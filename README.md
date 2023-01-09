@@ -1,5 +1,13 @@
 # GitLab Container Registry
 
+## Conarx Extended Storage
+
+This README is kept in sync with the upstream GitLab Container Registry project.
+The [Conarx Extended Storage README](./docs-ces/README.md) can be found under the
+[docs-ces](./docs-ces/) directory.
+
+## GitLab
+
 **Quick Links**:
 [**Roadmap**](https://about.gitlab.com/handbook/engineering/development/ops/package/#roadmap) |
 [Want to Contribute?](#contributing) |
