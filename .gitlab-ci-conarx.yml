@@ -22,3 +22,8 @@ stages:
   - integration
   - release
 
+.go-version-matrix:
+  parallel:
+    matrix:
+      - GO_VERSION: [ "1.19" ]
+
