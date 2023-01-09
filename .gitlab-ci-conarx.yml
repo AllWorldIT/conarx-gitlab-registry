@@ -1,0 +1,24 @@
+include:
+  - local: .gitlab/ci/validate.yml
+  - local: .gitlab/ci/test.yml
+  - local: .gitlab/ci/integration.yml
+  - local: .gitlab/ci/release.yml
+
+default:
+  image: golang:1.17-buster
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - $GOPATH/pkg/mod/
+      - bin/
+
+variables:
+  BUILDTAGS: "include_gcs,include_oss,continuous_profiler_stackdriver"
+  CGO_ENABLED: "1"
+
+stages:
+  - validate
+  - test
+  - integration
+  - release
+
