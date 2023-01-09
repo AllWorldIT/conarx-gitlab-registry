@@ -1,4 +1,17 @@
-# Distribution
+
+[![pipeline status](https://gitlab.conarx.tech/gitlab/container-registry/badges/main/pipeline.svg)](https://gitlab.conarx.tech/gitlab/container-registry/-/commits/main)
+[![coverage report](https://gitlab.conarx.tech/gitlab/container-registry/badges/main/coverage.svg)](https://gitlab.conarx.tech/gitlab/container-registry/-/commits/main)
+
+
+# Docker Distribution
+
+## Conarx Extended Storage
+
+This README is kept in sync with the upstream GitLab Container Registry project.
+The [Conarx Extended Storage README](./docs-ces/README.md) can be found under the
+[docs-ces](./docs-ces/) directory.
+
+## GitLab
 
 This README is kept in sync with the upstream Docker Distribution.
 The [GitLab README](./docs-gitlab/README.md) can be found under the
@@ -13,8 +26,8 @@ project with a new API design, focused around security and performance.
 
 <img src="https://www.docker.com/sites/default/files/oyster-registry-3.png" width=200px/>
 
-[![pipeline status](https://gitlab.com/gitlab-org/container-registry/badges/release/2.9-gitlab/pipeline.svg)](https://gitlab.com/gitlab-org/container-registry/-/commits/release/2.9-gitlab)
-[![coverage report](https://gitlab.com/gitlab-org/container-registry/badges/release/2.9-gitlab/coverage.svg)](https://gitlab.com/gitlab-org/container-registry/-/commits/release/2.9-gitlab)
+[![pipeline status](https://gitlab.com/gitlab-org/container-registry/badges/master/pipeline.svg)](https://gitlab.com/gitlab-org/container-registry/-/commits/master)
+[![coverage report](https://gitlab.com/gitlab-org/container-registry/badges/master/coverage.svg)](https://gitlab.com/gitlab-org/container-registry/-/commits/master)
 [![GoDoc](https://godoc.org/github.com/docker/distribution?status.svg)](https://godoc.org/github.com/docker/distribution)
 
 This repository contains the following components:
