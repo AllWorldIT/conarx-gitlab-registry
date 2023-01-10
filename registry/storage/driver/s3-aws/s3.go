@@ -805,7 +805,26 @@ func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 
 		for _, commonPrefix := range resp.CommonPrefixes {
 			commonPrefix := *commonPrefix.Prefix
-			directories = append(directories, strings.Replace(commonPrefix[0:len(commonPrefix)-1], d.s3Path(""), prefix, 1))
+
+			directory := strings.Replace(commonPrefix[0:len(commonPrefix)-1], d.s3Path(""), prefix, 1)
+
+			// NK: Minio - Walk the directory to see if we have files, if we don't we exclude the directory below
+			//             The reason for this is Minio returns directory paths when versioned objects that have delete markers
+			//             exist. Where AWS S3 does not.
+			var objectCount int64
+			var filesFound bool
+			d.doWalk(ctx, &objectCount, d.s3Path(directory), d.s3Path(prefix), func(fileInfo storagedriver.FileInfo) error {
+				if fileInfo.IsDir() {
+					return nil
+				}
+				filesFound = true
+				return fmt.Errorf("file found")
+			})
+
+			// NK: Minio - If we found files we add the directory
+			if filesFound {
+				directories = append(directories, directory)
+			}
 		}
 
 		if *resp.IsTruncated {
