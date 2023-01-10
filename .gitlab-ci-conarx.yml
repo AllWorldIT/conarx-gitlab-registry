@@ -1,8 +1,36 @@
 include:
-  - local: .gitlab/ci/validate.yml
-  - local: .gitlab/ci/test.yml
-  - local: .gitlab/ci/integration.yml
-  - local: .gitlab/ci/release.yml
+- template: Security/License-Scanning.gitlab-ci.yml
+- template: Security/SAST.gitlab-ci.yml
+- template: Security/Dependency-Scanning.gitlab-ci.yml
+- template: Security/Secret-Detection.gitlab-ci.yml
+- template: Workflows/MergeRequest-Pipelines.gitlab-ci.yml
+
+# workflow rules are not extended by scanner jobs, need to override them manually
+# TODO: remove when https://gitlab.com/gitlab-org/gitlab/-/issues/218444 is done
+.rules-for-scanners: &rules-for-scanners
+  stage: validate
+  rules:
+    # For merge requests, create a pipeline.
+    - if: '$CI_MERGE_REQUEST_IID'
+    # For the default branch, create a pipeline (this includes on schedules, pushes, merges, etc.).
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    # For tags, create a pipeline.
+    - if: '$CI_COMMIT_TAG'
+
+license_scanning:
+  <<: *rules-for-scanners
+
+gemnasium-dependency_scanning:
+  <<: *rules-for-scanners
+
+secret_detection:
+  stage: validate
+  rules:
+    # For merge requests, create a pipeline.
+    - if: '$CI_MERGE_REQUEST_IID'
+
+semgrep-sast:
+  <<: *rules-for-scanners
 
 default:
   image: golang:1.17-buster
@@ -22,10 +50,344 @@ stages:
   - integration
   - release
 
+commitlint:
+  cache: {}
+  image: node:lts-alpine
+  stage: validate
+  before_script:
+    - apk add --no-cache git
+    - npm install -g @commitlint/cli @commitlint/config-conventional
+  script:
+    - npx commitlint --from ${CI_MERGE_REQUEST_DIFF_BASE_SHA} --to HEAD --verbose
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+
+static-analysis:
+  cache: {}
+  image: registry.gitlab.com/gitlab-org/gitlab-build-images:golangci-lint-alpine
+  stage: validate
+  needs: []
+  script:
+    # Use default .golangci.yml file from the image if one is not present in the project root.
+    - '[ -e .golangci.yml ] || cp /golangci/.golangci.yml .'
+    # Write the code coverage report to gl-code-quality-report.json
+    # and print linting issues to stdout in the format: path/to/file:line description
+    - golangci-lint run --issues-exit-code 0 --out-format code-climate | tee gl-code-quality-report.json | jq -r '.[] | "\(.location.path):\(.location.lines.begin) \(.description)"'
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+    paths:
+      - gl-code-quality-report.json
+
+modules:tidy:
+  cache: {}
+  stage: validate
+  needs: []
+  script:
+    - go mod tidy
+    - git diff --exit-code go.mod go.sum
+
+modules:outdated:
+  cache: {}
+  stage: validate
+  needs: []
+  allow_failure: true
+  before_script:
+    - go install github.com/psampaz/go-mod-outdated@v0.8.0
+  script: go list -u -m -json all | go-mod-outdated -update -direct -ci
+
+mocks:
+  cache: {}
+  stage: validate
+  needs: []
+  before_script:
+    - go install github.com/golang/mock/mockgen@v1.6.0
+  script:
+    - go generate ./...
+    - git diff --exit-code **/mocks/*.go
+
+.schema-migrations:
+  needs: []
+  variables:
+    FF_NETWORK_PER_BUILD: 1
+    POSTGRES_PASSWORD: "secret"
+    PGPASSWORD: "secret"
+    POSTGRES_DB: "registry"
+    REGISTRY_DATABASE_ENABLED: "true"
+    REGISTRY_DATABASE_HOST: "db"
+    REGISTRY_DATABASE_PORT: "5432"
+    REGISTRY_DATABASE_USER: "postgres"
+    REGISTRY_DATABASE_PASSWORD: "secret"
+    REGISTRY_DATABASE_DBNAME: "registry"
+    REGISTRY_DATABASE_SSLMODE: "disable"
+  services:
+    - name: postgres:12-alpine
+      alias: "db"
+  before_script:
+    - "echo 'version: 0.1' > config.yml"
+    - make binaries
+    - chmod +x ./bin/*
+
+database:schema-migrations:
+  extends: .schema-migrations
+  cache: {}
+  stage: validate
+  script:
+    - ./bin/registry database migrate up config.yml
+    - ./bin/registry database migrate down --force config.yml
+
+database:schema-migrations:status:
+  cache: {}
+  extends: .schema-migrations
+  stage: validate
+  script:
+    - ./bin/registry database migrate status -u config.yml | grep -qw 'false' || exit 1
+    - ./bin/registry database migrate up -n 2 config.yml
+    - ./bin/registry database migrate status --up-to-date config.yml | grep -qw 'false' || exit 1
+    - ./bin/registry database migrate up config.yml
+    - ./bin/registry database migrate status -u config.yml | grep -qw 'true' || exit 1
+
+database:structure-sql:
+  cache: {}
+  extends: .schema-migrations
+  stage: validate
+  variables:
+    PG_FORMATTER_VERSION: "5.0"
+  script:
+    # Install build/make deps
+    - apt-get update && apt-get -y install ca-certificates gnupg lsb-release
+    # Install Postgres client
+    - wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+    - sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+    - apt-get update && apt-get -y install postgresql-client-12
+    # Install pgFormatter
+    - wget -qO- https://github.com/darold/pgFormatter/archive/refs/tags/v$PG_FORMATTER_VERSION.tar.gz | tar xz
+    - cd pgFormatter-$PG_FORMATTER_VERSION
+    - perl Makefile.PL && make && make install
+    - cd ..
+    # Apply database migrations
+    - ./bin/registry database migrate up config.yml
+    # Dump and validate
+    - make db-structure-dump
+    - git diff --exit-code
+
 .go-version-matrix:
+  image: golang:${GO_VERSION}-buster
   parallel:
     matrix:
       - GO_VERSION: [ "1.19" ]
+  variables:
+    GOTESTSUM_VERSION: v1.8.1
+    GO_TEST: 'go run gotest.tools/gotestsum@$GOTESTSUM_VERSION --junitfile junit.xml --format testname --'
+  artifacts:
+    reports:
+      junit: junit.xml
+
+coverage:
+  extends: .go-version-matrix
+  stage: test
+  needs: [mocks]
+  script:
+    - make coverage
+
+.middleware:storage: &middleware-storage
+  extends: .go-version-matrix
+  stage: integration
+  needs: []
+
+middleware:storage-googlecdn:
+  <<: *middleware-storage
+  variables:
+    REGISTRY_STORAGE_GCS_BUCKET: $CDN_GCS_BUCKET
+    REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_BASEURL: $CDN_BASEURL
+    REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_KEYNAME: $CDN_KEYNAME
+  script:
+    - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
+    - export REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_PRIVATEKEY="$CDN_PRIVATEKEY"
+    - $GO_TEST -v -coverprofile=coverage.out -tags=include_gcs,integration github.com/docker/distribution/registry/storage/driver/middleware/googlecdn
+
+.storage-driver-test: &storage-driver-test
+  extends: .go-version-matrix
+  stage: integration
+  needs: []
+  variables:
+    TEST_SHORT_FLAG: "-test.short"
+  rules:
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      variables:
+        TEST_SHORT_FLAG: ""
+    - when: always
+  script: $GO_TEST -timeout=30m -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE -args -check.v $TEST_SHORT_FLAG
+
+filesystem:
+  <<: *storage-driver-test
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/storage/driver/filesystem
+
+inmemory:
+  <<: *storage-driver-test
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/storage/driver/inmemory
+
+swift:
+  <<: *storage-driver-test
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/storage/driver/swift
+
+s3-aws:
+  <<: *storage-driver-test
+  variables:
+    AWS_ACCESS_KEY: "AKIAIOSFODNN7EXAMPLE"
+    AWS_SECRET_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    MINIO_ACCESS_KEY: $AWS_ACCESS_KEY
+    MINIO_SECRET_KEY: $AWS_SECRET_KEY
+    REGION_ENDPOINT: "http://minio:9000"
+    AWS_REGION: "us-east-2"
+    S3_BUCKET: "test-bucket"
+    S3_ENCRYPT: "false"
+  services:
+    - name: minio/minio:latest
+      alias: "minio"
+      command: ["server", "/data"]
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/storage/driver/s3-aws
+    # Download the minio client
+    - wget --no-verbose https://dl.min.io/client/mc/release/linux-amd64/mc
+    - chmod u+x ./mc
+    # Configure the minio client to use the local minio service rather than play.minio.io
+    - ./mc config host add s3v4 $REGION_ENDPOINT $AWS_ACCESS_KEY $AWS_SECRET_KEY --api S3v4
+    - ./mc mb s3v4/$S3_BUCKET
+
+gcs:
+  <<: *storage-driver-test
+  variables:
+    REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
+    REGISTRY_STORAGE_GCS_TARGET_BUCKET: $GCS_BUCKET
+  before_script:
+    - export TEST_SHORT_FLAG="-test.short"
+    - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
+    - export PACKAGE=github.com/docker/distribution/registry/storage/driver/gcs
+
+api:
+  extends: .go-version-matrix
+  stage: integration
+  needs: []
+  variables:
+    TAGS: 'integration,handlers_test'
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=$TAGS github.com/docker/distribution/registry/handlers
+
+api:conformance:
+  extends: .go-version-matrix
+  stage: integration
+  needs: []
+  variables:
+    TAGS: 'integration,api_conformance_test'
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=$TAGS github.com/docker/distribution/registry/handlers
+
+api:online-gc:
+  extends: .go-version-matrix
+  stage: integration
+  needs: []
+  variables:
+    TAGS: 'integration,online_gc_test'
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=$TAGS github.com/docker/distribution/registry/handlers
+
+.database: &database
+  extends: .go-version-matrix
+  stage: integration
+  needs: []
+  variables:
+    FF_NETWORK_PER_BUILD: 1
+    POSTGRES_PASSWORD: "secret"
+    POSTGRES_DB: "registry_test"
+    REGISTRY_DATABASE_ENABLED: "true"
+    REGISTRY_DATABASE_HOST: "db"
+    REGISTRY_DATABASE_PORT: "5432"
+    REGISTRY_DATABASE_USER: "postgres"
+    REGISTRY_DATABASE_PASSWORD: "secret"
+    REGISTRY_DATABASE_DBNAME: "registry_test"
+    REGISTRY_DATABASE_SSLMODE: "disable"
+    TAGS: 'integration'
+  services:
+    - name: postgres:12-alpine
+      alias: "db"
+  script: $GO_TEST -v -timeout=25m -coverprofile=coverage.out -tags=$TAGS $PACKAGE
+
+database:migrations:
+  <<: *database
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/datastore/migrations
+
+database:datastore:
+  <<: *database
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/datastore
+
+database:api:
+  <<: *database
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/handlers
+    - export TAGS=integration,handlers_test
+
+database:api-conformance:
+  <<: *database
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/handlers
+    - export TAGS=integration,api_conformance_test
+  script: $GO_TEST -v -timeout=25m -tags=$TAGS $PACKAGE
+
+database:api-gitlab:
+  <<: *database
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/handlers
+    - export TAGS=integration,api_gitlab_test
+  script: $GO_TEST -v -timeout=25m -tags=$TAGS $PACKAGE
+
+# Tests that simulate adverse network conditions/errors between the registry and its database.
+database:api-fault-tolerance:
+  <<: *database
+  before_script:
+    - export PACKAGE=github.com/docker/distribution/registry/handlers
+    - export TOXIPROXY_HOST=toxiproxy
+    - export TOXIPROXY_PORT=8474
+  services:
+    # `services` are not extended, so we have to redeclare `postgres:12-alpine` here.
+    - name: postgres:12-alpine
+      alias: "db"
+    - name: shopify/toxiproxy
+      alias: "toxiproxy"
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,toxiproxy $PACKAGE -run ^TestDBFaultTolerance
+
+.cache:redis: &cache-redis
+  extends: .go-version-matrix
+  stage: integration
+  needs: []
+  variables:
+    REDIS_ADDR: "redis:6379"
+  services:
+    - name: redis:alpine
+      alias: "redis"
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration github.com/docker/distribution/registry/storage/cache/redis
+
+cache:redis:
+  extends: .cache:redis
+
+cache:redis-sentinel:
+  <<: *cache-redis
+  variables:
+    # create a Docker network per build so that services can talk with each other
+    FF_NETWORK_PER_BUILD: 1
+    # config for redis-sentinel
+    REDIS_MASTER_HOST: "redis"
+    REDIS_MASTER_SET: "main-redis"
+    # config for app
+    REDIS_ADDR: "redis-sentinel:26379"
+    REDIS_MAIN_NAME: "main-redis"
+  services:
+    - name: redis:alpine
+      alias: "redis"
+    - name: bitnami/redis-sentinel
+      alias: "redis-sentinel"
 
 release:
   stage: release
@@ -41,3 +403,65 @@ release:
     tag_name: $CI_COMMIT_TAG
     name: 'Release $CI_COMMIT_TAG'
     description: './latestChanges.md'
+
+release-issue:
+  stage: release
+  image: golang:1.19-buster
+  script:
+   - go run cmd/internal/release/main.go --target-project-id $CI_PROJECT_ID --source-version $CI_COMMIT_TAG --gitlab-auth-token $CI_JOB_TOKEN --new-issue
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  when: manual
+
+.version-bump: &version-bump
+  stage: release
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - 'curl --fail-with-body --request POST --form token=$TRIGGER_TOKEN --form ref=$CI_DEFAULT_BRANCH --form "variables[DEPS_PIPELINE]=true" "https://gitlab.com/api/v4/projects/$PROJECT_ID/trigger/pipeline"'
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  when: manual
+
+version-bump:cng:
+  <<: *version-bump
+  needs: ["release-issue"]
+  variables:
+    TRIGGER_TOKEN: $BUMP_VERSION_TRIGGER_TOKEN_CNG
+    PROJECT_ID: "4359271"
+
+version-bump:charts:
+  <<: *version-bump
+  needs: ["version-bump:cng"]
+  variables:
+    TRIGGER_TOKEN: $BUMP_VERSION_TRIGGER_TOKEN_CHARTS
+    PROJECT_ID: "3828396"
+
+version-bump:omnibus:
+  <<: *version-bump
+  needs: [ "version-bump:cng"]
+  variables:
+    TRIGGER_TOKEN: $BUMP_VERSION_TRIGGER_TOKEN_OMNIBUS
+    PROJECT_ID: "20699"
+
+version-bump:k8s:
+  stage: release
+  image: golang:1.19-buster
+  needs: [ "version-bump:cng"]
+  variables:
+    TRIGGER_TOKEN: $BUMP_VERSION_TRIGGER_TOKEN_K8S
+    PROJECT_ID:  "12547113"
+  script:
+   - go run cmd/internal/release/main.go --target-project-id $PROJECT_ID --source-project-id $CI_PROJECT_ID --source-version $CI_COMMIT_TAG --gitlab-auth-token $TRIGGER_TOKEN
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  when: manual
+
+release-cop:
+  stage: .post
+  image: golang:1.19-buster
+  script:
+   - go run cmd/internal/releasecop/main.go --target-project-id $PROJECT_ID --gitlab-auth-token $CI_JOB_TOKEN --slack-webhook $SLACK_WEBHOOK_URL
+  only:
+    - schedules
