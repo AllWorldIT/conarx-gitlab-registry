@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -2796,4 +2797,229 @@ func TestGitlabAPI_RepositoryTagsList_EmptyRepository(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Empty(t, resp.Header.Get("Link"))
 	require.Empty(t, list)
+}
+
+func TestGitlabAPI_SubRepositoryList(t *testing.T) {
+	env := newTestEnv(t, disableMirrorFS)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	sortedReposWithTag := []string{
+		"foo/bar",
+		"foo/bar/a",
+		"foo/bar/b",
+		"foo/bar/b/c",
+	}
+
+	baseRepoName, err := reference.WithName("foo/bar")
+
+	repoWithoutTag := "foo/bar/b2"
+
+	require.NoError(t, err)
+	tagName := "latest"
+	// seed repos with the same base path foo/bar with tags
+	seedMultipleRepositoriesWithTaggedManifest(t, env, tagName, sortedReposWithTag)
+	// seed a repo under the same base path foo/bar but without tags
+	seedRandomSchema2Manifest(t, env, repoWithoutTag, putByDigest)
+
+	tt := []struct {
+		name               string
+		queryParams        url.Values
+		expectedRepoPaths  []string
+		expectedLinkHeader string
+		expectedStatus     int
+		expectedError      *errcode.ErrorCode
+	}{
+		{
+			name:              "no query parameters",
+			expectedStatus:    http.StatusOK,
+			expectedRepoPaths: sortedReposWithTag,
+		},
+		{
+			name:           "empty last query parameter",
+			queryParams:    url.Values{"last": []string{""}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
+			name:           "empty n query parameter",
+			queryParams:    url.Values{"n": []string{""}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamType,
+		},
+		{
+			name:           "empty last and n query parameters",
+			queryParams:    url.Values{"last": []string{""}, "n": []string{""}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamType,
+		},
+		{
+			name:           "non integer n query parameter",
+			queryParams:    url.Values{"n": []string{"foo"}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamType,
+		},
+		{
+			name:               "1st page",
+			queryParams:        url.Values{"n": []string{"3"}},
+			expectedStatus:     http.StatusOK,
+			expectedRepoPaths:  sortedReposWithTag[:3],
+			expectedLinkHeader: fmt.Sprintf(`</gitlab/v1/repository-paths/%s/repositories/list/?last=%s&n=3>; rel="next"`, baseRepoName.Name(), url.QueryEscape(sortedReposWithTag[2])),
+		},
+		{
+			name:               "nth page",
+			queryParams:        url.Values{"last": []string{"foo/bar"}, "n": []string{"2"}},
+			expectedStatus:     http.StatusOK,
+			expectedRepoPaths:  sortedReposWithTag[1:3],
+			expectedLinkHeader: fmt.Sprintf(`</gitlab/v1/repository-paths/%s/repositories/list/?last=%s&n=2>; rel="next"`, baseRepoName.Name(), url.QueryEscape(sortedReposWithTag[2])),
+		},
+		{
+			name:              "last page",
+			queryParams:       url.Values{"last": []string{"foo/bar/b/c"}, "n": []string{"4"}},
+			expectedStatus:    http.StatusOK,
+			expectedRepoPaths: []string{},
+		},
+		{
+			name:           "zero page size",
+			queryParams:    url.Values{"n": []string{"0"}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
+			name:           "negative page size",
+			queryParams:    url.Values{"n": []string{"-1"}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
+			name:              "page size bigger than full list",
+			queryParams:       url.Values{"n": []string{"1000"}},
+			expectedStatus:    http.StatusOK,
+			expectedRepoPaths: sortedReposWithTag,
+		},
+		{
+			name:              "non existent marker sort",
+			queryParams:       url.Values{"last": []string{"foo/bar/0"}},
+			expectedStatus:    http.StatusOK,
+			expectedRepoPaths: sortedReposWithTag[1:],
+		},
+		{
+			name:           "invalid marker format",
+			queryParams:    url.Values{"last": []string{":"}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+	}
+
+	for _, test := range tt {
+		t.Run(test.name, func(t *testing.T) {
+			u, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoName, test.queryParams)
+			require.NoError(t, err)
+			resp, err := http.Get(u)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			require.Equal(t, test.expectedStatus, resp.StatusCode)
+
+			if test.expectedError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *test.expectedError)
+				return
+			}
+
+			var body []*handlers.RepositoryAPIResponse
+			dec := json.NewDecoder(resp.Body)
+			err = dec.Decode(&body)
+			require.NoError(t, err)
+			expectedBody := make([]*handlers.RepositoryAPIResponse, 0, len(test.expectedRepoPaths))
+			for _, path := range test.expectedRepoPaths {
+				splitPath := strings.Split(path, "/")
+				expectedBody = append(expectedBody, &handlers.RepositoryAPIResponse{
+					Name:          splitPath[len(splitPath)-1],
+					Path:          path,
+					Size:          nil,
+					SizePrecision: "",
+				})
+			}
+			// Check that created_at is not empty but updated_at is. We then need to erase the created_at attribute from
+			// the response payload before comparing. This is the best we can do as we have no control/insight into the
+			// timestamps at which records are inserted on the DB.
+			for _, d := range body {
+				require.Empty(t, d.UpdatedAt)
+				require.NotEmpty(t, d.CreatedAt)
+				d.CreatedAt = ""
+			}
+
+			require.Equal(t, expectedBody, body)
+			require.Equal(t, test.expectedLinkHeader, resp.Header.Get("Link"))
+		})
+	}
+}
+
+// TestGitlabAPI_SubRepositoryList_DefaultPageSize asserts that the API enforces a default page size of 100. We do it
+// here instead of TestGitlabAPI_SubRepositoryList because we have to create more than 100 repositories
+// w/tags to test this. Doing it in the former test would mean more complicated table test definitions,
+// instead of the current small set of repositories w/tags that make it easy to follow/understand the expected results.
+func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
+
+	env := newTestEnv(t, disableMirrorFS)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	// generate 100+1 repos with tagged images
+	reposWithTag := make([]string, 0, 101)
+	for i := 0; i <= 100; i++ {
+		reposWithTag = append(reposWithTag, fmt.Sprintf("foo/bar/%d", i))
+	}
+
+	baseRepoName, err := reference.WithName("foo/bar")
+	tagName := "latest"
+	require.NoError(t, err)
+
+	// seed repos of the same base path foo/bar but with a tagged manifest
+	seedMultipleRepositoriesWithTaggedManifest(t, env, tagName, reposWithTag)
+
+	u, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoName)
+	require.NoError(t, err)
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// simply assert the number of repositories in the body
+	var body []*handlers.RepositoryAPIResponse
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&body)
+	require.NoError(t, err)
+
+	require.Len(t, body, 100)
+
+	// make sure the next page link starts at repo 100th
+	sort.Strings(reposWithTag)
+	expectedLink := fmt.Sprintf(`</gitlab/v1/repository-paths/%s/repositories/list/?last=%s&n=100>; rel="next"`, baseRepoName.Name(), url.QueryEscape(reposWithTag[99]))
+	require.Equal(t, expectedLink, resp.Header.Get("Link"))
+}
+
+func TestGitlabAPI_SubRepositoryList_EmptyRepository(t *testing.T) {
+	env := newTestEnv(t, disableMirrorFS)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	baseRepoName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	u, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoName)
+	require.NoError(t, err)
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var body []*handlers.RepositoryAPIResponse
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&body)
+	require.NoError(t, err)
+	require.NotNil(t, body)
+	require.ElementsMatch(t, body, []*handlers.RepositoryAPIResponse{})
 }

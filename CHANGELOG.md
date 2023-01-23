@@ -1,3 +1,20 @@
+## [3.65.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.65.0-gitlab...v3.65.1-gitlab) (2023-01-20)
+
+
+### Bug Fixes
+
+* **api/gitlab/v1:** repositories list endpoint should return an empty response... ([b307d2c](https://gitlab.com/gitlab-org/container-registry/commit/b307d2c48f70e5858a2f67eaa8581fb092730878))
+* disable statement timeout for layers simplified usage migrations ([499e323](https://gitlab.com/gitlab-org/container-registry/commit/499e3233b4c2899741d6b0b0fa9818e2554e864a))
+
+# [3.65.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.64.0-gitlab...v3.65.0-gitlab) (2023-01-12)
+
+
+### Features
+
+* **api/gitlab/v1:** add route for paginated list of repos under path ([c106367](https://gitlab.com/gitlab-org/container-registry/commit/c106367fd131a079978cf1787ccbd2e8f461a21a))
+* deprecate azure legacy prefix ([9823a15](https://gitlab.com/gitlab-org/container-registry/commit/9823a15c95d9f0a0707577d088b3da4bac7b616d))
+* deprecate proxy pull-through cache mode ([82046e1](https://gitlab.com/gitlab-org/container-registry/commit/82046e16868866732b9b35d55106b0dd19413c14))
+
 # [3.64.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.63.0-gitlab...v3.64.0-gitlab) (2023-01-06)
 
 

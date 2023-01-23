@@ -30,6 +30,7 @@ A list of methods and URIs are covered in the table below:
 | `GET`    | `/gitlab/v1/import/<path>/`                | Query import status of the repository identified by `path`.                        |
 | `DELETE` | `/gitlab/v1/import/<path>/`                | Cancel import of the repository identified by `path`.                              |
 | `GET`    | `/gitlab/v1/repositories/<path>/tags/list/` | Obtain the list of tags for the repository identified by `path`.                   |
+| `GET`    | `/gitlab/v1/repository-paths/<path>/repositories/list/` | Obtain the list of of repositories under a base repository path identified by `path`.         |
 
 By design, any feature that incurs additional processing time, such as query parameters that allow obtaining additional data, is opt-*in*.
 
@@ -222,6 +223,110 @@ The tag objects are sorted lexicographically by tag name to enable marker-based 
   }
 ]
 ```
+
+## List Sub Repositories
+
+Obtain a list of repositories (that have at least 1 tag) under a repository base path. If the supplied base path also corresponds to a repository with at least 1 tag it will also be returned.
+
+### Request
+
+```shell
+GET /gitlab/v1/repository-paths/<path>/repositories/list/
+```
+
+| Attribute | Type   | Required | Default | Description                                                                                                                                                                                                                                         |
+|-----------|--------|----------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `path`    | String | Yes      |         | The full path of the target repository base path. Equivalent to the `name` parameter in the `/v2/` API, described in the [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md). The same pattern validation applies. |
+| `last`    | String | No       |         | Query parameter used as marker for pagination. Set this to the path lexicographically after which (exclusive) you want the requested page to start. The value of this query parameter must be a valid path name. More precisely, it must respect the `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}` pattern as defined in the OCI Distribution spec [here](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests). Otherwise, an `INVALID_QUERY_PARAMETER_VALUE` error is returned. |
+| `n`       | String | No       | 100     | Query parameter used as limit for pagination. Defaults to 100. Must be a positive integer between `1` and `1000` (inclusive). If the value is not a valid integer, the `INVALID_QUERY_PARAMETER_TYPE` error is returned. If the value is a valid integer but is out of the rage then an `INVALID_QUERY_PARAMETER_VALUE` error is returned. |
+
+#### Pagination
+
+The response is marker-based paginated, using marker (`last`) and limit (`n`) query parameters to paginate through repository paths.
+The default page size is 100, and it can be optionally increased to a maximum of 1000.
+
+In case more repository paths exist beyond those included in each response, the response `Link` header will contain the URL for the
+next page, encoded as specified in [RFC5988](https://tools.ietf.org/html/rfc5988). If the header is not present, the
+client can assume that all tags have been retrieved already.
+
+As an example, consider a repository named `app` with four sub repos: `app/a`, `app/b` and `app/c`. To start retrieving the list of
+sub repositories with a page size of `2`, the `n` query parameter should be set to `2`:
+
+```text
+?n=2
+```
+
+As result, the response will include the repository paths of `app` and `app/a`, as they are lexicographically the first and second
+repository (with at least 1 tag) in the path. The `Link` header would then be filled and point to the second page:
+
+```http
+200 OK
+Content-Type: application/json
+Link: <https://registry.gitlab.com/gitlab/v1/repository-paths/app/repositories/list/?n=2&last=app%2Fb>; rel="next"
+```
+
+Note that `last` is set to `app/a`, as that was the last path included in the first page. Invoking this URL will therefore
+give us the second page with repositories `app/b` and `app/c`. As there are no additional repositories to receive, the response will not include
+a `Link` header this time.
+
+#### Example
+
+```shell
+curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/repository-paths/gitlab-org/build/cng/repositories/list/?n=2&last=cng/container-registry"
+```
+
+### Response
+
+#### Header
+
+| Status Code        | Reason                                                                                                           |
+|--------------------|------------------------------------------------------------------------------------------------------------------|
+| `200 OK`           | The response body includes the requested details or is empty if the repository does not exist or if there are no repositories with at least one tag under the base path provided in the request.                                      |
+| `400 Bad Request`  | The value for the `n` and/or `last` pagination query parameters are invalid.                                     |
+| `401 Unauthorized` | The client should take action based on the contents of the `WWW-Authenticate` header and try the endpoint again. |
+
+#### Body
+
+The response body is an array of objects (one per repository) with the following attributes:
+
+| Key          | Value                                            | Type   | Format                              | Condition                                                                                                |
+|--------------|--------------------------------------------------|--------|-------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `name`       | The repository name.                             | String |                                     |                                                                                                          |
+| `path`       | The repository path.                             | String |                                     |                                                                                                          |
+| `created_at`     | The timestamp at which the repository was created.                                                                                                                                                                                                                                                                                                                                                                                                                                                | String | ISO 8601 with millisecond precision |                                                             |
+| `updated_at`     | The timestamp at which the repository details were last updated.                                                                                                                                                                                                                                                                                                                                                                                                                                  | String | ISO 8601 with millisecond precision | Only present if updated at least once.                      |
+
+The repository objects are sorted lexicographically by repository path name to enable marker-based pagination.
+
+#### Example
+
+```json
+[
+  {
+    "name": "docker-alpine",
+    "path": "gitlab-org/build/cng/docker-alpine",
+    "created_at": "2022-06-07T12:11:13.633+00:00",
+    "updated_at": "2022-06-07T14:37:49.251+00:00"
+
+  },
+  {
+    "name": "git-base",
+    "path": "gitlab-org/build/cng/git-base",
+    "created_at": "2022-06-07T12:11:13.633+00:00",
+    "updated_at": "2022-06-07T14:37:49.251+00:00"
+
+  }
+]
+```
+
+### Codes
+
+The error codes encountered via this API are enumerated in the following table.
+
+|Code|Message|Description|
+|----|-------|-----------|
+`INVALID_QUERY_PARAMETER_VALUE` | `the value of a query parameter is invalid` | The value of a request query parameter is invalid. The error detail identifies the concerning parameter and the list of possible values.
+`INVALID_QUERY_PARAMETER_TYPE` | `the value of a query parameter is of an invalid type` | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.
 
 ## Import Repository
 
@@ -504,6 +609,10 @@ error codes described in the
 `INVALID_QUERY_PARAMETER_TYPE` | `the value of a query parameter is of an invalid type` | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.
 
 ## Changes
+
+### 2023-01-05
+
+- Add sub repositories list endpoint.
 
 ### 2023-01-04
 

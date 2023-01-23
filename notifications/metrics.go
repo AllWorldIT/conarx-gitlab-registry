@@ -11,12 +11,14 @@ import (
 )
 
 var (
-	// eventsCounter counts total events of incoming, success, failure, and errors
+	// eventsCounter counts total events of incoming, success and failure
 	eventsCounter = prometheus.NotificationsNamespace.NewLabeledCounter("events", "The number of total events", "type")
 	// pendingGauge measures the pending queue size
 	pendingGauge = prometheus.NotificationsNamespace.NewGauge("pending", "The gauge of pending events in queue", metrics.Total)
 	// statusCounter counts the total notification call per each status code
 	statusCounter = prometheus.NotificationsNamespace.NewLabeledCounter("status", "The number of status code", "code")
+	// errorCounter counts the total nuymber of events that were not sent due to internal errors
+	errorCounter = prometheus.NotificationsNamespace.NewCounter("errors", "The number of events that were not sent due to internal errors")
 )
 
 // EndpointMetrics track various actions taken by the endpoint, typically by
@@ -88,12 +90,12 @@ func (emsl *endpointMetricsHTTPStatusListener) failure(status int, events ...Eve
 	eventsCounter.WithValues("Failures").Inc(1)
 }
 
-func (emsl *endpointMetricsHTTPStatusListener) err(err error, events ...Event) {
+func (emsl *endpointMetricsHTTPStatusListener) err(events ...Event) {
 	emsl.safeMetrics.Lock()
 	defer emsl.safeMetrics.Unlock()
 	emsl.Errors += len(events)
 
-	eventsCounter.WithValues("Errors").Inc(1)
+	errorCounter.Inc(1)
 }
 
 // endpointMetricsEventQueueListener maintains the incoming events counter and

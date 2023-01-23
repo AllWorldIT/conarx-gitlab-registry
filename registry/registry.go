@@ -16,11 +16,13 @@ import (
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/health"
+	dlog "github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/listener"
 	"github.com/docker/distribution/uuid"
 	"github.com/docker/distribution/version"
+
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -579,6 +581,21 @@ func validate(config *configuration.Configuration) error {
 			default:
 				errs = multierror.Append(fmt.Errorf("invalid type %[1]T for 'storage.redirect.expirydelay' (duration)", v))
 			}
+		}
+	}
+
+	// Deprecation warning for azure.
+	if ac, ok := config.Storage["azure"]; ok {
+		v, ok := ac["trimlegacyrootprefix"]
+		if ok {
+			if _, ok := v.(bool); !ok {
+				errs = multierror.Append(fmt.Errorf("invalid type %[1]T for 'storage.azure.trimlegacyrootprefix' (boolean)", v))
+			}
+		} else {
+			dlog.GetLogger().Warn("**DEPRECATION NOTICE**: The azure driver will default to using the standard " +
+				"root prefix on 2023-05-22. Set `trimlegacyrootprefix:false` to maintain " +
+				"backwards compatibility with existing azure deployments. See " +
+				"https://gitlab.com/gitlab-org/container-registry/-/issues/854 for more details.")
 		}
 	}
 

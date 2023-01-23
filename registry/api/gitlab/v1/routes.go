@@ -41,6 +41,12 @@ var (
 		Path: Base.Path + "repositories/{name:" + reference.NameRegexp.String() + "}/tags/list/",
 		ID:   Base.Path + "repositories/{name}/tags/list",
 	}
+	// SubRepositories is the API route for the sub-repositories list.
+	SubRepositories = Route{
+		Name: "sub-repositories",
+		Path: Base.Path + "repository-paths/{name:" + reference.NameRegexp.String() + "}/repositories/list/",
+		ID:   Base.Path + "repository-paths/{name}/repositories/list",
+	}
 )
 
 // Router returns a new *mux.Router for the Gitlab v1 API.
@@ -63,6 +69,7 @@ func RouterWithPrefix(prefix string) *mux.Router {
 	router.Path(RepositoryImport.Path).Name(RepositoryImport.Name)
 	router.Path(RepositoryTags.Path).Name(RepositoryTags.Name)
 	router.Path(Repositories.Path).Name(Repositories.Name)
+	router.Path(SubRepositories.Path).Name(SubRepositories.Name)
 
 	return rootRouter
 }

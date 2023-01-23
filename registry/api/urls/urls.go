@@ -274,6 +274,18 @@ func (ub *Builder) BuildGitlabV1RepositoryImportURL(name reference.Named, values
 	return appendValuesURL(u, values...).String(), nil
 }
 
+// BuildGitlabV1SubRepositoriesURL constructs a URL for the Gitlab v1 API sub-repositories route by name.
+func (ub *Builder) BuildGitlabV1SubRepositoriesURL(name reference.Named, values ...url.Values) (string, error) {
+	route := ub.cloneGitLabRoute(v1.SubRepositories)
+
+	u, err := route.URL("name", name.Name())
+	if err != nil {
+		return "", err
+	}
+
+	return appendValuesURL(u, values...).String(), nil
+}
+
 // cloneDistributionRoute returns a clone of the named route from the
 // distribution router. Routes must be cloned to avoid modifying them during
 // url generation.

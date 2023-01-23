@@ -47,7 +47,7 @@ func newHTTPSink(u string, timeout time.Duration, headers http.Header, transport
 type httpStatusListener interface {
 	success(status int, events ...Event)
 	failure(status int, events ...Event)
-	err(err error, events ...Event)
+	err(events ...Event)
 }
 
 // Accept makes an attempt to notify the endpoint, returning an error if it
@@ -73,7 +73,7 @@ func (hs *httpSink) Write(events ...Event) error {
 	p, err := json.MarshalIndent(envelope, "", "   ")
 	if err != nil {
 		for _, listener := range hs.listeners {
-			listener.err(err, events...)
+			listener.err(events...)
 		}
 		return fmt.Errorf("%v: error marshaling event envelope: %v", hs, err)
 	}
@@ -82,7 +82,7 @@ func (hs *httpSink) Write(events ...Event) error {
 	resp, err := hs.client.Post(hs.url, EventsMediaType, body)
 	if err != nil {
 		for _, listener := range hs.listeners {
-			listener.err(err, events...)
+			listener.err(events...)
 		}
 
 		return fmt.Errorf("%v: error posting: %v", hs, err)

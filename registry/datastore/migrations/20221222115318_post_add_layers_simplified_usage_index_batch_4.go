@@ -10,6 +10,7 @@ func init() {
 		Migration: &migrate.Migration{
 			Id: "20221222115318_post_add_layers_simplified_usage_index_batch_4",
 			Up: []string{
+				"SET statement_timeout TO 0",
 				"CREATE INDEX CONCURRENTLY IF NOT EXISTS index_layers_p_32_on_top_level_namespace_id_and_digest_and_size ON partitions.layers_p_32 USING btree (top_level_namespace_id, digest, size)",
 				"CREATE INDEX CONCURRENTLY IF NOT EXISTS index_layers_p_33_on_top_level_namespace_id_and_digest_and_size ON partitions.layers_p_33 USING btree (top_level_namespace_id, digest, size)",
 				"CREATE INDEX CONCURRENTLY IF NOT EXISTS index_layers_p_34_on_top_level_namespace_id_and_digest_and_size ON partitions.layers_p_34 USING btree (top_level_namespace_id, digest, size)",
@@ -26,6 +27,7 @@ func init() {
 				"CREATE INDEX CONCURRENTLY IF NOT EXISTS index_layers_p_45_on_top_level_namespace_id_and_digest_and_size ON partitions.layers_p_45 USING btree (top_level_namespace_id, digest, size)",
 				"CREATE INDEX CONCURRENTLY IF NOT EXISTS index_layers_p_46_on_top_level_namespace_id_and_digest_and_size ON partitions.layers_p_46 USING btree (top_level_namespace_id, digest, size)",
 				"CREATE INDEX CONCURRENTLY IF NOT EXISTS index_layers_p_47_on_top_level_namespace_id_and_digest_and_size ON partitions.layers_p_47 USING btree (top_level_namespace_id, digest, size)",
+				"RESET statement_timeout",
 			},
 			Down: []string{
 				"DROP INDEX IF EXISTS partitions.index_layers_p_32_on_top_level_namespace_id_and_digest_and_size CASCADE",

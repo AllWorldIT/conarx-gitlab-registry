@@ -8,22 +8,29 @@ include:
       - '/ci/danger-review.yml'
 
 default:
-  image: golang:1.17-buster
+  image: golang:$GO_VERSION-buster
   tags:
     - gitlab-org
   cache:
-    key: ${CI_COMMIT_REF_SLUG}
+    key:
+      prefix: $GO_VERSION
+      files:
+        - go.mod
+        - go.sum
     paths:
-      - $GOPATH/pkg/mod/
-      - bin/
+      - .GOPATH/pkg/mod/
+    policy: pull
 
 variables:
+  # default Go version
+  GO_VERSION: "1.17"
   BUILDTAGS: "include_gcs,include_oss,continuous_profiler_stackdriver"
   CGO_ENABLED: "1"
+  GOPATH: $CI_PROJECT_DIR/.GOPATH
+  GOTESTSUM_VERSION: v1.8.1
 
 stages:
   - validate
   - test
   - integration
   - release
-

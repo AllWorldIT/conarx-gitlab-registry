@@ -10,10 +10,12 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/distribution/manifest/schema1"
-	"strings"
+	"github.com/stretchr/testify/require"
 )
 
 // TestHTTPSink mocks out an http endpoint and notifies it under a couple of
@@ -199,4 +201,44 @@ func createTestEvent(action, repo, typ string) Event {
 	event.Target.Repository = repo
 
 	return *event
+}
+
+func TestHTTPSink_Errors(t *testing.T) {
+	serverHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		// set a long sleep bigger than the sink's timeout to force an error in the httpSink.Write method
+		time.Sleep(time.Second)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(serverHandler)
+	defer server.Close()
+
+	metrics := newSafeMetrics()
+
+	// make sure that passing in the transport no longer gives this error
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	sink := newHTTPSink(server.URL, 10*time.Millisecond, nil, tr,
+		&endpointMetricsHTTPStatusListener{safeMetrics: metrics})
+	defer sink.Close()
+
+	events := []Event{
+		createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+		createTestEvent("push", "library/test", layerMediaType),
+		createTestEvent("push", "library/test", layerMediaType),
+	}
+
+	// all events should time out
+	var expectedMetrics EndpointMetrics
+	expectedMetrics.Statuses = make(map[string]int)
+	expectedMetrics.Errors += len(events)
+
+	err := sink.Write(events...)
+	// either client timeout or context deadline exceeded, asserting this error can be flaky
+	require.Error(t, err)
+
+	require.Equal(t, metrics.EndpointMetrics, expectedMetrics)
 }

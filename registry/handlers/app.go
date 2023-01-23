@@ -521,6 +521,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 	// configure as a pull through cache
 	if config.Proxy.RemoteURL != "" {
+		log.Warn("DEPRECATION NOTICE: The proxy pull-through cache mode is deprecated and will be removed in " +
+			"2023-05-22. See https://gitlab.com/gitlab-org/container-registry/-/issues/842 for more details")
 		app.registry, err = proxy.NewRegistryPullThroughCache(ctx, app.registry, app.driver, config.Proxy)
 		if err != nil {
 			return nil, err
@@ -1089,6 +1091,7 @@ func (app *App) initMetaRouter() error {
 	app.registerGitlab(v1.RepositoryImport, importDispatcher)
 	app.registerGitlab(v1.RepositoryTags, repositoryTagsDispatcher)
 	app.registerGitlab(v1.Repositories, repositoryDispatcher)
+	app.registerGitlab(v1.SubRepositories, subRepositoriesDispatcher)
 
 	var err error
 	v1PathWithPrefix := fmt.Sprintf("^%s%s.*", strings.TrimSuffix(app.Config.HTTP.Prefix, "/"), v1.Base.Path)
@@ -1690,12 +1693,15 @@ func appendRepositoryDetailsAccessRecords(accessRecords []auth.Access, r *http.R
 	route := mux.CurrentRoute(r)
 	routeName := route.GetName()
 
-	// For now, we only have one operation requiring a custom access record, and that is for returning the size of a
-	// repository including its descendants. This requires an access record of type `repository` and name `<name>/*`
+	// For now, we only have two operation requiring a custom access record, which are:
+	// 1. for returning the size of a repository including its descendants.
+	// 2. for returning all the repositories under a given repository base path (including the base repository)
+	// These two operations requires an access record of type `repository` and name `<name>/*`
 	// (to grant read access on all descendants), in addition to the standard access record of type `repository` and
 	// name `<name>` (to grant read access to the base repository), which was appended in the preceding call to
 	// `appendAccessRecords`.
-	if routeName == v1.Repositories.Name && sizeQueryParamValue(r) == sizeQueryParamSelfWithDescendantsValue {
+	if routeName == v1.SubRepositories.Name ||
+		(routeName == v1.Repositories.Name && sizeQueryParamValue(r) == sizeQueryParamSelfWithDescendantsValue) {
 		accessRecords = append(accessRecords, auth.Access{
 			Resource: auth.Resource{
 				Type: "repository",

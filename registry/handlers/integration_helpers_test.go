@@ -1757,3 +1757,11 @@ func assertImportStatus(t *testing.T, importURL, repoPath string, expectedStatus
 
 	require.Equal(t, expectedStatusResponse, s)
 }
+
+func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagName string, repoPaths []string) {
+	t.Helper()
+
+	for _, path := range repoPaths {
+		seedRandomSchema2Manifest(t, env, path, putByTag(tagName))
+	}
+}

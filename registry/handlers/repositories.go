@@ -64,7 +64,8 @@ var (
 		sizeQueryParamSelfWithDescendantsValue,
 	}
 
-	lastQueryParamPattern = reference.TagRegexp
+	lastTagQueryParamPattern  = reference.TagRegexp
+	lastPathQueryParamPattern = reference.NameRegexp
 )
 
 func isQueryParamValueValid(value string, validValues []string) bool {
@@ -271,8 +272,8 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	var lastEntry string
 	if q.Has(lastQueryParamKey) {
 		lastEntry = q.Get(lastQueryParamKey)
-		if !queryParamValueMatchesPattern(lastEntry, lastQueryParamPattern) {
-			detail := v1.InvalidQueryParamValuePatternErrorDetail(lastQueryParamKey, lastQueryParamPattern)
+		if !queryParamValueMatchesPattern(lastEntry, lastTagQueryParamPattern) {
+			detail := v1.InvalidQueryParamValuePatternErrorDetail(lastQueryParamKey, lastTagQueryParamPattern)
 			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
 			return
 		}
@@ -327,6 +328,95 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 		}
 		if t.UpdatedAt.Valid {
 			d.UpdatedAt = timeToString(t.UpdatedAt.Time)
+		}
+		resp = append(resp, d)
+	}
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(resp); err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+}
+
+type subRepositoriesHandler struct {
+	*Context
+}
+
+func subRepositoriesDispatcher(ctx *Context, _ *http.Request) http.Handler {
+	subRepositoriesHandler := &subRepositoriesHandler{
+		Context: ctx,
+	}
+
+	return handlers.MethodHandler{
+		http.MethodGet: http.HandlerFunc(subRepositoriesHandler.GetSubRepositories),
+	}
+}
+
+// GetSubRepositories retrieves a list of repositories for a given repository base path. This includes support for marker-based pagination
+// using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution catalog list API. `n` can not exceed 1000.
+// if no `n` query parameter is specified the default of `100` is used.
+func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	maxEntries := maximumReturnedEntries
+	if q.Has(nQueryParamKey) {
+		val, valid := isQueryParamTypeInt(q.Get(nQueryParamKey))
+		if !valid {
+			detail := v1.InvalidQueryParamTypeErrorDetail(nQueryParamKey, nQueryParamValidTypes)
+			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamType.WithDetail(detail))
+			return
+		}
+		if !isQueryParamIntValueInBetween(val, nQueryParamValueMin, nQueryParamValueMax) {
+			detail := v1.InvalidQueryParamValueRangeErrorDetail(nQueryParamKey, nQueryParamValueMin, nQueryParamValueMax)
+			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
+			return
+		}
+		maxEntries = val
+	}
+
+	// `lastEntry` must conform to the repository name regexp
+	var lastEntry string
+	if q.Has(lastQueryParamKey) {
+		lastEntry = q.Get(lastQueryParamKey)
+		if !queryParamValueMatchesPattern(lastEntry, lastPathQueryParamPattern) {
+			detail := v1.InvalidQueryParamValuePatternErrorDetail(lastQueryParamKey, lastPathQueryParamPattern)
+			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
+			return
+		}
+	}
+
+	path := h.Repository.Named().Name()
+	rStore := datastore.NewRepositoryStore(h.db)
+	repoList, err := rStore.FindPagingatedRepositoriesForPath(h.Context, path, lastEntry, maxEntries)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	// Add a link header if there might be more entries to retrieve
+	if len(repoList) == maxEntries {
+		lastEntry = repoList[len(repoList)-1].Path
+		urlStr, err := createLinkEntry(r.URL.String(), maxEntries, lastEntry)
+		if err != nil {
+			h.Errors = append(h.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
+			return
+		}
+		w.Header().Set("Link", urlStr)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	resp := make([]RepositoryAPIResponse, 0, len(repoList))
+	for _, r := range repoList {
+		d := RepositoryAPIResponse{
+			Name:      r.Name,
+			Path:      r.Path,
+			Size:      r.Size,
+			CreatedAt: timeToString(r.CreatedAt),
+		}
+		if r.UpdatedAt.Valid {
+			d.UpdatedAt = timeToString(r.UpdatedAt.Time)
 		}
 		resp = append(resp, d)
 	}

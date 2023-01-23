@@ -62,34 +62,52 @@ static-analysis:
       - gl-code-quality-report.json
 
 modules:tidy:
-  cache: {}
   stage: validate
-  needs: []
+  needs: ['modules:download']
   script:
     - go mod tidy
     - git diff --exit-code go.mod go.sum
 
-modules:outdated:
-  cache: {}
+modules:download:
   stage: validate
-  needs: []
+  parallel:
+    matrix:
+      - GO_VERSION: [ "1.17", "1.18", "1.19" ]
+  script:
+    - go mod download
+    # This is an external tool used to run tests, we can save some time by downloading in advance
+    - go install gotest.tools/gotestsum@$GOTESTSUM_VERSION
+  cache:
+    key:
+      prefix: $GO_VERSION
+      files:
+        - go.mod
+        - go.sum
+    paths:
+      - .GOPATH/pkg/mod/
+    policy: push
+
+modules:outdated:
+  stage: validate
+  needs: ['modules:download']
   allow_failure: true
   before_script:
     - go install github.com/psampaz/go-mod-outdated@v0.8.0
+    - export PATH="$PATH:$GOPATH/bin"
   script: go list -u -m -json all | go-mod-outdated -update -direct -ci
 
 mocks:
-  cache: {}
+  needs: ['modules:download']
   stage: validate
-  needs: []
   before_script:
     - go install github.com/golang/mock/mockgen@v1.6.0
+    - export PATH="$PATH:$GOPATH/bin"
   script:
     - go generate ./...
     - git diff --exit-code **/mocks/*.go
 
 .schema-migrations:
-  needs: []
+  needs: ['modules:download']
   variables:
     FF_NETWORK_PER_BUILD: 1
     POSTGRES_PASSWORD: "secret"
@@ -112,14 +130,12 @@ mocks:
 
 database:schema-migrations:
   extends: .schema-migrations
-  cache: {}
   stage: validate
   script:
     - ./bin/registry database migrate up config.yml
     - ./bin/registry database migrate down --force config.yml
 
 database:schema-migrations:status:
-  cache: {}
   extends: .schema-migrations
   stage: validate
   script:
@@ -130,7 +146,6 @@ database:schema-migrations:status:
     - ./bin/registry database migrate status -u config.yml | grep -qw 'true' || exit 1
 
 database:structure-sql:
-  cache: {}
   extends: .schema-migrations
   stage: validate
   variables:
