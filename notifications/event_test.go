@@ -36,7 +36,8 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
             "useragent": "test/0.1"
          },
          "actor": {
-            "name": "test-actor"
+            "name": "test-actor",
+            "user_type": "test-user-type"
          },
          "source": {
             "addr": "hostname.local:port"
@@ -62,7 +63,8 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
             "useragent": "test/0.1"
          },
          "actor": {
-            "name": "test-actor"
+            "name": "test-actor",
+            "user_type": "test-user-type"
          },
          "source": {
             "addr": "hostname.local:port"
@@ -88,7 +90,8 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
             "useragent": "test/0.1"
          },
          "actor": {
-            "name": "test-actor"
+            "name": "test-actor",
+            "user_type": "test-user-type"
          },
          "source": {
             "addr": "hostname.local:port"
@@ -107,6 +110,7 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
 	prototype.Action = EventActionPush
 	prototype.Timestamp = tm
 	prototype.Actor.Name = "test-actor"
+	prototype.Actor.UserType = "test-user-type"
 	prototype.Request.ID = "asdfasdf"
 	prototype.Request.Addr = "client.local"
 	prototype.Request.Host = "registrycluster.local"

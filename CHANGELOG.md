@@ -1,3 +1,10 @@
+# [3.66.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.65.1-gitlab...v3.66.0-gitlab) (2023-01-26)
+
+
+### Features
+
+* **notifications:** add user type to actor in event ([88afcdc](https://gitlab.com/gitlab-org/container-registry/commit/88afcdca914e1ccf1079eefec75e03ade1004bf6))
+
 ## [3.65.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.65.0-gitlab...v3.65.1-gitlab) (2023-01-20)
 
 

@@ -19,11 +19,11 @@ storage:
     rootdirectory: "/tmp/registry"
 database:
   enabled:  true
-  host:     "localhost"
+  host:     127.0.0.1
   port:     5432
-  user:     "postgres"
-  password: "secret"
-  dbname:   "registry_test"
+  user:     "registry"
+  password: "apassword"
+  dbname:   "registry_dev"
   sslmode:  "disable"
 http:
   # Registry API will be accessible at localhost:5000

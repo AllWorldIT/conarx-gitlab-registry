@@ -109,3 +109,8 @@ func getUserName(ctx context.Context, r *http.Request) string {
 
 	return username
 }
+
+// getUserType attempts to resolve a user type from the context.
+func getUserType(ctx context.Context) string {
+	return dcontext.GetStringValue(ctx, auth.UserTypeKey)
+}

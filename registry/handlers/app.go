@@ -1560,7 +1560,8 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 // correct actor and source.
 func (app *App) eventBridge(ctx *Context, r *http.Request) notifications.Listener {
 	actor := notifications.ActorRecord{
-		Name: getUserName(ctx, r),
+		Name:     getUserName(ctx, r),
+		UserType: getUserType(ctx),
 	}
 	request := notifications.NewRequestRecord(dcontext.GetRequestID(ctx), r)
 
@@ -1569,7 +1570,8 @@ func (app *App) eventBridge(ctx *Context, r *http.Request) notifications.Listene
 
 func (app *App) queueBridge(ctx *Context, r *http.Request) *notifications.QueueBridge {
 	actor := notifications.ActorRecord{
-		Name: getUserName(ctx, r),
+		Name:     getUserName(ctx, r),
+		UserType: getUserType(ctx),
 	}
 	request := notifications.NewRequestRecord(dcontext.GetRequestID(ctx), r)
 

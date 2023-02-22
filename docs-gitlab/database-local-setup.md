@@ -3,12 +3,12 @@
 Follow this guide to enable the Registry with the metadata database configured.
 
 
-## macOS
+## macOS and Linux
 
 Requirements:
 
-- Standalone development environment setup*
-- A container runtime, see [Docker Desktop alternatives](./development-environment-setup.md#alternatives-to-docker-desktop))
+- Standalone development environment setup (see **NOTE** below) 
+- A container runtime, see [Docker Desktop alternatives](./development-environment-setup.md#alternatives-to-docker-desktop)
 - The `docker` CLI
 
 **NOTE**: if you have an instance of the GDK running, you can use its postgres
@@ -19,7 +19,7 @@ when running multiple tests. Check the
 ### Run postgresql
 
 There are several options to install and run PostgreSQL
-and the instructions can be found in the [Postgres website](https://www.postgresql.org/download/macosx/).
+and the instructions can be found in the [Postgres website](https://www.postgresql.org/download/).
 For simplicity, this guide will focus on using a container runtime approach.
 
 To run PostgreSQL as a container, follow these instructions:
@@ -117,6 +117,8 @@ database:
   sslmode:  "disable"
 ```
 
+or use `cp config/database-filesystem.yml config.yml` to work with the pre-configured one.
+
 **NOTE**: we use the host's localhost here. If your registry can't connect to
 the database, try using the host's IP address instead (e.g. 192.168.1.100) 
 
@@ -138,8 +140,8 @@ You should see all the migrations being applied. Something like this should be e
 
 ```shell
 ...
-20220803114849_update_gc_track_deleted_layers_trigger
-OK: applied 121 migrations
+20221222120826_post_add_layers_simplified_usage_index_batch_6
+OK: applied 127 migrations in 4.501s
 ```
 
 5. Verify the migrations have been applied to the correct database and that the tables are empty.
@@ -210,14 +212,15 @@ you used to run the migrations.
 1. Run the registry using `./bin/registry serve /path/to/your/config.yml`. Then check the logs for something similar to this:
 
 ```shell
-WARN[0000] the metadata database is an experimental feature, please do not enable it in production  go_version=go1.19.1 instance_id=e11c048a-9901-4e12-be16-be8eedc2e941 service=registry version=v3.58.0-gitlab-6-gef704fd1.m
-INFO[0000] Dialing PostgreSQL server                     database=registry_dev go_version=go1.19.1 host=127.0.0.1 instance_id=e11c048a-9901-4e12-be16-be8eedc2e941 service=registry version=v3.58.0-gitlab-6-gef704fd1.m
-INFO[0000] Exec                                          args="[]" commandTag= database=registry_dev duration_ms=0 go_version=go1.19.1 instance_id=e11c048a-9901-4e12-be16-be8eedc2e941 pid=130 service=registry sql=";" version=v3.58.0-gitlab-6-gef704fd1.m
-INFO[0000] Exec                                          args="[]" commandTag="CREATE TABLE" database=registry_dev duration_ms=1 go_version=go1.19.1 instance_id=e11c048a-9901-4e12-be16-be8eedc2e941 pid=130 service=registry sql="create table if not exists \"schema_migrations\" (\"id\" text not null primary key, \"applied_at\" timestamp with time zone) ;" version=v3.58.0-gitlab-6-gef704fd1.m
-INFO[0000] Query                                         args="[]" database=registry_dev duration_ms=2 go_version=go1.19.1 instance_id=e11c048a-9901-4e12-be16-be8eedc2e941 pid=130 row_count=121 service=registry sql="SELECT * FROM \"schema_migrations\" ORDER BY \"id\" ASC" version=v3.58.0-gitlab-6-gef704fd1.m
-INFO[0000] Exec                                          args="[]" commandTag="CREATE TABLE" database=registry_dev duration_ms=0 go_version=go1.19.1 instance_id=e11c048a-9901-4e12-be16-be8eedc2e941 pid=130 service=registry sql="create table if not exists \"schema_migrations\" (\"id\" text not null primary key, \"applied_at\" timestamp with time zone) ;" version=v3.58.0-gitlab-6-gef704fd1.m
-INFO[0000] Query                                         args="[]" database=registry_dev duration_ms=0 go_version=go1.19.1 instance_id=e11c048a-9901-4e12-be16-be8eedc2e941 pid=130 row_count=121 service=registry sql="SELECT * FROM \"schema_migrations\" ORDER BY \"id\" ASC" version=v3.58.0-gitlab-6-gef704fd1.m
-INFO[0000] listening on [::]:5000                        go_version=go1.19.1 instance_id=e11c048a-9901-4e12-be16-be8eedc2e941 service=registry version=v3.58.0-gitlab-6-gef704fd1.m
+INFO[0000] storage backend redirection enabled           go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e service=registry version=v3.65.1-gitlab-11-g44ce3d88.m
+WARN[0000] the metadata database is an experimental feature, please do not enable it in production  go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e service=registry version=v3.65.1-gitlab-11-g44ce3d88.m
+INFO[0000] Starting upload purge in 55m0s                go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e service=registry version=v3.65.1-gitlab-11-g44ce3d88.m
+INFO[0000] starting online GC agent                      component=registry.gc.Agent go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e jitter_s=16 service=registry version=v3.65.1-gitlab-11-g44ce3d88.m worker=registry.gc.worker.ManifestWorker
+INFO[0000] starting health checker                       address=":5001" go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e path=/debug/health version=v3.65.1-gitlab-11-g44ce3d88.m
+INFO[0000] listening on [::]:5000                        go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e service=registry version=v3.65.1-gitlab-11-g44ce3d88.m
+INFO[0000] starting online GC agent                      component=registry.gc.Agent go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e jitter_s=11 service=registry version=v3.65.1-gitlab-11-g44ce3d88.m worker=registry.gc.worker.BlobWorker
+INFO[0000] starting Prometheus listener                  address=":5001" go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e path=/metrics version=v3.65.1-gitlab-11-g44ce3d88.m
+INFO[0000] starting pprof listener                       address=":5001" go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e path=/debug/pprof/ version=v3.65.1-gitlab-11-g44ce3d88.m
 ```
 
 2. Open a new terminal and push a new image to the current registry:
@@ -238,8 +241,7 @@ registry_dev=# select * from repositories where path = 'root/registry-tests/alpi
   2 |                      1 |           | 2022-10-18 05:03:26.14314+00 |            | alpine | root/registry-tests/alpine | native           |            |
 (1 row)
 
-registry_dev-# select r.name as repo_name, r.path as repo_path, r.created_at, t.name as tag_name, tln.name as namespace from repositories r join tags t on t.repository_id = r.id join top_level_namespaces tln on tln.id = r.to
-p_level_namespace_id ;
+registry_dev-# select r.name as repo_name, r.path as repo_path, r.created_at, t.name as tag_name, tln.name as namespace from repositories r join tags t on t.repository_id = r.id join top_level_namespaces tln on tln.id = r.top_level_namespace_id ;
  repo_name |          repo_path          |          created_at          | tag_name  | namespace
 -----------+-----------------------------+------------------------------+-----------+-----------
  alpine    | root/registry-tests/alpine  | 2022-10-18 05:03:26.14314+00 | latest    | root
@@ -275,6 +277,8 @@ CREATE DATABASE
 export REGISTRY_DATABASE_ENABLED=true
 export REGISTRY_DATABASE_PORT=5432
 export REGISTRY_DATABASE_HOST=127.0.0.1
+export REGISTRY_DATABASE_USER=registry
+export REGISTRY_DATABASE_PASSWORD=apassword
 export REGISTRY_DATABASE_SSLMODE=disable
 ```
 

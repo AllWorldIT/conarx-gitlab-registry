@@ -101,6 +101,10 @@ type ActorRecord struct {
 	// request context that generated the event.
 	Name string `json:"name,omitempty"`
 
+	// UserType is filled when authentication was used, and we were able to identify the user
+	// successfully against the auth service.
+	UserType string `json:"user_type,omitempty"`
+
 	// TODO(stevvooe): Look into setting a session cookie to get this
 	// without docker daemon.
 	//    SessionID

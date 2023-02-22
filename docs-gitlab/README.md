@@ -17,7 +17,6 @@
 - [Authentication Request Flow](auth-request-flow.md)
 - [Online Garbage Collection](db/online-garbage-collection.md)
 - [HTTP API Queries](db/http-api-queries.md)
-- [Migration Proxy Mode](migration-proxy.md)
 
 ### Troubleshooting
 
