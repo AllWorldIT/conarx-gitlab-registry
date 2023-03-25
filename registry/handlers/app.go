@@ -38,7 +38,6 @@ import (
 	"github.com/docker/distribution/registry/gc"
 	"github.com/docker/distribution/registry/gc/worker"
 	"github.com/docker/distribution/registry/handlers/internal/metrics"
-	metricskit "github.com/docker/distribution/registry/handlers/internal/metrics/labkit"
 	"github.com/docker/distribution/registry/internal"
 	redismetrics "github.com/docker/distribution/registry/internal/metrics/redis"
 	"github.com/docker/distribution/registry/internal/migration"
@@ -62,6 +61,7 @@ import (
 	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"gitlab.com/gitlab-org/labkit/errortracking"
+	metricskit "gitlab.com/gitlab-org/labkit/metrics"
 	"gitlab.com/gitlab-org/labkit/metrics/sqlmetrics"
 )
 
@@ -817,7 +817,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 var routeMetricsMiddleware = metricskit.NewHandlerFactory(
 	metricskit.WithNamespace(prometheus.NamespacePrefix),
-	metricskit.WithLabels("route", "migration_path"),
+	metricskit.WithLabels("route"),
 	// Keeping the same buckets used before LabKit, as defined in
 	// https://github.com/docker/go-metrics/blob/b619b3592b65de4f087d9f16863a7e6ff905973c/handler.go#L31:L32
 	metricskit.WithRequestDurationBuckets([]float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 60}),
@@ -1695,15 +1695,17 @@ func appendRepositoryDetailsAccessRecords(accessRecords []auth.Access, r *http.R
 	route := mux.CurrentRoute(r)
 	routeName := route.GetName()
 
-	// For now, we only have two operation requiring a custom access record, which are:
+	// For now, we only have three operations requiring a custom access record, which are:
 	// 1. for returning the size of a repository including its descendants.
 	// 2. for returning all the repositories under a given repository base path (including the base repository)
-	// These two operations requires an access record of type `repository` and name `<name>/*`
-	// (to grant read access on all descendants), in addition to the standard access record of type `repository` and
+	// 3. renaming a base repository (name and path) and updating the sub-repositories (path) accordingly
+	// These three operations require an access record of type `repository` and name `<name>/*`
+	// (to grant access on all descendants), in addition to the standard access record of type `repository` and
 	// name `<name>` (to grant read access to the base repository), which was appended in the preceding call to
 	// `appendAccessRecords`.
 	if routeName == v1.SubRepositories.Name ||
-		(routeName == v1.Repositories.Name && sizeQueryParamValue(r) == sizeQueryParamSelfWithDescendantsValue) {
+		(routeName == v1.Repositories.Name &&
+			(sizeQueryParamValue(r) == sizeQueryParamSelfWithDescendantsValue || r.Method == http.MethodPatch)) {
 		accessRecords = append(accessRecords, auth.Access{
 			Resource: auth.Resource{
 				Type: "repository",

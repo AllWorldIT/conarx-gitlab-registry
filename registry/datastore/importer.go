@@ -68,6 +68,9 @@ func WithImportDanglingManifests(imp *Importer) {
 
 // WithImportDanglingBlobs configures the Importer to import all blobs
 // rather than only blobs referenced by manifests.
+//
+// Deprecated: WithImportDanglingBlobs is a legacy option that is no longer used
+// in the import command made available to the user.
 func WithImportDanglingBlobs(imp *Importer) {
 	imp.importDanglingBlobs = true
 }
@@ -945,7 +948,84 @@ func (imp *Importer) isDatabaseEmpty(ctx context.Context) (bool, error) {
 }
 
 // ImportAll populates the registry database with metadata from all repositories in the storage backend.
+//
+// Deprecated: ImportAll is the original implementation and should no longer be used, use FullImport instead.
 func (imp *Importer) ImportAll(ctx context.Context) error {
+	var tx Transactor
+	var err error
+
+	// Add pre_import field to all subsequent logging.
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"pre_import": false, "dry_run": imp.dryRun, "legacy": true})
+	ctx = log.WithLogger(ctx, l)
+	l.Warn("this is the legacy full import method, do not use on production registries")
+
+	// Create a single transaction and roll it back at the end for dry runs.
+	if imp.dryRun {
+		tx, err = imp.beginTx(ctx)
+		if err != nil {
+			return fmt.Errorf("beginning dry run transaction: %w", err)
+		}
+		defer tx.Rollback()
+	}
+
+	start := time.Now()
+	l.Info("starting metadata import")
+
+	if imp.requireEmptyDatabase {
+		empty, err := imp.isDatabaseEmpty(ctx)
+		if err != nil {
+			return fmt.Errorf("checking if database is empty: %w", err)
+		}
+		if !empty {
+			return errors.New("non-empty database")
+		}
+	}
+
+	if imp.importDanglingBlobs {
+		blobStart := time.Now()
+		l.Info("importing all blobs")
+
+		if err := imp.importBlobs(ctx); err != nil {
+			return fmt.Errorf("importing blobs: %w", err)
+		}
+
+		blobEnd := time.Since(blobStart).Seconds()
+		l.WithFields(log.Fields{"duration_s": blobEnd}).Info("blob import complete")
+	}
+
+	if err := imp.importAllRepositories(ctx); err != nil {
+		return err
+	}
+
+	// This should only delay during testing.
+	time.Sleep(imp.testingDelay)
+
+	if !imp.dryRun {
+		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
+		imp.loadStores(imp.db)
+	}
+
+	if imp.rowCount {
+		counters, err := imp.countRows(ctx)
+		if err != nil {
+			l.WithError(err).Error("counting table rows")
+		}
+
+		logCounters := make(map[string]interface{}, len(counters))
+		for t, n := range counters {
+			logCounters[t] = n
+		}
+		l = l.WithFields(logCounters)
+	}
+
+	t := time.Since(start).Seconds()
+	l.WithFields(log.Fields{"duration_s": t}).Info("metadata import complete")
+
+	return err
+}
+
+// FullImport populates the registry database with metadata from all repositories in the storage backend.
+func (imp *Importer) FullImport(ctx context.Context) error {
 	var tx Transactor
 	var err error
 
@@ -975,86 +1055,28 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 		}
 	}
 
-	if imp.importDanglingBlobs {
-		var index int
-		blobStart := time.Now()
-		l.Info("importing all blobs")
-		err := imp.registry.Blobs().Enumerate(ctx, func(desc distribution.Descriptor) error {
-			index++
-			l := l.WithFields(log.Fields{"digest": desc.Digest, "count": index, "size": desc.Size})
-			l.Info("importing blob")
-
-			dbBlob, err := imp.blobStore.FindByDigest(ctx, desc.Digest)
-			if err != nil {
-				return fmt.Errorf("checking for existence of blob: %w", err)
-			}
-
-			if dbBlob == nil {
-				if err := imp.blobStore.Create(ctx, &models.Blob{MediaType: "application/octet-stream", Digest: desc.Digest, Size: desc.Size}); err != nil {
-					return fmt.Errorf("creating blob in database: %w", err)
-				}
-			}
-
-			// Even if we found the blob in the database, try to transfer in case it's
-			// not present in blob storage on the transfer side.
-			if err = imp.transferBlob(ctx, desc.Digest, desc.Size, metrics.BlobTypeUnknown); err != nil {
-				return err
-			}
-
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("importing blobs: %w", err)
-		}
-
-		blobEnd := time.Since(blobStart).Seconds()
-		l.WithFields(log.Fields{"duration_s": blobEnd}).Info("blob import complete")
+	if err := imp.preImportAllRepositories(ctx); err != nil {
+		return fmt.Errorf("pre importing all repositories: %w", err)
 	}
 
-	repositoryEnumerator, ok := imp.registry.(distribution.RepositoryEnumerator)
-	if !ok {
-		return errors.New("error building repository enumerator")
-	}
-
-	index := 0
-	err = repositoryEnumerator.Enumerate(ctx, func(path string) error {
-		if !imp.dryRun {
-			tx, err = imp.beginTx(ctx)
-			if err != nil {
-				return fmt.Errorf("beginning repository transaction: %w", err)
-			}
-			defer tx.Rollback()
-		}
-
-		index++
-		repoStart := time.Now()
-		l := l.WithFields(log.Fields{"repository": path, "count": index})
-		l.Info("importing repository")
-
-		if err := imp.importRepository(ctx, path); err != nil {
-			l.WithError(err).Error("error importing repository")
-			// if the storage driver failed to find a repository path (usually due to missing `_manifests/revisions`
-			// or `_manifests/tags` folders) continue to the next one, otherwise stop as the error is unknown.
-			if !(errors.As(err, &driver.PathNotFoundError{}) || errors.As(err, &distribution.ErrRepositoryUnknown{})) {
-				return err
-			}
-			return nil
-		}
-
-		repoEnd := time.Since(repoStart).Seconds()
-		l.WithFields(log.Fields{"duration_s": repoEnd}).Info("repository import complete")
-
-		if !imp.dryRun {
-			if err := tx.Commit(); err != nil {
-				return fmt.Errorf("commit repository transaction: %w", err)
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
+	if err := imp.importAllRepositories(ctx); err != nil {
 		return err
 	}
+
+	if !imp.dryRun {
+		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
+		imp.loadStores(imp.db)
+	}
+
+	blobStart := time.Now()
+	l.Info("importing all blobs")
+
+	if err := imp.importBlobs(ctx); err != nil {
+		return fmt.Errorf("importing blobs: %w", err)
+	}
+
+	blobEnd := time.Since(blobStart).Seconds()
+	l.WithFields(log.Fields{"duration_s": blobEnd}).Info("blob import complete")
 
 	// This should only delay during testing.
 	time.Sleep(imp.testingDelay)
@@ -1081,6 +1103,329 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 	l.WithFields(log.Fields{"duration_s": t}).Info("metadata import complete")
 
 	return err
+}
+
+// PreImportAll populates repository data without including any tag information.
+// This command is safe to run without read-only mode enabled on the registry.
+func (imp *Importer) PreImportAll(ctx context.Context) error {
+	// Add specific log fields to all subsequent log entries.
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"pre_import": true,
+		"component":  "importer",
+	})
+	ctx = log.WithLogger(ctx, l)
+	l.Info("Starting full pre-import")
+
+	// Create a single transaction and roll it back at the end for dry runs.
+	if imp.dryRun {
+		tx, err := imp.beginTx(ctx)
+		if err != nil {
+			return fmt.Errorf("begin dry run transaction: %w", err)
+		}
+		defer tx.Rollback()
+	}
+
+	if imp.requireEmptyDatabase {
+		empty, err := imp.isDatabaseEmpty(ctx)
+		if err != nil {
+			return fmt.Errorf("checking if database is empty: %w", err)
+		}
+		if !empty {
+			return errors.New("non-empty database")
+		}
+	}
+
+	start := time.Now()
+
+	if err := imp.preImportAllRepositories(ctx); err != nil {
+		return fmt.Errorf("pre importing all repositories: %w", err)
+	}
+
+	if imp.testingDelay < 0 {
+		return errNegativeTestingDelay
+	}
+
+	// This should only delay during testing.
+	timer := time.NewTimer(imp.testingDelay)
+	select {
+	case <-timer.C:
+		// do nothing
+		l.Debug("done waiting for slow pre import test")
+	case <-ctx.Done():
+		return nil
+	}
+
+	if imp.rowCount {
+		counters, err := imp.countRows(ctx)
+		if err != nil {
+			l.WithError(err).Error("counting table rows")
+		}
+
+		logCounters := make(map[string]interface{}, len(counters))
+		for t, n := range counters {
+			logCounters[t] = n
+		}
+		l = l.WithFields(logCounters)
+	}
+
+	t := time.Since(start).Seconds()
+	l.WithFields(log.Fields{"duration_s": t}).Info("full pre-import complete")
+
+	return nil
+}
+
+func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
+	repositoryEnumerator, ok := imp.registry.(distribution.RepositoryEnumerator)
+	if !ok {
+		return errors.New("building repository enumerator")
+	}
+
+	index := 0
+	return repositoryEnumerator.Enumerate(ctx, func(path string) error {
+		index++
+		repoStart := time.Now()
+		l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": path, "count": index})
+		l.Info("pre importing repository")
+
+		named, err := reference.WithName(path)
+		if err != nil {
+			return fmt.Errorf("parsing repository name: %w", err)
+		}
+
+		fsRepo, err := imp.registry.Repository(ctx, named)
+		if err != nil {
+			return fmt.Errorf("constructing filesystem repository: %w", err)
+		}
+
+		dbRepo, err := imp.repositoryStore.CreateOrFindByPath(ctx, path)
+		if err != nil {
+			return fmt.Errorf("creating or finding repository in database: %w", err)
+		}
+
+		if err = imp.preImportTaggedManifests(ctx, fsRepo, dbRepo); err != nil {
+			l.WithError(err).Error("pre importing tagged manifests")
+			// if the storage driver failed to find a repository path (usually due to missing `_manifests/revisions`
+			// or `_manifests/tags` folders) continue to the next one, otherwise stop as the error is unknown.
+			if !(errors.As(err, &driver.PathNotFoundError{}) || errors.As(err, &distribution.ErrRepositoryUnknown{})) {
+				return fmt.Errorf("pre importing tagged manifests: %w", err)
+			}
+			return nil
+		}
+
+		repoEnd := time.Since(repoStart).Seconds()
+		l.WithFields(log.Fields{"duration_s": repoEnd}).Info("repository pre import complete")
+
+		return nil
+	})
+}
+
+// ImportAllRepositories populates all repository data, when used after a pre import
+// cycle, this data will largely include only tags, but if a tag is not
+// associated with an existing manifest, all metadata associated with that
+// manifest will be imported. This command must only be used when read-only
+// mode is enabled on the registry.
+func (imp *Importer) ImportAllRepositories(ctx context.Context) error {
+	// Add specific log fields to all subsequent log entries.
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"pre_import": false,
+		"component":  "importer",
+	})
+	ctx = log.WithLogger(ctx, l)
+	l.Info("Starting full import")
+
+	// Create a single transaction and roll it back at the end for dry runs.
+	if imp.dryRun {
+		tx, err := imp.beginTx(ctx)
+		if err != nil {
+			return fmt.Errorf("begin dry run transaction: %w", err)
+		}
+		defer tx.Rollback()
+	}
+
+	if imp.requireEmptyDatabase {
+		empty, err := imp.isDatabaseEmpty(ctx)
+		if err != nil {
+			return fmt.Errorf("checking if database is empty: %w", err)
+		}
+		if !empty {
+			return errors.New("non-empty database")
+		}
+	}
+
+	start := time.Now()
+
+	if err := imp.importAllRepositories(ctx); err != nil {
+		return fmt.Errorf("importing all repositories: %w", err)
+	}
+
+	if imp.testingDelay < 0 {
+		return errNegativeTestingDelay
+	}
+
+	if !imp.dryRun {
+		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
+		imp.loadStores(imp.db)
+	}
+
+	// This should only delay during testing.
+	timer := time.NewTimer(imp.testingDelay)
+	select {
+	case <-timer.C:
+		// do nothing
+		l.Debug("done waiting for slow import test")
+	case <-ctx.Done():
+		return nil
+	}
+
+	if imp.rowCount {
+		counters, err := imp.countRows(ctx)
+		if err != nil {
+			l.WithError(err).Error("counting table rows")
+		}
+
+		logCounters := make(map[string]interface{}, len(counters))
+		for t, n := range counters {
+			logCounters[t] = n
+		}
+		l = l.WithFields(logCounters)
+	}
+
+	t := time.Since(start).Seconds()
+	l.WithFields(log.Fields{"duration_s": t}).Info("full repository import complete")
+
+	return nil
+}
+
+// ImportBlobs populates the registry database with metadata from all blobs in the storage backend.
+func (imp *Importer) ImportBlobs(ctx context.Context) error {
+	var tx Transactor
+	var err error
+
+	// Add common fields to all subsequent logging.
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"pre_import": false, "dry_run": imp.dryRun})
+	ctx = log.WithLogger(ctx, l)
+
+	// Create a single transaction and roll it back at the end for dry runs.
+	if imp.dryRun {
+		tx, err = imp.beginTx(ctx)
+		if err != nil {
+			return fmt.Errorf("beginning dry run transaction: %w", err)
+		}
+		defer tx.Rollback()
+	}
+
+	if imp.requireEmptyDatabase {
+		empty, err := imp.isDatabaseEmpty(ctx)
+		if err != nil {
+			return fmt.Errorf("checking if database is empty: %w", err)
+		}
+		if !empty {
+			return errors.New("non-empty database")
+		}
+	}
+
+	start := time.Now()
+	l.Info("starting blob metadata import")
+
+	if err := imp.importBlobs(ctx); err != nil {
+		return fmt.Errorf("importing blobs: %w", err)
+	}
+
+	end := time.Since(start).Seconds()
+	l.WithFields(log.Fields{"duration_s": end}).Info("blob metadata import complete")
+
+	// This should only delay during testing.
+	time.Sleep(imp.testingDelay)
+
+	if !imp.dryRun {
+		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
+		imp.loadStores(imp.db)
+	}
+
+	if imp.rowCount {
+		counters, err := imp.countRows(ctx)
+		if err != nil {
+			l.WithError(err).Error("counting table rows")
+		}
+
+		logCounters := make(map[string]interface{}, len(counters))
+		for t, n := range counters {
+			logCounters[t] = n
+		}
+		l = l.WithFields(logCounters)
+	}
+
+	return err
+}
+
+func (imp *Importer) importBlobs(ctx context.Context) error {
+	var index int
+	return imp.registry.Blobs().Enumerate(ctx, func(desc distribution.Descriptor) error {
+		index++
+		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"digest": desc.Digest, "count": index, "size": desc.Size}).Info("importing blob")
+
+		dbBlob, err := imp.blobStore.FindByDigest(ctx, desc.Digest)
+		if err != nil {
+			return fmt.Errorf("checking for existence of blob: %w", err)
+		}
+
+		if dbBlob == nil {
+			if err := imp.blobStore.Create(ctx, &models.Blob{MediaType: "application/octet-stream", Digest: desc.Digest, Size: desc.Size}); err != nil {
+				return fmt.Errorf("creating blob in database: %w", err)
+			}
+		}
+
+		// Even if we found the blob in the database, try to transfer in case it's
+		// not present in blob storage on the transfer side.
+		return imp.transferBlob(ctx, desc.Digest, desc.Size, metrics.BlobTypeUnknown)
+	})
+}
+
+func (imp *Importer) importAllRepositories(ctx context.Context) error {
+	var tx Transactor
+	var err error
+
+	repositoryEnumerator, ok := imp.registry.(distribution.RepositoryEnumerator)
+	if !ok {
+		return errors.New("error building repository enumerator")
+	}
+
+	index := 0
+	return repositoryEnumerator.Enumerate(ctx, func(path string) error {
+		if !imp.dryRun {
+			tx, err = imp.beginTx(ctx)
+			if err != nil {
+				return fmt.Errorf("beginning repository transaction: %w", err)
+			}
+			defer tx.Rollback()
+		}
+
+		index++
+		start := time.Now()
+		l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": path, "count": index})
+		l.Info("importing repository")
+
+		if err := imp.importRepository(ctx, path); err != nil {
+			l.WithError(err).Error("error importing repository")
+			// if the storage driver failed to find a repository path (usually due to missing `_manifests/revisions`
+			// or `_manifests/tags` folders) continue to the next one, otherwise stop as the error is unknown.
+			if !(errors.As(err, &driver.PathNotFoundError{}) || errors.As(err, &distribution.ErrRepositoryUnknown{})) {
+				return err
+			}
+			return nil
+		}
+
+		end := time.Since(start).Seconds()
+		l.WithFields(log.Fields{"duration_s": end}).Info("repository import complete")
+
+		if !imp.dryRun {
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("commit repository transaction: %w", err)
+			}
+		}
+
+		return nil
+	})
 }
 
 // Import populates the registry database with metadata from a specific repository in the storage backend.

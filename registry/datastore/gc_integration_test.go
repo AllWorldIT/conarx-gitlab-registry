@@ -77,12 +77,16 @@ const (
 	defaultReviewAfterDelay = 24 * time.Hour
 
 	// minReviewAfterJitter is the minimum jitter in seconds that the online GC triggers will use to set a task's review
-	// due date (`review_after` column) whenever they are created or updated.
+	// due date (`review_after` column) whenever they are created or updated. The minimum jitter used by the database triggers
+	// when scheduling GC reviews in all GC review-table's `review_after` column is set to 5 seconds in this migration:
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/registry/datastore/migrations/20220729143447_update_gc_review_after_function.go
 	minReviewAfterJitter = 5 * time.Second
 
-	// minReviewAfterJitter is the maximum jitter in seconds that the online GC triggers will use to set a task's review
-	// due date (`review_after` column) whenever they are created or updated.
-	maxReviewAfterJitter = 60 * time.Second
+	// maxReviewAfterJitter is the maximum jitter in seconds that the online GC triggers will use to set a task's review
+	// due date (`review_after` column) whenever they are created or updated. The maximum jitter used by the database triggers
+	// when scheduling GC reviews in all GC review-table's `review_after` column is set to < 61 seconds in this migration:
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/registry/datastore/migrations/20220729143447_update_gc_review_after_function.go
+	maxReviewAfterJitter = 61 * time.Second
 
 	// defaultReviewAfterWithMinJitterDelay is the default delay plus the minimum jitter in seconds applied by online GC triggers
 	// to review tasks plus the minimum jitter in seconds that the online GC triggers will use to set a task's review.

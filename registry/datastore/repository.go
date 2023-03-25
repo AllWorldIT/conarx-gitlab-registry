@@ -38,6 +38,7 @@ type RepositoryReader interface {
 	FindSiblingsOf(ctx context.Context, id int64) (models.Repositories, error)
 	Count(ctx context.Context) (int, error)
 	CountAfterPath(ctx context.Context, path string) (int, error)
+	CountPathSubRepositories(ctx context.Context, topLevelNamespaceID int64, path string) (int, error)
 	Manifests(ctx context.Context, r *models.Repository) (models.Manifests, error)
 	Tags(ctx context.Context, r *models.Repository) (models.Tags, error)
 	TagsPaginated(ctx context.Context, r *models.Repository, limit int, lastName string) (models.Tags, error)
@@ -67,6 +68,8 @@ type RepositoryWriter interface {
 	UnlinkBlob(ctx context.Context, r *models.Repository, d digest.Digest) (bool, error)
 	DeleteTagByName(ctx context.Context, r *models.Repository, name string) (bool, error)
 	DeleteManifest(ctx context.Context, r *models.Repository, d digest.Digest) (bool, error)
+	RenamePathForSubRepositories(ctx context.Context, topLevelNamespaceID int64, oldPath, newPath string) error
+	Rename(ctx context.Context, r *models.Repository, newPath, newName string) error
 }
 
 type repositoryOption func(*models.Repository)
@@ -830,6 +833,19 @@ func (s *repositoryStore) CountAfterPath(ctx context.Context, path string) (int,
 	return count, nil
 }
 
+// CountPathSubRepositories counts all sub repositories of a repository path (including the base repository).
+func (s *repositoryStore) CountPathSubRepositories(ctx context.Context, topLevelNamespaceID int64, path string) (int, error) {
+	defer metrics.InstrumentQuery("repository_count_sub_repositories")()
+
+	q := "SELECT COUNT(*) FROM repositories WHERE top_level_namespace_id = $1 AND (path = $2 OR path LIKE $3)"
+	var count int
+	if err := s.db.QueryRowContext(ctx, q, topLevelNamespaceID, path, path+"/%").Scan(&count); err != nil {
+		return count, fmt.Errorf("counting sub-repositories: %w", err)
+	}
+
+	return count, nil
+}
+
 // Manifests finds all manifests associated with a repository.
 func (s *repositoryStore) Manifests(ctx context.Context, r *models.Repository) (models.Manifests, error) {
 	defer metrics.InstrumentQuery("repository_manifests")()
@@ -1551,7 +1567,7 @@ func (s *repositoryStore) DeleteManifest(ctx context.Context, r *models.Reposito
 // Also, even if there are no repository with a `path` of `lastPath`, the returned
 // repositories will still be those with a base path `path` and lexicographically after lastPath.
 func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context, path string, lastPath string, limit int) (models.Repositories, error) {
-	defer metrics.InstrumentQuery("repository_find_descendants_of")()
+	defer metrics.InstrumentQuery("repository_find_paginated_repositories_for_path")()
 	q := `SELECT  
 			id,
 			top_level_namespace_id,
@@ -1577,6 +1593,41 @@ func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context,
 	}
 
 	return scanFullRepositories(rows)
+}
+
+// RenamePathForSubRepositories updates all sub repositories that start with a repository `oldPath` to a `newPath`
+// e.g: All sub repositories with `oldPath`: my-group/my-sub-group/old-repo-name will be changed to:
+// my-group/my-sub-group/new-repo-name, where the `newPath` argument is `my-group/my-sub-group/new-repo-name`.
+// This does not change the base repository's path however.
+func (s *repositoryStore) RenamePathForSubRepositories(ctx context.Context, topLevelNamespaceID int64, oldPath, newPath string) error {
+	defer metrics.InstrumentQuery("repository_rename_sub_repositories_path")()
+
+	q := "UPDATE repositories SET path = REPLACE(path, $1, $2) WHERE top_level_namespace_id = $3 AND path LIKE $4"
+	_, err := s.db.ExecContext(ctx, q, oldPath, newPath, topLevelNamespaceID, oldPath+"/%")
+	if err != nil {
+		return fmt.Errorf("renaming sub-repository paths: %w", err)
+	}
+	return nil
+}
+
+// Rename updates a repository's path and name attributes to a `newPath` and `newName` respectively.
+// This must always be followed by `RenamePathForSubRepositories` to make sure sub-repositories starting with
+// the `oldPath`of the repository are also updated to start with the `newPath`.
+func (s *repositoryStore) Rename(ctx context.Context, r *models.Repository, newPath, newName string) error {
+	defer metrics.InstrumentQuery("repository_rename")()
+
+	q := "UPDATE repositories SET path = $1, name = $2 WHERE top_level_namespace_id = $3 AND path = $4 RETURNING updated_at"
+	row := s.db.QueryRowContext(ctx, q, newPath, newName, r.NamespaceID, r.Path)
+	if err := row.Scan(&r.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("repository not found")
+		}
+		return fmt.Errorf("renaming repository: %w", err)
+	}
+
+	s.cache.Set(ctx, r)
+
+	return nil
 }
 
 // lexicographicallyNextPath takes a path string and returns the next lexicographical path string.

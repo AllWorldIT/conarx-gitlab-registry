@@ -1,3 +1,3 @@
-[{"id":2,"top_level_namespace_id":1,"repository_id":1,"layer_id":2,"digest":"\\x013d14ebaae2d1dc4f2a86598f1c76055ec7f41afa5ba8c3a36eb758eb3acc6414"}, 
- {"id":3,"top_level_namespace_id":1,"repository_id":1,"layer_id":3,"digest":"\\x016205e6b1238c554811d6a047b3d241ec5e1c1bc6daa95081190ee9f5d6ca5de2"}, 
- {"id":1,"top_level_namespace_id":1,"repository_id":1,"layer_id":1,"digest":"\\x01c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9"}]
+[{"id":1,"top_level_namespace_id":1,"repository_id":1,"layer_id":1,"digest":"\\x01c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9"}, 
+ {"id":2,"top_level_namespace_id":1,"repository_id":1,"layer_id":2,"digest":"\\x013d14ebaae2d1dc4f2a86598f1c76055ec7f41afa5ba8c3a36eb758eb3acc6414"}, 
+ {"id":3,"top_level_namespace_id":1,"repository_id":1,"layer_id":3,"digest":"\\x016205e6b1238c554811d6a047b3d241ec5e1c1bc6daa95081190ee9f5d6ca5de2"}]

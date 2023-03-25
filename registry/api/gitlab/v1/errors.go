@@ -41,12 +41,32 @@ var ErrorCodeInvalidQueryParamType = errcode.Register(errGroup, errcode.ErrorDes
 	HTTPStatusCode: http.StatusBadRequest,
 })
 
+// ErrorCodeInvalidBodyParamType is returned when the value of a body parameter is of an invalid type.
+var ErrorCodeInvalidBodyParamType = errcode.Register(errGroup, errcode.ErrorDescriptor{
+	Value:          "INVALID_BODY_PARAMETER_TYPE",
+	Message:        "invalid body parameter value type",
+	Description:    "The value of a request body parameter is of an invalid type",
+	HTTPStatusCode: http.StatusBadRequest,
+})
+
+// ErrorCodeInvalidJSONBody is returned when the body of a request is an invalid json.
+var ErrorCodeInvalidJSONBody = errcode.Register(errGroup, errcode.ErrorDescriptor{
+	Value:          "INVALID_JSON_BODY",
+	Message:        "invalid json body",
+	Description:    "The body of the request is an invalid json",
+	HTTPStatusCode: http.StatusBadRequest,
+})
+
 func InvalidQueryParamTypeErrorDetail(key string, validTypes []reflect.Kind) string {
 	strTypes := make([]string, 0, len(validTypes))
 	for _, t := range validTypes {
 		strTypes = append(strTypes, t.String())
 	}
 	return fmt.Sprintf("the '%s' query parameter value type must be one of: %s", key, strings.Join(strTypes, ", "))
+}
+
+func InvalidPatchBodyTypeErrorDetail(key string, pattern *regexp.Regexp) string {
+	return fmt.Sprintf("the '%s' body parameter value must match the pattern '%s'", key, pattern)
 }
 
 // ErrorCodePreImportInProgress is returned when a repository is already pre importing.
@@ -146,6 +166,28 @@ var ErrorCodeImportCannotBeCanceled = errcode.Register(errGroup, errcode.ErrorDe
 	HTTPStatusCode: http.StatusBadRequest,
 })
 
+// ErrorCodeRenameConflict when a repository name is already taken.
+var ErrorCodeRenameConflict = errcode.Register(errGroup, errcode.ErrorDescriptor{
+	Value:   "RENAME_CONFLICT",
+	Message: "repository name is already taken",
+	Description: `This is returned if the name used during a rename operation is
+			already in use in the registry.`,
+	HTTPStatusCode: http.StatusConflict,
+})
+
+// ErrorCodeExceedsLimit when the repository has too many sub-repositories to perform an operation.
+var ErrorCodeExceedsLimit = errcode.Register(errGroup, errcode.ErrorDescriptor{
+	Value:   "EXCEEDS_LIMITS",
+	Message: "repository contains too many sub-repositories for the operation",
+	Description: `This is returned if the repository used during an operation 
+		contains too many sub-repositories.`,
+	HTTPStatusCode: http.StatusUnprocessableEntity,
+})
+
 func ErrorCodeImportCannotBeCanceledDetail(repo distribution.Repository, status string) string {
 	return fmt.Sprintf("repository path %s previous migration status: %s", repo.Named().Name(), status)
+}
+
+func ExceedsRenameLimitErrorDetail(validValue int) string {
+	return fmt.Sprintf("the repository must have less than %d sub-repositories:", validValue)
 }

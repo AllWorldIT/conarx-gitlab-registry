@@ -54,6 +54,7 @@ func init() {
 	maxRequestsPerSecond := os.Getenv("S3_MAX_REQUESTS_PER_SEC")
 	maxRetries := os.Getenv("S3_MAX_RETRIES")
 	logLevel := os.Getenv("S3_LOG_LEVEL")
+	objectOwnership := os.Getenv("S3_OBJECT_OWNERSHIP")
 
 	if err != nil {
 		panic(err)
@@ -123,6 +124,14 @@ func init() {
 			}
 		}
 
+		objectOwnershipBool := false
+		if objectOwnership != "" {
+			objectOwnershipBool, err = strconv.ParseBool(objectOwnership)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		parallelWalkBool := true
 
 		logLevelType := parseLogLevelParam(logLevel)
@@ -151,6 +160,7 @@ func init() {
 			maxRetriesInt64,
 			parallelWalkBool,
 			logLevelType,
+			objectOwnershipBool,
 		}
 
 		return New(parameters)
@@ -337,6 +347,15 @@ func Test_parseParameters(t *testing.T) {
 			emptyAllowed:    false,
 			nonTypeAllowed:  false,
 			defaultt:        s3.ObjectCannedACLPrivate,
+		},
+		"objectownership": {
+			parameters:      p,
+			paramName:       "objectownership",
+			driverParamName: "ObjectOwnership",
+			nilAllowed:      true,
+			emptyAllowed:    false,
+			nonTypeAllowed:  false,
+			defaultt:        false,
 		},
 	}
 

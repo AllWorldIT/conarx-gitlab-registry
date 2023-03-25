@@ -158,13 +158,28 @@ var (
 
 // Sink accepts and sends events.
 type Sink interface {
-	// Write writes one or more events to the sink. If no error is returned,
-	// the caller will assume that all events have been committed and will not
-	// try to send them again. If an error is received, the caller may retry
+	// Write writes an event to the sink. If no error is returned,
+	// the caller will assume that the event was committed and will not
+	// try to send it again. If an error is received, the caller may retry
 	// sending the event. The caller should cede the slice of memory to the
 	// sink and not modify it after calling this method.
-	Write(events ...Event) error
+	Write(event *Event) error
 
 	// Close the sink, possibly waiting for pending events to flush.
 	Close() error
+}
+
+func (e *Event) artifact() string {
+	if e.Target.Tag != "" {
+		return "tag"
+	}
+
+	if e.Target.MediaType == "application/octet-stream" {
+		return "blob"
+	}
+
+	// We know that the previous cases take precedence, so we can fall back to manifest. The only exception right now
+	// is that there is no way to distinguish between deleted blobs and manifests.
+	// TODO: support for deleted blobs https://gitlab.com/gitlab-org/container-registry/-/issues/920
+	return "manifest"
 }

@@ -74,6 +74,11 @@ var (
 	// are like digests without the algorithm, since sha256 is used.
 	IdentifierRegexp = match(`([a-f0-9]{64})`)
 
+	// GitLabProjectNameRegex regex is used to check or match a
+	// name to the gitlab project name pattern.
+	// https://gitlab.com/gitlab-org/gitlab/-/issues/349047
+	GitLabProjectNameRegex = regexp.MustCompile(`^[[a-z0-9]+([._-][a-z0-9]+)*([a-z0-9]+([._-][a-z0-9]+)*)*]*$`)
+
 	// anchoredIdentifierRegexp is used to check or match an
 	// identifier value, anchored at start and end of string.
 	anchoredIdentifierRegexp = anchored(IdentifierRegexp)

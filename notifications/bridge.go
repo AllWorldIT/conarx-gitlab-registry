@@ -82,7 +82,7 @@ func (b *bridge) BlobMounted(repo reference.Named, desc distribution.Descriptor,
 		return err
 	}
 	event.Target.FromRepository = fromRepo.Name()
-	return b.sink.Write(*event)
+	return b.sink.Write(event)
 }
 
 func (b *bridge) BlobDeleted(repo reference.Named, dgst digest.Digest) error {
@@ -97,7 +97,7 @@ func (b *bridge) RepoDeleted(repo reference.Named) error {
 	event := b.createEvent(EventActionDelete)
 	event.Target.Repository = repo.Name()
 
-	return b.sink.Write(*event)
+	return b.sink.Write(event)
 }
 
 func (b *bridge) createManifestEventAndWrite(action string, repo reference.Named, sm distribution.Manifest) error {
@@ -106,7 +106,7 @@ func (b *bridge) createManifestEventAndWrite(action string, repo reference.Named
 		return err
 	}
 
-	return b.sink.Write(*manifestEvent)
+	return b.sink.Write(manifestEvent)
 }
 
 func (b *bridge) createManifestDeleteEventAndWrite(action string, repo reference.Named, dgst digest.Digest) error {
@@ -114,7 +114,7 @@ func (b *bridge) createManifestDeleteEventAndWrite(action string, repo reference
 	event.Target.Repository = repo.Name()
 	event.Target.Digest = dgst
 
-	return b.sink.Write(*event)
+	return b.sink.Write(event)
 }
 
 func (b *bridge) createManifestEvent(action string, repo reference.Named, sm distribution.Manifest) (*Event, error) {
@@ -158,7 +158,7 @@ func (b *bridge) createBlobDeleteEventAndWrite(action string, repo reference.Nam
 	event.Target.Digest = dgst
 	event.Target.Repository = repo.Name()
 
-	return b.sink.Write(*event)
+	return b.sink.Write(event)
 }
 
 func (b *bridge) createBlobEventAndWrite(action string, repo reference.Named, desc distribution.Descriptor) error {
@@ -167,7 +167,7 @@ func (b *bridge) createBlobEventAndWrite(action string, repo reference.Named, de
 		return err
 	}
 
-	return b.sink.Write(*event)
+	return b.sink.Write(event)
 }
 
 func (b *bridge) createBlobEvent(action string, repo reference.Named, desc distribution.Descriptor) (*Event, error) {

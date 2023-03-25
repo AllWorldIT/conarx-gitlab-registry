@@ -469,7 +469,7 @@ type manifestOpts struct {
 	putManifest           bool
 	writeToFilesystemOnly bool
 	assertNotification    bool
-
+	withoutMediaType      bool
 	// Non-optional values which be passed through by the testing func for ease of use.
 	repoPath string
 }
@@ -495,6 +495,10 @@ func writeToFilesystemOnly(t *testing.T, env *testEnv, opts *manifestOpts) {
 
 func withAssertNotification(t *testing.T, env *testEnv, opts *manifestOpts) {
 	opts.assertNotification = true
+}
+
+func withoutMediaType(_ *testing.T, _ *testEnv, opts *manifestOpts) {
+	opts.withoutMediaType = true
 }
 
 func schema2Config() ([]byte, distribution.Descriptor) {
@@ -827,7 +831,11 @@ func seedRandomOCIImageIndex(t *testing.T, env *testEnv, repoPath string, opts .
 		}
 	}
 
-	deserializedManifest, err := manifestlist.FromDescriptors(ociImageIndex.Manifests)
+	mediaType := v1.MediaTypeImageIndex
+	if config.withoutMediaType {
+		mediaType = ""
+	}
+	deserializedManifest, err := manifestlist.FromDescriptorsWithMediaType(ociImageIndex.Manifests, mediaType)
 	require.NoError(t, err)
 
 	if config.putManifest {
@@ -1688,10 +1696,10 @@ func (min *mockImportNotification) waitForImportNotification(t *testing.T, path,
 
 	select {
 	case receivedNotif := <-min.receivedNotif[path]:
+		t.Logf("notification received was: %+v", receivedNotif)
 		require.Equal(t, expectedNotif.Name, receivedNotif.Name)
 		require.Equal(t, expectedNotif.Path, receivedNotif.Path)
 		require.Equal(t, expectedNotif.Status, receivedNotif.Status)
-
 		// we wrap the underlying error if we fail to update the DB after a (pre)import operation
 		// which varies depending on the execution, for example the DB username
 		require.Contains(t, receivedNotif.Detail, expectedNotif.Detail, "detail mismatch")

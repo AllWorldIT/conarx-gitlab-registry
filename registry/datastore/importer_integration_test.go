@@ -175,6 +175,22 @@ func TestImporter_ImportAll(t *testing.T) {
 	validateImport(t, suite.db)
 }
 
+func TestImporter_ImportAll_NoDanglingManifests(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporter(t, suite.db)
+	require.NoError(t, imp.ImportAll(suite.ctx))
+	validateImport(t, suite.db)
+}
+
+func TestImporter_ImportAll_NoDanglingManifests_DanglingBlobs(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporter(t, suite.db, datastore.WithImportDanglingBlobs)
+	require.NoError(t, imp.ImportAll(suite.ctx))
+	validateImport(t, suite.db)
+}
+
 func TestImporter_ImportAll_DanglingBlobs(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
@@ -882,5 +898,56 @@ func TestImporter_PreImport_Retry_Succeeds(t *testing.T) {
 	err := imp.PreImport(suite.ctx, "f-dangling-manifests")
 	require.NoError(t, err)
 
+	validateImport(t, suite.db)
+}
+
+func TestImporter_ImportBlobs(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporter(t, suite.db)
+	require.NoError(t, imp.ImportBlobs(suite.ctx))
+	validateImport(t, suite.db)
+}
+
+func TestImporter_ImportBlobs_DryRun(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporter(t, suite.db, datastore.WithDryRun)
+	require.NoError(t, imp.ImportBlobs(suite.ctx))
+	validateImport(t, suite.db)
+}
+
+func TestImporter_ImportBlobs_AbortsIfDatabaseIsNotEmpty(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	// load some fixtures
+	reloadRepositoryFixtures(t)
+
+	imp := newImporter(t, suite.db, datastore.WithRequireEmptyDatabase)
+	err := imp.ImportBlobs(suite.ctx)
+	require.EqualError(t, err, "non-empty database")
+}
+
+func TestImporter_PreImportAll(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporter(t, suite.db)
+	require.NoError(t, imp.PreImportAll(suite.ctx))
+	validateImport(t, suite.db)
+}
+
+func TestImporter_FullImport(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporter(t, suite.db)
+	require.NoError(t, imp.FullImport(suite.ctx))
+	validateImport(t, suite.db)
+}
+
+func TestImporter_ImportAllRepositories(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporter(t, suite.db)
+	require.NoError(t, imp.ImportAllRepositories(suite.ctx))
 	validateImport(t, suite.db)
 }

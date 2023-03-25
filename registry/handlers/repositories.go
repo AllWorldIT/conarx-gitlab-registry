@@ -1,9 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"path"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -33,7 +37,8 @@ func repositoryDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	}
 
 	return handlers.MethodHandler{
-		http.MethodGet: http.HandlerFunc(repositoryHandler.GetRepository),
+		http.MethodGet:   http.HandlerFunc(repositoryHandler.GetRepository),
+		http.MethodPatch: http.HandlerFunc(repositoryHandler.RenameRepository),
 	}
 }
 
@@ -45,6 +50,13 @@ type RepositoryAPIResponse struct {
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at,omitempty"`
 }
+type RenameRepositoryAPIResponse struct {
+	TTL time.Duration `json:"ttl"`
+}
+
+type RenameRepositoryAPIRequest struct {
+	Name string `json:"name"`
+}
 
 const (
 	sizeQueryParamKey                      = "size"
@@ -54,6 +66,9 @@ const (
 	nQueryParamValueMin                    = 1
 	nQueryParamValueMax                    = 1000
 	lastQueryParamKey                      = "last"
+	dryRunParamKey                         = "dry_run"
+	defaultDryRunRenameOperationTimeout    = 5 * time.Second
+	maxRepositoriesToRename                = 1000
 )
 
 var (
@@ -90,6 +105,17 @@ func queryParamValueMatchesPattern(value string, pattern *regexp.Regexp) bool {
 	return pattern.MatchString(value)
 }
 
+func queryParamDryRunValue(value string) (bool, error) {
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unknown value: %s", value)
+	}
+}
+
 func sizeQueryParamValue(r *http.Request) string {
 	return r.URL.Query().Get(sizeQueryParamKey)
 }
@@ -98,6 +124,23 @@ func sizeQueryParamValue(r *http.Request) string {
 // across GitLab applications.
 func timeToString(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15:04:05.000Z07:00")
+}
+
+// replacePathName removes the last part (i.e the name) of `originPath` and replaces it with `newName`
+func replacePathName(originPath string, newName string) string {
+	dir := path.Dir(originPath)
+	return path.Join(dir, newName)
+}
+
+// extractDryRunQueryParamValue extracts a valid `dry_run` query parameter value from `url`.
+// when no `dry_run` key is found it returns true by default, when a key is found the function
+// returns the value of the key or returns an error if the vaues are neither "true" or "false".
+func extractDryRunQueryParamValue(url url.Values) (dryRun bool, err error) {
+	dryRun = true
+	if url.Has(dryRunParamKey) {
+		dryRun, err = queryParamDryRunValue(url.Get(dryRunParamKey))
+	}
+	return dryRun, err
 }
 
 const (
@@ -425,5 +468,150 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 	if err := enc.Encode(resp); err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
+	}
+}
+
+// RenameRepository renames a given base repository (name and path) and updates the paths of all sub-repositories originating
+// from the refrenced base repository. If the query param: `dry_run` is set to true, then this operation
+// only attempts to verify that a rename is possible for a provided repository and name.
+// When no `dry_run` option is provided, this function defaults to `dry_run=true`.
+func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Request) {
+	l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"path": h.Repository.Named().Name()})
+
+	// extract `dry_run` param
+	dryRun, err := extractDryRunQueryParamValue(r.URL.Query())
+	if err != nil {
+		detail := v1.InvalidQueryParamValueErrorDetail(dryRunParamKey, []string{"true", "false"})
+		h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamType.WithDetail(detail))
+		return
+	}
+
+	// parse request body
+	var renameObject RenameRepositoryAPIRequest
+	err = json.NewDecoder(r.Body).Decode(&renameObject)
+	if err != nil {
+		h.Errors = append(h.Errors, v1.ErrorCodeInvalidJSONBody)
+		return
+	}
+
+	// extract name parameter and validate it
+	newName := renameObject.Name
+	if !reference.GitLabProjectNameRegex.MatchString(newName) {
+		detail := v1.InvalidPatchBodyTypeErrorDetail("name", reference.GitLabProjectNameRegex)
+		h.Errors = append(h.Errors, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail))
+		return
+	}
+
+	// TODO: `renameLeaseTTL` should be acquired dynamically from the repository lease if exist:
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/896#repository-lease-ttl-timer
+	// for now we set a hard timeout of `defaultDryRunRenameOperationTimeout` (i.e 5s) for the transaction
+	// until the rename-lease functionality is implemented.
+	var (
+		renameLeaseTTL               = defaultDryRunRenameOperationTimeout
+		repositoryRenameOperationTTL time.Duration
+	)
+
+	if dryRun {
+		repositoryRenameOperationTTL = defaultDryRunRenameOperationTimeout
+	} else {
+		// TODO: when repository leases are implemented in https://gitlab.com/gitlab-org/container-registry/-/issues/895,
+		// the `repositoryRenameOperationTTL` here should be the minimum of either `defaultDryRunRenameOperationTimeout` or  the actual `renameLeaseTTL`
+		// (as obtained from a pre-existing repository lease object).
+		// this would ensure that the store (db) transactions for renames gets short circuited when the rename lease is about to expire.
+		repositoryRenameOperationTTL = renameLeaseTTL
+	}
+
+	// find repository to rename
+	path := h.Repository.Named().Name()
+	rStore := datastore.NewRepositoryStore(h.db)
+	repo, err := rStore.FindByPath(h.Context, path)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+	if repo == nil {
+		h.Errors = append(h.Errors, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": path}))
+		return
+	}
+
+	// verify the repository does not contain more than 1000 sub repositories.
+	// this is a pre-cautious limitation for scalability and performance reasons.
+	// for GitLab.com, < 1000 repositories covers 99.98% of all projects.
+	// we can then increase this later based on metrics and pending a decision on
+	// https://gitlab.com/gitlab-org/gitlab/-/issues/357014
+	repoCount, err := rStore.CountPathSubRepositories(h.Context, repo.NamespaceID, repo.Path)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+	if repoCount > maxRepositoriesToRename {
+		l.WithError(err).WithFields(log.Fields{
+			"repository_count": repoCount,
+		}).Info("repository exceeds rename limit")
+		detail := v1.ExceedsRenameLimitErrorDetail(maxRepositoriesToRename)
+		h.Errors = append(h.Errors, v1.ErrorCodeExceedsLimit.WithDetail(detail))
+		return
+	}
+
+	// verify the new path to be renamed-to is not taken
+	newPath := replacePathName(repo.Path, newName)
+	newRepo, err := rStore.FindByPath(h.Context, newPath)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	if newRepo != nil {
+		l.WithError(err).WithFields(log.Fields{
+			"rename_path": newRepo.Path,
+		}).Info("repository rename conflicts")
+		h.Errors = append(h.Errors, v1.ErrorCodeRenameConflict)
+		return
+	}
+
+	// start a transaction to rename the repository (and sub-repository attributes)
+	// and specify a time limit to prevent long running repository rename operations
+	txCtx, cancel := context.WithTimeout(h.Context, repositoryRenameOperationTTL)
+	defer cancel()
+
+	tx, err := h.db.BeginTx(h.Context, nil)
+	if err != nil {
+		h.Errors = append(h.Errors,
+			errcode.FromUnknownError(fmt.Errorf("failed to create database transaction: %w", err)))
+		return
+	}
+	defer tx.Rollback()
+
+	rStoreTx := datastore.NewRepositoryStore(tx)
+	oldpath := repo.Path
+	err = rStoreTx.Rename(txCtx, repo, newPath, newName)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	err = rStoreTx.RenamePathForSubRepositories(txCtx, repo.NamespaceID, oldpath, newPath)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	if !dryRun {
+		if err := tx.Commit(); err != nil {
+			h.Errors = append(h.Errors,
+				errcode.FromUnknownError(fmt.Errorf("failed to commit database transaction: %w", err)))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		// TODO: `repositoryRenameOperationTTL` should be acquired dynamically from a new repository lease:
+		// https://gitlab.com/gitlab-org/container-registry/-/issues/896#repository-lease-ttl-timer
+		// for now we return TTL of 0 seconds for the lease, until the rename-lease functionality is implemented.
+		repositoryRenameOperationTTL = 0 * time.Second
+		if err := json.NewEncoder(w).Encode(&RenameRepositoryAPIResponse{TTL: repositoryRenameOperationTTL}); err != nil {
+			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+			return
+		}
 	}
 }

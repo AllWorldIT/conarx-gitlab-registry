@@ -51,7 +51,7 @@ func (qb *QueueBridge) ManifestPushed(repo reference.Named, sm distribution.Mani
 		}
 	}
 
-	return qb.sink.Write(*manifestEvent)
+	return qb.sink.Write(manifestEvent)
 }
 
 // ManifestPulled creates the corresponding event and queues the event to be sent.
@@ -68,7 +68,7 @@ func (qb *QueueBridge) ManifestPulled(repo reference.Named, sm distribution.Mani
 		}
 	}
 
-	return qb.sink.Write(*manifestEvent)
+	return qb.sink.Write(manifestEvent)
 }
 
 // ManifestDeleted creates and queues an event with the deleted manifest repository and digest.
@@ -81,7 +81,7 @@ func (qb *QueueBridge) ManifestDeleted(repo reference.Named, dgst digest.Digest)
 		Repository: repo.Name(),
 	}
 
-	return qb.sink.Write(*event)
+	return qb.sink.Write(event)
 }
 
 // TagDeleted creates and queues the related event with the repository tag details.
@@ -90,7 +90,7 @@ func (qb *QueueBridge) TagDeleted(repo reference.Named, tag string) error {
 	event.Target.Repository = repo.Name()
 	event.Target.Tag = tag
 
-	return qb.sink.Write(*event)
+	return qb.sink.Write(event)
 }
 
 func (qb *QueueBridge) createManifestEvent(action string, repo reference.Named, sm distribution.Manifest) (*Event, error) {

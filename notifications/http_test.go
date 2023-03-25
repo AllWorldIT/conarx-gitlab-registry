@@ -70,8 +70,8 @@ func TestHTTPSink(t *testing.T) {
 		&endpointMetricsHTTPStatusListener{safeMetrics: metrics})
 
 	// first make sure that the default transport gives x509 untrusted cert error
-	events := []Event{}
-	err := sink.Write(events...)
+	event := &Event{}
+	err := sink.Write(event)
 	if !strings.Contains(err.Error(), "x509") && !strings.Contains(err.Error(), "unknown ca") {
 		t.Fatal("TLS server with default transport should give unknown CA error")
 	}
@@ -85,7 +85,7 @@ func TestHTTPSink(t *testing.T) {
 	}
 	sink = newHTTPSink(server.URL, 0, nil, tr,
 		&endpointMetricsHTTPStatusListener{safeMetrics: metrics})
-	err = sink.Write(events...)
+	err = sink.Write(event)
 	if err != nil {
 		t.Fatalf("unexpected error writing events: %v", err)
 	}
@@ -95,6 +95,9 @@ func TestHTTPSink(t *testing.T) {
 	// reset server to standard http server and sink to a basic sink
 	server = httptest.NewServer(serverHandler)
 	defer server.Close()
+
+	// reset metrics for following tests
+	metrics = newSafeMetrics()
 	sink = newHTTPSink(server.URL, 0, nil, nil,
 		&endpointMetricsHTTPStatusListener{safeMetrics: metrics})
 	var expectedMetrics EndpointMetrics
@@ -116,17 +119,20 @@ func TestHTTPSink(t *testing.T) {
 	}()
 
 	for _, tc := range []struct {
+		name       string
 		events     []Event // events to send
 		url        string
 		failure    bool // true if there should be a failure.
 		statusCode int  // if not set, no status code should be incremented.
 	}{
 		{
+			name:       "single_200",
 			statusCode: http.StatusOK,
 			events: []Event{
 				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest)},
 		},
 		{
+			name:       "multiple_200",
 			statusCode: http.StatusOK,
 			events: []Event{
 				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
@@ -135,13 +141,22 @@ func TestHTTPSink(t *testing.T) {
 			},
 		},
 		{
+			name:       "redirect_307",
 			statusCode: http.StatusTemporaryRedirect,
+			events: []Event{
+				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+			},
 		},
 		{
+			name:       "bad_request_400",
 			statusCode: http.StatusBadRequest,
-			failure:    true,
+			events: []Event{
+				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+			},
+			failure: true,
 		},
 		{
+			name: "connection_closed",
 			// Case where connection is immediately closed
 			url:     closeL.Addr().String(),
 			failure: true,
@@ -165,22 +180,23 @@ func TestHTTPSink(t *testing.T) {
 		url += fmt.Sprintf("?status=%v", tc.statusCode)
 		sink.url = url
 
-		t.Logf("testcase: %v, fail=%v", url, tc.failure)
+		t.Logf("testcase: %v, fail=%v", tc.name, tc.failure)
 		// Try a simple event emission.
-		err := sink.Write(tc.events...)
-
-		if !tc.failure {
-			if err != nil {
-				t.Fatalf("unexpected error send event: %v", err)
-			}
-		} else {
-			if err == nil {
-				t.Fatalf("the endpoint should have rejected the request")
+		for _, ev := range tc.events {
+			err := sink.Write(&ev)
+			if !tc.failure {
+				if err != nil {
+					t.Fatalf("unexpected error send event: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("the endpoint should have rejected the request")
+				}
 			}
 		}
 
 		if !reflect.DeepEqual(metrics.EndpointMetrics, expectedMetrics) {
-			t.Fatalf("metrics not as expected: %#v != %#v", metrics.EndpointMetrics, expectedMetrics)
+			t.Fatalf("metrics not as expected: %#v != got: %#v", metrics.EndpointMetrics, expectedMetrics)
 		}
 	}
 
@@ -236,9 +252,11 @@ func TestHTTPSink_Errors(t *testing.T) {
 	expectedMetrics.Statuses = make(map[string]int)
 	expectedMetrics.Errors += len(events)
 
-	err := sink.Write(events...)
-	// either client timeout or context deadline exceeded, asserting this error can be flaky
-	require.Error(t, err)
+	for _, event := range events {
+		err := sink.Write(&event)
+		// either client timeout or context deadline exceeded, asserting this error can be flaky
+		require.Error(t, err)
+	}
 
 	require.Equal(t, metrics.EndpointMetrics, expectedMetrics)
 }

@@ -113,7 +113,7 @@ var validRegions = map[string]struct{}{}
 // validObjectACLs contains known s3 object Acls
 var validObjectACLs = map[string]struct{}{}
 
-//DriverParameters A struct that encapsulates all of the driver parameters after all values have been set
+// DriverParameters A struct that encapsulates all of the driver parameters after all values have been set
 type DriverParameters struct {
 	AccessKey                   string
 	SecretKey                   string
@@ -138,6 +138,7 @@ type DriverParameters struct {
 	MaxRetries                  int64
 	ParallelWalk                bool
 	LogLevel                    aws.LogLevelType
+	ObjectOwnership             bool
 }
 
 func init() {
@@ -184,6 +185,7 @@ type driver struct {
 	RootDirectory               string
 	StorageClass                string
 	ObjectACL                   string
+	ObjectOwnership             bool
 	ParallelWalk                bool
 }
 
@@ -256,6 +258,7 @@ func parseParameters(parameters map[string]interface{}) (*DriverParameters, erro
 	}
 	secretKey := parameters["secretkey"]
 	if secretKey == nil {
+		//#nosec G101 -- This is a false positive
 		secretKey = ""
 	}
 
@@ -360,9 +363,26 @@ func parseParameters(parameters map[string]interface{}) (*DriverParameters, erro
 		storageClass = storageClassString
 	}
 
+	objectOwnership := false
+	objectOwnershipParam := parameters["objectownership"]
+	if objectOwnershipParam != nil {
+		objectOwnershipBool, ok := objectOwnershipParam.(bool)
+		if !ok {
+			err := fmt.Errorf("object ownership parameter must be either %v or %v", true, false)
+			result = multierror.Append(result, err)
+		}
+		objectOwnership = objectOwnershipBool
+	}
+
 	objectACL := s3.ObjectCannedACLPrivate
 	objectACLParam := parameters["objectacl"]
 	if objectACLParam != nil {
+
+		if objectOwnership {
+			err := fmt.Errorf("object ACL parameter should not be set when object ownership is enabled")
+			result = multierror.Append(result, err)
+		}
+
 		objectACLString, ok := objectACLParam.(string)
 		if !ok {
 			err := fmt.Errorf("object ACL parameter should be a string: %v", objectACLParam)
@@ -438,6 +458,7 @@ func parseParameters(parameters map[string]interface{}) (*DriverParameters, erro
 		maxRetries,
 		parallelWalkBool,
 		logLevel,
+		objectOwnership,
 	}, nil
 }
 
@@ -1473,6 +1494,9 @@ func (d *driver) getContentType() *string {
 }
 
 func (d *driver) getACL() *string {
+	if d.ObjectOwnership {
+		return nil
+	}
 	return aws.String(d.ObjectACL)
 }
 

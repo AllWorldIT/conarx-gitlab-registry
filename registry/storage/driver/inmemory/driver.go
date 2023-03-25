@@ -360,7 +360,8 @@ func (w *writer) Write(p []byte) (int, error) {
 	w.d.mutex.Lock()
 	defer w.d.mutex.Unlock()
 
-	return w.f.WriteAt(p, int64(len(w.f.data)))
+	w.f.Append(p)
+	return len(p), nil
 }
 
 func (w *writer) Size() int64 {

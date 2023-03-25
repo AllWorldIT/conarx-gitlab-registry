@@ -1122,6 +1122,56 @@ func TestManifestAPI_BuildkitIndex(t *testing.T) {
 	}
 }
 
+func TestManifestAPI_OCIIndexNoMediaType(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.Shutdown()
+
+	repoRef, err := reference.WithName("foo")
+	require.NoError(t, err)
+
+	tag := "latest"
+	tagRef, err := reference.WithTag(repoRef, tag)
+	require.NoError(t, err)
+
+	sentIndex := seedRandomOCIImageIndex(t, env, repoRef.Name(), putByTag(tag), withoutMediaType)
+
+	manifestURL, err := env.builder.BuildManifestURL(tagRef)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest("GET", manifestURL, nil)
+	require.NoError(t, err)
+
+	// v1.MediaTypeImageIndex would be enough, but this replicates the behavior of the Docker client and others
+	req.Header.Set("Accept", schema2.MediaTypeManifest)
+	req.Header.Add("Accept", v1.MediaTypeImageManifest)
+	req.Header.Add("Accept", manifestlist.MediaTypeManifestList)
+	req.Header.Add("Accept", v1.MediaTypeImageIndex)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	checkResponse(t, "", resp, http.StatusOK)
+
+	// ensure content-type header is properly set and the digest matches the one we know
+	_, payload, err := sentIndex.Payload()
+	require.NoError(t, err)
+	dgst := digest.FromBytes(payload)
+
+	checkHeaders(t, resp, http.Header{
+		"Content-Type":          []string{v1.MediaTypeImageIndex},
+		"Docker-Content-Digest": []string{dgst.String()},
+	})
+
+	// ensure payload matches the one sent and double-check that the mediaType field is not filled
+	var fetchedIndex *manifestlist.DeserializedManifestList
+	err = json.NewDecoder(resp.Body).Decode(&fetchedIndex)
+	require.NoError(t, err)
+
+	require.EqualValues(t, sentIndex, fetchedIndex)
+	require.Empty(t, fetchedIndex.MediaType)
+}
+
 // TestManifestAPI_ManifestListWithLayerReferences tests that the API will not
 // accept pushes and pulls of non Buildkit cache image manifest lists which
 // reference blobs.

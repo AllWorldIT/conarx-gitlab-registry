@@ -149,6 +149,8 @@ func (t table) DumpAsJSON(ctx context.Context, db datastore.Queryer) ([]byte, er
 		tmpl = "SELECT json_agg(t) FROM (SELECT * FROM %s ORDER BY (top_level_namespace_id, id)) t"
 	case GCManifestReviewQueueTable:
 		tmpl = "SELECT json_agg(t) FROM (SELECT * FROM %s ORDER BY (top_level_namespace_id, repository_id)) t"
+	case GCBlobsLayersTable:
+		tmpl = "SELECT json_agg(t) FROM (SELECT * FROM %s ORDER BY id) t"
 	default:
 		tmpl = "SELECT json_agg(t) FROM (SELECT * FROM %s ORDER BY digest) t"
 	}

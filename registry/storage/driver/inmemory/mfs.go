@@ -309,6 +309,11 @@ func (f *file) WriteAt(p []byte, offset int64) (n int, err error) {
 	return copy(f.data[off:off+len(p)], p), nil
 }
 
+func (f *file) Append(p []byte) {
+	f.mod = time.Now()
+	f.data = append(f.data, p...)
+}
+
 func (f *file) String() string {
 	return fmt.Sprintf("&file{path: %q}", f.p)
 }

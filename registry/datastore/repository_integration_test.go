@@ -1153,6 +1153,55 @@ func TestRepositoryStore_CountAfterPath_NoRepositories(t *testing.T) {
 	require.Equal(t, 0, c)
 }
 
+func TestRepositoryStore_CountPathSubRepositories(t *testing.T) {
+	reloadManifestFixtures(t)
+
+	tt := []struct {
+		name string
+		path string
+		// see testdata/fixtures/[repositories|repository_manifests].sql:
+		//
+		// 		gitlab-org 								(0 manifests, 0 manifest lists)
+		// 		gitlab-org/gitlab-test 					(0 manifests, 0 manifest lists)
+		// 		gitlab-org/gitlab-test/backend 			(2 manifests, 1 manifest list)
+		// 		gitlab-org/gitlab-test/frontend 		(2 manifests, 1 manifest list)
+		// 		a-test-group 							(0 manifests, 0 manifest lists)
+		// 		a-test-group/foo  						(1 manifests, 0 manifest lists)
+		// 		a-test-group/bar 						(0 manifests, 1 manifest list)
+		namespaceID      int64
+		expectedNumRepos int
+	}{
+		{
+			name:             "non existent path",
+			path:             "non-existent",
+			namespaceID:      1,
+			expectedNumRepos: 0,
+		},
+		{
+			name:             "path with only one repository",
+			path:             "a-test-group/bar",
+			namespaceID:      2,
+			expectedNumRepos: 1,
+		},
+		{
+			name:             "path with more than one repository",
+			path:             "gitlab-org",
+			namespaceID:      1,
+			expectedNumRepos: 4,
+		},
+	}
+
+	s := datastore.NewRepositoryStore(suite.db)
+
+	for _, test := range tt {
+		t.Run(test.name, func(t *testing.T) {
+			c, err := s.CountPathSubRepositories(suite.ctx, test.namespaceID, test.path)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedNumRepos, c)
+		})
+	}
+}
+
 func TestRepositoryStore_FindManifestByDigest(t *testing.T) {
 	reloadManifestFixtures(t)
 
@@ -2647,4 +2696,327 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath_None(t *testing.T) {
 	rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, "a-test-group", "", 100)
 	require.NoError(t, err)
 	require.Empty(t, rr)
+}
+
+func TestRepositoryStore_RenamePathForSubRepositories(t *testing.T) {
+	reloadRepositoryFixtures(t)
+	test := struct {
+		name                 string
+		baseRepo             *models.Repository
+		topLevelNamespaceID  int64
+		newPath              string
+		expectedUpdatedRepos map[string]*models.Repository
+		// see testdata/fixtures/repositories.sql:
+		//
+		// 		gitlab-org 												(0 tag(s))
+		// 		gitlab-org/gitlab-test 									(0 tag(s))
+		// 		gitlab-org/gitlab-test/backend 							(4 tag(s))
+		// 		gitlab-org/gitlab-test/frontend 						(4 tag(s))
+	}{
+
+		name: "update all sub-repository paths starting with path `gitlab-org`",
+		baseRepo: &models.Repository{
+			ID:              1,
+			NamespaceID:     1,
+			Name:            "gitlab-org",
+			Path:            "gitlab-org",
+			ParentID:        sql.NullInt64{Valid: false},
+			MigrationStatus: migration.RepositoryStatusNative,
+		},
+		topLevelNamespaceID: 1,
+		newPath:             "not-gitlab-org",
+		expectedUpdatedRepos: map[string]*models.Repository{
+			"gitlab-org/gitlab-test": {
+				ID:              2,
+				NamespaceID:     1,
+				Name:            "gitlab-test",
+				Path:            "not-gitlab-org/gitlab-test",
+				ParentID:        sql.NullInt64{Int64: 1, Valid: true},
+				MigrationStatus: migration.RepositoryStatusNative,
+			},
+			"gitlab-org/gitlab-test/backend": {
+				ID:              3,
+				NamespaceID:     1,
+				Name:            "backend",
+				Path:            "not-gitlab-org/gitlab-test/backend",
+				ParentID:        sql.NullInt64{Int64: 2, Valid: true},
+				MigrationStatus: migration.RepositoryStatusNative,
+			},
+			"gitlab-org/gitlab-test/frontend": {
+				ID:              4,
+				NamespaceID:     1,
+				Name:            "frontend",
+				Path:            "not-gitlab-org/gitlab-test/frontend",
+				ParentID:        sql.NullInt64{Int64: 2, Valid: true},
+				MigrationStatus: migration.RepositoryStatusNative,
+			},
+		},
+	}
+
+	s := datastore.NewRepositoryStore(suite.db)
+	t.Run(test.name, func(t *testing.T) {
+		err := s.RenamePathForSubRepositories(suite.ctx, test.topLevelNamespaceID, test.baseRepo.Path, test.newPath)
+		require.NoError(t, err)
+		// verify base repository remains unchanged
+		actualOldrepo, err := s.FindByPath(suite.ctx, test.baseRepo.Path)
+		require.NoError(t, err)
+		// reset created_at attributes for reproducible comparisons
+		require.NotEmpty(t, actualOldrepo.CreatedAt)
+		actualOldrepo.CreatedAt = time.Time{}
+		require.Equal(t, test.baseRepo, actualOldrepo)
+		// verify only paths were updated for sub-repositories
+		for oldPath, expectedNewRepo := range test.expectedUpdatedRepos {
+			oldrepo, err := s.FindByPath(suite.ctx, oldPath)
+			require.NoError(t, err)
+			require.Empty(t, oldrepo)
+			newRepo, err := s.FindByPath(suite.ctx, expectedNewRepo.Path)
+			require.NoError(t, err)
+			// reset created_at attributes for reproducible comparisons
+			require.NotEmpty(t, newRepo.CreatedAt)
+			newRepo.CreatedAt = time.Time{}
+			require.Equal(t, expectedNewRepo, newRepo)
+		}
+	})
+}
+
+func TestRepositoryStore_RenamePathForSubRepositories_None(t *testing.T) {
+	reloadRepositoryFixtures(t)
+	s := datastore.NewRepositoryStore(suite.db)
+	repo, err := s.FindByPath(suite.ctx, "a-non-existent-repository")
+	require.NoError(t, err)
+	require.Empty(t, repo)
+	err = s.RenamePathForSubRepositories(suite.ctx, 2, "a-non-existent-repository", "a-new-repository-name")
+	require.NoError(t, err)
+}
+
+func TestRepositoryStore_RenamePathForSubRepositories_OnlyNecessaryChanged(t *testing.T) {
+	reloadRepositoryFixtures(t)
+	s := datastore.NewRepositoryStore(suite.db)
+
+	err := s.RenamePathForSubRepositories(suite.ctx, 3, "usage-group/sub-group-1", "usage-group/sub-group-foo")
+	require.NoError(t, err)
+	rr, err := s.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	// see testdata/fixtures/repositories.sql
+	require.Len(t, rr, 16)
+	local := rr[0].CreatedAt.Location()
+	// we only expect changes to repository with ID:10 and ID: 11
+	expected := models.Repositories{
+		{
+			ID:              1,
+			NamespaceID:     1,
+			Name:            "gitlab-org",
+			Path:            "gitlab-org",
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2020-03-02 17:47:39.849864", local),
+		},
+		{
+			ID:              2,
+			NamespaceID:     1,
+			Name:            "gitlab-test",
+			Path:            "gitlab-org/gitlab-test",
+			ParentID:        sql.NullInt64{Int64: 1, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2020-03-02 17:47:40.866312", local),
+		},
+		{
+			ID:              3,
+			NamespaceID:     1,
+			Name:            "backend",
+			Path:            "gitlab-org/gitlab-test/backend",
+			ParentID:        sql.NullInt64{Int64: 2, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2020-03-02 17:42:12.566212", local),
+		},
+		{
+			ID:              4,
+			NamespaceID:     1,
+			Name:            "frontend",
+			Path:            "gitlab-org/gitlab-test/frontend",
+			ParentID:        sql.NullInt64{Int64: 2, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2020-03-02 17:43:39.476421", local),
+		},
+		{
+			ID:              5,
+			NamespaceID:     2,
+			Name:            "a-test-group",
+			Path:            "a-test-group",
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2020-06-08 16:01:39.476421", local),
+		},
+		{
+			ID:              6,
+			NamespaceID:     2,
+			Name:            "foo",
+			Path:            "a-test-group/foo",
+			ParentID:        sql.NullInt64{Int64: 5, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2020-06-08 16:01:39.476421", local),
+		},
+		{
+			ID:              7,
+			NamespaceID:     2,
+			Name:            "bar",
+			Path:            "a-test-group/bar",
+			ParentID:        sql.NullInt64{Int64: 5, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2020-06-08 16:01:39.476421", local),
+		},
+		{
+			ID:              8,
+			NamespaceID:     3,
+			Name:            "usage-group",
+			Path:            "usage-group",
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2021-11-24 11:36:04.692846", local),
+		},
+		{
+			ID:              9,
+			NamespaceID:     3,
+			Name:            "sub-group-1",
+			Path:            "usage-group/sub-group-1",
+			ParentID:        sql.NullInt64{Int64: 8, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2021-11-24 11:36:04.692846", local),
+		},
+		{
+			ID:              10,
+			NamespaceID:     3,
+			Name:            "repository-1",
+			Path:            "usage-group/sub-group-foo/repository-1",
+			ParentID:        sql.NullInt64{Int64: 9, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2021-11-24 11:36:04.692846", local),
+		},
+		{
+			ID:              11,
+			NamespaceID:     3,
+			Name:            "repository-2",
+			Path:            "usage-group/sub-group-foo/repository-2",
+			ParentID:        sql.NullInt64{Int64: 9, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2022-02-22 11:12:43.561123", local),
+		},
+		{
+			ID:              12,
+			NamespaceID:     3,
+			Name:            "sub-group-2",
+			Path:            "usage-group/sub-group-2",
+			ParentID:        sql.NullInt64{Int64: 8, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2022-02-22 11:33:12.312211", local),
+		},
+		{
+			ID:              13,
+			NamespaceID:     3,
+			Name:            "repository-1",
+			Path:            "usage-group/sub-group-2/repository-1",
+			ParentID:        sql.NullInt64{Int64: 12, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2022-02-22 11:33:12.434732", local),
+		},
+		{
+			ID:              14,
+			NamespaceID:     3,
+			Name:            "sub-repository-1",
+			Path:            "usage-group/sub-group-2/repository-1/sub-repository-1",
+			ParentID:        sql.NullInt64{Int64: 13, Valid: true},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2022-02-22 11:33:12.434732", local),
+		},
+		{
+			ID:              15,
+			NamespaceID:     4,
+			Name:            "usage-group-2",
+			Path:            "usage-group-2",
+			ParentID:        sql.NullInt64{},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2022-02-22 15:36:04.692846", local),
+		},
+		{
+			ID:              16,
+			NamespaceID:     4,
+			Name:            "project-1",
+			Path:            "usage-group-2/sub-group-1/project-1",
+			ParentID:        sql.NullInt64{},
+			MigrationStatus: migration.RepositoryStatusNative,
+			CreatedAt:       testutil.ParseTimestamp(t, "2022-02-22 15:36:04.692846", local),
+		},
+	}
+
+	require.ElementsMatch(t, expected, rr)
+}
+
+func TestRepositoryStore_RenameRepository(t *testing.T) {
+	reloadRepositoryFixtures(t)
+	tests := []struct {
+		name                string
+		oldPath             string
+		namespaceID         int64
+		newName             string
+		newPath             string
+		expectedUpdatedRepo *models.Repository
+		// see testdata/fixtures/repositories.sql:
+		//
+		// 		gitlab-org 												(0 tag(s))
+		// 		gitlab-org/gitlab-test 									(0 tag(s))
+	}{
+		{
+
+			name:        "update repository name and path for path `gitlab-org`",
+			oldPath:     "gitlab-org",
+			namespaceID: 1,
+			newName:     "not-gitlab-org",
+			newPath:     "not-gitlab-org",
+			expectedUpdatedRepo: &models.Repository{
+				ID:              1,
+				NamespaceID:     1,
+				Name:            "not-gitlab-org",
+				Path:            "not-gitlab-org",
+				ParentID:        sql.NullInt64{Valid: false},
+				MigrationStatus: migration.RepositoryStatusNative,
+			},
+		},
+		{
+
+			name:        "update repository name and path for nested repo `gitlab-org/gitlab-test`",
+			oldPath:     "gitlab-org/gitlab-test",
+			namespaceID: 1,
+			newName:     "not-gitlab-test",
+			newPath:     "gitlab-org/not-gitlab-test",
+			expectedUpdatedRepo: &models.Repository{
+				ID:              2,
+				NamespaceID:     1,
+				Name:            "not-gitlab-test",
+				Path:            "gitlab-org/not-gitlab-test",
+				ParentID:        sql.NullInt64{Int64: 1, Valid: true},
+				MigrationStatus: migration.RepositoryStatusNative,
+			},
+		},
+	}
+
+	s := datastore.NewRepositoryStore(suite.db)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := s.Rename(suite.ctx, &models.Repository{Path: test.oldPath, NamespaceID: test.namespaceID}, test.newPath, test.newName)
+			require.NoError(t, err)
+			repo, err := s.FindByPath(suite.ctx, test.newPath)
+			require.NoError(t, err)
+			// reset created_at attributes for reproducible comparisons
+			require.NotEmpty(t, repo.CreatedAt)
+			repo.CreatedAt = time.Time{}
+			require.Equal(t, test.expectedUpdatedRepo, repo)
+
+		})
+	}
+}
+
+func TestRepositoryStore_RenameRepository_None(t *testing.T) {
+	reloadRepositoryFixtures(t)
+	s := datastore.NewRepositoryStore(suite.db)
+	err := s.Rename(suite.ctx, &models.Repository{Path: "a-non-existent-repository", NamespaceID: 1},
+		"a-new-repository-path", "a-new-repository-name")
+	require.EqualError(t, err, "repository not found")
 }

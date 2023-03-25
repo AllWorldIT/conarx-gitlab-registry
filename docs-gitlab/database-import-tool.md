@@ -15,6 +15,23 @@ form.
 
 ### Options
 
+#### All Repositories
+
+The `--all-repositories` option will import all repository metadata. With this
+flag, it is required to switch the registry to read-only mode. Start with a
+`pre-import` to limit the amount of read-only time required as much of the
+import work can be handled by the pre-import phase which has no read-only
+requirement. Alias: `--step-two`
+
+#### Common Blobs
+
+The `--common-blobs` option instructs the tool to import all blob metadata from
+common blob storage not already present in the metadata database. This command
+does not import any repository scope metadata and is intended to be used as the
+final step of a three step import. Running this command ensures that any
+unreferenced blobs are visible to the online garbage collector, allowing them
+to be removed from object storage. Alias: `--step-three`
+
 #### Require Empty Database
 
 The `--require-empty-database` option allows the user to enable a safety check
@@ -23,12 +40,6 @@ contains some information. This option is useful for relatively small registries
 where it is possible to import all registry data in one single period of
 read-only mode or downtime. Larger registries will likely need to break up the
 import process over multiple sessions.
-
-#### Dangling Blobs
-
-The `--dangling-blobs` option instructs the tool to import all blob metadata
-without confirmation that this information is reachable from a tagged image
-or that the blob is linked to any repository.
 
 #### Dangling Manifests
 
@@ -63,12 +74,12 @@ the configured storage driver must have read and write access to the new storage
 
 #### Pre Import
 The `--pre-import` option will only import immutable registry data. When running
-with this flag, it is not necessary to switch the repository to read-only mode.
+with this flag, it is not necessary to switch the registry to read-only mode.
 This, in conjunction with a normal import command ran afterward, should enable
 administrators to limit the amount of time a repository must be read-only, as
-much of the import work can be handled by the pre-import phase.
+much of the import work can be handled by the pre-import phase. Alias: `--step-one`
 
-While it is not necessary to switch the repository to read-only mode,
+While it is not necessary to switch the registry to read-only mode,
 administrators should take care not to use the [blob delete API
 endpoint](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#delete-blob)
 during the pre-import phase. This endpoint is not used by any of the Docker
@@ -81,7 +92,7 @@ are subject to online garbage collection, and therefore it is important to
 ensure that the subsequent import step is completed within the configured
 garbage collector workers
 [`reviewafter`](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/configuration.md#gc)
-delay.
+delay or garbage collection is not enabled until after the import step finishes.
 
 #### Row Count
 

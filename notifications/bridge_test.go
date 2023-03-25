@@ -46,11 +46,11 @@ var (
 )
 
 func TestEventBridgeManifestPulled(t *testing.T) {
-	l := createTestEnv(t, testSinkFn(func(events ...Event) error {
-		checkCommonManifest(t, EventActionPull, events...)
+	l := createTestEnv(t, func(event *Event) error {
+		checkCommonManifest(t, EventActionPull, event)
 
 		return nil
-	}))
+	})
 
 	repoRef, _ := reference.WithName(repo)
 	if err := l.ManifestPulled(repoRef, sm); err != nil {
@@ -59,11 +59,11 @@ func TestEventBridgeManifestPulled(t *testing.T) {
 }
 
 func TestEventBridgeManifestPushed(t *testing.T) {
-	l := createTestEnv(t, testSinkFn(func(events ...Event) error {
-		checkCommonManifest(t, EventActionPush, events...)
+	l := createTestEnv(t, func(event *Event) error {
+		checkCommonManifest(t, EventActionPush, event)
 
 		return nil
-	}))
+	})
 
 	repoRef, _ := reference.WithName(repo)
 	if err := l.ManifestPushed(repoRef, sm); err != nil {
@@ -72,14 +72,14 @@ func TestEventBridgeManifestPushed(t *testing.T) {
 }
 
 func TestEventBridgeManifestPushedWithTag(t *testing.T) {
-	l := createTestEnv(t, testSinkFn(func(events ...Event) error {
-		checkCommonManifest(t, EventActionPush, events...)
-		if events[0].Target.Tag != "latest" {
-			t.Fatalf("missing or unexpected tag: %#v", events[0].Target)
+	l := createTestEnv(t, func(event *Event) error {
+		checkCommonManifest(t, EventActionPush, event)
+		if event.Target.Tag != "latest" {
+			t.Fatalf("missing or unexpected tag: %#v", event.Target)
 		}
 
 		return nil
-	}))
+	})
 
 	repoRef, _ := reference.WithName(repo)
 	if err := l.ManifestPushed(repoRef, sm, distribution.WithTag(m.Tag)); err != nil {
@@ -88,14 +88,14 @@ func TestEventBridgeManifestPushedWithTag(t *testing.T) {
 }
 
 func TestEventBridgeManifestPulledWithTag(t *testing.T) {
-	l := createTestEnv(t, testSinkFn(func(events ...Event) error {
-		checkCommonManifest(t, EventActionPull, events...)
-		if events[0].Target.Tag != "latest" {
-			t.Fatalf("missing or unexpected tag: %#v", events[0].Target)
+	l := createTestEnv(t, func(event *Event) error {
+		checkCommonManifest(t, EventActionPull, event)
+		if event.Target.Tag != "latest" {
+			t.Fatalf("missing or unexpected tag: %#v", event.Target)
 		}
 
 		return nil
-	}))
+	})
 
 	repoRef, _ := reference.WithName(repo)
 	if err := l.ManifestPulled(repoRef, sm, distribution.WithTag(m.Tag)); err != nil {
@@ -104,13 +104,13 @@ func TestEventBridgeManifestPulledWithTag(t *testing.T) {
 }
 
 func TestEventBridgeManifestDeleted(t *testing.T) {
-	l := createTestEnv(t, testSinkFn(func(events ...Event) error {
-		checkDeleted(t, EventActionDelete, events...)
-		if events[0].Target.Digest != dgst {
-			t.Fatalf("unexpected digest on event target: %q != %q", events[0].Target.Digest, dgst)
+	l := createTestEnv(t, func(event *Event) error {
+		checkDeleted(t, EventActionDelete, event)
+		if event.Target.Digest != dgst {
+			t.Fatalf("unexpected digest on event target: %q != %q", event.Target.Digest, dgst)
 		}
 		return nil
-	}))
+	})
 
 	repoRef, _ := reference.WithName(repo)
 	if err := l.ManifestDeleted(repoRef, dgst); err != nil {
@@ -119,13 +119,13 @@ func TestEventBridgeManifestDeleted(t *testing.T) {
 }
 
 func TestEventBridgeTagDeleted(t *testing.T) {
-	l := createTestEnv(t, testSinkFn(func(events ...Event) error {
-		checkDeleted(t, EventActionDelete, events...)
-		if events[0].Target.Tag != m.Tag {
-			t.Fatalf("unexpected tag on event target: %q != %q", events[0].Target.Tag, m.Tag)
+	l := createTestEnv(t, func(event *Event) error {
+		checkDeleted(t, EventActionDelete, event)
+		if event.Target.Tag != m.Tag {
+			t.Fatalf("unexpected tag on event target: %q != %q", event.Target.Tag, m.Tag)
 		}
 		return nil
-	}))
+	})
 
 	repoRef, _ := reference.WithName(repo)
 	if err := l.TagDeleted(repoRef, m.Tag); err != nil {
@@ -134,10 +134,10 @@ func TestEventBridgeTagDeleted(t *testing.T) {
 }
 
 func TestEventBridgeRepoDeleted(t *testing.T) {
-	l := createTestEnv(t, testSinkFn(func(events ...Event) error {
-		checkDeleted(t, EventActionDelete, events...)
+	l := createTestEnv(t, func(event *Event) error {
+		checkDeleted(t, EventActionDelete, event)
 		return nil
-	}))
+	})
 
 	repoRef, _ := reference.WithName(repo)
 	if err := l.RepoDeleted(repoRef); err != nil {
@@ -162,12 +162,10 @@ func createTestEnv(t *testing.T, fn testSinkFn) Listener {
 	return NewBridge(ub, source, actor, request, fn, true)
 }
 
-func checkDeleted(t *testing.T, action string, events ...Event) {
-	if len(events) != 1 {
-		t.Fatalf("unexpected number of events: %v != 1", len(events))
+func checkDeleted(t *testing.T, action string, event *Event) {
+	if event == nil {
+		t.Fatal("event is nil")
 	}
-
-	event := events[0]
 
 	if event.Source != source {
 		t.Fatalf("source not equal: %#v != %#v", event.Source, source)
@@ -186,10 +184,9 @@ func checkDeleted(t *testing.T, action string, events ...Event) {
 	}
 }
 
-func checkCommonManifest(t *testing.T, action string, events ...Event) {
-	checkCommon(t, events...)
+func checkCommonManifest(t *testing.T, action string, event *Event) {
+	checkCommon(t, event)
 
-	event := events[0]
 	if event.Action != action {
 		t.Fatalf("unexpected event action: %q != %q", event.Action, action)
 	}
@@ -215,12 +212,10 @@ func checkCommonManifest(t *testing.T, action string, events ...Event) {
 	}
 }
 
-func checkCommon(t *testing.T, events ...Event) {
-	if len(events) != 1 {
-		t.Fatalf("unexpected number of events: %v != 1", len(events))
+func checkCommon(t *testing.T, event *Event) {
+	if event == nil {
+		t.Fatal("event is nil")
 	}
-
-	event := events[0]
 
 	if event.Source != source {
 		t.Fatalf("source not equal: %#v != %#v", event.Source, source)
@@ -247,10 +242,10 @@ func checkCommon(t *testing.T, events ...Event) {
 	}
 }
 
-type testSinkFn func(events ...Event) error
+type testSinkFn func(events *Event) error
 
-func (tsf testSinkFn) Write(events ...Event) error {
-	return tsf(events...)
+func (tsf testSinkFn) Write(events *Event) error {
+	return tsf(events)
 }
 
 func (tsf testSinkFn) Close() error { return nil }

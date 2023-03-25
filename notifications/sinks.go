@@ -19,7 +19,7 @@ import (
 // provided by wrapping incoming sinks.
 type Broadcaster struct {
 	sinks  []Sink
-	events chan []Event
+	events chan *Event
 	closed chan chan struct{}
 }
 
@@ -31,7 +31,7 @@ type Broadcaster struct {
 func NewBroadcaster(sinks ...Sink) *Broadcaster {
 	b := Broadcaster{
 		sinks:  sinks,
-		events: make(chan []Event),
+		events: make(chan *Event),
 		closed: make(chan chan struct{}),
 	}
 
@@ -41,13 +41,13 @@ func NewBroadcaster(sinks ...Sink) *Broadcaster {
 	return &b
 }
 
-// Write accepts a block of events to be dispatched to all sinks. This method
+// Write accepts an event to be dispatched to all sinks. This method
 // will never fail and should never block (hopefully!). The caller cedes the
 // slice memory to the broadcaster and should not modify it after calling
 // write.
-func (b *Broadcaster) Write(events ...Event) error {
+func (b *Broadcaster) Write(event *Event) error {
 	select {
-	case b.events <- events:
+	case b.events <- event:
 	case <-b.closed:
 		return ErrSinkClosed
 	}
@@ -80,7 +80,7 @@ func (b *Broadcaster) run() {
 		select {
 		case block := <-b.events:
 			for _, sink := range b.sinks {
-				if err := sink.Write(block...); err != nil {
+				if err := sink.Write(block); err != nil {
 					logrus.Errorf("broadcaster: error writing events to %v, these events will be lost: %v", sink, err)
 				}
 			}
@@ -114,8 +114,8 @@ type eventQueue struct {
 
 // eventQueueListener is called when various events happen on the queue.
 type eventQueueListener interface {
-	ingress(events ...Event)
-	egress(events ...Event)
+	ingress(events *Event)
+	egress(events *Event)
 }
 
 // newEventQueue returns a queue to the provided sink. If the updater is non-
@@ -132,9 +132,9 @@ func newEventQueue(sink Sink, listeners ...eventQueueListener) *eventQueue {
 	return &eq
 }
 
-// Write accepts the events into the queue, only failing if the queue has
+// Write accepts an event into the queue, only failing if the queue has
 // beend closed.
-func (eq *eventQueue) Write(events ...Event) error {
+func (eq *eventQueue) Write(event *Event) error {
 	eq.mu.Lock()
 	defer eq.mu.Unlock()
 
@@ -143,9 +143,9 @@ func (eq *eventQueue) Write(events ...Event) error {
 	}
 
 	for _, listener := range eq.listeners {
-		listener.ingress(events...)
+		listener.ingress(event)
 	}
-	eq.events.PushBack(events)
+	eq.events.PushBack(event)
 	eq.cond.Signal() // signal waiters
 
 	return nil
@@ -177,12 +177,12 @@ func (eq *eventQueue) run() {
 			return // nil block means event queue is closed.
 		}
 
-		if err := eq.sink.Write(block...); err != nil {
+		if err := eq.sink.Write(block); err != nil {
 			logrus.Warnf("eventqueue: error writing events to %v, these events will be lost: %v", eq.sink, err)
 		}
 
 		for _, listener := range eq.listeners {
-			listener.egress(block...)
+			listener.egress(block)
 		}
 	}
 }
@@ -190,7 +190,7 @@ func (eq *eventQueue) run() {
 // next encompasses the critical section of the run loop. When the queue is
 // empty, it will block on the condition. If new data arrives, it will wake
 // and return a block. When closed, a nil slice will be returned.
-func (eq *eventQueue) next() []Event {
+func (eq *eventQueue) next() *Event {
 	eq.mu.Lock()
 	defer eq.mu.Unlock()
 
@@ -203,7 +203,7 @@ func (eq *eventQueue) next() []Event {
 		eq.cond.Wait()
 	}
 	front := eq.events.Front()
-	block := front.Value.([]Event)
+	block := front.Value.(*Event)
 	eq.events.Remove(front)
 
 	return block
@@ -239,29 +239,20 @@ func newIgnoredSink(sink Sink, ignored []string, ignoreActions []string) Sink {
 	}
 }
 
-// Write discards events with ignored target media types and passes the rest
+// Write discards an event with ignored target media types or passes the event
 // along.
-func (imts *ignoredSink) Write(events ...Event) error {
-	var kept []Event
-	for _, e := range events {
-		if !imts.ignoreMediaTypes[e.Target.MediaType] {
-			kept = append(kept, e)
-		}
+func (imts *ignoredSink) Write(event *Event) error {
+	if event == nil {
+		return nil
 	}
-	if len(kept) == 0 {
+	if imts.ignoreMediaTypes[event.Target.MediaType] {
+		return nil
+	}
+	if imts.ignoreActions[event.Action] {
 		return nil
 	}
 
-	var results []Event
-	for _, e := range kept {
-		if !imts.ignoreActions[e.Action] {
-			results = append(results, e)
-		}
-	}
-	if len(results) == 0 {
-		return nil
-	}
-	return imts.Sink.Write(results...)
+	return imts.Sink.Write(event)
 }
 
 // retryingSink retries the write until success or an ErrSinkClosed is
@@ -305,9 +296,9 @@ func newRetryingSink(sink Sink, threshold int, backoff time.Duration) *retryingS
 	return rs
 }
 
-// Write attempts to flush the events to the downstream sink until it succeeds
+// Write attempts to flush the event to the downstream sink until it succeeds
 // or the sink is closed.
-func (rs *retryingSink) Write(events ...Event) error {
+func (rs *retryingSink) Write(event *Event) error {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
 
@@ -323,7 +314,7 @@ retry:
 		goto retry
 	}
 
-	if err := rs.write(events...); err != nil {
+	if err := rs.write(event); err != nil {
 		if err == ErrSinkClosed {
 			// terminal!
 			return err
@@ -351,8 +342,8 @@ func (rs *retryingSink) Close() error {
 
 // write provides a helper that dispatches failure and success properly. Used
 // by write as the single-flight write call.
-func (rs *retryingSink) write(events ...Event) error {
-	if err := rs.sink.Write(events...); err != nil {
+func (rs *retryingSink) write(event *Event) error {
+	if err := rs.sink.Write(event); err != nil {
 		rs.failure()
 		return err
 	}

@@ -10,10 +10,8 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/gc/internal/metrics"
-
 	"github.com/hashicorp/go-multierror"
 	"github.com/jackc/pgconn"
-	"github.com/jackc/pgerrcode"
 )
 
 var (
@@ -148,32 +146,6 @@ func (w *ManifestWorker) deleteManifest(ctx context.Context, tx datastore.Transa
 	dgst, err := ms.Delete(ctx, t.NamespaceID, t.RepositoryID, t.ManifestID)
 	if err != nil {
 		report(err)
-		// temporary debugging aid for https://gitlab.com/gitlab-org/container-registry/-/issues/732
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.DeadlockDetected {
-			l.WithFields(log.Fields{
-				"manifest_id":          t.ManifestID,
-				"repository_id":        t.RepositoryID,
-				"pg_severity":          pgErr.Severity,
-				"pg_code":              pgErr.Code,
-				"pg_msg":               pgErr.Message,
-				"pg_detail":            pgErr.Detail,
-				"pg_hint":              pgErr.Hint,
-				"pg_position":          pgErr.Position,
-				"pg_internal_position": pgErr.InternalPosition,
-				"pg_internal_query":    pgErr.InternalQuery,
-				"pg_where":             pgErr.Where,
-				"pg_schema_name":       pgErr.SchemaName,
-				"pg_table_name":        pgErr.TableName,
-				"pg_column_name":       pgErr.ColumnName,
-				"pg_data_type_name":    pgErr.DataTypeName,
-				"pg_constraint_name":   pgErr.ConstraintName,
-				"pg_file":              pgErr.File,
-				"pg_line":              pgErr.Line,
-				"pg_routine":           pgErr.Routine,
-			}).Error("deadlock when trying to delete manifest")
-		}
-
 		return err
 	}
 	if dgst == nil {

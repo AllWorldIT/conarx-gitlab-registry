@@ -4,8 +4,8 @@ ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 GOLANGCI_VERSION ?= v1.45.0
 
 # Used to populate version variable in main package.
-VERSION=$(shell git describe --tags --match 'v[0-9]*' --dirty='.m' --always)
-REVISION=$(shell git rev-parse HEAD)$(shell if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi)
+VERSION?=$(shell git describe --tags --match 'v[0-9]*' --dirty='.m' --always)
+REVISION?=$(shell git rev-parse HEAD)$(shell if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi)
 BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%S")
 
 PKG=github.com/docker/distribution

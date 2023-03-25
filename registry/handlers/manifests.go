@@ -154,7 +154,7 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 	} else if isManifestList {
 		if manifestList.MediaType == manifestlist.MediaTypeManifestList {
 			manifestType = manifestlistSchema
-		} else if manifestList.MediaType == v1.MediaTypeImageIndex {
+		} else if manifestList.MediaType == v1.MediaTypeImageIndex || manifestList.MediaType == "" {
 			manifestType = ociImageIndexSchema
 		}
 	}

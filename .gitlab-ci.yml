@@ -23,7 +23,7 @@ default:
 
 variables:
   # default Go version
-  GO_VERSION: "1.17"
+  GO_VERSION: "1.18"
   BUILDTAGS: "include_gcs,include_oss,continuous_profiler_stackdriver"
   CGO_ENABLED: "1"
   GOPATH: $CI_PROJECT_DIR/.GOPATH

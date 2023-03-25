@@ -1,3 +1,51 @@
+# [3.69.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.68.0-gitlab...v3.69.0-gitlab) (2023-03-16)
+
+
+### Bug Fixes
+
+* **datastore:** do not use a transaction for full pre import repositories ([d41f64a](https://gitlab.com/gitlab-org/container-registry/commit/d41f64aea14b1ca6c4b84fc22bd28ad80117e00b))
+* **gc:** revert temporary debug log for deadlocks during manifest deletes ([b06a277](https://gitlab.com/gitlab-org/container-registry/commit/b06a27752fb543306363df018ce9d40a2a25e5cc))
+* **handlers:** serve OCI index payloads with no media type field ([280fd79](https://gitlab.com/gitlab-org/container-registry/commit/280fd798c7b107216b9123164123fe879d2459c7))
+* revert temporarily log query duration for debugging ([a184751](https://gitlab.com/gitlab-org/container-registry/commit/a184751f96b586d7bbabbee5dd917034f60f36d2))
+
+
+### Features
+
+* **api/gitlab/v1:** add rename repository endpoint ([365e740](https://gitlab.com/gitlab-org/container-registry/commit/365e740393176a58a2532ec6eaf7c5d5f2ac539c))
+* **datastore:** add all-repositories option to import command ([4fb3682](https://gitlab.com/gitlab-org/container-registry/commit/4fb36825a18d4c297cc36beb25e84f2888a9bf86))
+* **db:** add query to perform rename of repository ([92de2b9](https://gitlab.com/gitlab-org/container-registry/commit/92de2b983b5af1a3e14b6b210c4d577906fcea5c))
+* **registry:** import-command add step-three import option (import blobs only) ([90e0b5b](https://gitlab.com/gitlab-org/container-registry/commit/90e0b5bcd8e33930855fe74490739965850ec263))
+* **registry:** import-command use FullImport method, remove unsupported dangling-blobs option ([6747b06](https://gitlab.com/gitlab-org/container-registry/commit/6747b06bf981c81b9f494845819eb67656fa8237))
+* **registry:** import-command: enable full registry pre import ([1fe18ea](https://gitlab.com/gitlab-org/container-registry/commit/1fe18eacd4f919902c15b7017b8c6437fcf6b7d0))
+* remove online migration path HTTP metrics injection ([a865f85](https://gitlab.com/gitlab-org/container-registry/commit/a865f85badc1ac9f9d11bb4f15766d25f45fa938))
+* **s3:** add object ownership config parameter ([cce2e48](https://gitlab.com/gitlab-org/container-registry/commit/cce2e48e737bc1dadd3b320ffd495f7315eeda59))
+
+# [3.68.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.67.1-gitlab...v3.68.0-gitlab) (2023-03-01)
+
+
+### Features
+
+* **datastore:** add index to speed up lookups of manifests by tag ([069a705](https://gitlab.com/gitlab-org/container-registry/commit/069a70513c0210a8adc8f9677bde46a5f0a4892d))
+
+## [3.67.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.67.0-gitlab...v3.67.1-gitlab) (2023-03-01)
+
+
+### Bug Fixes
+
+* **db:** update metric name ([b39e0e1](https://gitlab.com/gitlab-org/container-registry/commit/b39e0e130fa51ae11b11d5ab0d6fbf1fc66cac31))
+
+# [3.67.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.66.0-gitlab...v3.67.0-gitlab) (2023-02-15)
+
+
+### Bug Fixes
+
+* **driver:** write to in memory file in place ([73c1dd9](https://gitlab.com/gitlab-org/container-registry/commit/73c1dd9ec92faa5b3331c315216ad38c2fbb6b2a))
+
+
+### Features
+
+* temporarily log query duration for debugging ([6157779](https://gitlab.com/gitlab-org/container-registry/commit/6157779daee1997c17c7b68f0f53b0bc12d89186))
+
 # [3.66.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.65.1-gitlab...v3.66.0-gitlab) (2023-01-26)
 
 
