@@ -278,6 +278,10 @@ issues:
         - errcheck
         - dupl
         - gosec
+    # Don't report on shadowing `err`. Strictly avoiding shadowing `err` often
+    # results in code that is not idomatic for little gain in clarity or correctness.
+    - text: 'shadow: declaration of "err" shadows declaration at'
+      linters: [ govet ]
 
     # Exclude known linters from partially hard-vendored code,
     # which is impossible to exclude via "nolint" comments.

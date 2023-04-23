@@ -102,3 +102,51 @@ func TestLexicographicallyNextPath(t *testing.T) {
 		require.Equal(t, test.expectedNextPath, lexicographicallyNextPath(test.path))
 	}
 }
+
+func TestLexicographicallyBeforePath(t *testing.T) {
+	var tests = []struct {
+		path               string
+		expectedBeforePath string
+	}{
+		{
+			path:               "gitlab.con",
+			expectedBeforePath: "gitlab.com",
+		},
+		{
+			path:               "gitlab.com/",
+			expectedBeforePath: "gitlab.com.",
+		},
+		{
+			path:               "",
+			expectedBeforePath: "z",
+		},
+		{
+			path:               "aaa",
+			expectedBeforePath: "aaz",
+		},
+		{
+			path:               "aaaB",
+			expectedBeforePath: "aaaA",
+		},
+		{
+			path:               "aaa0aaa",
+			expectedBeforePath: "aaa/aaa",
+		},
+		{
+			path:               "zzz",
+			expectedBeforePath: "zzy",
+		},
+		{
+			path:               "zzz[",
+			expectedBeforePath: "zzzZ",
+		},
+		{
+			path:               "gitlab-com/gl-infra/k8s-workloadt",
+			expectedBeforePath: "gitlab-com/gl-infra/k8s-workloads",
+		},
+	}
+
+	for _, test := range tests {
+		require.Equal(t, test.expectedBeforePath, lexicographicallyBeforePath(test.path))
+	}
+}

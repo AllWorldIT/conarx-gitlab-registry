@@ -1,4 +1,25 @@
-release:
+dry-run:
+  image: node:lts
+  stage: release
+  needs: []
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - make dev-tools
+    - npx semantic-release --dry-run
+
+cut:
+  image: node:lts
+  stage: release
+  needs: [ "dry-run" ]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  script:
+    - make dev-tools
+    - npx semantic-release
+
+publish:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   script:

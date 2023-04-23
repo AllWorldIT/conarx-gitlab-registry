@@ -35,7 +35,7 @@ import (
 	"github.com/docker/distribution/registry/api/urls"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
-	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
+	datastoretestutil "github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/handlers"
 	registryhandlers "github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/internal/migration"
@@ -69,6 +69,11 @@ func init() {
 }
 
 type configOpt func(*configuration.Configuration)
+
+type cacheClient interface {
+	// FlushCache removes all cached data in the cache
+	FlushCache() error
+}
 
 func withDelete(config *configuration.Configuration) {
 	config.Storage["delete"] = configuration.Parameters{"enabled": true}
@@ -241,7 +246,7 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 	config.HTTP.Headers = headerConfig
 
 	if os.Getenv("REGISTRY_DATABASE_ENABLED") == "true" {
-		dsn, err := dbtestutil.NewDSNFromEnv()
+		dsn, err := datastoretestutil.NewDSNFromEnv()
 		if err != nil {
 			panic(fmt.Sprintf("error creating dsn: %v", err))
 		}
@@ -334,14 +339,15 @@ func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[stri
 }
 
 type testEnv struct {
-	pk      libtrust.PrivateKey
-	ctx     context.Context
-	config  *configuration.Configuration
-	app     *registryhandlers.App
-	server  *httptest.Server
-	builder *urls.Builder
-	db      *datastore.DB
-	ns      *rtestutil.NotificationServer
+	pk          libtrust.PrivateKey
+	ctx         context.Context
+	config      *configuration.Configuration
+	app         *registryhandlers.App
+	server      *httptest.Server
+	builder     *urls.Builder
+	db          *datastore.DB
+	ns          *rtestutil.NotificationServer
+	cacheClient cacheClient
 }
 
 func (e *testEnv) requireDB(t *testing.T) {
@@ -371,7 +377,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	var db *datastore.DB
 	var err error
 	if config.Database.Enabled {
-		db, err = dbtestutil.NewDBFromConfig(config)
+		db, err = datastoretestutil.NewDBFromConfig(config)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -393,6 +399,16 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 			if _, err := s.UpdateAllReviewAfterDefaults(ctx, d); err != nil {
 				t.Fatal(err)
 			}
+		}
+	}
+
+	// The API test needs access to the redis only to clean it up during
+	// shutdown so that environments come up with a fresh cache.
+	var redis cacheClient
+	if config.Redis.Cache.Enabled {
+		redis, err = datastoretestutil.NewRedisClientFromConfig(config)
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
 
@@ -423,14 +439,15 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	}
 
 	return &testEnv{
-		pk:      pk,
-		ctx:     ctx,
-		config:  config,
-		app:     app,
-		server:  server,
-		builder: builder,
-		db:      db,
-		ns:      notifServer,
+		pk:          pk,
+		ctx:         ctx,
+		config:      config,
+		app:         app,
+		server:      server,
+		builder:     builder,
+		db:          db,
+		ns:          notifServer,
+		cacheClient: redis,
 	}
 }
 
@@ -443,7 +460,7 @@ func (t *testEnv) Shutdown() {
 			panic(err)
 		}
 
-		if err := dbtestutil.TruncateAllTables(t.db); err != nil {
+		if err := datastoretestutil.TruncateAllTables(t.db); err != nil {
 			panic(err)
 		}
 
@@ -453,6 +470,15 @@ func (t *testEnv) Shutdown() {
 
 		// Needed for idempotency, so that shutdowns may be defer'd without worry.
 		t.config.Database.Enabled = false
+	}
+
+	if t.config.Redis.Cache.Enabled {
+		if err := t.cacheClient.FlushCache(); err != nil {
+			panic(err)
+		}
+
+		// Needed for idempotency, so that shutdowns may be defer'd without worry.
+		t.config.Redis.Cache.Enabled = false
 	}
 
 	// The Prometheus DBStatsCollector is registered within handlers.NewApp (it is the only place we can do so).

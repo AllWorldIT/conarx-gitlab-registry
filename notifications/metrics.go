@@ -12,19 +12,20 @@ import (
 
 var (
 	// eventsCounter counts total events of incoming, success and failure
-	eventsCounter = prometheus.NotificationsNamespace.NewLabeledCounter("events", "The number of total events", "type", "action", "artifact")
+	eventsCounter = prometheus.NotificationsNamespace.NewLabeledCounter("events", "The number of total events", "type", "action", "artifact", "endpoint")
 	// pendingGauge measures the pending queue size
 	pendingGauge = prometheus.NotificationsNamespace.NewGauge("pending", "The gauge of pending events in queue", metrics.Total)
 	// statusCounter counts the total notification call per each status code
 	statusCounter = prometheus.NotificationsNamespace.NewLabeledCounter("status", "The number of status code", "code")
 	// errorCounter counts the total nuymber of events that were not sent due to internal errors
-	errorCounter = prometheus.NotificationsNamespace.NewCounter("errors", "The number of events that were not sent due to internal errors")
+	errorCounter = prometheus.NotificationsNamespace.NewLabeledCounter("errors", "The number of events that were not sent due to internal errors", "endpoint")
 )
 
 // EndpointMetrics track various actions taken by the endpoint, typically by
 // number of events. The goal of this to export it via expvar but we may find
 // some other future solution to be better.
 type EndpointMetrics struct {
+	Endpoint  string         // endpoint name to be added to the metrics
 	Pending   int            // events pending in queue
 	Events    int            // total events incoming
 	Successes int            // total events written successfully
@@ -41,8 +42,9 @@ type safeMetrics struct {
 }
 
 // newSafeMetrics returns safeMetrics with map allocated.
-func newSafeMetrics() *safeMetrics {
+func newSafeMetrics(endpoint string) *safeMetrics {
 	var sm safeMetrics
+	sm.Endpoint = endpoint
 	sm.Statuses = make(map[string]int)
 	return &sm
 }
@@ -77,7 +79,7 @@ func (emsl *endpointMetricsHTTPStatusListener) success(status int, event *Event)
 	emsl.Successes++
 
 	statusCounter.WithValues(fmt.Sprintf("%d %s", status, http.StatusText(status))).Inc(1)
-	eventsCounter.WithValues("Successes", event.Action, event.artifact()).Inc(1)
+	eventsCounter.WithValues("Successes", event.Action, event.artifact(), emsl.Endpoint).Inc(1)
 }
 
 func (emsl *endpointMetricsHTTPStatusListener) failure(status int, event *Event) {
@@ -87,7 +89,7 @@ func (emsl *endpointMetricsHTTPStatusListener) failure(status int, event *Event)
 	emsl.Failures++
 
 	statusCounter.WithValues(fmt.Sprintf("%d %s", status, http.StatusText(status))).Inc(1)
-	eventsCounter.WithValues("Failures", event.Action, event.artifact()).Inc(1)
+	eventsCounter.WithValues("Failures", event.Action, event.artifact(), emsl.Endpoint).Inc(1)
 }
 
 func (emsl *endpointMetricsHTTPStatusListener) err(event *Event) {
@@ -95,7 +97,7 @@ func (emsl *endpointMetricsHTTPStatusListener) err(event *Event) {
 	defer emsl.safeMetrics.Unlock()
 	emsl.Errors++
 
-	errorCounter.Inc(1)
+	errorCounter.WithValues(emsl.Endpoint).Inc(1)
 }
 
 // endpointMetricsEventQueueListener maintains the incoming events counter and
@@ -111,7 +113,7 @@ func (eqc *endpointMetricsEventQueueListener) ingress(event *Event) {
 	eqc.Events++
 	eqc.Pending++
 
-	eventsCounter.WithValues("Events", event.Action, event.artifact()).Inc()
+	eventsCounter.WithValues("Events", event.Action, event.artifact(), eqc.Endpoint).Inc()
 	pendingGauge.Inc(1)
 }
 

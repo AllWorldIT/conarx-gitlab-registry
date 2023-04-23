@@ -39,13 +39,12 @@ var (
 // Importer populates the registry database with filesystem metadata. This is only meant to be used for an initial
 // one-off migration, starting with an empty database.
 type Importer struct {
-	registry            distribution.Namespace
-	blobTransferService distribution.BlobTransferService
-	db                  *DB
-	repositoryStore     RepositoryStore
-	manifestStore       ManifestStore
-	tagStore            TagStore
-	blobStore           BlobStore
+	registry        distribution.Namespace
+	db              *DB
+	repositoryStore RepositoryStore
+	manifestStore   ManifestStore
+	tagStore        TagStore
+	blobStore       BlobStore
 
 	importDanglingManifests bool
 	importDanglingBlobs     bool
@@ -62,6 +61,9 @@ type ImporterOption func(*Importer)
 
 // WithImportDanglingManifests configures the Importer to import all manifests
 // rather than only tagged manifests.
+//
+// Deprecated: WithImportDanglingManifests is a legacy option that is no longer used
+// in the import command made available to the user.
 func WithImportDanglingManifests(imp *Importer) {
 	imp.importDanglingManifests = true
 }
@@ -91,13 +93,6 @@ func WithDryRun(imp *Importer) {
 // on (pre)import completion.
 func WithRowCount(imp *Importer) {
 	imp.rowCount = true
-}
-
-// WithBlobTransferService configures the Importer to use the passed BlobTransferService.
-func WithBlobTransferService(bts distribution.BlobTransferService) ImporterOption {
-	return func(imp *Importer) {
-		imp.blobTransferService = bts
-	}
 }
 
 // WithTagConcurrency configures the Importer to retrieve the details of n tags
@@ -186,10 +181,6 @@ func (imp *Importer) importLayer(ctx context.Context, dbRepo *models.Repository,
 		return fmt.Errorf("linking layer blob to repository: %w", err)
 	}
 
-	if err := imp.transferBlob(ctx, dbLayer.Digest, dbLayer.Size, metrics.BlobTypeLayer); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -232,35 +223,6 @@ func (imp *Importer) importLayers(ctx context.Context, dbRepo *models.Repository
 	return dbLayers, nil
 }
 
-func (imp *Importer) transferBlob(ctx context.Context, d digest.Digest, size int64, t metrics.BlobType) error {
-	if imp.dryRun || imp.blobTransferService == nil {
-		return nil
-	}
-
-	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
-		"digest":    d,
-		"blob_type": t.String(),
-	})
-
-	start := time.Now()
-	var noop bool
-	if err := imp.blobTransferService.Transfer(ctx, d); err != nil {
-		if !errors.Is(err, distribution.ErrBlobExists) {
-			return fmt.Errorf("transferring blob with digest %s: %w", d, err)
-		}
-		noop = true
-	}
-
-	duration := time.Since(start).Seconds()
-	metrics.BlobTransfer(duration, float64(size), t)
-	l.WithFields(log.Fields{
-		"noop":       noop,
-		"duration_s": duration,
-	}).Info("blob transfer complete")
-
-	return nil
-}
-
 func (imp *Importer) importManifestV2(ctx context.Context, fsRepo distribution.Repository, dbRepo *models.Repository, m distribution.ManifestV2, dgst digest.Digest, payload []byte, nonConformant bool) (*models.Manifest, error) {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": dbRepo.Path})
 
@@ -285,10 +247,6 @@ func (imp *Importer) importManifestV2(ctx context.Context, fsRepo distribution.R
 	}
 
 	if err := imp.blobStore.CreateOrFind(ctx, dbConfigBlob); err != nil {
-		return nil, err
-	}
-
-	if err := imp.transferBlob(ctx, m.Config().Digest, m.Config().Size, metrics.BlobTypeConfig); err != nil {
 		return nil, err
 	}
 
@@ -718,6 +676,7 @@ func (imp *Importer) importRepository(ctx context.Context, path string) error {
 	}
 
 	if imp.importDanglingManifests {
+		log.GetLogger(log.WithContext(ctx)).Warn("beginning legacy dangling manifests import")
 		// import all repository manifests
 		if err := imp.importManifests(ctx, fsRepo, dbRepo); err != nil {
 			return fmt.Errorf("importing manifests: %w", err)
@@ -982,15 +941,9 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 	}
 
 	if imp.importDanglingBlobs {
-		blobStart := time.Now()
-		l.Info("importing all blobs")
-
 		if err := imp.importBlobs(ctx); err != nil {
 			return fmt.Errorf("importing blobs: %w", err)
 		}
-
-		blobEnd := time.Since(blobStart).Seconds()
-		l.WithFields(log.Fields{"duration_s": blobEnd}).Info("blob import complete")
 	}
 
 	if err := imp.importAllRepositories(ctx); err != nil {
@@ -999,11 +952,6 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 
 	// This should only delay during testing.
 	time.Sleep(imp.testingDelay)
-
-	if !imp.dryRun {
-		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
-		imp.loadStores(imp.db)
-	}
 
 	if imp.rowCount {
 		counters, err := imp.countRows(ctx)
@@ -1024,14 +972,59 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 	return err
 }
 
-// FullImport populates the registry database with metadata from all repositories in the storage backend.
-func (imp *Importer) FullImport(ctx context.Context) error {
-	var tx Transactor
-	var err error
+type step int
 
-	// Add pre_import field to all subsequent logging.
-	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"pre_import": false, "dry_run": imp.dryRun})
+const (
+	unknown step = iota // Always first to catch uninitialized values.
+	preImport
+	repoImport
+	commonBlobs
+)
+
+// doImport manages which import steps to run and ensure pre and post import
+// tasks are handled consistently across import steps. Included import steps are
+// always ran in the following order: pre import, repository import, common blobs.
+// The function signature requires at least one step to be included, but allows multiple.
+func (imp *Importer) doImport(ctx context.Context, required step, steps ...step) error {
+	var (
+		tx                Transactor
+		err               error
+		pre, repos, blobs bool
+	)
+
+	// Assign each valid step to a boolean value. This ensures that we only run a
+	// particular step once and in the correct order.
+	steps = append(steps, required)
+	for _, s := range steps {
+		switch s {
+		case preImport:
+			pre = true
+		case repoImport:
+			repos = true
+		case commonBlobs:
+			blobs = true
+		default:
+			return fmt.Errorf("unknown import step: %v", s)
+		}
+	}
+
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"pre_import":        pre,
+		"repository_import": repos,
+		"common_blobs":      blobs,
+		"dry_run":           imp.dryRun,
+	})
 	ctx = log.WithLogger(ctx, l)
+
+	if imp.requireEmptyDatabase {
+		empty, err := imp.isDatabaseEmpty(ctx)
+		if err != nil {
+			return fmt.Errorf("checking if database is empty: %w", err)
+		}
+		if !empty {
+			return errors.New("non-empty database")
+		}
+	}
 
 	// Create a single transaction and roll it back at the end for dry runs.
 	if imp.dryRun {
@@ -1045,114 +1038,28 @@ func (imp *Importer) FullImport(ctx context.Context) error {
 	start := time.Now()
 	l.Info("starting metadata import")
 
-	if imp.requireEmptyDatabase {
-		empty, err := imp.isDatabaseEmpty(ctx)
-		if err != nil {
-			return fmt.Errorf("checking if database is empty: %w", err)
-		}
-		if !empty {
-			return errors.New("non-empty database")
+	if pre {
+		if err := imp.preImportAllRepositories(ctx); err != nil {
+			return fmt.Errorf("pre importing all repositories: %w", err)
 		}
 	}
-
-	if err := imp.preImportAllRepositories(ctx); err != nil {
-		return fmt.Errorf("pre importing all repositories: %w", err)
-	}
-
-	if err := imp.importAllRepositories(ctx); err != nil {
-		return err
-	}
-
-	if !imp.dryRun {
-		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
-		imp.loadStores(imp.db)
-	}
-
-	blobStart := time.Now()
-	l.Info("importing all blobs")
-
-	if err := imp.importBlobs(ctx); err != nil {
-		return fmt.Errorf("importing blobs: %w", err)
-	}
-
-	blobEnd := time.Since(blobStart).Seconds()
-	l.WithFields(log.Fields{"duration_s": blobEnd}).Info("blob import complete")
-
-	// This should only delay during testing.
-	time.Sleep(imp.testingDelay)
-
-	if !imp.dryRun {
-		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
-		imp.loadStores(imp.db)
-	}
-
-	if imp.rowCount {
-		counters, err := imp.countRows(ctx)
-		if err != nil {
-			l.WithError(err).Error("counting table rows")
+	if repos {
+		if err := imp.importAllRepositories(ctx); err != nil {
+			return fmt.Errorf("importing all repositories: %w", err)
 		}
-
-		logCounters := make(map[string]interface{}, len(counters))
-		for t, n := range counters {
-			logCounters[t] = n
+	}
+	if blobs {
+		if err := imp.importBlobs(ctx); err != nil {
+			return fmt.Errorf("importing blobs: %w", err)
 		}
-		l = l.WithFields(logCounters)
 	}
 
 	t := time.Since(start).Seconds()
 	l.WithFields(log.Fields{"duration_s": t}).Info("metadata import complete")
 
-	return err
-}
-
-// PreImportAll populates repository data without including any tag information.
-// This command is safe to run without read-only mode enabled on the registry.
-func (imp *Importer) PreImportAll(ctx context.Context) error {
-	// Add specific log fields to all subsequent log entries.
-	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
-		"pre_import": true,
-		"component":  "importer",
-	})
-	ctx = log.WithLogger(ctx, l)
-	l.Info("Starting full pre-import")
-
-	// Create a single transaction and roll it back at the end for dry runs.
-	if imp.dryRun {
-		tx, err := imp.beginTx(ctx)
-		if err != nil {
-			return fmt.Errorf("begin dry run transaction: %w", err)
-		}
-		defer tx.Rollback()
-	}
-
-	if imp.requireEmptyDatabase {
-		empty, err := imp.isDatabaseEmpty(ctx)
-		if err != nil {
-			return fmt.Errorf("checking if database is empty: %w", err)
-		}
-		if !empty {
-			return errors.New("non-empty database")
-		}
-	}
-
-	start := time.Now()
-
-	if err := imp.preImportAllRepositories(ctx); err != nil {
-		return fmt.Errorf("pre importing all repositories: %w", err)
-	}
-
-	if imp.testingDelay < 0 {
-		return errNegativeTestingDelay
-	}
-
-	// This should only delay during testing.
-	timer := time.NewTimer(imp.testingDelay)
-	select {
-	case <-timer.C:
-		// do nothing
-		l.Debug("done waiting for slow pre import test")
-	case <-ctx.Done():
-		return nil
+	if !imp.dryRun {
+		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
+		imp.loadStores(imp.db)
 	}
 
 	if imp.rowCount {
@@ -1168,10 +1075,32 @@ func (imp *Importer) PreImportAll(ctx context.Context) error {
 		l = l.WithFields(logCounters)
 	}
 
-	t := time.Since(start).Seconds()
-	l.WithFields(log.Fields{"duration_s": t}).Info("full pre-import complete")
+	return err
+}
 
-	return nil
+// FullImport populates the registry database with metadata from all repositories in the storage backend.
+func (imp *Importer) FullImport(ctx context.Context) error {
+	return imp.doImport(ctx, preImport, repoImport, commonBlobs)
+}
+
+// PreImportAll populates repository data without including any tag information.
+// This command is safe to run without read-only mode enabled on the registry.
+func (imp *Importer) PreImportAll(ctx context.Context) error {
+	return imp.doImport(ctx, preImport)
+}
+
+// ImportAllRepositories populates all repository data, when used after a pre import
+// cycle, this data will largely include only tags, but if a tag is not
+// associated with an existing manifest, all metadata associated with that
+// manifest will be imported. This command must only be used when read-only
+// mode is enabled on the registry.
+func (imp *Importer) ImportAllRepositories(ctx context.Context) error {
+	return imp.doImport(ctx, repoImport)
+}
+
+// ImportBlobs populates the registry database with metadata from all blobs in the storage backend.
+func (imp *Importer) ImportBlobs(ctx context.Context) error {
+	return imp.doImport(ctx, commonBlobs)
 }
 
 func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
@@ -1219,150 +1148,15 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 	})
 }
 
-// ImportAllRepositories populates all repository data, when used after a pre import
-// cycle, this data will largely include only tags, but if a tag is not
-// associated with an existing manifest, all metadata associated with that
-// manifest will be imported. This command must only be used when read-only
-// mode is enabled on the registry.
-func (imp *Importer) ImportAllRepositories(ctx context.Context) error {
-	// Add specific log fields to all subsequent log entries.
-	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
-		"pre_import": false,
-		"component":  "importer",
-	})
-	ctx = log.WithLogger(ctx, l)
-	l.Info("Starting full import")
-
-	// Create a single transaction and roll it back at the end for dry runs.
-	if imp.dryRun {
-		tx, err := imp.beginTx(ctx)
-		if err != nil {
-			return fmt.Errorf("begin dry run transaction: %w", err)
-		}
-		defer tx.Rollback()
-	}
-
-	if imp.requireEmptyDatabase {
-		empty, err := imp.isDatabaseEmpty(ctx)
-		if err != nil {
-			return fmt.Errorf("checking if database is empty: %w", err)
-		}
-		if !empty {
-			return errors.New("non-empty database")
-		}
-	}
-
-	start := time.Now()
-
-	if err := imp.importAllRepositories(ctx); err != nil {
-		return fmt.Errorf("importing all repositories: %w", err)
-	}
-
-	if imp.testingDelay < 0 {
-		return errNegativeTestingDelay
-	}
-
-	if !imp.dryRun {
-		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
-		imp.loadStores(imp.db)
-	}
-
-	// This should only delay during testing.
-	timer := time.NewTimer(imp.testingDelay)
-	select {
-	case <-timer.C:
-		// do nothing
-		l.Debug("done waiting for slow import test")
-	case <-ctx.Done():
-		return nil
-	}
-
-	if imp.rowCount {
-		counters, err := imp.countRows(ctx)
-		if err != nil {
-			l.WithError(err).Error("counting table rows")
-		}
-
-		logCounters := make(map[string]interface{}, len(counters))
-		for t, n := range counters {
-			logCounters[t] = n
-		}
-		l = l.WithFields(logCounters)
-	}
-
-	t := time.Since(start).Seconds()
-	l.WithFields(log.Fields{"duration_s": t}).Info("full repository import complete")
-
-	return nil
-}
-
-// ImportBlobs populates the registry database with metadata from all blobs in the storage backend.
-func (imp *Importer) ImportBlobs(ctx context.Context) error {
-	var tx Transactor
-	var err error
-
-	// Add common fields to all subsequent logging.
-	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"pre_import": false, "dry_run": imp.dryRun})
-	ctx = log.WithLogger(ctx, l)
-
-	// Create a single transaction and roll it back at the end for dry runs.
-	if imp.dryRun {
-		tx, err = imp.beginTx(ctx)
-		if err != nil {
-			return fmt.Errorf("beginning dry run transaction: %w", err)
-		}
-		defer tx.Rollback()
-	}
-
-	if imp.requireEmptyDatabase {
-		empty, err := imp.isDatabaseEmpty(ctx)
-		if err != nil {
-			return fmt.Errorf("checking if database is empty: %w", err)
-		}
-		if !empty {
-			return errors.New("non-empty database")
-		}
-	}
-
-	start := time.Now()
-	l.Info("starting blob metadata import")
-
-	if err := imp.importBlobs(ctx); err != nil {
-		return fmt.Errorf("importing blobs: %w", err)
-	}
-
-	end := time.Since(start).Seconds()
-	l.WithFields(log.Fields{"duration_s": end}).Info("blob metadata import complete")
-
-	// This should only delay during testing.
-	time.Sleep(imp.testingDelay)
-
-	if !imp.dryRun {
-		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
-		imp.loadStores(imp.db)
-	}
-
-	if imp.rowCount {
-		counters, err := imp.countRows(ctx)
-		if err != nil {
-			l.WithError(err).Error("counting table rows")
-		}
-
-		logCounters := make(map[string]interface{}, len(counters))
-		for t, n := range counters {
-			logCounters[t] = n
-		}
-		l = l.WithFields(logCounters)
-	}
-
-	return err
-}
-
 func (imp *Importer) importBlobs(ctx context.Context) error {
 	var index int
-	return imp.registry.Blobs().Enumerate(ctx, func(desc distribution.Descriptor) error {
+	start := time.Now()
+	l := log.GetLogger(log.WithContext(ctx))
+	l.Info("importing all blobs")
+
+	if err := imp.registry.Blobs().Enumerate(ctx, func(desc distribution.Descriptor) error {
 		index++
-		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"digest": desc.Digest, "count": index, "size": desc.Size}).Info("importing blob")
+		l.WithFields(log.Fields{"digest": desc.Digest, "count": index, "size": desc.Size}).Info("importing blob")
 
 		dbBlob, err := imp.blobStore.FindByDigest(ctx, desc.Digest)
 		if err != nil {
@@ -1375,10 +1169,15 @@ func (imp *Importer) importBlobs(ctx context.Context) error {
 			}
 		}
 
-		// Even if we found the blob in the database, try to transfer in case it's
-		// not present in blob storage on the transfer side.
-		return imp.transferBlob(ctx, desc.Digest, desc.Size, metrics.BlobTypeUnknown)
-	})
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	end := time.Since(start).Seconds()
+	l.WithFields(log.Fields{"duration_s": end}).Info("blob import complete")
+
+	return nil
 }
 
 func (imp *Importer) importAllRepositories(ctx context.Context) error {
@@ -1422,6 +1221,9 @@ func (imp *Importer) importAllRepositories(ctx context.Context) error {
 			if err := tx.Commit(); err != nil {
 				return fmt.Errorf("commit repository transaction: %w", err)
 			}
+
+			// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
+			imp.loadStores(imp.db)
 		}
 
 		return nil

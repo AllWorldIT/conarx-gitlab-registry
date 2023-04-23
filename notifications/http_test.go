@@ -65,7 +65,7 @@ func TestHTTPSink(t *testing.T) {
 	})
 	server := httptest.NewTLSServer(serverHandler)
 
-	metrics := newSafeMetrics()
+	metrics := newSafeMetrics(t.Name())
 	sink := newHTTPSink(server.URL, 0, nil, nil,
 		&endpointMetricsHTTPStatusListener{safeMetrics: metrics})
 
@@ -97,10 +97,11 @@ func TestHTTPSink(t *testing.T) {
 	defer server.Close()
 
 	// reset metrics for following tests
-	metrics = newSafeMetrics()
+	metrics = newSafeMetrics(t.Name())
 	sink = newHTTPSink(server.URL, 0, nil, nil,
 		&endpointMetricsHTTPStatusListener{safeMetrics: metrics})
 	var expectedMetrics EndpointMetrics
+	expectedMetrics.Endpoint = t.Name()
 	expectedMetrics.Statuses = make(map[string]int)
 
 	closeL, err := net.Listen("tcp", "localhost:0")
@@ -230,7 +231,7 @@ func TestHTTPSink_Errors(t *testing.T) {
 	server := httptest.NewServer(serverHandler)
 	defer server.Close()
 
-	metrics := newSafeMetrics()
+	metrics := newSafeMetrics(t.Name())
 
 	// make sure that passing in the transport no longer gives this error
 	tr := &http.Transport{
@@ -249,6 +250,7 @@ func TestHTTPSink_Errors(t *testing.T) {
 
 	// all events should time out
 	var expectedMetrics EndpointMetrics
+	expectedMetrics.Endpoint = t.Name()
 	expectedMetrics.Statuses = make(map[string]int)
 	expectedMetrics.Errors += len(events)
 

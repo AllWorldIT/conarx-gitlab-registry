@@ -170,3 +170,18 @@ type GCReviewAfterDefault struct {
 	Event string
 	Value time.Duration
 }
+
+// LeaseType defines the types of available leases on repositories
+type LeaseType string
+
+var (
+	// RenameLease is a repository LeaseType for rename operations
+	RenameLease LeaseType = "rename_lease"
+)
+
+// RepositoryLease represents a lease (on a new repository space) granted to an existing repository
+type RepositoryLease struct {
+	GrantedTo string
+	Path      string
+	Type      LeaseType
+}

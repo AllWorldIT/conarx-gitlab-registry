@@ -196,33 +196,6 @@ func (ih *importHandler) StartRepositoryImport(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// We're calling the constructor for the migration driver here, rather than
-	// passing it directly. This effectively strips the google CDN middleware
-	// (and all other middleware) from the migration driver since the CDN
-	// prevents blob transfer from starting.
-	// See: https://gitlab.com/gitlab-org/container-registry/-/issues/617
-	migrationDriver, err := migrationDriver(ih.App.Config)
-	if err != nil {
-		// try to update status from `(pre_)import_in_progress` to `(pre_)import_failed` before heading out
-		ih.updateRepoWithError(ih.Context, dbRepo, err, &multierror.Error{})
-		err = errcode.FromUnknownError(err)
-		ih.Errors = append(ih.Errors, err)
-
-		report(false, err)
-		return
-	}
-
-	bts, err := storage.NewBlobTransferService(ih.App.driver, migrationDriver)
-	if err != nil {
-		// try to update status from `(pre_)import_in_progress` to `(pre_)import_failed` before heading out
-		ih.updateRepoWithError(ih.Context, dbRepo, err, &multierror.Error{})
-		err = errcode.FromUnknownError(err)
-		ih.Errors = append(ih.Errors, err)
-
-		report(false, err)
-		return
-	}
-
 	go func() {
 		defer ih.panicRecoverer(dbRepo)
 		defer ih.releaseImportSemaphore()
@@ -230,7 +203,6 @@ func (ih *importHandler) StartRepositoryImport(w http.ResponseWriter, r *http.Re
 		importer := datastore.NewImporter(
 			ih.App.db,
 			ih.App.registry,
-			datastore.WithBlobTransferService(bts),
 			datastore.WithTagConcurrency(ih.App.Config.Migration.TagConcurrency),
 			// This should ALWAYS be set to zero during production.
 			datastore.WithTestSlowImport(ih.App.Config.Migration.TestSlowImport),

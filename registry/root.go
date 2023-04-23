@@ -55,15 +55,12 @@ func init() {
 	DBCmd.AddCommand(MigrateCmd)
 
 	DBCmd.AddCommand(ImportCmd)
-	ImportCmd.Flags().StringVarP(&repoPath, "repository", "r", "", "import a specific repository (all by default)")
-	ImportCmd.Flags().StringVarP(&blobTransferDest, "blob-transfer-destination", "t", "", "copy imported blobs to separate bucket (GCS) or root directory (filesystem)")
 	ImportCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do not commit changes to the database")
-	ImportCmd.Flags().BoolVarP(&importDanglingManifests, "dangling-manifests", "m", false, "import all manifests, regardless of whether they are tagged or not")
 	ImportCmd.Flags().BoolVarP(&requireEmptyDatabase, "require-empty-database", "e", false, "abort import if the database is not empty")
 	ImportCmd.Flags().BoolVarP(&rowCount, "row-count", "c", false, "count and log number of rows across relevant database tables on (pre)import completion")
 	ImportCmd.Flags().BoolVarP(&preImport, "pre-import", "p", false, "import immutable repository-scoped data to speed up a following import")
 	ImportCmd.Flags().BoolVarP(&preImport, "step-one", "1", false, "perform step one of a multi-step import: alias for `pre-import`")
-	ImportCmd.Flags().BoolVarP(&importAllRepos, "all-repositories", "R", false, "import all repository-scoped data")
+	ImportCmd.Flags().BoolVarP(&importAllRepos, "all-repositories", "r", false, "import all repository-scoped data")
 	ImportCmd.Flags().BoolVarP(&importAllRepos, "step-two", "2", false, "perform step two of a multi-step import: alias for `all-repositories`")
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "common-blobs", "B", false, "import all blob metadata from common storage")
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "step-three", "3", false, "perform step three of a multi-step import: alias for `common-blobs`")
@@ -74,25 +71,22 @@ func init() {
 
 // Command flag vars
 var (
-	requireEmptyDatabase    bool
-	blobTransferDest        string
-	debugAddr               string
-	dryRun                  bool
-	force                   bool
-	importDanglingManifests bool
-	maxNumMigrations        *int
-	removeUntagged          bool
-	repoPath                string
-	showVersion             bool
-	skipPostDeployment      bool
-	upToDateCheck           bool
-	preImport               bool
-	format                  string
-	countTags               bool
-	rowCount                bool
-	importCommonBlobs       bool
-	importAllRepos          bool
-	preImportAll            bool
+	requireEmptyDatabase bool
+	debugAddr            string
+	dryRun               bool
+	force                bool
+	maxNumMigrations     *int
+	removeUntagged       bool
+	showVersion          bool
+	skipPostDeployment   bool
+	upToDateCheck        bool
+	preImport            bool
+	format               string
+	countTags            bool
+	rowCount             bool
+	importCommonBlobs    bool
+	importAllRepos       bool
+	preImportAll         bool
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -449,9 +443,22 @@ var ImportCmd = &cobra.Command{
 	Short: "Import filesystem metadata into the database",
 	Long: "Import filesystem metadata into the database.\n" +
 		"Untagged manifests are not imported.\n " +
-		"Individual repositories may be imported via the --repository option.\n " +
 		"This tool can not be used with the parallelwalk storage configuration enabled.",
 	Run: func(cmd *cobra.Command, args []string) {
+
+		// Ensure no more than one step flag is set.
+		if preImport && (importAllRepos || importCommonBlobs) {
+			fmt.Fprint(os.Stderr, "steps two or three can't be used with step one\n")
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		if importAllRepos && importCommonBlobs {
+			fmt.Fprint(os.Stderr, "step three can't be used with step two\n")
+			cmd.Usage()
+			os.Exit(1)
+		}
+
 		config, err := resolveConfiguration(args)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
@@ -511,9 +518,6 @@ var ImportCmd = &cobra.Command{
 		}
 
 		var opts []datastore.ImporterOption
-		if importDanglingManifests {
-			opts = append(opts, datastore.WithImportDanglingManifests)
-		}
 		if dryRun {
 			opts = append(opts, datastore.WithDryRun)
 		}
@@ -524,57 +528,17 @@ var ImportCmd = &cobra.Command{
 			opts = append(opts, datastore.WithRowCount)
 		}
 
-		if blobTransferDest != "" {
-			destParameters := parameters
-			switch driver.Name() {
-			case "gcs":
-				destParameters["bucket"] = blobTransferDest
-			case "filesystem":
-				destParameters["rootdirectory"] = blobTransferDest
-			default:
-				fmt.Fprintf(os.Stderr, "%s driver does not support blob transfer", driver.Name())
-				os.Exit(1)
-			}
-
-			destDriver, err := factory.Create(config.Storage.Type(), destParameters)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to construct %s driver for blob transfer: %v", config.Storage.Type(), err)
-				os.Exit(1)
-			}
-
-			bts, err := storage.NewBlobTransferService(driver, destDriver)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to construct blob transfer service: %v", err)
-				os.Exit(1)
-			}
-
-			opts = append(opts, datastore.WithBlobTransferService(bts))
-		}
-
 		p := datastore.NewImporter(db, registry, opts...)
 
-		// Single repository commands.
-		if repoPath != "" {
-			switch {
-			case preImport:
-				err = p.PreImport(ctx, repoPath)
-			case importCommonBlobs:
-				err = errors.New("--common-blobs is not supported with the `--repository` flag")
-			default:
-				err = p.Import(ctx, repoPath)
-			}
-			// Full registry commands.
-		} else {
-			switch {
-			case preImport:
-				err = p.PreImportAll(ctx)
-			case importAllRepos:
-				err = p.ImportAllRepositories(ctx)
-			case importCommonBlobs:
-				err = p.ImportBlobs(ctx)
-			default:
-				err = p.FullImport(ctx)
-			}
+		switch {
+		case preImport:
+			err = p.PreImportAll(ctx)
+		case importAllRepos:
+			err = p.ImportAllRepositories(ctx)
+		case importCommonBlobs:
+			err = p.ImportBlobs(ctx)
+		default:
+			err = p.FullImport(ctx)
 		}
 
 		if err != nil {

@@ -45,7 +45,7 @@ const defaultTimeout = 2 * time.Minute // 2 minute timeout per chunk
 // listMax is the largest amount of objects you can request from OSS in a list call
 const listMax = 1000
 
-//DriverParameters A struct that encapsulates all of the driver parameters after all values have been set
+// DriverParameters A struct that encapsulates all of the driver parameters after all values have been set
 type DriverParameters struct {
 	AccessKeyID     string
 	AccessKeySecret string
@@ -516,10 +516,6 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 	// TODO: Verify that this driver can reliably handle parallel workloads before
 	// using storagedriver.WalkFallbackParallel
 	return d.Walk(ctx, path, f)
-}
-
-func (d *driver) TransferTo(ctx context.Context, destDriver storagedriver.StorageDriver, src, dest string) error {
-	return storagedriver.ErrUnsupportedMethod{}
 }
 
 func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {

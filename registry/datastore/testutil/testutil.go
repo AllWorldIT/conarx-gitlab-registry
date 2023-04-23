@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/registry/datastore"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -375,4 +377,34 @@ func CompareWithGoldenFile(tb testing.TB, path string, actual []byte, create, up
 
 	expected := readGoldenFile(tb, path)
 	require.Equal(tb, string(expected), string(actual), "does not match .golden file")
+}
+
+type redisClient struct {
+	redis redis.UniversalClient
+}
+
+// FlushCache Removes all cached data in the cache
+func (r *redisClient) FlushCache() error {
+	if err := r.redis.FlushAll(context.Background()).Err(); err != nil {
+		return fmt.Errorf("flushing redis cache: %w", err)
+	}
+	return nil
+}
+
+// NewRedisClientFromConfig generates a new redis cache client based on configuration settings.
+func NewRedisClientFromConfig(config *configuration.Configuration) (*redisClient, error) {
+	opts := &redis.UniversalOptions{
+		Addrs:    strings.Split(config.Redis.Cache.Addr, ","),
+		DB:       config.Redis.Cache.DB,
+		Password: config.Redis.Cache.Password,
+	}
+	redis := redis.NewUniversalClient(opts)
+	// Ensure the client is correctly configured and the server is reachable. We use a new local context here with a
+	// tight timeout to avoid blocking the application start for too long.
+	pingCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	if cmd := redis.Ping(pingCtx); cmd.Err() != nil {
+		return nil, cmd.Err()
+	}
+	return &redisClient{redis}, nil
 }

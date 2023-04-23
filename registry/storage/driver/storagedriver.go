@@ -98,8 +98,6 @@ type StorageDriver interface {
 	// processed is not stable and WalkFn must be thread-safe.
 	WalkParallel(ctx context.Context, path string, f WalkFn) error
 
-	TransferTo(ctx context.Context, destDriver StorageDriver, src, dest string) error
-
 	// ExistsPath is a performance optimized version of Stat to be used specifically for checking
 	// if a given path (not object) exists.
 	ExistsPath(ctx context.Context, path string) (bool, error)
@@ -213,20 +211,4 @@ type Error struct {
 
 func (err Error) Error() string {
 	return fmt.Sprintf("%s: %s", err.DriverName, err.Enclosed)
-}
-
-// PartialTransferError is returned when a transfer operation has left the
-// destination path in an unknown state.
-type PartialTransferError struct {
-	SourcePath      string
-	DestinationPath string
-	Cause           error
-}
-
-func (err PartialTransferError) Error() string {
-	return fmt.Sprintf("partial transfer from %s to %s: %s", err.SourcePath, err.DestinationPath, err.Cause)
-}
-
-func (err PartialTransferError) Unwrap() error {
-	return err.Cause
 }

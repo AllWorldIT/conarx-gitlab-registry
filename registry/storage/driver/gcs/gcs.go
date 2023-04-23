@@ -708,7 +708,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 }
 
 // List returns a list of the objects that are direct descendants of the
-//given path.
+// given path.
 func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 	var query *storage.Query
 	query = &storage.Query{}
@@ -993,41 +993,6 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 	return storagedriver.WalkFallbackParallel(ctx, d, maxWalkConcurrency, path, f)
 }
 
-// TransferTo writes the content from the source driver and the source path, to
-// the destination driver at the destination path using the GCS storage client's
-// Copier object to transfer data without pulling it into local memory.
-func (d *driver) TransferTo(ctx context.Context, destDriver storagedriver.StorageDriver, srcPath, destPath string) error {
-	targetDriver, err := convertToGCS(destDriver)
-	if err != nil {
-		return fmt.Errorf("unable to begin transfer: %w", err)
-	}
-
-	srcPath = d.pathToKey(srcPath)
-	destPath = targetDriver.pathToKey(destPath)
-
-	src := d.storageClient.Bucket(d.bucket).Object(srcPath)
-	dest := targetDriver.storageClient.Bucket(targetDriver.bucket).Object(destPath)
-
-	destAttrs, err := dest.CopierFrom(src).Run(ctx)
-	if err != nil {
-		err = fmt.Errorf("copying data from source to destination: %w", err)
-		return storagedriver.PartialTransferError{SourcePath: srcPath, DestinationPath: destPath, Cause: err}
-	}
-
-	srcAttrs, err := src.Attrs(ctx)
-	if err != nil {
-		err = fmt.Errorf("getting attrs for src object: %w", err)
-		return storagedriver.PartialTransferError{SourcePath: srcPath, DestinationPath: destPath, Cause: err}
-	}
-
-	if srcAttrs.CRC32C != destAttrs.CRC32C {
-		err = fmt.Errorf("src %q and dest %q checksums do not match after transfer", src.ObjectName(), dest.ObjectName())
-		return storagedriver.PartialTransferError{SourcePath: srcPath, DestinationPath: destPath, Cause: err}
-	}
-
-	return nil
-}
-
 // ExistsPath is a performance optimized version of Stat to be used specifically for checking if a given path (not
 // object) exists. For GCS this means doing a single list request with no recursion and minimum attribute retrieval.
 func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
@@ -1058,25 +1023,6 @@ func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func convertToGCS(destDriver storagedriver.StorageDriver) (*driver, error) {
-	dd, ok := destDriver.(*Wrapper)
-	if !ok {
-		return nil, errors.New("destDriver must be a gcs Wrapper")
-	}
-
-	r, ok := dd.StorageDriver.(*base.Regulator)
-	if !ok {
-		return nil, errors.New("gcs.Wrapper base driver must be a Regulator")
-	}
-
-	innerDriver, ok := r.StorageDriver.(*driver)
-	if !ok {
-		return nil, errors.New("destDriver base driver must be a gcs driver")
-	}
-
-	return innerDriver, nil
 }
 
 func startSession(client *http.Client, bucket string, name string) (uri string, err error) {

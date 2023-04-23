@@ -3001,17 +3001,19 @@ func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
+	baseRepoPath := "foo/bar"
+	baseRepoName, err := reference.WithName(baseRepoPath)
+
 	// generate 100+1 repos with tagged images
 	reposWithTag := make([]string, 0, 101)
+	reposWithTag = append(reposWithTag, baseRepoPath)
 	for i := 0; i <= 100; i++ {
-		reposWithTag = append(reposWithTag, fmt.Sprintf("foo/bar/%d", i))
+		reposWithTag = append(reposWithTag, fmt.Sprintf(baseRepoPath+"/%d", i))
 	}
-
-	baseRepoName, err := reference.WithName("foo/bar")
-	tagName := "latest"
 	require.NoError(t, err)
 
 	// seed repos of the same base path foo/bar but with a tagged manifest
+	tagName := "latest"
 	seedMultipleRepositoriesWithTaggedManifest(t, env, tagName, reposWithTag)
 
 	u, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoName)
@@ -3036,7 +3038,7 @@ func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
 	require.Equal(t, expectedLink, resp.Header.Get("Link"))
 }
 
-func TestGitlabAPI_SubRepositoryList_EmptyRepository(t *testing.T) {
+func TestGitlabAPI_SubRepositoryList_EmptyTagRepository(t *testing.T) {
 	env := newTestEnv(t, disableMirrorFS)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
@@ -3044,6 +3046,23 @@ func TestGitlabAPI_SubRepositoryList_EmptyRepository(t *testing.T) {
 	baseRepoName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
 
+	// create repository and then delete its only tag
+	tag := "latest"
+	createRepository(t, env, baseRepoName.Name(), tag)
+
+	ref, err := reference.WithTag(baseRepoName, tag)
+	require.NoError(t, err)
+
+	tagURL, err := env.builder.BuildTagURL(ref)
+	require.NoError(t, err)
+
+	res, err := httpDelete(tagURL)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusAccepted, res.StatusCode)
+
+	// assert subrepositories response
 	u, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoName)
 	require.NoError(t, err)
 	resp, err := http.Get(u)
@@ -3060,12 +3079,129 @@ func TestGitlabAPI_SubRepositoryList_EmptyRepository(t *testing.T) {
 	require.ElementsMatch(t, body, []*handlers.RepositoryAPIResponse{})
 }
 
-func TestGitlabAPI_RenameRepository(t *testing.T) {
+func TestGitlabAPI_SubRepositoryList_NonExistentRepository(t *testing.T) {
+	env := newTestEnv(t, disableMirrorFS)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	baseRepoName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	u, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoName)
+	require.NoError(t, err)
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
+	nestedRepos := []string{
+		"foo/bar/a",
+	}
+
+	baseRepoName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	tt := []struct {
+		name               string
+		queryParams        url.Values
+		requestBody        []byte
+		expectedRespStatus int
+		expectedRespError  *errcode.ErrorCode
+		expectedRespBody   *handlers.RenameRepositoryAPIResponse
+	}{
+		{
+			name:               "dry run param not set means implicit true",
+			requestBody:        []byte(`{ "name" : "not-bar" }`),
+			expectedRespStatus: http.StatusOK,
+			expectedRespBody: &handlers.RenameRepositoryAPIResponse{
+				TTL: 0,
+			},
+		},
+		{
+			name:               "dry run param is set explicitly to true",
+			queryParams:        url.Values{"dry_run": []string{"true"}},
+			requestBody:        []byte(`{ "name" : "not-bar" }`),
+			expectedRespStatus: http.StatusOK,
+			expectedRespBody: &handlers.RenameRepositoryAPIResponse{
+				TTL: 0,
+			},
+		},
+		{
+			name:               "dry run param is set explicitly to false",
+			queryParams:        url.Values{"dry_run": []string{"false"}},
+			requestBody:        []byte(`{ "name" : "not-bar" }`),
+			expectedRespStatus: http.StatusNoContent,
+			expectedRespBody:   nil,
+		},
+		{
+			name:               "bad json body",
+			queryParams:        url.Values{"dry_run": []string{"false"}},
+			requestBody:        []byte(`"name" : "not-bar"`),
+			expectedRespStatus: http.StatusBadRequest,
+			expectedRespError:  &v1.ErrorCodeInvalidJSONBody,
+			expectedRespBody:   nil,
+		},
+		{
+			name:               "invalid name parameter in request",
+			queryParams:        url.Values{"dry_run": []string{"false"}},
+			requestBody:        []byte(`{ "name" : "@@@" }`),
+			expectedRespStatus: http.StatusBadRequest,
+			expectedRespError:  &v1.ErrorCodeInvalidBodyParamType,
+			expectedRespBody:   nil,
+		},
+	}
+
+	for _, test := range tt {
+		t.Run(test.name, func(t *testing.T) {
+			srv := testutil.RedisServer(t)
+			env := newTestEnv(t, disableMirrorFS, withRedisCache(srv.Addr()))
+			env.requireDB(t)
+			t.Cleanup(env.Shutdown)
+
+			// seed repos
+			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+
+			// create and execute test request
+			u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, test.queryParams)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader(test.requestBody))
+			require.NoError(t, err)
+
+			// make request
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// assert results
+			require.Equal(t, test.expectedRespStatus, resp.StatusCode)
+			if test.expectedRespError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *test.expectedRespError)
+				return
+			}
+			// assert reponses with body are valid
+			var body *handlers.RenameRepositoryAPIResponse
+			err = json.NewDecoder(resp.Body).Decode(&body)
+			if test.expectedRespBody != nil {
+				require.NoError(t, err)
+				// assert that the TTL parameter is set and is greater than 0
+				require.Greater(t, body.TTL, 0*time.Second)
+				require.LessOrEqual(t, body.TTL, 60*time.Second)
+				// set the TTL parameter to zero to avoid test time drift comparison
+				body.TTL = 0
+			}
+			require.Equal(t, test.expectedRespBody, body)
+		})
+	}
+}
+
+func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 	nestedRepos := []string{
 		"foo/bar",
 		"foo/bar/a",
-		"foo/bar/b",
-		"foo/bar/b/c",
 	}
 
 	baseRepoName, err := reference.WithName("foo/bar")
@@ -3131,7 +3267,8 @@ func TestGitlabAPI_RenameRepository(t *testing.T) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			env := newTestEnv(t, disableMirrorFS)
+			srv := testutil.RedisServer(t)
+			env := newTestEnv(t, disableMirrorFS, withRedisCache(srv.Addr()))
 			env.requireDB(t)
 			t.Cleanup(env.Shutdown)
 
@@ -3145,6 +3282,7 @@ func TestGitlabAPI_RenameRepository(t *testing.T) {
 			req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader(test.requestBody))
 			require.NoError(t, err)
 
+			// make request
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
@@ -3155,20 +3293,48 @@ func TestGitlabAPI_RenameRepository(t *testing.T) {
 				checkBodyHasErrorCodes(t, "", resp, *test.expectedRespError)
 				return
 			}
-
+			// assert reponses with body are valid
 			var body *handlers.RenameRepositoryAPIResponse
 			err = json.NewDecoder(resp.Body).Decode(&body)
 			if test.expectedRespBody != nil {
 				require.NoError(t, err)
+				// assert that the TTL parameter is set and is greater than 0
+				require.Greater(t, body.TTL, 0*time.Second)
+				require.LessOrEqual(t, body.TTL, 60*time.Second)
+				// set the TTL parameter to zero to avoid test time drift comparison
+				body.TTL = 0
 			}
-
 			require.Equal(t, test.expectedRespBody, body)
 		})
 	}
 }
 
-func TestGitlabAPI_RenameRepository_Empty(t *testing.T) {
+func TestGitlabAPI_RenameRepository_WithoutRedis(t *testing.T) {
 	env := newTestEnv(t, disableMirrorFS)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	baseRepoName, err := reference.WithName("foo/foo")
+	require.NoError(t, err)
+
+	// create and execute test request
+	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, url.Values{"dry_run": []string{"false"}})
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// assert results
+	checkBodyHasErrorCodes(t, "", resp, v1.ErrorCodeNotImplemented)
+}
+
+func TestGitlabAPI_RenameRepository_Empty(t *testing.T) {
+	srv := testutil.RedisServer(t)
+	env := newTestEnv(t, disableMirrorFS, withRedisCache(srv.Addr()))
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 
@@ -3189,8 +3355,167 @@ func TestGitlabAPI_RenameRepository_Empty(t *testing.T) {
 	// assert results
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
+
+func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
+	srv := testutil.RedisServer(t)
+	env := newTestEnv(t, disableMirrorFS, withRedisCache(srv.Addr()))
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// seed two repos in the same namespace
+	firstRepoPath := "foo/bar"
+	secondRepoPath := "foo/foo"
+	firstRepo, err := reference.WithName(firstRepoPath)
+	require.NoError(t, err)
+	secondRepo, err := reference.WithName(secondRepoPath)
+	require.NoError(t, err)
+
+	tagname := "latest"
+	seedRandomSchema2Manifest(t, env, firstRepoPath, putByTag(tagname))
+	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
+
+	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
+	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"true"}})
+	require.NoError(t, err)
+	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
+	require.NoError(t, err)
+
+	// try to obtain lease for renaming the "foo" in "foo/foo" to "not-bar"
+	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"true"}})
+	require.NoError(t, err)
+	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
+	require.NoError(t, err)
+
+	// send first request
+	resp, err := http.DefaultClient.Do(fiirstReq)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// assert that the lease was obtained
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var body *handlers.RenameRepositoryAPIResponse
+	err = json.NewDecoder(resp.Body).Decode(&body)
+	require.NoError(t, err)
+	require.Greater(t, body.TTL, 0*time.Second)
+	require.LessOrEqual(t, body.TTL, 60*time.Second)
+
+	// send second request
+	resp, err = http.DefaultClient.Do(secondReq)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// assert there is a conflict obtaining the lease
+	checkBodyHasErrorCodes(t, "", resp, v1.ErrorCodeRenameConflict)
+}
+
+func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
+	srv := testutil.RedisServer(t)
+	env := newTestEnv(t, disableMirrorFS, withRedisCache(srv.Addr()))
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// seed two repos in the same namespace
+	firstRepoPath := "foo/bar"
+	secondRepoPath := "foo/bar/zag"
+	firstRepo, err := reference.WithName(firstRepoPath)
+	require.NoError(t, err)
+	secondRepo, err := reference.WithName(secondRepoPath)
+	require.NoError(t, err)
+
+	tagname := "latest"
+	seedRandomSchema2Manifest(t, env, firstRepoPath, putByTag(tagname))
+	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
+
+	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
+	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"true"}})
+	require.NoError(t, err)
+	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
+	require.NoError(t, err)
+
+	// try to obtain lease for renaming the "zag" in "foo/bar/zag" to "not-bar"
+	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"true"}})
+	require.NoError(t, err)
+	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
+	require.NoError(t, err)
+
+	// send first request
+	resp, err := http.DefaultClient.Do(fiirstReq)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// assert that the lease was obtained
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body := handlers.RenameRepositoryAPIResponse{}
+	err = json.NewDecoder(resp.Body).Decode(&body)
+	require.NoError(t, err)
+	require.Greater(t, body.TTL, 0*time.Second)
+	require.LessOrEqual(t, body.TTL, 60*time.Second)
+
+	// send second request
+	resp, err = http.DefaultClient.Do(secondReq)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// assert there is no conflict obtaining the second lease in the presence of the first
+	// assert that the lease was obtained
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body = handlers.RenameRepositoryAPIResponse{}
+	err = json.NewDecoder(resp.Body).Decode(&body)
+	require.NoError(t, err)
+	require.Greater(t, body.TTL, 0*time.Second)
+	require.LessOrEqual(t, body.TTL, 60*time.Second)
+}
+
+func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
+	srv := testutil.RedisServer(t)
+	env := newTestEnv(t, disableMirrorFS, withRedisCache(srv.Addr()))
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// seed two repos in the same namespace
+	firstRepoPath := "foo/bar"
+	secondRepoPath := "foo/foo"
+	firstRepo, err := reference.WithName(firstRepoPath)
+	require.NoError(t, err)
+	secondRepo, err := reference.WithName(secondRepoPath)
+	require.NoError(t, err)
+
+	tagname := "latest"
+	seedRandomSchema2Manifest(t, env, firstRepoPath, putByTag(tagname))
+	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
+
+	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
+	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"false"}})
+	require.NoError(t, err)
+	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
+	require.NoError(t, err)
+
+	// try to obtain lease for renaming the "foo" in "foo/foo" to "not-bar"
+	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"false"}})
+	require.NoError(t, err)
+	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
+	require.NoError(t, err)
+
+	// send first request
+	resp, err := http.DefaultClient.Do(fiirstReq)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// assert that the raname succeded
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	// send second request
+	resp, err = http.DefaultClient.Do(secondReq)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// assert there is a conflict obtaining the lease
+	checkBodyHasErrorCodes(t, "", resp, v1.ErrorCodeRenameConflict)
+}
+
 func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	srv := testutil.RedisServer(t)
+	env := newTestEnv(t, disableMirrorFS, withRedisCache(srv.Addr()))
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 

@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	gocache "github.com/eko/gocache/v2/cache"
-	"github.com/eko/gocache/v2/store"
-	"github.com/go-redis/redis/v8"
-	"github.com/go-redis/redismock/v8"
+	gocache "github.com/eko/gocache/lib/v4/cache"
+	libstore "github.com/eko/gocache/lib/v4/store"
+	redisstore "github.com/eko/gocache/store/redis/v4"
+	"github.com/go-redis/redismock/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 // RedisServer start a new miniredis server and registers the cleanup after the test is done.
@@ -31,20 +32,20 @@ func redisClient(tb testing.TB) redis.UniversalClient {
 // redisCache creates a new gocache cache based on Redis. If a client is not provided, a server/client pair is created
 // using redisClient. A client can be provided when wanting to use a specific client, such as for mocking purposes. A
 // global TTL for cached objects can be specific (defaults to no TTL).
-func redisCache(tb testing.TB, client redis.UniversalClient, ttl time.Duration) *gocache.Cache {
+func redisCache(tb testing.TB, client redis.UniversalClient, ttl time.Duration) *gocache.Cache[any] {
 	tb.Helper()
 
 	if client == nil {
 		client = redisClient(tb)
 	}
 
-	s := store.NewRedis(client, &store.Options{Expiration: ttl})
-	return gocache.New(s)
+	s := redisstore.NewRedis(client, libstore.WithExpiration(ttl))
+	return gocache.New[any](s)
 }
 
 // RedisCache creates a new gocache cache based on Redis using a new miniredis server and redis client. A global TTL for
 // cached objects can be specific (defaults to no TTL).
-func RedisCache(tb testing.TB, ttl time.Duration) *gocache.Cache {
+func RedisCache(tb testing.TB, ttl time.Duration) *gocache.Cache[any] {
 	tb.Helper()
 
 	return redisCache(tb, redisClient(tb), ttl)
@@ -52,7 +53,7 @@ func RedisCache(tb testing.TB, ttl time.Duration) *gocache.Cache {
 
 // RedisCacheMock is similar to RedisCache but here we use a redismock client. A global TTL for cached objects can be
 // specific (defaults to no TTL).
-func RedisCacheMock(tb testing.TB, ttl time.Duration) (*gocache.Cache, redismock.ClientMock) {
+func RedisCacheMock(tb testing.TB, ttl time.Duration) (*gocache.Cache[any], redismock.ClientMock) {
 	client, mock := redismock.NewClientMock()
 
 	return redisCache(tb, client, ttl), mock

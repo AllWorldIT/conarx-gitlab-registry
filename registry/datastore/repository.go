@@ -14,15 +14,15 @@ import (
 	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/internal/migration"
-	"gitlab.com/gitlab-org/labkit/errortracking"
 
-	gocache "github.com/eko/gocache/v2/cache"
-	"github.com/eko/gocache/v2/marshaler"
-	"github.com/eko/gocache/v2/store"
-	"github.com/go-redis/redis/v8"
+	gocache "github.com/eko/gocache/lib/v4/cache"
+	"github.com/eko/gocache/lib/v4/marshaler"
+	libstore "github.com/eko/gocache/lib/v4/store"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
 	"github.com/opencontainers/go-digest"
+	"github.com/redis/go-redis/v9"
+	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
 // cacheOpTimeout defines the timeout applied to cache operations against Redis
@@ -54,7 +54,7 @@ type RepositoryReader interface {
 	SizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
 	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
 	TagsDetailPaginated(ctx context.Context, r *models.Repository, limit int, lastName string) ([]*models.TagDetail, error)
-	FindPagingatedRepositoriesForPath(ctx context.Context, path string, lastPath string, limit int) (models.Repositories, error)
+	FindPagingatedRepositoriesForPath(ctx context.Context, r *models.Repository, lastPath string, limit int) (models.Repositories, error)
 }
 
 // RepositoryWriter is the interface that defines write operations for a repository store.
@@ -250,13 +250,13 @@ func (c *singleRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, 
 // centralRepositoryCache is the interface for the centralized repository object cache backed by Redis.
 type centralRepositoryCache struct {
 	// cache provides access to the raw gocache interface
-	cache *gocache.Cache
+	cache *gocache.Cache[any]
 	// marshaler provides access to a MessagePack backed marshaling interface
 	marshaler *marshaler.Marshaler
 }
 
 // NewCentralRepositoryCache creates an interface for the centralized repository object cache backed by Redis.
-func NewCentralRepositoryCache(cache *gocache.Cache) *centralRepositoryCache {
+func NewCentralRepositoryCache(cache *gocache.Cache[any]) *centralRepositoryCache {
 	return &centralRepositoryCache{cache, marshaler.New(cache)}
 }
 
@@ -286,8 +286,8 @@ func (c *centralRepositoryCache) Get(ctx context.Context, path string) *models.R
 
 	tmp, err := c.marshaler.Get(getCtx, c.key(path), new(models.Repository))
 	if err != nil {
-		// redis.Nil is returned when the key is not found in Redis
-		if err != redis.Nil {
+		// a wrapped redis.Nil is returned when the key is not found in Redis
+		if !errors.Is(err, redis.Nil) {
 			l.WithError(err).Error("failed to read repository from cache")
 		}
 		return nil
@@ -317,7 +317,7 @@ func (c *centralRepositoryCache) Set(ctx context.Context, r *models.Repository) 
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	if err := c.marshaler.Set(setCtx, c.key(r.Path), r, nil); err != nil {
+	if err := c.marshaler.Set(setCtx, c.key(r.Path), r); err != nil {
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to write repository to cache")
 	}
 }
@@ -333,8 +333,7 @@ func (c *centralRepositoryCache) SizeWithDescendantsTimedOut(ctx context.Context
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	opts := &store.Options{Expiration: sizeTimedOutKeyTTL}
-	if err := c.cache.Set(setCtx, c.sizeWithDescendantsTimedOutKey(r.Path), "true", opts); err != nil {
+	if err := c.cache.Set(setCtx, c.sizeWithDescendantsTimedOutKey(r.Path), "true", libstore.WithExpiration(sizeTimedOutKeyTTL)); err != nil {
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to create size with descendants timeout key in cache")
 	}
 }
@@ -346,8 +345,8 @@ func (c *centralRepositoryCache) HasSizeWithDescendantsTimedOut(ctx context.Cont
 	defer cancel()
 
 	if _, err := c.cache.Get(setCtx, c.sizeWithDescendantsTimedOutKey(r.Path)); err != nil {
-		// redis.Nil is returned when the key is not found in Redis
-		if err != redis.Nil {
+		// a wrapped redis.Nil is returned when the key is not found in Redis
+		if !errors.Is(err, redis.Nil) {
 			msg := "failed to read size with descendants timeout key from cache"
 			log.GetLogger(log.WithContext(ctx)).WithError(err).Error(msg)
 			errortracking.Capture(fmt.Errorf("%s: %w", msg, err), errortracking.WithContext(ctx))
@@ -364,7 +363,7 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 	defer cancel()
 
 	r.Size = nil
-	if err := c.marshaler.Set(inValCtx, c.key(r.Path), r, nil); err != nil {
+	if err := c.marshaler.Set(inValCtx, c.key(r.Path), r); err != nil {
 		detail := "failed to invalidate repository size in cache for repo: " + r.Path
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn(detail)
 		err := fmt.Errorf("%q: %q", detail, err)
@@ -1566,7 +1565,13 @@ func (s *repositoryStore) DeleteManifest(ctx context.Context, r *models.Reposito
 // Empty repositories (which do not have at least a tag) are ignored.
 // Also, even if there are no repository with a `path` of `lastPath`, the returned
 // repositories will still be those with a base path `path` and lexicographically after lastPath.
-func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context, path string, lastPath string, limit int) (models.Repositories, error) {
+func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context, r *models.Repository, lastPath string, limit int) (models.Repositories, error) {
+	// start from a path lexicographically before r.Path when no last path is availaible.
+	// this improves the query performance as we will not need to filter from `r.path > ""` in the query below.
+	if lastPath == "" {
+		lastPath = lexicographicallyBeforePath(r.Path)
+	}
+
 	defer metrics.InstrumentQuery("repository_find_paginated_repositories_for_path")()
 	q := `SELECT  
 			id,
@@ -1584,10 +1589,11 @@ func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context,
 			(r.path = $1 OR r.path LIKE $2)
 			AND EXISTS ( SELECT FROM tags AS t WHERE t.top_level_namespace_id = r.top_level_namespace_id AND t.repository_id = r.id )
 			AND (r.path > $3 AND r.path < $4)
+			AND r.top_level_namespace_id = $5
 		ORDER BY r.path
-		LIMIT $5`
+		LIMIT $6`
 
-	rows, err := s.db.QueryContext(ctx, q, path, path+"/%", lastPath, lexicographicallyNextPath(path), limit)
+	rows, err := s.db.QueryContext(ctx, q, r.Path, r.Path+"/%", lastPath, lexicographicallyNextPath(r.Path), r.NamespaceID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("finding pagingated list of repository for path: %w", err)
 	}
@@ -1653,4 +1659,36 @@ func lexicographicallyNextPath(path string) string {
 		nexLexPath = string(rPath)
 	}
 	return nexLexPath
+}
+
+// lexicographicallyBeforePath takes a path string and returns the lexicographical path just before the provided path.
+// e.g gitlab-con => gitlab-com , gitlab-com/  => gitlab-com.
+// In the event that an empty string is provided as a path it returns 'z'.
+// In the event where only "a's" exist in the path; the last 'a' carachter of the path is converted to a "z".
+// This function serves primarily as a helper for optimizing paginated db queries used in `FindPagingatedRepositoriesForPath.
+func lexicographicallyBeforePath(path string) string {
+	// this shouldn't be possible but to be safe we return a z on empty path
+	if path == "" {
+		return "z"
+	}
+
+	// Find first character from right
+	// which is not a.
+	i := strings.LastIndexFunc(path, func(r rune) bool {
+		return r != 'a'
+	})
+
+	var beforeLexPath string
+	// If all characters are 'a',
+	// change the last character to 'z'.
+	if i == -1 {
+		beforeLexPath = strings.TrimSuffix(path, "a") + "z"
+	} else {
+		// If there are some non "a" characters,
+		// convert the very last one to its reverse lexicographical unicode character
+		rPath := []rune(path)
+		rPath[i]--
+		beforeLexPath = string(rPath)
+	}
+	return beforeLexPath
 }

@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package redis_test
@@ -11,7 +12,8 @@ import (
 
 	"github.com/docker/distribution/registry/storage/cache/cachecheck"
 	rediscache "github.com/docker/distribution/registry/storage/cache/redis"
-	"github.com/go-redis/redis/v8"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func isEligible(t *testing.T) {

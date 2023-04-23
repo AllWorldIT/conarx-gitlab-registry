@@ -57,6 +57,14 @@ var ErrorCodeInvalidJSONBody = errcode.Register(errGroup, errcode.ErrorDescripto
 	HTTPStatusCode: http.StatusBadRequest,
 })
 
+// ErrorCodeNotImplemented is returned when the requested operation has no corresponding implementation in the registry.
+var ErrorCodeNotImplemented = errcode.Register(errGroup, errcode.ErrorDescriptor{
+	Value:          "NOT_IMPLEMENTED",
+	Message:        "operation not available",
+	Description:    "The requested operation is not available",
+	HTTPStatusCode: http.StatusNotFound,
+})
+
 func InvalidQueryParamTypeErrorDetail(key string, validTypes []reflect.Kind) string {
 	strTypes := make([]string, 0, len(validTypes))
 	for _, t := range validTypes {
@@ -67,6 +75,10 @@ func InvalidQueryParamTypeErrorDetail(key string, validTypes []reflect.Kind) str
 
 func InvalidPatchBodyTypeErrorDetail(key string, pattern *regexp.Regexp) string {
 	return fmt.Sprintf("the '%s' body parameter value must match the pattern '%s'", key, pattern)
+}
+
+func MissingServerDependencyTypeErrorDetail(key string) string {
+	return fmt.Sprintf("the server is missing the dependency '%s'", key)
 }
 
 // ErrorCodePreImportInProgress is returned when a repository is already pre importing.
@@ -190,4 +202,12 @@ func ErrorCodeImportCannotBeCanceledDetail(repo distribution.Repository, status 
 
 func ExceedsRenameLimitErrorDetail(validValue int) string {
 	return fmt.Sprintf("the repository must have less than %d sub-repositories:", validValue)
+}
+
+func ConflictWithOngoingRename(path string) string {
+	return fmt.Sprintf("an ongoing rename operation in the registry is using the path: %s", path)
+}
+
+func ConflictWithExistingRepository(path string) string {
+	return fmt.Sprintf("a repository already exists in the registry with the path: %s", path)
 }

@@ -3,9 +3,9 @@ package redis
 import (
 	"github.com/docker/distribution/metrics"
 
-	redisprom "github.com/globocom/go-redis-prometheus"
-	"github.com/go-redis/redis/v8"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/redis/go-redis/v9"
+	redisprom "github.com/trim21/go-redis-prometheus"
 )
 
 const (

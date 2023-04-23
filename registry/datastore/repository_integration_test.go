@@ -2494,7 +2494,7 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 	tt := []struct {
 		name     string
 		limit    int
-		path     string
+		baseRepo *models.Repository
 		lastPath string
 
 		// see testdata/fixtures/[repositories|tags].sql:
@@ -2521,7 +2521,10 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 			name:     "no limit and no last path",
 			limit:    100, // there are only 16 repositories in the DB, so this is equivalent to no limit
 			lastPath: "",  // this is the equivalent to no last path, as all repository paths are non-empty
-			path:     "usage-group",
+			baseRepo: &models.Repository{
+				NamespaceID: 3,
+				Path:        "usage-group",
+			},
 			expectedRepos: models.Repositories{
 				{
 					ID:              9,
@@ -2569,7 +2572,10 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 			name:     "1st part",
 			limit:    2,
 			lastPath: "",
-			path:     "usage-group",
+			baseRepo: &models.Repository{
+				NamespaceID: 3,
+				Path:        "usage-group",
+			},
 			expectedRepos: models.Repositories{
 				{
 					ID:              9,
@@ -2590,9 +2596,12 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 			},
 		},
 		{
-			name:     "last part",
-			limit:    100,
-			path:     "usage-group",
+			name:  "last part",
+			limit: 100,
+			baseRepo: &models.Repository{
+				NamespaceID: 3,
+				Path:        "usage-group",
+			},
 			lastPath: "usage-group/sub-group-1/repository-1",
 			expectedRepos: models.Repositories{
 				{
@@ -2622,9 +2631,12 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 			},
 		},
 		{
-			name:     "nth part",
-			limit:    1,
-			path:     "usage-group",
+			name:  "nth part",
+			limit: 1,
+			baseRepo: &models.Repository{
+				NamespaceID: 3,
+				Path:        "usage-group",
+			},
 			lastPath: "usage-group/sub-group-1/repository-2",
 			expectedRepos: models.Repositories{
 				{
@@ -2638,9 +2650,12 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 			},
 		},
 		{
-			name:     "non existent last path starting with d",
-			limit:    100,
-			path:     "gitlab-org",
+			name:  "non existent last path starting with d",
+			limit: 100,
+			baseRepo: &models.Repository{
+				NamespaceID: 1,
+				Path:        "gitlab-org",
+			},
 			lastPath: "does-not-exist",
 			expectedRepos: models.Repositories{
 				{
@@ -2662,9 +2677,12 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 			},
 		},
 		{
-			name:          "non existent last path starting with z",
-			limit:         100,
-			path:          "gitlab-org",
+			name:  "non existent last path starting with z",
+			limit: 100,
+			baseRepo: &models.Repository{
+				NamespaceID: 1,
+				Path:        "gitlab-org",
+			},
 			lastPath:      "z-does-not-exist",
 			expectedRepos: models.Repositories{},
 		},
@@ -2674,7 +2692,7 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, test.path, test.lastPath, test.limit)
+			rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, test.baseRepo, test.lastPath, test.limit)
 
 			// reset created_at attributes for reproducible comparisons
 			for _, r := range rr {
@@ -2693,7 +2711,10 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath_None(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, "a-test-group", "", 100)
+	rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, &models.Repository{
+		NamespaceID: 2,
+		Path:        "a-test-group",
+	}, "", 100)
 	require.NoError(t, err)
 	require.Empty(t, rr)
 }

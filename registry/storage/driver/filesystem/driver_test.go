@@ -3,7 +3,6 @@ package filesystem
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"os"
 	"path"
 	"testing"
@@ -171,95 +170,6 @@ func TestDeleteFilesNonExistingParentDir(t *testing.T) {
 	if count != 1 {
 		t.Errorf("expected deleted count to be 1, got %d", count)
 	}
-}
-
-func TestTransferTo(t *testing.T) {
-	srcDriver := newTempDirDriver(t)
-
-	destDriver := newTempDirDriver(t)
-
-	b := make([]byte, 10)
-	rand.Read(b)
-
-	ctx := context.Background()
-	path := "/happy/data/path"
-
-	// Write content to source.
-	err := srcDriver.PutContent(ctx, path, b)
-	require.NoError(t, err)
-
-	// Destination should not have already have content at the path.
-	_, err = destDriver.Stat(ctx, path)
-	require.True(t, errors.As(err, &storagedriver.PathNotFoundError{}))
-
-	// Transfer to destination.
-	err = srcDriver.TransferTo(ctx, destDriver, path, path)
-	require.NoError(t, err)
-
-	// Reading from destination should work.
-	c, err := destDriver.GetContent(ctx, path)
-	require.NoError(t, err)
-	require.EqualValues(t, b, c)
-}
-
-func TestTransferToExistingDest(t *testing.T) {
-	srcDriver := newTempDirDriver(t)
-
-	destDriver := newTempDirDriver(t)
-
-	srcContent := make([]byte, 10)
-	rand.Read(srcContent)
-
-	destContent := make([]byte, 10)
-	rand.Read(destContent)
-
-	ctx := context.Background()
-	path := "/existing/data/path"
-
-	// Write content in both locations.
-	err := srcDriver.PutContent(ctx, path, srcContent)
-	require.NoError(t, err)
-
-	err = destDriver.PutContent(ctx, path, destContent)
-	require.NoError(t, err)
-
-	// Transfer should overwrite the path on the destDriver.
-	err = srcDriver.TransferTo(ctx, destDriver, path, path)
-	require.NoError(t, err)
-
-	// Getting content from destination after transfer should match the srcContent.
-	c, err := destDriver.GetContent(ctx, path)
-	require.NoError(t, err)
-	require.EqualValues(t, srcContent, c)
-}
-
-func TestTransferToSameRootDir(t *testing.T) {
-	rootDir := t.TempDir()
-
-	srcDriver, err := FromParameters(map[string]interface{}{
-		"rootdirectory": rootDir,
-	})
-	require.NoError(t, err)
-
-	destDriver, err := FromParameters(map[string]interface{}{
-		"rootdirectory": rootDir,
-	})
-	require.NoError(t, err)
-
-	b := make([]byte, 10)
-	rand.Read(b)
-
-	ctx := context.Background()
-	path := "/same/root/path"
-
-	// Write content to source.
-	err = srcDriver.PutContent(ctx, path, b)
-	require.NoError(t, err)
-
-	// Transfer to destination should exit early with error.
-	err = srcDriver.TransferTo(ctx, destDriver, path, path)
-	require.EqualError(t, err,
-		"unable to begin transfer: srcDriver and destDriver must not have the same root directory")
 }
 
 func newTempDirDriver(t *testing.T) *Driver {

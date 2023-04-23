@@ -26,7 +26,7 @@ middleware:storage-googlecdn:
       variables:
         TEST_SHORT_FLAG: ""
     - when: always
-  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE -args $TEST_SHORT_FLAG
+  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE -args -check.v $TEST_SHORT_FLAG
 
 filesystem:
   <<: *storage-driver-test
@@ -76,7 +76,6 @@ gcs:
   variables:
     <<: *storage-driver-variables
     REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
-    REGISTRY_STORAGE_GCS_TARGET_BUCKET: $GCS_BUCKET
     TEST_SHORT_FLAG: "-test.short"
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/gcs"
     TEST_TIMEOUT: "35m"

@@ -53,12 +53,13 @@ import (
 	storagemiddleware "github.com/docker/distribution/registry/storage/driver/middleware"
 	"github.com/docker/distribution/registry/storage/validation"
 	"github.com/docker/distribution/version"
-	gocache "github.com/eko/gocache/v2/cache"
-	"github.com/eko/gocache/v2/store"
+	gocache "github.com/eko/gocache/lib/v4/cache"
+	libstore "github.com/eko/gocache/lib/v4/store"
+	redisstore "github.com/eko/gocache/store/redis/v4"
 	"github.com/getsentry/sentry-go"
-	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 	promclient "github.com/prometheus/client_golang/prometheus"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 	metricskit "gitlab.com/gitlab-org/labkit/metrics"
@@ -120,7 +121,7 @@ type App struct {
 	manifestPayloadSizeLimit int
 
 	// redisCache is the interface for manipulating cached data on Redis.
-	redisCache *gocache.Cache
+	redisCache *gocache.Cache[any]
 }
 
 // NewApp takes a configuration and returns a configured app, ready to serve
@@ -923,15 +924,15 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 	}
 
 	opts := &redis.UniversalOptions{
-		Addrs:        strings.Split(config.Redis.Cache.Addr, ","),
-		DB:           config.Redis.Cache.DB,
-		Password:     config.Redis.Cache.Password,
-		DialTimeout:  config.Redis.Cache.DialTimeout,
-		ReadTimeout:  config.Redis.Cache.ReadTimeout,
-		WriteTimeout: config.Redis.Cache.WriteTimeout,
-		PoolSize:     config.Redis.Cache.Pool.Size,
-		MaxConnAge:   config.Redis.Cache.Pool.MaxLifetime,
-		MasterName:   config.Redis.Cache.MainName,
+		Addrs:           strings.Split(config.Redis.Cache.Addr, ","),
+		DB:              config.Redis.Cache.DB,
+		Password:        config.Redis.Cache.Password,
+		DialTimeout:     config.Redis.Cache.DialTimeout,
+		ReadTimeout:     config.Redis.Cache.ReadTimeout,
+		WriteTimeout:    config.Redis.Cache.WriteTimeout,
+		PoolSize:        config.Redis.Cache.Pool.Size,
+		ConnMaxLifetime: config.Redis.Cache.Pool.MaxLifetime,
+		MasterName:      config.Redis.Cache.MainName,
 	}
 	if config.Redis.Cache.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
@@ -939,18 +940,20 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 		}
 	}
 	if config.Redis.Cache.Pool.IdleTimeout > 0 {
-		opts.IdleTimeout = config.Redis.Cache.Pool.IdleTimeout
+		opts.ConnMaxIdleTime = config.Redis.Cache.Pool.IdleTimeout
 	}
 
 	// redis.NewUniversalClient will take care of returning the appropriate client type (single, cluster or sentinel)
-	// depending on the configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v8#NewUniversalClient.
+	// depending on the configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
 	redisClient := redis.NewUniversalClient(opts)
 
-	redismetrics.InstrumentClient(
-		redisClient,
-		redismetrics.WithInstanceName("cache"),
-		redismetrics.WithMaxConns(opts.PoolSize),
-	)
+	if config.HTTP.Debug.Prometheus.Enabled {
+		redismetrics.InstrumentClient(
+			redisClient,
+			redismetrics.WithInstanceName("cache"),
+			redismetrics.WithMaxConns(opts.PoolSize),
+		)
+	}
 
 	// Ensure the client is correctly configured and the server is reachable. We use a new local context here with a
 	// tight timeout to avoid blocking the application start for too long.
@@ -960,8 +963,8 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 		return cmd.Err()
 	}
 
-	redisStore := store.NewRedis(redisClient, &store.Options{Expiration: redisCacheTTL})
-	app.redisCache = gocache.New(redisStore)
+	redisStore := redisstore.NewRedis(redisClient, libstore.WithExpiration(redisCacheTTL))
+	app.redisCache = gocache.New[any](redisStore)
 
 	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis cache configured successfully")
 
@@ -974,15 +977,15 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 	}
 
 	opts := &redis.UniversalOptions{
-		Addrs:        strings.Split(configuration.Redis.Addr, ","),
-		DB:           configuration.Redis.DB,
-		Password:     configuration.Redis.Password,
-		DialTimeout:  configuration.Redis.DialTimeout,
-		ReadTimeout:  configuration.Redis.ReadTimeout,
-		WriteTimeout: configuration.Redis.WriteTimeout,
-		PoolSize:     configuration.Redis.Pool.Size,
-		MaxConnAge:   configuration.Redis.Pool.MaxLifetime,
-		MasterName:   configuration.Redis.MainName,
+		Addrs:           strings.Split(configuration.Redis.Addr, ","),
+		DB:              configuration.Redis.DB,
+		Password:        configuration.Redis.Password,
+		DialTimeout:     configuration.Redis.DialTimeout,
+		ReadTimeout:     configuration.Redis.ReadTimeout,
+		WriteTimeout:    configuration.Redis.WriteTimeout,
+		PoolSize:        configuration.Redis.Pool.Size,
+		ConnMaxLifetime: configuration.Redis.Pool.MaxLifetime,
+		MasterName:      configuration.Redis.MainName,
 	}
 	if configuration.Redis.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
@@ -990,10 +993,10 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 		}
 	}
 	if configuration.Redis.Pool.IdleTimeout > 0 {
-		opts.IdleTimeout = configuration.Redis.Pool.IdleTimeout
+		opts.ConnMaxIdleTime = configuration.Redis.Pool.IdleTimeout
 	}
 	// NewUniversalClient will take care of returning the appropriate client type (simple or sentinel) depending on the
-	// configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v8#NewUniversalClient.
+	// configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
 	app.redis = redis.NewUniversalClient(opts)
 
 	// setup expvar

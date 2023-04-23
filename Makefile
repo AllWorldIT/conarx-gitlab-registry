@@ -14,6 +14,7 @@ PKG=github.com/docker/distribution
 PACKAGES=$(shell go list -tags "${BUILDTAGS}" ./...)
 INTEGRATION_PACKAGE=${PKG}
 COVERAGE_PACKAGES=$(filter-out ${PKG}/registry/storage/driver/%,${PACKAGES})
+GO_TEST ?='go test'
 
 
 # Project binaries.
@@ -65,20 +66,11 @@ integration: ## run integration tests
 	@echo "$(WHALE) $@"
 	@go test ${TESTFLAGS} -parallel ${TESTFLAGS_PARALLEL} ${INTEGRATION_PACKAGE}
 
-coverage: ## generate coverprofiles from the unit tests
+coverage:
 	@echo "$(WHALE) $@"
 	@rm -f coverage.txt
-	@go test ${GO_TAGS} -i ${TESTFLAGS} $(filter-out ${INTEGRATION_PACKAGE},${COVERAGE_PACKAGES}) 2> /dev/null
-	@( for pkg in $(filter-out ${INTEGRATION_PACKAGE},${COVERAGE_PACKAGES}); do \
-		go test ${GO_TAGS} ${TESTFLAGS} \
-			-cover \
-			-coverprofile=profile.out \
-			-covermode=atomic $$pkg || exit; \
-		if [ -f profile.out ]; then \
-			cat profile.out >> coverage.txt; \
-			rm profile.out; \
-		fi; \
-	done )
+	@$(subst $\',,$(GO_TEST)) -coverprofile=coverage.txt -covermode=atomic ${GO_TAGS} ${TESTFLAGS} $(filter-out ${INTEGRATION_PACKAGE},${COVERAGE_PACKAGES})
+	@go tool cover -func coverage.txt
 
 FORCE:
 

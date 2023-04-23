@@ -21,6 +21,7 @@ import (
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
+	"gitlab.com/gitlab-org/labkit/errortracking"
 
 	"github.com/gorilla/handlers"
 	"github.com/jackc/pgconn"
@@ -429,9 +430,30 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 		}
 	}
 
+	// extract the repository name to create the a preliminary repository
 	path := h.Repository.Named().Name()
+	repo := &models.Repository{Path: path}
+
+	// try to find the namespaceid for the repo if it exists
+	topLevelPathSegment := repo.TopLevelPathSegment()
+	nStore := datastore.NewNamespaceStore(h.db)
+	namespace, err := nStore.FindByName(h.Context, topLevelPathSegment)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+	if namespace == nil {
+		h.Errors = append(h.Errors, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"namespace": topLevelPathSegment}))
+		return
+	}
+
+	// path and namespace ID are the two required parameters for the queries in repositoryStore.FindPagingatedRepositoriesForPath,
+	// so we must fill those. We also fill the name for consistency on the response.
+	repo.NamespaceID = namespace.ID
+	repo.Name = repo.Path[strings.LastIndex(repo.Path, "/")+1:]
+
 	rStore := datastore.NewRepositoryStore(h.db)
-	repoList, err := rStore.FindPagingatedRepositoriesForPath(h.Context, path, lastEntry, maxEntries)
+	repoList, err := rStore.FindPagingatedRepositoriesForPath(h.Context, repo, lastEntry, maxEntries)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
@@ -471,30 +493,29 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 	}
 }
 
-// RenameRepository renames a given base repository (name and path) and updates the paths of all sub-repositories originating
-// from the refrenced base repository. If the query param: `dry_run` is set to true, then this operation
+// RenameRepository renames a given base repository (name and path - if exist) and updates the paths of all sub-repositories originating
+// from the refrenced base repository path. If the query param: `dry_run` is set to true, then this operation
 // only attempts to verify that a rename is possible for a provided repository and name.
 // When no `dry_run` option is provided, this function defaults to `dry_run=true`.
 func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"path": h.Repository.Named().Name()})
 
-	// extract `dry_run` param
-	dryRun, err := extractDryRunQueryParamValue(r.URL.Query())
-	if err != nil {
-		detail := v1.InvalidQueryParamValueErrorDetail(dryRunParamKey, []string{"true", "false"})
-		h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamType.WithDetail(detail))
+	// this endpoint is only available on a registry that utilizes the redis cache,
+	// we make sure we fail with a 404 and detailing a missing dependecy error if no redis cache is found
+	if h.App.redisCache == nil {
+		detail := v1.MissingServerDependencyTypeErrorDetail("redis")
+		h.Errors = append(h.Errors, v1.ErrorCodeNotImplemented.WithDetail(detail))
 		return
 	}
 
-	// parse request body
-	var renameObject RenameRepositoryAPIRequest
-	err = json.NewDecoder(r.Body).Decode(&renameObject)
+	// extract any necessary request parameters
+	dryRun, renameObject, err := extractRenameRequestParams(r)
 	if err != nil {
-		h.Errors = append(h.Errors, v1.ErrorCodeInvalidJSONBody)
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
 
-	// extract name parameter and validate it
+	// validate the name suggested for the rename operation
 	newName := renameObject.Name
 	if !reference.GitLabProjectNameRegex.MatchString(newName) {
 		detail := v1.InvalidPatchBodyTypeErrorDetail("name", reference.GitLabProjectNameRegex)
@@ -502,43 +523,20 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// TODO: `renameLeaseTTL` should be acquired dynamically from the repository lease if exist:
-	// https://gitlab.com/gitlab-org/container-registry/-/issues/896#repository-lease-ttl-timer
-	// for now we set a hard timeout of `defaultDryRunRenameOperationTimeout` (i.e 5s) for the transaction
-	// until the rename-lease functionality is implemented.
-	var (
-		renameLeaseTTL               = defaultDryRunRenameOperationTimeout
-		repositoryRenameOperationTTL time.Duration
-	)
-
-	if dryRun {
-		repositoryRenameOperationTTL = defaultDryRunRenameOperationTimeout
-	} else {
-		// TODO: when repository leases are implemented in https://gitlab.com/gitlab-org/container-registry/-/issues/895,
-		// the `repositoryRenameOperationTTL` here should be the minimum of either `defaultDryRunRenameOperationTimeout` or  the actual `renameLeaseTTL`
-		// (as obtained from a pre-existing repository lease object).
-		// this would ensure that the store (db) transactions for renames gets short circuited when the rename lease is about to expire.
-		repositoryRenameOperationTTL = renameLeaseTTL
-	}
-
-	// find repository to rename
-	path := h.Repository.Named().Name()
 	rStore := datastore.NewRepositoryStore(h.db)
-	repo, err := rStore.FindByPath(h.Context, path)
+	nStore := datastore.NewNamespaceStore(h.db)
+
+	// find the base repository for the path to be renamed (if it exists), if the base path does not exist
+	// we still need to check and rename the sub-repositories of the provided path (if they exist)
+	repo, renameBaseRepo, err := inferRepository(h.Context, h.Repository.Named().Name(), rStore, nStore)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
-	if repo == nil {
-		h.Errors = append(h.Errors, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": path}))
-		return
-	}
 
-	// verify the repository does not contain more than 1000 sub repositories.
+	// verify the repository path does not contain more than 1000 sub repositories.
 	// this is a pre-cautious limitation for scalability and performance reasons.
-	// for GitLab.com, < 1000 repositories covers 99.98% of all projects.
-	// we can then increase this later based on metrics and pending a decision on
-	// https://gitlab.com/gitlab-org/gitlab/-/issues/357014
+	// https://gitlab.com/gitlab-org/gitlab/-/issues/357014s
 	repoCount, err := rStore.CountPathSubRepositories(h.Context, repo.NamespaceID, repo.Path)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -553,27 +551,54 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// verify the new path to be renamed-to is not taken
 	newPath := replacePathName(repo.Path, newName)
-	newRepo, err := rStore.FindByPath(h.Context, newPath)
+
+	// check that no base repository or sub repository exists for the new path
+	nameTaken, err := isRepositoryNameTaken(h.Context, rStore, repo.NamespaceID, newName, newPath)
+	if nameTaken {
+		l.WithError(err).WithFields(log.Fields{
+			"rename_path": newPath,
+		}).Info("repository rename conflicts with existing repository")
+	}
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
 
-	if newRepo != nil {
-		l.WithError(err).WithFields(log.Fields{
-			"rename_path": newRepo.Path,
-		}).Info("repository rename conflicts")
-		h.Errors = append(h.Errors, v1.ErrorCodeRenameConflict)
+	// at this point everything checks out with the request and there are no conflicts
+	// with existing repositories/sub-repositories within the registry. we proceed
+	// with procuring a lease for the rename operation.
+
+	// create a repository lease store
+	var opts []datastore.RepositoryLeaseStoreOption
+	opts = append(opts, datastore.WithRepositoryLeaseCache(datastore.NewCentralRepositoryLeaseCache(h.App.redisCache)))
+	rlstore := datastore.NewRepositoryLeaseStore(opts...)
+
+	// verify a valid rename lease exists or create one if one can be created
+	lease, err := enforceRenameLease(h.Context, rlstore, newPath, repo.Path)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
 
+	// set a time limit for the rename operation query (both dry-run and real run)
+	var repositoryRenameOperationTTL time.Duration
+	if dryRun {
+		repositoryRenameOperationTTL = defaultDryRunRenameOperationTimeout
+	} else {
+		// selects the lower of `defaultDryRunRenameOperationTimeout` and the TTL of the lease
+		repositoryRenameOperationTTL, err = getDynamicRenameOperationTTL(h.Context, rlstore, lease)
+		if err != nil {
+			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+			return
+		}
+
+	}
+
 	// start a transaction to rename the repository (and sub-repository attributes)
-	// and specify a time limit to prevent long running repository rename operations
+	// and specify a timeout limit to prevent long running repository rename operations
 	txCtx, cancel := context.WithTimeout(h.Context, repositoryRenameOperationTTL)
 	defer cancel()
-
 	tx, err := h.db.BeginTx(h.Context, nil)
 	if err != nil {
 		h.Errors = append(h.Errors,
@@ -582,20 +607,13 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 	}
 	defer tx.Rollback()
 
-	rStoreTx := datastore.NewRepositoryStore(tx)
-	oldpath := repo.Path
-	err = rStoreTx.Rename(txCtx, repo, newPath, newName)
-	if err != nil {
+	// run the rename operation in a transaction
+	if err = executeRenameOperation(txCtx, tx, repo, renameBaseRepo, newPath, newName); err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
 
-	err = rStoreTx.RenamePathForSubRepositories(txCtx, repo.NamespaceID, oldpath, newPath)
-	if err != nil {
-		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
-		return
-	}
-
+	// only commit the transaction if the request was not a dry-run
 	if !dryRun {
 		if err := tx.Commit(); err != nil {
 			h.Errors = append(h.Errors,
@@ -603,15 +621,171 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+
+		// When a lease fails to be destroyed after it is no longer needed it should not impact the response to the caller.
+		// The lease will eventually expire regardless, but we still need to record these failed cases.
+		if err := rlstore.Destroy(h.Context, lease); err != nil {
+			errortracking.Capture(err, errortracking.WithContext(h.Context))
+		}
 	} else {
 		w.Header().Set("Content-Type", "application/json")
-		// TODO: `repositoryRenameOperationTTL` should be acquired dynamically from a new repository lease:
-		// https://gitlab.com/gitlab-org/container-registry/-/issues/896#repository-lease-ttl-timer
-		// for now we return TTL of 0 seconds for the lease, until the rename-lease functionality is implemented.
-		repositoryRenameOperationTTL = 0 * time.Second
+		repositoryRenameOperationTTL, err = rlstore.GetTTL(h.Context, lease)
+		if err != nil {
+			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+			return
+		}
 		if err := json.NewEncoder(w).Encode(&RenameRepositoryAPIResponse{TTL: repositoryRenameOperationTTL}); err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
 		}
 	}
+}
+
+// enforceRenameLease makes sure a conflicting rename lease does not already exist for `forPath` that is not granted to `grantedToPath`
+// if a rename lease exist for the `forPath` that is not granted to `grantedToPath` it returns an errcode.Error.
+// if a rename lease exist for the `forPath` with the same `grantedToPath` it refreshes the TTL the lease.
+// if no rename lease exist for the `forPath` whatsoever it allocates a new lease for `forPath` to `grantedToPath`.
+func enforceRenameLease(ctx *Context, rlstore datastore.RepositoryLeaseStore, forPath, grantedToPath string) (*models.RepositoryLease, error) {
+	// Check if an existing lease exist for the rename path
+	rlease, err := rlstore.FindRenameByPath(ctx, forPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// if no leases exist then create one immediately
+	if rlease == nil {
+		rlease, err = rlstore.UpsertRename(ctx, &models.RepositoryLease{
+			GrantedTo: grantedToPath,
+			Path:      forPath,
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// verify the current repository path owns the lease or if it is owned by a different repository path
+		if grantedToPath != rlease.GrantedTo {
+			detail := v1.ConflictWithOngoingRename(forPath)
+			return nil, v1.ErrorCodeRenameConflict.WithDetail(detail)
+		}
+
+		// if the current user owns the lease, refresh it so it lives longer
+		rlease, err = rlstore.UpsertRename(ctx, &models.RepositoryLease{
+			GrantedTo: grantedToPath,
+			Path:      forPath,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return rlease, nil
+}
+
+// extractRenameRequestParams retrieves the necessary parameters for a rename operation from a request
+func extractRenameRequestParams(r *http.Request) (bool, *RenameRepositoryAPIRequest, error) {
+	// extract the requests `dry_run` param and validate it
+	dryRun, err := extractDryRunQueryParamValue(r.URL.Query())
+	if err != nil {
+		detail := v1.InvalidQueryParamValueErrorDetail(dryRunParamKey, []string{"true", "false"})
+		return dryRun, nil, v1.ErrorCodeInvalidQueryParamType.WithDetail(detail)
+	}
+
+	// parse request body
+	var renameObject RenameRepositoryAPIRequest
+	err = json.NewDecoder(r.Body).Decode(&renameObject)
+	if err != nil {
+		return dryRun, nil, v1.ErrorCodeInvalidJSONBody.WithDetail("invalid json")
+	}
+	return dryRun, &renameObject, nil
+}
+
+// getDynamicRenameOperationTTL selects the greater of `defaultDryRunRenameOperationTimeout` and a lease's TTL
+func getDynamicRenameOperationTTL(ctx context.Context, rlstore datastore.RepositoryLeaseStore, lease *models.RepositoryLease) (time.Duration, error) {
+	repositoryRenameOperationTTL, err := rlstore.GetTTL(ctx, lease)
+	if err != nil {
+		return 0, err
+	}
+
+	// the rename query should only take at most the minimum time dedicated to database queries
+	if repositoryRenameOperationTTL > defaultDryRunRenameOperationTimeout {
+		repositoryRenameOperationTTL = defaultDryRunRenameOperationTimeout
+	}
+	return repositoryRenameOperationTTL, nil
+}
+
+// executeRenameOperation executes a rename operation to `newPath` and `newName` on the provided `repo` using a share transaction `tx`
+// and a shared context `ctx`
+func executeRenameOperation(ctx context.Context, tx datastore.Transactor, repo *models.Repository, renameBaseRepo bool, newPath, newName string) error {
+	rStoreTx := datastore.NewRepositoryStore(tx)
+	oldpath := repo.Path
+	if renameBaseRepo {
+		if err := rStoreTx.Rename(ctx, repo, newPath, newName); err != nil {
+			return err
+		}
+	}
+	return rStoreTx.RenamePathForSubRepositories(ctx, repo.NamespaceID, oldpath, newPath)
+}
+
+// inferRepository infers a repository object (using the `path` argument) from either the repository store or the namesapce store
+func inferRepository(context context.Context, path string, rStore datastore.RepositoryStore, nStore datastore.NamespaceStore) (*models.Repository, bool, error) {
+	// find the base repository for the path to be renamed (if it exists)
+	// if the base path does not exist we still need to update the subrepositories
+	// of the path (if they exist)
+	var renameBaseRepo bool
+	repo, err := rStore.FindByPath(context, path)
+	if err != nil {
+		return nil, renameBaseRepo, err
+	}
+
+	if repo != nil {
+		renameBaseRepo = true
+	}
+
+	// if a base repository was not found we infer a repository using the paths namespace
+	if repo == nil {
+		// build a preliminary repository object
+		repo = &models.Repository{Path: path}
+		topLevelPathSegment := repo.TopLevelPathSegment()
+
+		// find the repository namespace and update the preliminary repository object
+		namespace, err := nStore.FindByName(context, topLevelPathSegment)
+		if err != nil {
+			return nil, renameBaseRepo, err
+		}
+		if namespace == nil {
+			return nil, renameBaseRepo, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"namespace": topLevelPathSegment})
+		}
+		repo.NamespaceID = namespace.ID
+	}
+	return repo, renameBaseRepo, nil
+}
+
+// isRepositoryNameTaken checks if the `name` and `path` provided in the arguments are used by
+// any base repositories or sub-repositories within a given namespace with `namespaceId`
+func isRepositoryNameTaken(ctx context.Context, rStore datastore.RepositoryStore, namespaceId int64, newName, newPath string) (bool, error) {
+
+	newRepo, err := rStore.FindByPath(ctx, newPath)
+	if err != nil {
+		return false, err
+	}
+
+	// fail if new base path already exist in the registry
+	if newRepo != nil {
+		detail := v1.ConflictWithExistingRepository(newName)
+		return true, v1.ErrorCodeRenameConflict.WithDetail(detail)
+	}
+
+	// if a base path does not contain a repository, we still need to check
+	// that no sub-repositories potentially exist withing the nested path
+	if newRepo == nil {
+		// check that no sub-repositories exist for the path
+		subrepositories, err := rStore.CountPathSubRepositories(ctx, namespaceId, newPath)
+		if err != nil {
+			return false, err
+		}
+		if subrepositories > 0 {
+			detail := v1.ConflictWithExistingRepository(newName)
+			return true, v1.ErrorCodeRenameConflict.WithDetail(detail)
+		}
+	}
+	return false, nil
 }

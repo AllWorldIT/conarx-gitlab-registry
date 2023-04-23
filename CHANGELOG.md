@@ -1,3 +1,33 @@
+# [3.71.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.70.0-gitlab...v3.71.0-gitlab) (2023-04-14)
+
+
+### Features
+
+* add support for Flux media types ([bf844d6](https://gitlab.com/gitlab-org/container-registry/commit/bf844d66fca9a4fdf2cd368209e4e3c74590ac8d))
+* **api/gitlab/v1:** update rename endpoint to use redis ([2a6f01a](https://gitlab.com/gitlab-org/container-registry/commit/2a6f01ab43bf21093ce50c47a614797333ad855b))
+* **notifications:** add endpoint name label to Prometheus metrics ([6fe8cc2](https://gitlab.com/gitlab-org/container-registry/commit/6fe8cc2b0dbb3e8708ffecbe85855b553c9739ea))
+
+# [3.70.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.69.0-gitlab...v3.70.0-gitlab) (2023-03-31)
+
+
+### Bug Fixes
+
+* **cache:** check for any type of redisNil wrapped error ([574a7b1](https://gitlab.com/gitlab-org/container-registry/commit/574a7b12c5eec7ec608abb85d02152c59853ddbd))
+* **registry:** import-command: error out when multiple import step options are provided ([981cbed](https://gitlab.com/gitlab-org/container-registry/commit/981cbedbaa039e11506371883399e30d73edcca2))
+* **s3:** propagate the new objectOwnership param to S3 constructor ([e7e1658](https://gitlab.com/gitlab-org/container-registry/commit/e7e1658aa84df9376145127b8e87c8b5d8a1e814))
+
+
+### Features
+
+* **registry:** import-command: remove dangling manifest option ([a245b5b](https://gitlab.com/gitlab-org/container-registry/commit/a245b5bb5e1f668f18ae9fded5e10fa5b9e788a1))
+* **registry:** import-command: remove single repository option ([435a46a](https://gitlab.com/gitlab-org/container-registry/commit/435a46ae0a42a2bd83e654940426f3df22c74b8d))
+* **registry:** importer: remove blob transfer ([40285f9](https://gitlab.com/gitlab-org/container-registry/commit/40285f93f71701af3c9bb6f85d58b5a69cee2572))
+
+
+### Performance Improvements
+
+* **api:** improve query performance for listing repositories ([51d58e3](https://gitlab.com/gitlab-org/container-registry/commit/51d58e39ef3e9fdfa6bb82f9a3a6474087031f1c))
+
 # [3.69.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.68.0-gitlab...v3.69.0-gitlab) (2023-03-16)
 
 

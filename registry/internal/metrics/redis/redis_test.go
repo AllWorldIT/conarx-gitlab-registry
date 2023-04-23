@@ -8,9 +8,9 @@ import (
 
 	"github.com/docker/distribution/metrics"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 

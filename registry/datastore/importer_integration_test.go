@@ -8,12 +8,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"net"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
-	"syscall"
 	"testing"
 	"time"
 
@@ -22,11 +20,9 @@ import (
 	"github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/internal/migration"
 	"github.com/docker/distribution/registry/storage"
-	"github.com/docker/distribution/registry/storage/driver"
 	storageDriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/docker/libtrust"
-	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -131,40 +127,6 @@ func validateImport(t *testing.T, db *datastore.DB) {
 			testutil.CompareWithGoldenFile(t, p, actual, *create, *update)
 		})
 	}
-}
-
-// Check that the blobs in the database match the blobs in the driver exactly.
-func validateBlobTransfer(t *testing.T, driver driver.StorageDriver) {
-	t.Helper()
-
-	blobStore := datastore.NewBlobStore(suite.db)
-	dbBlobs, err := blobStore.FindAll(suite.ctx)
-	require.NoError(t, err)
-
-	var dbDigests []digest.Digest
-	for _, b := range dbBlobs {
-		dbDigests = append(dbDigests, b.Digest)
-	}
-
-	registry := newRegistry(t, driver)
-	blobService := registry.Blobs()
-
-	var fsDigests []digest.Digest
-
-	err = blobService.Enumerate(suite.ctx, func(desc distribution.Descriptor) error {
-		fsDigests = append(fsDigests, desc.Digest)
-		return nil
-	})
-
-	// If there are no blobs in the database, such as after a dry run, we expect
-	// the blob data path to not exist.
-	if len(dbDigests) == 0 {
-		require.True(t, errors.As(err, &storageDriver.PathNotFoundError{}))
-	} else {
-		require.NoError(t, err)
-	}
-
-	require.ElementsMatch(t, dbDigests, fsDigests)
 }
 
 func TestImporter_ImportAll(t *testing.T) {
@@ -286,40 +248,6 @@ func TestImporter_ImportAll_DanglingBlobs_StopsOnError(t *testing.T) {
 	imp := newImporterWithRoot(t, suite.db, "invalid-blob", datastore.WithImportDanglingBlobs)
 	require.Error(t, imp.ImportAll(suite.ctx))
 	validateImport(t, suite.db)
-}
-
-func TestImporter_ImportAll_BlobTransfer(t *testing.T) {
-	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	srcPath := "happy-path"
-	srcDriver := newFilesystemStorageDriverWithRoot(t, srcPath)
-
-	destDriver := newTempDirDriver(t)
-
-	bts, err := storage.NewBlobTransferService(srcDriver, destDriver)
-	require.NoError(t, err)
-
-	imp := newImporterWithRoot(t, suite.db, srcPath, datastore.WithBlobTransferService(bts))
-	require.NoError(t, imp.ImportAll(suite.ctx))
-	validateImport(t, suite.db)
-	validateBlobTransfer(t, destDriver)
-}
-
-func TestImporter_ImportAll_BlobTransfer_DryRun(t *testing.T) {
-	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	srcPath := "happy-path"
-	srcDriver := newFilesystemStorageDriverWithRoot(t, srcPath)
-
-	destDriver := newTempDirDriver(t)
-
-	bts, err := storage.NewBlobTransferService(srcDriver, destDriver)
-	require.NoError(t, err)
-
-	imp := newImporterWithRoot(t, suite.db, srcPath, datastore.WithBlobTransferService(bts), datastore.WithDryRun)
-	require.NoError(t, imp.ImportAll(suite.ctx))
-	validateImport(t, suite.db)
-	validateBlobTransfer(t, destDriver)
 }
 
 func TestImporter_ImportAll_BadManifestFormat(t *testing.T) {
@@ -855,50 +783,6 @@ func TestImporter_PreImport_DoesNotFailWhenProcessingPreviouslySkippedManifest(t
 	imp := newImporterWithRoot(t, suite.db, "empty-layer-links")
 	err := imp.PreImport(suite.ctx, "broken-layer-links")
 	require.NoError(t, err)
-}
-
-type mockBlobTransfer struct {
-	count      int
-	maxRetries int
-	err        error
-}
-
-func (mbts *mockBlobTransfer) Transfer(ctx context.Context, dgst digest.Digest) error {
-	mbts.count++
-	if mbts.count > mbts.maxRetries {
-		return nil
-	}
-
-	return mbts.err
-}
-
-func TestImporter_PreImport_Retry_Fails(t *testing.T) {
-	require.NoError(t, testutil.TruncateAllTables(suite.db))
-	mbts := &mockBlobTransfer{
-		// using a high number will ensure we always return an error before the pre import timeout
-		maxRetries: 100,
-		err:        &net.OpError{Err: &os.SyscallError{Err: syscall.ECONNRESET}},
-	}
-
-	imp := newImporter(t, suite.db, datastore.WithBlobTransferService(mbts), datastore.WithPreImportRetryTimeout(200*time.Millisecond))
-	err := imp.PreImport(suite.ctx, "f-dangling-manifests")
-	require.EqualError(t, err, "pre importing tagged manifests: pre importing manifest: retrying pre import manifest sha256:efdb07f074a5cfb25547c0cf1ddac509a10ec9eb15e565584988c913ccaa344a: transferring blob with digest sha256:bda9e8f07268fe2c2e97833c721102739f7d6ff9401b7f03aaec176e772bbd8b: : : connection reset by peer")
-}
-
-func TestImporter_PreImport_Retry_Succeeds(t *testing.T) {
-	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	mbts := &mockBlobTransfer{
-		// Call to Transfer will succeed on second try
-		maxRetries: 1,
-		err:        &net.OpError{Err: &os.SyscallError{Err: syscall.ECONNRESET}},
-	}
-
-	imp := newImporter(t, suite.db, datastore.WithBlobTransferService(mbts), datastore.WithPreImportRetryTimeout(500*time.Millisecond))
-	err := imp.PreImport(suite.ctx, "f-dangling-manifests")
-	require.NoError(t, err)
-
-	validateImport(t, suite.db)
 }
 
 func TestImporter_ImportBlobs(t *testing.T) {

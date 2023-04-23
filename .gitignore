@@ -42,3 +42,7 @@ bin/*
 
 # junit test report
 junit.xml
+
+# coverprofile
+coverage.txt
+

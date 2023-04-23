@@ -41,11 +41,6 @@ where it is possible to import all registry data in one single period of
 read-only mode or downtime. Larger registries will likely need to break up the
 import process over multiple sessions.
 
-#### Dangling Manifests
-
-The `--dangling-manifests` option instructs the import to import all manifests
-without confirmation that this information is reachable from a tagged image.
-
 #### Dry Run
 
 The `--dry-run` option will perform a full import without committing any changes
@@ -55,22 +50,6 @@ prohibitively long. Additionally, for even larger registries this option can
 be ran while the registry is in full operation, although this could impact the
 performance of the registry and the import may not capture any images which
 are added while the dry run is in progress.
-
-#### Repository
-
-The `--repository` option allow the user to pass the path to a particular
-repository to be imported. This option enables the user to import a subset of
-repositories via repeated calls to the import command, passing in a new
-repository path each time.
-
-Note: The `--dangling-blobs` option is ignored when this option is specified.
-
-#### Blob Transfer Destination
-The `--blob-transfer-destination` option allows the user to copy imported blobs to
-another storage location. This option is only available for GCS and filesystem
-drivers. For GCS, the name of the new bucket should be passed to this flag. For
-the filesystem driver, this should be the new root directory. In both cases,
-the configured storage driver must have read and write access to the new storage.
 
 #### Pre Import
 The `--pre-import` option will only import immutable registry data. When running

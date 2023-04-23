@@ -54,26 +54,6 @@ func (err ErrBlobMounted) Error() string {
 		err.From, err.Descriptor)
 }
 
-// ErrBlobTransferFailed should be used to when a blob transfer has failed.
-type ErrBlobTransferFailed struct {
-	// Digest of the blob which was attempted to be transferred.
-	Digest digest.Digest
-	// Set to true to indicate a post-failure cleanup was attempted.
-	Cleanup bool
-	// Root transfer error.
-	Reason error
-	// Post-failure cleanup error.
-	CleanupErr error
-}
-
-func (err ErrBlobTransferFailed) Error() string {
-	return fmt.Sprintf("failed to transfer blob digest=%q cleanup=%t cleanupError=%v: %v", err.Digest, err.Cleanup, err.CleanupErr, err.Reason)
-}
-
-func (err ErrBlobTransferFailed) Unwrap() error {
-	return err.Reason
-}
-
 // Descriptor describes targeted content. Used in conjunction with a blob
 // store, a descriptor can be used to fetch, store and target any kind of
 // blob. The struct also describes the wire protocol format. Fields should
@@ -131,18 +111,6 @@ type BlobDeleter interface {
 // BlobEnumerator enables iterating over blobs from storage
 type BlobEnumerator interface {
 	Enumerate(ctx context.Context, ingester func(descriptor Descriptor) error) error
-}
-
-// BlobTransferService enables efficient copying of blobs from distinct blob
-// stores. Implementations are responsible for determining from which and to
-// which location the blob is copied.
-type BlobTransferService interface {
-	// Transfer initiates copying the blob with the corresponding digest. This
-	// call must block until complete. The source location should not be modified
-	// as part of this operation. If an error occurs during this operation
-	// ErrBlobTransferFailed will be returned. ErrBlobExists is returned in case
-	// the blob already exists on the destination.
-	Transfer(context.Context, digest.Digest) error
 }
 
 // BlobDescriptorService manages metadata about a blob by digest. Most

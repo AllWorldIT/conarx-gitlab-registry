@@ -284,6 +284,7 @@ curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitla
 | `200 OK`           | The response body includes the requested details or is empty if the repository does not exist or if there are no repositories with at least one tag under the base path provided in the request.                                      |
 | `400 Bad Request`  | The value for the `n` and/or `last` pagination query parameters are invalid.                                     |
 | `401 Unauthorized` | The client should take action based on the contents of the `WWW-Authenticate` header and try the endpoint again. |
+| `404 Not Found`    | The namespace associated with the repository was not found.                                                                                    |
 
 #### Body
 
@@ -609,6 +610,10 @@ error codes described in the
 `INVALID_QUERY_PARAMETER_TYPE` | `the value of a query parameter is of an invalid type` | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.
 
 ## Changes
+
+### 2023-03-22
+
+- Add 404 status to repositories list endpoint.
 
 ### 2023-01-05
 
