@@ -11,7 +11,7 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
-//ocischemaManifestHandler is a ManifestHandler that covers ocischema manifests.
+// ocischemaManifestHandler is a ManifestHandler that covers ocischema manifests.
 type ocischemaManifestHandler struct {
 	repository               distribution.Repository
 	blobStore                distribution.BlobStore
@@ -34,7 +34,7 @@ func (ms *ocischemaManifestHandler) Unmarshal(ctx context.Context, dgst digest.D
 	return m, nil
 }
 
-func (ms *ocischemaManifestHandler) Put(ctx context.Context, manifest distribution.Manifest, skipDependencyVerification bool) (digest.Digest, error) {
+func (ms *ocischemaManifestHandler) Put(ctx context.Context, manifest distribution.Manifest) (digest.Digest, error) {
 	dcontext.GetLogger(ms.ctx).Debug("(*ocischemaManifestHandler).Put")
 
 	m, ok := manifest.(*ocischema.DeserializedManifest)
@@ -42,7 +42,7 @@ func (ms *ocischemaManifestHandler) Put(ctx context.Context, manifest distributi
 		return "", fmt.Errorf("non-ocischema manifest put to ocischemaManifestHandler: %T", manifest)
 	}
 
-	if err := ms.verifyManifest(ms.ctx, m, skipDependencyVerification); err != nil {
+	if err := ms.verifyManifest(ms.ctx, m); err != nil {
 		return "", err
 	}
 
@@ -63,13 +63,13 @@ func (ms *ocischemaManifestHandler) Put(ctx context.Context, manifest distributi
 // verifyManifest ensures that the manifest content is valid from the
 // perspective of the registry. As a policy, the registry only tries to store
 // valid content, leaving trust policies of that content up to consumers.
-func (ms *ocischemaManifestHandler) verifyManifest(ctx context.Context, mnfst *ocischema.DeserializedManifest, skipDependencyVerification bool) error {
+func (ms *ocischemaManifestHandler) verifyManifest(ctx context.Context, mnfst *ocischema.DeserializedManifest) error {
 	manifestService, err := ms.repository.Manifests(ctx)
 	if err != nil {
 		return err
 	}
 
-	v := validation.NewOCIValidator(manifestService, ms.repository.Blobs(ctx), skipDependencyVerification, ms.manifestRefLimit, ms.manifestPayloadSizeLimit, ms.manifestURLs)
+	v := validation.NewOCIValidator(manifestService, ms.repository.Blobs(ctx), ms.manifestRefLimit, ms.manifestPayloadSizeLimit, ms.manifestURLs)
 
 	return v.Validate(ctx, mnfst)
 }

@@ -16,14 +16,13 @@ type ManifestListValidator struct {
 }
 
 // NewManifestListValidator returns a new ManifestListValidator.
-func NewManifestListValidator(exister ManifestExister, bs distribution.BlobStatter, skipDependencyVerification bool, refLimit, payloadLimit int) *ManifestListValidator {
+func NewManifestListValidator(exister ManifestExister, bs distribution.BlobStatter, refLimit, payloadLimit int) *ManifestListValidator {
 	return &ManifestListValidator{
 		baseValidator: baseValidator{
-			manifestExister:            exister,
-			blobStatter:                bs,
-			skipDependencyVerification: skipDependencyVerification,
-			refLimit:                   refLimit,
-			payloadLimit:               payloadLimit,
+			manifestExister: exister,
+			blobStatter:     bs,
+			refLimit:        refLimit,
+			payloadLimit:    payloadLimit,
 		},
 	}
 }
@@ -46,10 +45,6 @@ func (v *ManifestListValidator) Validate(ctx context.Context, mnfst *manifestlis
 	if err := v.exceedsRefLimit(mnfst); err != nil {
 		errs = append(errs, err)
 		return errs
-	}
-
-	if v.skipDependencyVerification {
-		return nil
 	}
 
 	// Docker buildkit uses OCI Image Indexes to store lists of layer blobs.

@@ -11,7 +11,7 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
-//schema2ManifestHandler is a ManifestHandler that covers schema2 manifests.
+// schema2ManifestHandler is a ManifestHandler that covers schema2 manifests.
 type schema2ManifestHandler struct {
 	repository               distribution.Repository
 	blobStore                distribution.BlobStore
@@ -34,7 +34,7 @@ func (ms *schema2ManifestHandler) Unmarshal(ctx context.Context, dgst digest.Dig
 	return m, nil
 }
 
-func (ms *schema2ManifestHandler) Put(ctx context.Context, manifest distribution.Manifest, skipDependencyVerification bool) (digest.Digest, error) {
+func (ms *schema2ManifestHandler) Put(ctx context.Context, manifest distribution.Manifest) (digest.Digest, error) {
 	dcontext.GetLogger(ms.ctx).Debug("(*schema2ManifestHandler).Put")
 
 	m, ok := manifest.(*schema2.DeserializedManifest)
@@ -42,7 +42,7 @@ func (ms *schema2ManifestHandler) Put(ctx context.Context, manifest distribution
 		return "", fmt.Errorf("non-schema2 manifest put to schema2ManifestHandler: %T", manifest)
 	}
 
-	if err := ms.verifyManifest(ms.ctx, m, skipDependencyVerification); err != nil {
+	if err := ms.verifyManifest(ms.ctx, m); err != nil {
 		return "", err
 	}
 
@@ -63,13 +63,13 @@ func (ms *schema2ManifestHandler) Put(ctx context.Context, manifest distribution
 // verifyManifest ensures that the manifest content is valid from the
 // perspective of the registry. As a policy, the registry only tries to store
 // valid content, leaving trust policies of that content up to consumers.
-func (ms *schema2ManifestHandler) verifyManifest(ctx context.Context, mnfst *schema2.DeserializedManifest, skipDependencyVerification bool) error {
+func (ms *schema2ManifestHandler) verifyManifest(ctx context.Context, mnfst *schema2.DeserializedManifest) error {
 	manifestService, err := ms.repository.Manifests(ctx)
 	if err != nil {
 		return err
 	}
 
-	v := validation.NewSchema2Validator(manifestService, ms.repository.Blobs(ctx), skipDependencyVerification, ms.manifestRefLimit, ms.manifestPayloadSizeLimit, ms.manifestURLs)
+	v := validation.NewSchema2Validator(manifestService, ms.repository.Blobs(ctx), ms.manifestRefLimit, ms.manifestPayloadSizeLimit, ms.manifestURLs)
 
 	return v.Validate(ctx, mnfst)
 }

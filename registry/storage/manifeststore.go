@@ -22,31 +22,13 @@ type ManifestHandler interface {
 	Unmarshal(ctx context.Context, dgst digest.Digest, content []byte) (distribution.Manifest, error)
 
 	// Put creates or updates the given manifest returning the manifest digest.
-	Put(ctx context.Context, manifest distribution.Manifest, skipDependencyVerification bool) (digest.Digest, error)
-}
-
-// SkipLayerVerification allows a manifest to be Put before its
-// layers are on the filesystem
-func SkipLayerVerification() distribution.ManifestServiceOption {
-	return skipLayerOption{}
-}
-
-type skipLayerOption struct{}
-
-func (o skipLayerOption) Apply(m distribution.ManifestService) error {
-	if ms, ok := m.(*manifestStore); ok {
-		ms.skipDependencyVerification = true
-		return nil
-	}
-	return fmt.Errorf("skip layer verification only valid for manifestStore")
+	Put(ctx context.Context, manifest distribution.Manifest) (digest.Digest, error)
 }
 
 type manifestStore struct {
 	repository *repository
 	blobStore  *linkedBlobStore
 	ctx        context.Context
-
-	skipDependencyVerification bool
 
 	schema1Handler      ManifestHandler
 	schema2Handler      ManifestHandler
@@ -150,13 +132,13 @@ func (ms *manifestStore) Put(ctx context.Context, manifest distribution.Manifest
 
 	switch manifest.(type) {
 	case *schema1.SignedManifest:
-		return ms.schema1Handler.Put(ctx, manifest, ms.skipDependencyVerification)
+		return ms.schema1Handler.Put(ctx, manifest)
 	case *schema2.DeserializedManifest:
-		return ms.schema2Handler.Put(ctx, manifest, ms.skipDependencyVerification)
+		return ms.schema2Handler.Put(ctx, manifest)
 	case *ocischema.DeserializedManifest:
-		return ms.ocischemaHandler.Put(ctx, manifest, ms.skipDependencyVerification)
+		return ms.ocischemaHandler.Put(ctx, manifest)
 	case *manifestlist.DeserializedManifestList:
-		return ms.manifestListHandler.Put(ctx, manifest, ms.skipDependencyVerification)
+		return ms.manifestListHandler.Put(ctx, manifest)
 	}
 
 	return "", fmt.Errorf("unrecognized manifest type %T", manifest)

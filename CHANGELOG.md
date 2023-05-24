@@ -1,3 +1,28 @@
+# [3.72.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.71.0-gitlab...v3.72.0-gitlab) (2023-05-02)
+
+
+### Bug Fixes
+
+* **datastore:** importer: consistently store config blob media types in database ([4cf8c52](https://gitlab.com/gitlab-org/container-registry/commit/4cf8c52817c7740d368995567ba6f236bbc4bccb))
+* **datastore:** importer: consistently store layer blob media types in database ([fc7ce4b](https://gitlab.com/gitlab-org/container-registry/commit/fc7ce4bc8b7a8246ede7d70af77759ad4c355bc4))
+* **datastore:** importer: display counters for new import methods ([27cfc44](https://gitlab.com/gitlab-org/container-registry/commit/27cfc44344f7b1a09e5dc14a6525e4c7f05c936a))
+* **gc:** ignore broken tag link ([db3d8d7](https://gitlab.com/gitlab-org/container-registry/commit/db3d8d75e8aedd9dd79146ac7aac501c049546c4))
+
+
+### Features
+
+* **api/gitlab/v1:** add config digest to List Repository Tags response ([299fa44](https://gitlab.com/gitlab-org/container-registry/commit/299fa44f8c27d679db6877ee66848f67f5658521))
+* **azure:** introduce azure storage driver legacyrootprefix config ([4314deb](https://gitlab.com/gitlab-org/container-registry/commit/4314debc14e14b6ef0d30e4215445e25b6bda86c))
+* **database:** use service discovery for primary address ([8fcbca0](https://gitlab.com/gitlab-org/container-registry/commit/8fcbca0e6ef8f829e2a405b266a38306eaf3feeb))
+* **handlers:** remove online migration routes ([0fb586a](https://gitlab.com/gitlab-org/container-registry/commit/0fb586af957044739b03c741f763799a8176940b))
+* **proxy:** remove pull-through proxy cache feature ([557061d](https://gitlab.com/gitlab-org/container-registry/commit/557061d481bba5d83cb5c80a171f89c95c20e3e4))
+* remove migration path label from storage metrics ([f7c9402](https://gitlab.com/gitlab-org/container-registry/commit/f7c9402286e39ef52acdc50a341d953776e924fb))
+
+
+### Performance Improvements
+
+* add uber automaxprocs package ([873ae97](https://gitlab.com/gitlab-org/container-registry/commit/873ae97dec238bc4823a0ce135d878ee013fefcc))
+
 # [3.71.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.70.0-gitlab...v3.71.0-gitlab) (2023-04-14)
 
 

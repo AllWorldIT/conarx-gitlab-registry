@@ -18,7 +18,6 @@ import (
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/libtrust"
-	"github.com/stretchr/testify/require"
 )
 
 func makeRootKeys(numKeys int) ([]libtrust.PrivateKey, error) {
@@ -482,48 +481,6 @@ func TestAccessController(t *testing.T) {
 	if err != nil {
 		t.Fatalf("accessController returned unexpected error: %s", err)
 	}
-}
-
-type migrationTest struct {
-	name string
-	flag *bool
-}
-
-func newTestMigrationAuthContext(t *testing.T, ctx context.Context, req *http.Request, actions []*ResourceActions, access ...auth.Access) context.Context {
-	t.Helper()
-
-	rootKeys, err := makeRootKeys(1)
-	require.NoError(t, err)
-
-	rootCertBundleFilename, err := writeTempRootCerts(rootKeys)
-	require.NoError(t, err)
-	t.Cleanup(func() { os.Remove(rootCertBundleFilename) })
-
-	testRealm := "https://gitlab.com/jwt/auth"
-	testIssuer := "omnibus-gitlab-issuer"
-	testService := "container_registry"
-
-	options := map[string]interface{}{
-		"realm":          testRealm,
-		"issuer":         testIssuer,
-		"service":        testService,
-		"rootcertbundle": rootCertBundleFilename,
-		"autoredirect":   false,
-	}
-
-	accessController, err := newAccessController(options)
-	require.NoError(t, err)
-
-	token, err := makeTestToken(
-		testIssuer, testService, actions, rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
-	)
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.compactRaw()))
-
-	authCtx, err := accessController.Authorized(ctx, access...)
-	require.NoError(t, err)
-
-	return authCtx
 }
 
 // This tests that newAccessController can handle PEM blocks in the certificate

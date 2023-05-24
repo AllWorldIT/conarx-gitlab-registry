@@ -23,7 +23,6 @@ const (
 	blobDownloadBytesDesc = "A histogram of blob download sizes for the storage backend."
 	blobUploadBytesName   = "blob_upload_bytes"
 	blobUploadBytesDesc   = "A histogram of new blob upload bytes for the storage backend."
-	migrationPathLabel    = "migration_path"
 
 	cdnRedirectBackendLabel      = "backend"
 	cdnRedirectBypassLabel       = "bypass"
@@ -77,7 +76,7 @@ func init() {
 			Help:      blobUploadBytesDesc,
 			Buckets:   buckets,
 		},
-		[]string{migrationPathLabel},
+		[]string{},
 	)
 
 	cdnRedirectTotal = prometheus.NewCounterVec(
@@ -117,6 +116,6 @@ func StorageRatelimit() {
 	rateLimitStorageTotal.Inc()
 }
 
-func BlobUpload(migrationPath string, size int64) {
-	blobUploadBytesHist.WithLabelValues(migrationPath).Observe(float64(size))
+func BlobUpload(size int64) {
+	blobUploadBytesHist.WithLabelValues().Observe(float64(size))
 }

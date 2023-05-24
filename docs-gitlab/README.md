@@ -75,7 +75,17 @@ stored. Defaults to the empty string (bucket root).
 Originally, the Azure driver would write to `//` as the root directory, also
 appearing in some places as `/<no-name>/` within the Azure UI. This legacy
 behavior must be preserved to support older deployments using this driver.
-Set to `true` to build root paths without an extra leading slash.
+Set to `false` to build root paths with an extra leading slash (i.e `//`).
+Defaults to the `true` to remove legacy root prefix. It is recomended to use
+`legacyrootprefix` to control this behaviour.
+
+`legacyrootprefix`
+
+This parameter is the recomended configuration (as opposed to `trimlegacyrootprefix`) to be used to preserve 
+the Azure driver legacy behaviour of using  `//` (appearing in some places as `/<no-name>/` within the Azure UI)
+as the root directory. When `legacyrootprefix` is set to `true` the azure driver uses the legacy azure root directory.
+When this parameter is specified together with `trimlegacyrootprefix` the registry will fail to start if the parameters conflict
+( i.e `trimlegacyrootprefix: true` and `legacyrootprefix: true` or `legacyrootprefix: false` and `trimlegacyrootprefix: true`).
 
 #### GCS Storage Driver
 

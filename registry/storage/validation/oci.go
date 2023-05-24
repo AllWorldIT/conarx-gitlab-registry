@@ -17,14 +17,13 @@ type OCIValidator struct {
 }
 
 // NewOCIValidator returns a new OCIValidator.
-func NewOCIValidator(exister ManifestExister, statter distribution.BlobStatter, skipDependencyVerification bool, refLimit, payloadLimit int, manifestURLs ManifestURLs) *OCIValidator {
+func NewOCIValidator(exister ManifestExister, statter distribution.BlobStatter, refLimit, payloadLimit int, manifestURLs ManifestURLs) *OCIValidator {
 	return &OCIValidator{
 		baseValidator: baseValidator{
-			manifestExister:            exister,
-			blobStatter:                statter,
-			skipDependencyVerification: skipDependencyVerification,
-			refLimit:                   refLimit,
-			payloadLimit:               payloadLimit,
+			manifestExister: exister,
+			blobStatter:     statter,
+			refLimit:        refLimit,
+			payloadLimit:    payloadLimit,
 		},
 		manifestURLs: manifestURLs,
 	}
@@ -48,10 +47,6 @@ func (v *OCIValidator) Validate(ctx context.Context, mnfst *ocischema.Deserializ
 	if err := v.exceedsRefLimit(mnfst); err != nil {
 		errs = append(errs, err)
 		return errs
-	}
-
-	if v.skipDependencyVerification {
-		return nil
 	}
 
 	for _, descriptor := range mnfst.References() {

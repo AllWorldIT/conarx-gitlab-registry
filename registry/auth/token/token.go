@@ -37,12 +37,6 @@ type ResourceActions struct {
 	Class   string   `json:"class,omitempty"`
 	Name    string   `json:"name"`
 	Actions []string `json:"actions"`
-	// Flag to support the GitLab.com registry migration Phase 1, as per
-	// https://gitlab.com/gitlab-org/container-registry/-/issues/374. We use *bool
-	// instead of bool to be able to distinguish between a missing flag and a flag
-	// set to false. Internally both cases are treated in the same way, but this
-	// is useful for logging and debugging purposes.
-	MigrationEligible *bool `json:"migration_eligible"`
 }
 
 // ClaimSet describes the main section of a JSON Web Token.

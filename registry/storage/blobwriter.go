@@ -12,7 +12,6 @@ import (
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore"
-	"github.com/docker/distribution/registry/internal/migration"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/internal/metrics"
 	"github.com/opencontainers/go-digest"
@@ -354,7 +353,7 @@ func (bw *blobWriter) moveBlob(ctx context.Context, desc distribution.Descriptor
 		"size_bytes": desc.Size,
 		"digest":     desc.Digest,
 	}).Info("new blob uploaded")
-	metrics.BlobUpload(migration.CodePath(ctx).String(), desc.Size)
+	metrics.BlobUpload(desc.Size)
 
 	// TODO(stevvooe): We should also write the mediatype when executing this move.
 

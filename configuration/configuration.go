@@ -62,9 +62,6 @@ type Configuration struct {
 	// Database is the configuration for the registry's metadata database
 	Database Database `yaml:"database"`
 
-	// Migration is the configuration for registry migration-related features.
-	Migration Migration `yaml:"migration,omitempty"`
-
 	// Auth allows configuration of various authorization methods that may be
 	// used to gate requests.
 	Auth Auth `yaml:"auth,omitempty"`
@@ -153,8 +150,6 @@ type Configuration struct {
 	Redis Redis `yaml:"redis,omitempty"`
 
 	Health Health `yaml:"health,omitempty"`
-
-	Proxy Proxy `yaml:"proxy,omitempty"`
 
 	// Validation configures validation options for the registry.
 	Validation struct {
@@ -434,6 +429,24 @@ type Database struct {
 	DrainTimeout time.Duration `yaml:"draintimeout,omitempty"`
 	// PreparedStatements can be used to enable prepared statements. Defaults to false.
 	PreparedStatements bool `yaml:"preparedstatements,omitempty"`
+	// Discovery has the required configuration parameters to find a service's host and port
+	// from a DNS server.
+	Discovery Discovery `yaml:"discovery,omitempty"`
+}
+
+// Discovery has the required configuration parameters to find a service's host and port
+// from a DNS server.
+type Discovery struct {
+	// Enabled defines whether the registry attempts to resolve addresses from a Nameserver
+	Enabled bool `yaml:"enabled,omitempty"`
+	// Nameserver is the IP address or discoverable name of the DNS server to query from.
+	Nameserver string `yaml:"nameserver,omitempty"`
+	// PrimaryRecord used to obtain the database's primary host address. The value must be a FQDN.
+	PrimaryRecord string `yaml:"primaryrecord,omitempty"`
+	// Port of the Nameserver. Defaults to 53.
+	Port string `yaml:"port,omitempty"`
+	// TCP specifies if the DNS query should happen over TCP instead of UDP.
+	TCP bool `yaml:"tcp,omitempty"`
 }
 
 // Regexp wraps regexp.Regexp to implement the encoding.TextMarshaler interface.
@@ -463,52 +476,6 @@ func (r *Regexp) UnmarshalText(text []byte) error {
 // MarshalText implements encoding.TextMarshaler.
 func (r *Regexp) MarshalText() ([]byte, error) {
 	return []byte(r.String()), nil
-}
-
-// Migration configures behavior of features related with the migration from filesystem metadata to database metadata.
-type Migration struct {
-	// Enabled enables migration mode, new repositories will be added to the
-	// database, while existing repositories will continue to use the filesystem.
-	Enabled bool `yaml:"enabled,omitempty"`
-	// DisableMirrorFS disables registry metadata writes to the filesystem for
-	// migrated repositories.
-	DisableMirrorFS bool `yaml:"disablemirrorfs,omitempty"`
-	// RootDirectory allows repositories that have been migrated to the database to use
-	// separate object storage paths by using a different root directory in the form of
-	// /<root-directory>/docker/registry/v2 Once the migration is complete, the
-	// storage driver configuration must be updated to use this root directory.
-	RootDirectory string `yaml:"rootdirectory,omitempty"`
-	// TagConcurrency determines the number of concurrent tag details requests to
-	// the filesystem backend. This can greatly reduce the time spent importing a
-	// repository after a successful pre import has completed. Pre import is not
-	// affected by this parameter. Default `1`.
-	TagConcurrency int `yaml:"tagconcurrency,omitempty"`
-	// ImportTimeout is the maximum duration that an import job may take to
-	// complete before it is aborted. Defaults to 10 minutes.
-	ImportTimeout time.Duration `yaml:"importtimeout,omitempty"`
-	// PreImportTimeout is the maximum duration that a pre import job may take to
-	// complete before it is aborted. Defaults to 2 hours.
-	PreImportTimeout time.Duration `yaml:"preimporttimeout,omitempty"`
-	// MaxConcurrentImports determines the maximum number of concurrent imports
-	// allowed per instance of the registry. This can help reduce the number of
-	// resources that the registry needs when the migration mode is enabled. Default `1`.
-	MaxConcurrentImports int `yaml:"maxconcurrentimports,omitempty"`
-	// TestSlowImport configures the importer to sleep for the given amount of time
-	// and the end of the import. Never use this outside of testing.
-	TestSlowImport time.Duration `yaml:"testslowimport,omitempty"`
-	// ImportNotification defines the endpoint to use to notify when an import or pre-import
-	// has completed with a given status and details.
-	ImportNotification struct {
-		// Enabled enables the import notifier
-		Enabled bool `yaml:"enabled"`
-		// URL is the full URL of the endpoint to use to send an import notification
-		URL string `yaml:"url,omitempty"`
-		// Timeout is the duration to wait before timing out the import notification
-		Timeout time.Duration `yaml:"timeout,omitempty"`
-		// Secret specifies the API secret to be sent in the Authorization header as part of
-		// the import notification.
-		Secret string `yaml:"secret,omitempty"`
-	} `yaml:"importnotification,omitempty"`
 }
 
 // MailOptions provides the configuration sections to user, for specific handler.
@@ -1004,7 +971,7 @@ type Events struct {
 	IncludeReferences bool `yaml:"includereferences"` // include reference data in manifest events
 }
 
-//Ignore configures mediaTypes and actions of the event, that it won't be propagated
+// Ignore configures mediaTypes and actions of the event, that it won't be propagated
 type Ignore struct {
 	MediaTypes []string `yaml:"mediatypes"` // target media types to ignore
 	Actions    []string `yaml:"actions"`    // ignore action types
@@ -1034,18 +1001,6 @@ type Middleware struct {
 	Disabled bool `yaml:"disabled,omitempty"`
 	// Map of parameters that will be passed to the middleware's initialization function
 	Options Parameters `yaml:"options"`
-}
-
-// Proxy configures the registry as a pull through cache
-type Proxy struct {
-	// RemoteURL is the URL of the remote registry
-	RemoteURL string `yaml:"remoteurl"`
-
-	// Username of the hub user
-	Username string `yaml:"username"`
-
-	// Password of the hub user
-	Password string `yaml:"password"`
 }
 
 type parseOpts struct {
@@ -1136,21 +1091,6 @@ func ApplyDefaults(config *Configuration) {
 	if config.Redis.Addr != "" && config.Redis.Pool.Size == 0 {
 		config.Redis.Pool.Size = 10
 	}
-	if config.Migration.Enabled && config.Migration.TagConcurrency < 1 {
-		config.Migration.TagConcurrency = 1
-	}
-	if config.Migration.Enabled && config.Migration.ImportTimeout < 1 {
-		config.Migration.ImportTimeout = 10 * time.Minute
-	}
-	if config.Migration.Enabled && config.Migration.PreImportTimeout < 1 {
-		config.Migration.PreImportTimeout = 2 * time.Hour
-	}
-	if config.Migration.Enabled && config.Migration.MaxConcurrentImports < 1 {
-		config.Migration.MaxConcurrentImports = 1
-	}
-
-	// Prevent this from being configured by users.
-	config.Migration.TestSlowImport = 0
 
 	// copy TLS config to debug server when enabled and debug TLS certificate is empty
 	if config.HTTP.Debug.TLS.Enabled {

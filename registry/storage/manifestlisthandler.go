@@ -33,7 +33,7 @@ func (ms *manifestListHandler) Unmarshal(ctx context.Context, dgst digest.Digest
 	return m, nil
 }
 
-func (ms *manifestListHandler) Put(ctx context.Context, manifestList distribution.Manifest, skipDependencyVerification bool) (digest.Digest, error) {
+func (ms *manifestListHandler) Put(ctx context.Context, manifestList distribution.Manifest) (digest.Digest, error) {
 	dcontext.GetLogger(ms.ctx).Debug("(*manifestListHandler).Put")
 
 	m, ok := manifestList.(*manifestlist.DeserializedManifestList)
@@ -41,7 +41,7 @@ func (ms *manifestListHandler) Put(ctx context.Context, manifestList distributio
 		return "", fmt.Errorf("wrong type put to manifestListHandler: %T", manifestList)
 	}
 
-	if err := ms.verifyManifest(ms.ctx, m, skipDependencyVerification); err != nil {
+	if err := ms.verifyManifest(ms.ctx, m); err != nil {
 		return "", err
 	}
 
@@ -63,7 +63,7 @@ func (ms *manifestListHandler) Put(ctx context.Context, manifestList distributio
 // perspective of the registry. As a policy, the registry only tries to
 // store valid content, leaving trust policies of that content up to
 // consumers.
-func (ms *manifestListHandler) verifyManifest(ctx context.Context, mnfst *manifestlist.DeserializedManifestList, skipDependencyVerification bool) error {
+func (ms *manifestListHandler) verifyManifest(ctx context.Context, mnfst *manifestlist.DeserializedManifestList) error {
 	manifestService, err := ms.repository.Manifests(ctx)
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func (ms *manifestListHandler) verifyManifest(ctx context.Context, mnfst *manife
 
 	blobService := ms.repository.Blobs(ctx)
 
-	v := validation.NewManifestListValidator(manifestService, blobService, skipDependencyVerification, ms.manifestRefLimit, ms.manifestPayloadSizeLimit)
+	v := validation.NewManifestListValidator(manifestService, blobService, ms.manifestRefLimit, ms.manifestPayloadSizeLimit)
 
 	return v.Validate(ctx, mnfst)
 }

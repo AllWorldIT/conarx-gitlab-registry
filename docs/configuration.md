@@ -86,7 +86,7 @@ storage:
     accountkey: base64encodedaccountkey
     container: containername
     rootdirectory: /azure/virtual/container
-    trimlegacyrootprefix: true
+    legacyrootprefix: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -179,19 +179,12 @@ database:
     maxidle: 25
     maxopen: 25
     maxlifetime: 5m
-migration:
-  enabled: true
-  disablemirrorfs: true
-  rootdirectory: /migration/root
-  importtimeout: 5m
-  preimporttimeout: 1h
-  tagconcurrency: 10
-  maxconcurrentimports: 10
-  importnotification:
+  discovery:
     enabled: true
-    url: 'https://example.com/notification/{path}/status'
-    timeout: 10s
-    secret: 'registry-secret'
+    nameserver: fqdn.of.valid.dns
+    port: 53
+    primaryrecord: primary.database.fqdn.
+    tcp: true
 auth:
   silly:
     realm: silly-realm
@@ -343,10 +336,6 @@ health:
       timeout: 3s
       interval: 10s
       threshold: 3
-proxy:
-  remoteurl: https://registry-1.docker.io
-  username: [username]
-  password: [password]
 validation:
   manifests:
     referencelimit: 150
@@ -428,12 +417,6 @@ Permitted values are `error`, `warn`, `info` and `debug`. The default is
 
 ## `storage`
 
-
-> **DEPRECATION NOTICE**: The azure driver will default to using the standard
-> root prefix on 2023-05-22. Set `trimlegacyrootprefix:false` to maintain
-> backwards compatibility with existing azure deployments. See
-> https://gitlab.com/gitlab-org/container-registry/-/issues/854 for more details.
-
 ```none
 storage:
   filesystem:
@@ -443,7 +426,7 @@ storage:
     accountkey: base64encodedaccountkey
     container: containername
     rootdirectory: /azure/virtual/container
-    trimlegacyrootprefix: true
+    legacyrootprefix: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -663,6 +646,12 @@ database:
     maxidle: 25
     maxopen: 25
     maxlifetime: 5m
+  discovery:
+    enabled: true
+    nameserver: fqdn.of.valid.dns
+    port: 53
+    primaryrecord: primary.database.fqdn.
+    tcp: true
 ```
 
 | Parameter  | Required | Description                                                                                                                                                                                                                                          |
@@ -700,51 +689,27 @@ Use these settings to configure the behavior of the database connection pool.
 | `maxlifetime`| no    | The maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. Defaults to 0 (unlimited). |
 | `maxidletime` | no | The maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. Defaults to 0 (unlimited). |
 
-## `migration`
-
-The `migration` subsection configures options related to migration of the
-registry from filesystem backed to database backed metadata storage.
+### `discovery`
 
 ```none
-migration:
-  enabled: true
-  disablemirrorfs: true
-  rootdirectory: /migration/root
-  autheligibilitydisabled: false
-  importtimeout: 5m
-  preimporttimeout: 1h
-  tagconcurrency: 10
-  maxconcurrentimports: 10
-  importnotification:
+  discovery:
     enabled: true
-    url: 'https://example.com/notification/{path}/status'
-    timeout: 10s
-    secret: 'registry-secret'
+    nameserver: fqdn.of.valid.dns
+    port: 53
+    primaryrecord: primary.database.fqdn.
+    tcp: true
 ```
 
-| Parameter     | Required | Description                                                                                                                                                                                                                                          |
-|----------- |----------|------------------
-| `enabled`         | no       | When set to `true` migration mode is enabled, new repositories will be added to the database, while existing repositories will continue to use the filesystem.
-| `disablemirrorfs` | no       | When set to `true`, the registry does not write metadata to the filesystem. Defaults to `false`. Must be used in combination with the metadata database.
-| `rootdirectory`   | no       | RootDirectory allows repositories that have been migrated to the database to use separate object storage paths. Using a distinct rootdirectory from the main storage driver configuration allows online migrations.
-| `autheligibilitydisabled`   | no       | Allows disabling the evaluation of JWT tokens sent from Rails to determine the code path that _new_ repositories should follow. If disabled, all new repositories will follow the new code path. Defaults to `false`.
-| `tagconcurrency`   | no       | This parameter determines the number of concurrent tag details requests to the filesystem backend. This can greatly reduce the time spent importing a repository after a successful pre import has completed. Pre import is not affected by this parameter. Default `1`.
-| `maxconcurrentimports`    | no       | This parameter determines the maximum number of concurrent imports allowed per instance of the registry. This can help reduce the number of resources that the registry needs when the migration mode is enabled. Default `1`.
-| `importnotification` | no     | This defines the endpoint to use to notify when an import or pre-import has completed with a given status and details. See the [import notification subsection](#import-notification)
-| `importtimeout`      | no     | The maximum duration that an import job may take to complete before it is aborted. Defaults to 10 minutes.
-| `preimporttimeout`   | no     | The maximum duration that a pre import job may take to complete before it is aborted. Defaults to 2 hours.
+Use these settings to configure the behavior of the database service discovery.
+This is currently used to connect to the primary server for applying database migrations on high-availability replicated deployments.
 
-### Import Notification
-
-The `importnotification` configuration can be set when the migration is enabled to send a 
-`PUT` request to the configured URL whenever a pre-import or import operation has completed.
-
-| Parameter | Required | Description                                                                                                                                                                                                                                                   |
-|-----------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `enabled` | no       | When set to `true` the import notification feature will be enabled. This requires the following parameters to be configured. Defaults to false.                                                                                                               |
-| `url`     | no       | The URL endpoint where the notification will be sent to. Required when `importnotification` is enabled. Must be a valid URL, including scheme. A placeholder can be defined as `{path}` to add the repository path in the URL.                                |
-| `timeout` | no       | A value for the HTTP timeout for the import notification. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. Defaults to `0` or no time out. |
-| `secret`  | no       | A random string that will be sent in the `Authorization` header to the configured URL endpoint                                                                                                                                                                |
+| Parameter       | Required | Description                                                                        |
+|-----------------|----------|------------------------------------------------------------------------------------|
+| `enabled`       | no       | Whether the registry should use service discovery via DNS to resolve DB hosts.     |
+| `nameserver`    | no       | The IP address or FQD of the DNS server to query from.                             |
+| `port`          | no       | The port of the `Nameserver`. Defaults to `53`.                                    |
+| `primaryrecord` | no       | FQDN of the database's primary host. Used to apply schema migrations.              |
+| `tcp`           | no       | Whether to use `tcp` instead of `udp`. Defaults to `false`.                        | |
 
 ## `auth`
 
@@ -1401,38 +1366,6 @@ attempt fails, the health check will fail.
 | `timeout` | no       | How long to wait before timing out the TCP connection. A positive integer and an optional suffix indicating the unit of time. The suffix is one of `ns`, `us`, `ms`, `s`, `m`, or `h`. If you specify a value but omit the suffix, the value is interpreted as a number of nanoseconds. |
 | `interval`| no       | How long to wait between repetitions of the check. A positive integer and an optional suffix indicating the unit of time. The suffix is one of `ns`, `us`, `ms`, `s`, `m`, or `h`. Defaults to `10s` if the value is omitted. If you specify a value but omit the suffix, the value is interpreted as a number of nanoseconds. |
 | `threshold`| no      | The number of times the check must fail before the state is marked as unhealthy. If this field is not specified, a single failure marks the state as unhealthy. |
-
-
-## `proxy`
-
-> **DEPRECATION NOTICE**: The proxy pull-through cache mode is deprecated and will be removed in 2023-05-22. See
-> https://gitlab.com/gitlab-org/container-registry/-/issues/842 for more details.
-
-```
-proxy:
-  remoteurl: https://registry-1.docker.io
-  username: [username]
-  password: [password]
-```
-
-The `proxy` structure allows a registry to be configured as a pull-through cache
-to Docker Hub.  See
-[mirror](https://github.com/docker/docker.github.io/tree/master/registry/recipes/mirror.md)
-for more information. Pushing to a registry configured as a pull-through cache
-is unsupported.
-
-| Parameter | Required | Description                                           |
-|-----------|----------|-------------------------------------------------------|
-| `remoteurl`| yes     | The URL for the repository on Docker Hub.             |
-| `username` | no      | The username registered with Docker Hub which has access to the repository. |
-| `password` | no      | The password used to authenticate to Docker Hub using the username specified in `username`. |
-
-
-To enable pulling private repositories (e.g. `batman/robin`) specify the
-username (such as `batman`) and the password for that username.
-
-> **Note**: These private repositories are stored in the proxy cache's storage.
-> Take appropriate measures to protect access to the proxy cache.
 
 ## `validation`
 

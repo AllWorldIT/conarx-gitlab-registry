@@ -17,7 +17,6 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -36,9 +35,7 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	datastoretestutil "github.com/docker/distribution/registry/datastore/testutil"
-	"github.com/docker/distribution/registry/handlers"
 	registryhandlers "github.com/docker/distribution/registry/handlers"
-	"github.com/docker/distribution/registry/internal/migration"
 	rtestutil "github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
@@ -59,10 +56,6 @@ import (
 
 func init() {
 	factory.Register("schema1Preseededinmemorydriver", &schema1PreseededInMemoryDriverFactory{})
-
-	// horrible hack for faster test execution
-	// TODO: this should be configurable https://gitlab.com/gitlab-org/container-registry/-/issues/626
-	registryhandlers.OngoingImportCheckIntervalSeconds = 100 * time.Millisecond
 
 	// http.DefaultClient does not have a timeout, so we need to configure it here
 	http.DefaultClient.Timeout = time.Second * 10
@@ -93,59 +86,6 @@ func withReadOnly(config *configuration.Configuration) {
 
 func withoutManifestURLValidation(config *configuration.Configuration) {
 	config.Validation.Manifests.URLs.Allow = []string{".*"}
-}
-
-func disableMirrorFS(config *configuration.Configuration) {
-	config.Migration.DisableMirrorFS = true
-}
-
-func withMigrationEnabled(config *configuration.Configuration) {
-	config.Migration.Enabled = true
-}
-
-func withMigrationRootDirectory(path string) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Migration.RootDirectory = path
-	}
-}
-
-func withMigrationTagConcurrency(n int) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Migration.TagConcurrency = n
-	}
-}
-
-func withMigrationMaxConcurrentImports(n int) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Migration.MaxConcurrentImports = n
-	}
-}
-
-func withMigrationPreImportTimeout(d time.Duration) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Migration.PreImportTimeout = d
-	}
-}
-
-func withMigrationImportTimeout(d time.Duration) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Migration.ImportTimeout = d
-	}
-}
-
-func withMigrationTestSlowImport(d time.Duration) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Migration.TestSlowImport = d
-	}
-}
-
-func withImportNotification(serverURL string) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Migration.ImportNotification.Enabled = true
-		config.Migration.ImportNotification.URL = fmt.Sprintf("%s/api/v4/registry/repositories/{path}/migration/status", serverURL)
-		config.Migration.ImportNotification.Secret = "secret"
-		config.Migration.ImportNotification.Timeout = 2 * time.Second
-	}
 }
 
 func withSillyAuth(config *configuration.Configuration) {
@@ -211,12 +151,6 @@ func withRedisCache(srvAddr string) configOpt {
 	}
 }
 
-func withNotifications(notifCfg configuration.Notifications) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Notifications = notifCfg
-	}
-}
-
 func withHTTPPrefix(s string) configOpt {
 	return func(config *configuration.Configuration) {
 		config.HTTP.Prefix = s
@@ -264,16 +198,6 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 			SSLRootCert: dsn.SSLRootCert,
 		}
 	}
-
-	// Default to a tag concurrency of 1, or imports will hang without
-	// an explicit configuration.
-	config.Migration.TagConcurrency = 1
-
-	// Default to sensibly short timeout values for testing.
-	config.Migration.ImportTimeout = 5 * time.Second
-	config.Migration.PreImportTimeout = 5 * time.Second
-	// default to 2 max concurrent imports, or some tests may be rate limited
-	config.Migration.MaxConcurrentImports = 2
 
 	for _, o := range opts {
 		o(config)
@@ -354,13 +278,6 @@ func (e *testEnv) requireDB(t *testing.T) {
 	if !e.config.Database.Enabled {
 		t.Skip("skipping test because the metadata database is not enabled")
 	}
-}
-
-func newTestEnvMirror(t *testing.T, opts ...configOpt) *testEnv {
-	config := newConfig(opts...)
-	config.Proxy.RemoteURL = "http://example.com"
-
-	return newTestEnvWithConfig(t, &config)
 }
 
 func newTestEnv(t *testing.T, opts ...configOpt) *testEnv {
@@ -1333,7 +1250,7 @@ func createRepository(t *testing.T, env *testEnv, repoPath string, tag string) d
 	return digest.FromBytes(payload)
 }
 
-func createRepositoryWithMultipleIdenticalTags(t *testing.T, env *testEnv, repoPath string, tags []string) (digest.Digest, string, int64) {
+func createRepositoryWithMultipleIdenticalTags(t *testing.T, env *testEnv, repoPath string, tags []string) (digest.Digest, digest.Digest, string, int64) {
 	deserializedManifest := seedRandomSchema2Manifest(t, env, repoPath)
 
 	_, payload, err := deserializedManifest.Payload()
@@ -1353,7 +1270,7 @@ func createRepositoryWithMultipleIdenticalTags(t *testing.T, env *testEnv, repoP
 		require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
 	}
 
-	return dgst, schema2.MediaTypeManifest, deserializedManifest.TotalSize()
+	return dgst, deserializedManifest.Config().Digest, schema2.MediaTypeManifest, deserializedManifest.TotalSize()
 }
 
 func httpDelete(url string) (*http.Response, error) {
@@ -1645,151 +1562,6 @@ func assertManifestDeleteResponse(t *testing.T, env *testEnv, repoName string, m
 
 	u := buildManifestDigestURL(t, env, repoName, m)
 	assertDeleteResponse(t, u, expectedStatus)
-}
-
-type mockImportNotification struct {
-	t             *testing.T
-	receivedNotif map[string]chan migration.Notification
-}
-
-func newMockImportNotification(t *testing.T, paths ...string) *mockImportNotification {
-	t.Helper()
-
-	require.Greater(t, len(paths), 0, "mock server requires at least 1 path")
-
-	min := &mockImportNotification{
-		t:             t,
-		receivedNotif: make(map[string]chan migration.Notification),
-	}
-
-	for _, path := range paths {
-		min.receivedNotif[path] = make(chan migration.Notification)
-	}
-
-	t.Cleanup(func() {
-		for _, c := range min.receivedNotif {
-			close(c)
-		}
-	})
-
-	return min
-}
-
-var pathRegex = regexp.MustCompile("/repositories/(.*)/migration/status")
-
-func (min *mockImportNotification) handleNotificationRequest(w http.ResponseWriter, r *http.Request) {
-	t := min.t
-	t.Helper()
-
-	// PUT /api/:version/registry/repositories/:path/migration/status
-	require.Equal(t, http.MethodPut, r.Method, "method not allowed")
-
-	actualNotification := migration.Notification{}
-	err := json.NewDecoder(r.Body).Decode(&actualNotification)
-	require.NoError(t, err)
-
-	match := pathRegex.FindStringSubmatch(r.RequestURI)
-	require.Len(t, match, 2)
-	require.NotEmpty(t, match[1])
-
-	require.NotEmpty(t, r.Header.Get("X-Request-Id"))
-	require.Equal(t, r.Header.Get("X-Gitlab-Client-Name"), migration.NotifierClientName)
-
-	min.receivedNotif[match[1]] <- actualNotification
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func mockImportNotificationServer(t *testing.T, min *mockImportNotification) string {
-	t.Helper()
-
-	s := httptest.NewServer(http.HandlerFunc(min.handleNotificationRequest))
-
-	t.Cleanup(s.Close)
-
-	return s.URL
-}
-
-func (min *mockImportNotification) waitForImportNotification(t *testing.T, path, status, detail string, timeout time.Duration) {
-	t.Helper()
-
-	expectedNotif := migration.Notification{
-		Name:   repositoryName(path),
-		Path:   path,
-		Status: status,
-		Detail: detail,
-	}
-
-	select {
-	case receivedNotif := <-min.receivedNotif[path]:
-		t.Logf("notification received was: %+v", receivedNotif)
-		require.Equal(t, expectedNotif.Name, receivedNotif.Name)
-		require.Equal(t, expectedNotif.Path, receivedNotif.Path)
-		require.Equal(t, expectedNotif.Status, receivedNotif.Status)
-		// we wrap the underlying error if we fail to update the DB after a (pre)import operation
-		// which varies depending on the execution, for example the DB username
-		require.Contains(t, receivedNotif.Detail, expectedNotif.Detail, "detail mismatch")
-	case <-time.After(timeout):
-		t.Errorf("timed out waiting for import notification for path: %q", path)
-	}
-}
-
-// repositoryName parses a repository path (e.g. `"a/b/c"`) and returns its name (e.g. `"c"`).
-// copied from registry/datastore/repository.go
-func repositoryName(path string) string {
-	segments := strings.Split(filepath.Clean(path), "/")
-	return segments[len(segments)-1]
-}
-
-func generateOldRepoPaths(t *testing.T, template string, count int) []string {
-	t.Helper()
-
-	var repoPaths []string
-
-	for i := 0; i < count; i++ {
-		path := fmt.Sprintf(template, i)
-		repoPaths = append(repoPaths, path)
-	}
-
-	return repoPaths
-}
-
-func seedMultipleFSManifestsWithTag(t *testing.T, env *testEnv, tagName string, repoPaths []string) {
-	t.Helper()
-
-	for _, path := range repoPaths {
-		seedRandomSchema2Manifest(t, env, path, putByTag(tagName), writeToFilesystemOnly)
-	}
-}
-
-func assertImportStatus(t *testing.T, importURL, repoPath string, expectedStatus migration.RepositoryStatus, detail string) {
-	t.Helper()
-
-	req, err := http.NewRequest(http.MethodGet, importURL, nil)
-	require.NoError(t, err)
-
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	// Import should have been found.
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	b, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	var s handlers.RepositoryImportStatus
-	err = json.Unmarshal(b, &s)
-	require.NoError(t, err)
-
-	expectedStatusResponse := handlers.RepositoryImportStatus{
-		Name:   repositoryName(repoPath),
-		Path:   repoPath,
-		Status: expectedStatus,
-		Detail: detail,
-	}
-
-	require.Equal(t, expectedStatusResponse, s)
 }
 
 func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagName string, repoPaths []string) {

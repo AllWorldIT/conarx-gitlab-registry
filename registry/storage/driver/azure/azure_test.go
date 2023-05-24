@@ -281,7 +281,7 @@ func Test_parseParameters_Bool(t *testing.T) {
 	}
 
 	opts := dtestutil.Opts{
-		Defaultt:          false,
+		Defaultt:          true,
 		ParamName:         paramTrimLegacyRootPrefix,
 		DriverParamName:   "trimLegacyRootPrefix",
 		OriginalParams:    p,
@@ -331,4 +331,110 @@ func TestURLFor_Expiry(t *testing.T) {
 	require.NoError(t, err)
 	expected = dt.UTC().Format(time.RFC3339)
 	require.Equal(t, expected, u.Query().Get(param))
+}
+
+func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
+	tests := []struct {
+		name                    string
+		config                  map[string]interface{}
+		expectedUseLegacyPrefix bool
+	}{
+		{
+
+			name:                    "config: legacyrootprefix not set trimlegacyrootprefix not set",
+			config:                  map[string]interface{}{},
+			expectedUseLegacyPrefix: false,
+		},
+		{
+
+			name: "config: legacyrootprefix set trimlegacyrootprefix not set",
+			config: map[string]interface{}{
+				paramLegacyRootPrefix: true,
+			},
+			expectedUseLegacyPrefix: true,
+		},
+		{
+
+			name: "config: legacyrootprefix false trimlegacyrootprefix not set",
+			config: map[string]interface{}{
+				paramLegacyRootPrefix: false,
+			},
+			expectedUseLegacyPrefix: false,
+		},
+		{
+
+			name: "config: legacyrootprefix not set trimlegacyrootprefix true",
+			config: map[string]interface{}{
+				paramTrimLegacyRootPrefix: true,
+			},
+			expectedUseLegacyPrefix: false,
+		},
+		{
+
+			name: "config: legacyrootprefix not set trimlegacyrootprefix false",
+			config: map[string]interface{}{
+				paramTrimLegacyRootPrefix: false,
+			},
+			expectedUseLegacyPrefix: true,
+		},
+		{
+
+			name: "config: legacyrootprefix true trimlegacyrootprefix false",
+			config: map[string]interface{}{
+				paramTrimLegacyRootPrefix: false,
+				paramLegacyRootPrefix:     true,
+			},
+			expectedUseLegacyPrefix: true,
+		},
+		{
+
+			name: "config: legacyrootprefix false trimlegacyrootprefix true",
+			config: map[string]interface{}{
+				paramTrimLegacyRootPrefix: true,
+				paramLegacyRootPrefix:     false,
+			},
+			expectedUseLegacyPrefix: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actualTrimLegacyPrefix, err := inferRootPrefixConfiguration(test.config)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedUseLegacyPrefix, actualTrimLegacyPrefix)
+
+		})
+	}
+}
+
+func TestInferRootPrefixConfiguration_Invalid(t *testing.T) {
+	tests := []struct {
+		name                    string
+		config                  map[string]interface{}
+		expectedUseLegacyPrefix bool
+	}{
+		{
+
+			name: "config: legacyrootprefix true trimlegacyrootprefix true",
+			config: map[string]interface{}{
+				paramTrimLegacyRootPrefix: true,
+				paramLegacyRootPrefix:     true,
+			},
+		},
+		{
+
+			name: "config: legacyrootprefix false trimlegacyrootprefix false",
+			config: map[string]interface{}{
+				paramTrimLegacyRootPrefix: false,
+				paramLegacyRootPrefix:     false,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			useLegacyRootPrefix, err := inferRootPrefixConfiguration(test.config)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be")
+			require.False(t, useLegacyRootPrefix)
+		})
+	}
 }

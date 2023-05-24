@@ -11,7 +11,9 @@ import (
 	"encoding/hex"
 
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCachedTagStoreAllHasSameResult0Tags(t *testing.T) {
@@ -61,7 +63,7 @@ func testCachedTagStoreAllHasSameResult(t *testing.T, numTags int) {
 
 	// Populate tagStore with random tags.
 	for i := 0; i < numTags; i++ {
-		if err := uploadTagWithRandomDigest(ctx, env.ts, strconv.Itoa(i)); err != nil {
+		if _, err := uploadTagWithRandomDigest(ctx, env.ts, strconv.Itoa(i)); err != nil {
 			t.Fatalf("error populating tags: %v", err)
 		}
 	}
@@ -90,6 +92,49 @@ func testCachedTagStoreAllHasSameResult(t *testing.T, numTags int) {
 	}
 }
 
+func TestCachedTagStoreAllIgnoresCorruptTags(t *testing.T) {
+	var (
+		dgst string
+		err  error
+		env  = testTagStore(t)
+		ctx  = context.Background()
+		tag  = "foo"
+	)
+
+	// populate tagStore with `tag=foo`
+	dgst, err = uploadTagWithRandomDigest(ctx, env.ts, tag)
+	assert.NoError(t, err)
+
+	// retrieve all existing tags
+	allTags, err := env.ts.All(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, allTags, 1)
+	assert.Contains(t, allTags, tag)
+
+	// obtain the tag link for the populated tag
+	ts, ok := env.ts.(*tagStore)
+	if !ok {
+		t.Fatalf("the tagservice must be a tagStore")
+	}
+	tagLinkPathSpec := manifestTagCurrentPathSpec{
+		name: ts.repository.Named().Name(),
+		tag:  tag,
+	}
+
+	// corrupt the tag link
+	err = corruptTagDigest(ctx, env.d, tagLinkPathSpec, dgst)
+	assert.NoError(t, err)
+
+	// retrieve all existing tags - only keeping the validated tags (e.g keeping tags without broken links)
+	cts := newCachedTagStore(ts)
+	cachedAllTags, err := cts.All(ctx)
+	// assert there were no errors when retrieving tags
+	assert.NoError(t, err)
+
+	// assert the retrieved tag does not contain the broken tags
+	assert.NotContains(t, cachedAllTags, tag)
+}
+
 func TestCachedTagStoreLookupHasSameResults0Tags(t *testing.T) {
 	testCachedTagStoreLookupHasSameResults(t, 0)
 }
@@ -108,7 +153,7 @@ func testCachedTagStoreLookupHasSameResults(t *testing.T, numTags int) {
 
 	// Populate tagStore with random tags.
 	for i := 0; i < numTags; i++ {
-		if err := uploadTagWithRandomDigest(ctx, env.ts, strconv.Itoa(i)); err != nil {
+		if _, err := uploadTagWithRandomDigest(ctx, env.ts, strconv.Itoa(i)); err != nil {
 			t.Fatalf("error populating tags: %v", err)
 		}
 	}
@@ -160,13 +205,31 @@ func compareLookup(ctx context.Context, t *testing.T, ts distribution.TagService
 	}
 }
 
-func uploadTagWithRandomDigest(ctx context.Context, ts distribution.TagService, tag string) error {
+func uploadTagWithRandomDigest(ctx context.Context, ts distribution.TagService, tag string) (string, error) {
 	bytes := make([]byte, 0)
 	hash := sha256.New()
 	hash.Write(bytes)
 	dgst := "sha256:" + hex.EncodeToString(hash.Sum(nil))
 
 	err := ts.Tag(ctx, tag, distribution.Descriptor{Digest: digest.Digest(dgst)})
+	if err != nil {
+		return dgst, err
+	}
+	return dgst, nil
+}
+
+func corruptTagDigest(ctx context.Context, d driver.StorageDriver, tagLinkPathSpec manifestTagCurrentPathSpec, digest string) error {
+	tagLinkPath, err := pathFor(tagLinkPathSpec)
+	if err != nil {
+		return err
+	}
+
+	writer, err := d.Writer(ctx, tagLinkPath, false)
+	if err != nil {
+		return err
+	}
+	// replace the existing digest string with a corrupt digest
+	_, err = writer.Write([]byte("corrupt"))
 	if err != nil {
 		return err
 	}

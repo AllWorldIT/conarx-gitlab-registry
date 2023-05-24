@@ -114,7 +114,6 @@ func TestVerifyManifest_OCI_NonDistributableLayer(t *testing.T) {
 		v := validation.NewOCIValidator(
 			manifestService,
 			repo.Blobs(ctx),
-			false,
 			0,
 			0,
 			validation.ManifestURLs{
@@ -152,31 +151,10 @@ func TestVerifyManifest_OCI_InvalidSchemaVersion(t *testing.T) {
 	dm, err := ocischema.FromStruct(m)
 	require.NoError(t, err)
 
-	v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), false, 0, 0, validation.ManifestURLs{})
+	v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), 0, 0, validation.ManifestURLs{})
 
 	err = v.Validate(ctx, dm)
 	require.EqualError(t, err, fmt.Sprintf("unrecognized manifest schema version %d", m.Versioned.SchemaVersion))
-}
-
-func TestVerifyManifest_OCI_SkipDependencyVerification(t *testing.T) {
-	ctx := context.Background()
-
-	registry := createRegistry(t)
-	repo := makeRepository(t, registry, "test")
-
-	manifestService, err := testutil.MakeManifestService(repo)
-	require.NoError(t, err)
-
-	m := makeOCIManifestTemplate(t, repo)
-	m.Layers = []distribution.Descriptor{{Digest: digest.FromString("fake-digest")}}
-
-	dm, err := ocischema.FromStruct(m)
-	require.NoError(t, err)
-
-	v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), true, 0, 0, validation.ManifestURLs{})
-
-	err = v.Validate(ctx, dm)
-	require.NoError(t, err)
 }
 
 func TestVerifyManifest_OCI_ManifestLayer(t *testing.T) {
@@ -217,7 +195,7 @@ func TestVerifyManifest_OCI_ManifestLayer(t *testing.T) {
 	dm, err := ocischema.FromStruct(m)
 	require.NoError(t, err)
 
-	v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), false, 0, 0, validation.ManifestURLs{})
+	v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), 0, 0, validation.ManifestURLs{})
 
 	err = v.Validate(ctx, dm)
 	require.NoErrorf(t, err, fmt.Sprintf("digest: %s", dgst))
@@ -249,7 +227,7 @@ func TestVerifyManifest_OCI_MultipleErrors(t *testing.T) {
 	dm, err := ocischema.FromStruct(m)
 	require.NoError(t, err)
 
-	v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), false, 0, 0, validation.ManifestURLs{})
+	v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), 0, 0, validation.ManifestURLs{})
 
 	err = v.Validate(ctx, dm)
 	require.Error(t, err)
@@ -269,53 +247,40 @@ func TestVerifyManifest_OCI_ReferenceLimits(t *testing.T) {
 	require.NoError(t, err)
 
 	var tests = []struct {
-		name                       string
-		manifestLayers             int
-		refLimit                   int
-		wantErr                    bool
-		skipDependencyVerification bool
+		name           string
+		manifestLayers int
+		refLimit       int
+		wantErr        bool
 	}{
 		{
-			name:                       "no reference limit",
-			manifestLayers:             10,
-			refLimit:                   0,
-			wantErr:                    false,
-			skipDependencyVerification: false,
+			name:           "no reference limit",
+			manifestLayers: 10,
+			refLimit:       0,
+			wantErr:        false,
 		},
 		{
-			name:                       "reference limit greater than number of references",
-			manifestLayers:             10,
-			refLimit:                   150,
-			wantErr:                    false,
-			skipDependencyVerification: false,
+			name:           "reference limit greater than number of references",
+			manifestLayers: 10,
+			refLimit:       150,
+			wantErr:        false,
 		},
 		{
-			name:                       "reference limit equal to number of references",
-			manifestLayers:             9, // 9 layers + config = 10
-			refLimit:                   10,
-			wantErr:                    false,
-			skipDependencyVerification: false,
+			name:           "reference limit equal to number of references",
+			manifestLayers: 9, // 9 layers + config = 10
+			refLimit:       10,
+			wantErr:        false,
 		},
 		{
-			name:                       "reference limit less than number of references",
-			manifestLayers:             400,
-			refLimit:                   179,
-			wantErr:                    true,
-			skipDependencyVerification: false,
+			name:           "reference limit less than number of references",
+			manifestLayers: 400,
+			refLimit:       179,
+			wantErr:        true,
 		},
 		{
-			name:                       "reference limit less than number of references skip verification",
-			manifestLayers:             4,
-			refLimit:                   2,
-			wantErr:                    true,
-			skipDependencyVerification: true,
-		},
-		{
-			name:                       "negative reference limit",
-			manifestLayers:             8,
-			refLimit:                   -17,
-			wantErr:                    false,
-			skipDependencyVerification: false,
+			name:           "negative reference limit",
+			manifestLayers: 8,
+			refLimit:       -17,
+			wantErr:        false,
 		},
 	}
 
@@ -337,7 +302,7 @@ func TestVerifyManifest_OCI_ReferenceLimits(t *testing.T) {
 			dm, err := ocischema.FromStruct(m)
 			require.NoError(t, err)
 
-			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), tt.skipDependencyVerification, tt.refLimit, 0, validation.ManifestURLs{})
+			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), tt.refLimit, 0, validation.ManifestURLs{})
 
 			err = v.Validate(ctx, dm)
 			if tt.wantErr {
@@ -369,52 +334,38 @@ func TestVerifyManifest_OCI_PayloadLimits(t *testing.T) {
 	baseOCIManifestIndextSize := len(payload)
 
 	tests := map[string]struct {
-		payloadLimit               int
-		wantErr                    bool
-		skipDependencyVerification bool
-		expectedErr                error
+		payloadLimit int
+		wantErr      bool
+		expectedErr  error
 	}{
 		"no payload size limit": {
-			payloadLimit:               0,
-			wantErr:                    false,
-			skipDependencyVerification: false,
+			payloadLimit: 0,
+			wantErr:      false,
 		},
 		"payload size limit greater than manifest size": {
-			payloadLimit:               baseOCIManifestIndextSize * 2,
-			wantErr:                    false,
-			skipDependencyVerification: false,
+			payloadLimit: baseOCIManifestIndextSize * 2,
+			wantErr:      false,
 		},
 		"payload size limit equal to manifest size": {
-			payloadLimit:               baseOCIManifestIndextSize,
-			wantErr:                    false,
-			skipDependencyVerification: false,
+			payloadLimit: baseOCIManifestIndextSize,
+			wantErr:      false,
 		},
 		"payload size limit less than manifest size": {
-			payloadLimit:               baseOCIManifestIndextSize / 2,
-			wantErr:                    true,
-			skipDependencyVerification: false,
-			expectedErr: distribution.ErrManifestVerification{
-				distribution.ErrManifestPayloadSizeExceedsLimit{PayloadSize: baseOCIManifestIndextSize, Limit: baseOCIManifestIndextSize / 2},
-			},
-		},
-		"payload size limit less than manifest size skip verification": {
-			payloadLimit:               baseOCIManifestIndextSize / 2,
-			wantErr:                    true,
-			skipDependencyVerification: true,
+			payloadLimit: baseOCIManifestIndextSize / 2,
+			wantErr:      true,
 			expectedErr: distribution.ErrManifestVerification{
 				distribution.ErrManifestPayloadSizeExceedsLimit{PayloadSize: baseOCIManifestIndextSize, Limit: baseOCIManifestIndextSize / 2},
 			},
 		},
 		"negative payload size limit": {
-			payloadLimit:               -baseOCIManifestIndextSize,
-			wantErr:                    false,
-			skipDependencyVerification: false,
+			payloadLimit: -baseOCIManifestIndextSize,
+			wantErr:      false,
 		},
 	}
 
 	for tn, tt := range tests {
 		t.Run(tn, func(t *testing.T) {
-			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), tt.skipDependencyVerification, 0, tt.payloadLimit, validation.ManifestURLs{})
+			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), 0, tt.payloadLimit, validation.ManifestURLs{})
 
 			err = v.Validate(ctx, dm)
 			if tt.wantErr {

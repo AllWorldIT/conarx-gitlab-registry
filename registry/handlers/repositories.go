@@ -282,12 +282,13 @@ func repositoryTagsDispatcher(ctx *Context, _ *http.Request) http.Handler {
 // implementation details (such as sql.NullTime) without having to implement custom JSON serializers (and having to use
 // our own implementations) for these types. This is therefore a precise representation of the API response structure.
 type RepositoryTagResponse struct {
-	Name      string `json:"name"`
-	Digest    string `json:"digest"`
-	MediaType string `json:"media_type"`
-	Size      int64  `json:"size_bytes"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at,omitempty"`
+	Name         string `json:"name"`
+	Digest       string `json:"digest"`
+	ConfigDigest string `json:"config_digest,omitempty"`
+	MediaType    string `json:"media_type"`
+	Size         int64  `json:"size_bytes"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at,omitempty"`
 }
 
 // GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
@@ -369,6 +370,9 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 			MediaType: t.MediaType,
 			Size:      t.Size,
 			CreatedAt: timeToString(t.CreatedAt),
+		}
+		if t.ConfigDigest.Valid {
+			d.ConfigDigest = t.ConfigDigest.Digest.String()
 		}
 		if t.UpdatedAt.Valid {
 			d.UpdatedAt = timeToString(t.UpdatedAt.Time)

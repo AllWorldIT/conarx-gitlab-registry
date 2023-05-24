@@ -6,10 +6,12 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/reference"
+	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/inmemory"
 )
 
 type tagsTestEnv struct {
+	d   driver.StorageDriver
 	ts  distribution.TagService
 	ctx context.Context
 }
@@ -29,6 +31,7 @@ func testTagStore(t *testing.T) *tagsTestEnv {
 	}
 
 	return &tagsTestEnv{
+		d:   d,
 		ctx: ctx,
 		ts:  repo.Tags(ctx),
 	}

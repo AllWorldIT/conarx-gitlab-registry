@@ -58,6 +58,8 @@ The following is the list of supported media types. Any manifest or any of its r
 | `application/vnd.cncf.helm.chart.meta.layer.v1+json`                     |
 | `application/vnd.cncf.helm.chart.content.v1.tar+gzip`                    |
 | `application/vnd.cncf.helm.chart.content.layer.v1+tar`                   |
+| `application/vnd.cncf.flux.content.v1.tar+gzip`                          |
+| `application/vnd.cncf.flux.config.v1+json`                               |
 | `application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml`     |
 | `application/vnd.cncf.artifacthub.config.v1+yaml`                        |
 | `application/vnd.cnab.config.v1+json`                                    |

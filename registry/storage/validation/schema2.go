@@ -17,14 +17,13 @@ type Schema2Validator struct {
 }
 
 // NewSchema2Validator returns a new Schema2Validator.
-func NewSchema2Validator(exister ManifestExister, statter distribution.BlobStatter, skipDependencyVerification bool, refLimit, payloadLimit int, manifestURLs ManifestURLs) *Schema2Validator {
+func NewSchema2Validator(exister ManifestExister, statter distribution.BlobStatter, refLimit, payloadLimit int, manifestURLs ManifestURLs) *Schema2Validator {
 	return &Schema2Validator{
 		baseValidator: baseValidator{
-			manifestExister:            exister,
-			blobStatter:                statter,
-			skipDependencyVerification: skipDependencyVerification,
-			refLimit:                   refLimit,
-			payloadLimit:               payloadLimit,
+			manifestExister: exister,
+			blobStatter:     statter,
+			refLimit:        refLimit,
+			payloadLimit:    payloadLimit,
 		},
 		manifestURLs: manifestURLs,
 	}
@@ -48,10 +47,6 @@ func (v *Schema2Validator) Validate(ctx context.Context, mnfst *schema2.Deserial
 	if err := v.exceedsRefLimit(mnfst); err != nil {
 		errs = append(errs, err)
 		return errs
-	}
-
-	if v.skipDependencyVerification {
-		return nil
 	}
 
 	for _, descriptor := range mnfst.References() {

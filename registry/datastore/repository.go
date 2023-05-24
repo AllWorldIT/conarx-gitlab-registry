@@ -686,8 +686,9 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 
 	for rows.Next() {
 		var dgst Digest
+		var cfgDgst sql.NullString
 		t := new(models.TagDetail)
-		if err := rows.Scan(&t.Name, &dgst, &t.MediaType, &t.Size, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.Name, &dgst, &cfgDgst, &t.MediaType, &t.Size, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning tag details: %w", err)
 		}
 
@@ -696,6 +697,18 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 			return nil, err
 		}
 		t.Digest = d
+
+		if cfgDgst.Valid {
+			cd, err := Digest(cfgDgst.String).Parse()
+			if err != nil {
+				return nil, err
+			}
+			t.ConfigDigest = models.NullDigest{
+				Digest: cd,
+				Valid:  true,
+			}
+		}
+
 		tt = append(tt, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -714,6 +727,7 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 	q := `SELECT
 			t.name,
 			encode(m.digest, 'hex') AS digest,
+			encode(m.configuration_blob_digest, 'hex') AS config_digest,
 			mt.media_type,
 			m.total_size,
 			t.created_at,

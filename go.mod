@@ -26,6 +26,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/jszwec/csvutil v1.7.1
+	github.com/miekg/dns v1.0.14
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/ncw/swift v1.0.53
 	github.com/olekukonko/tablewriter v0.0.5
@@ -42,6 +43,7 @@ require (
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	github.com/xanzy/go-gitlab v0.73.1
 	gitlab.com/gitlab-org/labkit v1.17.0
+	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
 	golang.org/x/sync v0.1.0

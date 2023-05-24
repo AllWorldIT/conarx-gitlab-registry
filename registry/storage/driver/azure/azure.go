@@ -30,6 +30,7 @@ const (
 	paramRealm                = "realm"
 	paramRootDirectory        = "rootdirectory"
 	paramTrimLegacyRootPrefix = "trimlegacyrootprefix"
+	paramLegacyRootPrefix     = "legacyrootprefix"
 	maxChunkSize              = 4 * 1024 * 1024
 )
 
@@ -106,7 +107,7 @@ func parseParameters(parameters map[string]interface{}) (*driverParameters, erro
 		root = ""
 	}
 
-	trimLegacyRootPrefix, err := parse.Bool(parameters, paramTrimLegacyRootPrefix, false)
+	useLegacyRootPrefix, err := inferRootPrefixConfiguration(parameters)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +118,7 @@ func parseParameters(parameters map[string]interface{}) (*driverParameters, erro
 		container:            fmt.Sprint(container),
 		realm:                fmt.Sprint(realm),
 		root:                 fmt.Sprint(root),
-		trimLegacyRootPrefix: trimLegacyRootPrefix,
+		trimLegacyRootPrefix: !useLegacyRootPrefix,
 	}, nil
 }
 
@@ -620,4 +621,56 @@ func (d *driver) keyToPath(key string) string {
 	}
 
 	return "/" + strings.Trim(strings.TrimPrefix(key, root), "/")
+}
+
+// inferRootPrefixConfiguration determines when to use the azure legacy root prefix or not based on the storage driver configurations
+func inferRootPrefixConfiguration(ac map[string]interface{}) (useLegacyRootPrefix bool, err error) {
+	// extract config values
+	_, trimPrefixConfigExist := ac[paramTrimLegacyRootPrefix]
+	_, legacyPrefixConfigExist := ac[paramLegacyRootPrefix]
+
+	switch {
+	// both parameters exist, check for conflict:
+	case trimPrefixConfigExist && legacyPrefixConfigExist:
+		// extract the boolean representation of each of the config parameters
+		trimlegacyrootprefix, err := parse.Bool(ac, paramTrimLegacyRootPrefix, true)
+		if err != nil {
+			return false, err
+		}
+		legacyrootprefix, err := parse.Bool(ac, paramLegacyRootPrefix, true)
+		if err != nil {
+			return false, err
+		}
+
+		// conflict: user explicitly enabled legacyrootprefix but also enabled trimlegacyrootprefix or disabled both.
+		if legacyrootprefix == trimlegacyrootprefix {
+			err = fmt.Errorf("storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be %v", legacyrootprefix)
+			return false, err
+		}
+		useLegacyRootPrefix = legacyrootprefix
+
+	// both parameters do not exist; we will be using the default (i.e storage.azure.legacyrootprefix=false aka storage.azure.trimlegacyrootprefix=true):
+	case !trimPrefixConfigExist && !legacyPrefixConfigExist:
+		useLegacyRootPrefix = false
+
+	// one config parameter does not exist, while the other does;
+	// (in this case `legacyrootprefixExist` always takes precedence when it exists)
+	case !trimPrefixConfigExist || !legacyPrefixConfigExist:
+		if legacyPrefixConfigExist {
+			// extract the boolean representation of each of the config parameters
+			legacyrootprefix, err := parse.Bool(ac, paramLegacyRootPrefix, true)
+			if err != nil {
+				return false, err
+			}
+			useLegacyRootPrefix = legacyrootprefix
+		} else {
+			// extract the boolean representation of each of the config parameters
+			trimlegacyrootprefix, err := parse.Bool(ac, paramTrimLegacyRootPrefix, true)
+			if err != nil {
+				return false, err
+			}
+			useLegacyRootPrefix = !trimlegacyrootprefix
+		}
+	}
+	return useLegacyRootPrefix, err
 }

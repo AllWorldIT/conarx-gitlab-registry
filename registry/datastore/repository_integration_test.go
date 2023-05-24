@@ -2363,8 +2363,12 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 			lastName: "",  // this is the equivalent to no last name, as all tag names are non-empty
 			expectedTags: []*models.TagDetail{
 				{
-					Name:      "1.0.0",
-					Digest:    digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					Name:   "1.0.0",
+					Digest: digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					ConfigDigest: models.NullDigest{
+						Digest: "sha256:33f3ef3322b28ecfc368872e621ab715a04865471c47ca7426f3e93846157780",
+						Valid:  true,
+					},
 					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
 					Size:      489234,
 				},
@@ -2381,8 +2385,12 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 					Size:      23847,
 				},
 				{
-					Name:      "stable-9ede8db0",
-					Digest:    digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					Name:   "stable-9ede8db0",
+					Digest: digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					ConfigDigest: models.NullDigest{
+						Digest: "sha256:33f3ef3322b28ecfc368872e621ab715a04865471c47ca7426f3e93846157780",
+						Valid:  true,
+					},
 					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
 					Size:      489234,
 				},
@@ -2394,8 +2402,12 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 			lastName: "",
 			expectedTags: []*models.TagDetail{
 				{
-					Name:      "1.0.0",
-					Digest:    digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					Name:   "1.0.0",
+					Digest: digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					ConfigDigest: models.NullDigest{
+						Digest: "sha256:33f3ef3322b28ecfc368872e621ab715a04865471c47ca7426f3e93846157780",
+						Valid:  true,
+					},
 					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
 					Size:      489234,
 				},
@@ -2426,8 +2438,12 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 			lastName: "stable-91ac07a9",
 			expectedTags: []*models.TagDetail{
 				{
-					Name:      "stable-9ede8db0",
-					Digest:    digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					Name:   "stable-9ede8db0",
+					Digest: digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					ConfigDigest: models.NullDigest{
+						Digest: "sha256:33f3ef3322b28ecfc368872e621ab715a04865471c47ca7426f3e93846157780",
+						Valid:  true,
+					},
 					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
 					Size:      489234,
 				},
@@ -2451,8 +2467,12 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 					Size:      23847,
 				},
 				{
-					Name:      "stable-9ede8db0",
-					Digest:    digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					Name:   "stable-9ede8db0",
+					Digest: digest.Digest("sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6"),
+					ConfigDigest: models.NullDigest{
+						Digest: "sha256:33f3ef3322b28ecfc368872e621ab715a04865471c47ca7426f3e93846157780",
+						Valid:  true,
+					},
 					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
 					Size:      489234,
 				},

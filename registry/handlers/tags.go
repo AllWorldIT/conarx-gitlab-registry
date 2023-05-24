@@ -231,11 +231,6 @@ func (th *tagHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(th))
 	l.Debug("DeleteTag")
 
-	if th.App.isCache {
-		th.Errors = append(th.Errors, errcode.ErrorCodeUnsupported)
-		return
-	}
-
 	if th.writeFSMetadata {
 		tagService := th.Repository.Tags(th)
 		if err := tagService.Untag(th.Context, th.Tag); err != nil {

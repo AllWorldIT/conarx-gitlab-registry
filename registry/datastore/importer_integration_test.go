@@ -528,7 +528,7 @@ func TestImporter_PreImport_UnknownLayerMediaType(t *testing.T) {
 
 	imp := newImporterWithRoot(t, suite.db, "unknown-layer-mediatype")
 	err := imp.PreImport(suite.ctx, "a-simple")
-	require.EqualError(t, err, "pre importing tagged manifests: pre importing manifest: importing layers: creating layer blob: unknown media type: application/foo.bar.layer.v1.tar+gzip")
+	require.EqualError(t, err, "pre importing tagged manifests: pre importing manifest: associating layer blob with manifest: unknown media type: application/foo.bar.layer.v1.tar+gzip")
 }
 
 func TestImporter_Import_UnknownLayerMediaType(t *testing.T) {
@@ -536,7 +536,7 @@ func TestImporter_Import_UnknownLayerMediaType(t *testing.T) {
 
 	imp := newImporterWithRoot(t, suite.db, "unknown-layer-mediatype")
 	err := imp.Import(suite.ctx, "a-simple")
-	require.EqualError(t, err, "importing tags: importing manifest: importing layers: creating layer blob: unknown media type: application/foo.bar.layer.v1.tar+gzip")
+	require.EqualError(t, err, "importing tags: importing manifest: associating layer blob with manifest: unknown media type: application/foo.bar.layer.v1.tar+gzip")
 }
 
 func TestImporter_PreImport_UnknownManifestMediaType(t *testing.T) {
@@ -560,7 +560,7 @@ func TestImporter_PreImport_UnknownManifestConfigMediaType(t *testing.T) {
 
 	imp := newImporterWithRoot(t, suite.db, "unknown-manifestconfig-mediatype")
 	err := imp.PreImport(suite.ctx, "a-simple")
-	require.EqualError(t, err, "pre importing tagged manifests: pre importing manifest: unknown media type: application/foo.bar.container.image.v1+json")
+	require.EqualError(t, err, "pre importing tagged manifests: pre importing manifest: creating manifest: mapping config media type: unknown media type: application/foo.bar.container.image.v1+json")
 }
 
 func TestImporter_Import_UnknownManifestConfigMediaType(t *testing.T) {
@@ -568,7 +568,7 @@ func TestImporter_Import_UnknownManifestConfigMediaType(t *testing.T) {
 
 	imp := newImporterWithRoot(t, suite.db, "unknown-manifestconfig-mediatype")
 	err := imp.Import(suite.ctx, "a-simple")
-	require.EqualError(t, err, "importing tags: importing manifest: unknown media type: application/foo.bar.container.image.v1+json")
+	require.EqualError(t, err, "importing tags: importing manifest: creating manifest: mapping config media type: unknown media type: application/foo.bar.container.image.v1+json")
 }
 
 func TestImporter_PreImport_NoTagsPrefix(t *testing.T) {
@@ -649,7 +649,7 @@ func TestImporter_PreImport_FailureDueToInvalidManifestReferencesDoesNotSucceedO
 	// first pre-import attempt, should fail
 	imp := newImporterWithRoot(t, suite.db, "unknown-layer-mediatype")
 	err := imp.PreImport(suite.ctx, "a-simple")
-	expectedErr := "pre importing tagged manifests: pre importing manifest: importing layers: creating layer blob: unknown media type: application/foo.bar.layer.v1.tar+gzip"
+	expectedErr := "pre importing tagged manifests: pre importing manifest: associating layer blob with manifest: unknown media type: application/foo.bar.layer.v1.tar+gzip"
 	require.EqualError(t, err, expectedErr)
 
 	// retry, should fail with the exact same error
@@ -666,7 +666,7 @@ func TestImporter_PreImport_FailureDueToInvalidManifestListManifestReferencesDoe
 	// first pre-import attempt, should fail
 	imp := newImporterWithRoot(t, suite.db, "manifest-list-bad-manifest-ref")
 	err := imp.PreImport(suite.ctx, "multi-arch")
-	expectedErr := `pre importing tagged manifests: pre importing manifest: pre importing manifest list: importing layers: creating layer blob: unknown media type: application/foo.bar.layer.v1.tar+gzip`
+	expectedErr := "pre importing tagged manifests: pre importing manifest: pre importing manifest list: associating layer blob with manifest: unknown media type: application/foo.bar.layer.v1.tar+gzip"
 	require.EqualError(t, err, expectedErr)
 
 	// retry, should fail with the exact same error

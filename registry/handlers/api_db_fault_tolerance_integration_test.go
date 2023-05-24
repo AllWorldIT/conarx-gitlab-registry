@@ -750,7 +750,7 @@ func TestDBFaultTolerance_ConnectionLeak_Catalog(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_TagList(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -771,7 +771,7 @@ func TestDBFaultTolerance_ConnectionLeak_TagList(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_TagDelete(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -788,7 +788,7 @@ func TestDBFaultTolerance_ConnectionLeak_TagDelete(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_BlobGet(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	blobArgs, _ := createRepoWithBlob(t, env)
@@ -805,7 +805,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobGet(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_BlobHead(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	blobArgs, _ := createRepoWithBlob(t, env)
@@ -822,7 +822,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobHead(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_BlobDelete(t *testing.T) {
-	env := newTestEnv(t, withDelete, disableMirrorFS)
+	env := newTestEnv(t, withDelete)
 	defer env.Shutdown()
 
 	blobArgs, _ := createRepoWithBlob(t, env)
@@ -839,7 +839,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobDelete(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_BlobPut(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	assertNoDBConnections(t, env)
@@ -872,7 +872,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobPostMount(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestGetByDigest(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -890,7 +890,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestGetByDigest(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestGetByTag(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -909,7 +909,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestGetByTag(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestHeadByDigest(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -927,7 +927,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestHeadByDigest(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestHeadByTag(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -946,7 +946,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestHeadByTag(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestPutByDigest(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -964,7 +964,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestPutByDigest(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestPutByTag(t *testing.T) {
-	env := newTestEnv(t, disableMirrorFS)
+	env := newTestEnv(t)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -983,7 +983,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestPutByTag(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestDelete(t *testing.T) {
-	env := newTestEnv(t, withDelete, disableMirrorFS)
+	env := newTestEnv(t, withDelete)
 	defer env.Shutdown()
 
 	repoName := "foo"

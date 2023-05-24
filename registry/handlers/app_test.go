@@ -293,60 +293,6 @@ func TestAppendAccessRecords(t *testing.T) {
 	}
 }
 
-// TestGitlabAPI_RepositoryImportAccessRecords ensures that only admins may trigger imports
-// via the GitLab v1 API.
-func TestGitlabAPI_RepositoryImportAccessRecords(t *testing.T) {
-
-	// The appendRepositoryImportAccessRecords function depends on
-	// mux.CurrentRoute, which only inside a handler when a proper request is
-	// being made so we need to test against an instantiated app via HTTP.
-	ctx := context.Background()
-	config := testConfig()
-
-	app, err := NewApp(ctx, config)
-	require.NoError(t, err)
-
-	server := httptest.NewServer(app)
-	defer server.Close()
-
-	repo, err := reference.WithName("test/repo")
-	require.NoError(t, err)
-
-	repo, err = reference.WithTag(repo, "latest")
-	require.NoError(t, err)
-
-	builder, err := urls.NewBuilderFromString(server.URL, false)
-	require.NoError(t, err)
-
-	url, err := builder.BuildGitlabV1RepositoryImportURL(repo)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPut, url, nil)
-	require.NoError(t, err)
-
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-
-	expectedAuthHeader := `Bearer realm="realm-test",service="service-test",scope="registry:import:*"`
-	require.Equal(t, expectedAuthHeader, resp.Header.Get("WWW-Authenticate"))
-
-	// Ensure import scopes are not attached to other repository scoped requests.
-	url, err = builder.BuildManifestURL(repo)
-	require.NoError(t, err)
-
-	resp, err = http.Get(url)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-
-	expectedAuthHeader = `Bearer realm="realm-test",service="service-test",scope="repository:test/repo:pull"`
-	require.Equal(t, expectedAuthHeader, resp.Header.Get("WWW-Authenticate"))
-}
-
 // TestGitlabAPI_GetRepositoryDetailsAccessRecords ensures that only users will pull permissions for repository x can invoke the
 // `GET /gitlab/v1/repositories/x` endpoint.
 func TestGitlabAPI_GetRepositoryDetailsAccessRecords(t *testing.T) {

@@ -191,14 +191,15 @@ curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitla
 
 The response body is an array of objects (one per tag, if any) with the following attributes:
 
-| Key          | Value                                            | Type   | Format                              | Condition                                                                                                |
-|--------------|--------------------------------------------------|--------|-------------------------------------|----------------------------------------------------------------------------------------------------------|
-| `name`       | The tag name.                                    | String |                                     |                                                                                                          |
-| `digest`     | The digest of the tagged manifest.               | String |                                     |                                                                                                          |
-| `media_type` | The media type of the tagged manifest.           | String |                                     |                                                                                                          |
-| `size_bytes` | The size of the tagged image.                    | Number | Bytes                               |                                                                                                          |
-| `created_at` | The timestamp at which the tag was created.      | String | ISO 8601 with millisecond precision |                                                                                                          |
-| `updated_at` | The timestamp at which the tag was last updated. | String | ISO 8601 with millisecond precision | Only present if updated at least once. An update happens when a tag is switched to a different manifest. |
+| Key             | Value                                            | Type   | Format                              | Condition                                                                                                |
+|-----------------|--------------------------------------------------|--------|-------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `name`          | The tag name.                                    | String |                                     |                                                                                                          |
+| `digest`        | The digest of the tagged manifest.               | String |                                     |                                                                                                          |
+| `config_digest` | The configuration digest of the tagged image.    | String |                                     | Only present if image has an associated configuration.                                                   |
+| `media_type`    | The media type of the tagged manifest.           | String |                                     |                                                                                                          |
+| `size_bytes`    | The size of the tagged image.                    | Number | Bytes                               |                                                                                                          |
+| `created_at`    | The timestamp at which the tag was created.      | String | ISO 8601 with millisecond precision |                                                                                                          |
+| `updated_at`    | The timestamp at which the tag was last updated. | String | ISO 8601 with millisecond precision | Only present if updated at least once. An update happens when a tag is switched to a different manifest. |
 
 The tag objects are sorted lexicographically by tag name to enable marker-based pagination.
 
@@ -209,6 +210,7 @@ The tag objects are sorted lexicographically by tag name to enable marker-based 
   {
     "name": "0.1.0",
     "digest": "sha256:6c3c624b58dbbcd3c0dd82b4c53f04194d1247c6eebdaab7c610cf7d66709b3b",
+    "config_digest": "sha256:66b1132a0173910b01ee3a15ef4e69583bbf2f7f1e4462c99efbe1b9ab5bf808",
     "media_type": "application/vnd.oci.image.manifest.v1+json",
     "size_bytes": 286734237,
     "created_at": "2022-06-07T12:10:12.412+00:00"
@@ -216,6 +218,7 @@ The tag objects are sorted lexicographically by tag name to enable marker-based 
   {
     "name": "latest",
     "digest": "sha256:6c3c624b58dbbcd3c0dd82b4c53f04194d1247c6eebdaab7c610cf7d66709b3b",
+    "config_digest": "sha256:0c4c8e302e7a074a8a1c2600cd1af07505843adb2c026ea822f46d3b5a98dd1f",
     "media_type": "application/vnd.oci.image.manifest.v1+json",
     "size_bytes": 286734237,
     "created_at": "2022-06-07T12:11:13.633+00:00",
@@ -329,253 +332,6 @@ The error codes encountered via this API are enumerated in the following table.
 `INVALID_QUERY_PARAMETER_VALUE` | `the value of a query parameter is invalid` | The value of a request query parameter is invalid. The error detail identifies the concerning parameter and the list of possible values.
 `INVALID_QUERY_PARAMETER_TYPE` | `the value of a query parameter is of an invalid type` | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.
 
-## Import Repository
-
-Move a single repository from filesystem metadata to the database.
-
-Imports are processed asynchronously, the registry will send a notification via
-an HTTP request once the import has finished.
-
-Incoming writes to this repository during the import process will follow the old
-code path, and will cause the import process to be cancelled.
-
-### Request
-
-```shell
-PUT /gitlab/v1/import/<path>/
-```
-
-| Attribute     | Type    | Required | Default   | Description                                                  |
-| ------------- | ------- | -------- | --------- | ------------------------------------------------------------ |
-| `path`        | String  | Yes      |           | The full path of the target repository. Equivalent to the `name` parameter in the `/v2/` API, described in the [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md). The same pattern validation applies. |
-| `import_type` | Bool    | Yes      |           | When `import_type=pre`, only import manifests and their associated blobs, without importing tags. Once the pre import is complete, performing a final import with `import_type=final` should take far less time, reducing the amount of time required during which writes will be blocked. |
-
-#### Example
-
-```shell
-curl -X PUT --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/import/gitlab-org/build/cng/gitlab-container-registry/?import_type=pre"
-```
-
-#### Authentication
-
-This endpoint requires an auth token with the `registry` resource type, name set to `import`, and the `*` action. Sample:
-
-```json
-{
-  "access": [
-    {
-      "actions": [
-        "*"
-      ],
-      "name": "import",
-      "type": "registry"
-    }
-  ],
-  // ...
-}
-```
-
-### Response
-#### Header
-
-| Status Code               | Reason                                                       |
-| ------------------------- | ------------------------------------------------------------ |
-| `200 OK`                  | The repository was already present on the database and does not need to be imported. This repository may have been previously migrated or native to the database. |
-| `202 Accepted`            | The import or pre import was successfully started. |
-| `401 Unauthorized`        | The client should take action based on the contents of the `WWW-Authenticate` header and try the endpoint again. |
-| `400 Bad Request`         | The `import_type` query parameter was not set or its value is invalid. |
-| `404 Not Found`           | The repository was not found. |
-| `409 Conflict`            | The repository is already being imported. |
-| `424 Failed Dependency`   | The repository failed to pre import. This error only affects the import request when `import_type=final`, when `import_type=pre` the pre import will be retried.|
-| `424 Failed Dependency`   | The repository has not been pre imported yet. This error only affects the import request when `import_type=final` and no preceding `import_type=pre` import has been started.|
-| `425 Too Early`           | The Repository is currently being pre imported. |
-| `429 Too Many Requests`   | The registry is already running the maximum configured import jobs. |
-
-### Import Notification
-
-Once an import completes, the registry will send a synchronous notification in the form of an HTTP `PUT` request to the endpoint configured in [`migration`](../docs/configuration.md#migration). This notification includes the status of the import and any relevant details about it (such as the reason for a failure).
-
-#### Request
-##### Body
-
-| Key          | Value                                                                  | Type   |
-| ------------ | ---------------------------------------------------------------------- | ------ |
-| `name`       | The repository name. This is the last segment of the repository path.  | String |
-| `path`       | The repository path.                                                   | String |
-| `status`     | The status of the completed import.                                    | String |
-| `detail`     | A detailed explanation of the status. In case an error occurred, this field will contain the reason. | string |
-
-##### Possible Statuses
-
-| Value | Meaning |
-| ----- | ------- |
-| `import_complete`  | The import was completed successfully. |
-| `pre_import_complete` | The pre-import completed successfully. |
-| `import_failed` | The import has failed. |
-| `pre_import_failed`    | The pre-import has failed. |
-| `import_canceled` | The import was canceled. |
-| `pre_import_canceled` | The pre-import was canceled. |
-
-##### Examples
-
-###### Success
-```json
-{
-  "name": "gitlab-container-registry",
-  "path": "gitlab-org/build/cng/gitlab-container-registry",
-  "status": "import_complete",
-  "detail": "final import completed successfully"
-}
-```
-
-###### Error
-```json
-{
-  "name": "gitlab-container-registry",
-  "path": "gitlab-org/build/cng/gitlab-container-registry",
-  "status": "import_failed",
-  "detail": "importing tags: reading tags: write tcp 172.0.0.1:1234->172.0.0.1:4321: write: broken pipe"
-}
-```
-
-## Get Repository Import Status
-
-Query import status of a repository.
-
-### Request
-
-```shell
-GET /gitlab/v1/import/<path>/
-```
-
-| Attribute     | Type    | Required | Default   | Description                                                  |
-| ------------- | ------- | -------- | --------- | ------------------------------------------------------------ |
-| `path`        | String  | Yes      |           | The full path of the target repository. Equivalent to the `name` parameter in the `/v2/` API, described in the [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md). The same pattern validation applies. |
-
-#### Authentication
-
-This endpoint requires an auth token with the `registry` resource type, name set to `import`, and the `*` action.
-
-#### Example
-
-```shell
-curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/import/gitlab-org/build/cng/gitlab-container-registry/"
-```
-
-### Response
-
-#### Header
-
-| Status Code        | Reason                                                       |
-| ------------------ | ------------------------------------------------------------ |
-| `200 OK`           | The repository was found. The response body includes the requested details. |
-| `401 Unauthorized` | The client should take action based on the contents of the `WWW-Authenticate` header and try the endpoint again. |
-| `404 Not Found`    | The repository was not found.                                |
-
-#### Body
-
-| Key          | Value                                                        | Type   | 
-| ------------ | ------------------------------------------------------------ | ------ | 
-| `name`       | The repository name. This is the last segment of the repository path. | String |                                     |                                                              |
-| `path`       | The repository path.                                         | String |                                     |                                                              |
-| `status`     | The status of the import.                                    | String |
-| `detail`     | A detailed explanation of the status. | String |
-
-##### Possible Statuses
-
-| Value | Meaning |
-| ----- | ------- |
-| `native`  | This repository was originally created on the new platform. No import occurred. |
-| `import_in_progress`  | The import is in progress. |
-| `import_complete`  | The import was completed successfully. |
-| `import_failed` | The import has failed. |
-| `pre_import_in_progress`  | The pre-import is in progress. |
-| `pre_import_complete` | The pre-import completed successfully. |
-| `pre_import_failed`    | The pre-import has failed. |
-| `import_canceled` | The import was canceled. |
-| `pre_import_canceled` | The pre-import was canceled. |
-
-#### Example
-
-```json
-{
-  "name": "gitlab-container-registry",
-  "path": "gitlab-org/build/cng/gitlab-container-registry",
-  "status": "import_in_progress",
-  "detail": "import in progress"
-}
-```
-
-## Cancel Repository Import
-
-Cancel ongoing repository (pre)import.
-
-### Request
-
-```shell
-DELETE /gitlab/v1/import/<path>/
-```
-
-| Attribute     | Type    | Required | Default   | Description                                                  |
-| ------------- | ------- | -------- | --------- | ------------------------------------------------------------ |
-| `path`        | String  | Yes      |           | The full path of the target repository. Equivalent to the `name` parameter in the `/v2/` API, described in the [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md). The same pattern validation applies. |
-| `force`       | Bool    | No       |           | When `force=true`, any non-native migrated repository will be marked as `import_canceled` regardless of the previous migration status. |
-
-#### Authentication
-
-This endpoint requires an auth token with the `registry` resource type, name set to `import`, and the `*` action.
-
-#### Example
-
-```shell
-curl -X DELETE --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/import/gitlab-org/build/cng/gitlab-container-registry/"
-```
-
-### Response
-
-#### Header
-
-| Status Code        | Reason                                                       |
-| ------------------ | ------------------------------------------------------------ |
-| `202 Accepted`     | The repository was found and the ongoing (pre)import will be canceled. An async notification will be sent once the cancelation occurs. |
-| `400 Bad Request`  | The repository was found, but there is no ongoing (pre)import to cancel.  |
-| `401 Unauthorized` | The client should take action based on the contents of the `WWW-Authenticate` header and try the endpoint again. |
-| `404 Not Found`    | The repository was not found.                                |
-
-#### Body
-
-The response body is only included in `400 Bad Request` responses, as a way to inform the client about the current import status of the repository.
-
-| Key          | Value                                                        | Type   | 
-| ------------ | ------------------------------------------------------------ | ------ | 
-| `name`       | The repository name. This is the last segment of the repository path. | String |                                     |                                                              |
-| `path`       | The repository path.                                         | String |                                     |                                                              |
-| `status`     | The status of the import.                                    | String |
-| `detail`     | A detailed explanation of the status. | String |
-
-##### Possible Statuses
-
-| Value | Meaning |
-| ----- | ------- |
-| `native`  | This repository was originally created on the new platform. No import occurred. |
-| `import_complete`  | The import was completed successfully. |
-| `import_failed` | The import has failed. |
-| `pre_import_complete` | The pre-import completed successfully. |
-| `pre_import_failed`    | The pre-import has failed. |
-| `import_canceled` | The import was canceled. |
-| `pre_import_canceled` | The pre-import was canceled. |
-
-#### Example
-
-```json
-{
-  "name": "gitlab-container-registry",
-  "path": "gitlab-org/build/cng/gitlab-container-registry",
-  "status": "import_canceled",
-  "detail": "import canceled"
-}
-```
-
 ## Errors
 
 In case of an error, the response body payload (if any) follows the format defined in the
@@ -610,6 +366,14 @@ error codes described in the
 `INVALID_QUERY_PARAMETER_TYPE` | `the value of a query parameter is of an invalid type` | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.
 
 ## Changes
+
+### 2023-04-24
+
+- Add config digest to List Repository Tags response.
+
+### 2023-04-20
+
+- Removed routes used for the GitLab.com online migration.
 
 ### 2023-03-22
 

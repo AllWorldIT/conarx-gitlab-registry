@@ -888,7 +888,6 @@ func dbPutManifestOCI(imh *manifestHandler, manifest *ocischema.DeserializedMani
 	v := validation.NewOCIValidator(
 		&datastore.RepositoryManifestService{RepositoryReader: repoReader, RepositoryPath: repoPath},
 		&datastore.RepositoryBlobService{RepositoryReader: repoReader, RepositoryPath: repoPath},
-		imh.App.isCache,
 		imh.App.manifestRefLimit,
 		imh.App.manifestPayloadSizeLimit,
 		imh.App.manifestURLs,
@@ -908,7 +907,6 @@ func dbPutManifestSchema2(imh *manifestHandler, manifest *schema2.DeserializedMa
 	v := validation.NewSchema2Validator(
 		&datastore.RepositoryManifestService{RepositoryReader: repoReader, RepositoryPath: repoPath},
 		&datastore.RepositoryBlobService{RepositoryReader: repoReader, RepositoryPath: repoPath},
-		imh.App.isCache,
 		imh.App.manifestRefLimit,
 		imh.App.manifestPayloadSizeLimit,
 		imh.App.manifestURLs,
@@ -1072,7 +1070,6 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 			RepositoryPath:   repoPath,
 		},
 		&datastore.RepositoryBlobService{RepositoryReader: rStore, RepositoryPath: repoPath},
-		imh.App.isCache,
 		imh.App.manifestRefLimit,
 		imh.App.manifestPayloadSizeLimit,
 	)
@@ -1256,7 +1253,6 @@ func dbPutBuildkitIndex(imh *manifestHandler, ml *manifestlist.DeserializedManif
 	v := validation.NewOCIValidator(
 		&datastore.RepositoryManifestService{RepositoryReader: repoReader, RepositoryPath: repoPath},
 		&datastore.RepositoryBlobService{RepositoryReader: repoReader, RepositoryPath: repoPath},
-		imh.App.isCache,
 		imh.App.manifestRefLimit,
 		imh.App.manifestPayloadSizeLimit,
 		imh.App.manifestURLs,

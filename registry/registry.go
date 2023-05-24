@@ -19,6 +19,7 @@ import (
 	dlog "github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/handlers"
+	"github.com/docker/distribution/registry/internal/dns"
 	"github.com/docker/distribution/registry/listener"
 	"github.com/docker/distribution/uuid"
 	"github.com/docker/distribution/version"
@@ -184,8 +185,6 @@ func (registry *Registry) ListenAndServe() error {
 			"database_drain_timeout": registry.config.Database.DrainTimeout,
 		})
 		log.Info("attempting to stop server gracefully...")
-
-		registry.app.CancelAllImportsAndWait()
 
 		// shutdown the server with a grace period of configured timeout
 		if registry.config.HTTP.DrainTimeout != 0 {
@@ -560,10 +559,6 @@ func resolveConfiguration(args []string, opts ...configuration.ParseOption) (*co
 func validate(config *configuration.Configuration) error {
 	var errs *multierror.Error
 
-	if !config.Database.Enabled && config.Migration.DisableMirrorFS {
-		errs = multierror.Append(errors.New("filesystem mirroring may only be disabled when database is enabled"))
-	}
-
 	// Validate redirect section.
 	if redirectConfig, ok := config.Storage["redirect"]; ok {
 		if v, ok := redirectConfig["disable"]; ok {
@@ -584,54 +579,46 @@ func validate(config *configuration.Configuration) error {
 		}
 	}
 
-	// Deprecation warning for azure.
+	//  Validate and/or Log potential issues with azure `trimlegacyrootprefix` and `legacyrootprefix` configuration options.
 	if ac, ok := config.Storage["azure"]; ok {
-		v, ok := ac["trimlegacyrootprefix"]
-		if ok {
-			if _, ok := v.(bool); !ok {
-				errs = multierror.Append(fmt.Errorf("invalid type %[1]T for 'storage.azure.trimlegacyrootprefix' (boolean)", v))
+		var legacyPrefix, legacyPrefixIsBool, trimLegacyPrefix, trimLegacyPrefixIsBool bool
+
+		// assert `trimlegacyrootprefix` can be represented as a boolean
+		trimLegacyPrefixI, trimLegacyPrefixExist := ac["trimlegacyrootprefix"]
+		if trimLegacyPrefixExist {
+			if trimLegacyPrefix, trimLegacyPrefixIsBool = trimLegacyPrefixI.(bool); !trimLegacyPrefixIsBool {
+				errs = multierror.Append(fmt.Errorf("invalid type %[1]T for 'storage.azure.trimlegacyrootprefix' (boolean)", trimLegacyPrefix))
 			}
-		} else {
-			dlog.GetLogger().Warn("**DEPRECATION NOTICE**: The azure driver will default to using the standard " +
-				"root prefix on 2023-05-22. Set `trimlegacyrootprefix:false` to maintain " +
-				"backwards compatibility with existing azure deployments. See " +
-				"https://gitlab.com/gitlab-org/container-registry/-/issues/854 for more details.")
-		}
-	}
-
-	// Validate migration section.
-	if config.Migration.Enabled {
-		if !config.Database.Enabled {
-			errs = multierror.Append(errs, errors.New("database must be enabled to migrate"))
 		}
 
-		if config.Migration.RootDirectory == "" {
-			errs = multierror.Append(errs, errors.New("'migration.rootdirectory' must be set when in migration mode"))
-		}
-
-		storageParams := config.Storage.Parameters()
-		if storageParams == nil {
-			storageParams = make(configuration.Parameters)
-		}
-
-		// TODO: This is a temporary restraint while we are in Phase one of the migration proposal:
-		// https://gitlab.com/gitlab-org/container-registry/-/issues/374
-		if config.Migration.RootDirectory == fmt.Sprintf("%s", storageParams["rootdirectory"]) {
-			errs = multierror.Append(errs,
-				errors.New("migration requires a 'migration.rootdirectory` distinct from the root directory of primary storage driver"))
-		}
-
-		if config.Migration.ImportNotification.Enabled {
-			_, err := url.Parse(config.Migration.ImportNotification.URL)
-			if err != nil {
-				errs = multierror.Append(errs, fmt.Errorf("invalid 'migration.importnotification.url' %q %w", config.Migration.ImportNotification.URL, err))
+		// assert `legacyrootprefix` can be represented as a boolean
+		legacyPrefixI, legacyPrefixExist := ac["legacyrootprefix"]
+		if legacyPrefixExist {
+			if legacyPrefix, legacyPrefixIsBool = legacyPrefixI.(bool); !legacyPrefixIsBool {
+				errs = multierror.Append(fmt.Errorf("invalid type %[1]T for 'storage.azure.legacyrootprefix' (boolean)", legacyPrefix))
 			}
-			if config.Migration.ImportNotification.URL == "" {
-				errs = multierror.Append(errs, errors.New("'migration.importnotification.url` cannot be empty when import notification is enabled'"))
+		}
+
+		switch {
+		// both parameters exist, check for conflict:
+		case trimLegacyPrefixExist && legacyPrefixExist:
+			// while it is allowed to set both configs (as long as they do not conflict), setting only one is sufficient.
+			dlog.GetLogger().Warn("Both 'storage.azure.legacyrootprefix' and 'storage.azure.trimlegacyrootprefix' are set. It is recommended to set one or the other, rather than both.")
+
+			// conflict: user explicitly enabled legacyrootprefix but also enabled trimlegacyrootprefix (or disabled both).
+			if legacyPrefixIsBool && trimLegacyPrefixIsBool {
+				if legacyPrefix == trimLegacyPrefix {
+					errs = multierror.Append(fmt.Errorf("storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be %v", legacyPrefix))
+				}
 			}
-			if config.Migration.ImportNotification.Secret == "" {
-				errs = multierror.Append(errs, errors.New("'migration.importnotification.secret` cannot be empty when import notification is enabled'"))
-			}
+
+		// both parameters do not exist, warn user that we will be using the default (i.e storage.azure.legacyrootprefix=false aka storage.azure.trimlegacyrootprefix=true):
+		case !trimLegacyPrefixExist && !legacyPrefixExist:
+			dlog.GetLogger().Warn("A configuration parameter for 'storage.azure.legacyrootprefix' or 'storage.azure.trimlegacyrootprefix' was not specified. The azure driver will default to using the standard root prefix: \"/\" ")
+
+		// one parameter does not exist, while the other does
+		case !trimLegacyPrefixExist || !legacyPrefixExist:
+			// nothing to do here
 		}
 	}
 
@@ -645,6 +632,57 @@ func nextProtos(http2Disabled bool) []string {
 	default:
 		return []string{"h2", "http/1.1"}
 	}
+}
+
+// TODO: this method is not used yet but will be part of a follow-up MR for
+// https://gitlab.com/gitlab-org/container-registry/-/issues/890
+func dbPrimaryFromConfig(config *configuration.Configuration) (*datastore.DB, error) {
+	sd := config.Database.Discovery
+	network := "udp"
+	if sd.TCP {
+		network = "tcp"
+	}
+
+	resolver := dns.NewResolver(sd.Nameserver, sd.Port, network)
+
+	// Try to resolve the SRV records for from the nameserver.
+	srvRecords, err := resolver.LookupSRV(sd.PrimaryRecord)
+	if err != nil {
+		return nil, err
+	}
+
+	// At least 1 record will be returned by LookupSRV or an error if none found.
+	// So we can always use the first record from the primary address target.
+	record := srvRecords[0]
+	ips, err := resolver.LookupA(record.Target)
+	if err != nil {
+		return nil, err
+	}
+
+	return datastore.Open(&datastore.DSN{
+		Host:        ips[0].A.String(),
+		Port:        int(record.Port),
+		User:        config.Database.User,
+		Password:    config.Database.Password,
+		DBName:      config.Database.DBName,
+		SSLMode:     config.Database.SSLMode,
+		SSLCert:     config.Database.SSLCert,
+		SSLKey:      config.Database.SSLKey,
+		SSLRootCert: config.Database.SSLRootCert,
+	},
+		datastore.WithLogger(log.WithFields(log.Fields{"database": config.Database.DBName})),
+		datastore.WithLogLevel(config.Log.Level),
+		datastore.WithPoolConfig(&datastore.PoolConfig{
+			// override max open connections for applying migrations
+			// TODO: expose options for MaxIdle and MaxOpen
+			// https://gitlab.com/gitlab-org/container-registry/-/issues/994
+			MaxIdle:     1,
+			MaxOpen:     1,
+			MaxLifetime: config.Database.Pool.MaxLifetime,
+			MaxIdleTime: config.Database.Pool.MaxIdleTime,
+		}),
+		datastore.WithPreparedStatements(config.Database.PreparedStatements),
+	)
 }
 
 func dbFromConfig(config *configuration.Configuration) (*datastore.DB, error) {

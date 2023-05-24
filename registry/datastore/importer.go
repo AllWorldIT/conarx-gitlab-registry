@@ -21,7 +21,6 @@ import (
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/internal/migration"
-	"github.com/docker/distribution/registry/internal/migration/metrics"
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/jackc/pgconn"
 	"github.com/opencontainers/go-digest"
@@ -35,6 +34,8 @@ var (
 	errNegativeTestingDelay = errors.New("negative testing delay")
 	errManifestSkip         = errors.New("the manifest is invalid and its (pre)import should be skipped")
 )
+
+const mtOctetStream = "application/octet-stream"
 
 // Importer populates the registry database with filesystem metadata. This is only meant to be used for an initial
 // one-off migration, starting with an empty database.
@@ -186,7 +187,6 @@ func (imp *Importer) importLayer(ctx context.Context, dbRepo *models.Repository,
 
 func (imp *Importer) importLayers(ctx context.Context, dbRepo *models.Repository, fsRepo distribution.Repository, fsLayers []distribution.Descriptor) ([]*models.Blob, error) {
 	total := len(fsLayers)
-	metrics.LayerCount(total)
 
 	var dbLayers []*models.Blob
 
@@ -212,11 +212,16 @@ func (imp *Importer) importLayers(ctx context.Context, dbRepo *models.Repository
 			return dbLayers, fmt.Errorf("checking for access to blob with digest %s on repository %s: %w", fsLayer.Digest, fsRepo.Named().Name(), err)
 		}
 
-		layer := &models.Blob{MediaType: fsLayer.MediaType, Digest: fsLayer.Digest, Size: fsLayer.Size}
-
+		// Use the generic octet stream media type for common blob storage, but set
+		// the original fs media type on the *models.Blob object populated by importLayer.
+		// This way, when the layers are associated with the manifest, the
+		// manifest-layer associations record the layer media type in the manifest JSON.
+		layer := &models.Blob{MediaType: mtOctetStream, Digest: fsLayer.Digest, Size: fsLayer.Size}
 		if err := imp.importLayer(ctx, dbRepo, layer); err != nil {
 			return dbLayers, err
 		}
+		layer.MediaType = fsLayer.MediaType
+
 		dbLayers = append(dbLayers, layer)
 	}
 
@@ -246,9 +251,15 @@ func (imp *Importer) importManifestV2(ctx context.Context, fsRepo distribution.R
 		return nil, err
 	}
 
+	// Use the generic octet stream media type for common blob storage, but set
+	// the orginal media type on the *models.Blob object populated by CreateOrFind.
+	// This way, when the configuration is stored with the manifest, the media
+	// type will match what is present in the manifest JSON.
+	dbConfigBlob.MediaType = mtOctetStream
 	if err := imp.blobStore.CreateOrFind(ctx, dbConfigBlob); err != nil {
 		return nil, err
 	}
+	dbConfigBlob.MediaType = m.Config().MediaType
 
 	// link configuration to repository
 	if err := imp.repositoryStore.LinkBlob(ctx, dbRepo, dbConfigBlob.Digest); err != nil {
@@ -548,7 +559,6 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 	}
 
 	total := len(fsTags)
-	metrics.TagCount(metrics.ImportTypeFinal, total)
 	semaphore := make(chan struct{}, imp.tagConcurrency)
 	tagResChan := make(chan *tagLookupResponse)
 
@@ -704,8 +714,6 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 	}
 
 	total := len(fsTags)
-	metrics.TagCount(metrics.ImportTypePre, total)
-
 	doneManifests := map[digest.Digest]struct{}{}
 
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": dbRepo.Path, "total": total})
@@ -1055,12 +1063,6 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 	}
 
 	t := time.Since(start).Seconds()
-	l.WithFields(log.Fields{"duration_s": t}).Info("metadata import complete")
-
-	if !imp.dryRun {
-		// reset stores to use the main connection handler instead of the last (committed/rolled back) transaction
-		imp.loadStores(imp.db)
-	}
 
 	if imp.rowCount {
 		counters, err := imp.countRows(ctx)
@@ -1074,6 +1076,8 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		}
 		l = l.WithFields(logCounters)
 	}
+
+	l.WithFields(log.Fields{"duration_s": t}).Info("metadata import complete")
 
 	return err
 }
@@ -1164,7 +1168,7 @@ func (imp *Importer) importBlobs(ctx context.Context) error {
 		}
 
 		if dbBlob == nil {
-			if err := imp.blobStore.Create(ctx, &models.Blob{MediaType: "application/octet-stream", Digest: desc.Digest, Size: desc.Size}); err != nil {
+			if err := imp.blobStore.Create(ctx, &models.Blob{MediaType: mtOctetStream, Digest: desc.Digest, Size: desc.Size}); err != nil {
 				return fmt.Errorf("creating blob in database: %w", err)
 			}
 		}

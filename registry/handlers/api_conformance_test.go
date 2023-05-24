@@ -10,18 +10,14 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"os"
-	"path"
 	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/docker/distribution"
-	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/ocischema"
@@ -31,7 +27,6 @@ import (
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/version"
-
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -117,14 +112,12 @@ func TestAPIConformance(t *testing.T) {
 	type envOpt struct {
 		name                 string
 		opts                 []configOpt
-		migrationEnabled     bool
 		notificationsEnabled bool
-		migrationRoot        string
 	}
 
 	var envOpts = []envOpt{
 		{
-			name: "with filesystem mirroring",
+			name: "all",
 			opts: []configOpt{},
 		},
 		{
@@ -132,44 +125,6 @@ func TestAPIConformance(t *testing.T) {
 			opts:                 []configOpt{},
 			notificationsEnabled: true,
 		},
-	}
-
-	if os.Getenv("REGISTRY_DATABASE_ENABLED") == "true" {
-		envOpts = append(envOpts,
-			envOpt{
-				name: "with filesystem mirroring disabled",
-				opts: []configOpt{disableMirrorFS},
-			},
-			// Testing migration without a seperate root directory will need to remain
-			// disabled until we update the routing logic in phase 2 of the migration
-			// plan, as that will allow us to diferentiate new repositories with
-			// metadata in the old prefix.
-			// https://gitlab.com/gitlab-org/container-registry/-/issues/374#routing-1
-			/*
-				envOpt{
-					name:             "with migration enabled and filesystem mirroring disabled",
-					opts:             []configOpt{disableMirrorFS},
-					migrationEnabled: true,
-				},
-				envOpt{
-					name:             "with migration enabled and filesystem mirroring",
-					opts:             []configOpt{},
-					migrationEnabled: true,
-				},
-			*/
-			envOpt{
-				name:             "with migration enabled migration root directory and filesystem mirroring disabled",
-				opts:             []configOpt{disableMirrorFS},
-				migrationEnabled: true,
-				migrationRoot:    "new/",
-			},
-			envOpt{
-				name:             "with migration enabled migration root directory and filesystem mirroring",
-				opts:             []configOpt{},
-				migrationEnabled: true,
-				migrationRoot:    "new/",
-			},
-		)
 	}
 
 	// Randomize test functions and environments to prevent failures
@@ -192,33 +147,6 @@ func TestAPIConformance(t *testing.T) {
 				rootDir := t.TempDir()
 
 				o.opts = append(o.opts, withFSDriver(rootDir))
-
-				// This is a little hacky, but we need to create the migration root
-				// under the temp test dir to ensure we only write under that directory
-				// for a given test.
-				if o.migrationEnabled {
-					migrationRoot := path.Join(rootDir, o.migrationRoot)
-
-					o.opts = append(o.opts, withMigrationEnabled, withMigrationRootDirectory(migrationRoot))
-				}
-
-				if o.notificationsEnabled {
-					notifCfg := configuration.Notifications{
-						Endpoints: []configuration.Endpoint{
-							{
-								Name:              t.Name(),
-								Disabled:          false,
-								Headers:           http.Header{"test-header": []string{t.Name()}},
-								Timeout:           100 * time.Millisecond,
-								Threshold:         1,
-								Backoff:           100 * time.Millisecond,
-								IgnoredMediaTypes: []string{"application/octet-stream"},
-							},
-						},
-					}
-
-					o.opts = append(o.opts, withNotifications(notifCfg))
-				}
 
 				f(t, o.opts...)
 			})
@@ -2810,34 +2738,6 @@ func tags_Get(t *testing.T, opts ...configOpt) {
 			require.Equal(t, test.expectedLinkHeader, resp.Header.Get("Link"))
 		})
 	}
-
-	// If the database is enabled, disable it and rerun the tests again with the
-	// database to check that the filesystem mirroring worked correctly.
-	// All results should be the full list as the filesytem does not support pagination.
-	if env.config.Database.Enabled && !env.config.Migration.DisableMirrorFS && !env.config.Migration.Enabled {
-		env.config.Database.Enabled = false
-		defer func() { env.config.Database.Enabled = true }()
-
-		for _, test := range tt {
-			t.Run(fmt.Sprintf("%s filesystem mirroring", test.name), func(t *testing.T) {
-				tagsURL, err := env.builder.BuildTagsURL(imageName, test.queryParams)
-				require.NoError(t, err)
-
-				resp, err := http.Get(tagsURL)
-				require.NoError(t, err)
-				defer resp.Body.Close()
-
-				require.Equal(t, http.StatusOK, resp.StatusCode)
-
-				var body tagsAPIResponse
-				dec := json.NewDecoder(resp.Body)
-				err = dec.Decode(&body)
-				require.NoError(t, err)
-
-				require.Equal(t, tagsAPIResponse{Name: imageName.Name(), Tags: sortedTags}, body)
-			})
-		}
-	}
 }
 
 func tags_Get_RepositoryNotFound(t *testing.T, opts ...configOpt) {
@@ -3266,34 +3166,6 @@ func catalog_Get(t *testing.T, opts ...configOpt) {
 			require.Equal(t, test.expectedBody, body)
 			require.Equal(t, test.expectedLinkHeader, resp.Header.Get("Link"))
 		})
-	}
-
-	// If the database is enabled, disable it and rerun the tests again with the
-	// database to check that the filesystem mirroring worked correctly.
-	if env.config.Database.Enabled && !env.config.Migration.DisableMirrorFS && !env.config.Migration.Enabled {
-		env.config.Database.Enabled = false
-		defer func() { env.config.Database.Enabled = true }()
-
-		for _, test := range tt {
-			t.Run(fmt.Sprintf("%s filesystem mirroring", test.name), func(t *testing.T) {
-				catalogURL, err := env.builder.BuildCatalogURL(test.queryParams)
-				require.NoError(t, err)
-
-				resp, err := http.Get(catalogURL)
-				require.NoError(t, err)
-				defer resp.Body.Close()
-
-				require.Equal(t, http.StatusOK, resp.StatusCode)
-
-				var body catalogAPIResponse
-				dec := json.NewDecoder(resp.Body)
-				err = dec.Decode(&body)
-				require.NoError(t, err)
-
-				require.Equal(t, test.expectedBody, body)
-				require.Equal(t, test.expectedLinkHeader, resp.Header.Get("Link"))
-			})
-		}
 	}
 }
 

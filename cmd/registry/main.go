@@ -4,7 +4,6 @@ import (
 	"github.com/docker/distribution/registry"
 	_ "github.com/docker/distribution/registry/auth/silly"
 	_ "github.com/docker/distribution/registry/auth/token"
-	_ "github.com/docker/distribution/registry/proxy"
 	_ "github.com/docker/distribution/registry/storage/driver/azure"
 	_ "github.com/docker/distribution/registry/storage/driver/filesystem"
 	_ "github.com/docker/distribution/registry/storage/driver/gcs"
@@ -15,6 +14,7 @@ import (
 	_ "github.com/docker/distribution/registry/storage/driver/oss"
 	_ "github.com/docker/distribution/registry/storage/driver/s3-aws"
 	_ "github.com/docker/distribution/registry/storage/driver/swift"
+	_ "go.uber.org/automaxprocs"
 )
 
 func main() {

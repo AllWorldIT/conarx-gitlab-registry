@@ -66,9 +66,6 @@ var configStruct = Configuration{
 		DBName:   "registry",
 		SSLMode:  "disable",
 	},
-	Migration: Migration{
-		DisableMirrorFS: true,
-	},
 	Auth: Auth{
 		"silly": Parameters{
 			"realm":   "silly",
@@ -255,7 +252,6 @@ func (suite *ConfigSuite) TestParseSimple(c *C) {
 func (suite *ConfigSuite) TestParseInmemory(c *C) {
 	suite.expectedConfig.Storage = Storage{"inmemory": Parameters{}}
 	suite.expectedConfig.Database = Database{}
-	suite.expectedConfig.Migration = Migration{}
 	suite.expectedConfig.Reporting = Reporting{}
 	suite.expectedConfig.Log.Fields = nil
 
@@ -275,7 +271,6 @@ func (suite *ConfigSuite) TestParseIncomplete(c *C) {
 	suite.expectedConfig.Log.Fields = nil
 	suite.expectedConfig.Storage = Storage{"filesystem": Parameters{"rootdirectory": "/tmp/testroot"}}
 	suite.expectedConfig.Database = Database{}
-	suite.expectedConfig.Migration = Migration{}
 	suite.expectedConfig.Auth = Auth{"silly": Parameters{"realm": "silly"}}
 	suite.expectedConfig.Reporting = Reporting{}
 	suite.expectedConfig.Notifications = Notifications{}
@@ -642,261 +637,6 @@ func (suite *ConfigSuite) TestParseWithDifferentEnvDatabase(c *C) {
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
 	c.Assert(err, IsNil)
 	c.Assert(config, DeepEquals, suite.expectedConfig)
-}
-
-func TestParseMigrationDisabledMirrorFS(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  disablemirrorfs: %s
-`
-	tt := boolParameterTests(false)
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Migration.DisableMirrorFS))
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_DISABLEMIRRORFS", tt, validator)
-}
-
-func TestParseMigrationTagConcurrency(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  enabled: true
-  tagconcurrency: %s
-`
-	tt := []parameterTest{
-		{
-			name:  "sample",
-			value: "10",
-			want:  10,
-		},
-		{
-			name: "default",
-			want: 1,
-		},
-		{
-			name:  "negative",
-			value: "-1",
-			want:  1,
-		},
-	}
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.TagConcurrency)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_TAGCONCURRENCY", tt, validator)
-}
-func TestParseMigrationMaxConcurrentImports(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  enabled: true
-  maxconcurrentimports: %s
-`
-	tt := []parameterTest{
-		{
-			name:  "sample",
-			value: "100",
-			want:  100,
-		},
-		{
-			name: "default",
-			want: 1,
-		},
-		{
-			name:  "negative",
-			value: "-1",
-			want:  1,
-		},
-	}
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.MaxConcurrentImports)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_MAXCONCURRENTIMPORTS", tt, validator)
-}
-
-func TestParseMigrationImportNotification_Enabled(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  importnotification:
-    enabled: %s
-`
-	tt := boolParameterTests(false)
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Migration.ImportNotification.Enabled))
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_IMPORTNOTIFICATION_ENABLED", tt, validator)
-}
-
-func TestParseMigrationImportNotification_URL(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  importnotification:
-    url: %s
-`
-	tt := stringParameterTests("")
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.ImportNotification.URL)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_IMPORTNOTIFICATION_URL", tt, validator)
-}
-
-func TestParseMigrationImportNotification_Timeout(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  importnotification:
-    timeout: %s
-`
-	tt := []parameterTest{
-		{
-			name:  "valid duration",
-			value: "1ms",
-			want:  time.Millisecond,
-		},
-		{
-			name: "empty",
-			want: time.Duration(0),
-		},
-	}
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.ImportNotification.Timeout)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_IMPORTNOTIFICATION_TIMEOUT", tt, validator)
-}
-
-func TestParseMigrationImportNotification_Secret(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  importnotification:
-    secret: %s
-`
-	tt := stringParameterTests("")
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.ImportNotification.Secret)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_IMPORTNOTIFICATION_SECRET", tt, validator)
-}
-
-func TestParseMigrationImportTimeout(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  enabled: true
-  importtimeout: %s
-`
-	tt := []parameterTest{
-		{
-			name:  "sample",
-			value: "20m",
-			want:  time.Minute * 20,
-		},
-		{
-			name: "default",
-			want: time.Minute * 10,
-		},
-		{
-			name:  "negative",
-			value: "-1",
-			want:  time.Minute * 10,
-		},
-	}
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.ImportTimeout)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_IMPORTTIMEOUT", tt, validator)
-}
-
-func TestParseMigrationPreImportTimeout(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  enabled: true
-  preimporttimeout: %s
-`
-	tt := []parameterTest{
-		{
-			name:  "sample",
-			value: "20m",
-			want:  time.Minute * 20,
-		},
-		{
-			name: "default",
-			want: time.Hour * 2,
-		},
-		{
-			name:  "negative",
-			value: "-1",
-			want:  time.Hour * 2,
-		},
-	}
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.PreImportTimeout)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_PREIMPORTTIMEOUT", tt, validator)
-}
-
-func TestParseMigrationTestSlowImport(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  enabled: true
-  testslowimport: %s
-`
-	// TestSlowImport should not be exposed to users. Its value is forced to zero
-	// if the configuration is being parsed, but developers have access internally.
-	tt := []parameterTest{
-		{
-			name:  "sample",
-			value: "20m",
-			want:  time.Duration(0),
-		},
-		{
-			name: "default",
-			want: time.Duration(0),
-		},
-		{
-			name:  "negative",
-			value: "-1",
-			want:  time.Duration(0),
-		},
-	}
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.TestSlowImport)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_TESTSLOWIMPORT", tt, validator)
 }
 
 // TestParseInvalidVersion validates that the parser will fail to parse a newer configuration
@@ -1738,50 +1478,6 @@ reporting:
 	}
 
 	testParameter(t, yml, "REGISTRY_REPORTING_SENTRY_ENVIRONMENT", tt, validator)
-}
-
-func TestParseMigration_Enabled(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  enabled: %s
-`
-	tt := boolParameterTests(false)
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Migration.Enabled))
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_ENABLED", tt, validator)
-}
-
-func TestParseMigration_RootDirectory(t *testing.T) {
-	yml := `
-version: 0.1
-storage: inmemory
-migration:
-  rootdirectory: %s
-`
-
-	tt := []parameterTest{
-		{
-			name:  "empty",
-			value: "",
-			want:  "",
-		},
-		{
-			name:  "custom",
-			value: "migration/root",
-			want:  "migration/root",
-		},
-	}
-
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Migration.RootDirectory)
-	}
-
-	testParameter(t, yml, "REGISTRY_MIGRATION_ROOTDIRECTORY", tt, validator)
 }
 
 func checkStructs(c *C, t reflect.Type, structsChecked map[string]struct{}) {

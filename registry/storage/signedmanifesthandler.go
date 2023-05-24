@@ -57,7 +57,7 @@ func (ms *signedManifestHandler) Unmarshal(ctx context.Context, dgst digest.Dige
 	return &sm, nil
 }
 
-func (ms *signedManifestHandler) Put(ctx context.Context, manifest distribution.Manifest, skipDependencyVerification bool) (digest.Digest, error) {
+func (ms *signedManifestHandler) Put(ctx context.Context, manifest distribution.Manifest) (digest.Digest, error) {
 	log := dcontext.GetLogger(ms.ctx)
 	log.Debug("(*signedManifestHandler).Put")
 
@@ -66,7 +66,7 @@ func (ms *signedManifestHandler) Put(ctx context.Context, manifest distribution.
 		return "", fmt.Errorf("non-schema1 manifest put to signedManifestHandler: %T", manifest)
 	}
 
-	if err := ms.verifyManifest(ms.ctx, *sm, skipDependencyVerification); err != nil {
+	if err := ms.verifyManifest(ms.ctx, *sm); err != nil {
 		return "", err
 	}
 
@@ -86,7 +86,7 @@ func (ms *signedManifestHandler) Put(ctx context.Context, manifest distribution.
 // perspective of the registry. It ensures that the signature is valid for the
 // enclosed payload. As a policy, the registry only tries to store valid
 // content, leaving trust policies of that content up to consumers.
-func (ms *signedManifestHandler) verifyManifest(ctx context.Context, mnfst schema1.SignedManifest, skipDependencyVerification bool) error {
+func (ms *signedManifestHandler) verifyManifest(ctx context.Context, mnfst schema1.SignedManifest) error {
 	var errs distribution.ErrManifestVerification
 
 	if len(mnfst.Name) > reference.NameTotalLengthMax {
@@ -123,17 +123,15 @@ func (ms *signedManifestHandler) verifyManifest(ctx context.Context, mnfst schem
 		}
 	}
 
-	if !skipDependencyVerification {
-		for _, fsLayer := range mnfst.References() {
-			_, err := ms.repository.Blobs(ctx).Stat(ctx, fsLayer.Digest)
-			if err != nil {
-				if err != distribution.ErrBlobUnknown {
-					errs = append(errs, err)
-				}
-
-				// On error here, we always append unknown blob errors.
-				errs = append(errs, distribution.ErrManifestBlobUnknown{Digest: fsLayer.Digest})
+	for _, fsLayer := range mnfst.References() {
+		_, err := ms.repository.Blobs(ctx).Stat(ctx, fsLayer.Digest)
+		if err != nil {
+			if err != distribution.ErrBlobUnknown {
+				errs = append(errs, err)
 			}
+
+			// On error here, we always append unknown blob errors.
+			errs = append(errs, distribution.ErrManifestBlobUnknown{Digest: fsLayer.Digest})
 		}
 	}
 	if len(errs) != 0 {

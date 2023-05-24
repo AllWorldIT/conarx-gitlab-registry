@@ -2,10 +2,12 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/docker/distribution"
 
+	"github.com/docker/distribution/log"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/opencontainers/go-digest"
 )
@@ -38,6 +40,8 @@ func newCachedTagStore(ts *tagStore) *cachedTagStore {
 // ran once per instance of cachedTagStore.
 func (cts *cachedTagStore) Prime(ctx context.Context) error {
 	var retError error
+	l := log.GetLogger(log.WithContext(ctx))
+
 	cts.once.Do(func() {
 		allTags, err := cts.tagStore.All(ctx)
 		if err != nil {
@@ -58,9 +62,15 @@ func (cts *cachedTagStore) Prime(ctx context.Context) error {
 			}
 			tagDigest, err := cts.tagStore.blobStore.readlink(ctx, tagLinkPath)
 			if err != nil {
-				if _, ok := err.(storagedriver.PathNotFoundError); ok {
+				if errors.As(err, &storagedriver.PathNotFoundError{}) {
 					continue
 				}
+				if errors.Is(err, digest.ErrDigestInvalidFormat) {
+					// the tag link is corrupted, just log a warning and skip
+					l.WithError(err).Warn("broken tag link, skipping")
+					continue
+				}
+
 				retError = err
 				return
 			}

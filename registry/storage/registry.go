@@ -95,13 +95,6 @@ func DisableSchema1Pulls(registry *registry) error {
 	return nil
 }
 
-// DisableDigestResumption is a functional option for NewRegistry. It should be
-// used if the registry is acting as a caching proxy.
-func DisableDigestResumption(registry *registry) error {
-	registry.resumableDigestEnabled = false
-	return nil
-}
-
 // ManifestURLsAllowRegexp is a functional option for NewRegistry.
 func ManifestURLsAllowRegexp(r *regexp.Regexp) RegistryOption {
 	return func(registry *registry) error {

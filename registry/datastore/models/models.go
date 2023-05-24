@@ -105,16 +105,26 @@ type Tag struct {
 // Tags is a slice of Tag pointers.
 type Tags []*Tag
 
+// NullDigest is used to represent a digest.Digest that might be empty. Note that the value of Valid does not
+// necessarily guarantee that the value of Digest is/is not a valid digest, only that it is/is not an empty string. So
+// this is similar to sql.NullString, but embeds a digest.Digest instead of a plain string for convenience. It is the
+// responsibility of the code that initializes this struct to guarantee that the value of Digest is a valid digest.
+type NullDigest struct {
+	Digest digest.Digest
+	Valid  bool
+}
+
 // TagDetail is a virtual entity with no parallel on the database schema. This provides a set of attributes obtained
 // by merging a Tag entity with the corresponding Manifest entity and the GET /gitlab/v1/<name>/tags/list API endpoint
 // is its primary use case.
 type TagDetail struct {
-	Name      string
-	Digest    digest.Digest
-	MediaType string
-	Size      int64
-	CreatedAt time.Time
-	UpdatedAt sql.NullTime
+	Name         string
+	Digest       digest.Digest
+	ConfigDigest NullDigest
+	MediaType    string
+	Size         int64
+	CreatedAt    time.Time
+	UpdatedAt    sql.NullTime
 }
 
 type Blob struct {

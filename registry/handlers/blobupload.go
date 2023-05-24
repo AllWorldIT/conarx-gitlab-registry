@@ -13,7 +13,6 @@ import (
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
-	"github.com/docker/distribution/registry/internal/migration"
 	"github.com/docker/distribution/registry/storage"
 	"github.com/gorilla/handlers"
 	"github.com/opencontainers/go-digest"
@@ -260,17 +259,7 @@ func (buh *blobUploadHandler) PutBlobUploadComplete(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Embed migration path in context so that we can see it within the storage package. This is a temporary requirement
-	// to allow for rich upload metrics (in storage.blobWriter.moveBlob) during the gradual upgrade/migration.
-	var cp migration.CodePathVal
-	if buh.useDatabase {
-		cp = migration.NewCodePath
-	} else {
-		cp = migration.OldCodePath
-	}
-	ctx := migration.WithCodePath(buh, cp)
-
-	desc, err := buh.Upload.Commit(ctx, distribution.Descriptor{
+	desc, err := buh.Upload.Commit(buh, distribution.Descriptor{
 		Digest: dgst,
 
 		// TODO(stevvooe): This isn't wildly important yet, but we should

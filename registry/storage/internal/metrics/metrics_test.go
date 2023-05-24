@@ -122,65 +122,41 @@ registry_storage_rate_limit_total 1
 	require.NoError(t, err)
 }
 
-
 func TestBlobUpload(t *testing.T) {
 	restore := mockTimeSince(10 * time.Millisecond)
 	defer restore()
 
-	BlobUpload("old", 512)
-	BlobUpload("new", 1024)
-	BlobUpload("new", 2048)
+	BlobUpload(512)
+	BlobUpload(1024)
+	BlobUpload(2048)
 
 	var expected bytes.Buffer
 	expected.WriteString(`
 # HELP registry_storage_blob_upload_bytes A histogram of new blob upload bytes for the storage backend.
 # TYPE registry_storage_blob_upload_bytes histogram
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="524288"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="1.048576e+06"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="6.7108864e+07"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="1.34217728e+08"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="2.68435456e+08"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="5.36870912e+08"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="1.073741824e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="2.147483648e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="3.221225472e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="4.294967296e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="5.36870912e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="6.442450944e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="7.516192768e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="8.589934592e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="9.663676416e+09"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="1.073741824e+10"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="2.147483648e+10"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="3.221225472e+10"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="4.294967296e+10"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="5.36870912e+10"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="new",le="+Inf"} 2
-registry_storage_blob_upload_bytes_sum{migration_path="new"} 3072
-registry_storage_blob_upload_bytes_count{migration_path="new"} 2
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="524288"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="1.048576e+06"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="6.7108864e+07"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="1.34217728e+08"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="2.68435456e+08"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="5.36870912e+08"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="1.073741824e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="2.147483648e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="3.221225472e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="4.294967296e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="5.36870912e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="6.442450944e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="7.516192768e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="8.589934592e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="9.663676416e+09"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="1.073741824e+10"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="2.147483648e+10"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="3.221225472e+10"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="4.294967296e+10"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="5.36870912e+10"} 1
-registry_storage_blob_upload_bytes_bucket{migration_path="old",le="+Inf"} 1
-registry_storage_blob_upload_bytes_sum{migration_path="old"} 512
-registry_storage_blob_upload_bytes_count{migration_path="old"} 1
+registry_storage_blob_upload_bytes_bucket{le="524288"} 3
+registry_storage_blob_upload_bytes_bucket{le="1.048576e+06"} 3
+registry_storage_blob_upload_bytes_bucket{le="6.7108864e+07"} 3
+registry_storage_blob_upload_bytes_bucket{le="1.34217728e+08"} 3
+registry_storage_blob_upload_bytes_bucket{le="2.68435456e+08"} 3
+registry_storage_blob_upload_bytes_bucket{le="5.36870912e+08"} 3
+registry_storage_blob_upload_bytes_bucket{le="1.073741824e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="2.147483648e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="3.221225472e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="4.294967296e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="5.36870912e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="6.442450944e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="7.516192768e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="8.589934592e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="9.663676416e+09"} 3
+registry_storage_blob_upload_bytes_bucket{le="1.073741824e+10"} 3
+registry_storage_blob_upload_bytes_bucket{le="2.147483648e+10"} 3
+registry_storage_blob_upload_bytes_bucket{le="3.221225472e+10"} 3
+registry_storage_blob_upload_bytes_bucket{le="4.294967296e+10"} 3
+registry_storage_blob_upload_bytes_bucket{le="5.36870912e+10"} 3
+registry_storage_blob_upload_bytes_bucket{le="+Inf"} 3
+registry_storage_blob_upload_bytes_sum 3584
+registry_storage_blob_upload_bytes_count 3
 `)
 	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, blobUploadBytesName)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, blobUploadBytesName)

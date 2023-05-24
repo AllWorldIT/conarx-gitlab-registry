@@ -18,11 +18,10 @@ var (
 )
 
 type baseValidator struct {
-	manifestExister            ManifestExister
-	blobStatter                distribution.BlobStatter
-	refLimit                   int
-	payloadLimit               int
-	skipDependencyVerification bool
+	manifestExister ManifestExister
+	blobStatter     distribution.BlobStatter
+	refLimit        int
+	payloadLimit    int
 }
 
 func (v *baseValidator) exceedsRefLimit(mnfst distribution.Manifest) error {

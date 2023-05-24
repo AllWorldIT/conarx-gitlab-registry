@@ -196,10 +196,6 @@ var ErrorCodeExceedsLimit = errcode.Register(errGroup, errcode.ErrorDescriptor{
 	HTTPStatusCode: http.StatusUnprocessableEntity,
 })
 
-func ErrorCodeImportCannotBeCanceledDetail(repo distribution.Repository, status string) string {
-	return fmt.Sprintf("repository path %s previous migration status: %s", repo.Named().Name(), status)
-}
-
 func ExceedsRenameLimitErrorDetail(validValue int) string {
 	return fmt.Sprintf("the repository must have less than %d sub-repositories:", validValue)
 }
