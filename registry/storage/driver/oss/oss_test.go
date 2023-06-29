@@ -1,4 +1,4 @@
-// +build include_oss
+//go:build include_oss
 
 package oss
 

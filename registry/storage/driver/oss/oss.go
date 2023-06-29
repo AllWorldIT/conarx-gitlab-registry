@@ -8,7 +8,6 @@
 // time for directories (directories are an abstraction for key, value stores)
 //
 //go:build include_oss
-// +build include_oss
 
 package oss
 

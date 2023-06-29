@@ -1,5 +1,4 @@
 //go:build include_gcs
-// +build include_gcs
 
 // Package googlecdn provides a Google CDN middleware wrapper for the Google Cloud Storage (GCS) storage driver.
 package googlecdn

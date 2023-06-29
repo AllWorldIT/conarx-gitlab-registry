@@ -32,7 +32,7 @@ To run PostgreSQL as a container, follow these instructions:
    mkdir -p postgres-registry/data
    ```
 
-3. Run PostgreSQL 12 (the current minimum required version) as a container
+3. Run PostgreSQL 13 (the current minimum required version) as a container
 
    ```shell
    docker run --name postgres-registry -d \
@@ -41,7 +41,7 @@ To run PostgreSQL as a container, follow these instructions:
      -e POSTGRES_PASSWORD=apassword \
      -e POSTGRES_DB=registry_dev \
      -v $PWD/postgres-registry/data:/var/lib/postgres/data \
-     postgres:12-alpine
+     postgres:13-alpine
    ```
 
 4. Verify postgres is running by checking the logs:
@@ -63,7 +63,7 @@ it as the `PGHOST` environment variable.
 ```shell
 docker run -it --rm \
   -e PGHOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' postgres-registry) \
-  -e PGPASSWORD=apassword postgres:12-alpine psql -U registry -d registry_dev
+  -e PGPASSWORD=apassword postgres:13-alpine psql -U registry -d registry_dev
 ```
 
 ### Registry database and migrations

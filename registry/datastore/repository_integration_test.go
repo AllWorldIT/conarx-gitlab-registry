@@ -1,5 +1,4 @@
 //go:build integration
-// +build integration
 
 package datastore_test
 
@@ -1045,7 +1044,7 @@ func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			c, err := s.TagsCountAfterName(suite.ctx, r, test.lastName)
+			c, err := s.TagsCountAfterName(suite.ctx, r, test.lastName, "")
 			require.NoError(t, err)
 			require.Equal(t, test.expectedCount, c)
 		})
@@ -1482,13 +1481,13 @@ func TestRepositoryStore_ExistsBlobByDigest_NotFound(t *testing.T) {
 //
 // - `Ma` is tagged, so we need to account for the size of `La` and `Lb`. The repository size so far is `1*La + 1*Lb`;
 //
-// - `Mb` is tagged, so we need to account for the size of `Lc`. `La` and `Lb` were already accounted for once.
-//   Therefore, the repository size so far is `1*La + 1*Lb + 1*Lc`;
+//   - `Mb` is tagged, so we need to account for the size of `Lc`. `La` and `Lb` were already accounted for once.
+//     Therefore, the repository size so far is `1*La + 1*Lb + 1*Lc`;
 //
 // - `Mc` is not tagged, so `Ld` should not be accounted for, and `Lb` was already. The size formula remains unchanged;
 //
-// - `La` is tagged and references `Ma` and `Md`. The `Ma` layers were already accounted, so we should only sum the size
-//   of `Le` referenced by `Md`. The repository size is now `1*La + 1*Lb + 1*Lc + 1*Le`;
+//   - `La` is tagged and references `Ma` and `Md`. The `Ma` layers were already accounted, so we should only sum the size
+//     of `Le` referenced by `Md`. The repository size is now `1*La + 1*Lb + 1*Lc + 1*Le`;
 //
 // - `Lb` is tagged and references `Me` and `La`. `La` was already accounted for, so we ignore it. `Me` is "new", and
 // references `Lf` and `Lg`, which we haven't seen anywhere else. The final deduplicated repository size is threfore
@@ -1664,13 +1663,13 @@ func TestRepositoryStore_Size_WithCentralRepositoryCache(t *testing.T) {
 //
 // - `Ma` is tagged, so we need to account for the size of `La` and `Lb`. The repository size so far is `1*La + 1*Lb`;
 //
-// - `Mb` is tagged, so we need to account for the size of `Lc`. `La` and `Lb` were already accounted for once.
-//   Therefore, the repository size so far is `1*La + 1*Lb + 1*Lc`;
+//   - `Mb` is tagged, so we need to account for the size of `Lc`. `La` and `Lb` were already accounted for once.
+//     Therefore, the repository size so far is `1*La + 1*Lb + 1*Lc`;
 //
 // - `Mc` is not tagged, so `Ld` should not be accounted for, and `Lb` was already. The size formula remains unchanged;
 //
-// - `MLa` is tagged and references `Ma` and `Md`. The `Ma` layers were already accounted, so we should only sum the size
-//   of `Le` referenced by `Md`. The repository size is now `1*La + 1*Lb + 1*Lc + 1*Le`;
+//   - `MLa` is tagged and references `Ma` and `Md`. The `Ma` layers were already accounted, so we should only sum the size
+//     of `Le` referenced by `Md`. The repository size is now `1*La + 1*Lb + 1*Lc + 1*Le`;
 //
 // - `MLb` is tagged and references `Me` and `La`. `La` was already accounted for, so we ignore it. `Me` is "new", and
 // references `Lf` and `Lg`, which we haven't seen anywhere else. The repository size is now
@@ -2484,7 +2483,7 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			rr, err := s.TagsDetailPaginated(suite.ctx, r, test.limit, test.lastName)
+			rr, err := s.TagsDetailPaginated(suite.ctx, r, test.limit, test.lastName, "")
 			// reset created_at and updated_at attributes for reproducible comparisons
 			for _, r := range rr {
 				r.CreatedAt = time.Time{}
@@ -2503,7 +2502,7 @@ func TestRepositoryStore_TagsDetailPaginated_None(t *testing.T) {
 	r := &models.Repository{NamespaceID: 1, ID: 1}
 
 	s := datastore.NewRepositoryStore(suite.db)
-	tt, err := s.TagsDetailPaginated(suite.ctx, r, 100, "")
+	tt, err := s.TagsDetailPaginated(suite.ctx, r, 100, "", "")
 	require.NoError(t, err)
 	require.Empty(t, tt)
 }

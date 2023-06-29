@@ -104,7 +104,7 @@ Please note that this is not appropriate for large and/or partitioned tables, as
 ### Create Database
 
 Please make sure to create a `registry_dev` and `registry_test` (naming
-suggestion) database in your development PostgreSQL 12 instance before running
+suggestion) database in your development PostgreSQL 13 instance before running
 migrations.
  
 #### Example
@@ -176,7 +176,7 @@ Use "registry database migrate [command] --help" for more information about a co
 
 ### Pre-Requisites
 
-* A PostgreSQL 12 database for the registry must already exist;
+* A PostgreSQL 13 database for the registry must already exist;
 * The database should be configured under the `database` section of the registry
   `config.yml` configuration file. Please see the [configuration
   docs](https://gitlab.com/gitlab-org/container-registry/-/blob/database/docs/configuration.md#database)

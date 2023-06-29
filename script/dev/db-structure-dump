@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# db-structure-dump - A script to dump the database DDL as SQL. Requires pg_dump v12 and pg_format v5.
+# db-structure-dump - A script to dump the database DDL as SQL. Requires pg_dump v13 and pg_format v5.
 
 set -eo pipefail
 
 # Constants
 DB_DIR=./registry/datastore/migrations
 FILE_PATH=$DB_DIR/structure.sql
-PG_CLIENT_REQUIRED_MAJOR_VERSION="12"
+PG_CLIENT_REQUIRED_MAJOR_VERSION="${PG_VERSION:-13}"
 PG_FORMAT_REQUIRED_MAJOR_VERSION="5"
 DB_HOST=localhost
 DB_USER=postgres

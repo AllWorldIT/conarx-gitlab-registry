@@ -63,7 +63,7 @@ func dbGetTags(ctx context.Context, db datastore.Queryer, repoPath string, n int
 
 	var moreEntries bool
 	if len(tt) > 0 {
-		n, err := rStore.TagsCountAfterName(ctx, r, tt[len(tt)-1].Name)
+		n, err := rStore.TagsCountAfterName(ctx, r, tt[len(tt)-1].Name, "")
 		if err != nil {
 			return nil, false, err
 		}

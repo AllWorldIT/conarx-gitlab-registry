@@ -108,6 +108,7 @@ mocks:
 
 .schema-migrations:
   needs: ['modules:download']
+  extends: .go-pg-version-matrix
   variables:
     FF_NETWORK_PER_BUILD: 1
     POSTGRES_PASSWORD: "secret"
@@ -121,7 +122,7 @@ mocks:
     REGISTRY_DATABASE_DBNAME: "registry"
     REGISTRY_DATABASE_SSLMODE: "disable"
   services:
-    - name: postgres:12-alpine
+    - name: postgres:${PG_VERSION}-alpine
       alias: "db"
   before_script:
     - "echo 'version: 0.1' > config.yml"
@@ -148,15 +149,20 @@ database:schema-migrations:status:
 database:structure-sql:
   extends: .schema-migrations
   stage: validate
+  # Overrides `parallel` from .schema-migrations so that we only test against the default PG version as different
+  # pg_dump versions may produce slightly different outputs, so we settle with the default to match the output produced
+  # locally by engineers when executing `make db-structure-dump`.
+  parallel:
   variables:
     PG_FORMATTER_VERSION: "5.0"
+    PG_VERSION: $PG_CURR_VERSION
   script:
     # Install build/make deps
     - apt-get update && apt-get -y install ca-certificates gnupg lsb-release
     # Install Postgres client
     - wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
     - sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-    - apt-get update && apt-get -y install postgresql-client-12
+    - apt-get update && apt-get -y install postgresql-client-$PG_VERSION
     # Install pgFormatter
     - wget -qO- https://github.com/darold/pgFormatter/archive/refs/tags/v$PG_FORMATTER_VERSION.tar.gz | tar xz
     - cd pgFormatter-$PG_FORMATTER_VERSION

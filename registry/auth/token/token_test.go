@@ -18,6 +18,7 @@ import (
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/libtrust"
+	"github.com/stretchr/testify/require"
 )
 
 func makeRootKeys(numKeys int) ([]libtrust.PrivateKey, error) {
@@ -308,10 +309,10 @@ func writeTempRootCerts(rootKeys []libtrust.PrivateKey) (filename string, err er
 // TestAccessController tests complete integration of the token auth package.
 // It starts by mocking the options for a token auth accessController which
 // it creates. It then tries a few mock requests:
-// 		- don't supply a token; should error with challenge
-//		- supply an invalid token; should error with challenge
-// 		- supply a token with insufficient access; should error with challenge
-//		- supply a valid token; should not error
+//   - don't supply a token; should error with challenge
+//   - supply an invalid token; should error with challenge
+//   - supply a token with insufficient access; should error with challenge
+//   - supply a valid token; should not error
 func TestAccessController(t *testing.T) {
 	// Make 2 keys; only the first is to be a trusted root key.
 	rootKeys, err := makeRootKeys(2)
@@ -535,4 +536,89 @@ func TestNewAccessControllerPemBlock(t *testing.T) {
 	if len(ac.(*accessController).rootCerts.Subjects()) != 2 {
 		t.Fatal("accessController has the wrong number of certificates")
 	}
+}
+
+// TestAccessController_Meta tests that the meta data is correctly unmarshalled
+// from the JWT into the context (if it exist) and that the meta data is retreivable from the context.
+func TestAccessController_Meta(t *testing.T) {
+	req, err := http.NewRequest("GET", "https://registry.gitlab.com/v2/myrepo/", nil)
+	require.NoError(t, err)
+	ctx := dcontext.WithRequest(dcontext.Background(), req)
+
+	access := auth.Access{
+		Resource: auth.Resource{
+			Type: "repository",
+			Name: "myrepo",
+		},
+		Action: "pull",
+	}
+
+	tests := []struct {
+		name                 string
+		meta                 []*Meta
+		expectedProjectPaths []string
+	}{
+		{"no meta object", []*Meta{nil}, nil},
+		{"one meta object with project", []*Meta{{"foo/bar"}}, []string{"foo/bar"}},
+		{"multiple meta objects with projects", []*Meta{{"foo/bar"}, {"bar/foo"}}, []string{"foo/bar", "bar/foo"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var actions []*ResourceActions
+			for _, meta := range test.meta {
+				actions = append(actions, &ResourceActions{
+					Type:    access.Type,
+					Name:    access.Name,
+					Meta:    meta,
+					Actions: []string{access.Action},
+				})
+			}
+
+			authCtx := newTestAuthContext(t, ctx, req, actions, access)
+
+			// verify the meta value is correct
+			actualProjectPaths, _ := authCtx.Value(auth.ResourceProjectPathsKey).([]string)
+			require.ElementsMatch(t, test.expectedProjectPaths, actualProjectPaths)
+		})
+	}
+}
+
+// newTestAuthContext creates a valid JWT token with the requested access controls and passes it through the accesscontoller's `Authorized`
+// in order to : assert the JWT is still valid (with a meta field embedded in it) AND to return a context with a possibly embedded meta object.
+func newTestAuthContext(t *testing.T, ctx context.Context, req *http.Request, actions []*ResourceActions, access ...auth.Access) context.Context {
+	t.Helper()
+
+	rootKeys, err := makeRootKeys(1)
+	require.NoError(t, err)
+
+	rootCertBundleFilename, err := writeTempRootCerts(rootKeys)
+	require.NoError(t, err)
+	t.Cleanup(func() { os.Remove(rootCertBundleFilename) })
+
+	testRealm := "https://gitlab.com/jwt/auth"
+	testIssuer := "omnibus-gitlab-issuer"
+	testService := "container_registry"
+
+	options := map[string]interface{}{
+		"realm":          testRealm,
+		"issuer":         testIssuer,
+		"service":        testService,
+		"rootcertbundle": rootCertBundleFilename,
+		"autoredirect":   false,
+	}
+
+	accessController, err := newAccessController(options)
+	require.NoError(t, err)
+
+	token, err := makeTestToken(
+		testIssuer, testService, actions, rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
+	)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.compactRaw()))
+
+	authCtx, err := accessController.Authorized(ctx, access...)
+	require.NoError(t, err)
+
+	return authCtx
 }

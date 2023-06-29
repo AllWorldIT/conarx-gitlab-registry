@@ -989,6 +989,10 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 
 		// find and associate distributable manifest layer blobs
 		for _, reqLayer := range mfst.DistributableLayers() {
+			// Monitor for unknown layer media types before implementing
+			// https://gitlab.com/gitlab-org/container-registry/-/issues/990
+			logUnknownLayerMediaType(imh, reqLayer.MediaType)
+
 			dbBlob, err := dbFindRepositoryBlob(imh.Context, rStore, reqLayer, dbRepo.Path)
 			if err != nil {
 				return err
@@ -1000,6 +1004,25 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 	}
 
 	return nil
+}
+
+func logUnknownLayerMediaType(imh *manifestHandler, mt string) {
+	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{"media_type": mt})
+	mtStore := datastore.NewMediaTypeStore(imh.App.db)
+
+	exists, err := mtStore.Exists(imh.Context, mt)
+	if err != nil {
+		// Log error only. We should not introduce a possible failure in manifest
+		// uploads here since we are setting up temporary monitoring.
+		l.Error("error checking for existence of media type: %v", err)
+		return
+	}
+
+	if exists {
+		return
+	}
+
+	l.Warn("unknown layer media type")
 }
 
 // dbFindRepositoryBlob finds a blob which is linked to the repository.

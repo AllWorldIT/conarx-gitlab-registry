@@ -1,0 +1,48 @@
+releases:
+  charts:
+    project_id: 3828396
+    ref: master
+  cng:
+    project_id: 4359271
+    ref: master
+  omnibus:
+    project_id: 20699
+    ref: master
+  gdk:
+    project_id: 74823
+    branch_name: bump-registry-version-gdk
+    commit_message: Bump Container Registry version
+    ref: main
+    mr_title: Bump Container Registry version
+    paths:
+      - support/docker-registry
+      - lib/gdk/config.rb
+      - spec/lib/gdk/config_spec.rb
+      - gdk.example.yml
+  k8s_gprd:
+    project_id: 12547113
+    branch_name: bump-registry-version-gprd
+    commit_message: Bump Container Registry version (gprd)
+    ref: master
+    mr_title: Bump Container Registry (gprd)
+    paths:
+      - bases/gprd.yaml
+  k8s_gstg_pre:
+    project_id: 12547113
+    branch_name: bump-registry-version-gstg-pre
+    commit_message: Bump Container Registry version (gstg/pre)
+    ref: master
+    mr_title: Bump Container Registry (gstg/pre)
+    paths:
+      - bases/pre.yaml
+      - bases/gstg.yaml     
+  k8s_gprd_cny:
+    project_id: 12547113
+    branch_name: bump-registry-version-gprd-cny
+    commit_message: Bump Container Registry version (gprd-cny)
+    ref: master
+    mr_title: Bump Container Registry (gprd-cny)
+    paths:
+      - bases/gprd.yaml
+
+

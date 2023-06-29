@@ -58,7 +58,7 @@ type blobHandler struct {
 
 func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string, dgst digest.Digest) error {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "digest": dgst})
-	l.Debug("finding blob in database")
+	l.Debug("finding repository blob link in database")
 
 	rStore := datastore.NewRepositoryStore(db)
 	r, err := rStore.FindByPath(ctx, repoPath)
@@ -66,7 +66,9 @@ func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string
 		return err
 	}
 	if r == nil {
-		return v2.ErrorCodeBlobUnknown.WithDetail(dgst)
+		err := v2.ErrorCodeBlobUnknown.WithDetail(dgst)
+		l.WithError(err).Debug("no repository found in database checking for repository blob link")
+		return err
 	}
 
 	found, err := rStore.ExistsBlob(ctx, r, dgst)
@@ -75,7 +77,9 @@ func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string
 	}
 
 	if !found {
-		return v2.ErrorCodeBlobUnknown.WithDetail(dgst)
+		err := v2.ErrorCodeBlobUnknown.WithDetail(dgst)
+		l.WithError(err).Debug("repository blob link not found in database")
+		return err
 	}
 
 	return nil

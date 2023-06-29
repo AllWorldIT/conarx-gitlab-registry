@@ -24,6 +24,12 @@ import (
 // This file is intended to test the HTTP API tolerance and behaviour under scenarios that are prone to race conditions
 // due to online GC.
 
+// maxReviewAfterJitter is the maximum jitter in seconds that the online GC triggers will use to set a task's review
+// due date (`review_after` column) whenever they are created or updated. The maximum jitter used by the database triggers
+// when scheduling GC reviews in all GC review-table's `review_after` column is set to < 61 seconds in this migration:
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/registry/datastore/migrations/20220729143447_update_gc_review_after_function.go
+const maxReviewAfterJitter = 61 * time.Second
+
 func findAndLockGCManifestTask(t *testing.T, env *testEnv, repoName reference.Named, dgst digest.Digest) (*models.GCManifestTask, datastore.Transactor) {
 	tx, err := env.db.BeginTx(env.ctx, nil)
 	require.NoError(t, err)
@@ -38,7 +44,7 @@ func findAndLockGCManifestTask(t *testing.T, env *testEnv, repoName reference.Na
 	require.NotNil(t, m)
 
 	mts := datastore.NewGCManifestTaskStore(tx)
-	mt, err := mts.FindAndLockBefore(env.ctx, r.NamespaceID, r.ID, m.ID, time.Now())
+	mt, err := mts.FindAndLockBefore(env.ctx, r.NamespaceID, r.ID, m.ID, time.Now().Add(maxReviewAfterJitter))
 	require.NoError(t, err)
 	require.NotNil(t, mt)
 

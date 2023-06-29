@@ -118,7 +118,7 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 
 // Use the original URL from the request to create a new URL for
 // the link header
-func createLinkEntry(origURL string, maxEntries int, lastEntry string) (string, error) {
+func createLinkEntry(origURL string, maxEntries int, lastEntry string, extra ...url.Values) (string, error) {
 	calledURL, err := url.Parse(origURL)
 	if err != nil {
 		return "", err
@@ -127,6 +127,12 @@ func createLinkEntry(origURL string, maxEntries int, lastEntry string) (string, 
 	v := url.Values{}
 	v.Add("n", strconv.Itoa(maxEntries))
 	v.Add("last", lastEntry)
+
+	for _, val := range extra {
+		for k, vv := range val {
+			v[k] = append(v[k], vv...)
+		}
+	}
 
 	calledURL.RawQuery = v.Encode()
 

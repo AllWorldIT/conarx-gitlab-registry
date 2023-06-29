@@ -8,28 +8,27 @@
 // An implementation registers its access controller by name with a constructor
 // which accepts an options map for configuring the access controller.
 //
-//		options := map[string]interface{}{"sillySecret": "whysosilly?"}
-// 		accessController, _ := auth.GetAccessController("silly", options)
+//	options := map[string]interface{}{"sillySecret": "whysosilly?"}
+//	accessController, _ := auth.GetAccessController("silly", options)
 //
 // This `accessController` can then be used in a request handler like so:
 //
-// 		func updateOrder(w http.ResponseWriter, r *http.Request) {
-//			orderNumber := r.FormValue("orderNumber")
-//			resource := auth.Resource{Type: "customerOrder", Name: orderNumber}
-// 			access := auth.Access{Resource: resource, Action: "update"}
+//	func updateOrder(w http.ResponseWriter, r *http.Request) {
+//		orderNumber := r.FormValue("orderNumber")
+//		resource := auth.Resource{Type: "customerOrder", Name: orderNumber}
+//		access := auth.Access{Resource: resource, Action: "update"}
 //
-// 			if ctx, err := accessController.Authorized(ctx, access); err != nil {
-//				if challenge, ok := err.(auth.Challenge) {
-//					// Let the challenge write the response.
-//					challenge.SetHeaders(r, w)
-//					w.WriteHeader(http.StatusUnauthorized)
-//					return
-//				} else {
-//					// Some other error.
-//				}
+//		if ctx, err := accessController.Authorized(ctx, access); err != nil {
+//			if challenge, ok := err.(auth.Challenge) {
+//				// Let the challenge write the response.
+//				challenge.SetHeaders(r, w)
+//				w.WriteHeader(http.StatusUnauthorized)
+//				return
+//			} else {
+//				// Some other error.
 //			}
-// 		}
-//
+//		}
+//	}
 package auth
 
 import (
@@ -50,6 +49,9 @@ const (
 	// UserTypeKey is used to get the user type from
 	// a user context
 	UserTypeKey = "auth.user.type"
+
+	// ResourceProjectPathsKey is used to get the project paths present in a context
+	ResourceProjectPathsKey = "auth.project_paths"
 )
 
 var (
@@ -67,11 +69,12 @@ type UserInfo struct {
 	Type string
 }
 
-// Resource describes a resource by type and name.
+// Resource describes a resource by type, name and project path.
 type Resource struct {
-	Type  string
-	Class string
-	Name  string
+	Type        string
+	Class       string
+	Name        string
+	ProjectPath string
 }
 
 // Access describes a specific action that is
@@ -157,8 +160,20 @@ type resourceContext struct {
 type resourceKey struct{}
 
 func (rc resourceContext) Value(key interface{}) interface{} {
-	if key == (resourceKey{}) {
+	switch key {
+	case resourceKey{}:
 		return rc.resources
+	// for most cases, there will only be one resource element, as most requests only target one repository.
+	// cross-repository blob mount requests are the exception, as we always have two repositories (and hence 2 resources with 2 project_paths),
+	// a source (for which a user needs pull permissions) and a target (for which a user needs pull and push permissions).
+	case ResourceProjectPathsKey:
+		var projectPaths []string
+		for _, resource := range rc.resources {
+			if resource.ProjectPath != "" {
+				projectPaths = append(projectPaths, resource.ProjectPath)
+			}
+		}
+		return projectPaths
 	}
 
 	return rc.Context.Value(key)

@@ -1,4 +1,4 @@
-// +build !noresumabledigest
+//go:build !noresumabledigest
 
 package storage
 

@@ -42,7 +42,7 @@ type RepositoryReader interface {
 	Manifests(ctx context.Context, r *models.Repository) (models.Manifests, error)
 	Tags(ctx context.Context, r *models.Repository) (models.Tags, error)
 	TagsPaginated(ctx context.Context, r *models.Repository, limit int, lastName string) (models.Tags, error)
-	TagsCountAfterName(ctx context.Context, r *models.Repository, lastName string) (int, error)
+	TagsCountAfterName(ctx context.Context, r *models.Repository, lastName, nameFilter string) (int, error)
 	ManifestTags(ctx context.Context, r *models.Repository, m *models.Manifest) (models.Tags, error)
 	FindManifestByDigest(ctx context.Context, r *models.Repository, d digest.Digest) (*models.Manifest, error)
 	FindManifestByTagName(ctx context.Context, r *models.Repository, tagName string) (*models.Manifest, error)
@@ -53,7 +53,7 @@ type RepositoryReader interface {
 	Size(ctx context.Context, r *models.Repository) (int64, error)
 	SizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
 	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
-	TagsDetailPaginated(ctx context.Context, r *models.Repository, limit int, lastName string) ([]*models.TagDetail, error)
+	TagsDetailPaginated(ctx context.Context, r *models.Repository, limit int, lastName, nameFilter string) ([]*models.TagDetail, error)
 	FindPagingatedRepositoriesForPath(ctx context.Context, r *models.Repository, lastPath string, limit int) (models.Repositories, error)
 }
 
@@ -718,11 +718,23 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 	return tt, nil
 }
 
+// sqlPartialMatch builds a string that can be passed as value for a SQL `LIKE` expression. Besides surrounding the
+// input value with `%` wildcard characters for a partial match, this function also escapes the `_` and `%`
+// metacharacters supported in Postgres `LIKE` expressions.
+// See https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-LIKE for more details.
+func sqlPartialMatch(value string) string {
+	value = strings.ReplaceAll(value, "_", `\_`)
+	value = strings.ReplaceAll(value, "%", `\%`)
+
+	return fmt.Sprintf("%%%s%%", value)
+}
+
 // TagsDetailPaginated finds up to limit tags of a given repository with name lexicographically after lastName. This is
 // used exclusively for the GET /gitlab/v1/<name>/tags/list API, where pagination is done with a marker (lastName).
 // Even if there is no tag with a name of lastName, the returned tags will always be those with a path lexicographically
-// after lastName. Finally, tags are lexicographically sorted.
-func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, limit int, lastName string) ([]*models.TagDetail, error) {
+// after lastName. Tags are lexicographically sorted. Optionally, it is possible to pass a string to be used as a
+// partial match filter for tag names. The search is not filtered if this value is an empty string.
+func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, limit int, lastName, nameFilter string) ([]*models.TagDetail, error) {
 	defer metrics.InstrumentQuery("repository_tags_detail_paginated")()
 	q := `SELECT
 			t.name,
@@ -741,12 +753,13 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 		WHERE
 			t.top_level_namespace_id = $1
 			AND t.repository_id = $2
-			AND t.name > $3
+		  	AND t.name LIKE $3
+			AND t.name > $4
 		ORDER BY
 			t.name
-		LIMIT $4`
+		LIMIT $5`
 
-	rows, err := s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, lastName, limit)
+	rows, err := s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sqlPartialMatch(nameFilter), lastName, limit)
 	if err != nil {
 		return nil, fmt.Errorf("finding tags detail with pagination: %w", err)
 	}
@@ -758,8 +771,9 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 // exclusively for the GET /v2/<name>/tags/list API route, where pagination is done with a marker (lastName). Even if
 // there is no tag with a name of lastName, the counted tags will always be those with a path lexicographically after
 // lastName. This constraint exists to preserve the existing API behavior (when doing a filesystem walk based
-// pagination).
-func (s *repositoryStore) TagsCountAfterName(ctx context.Context, r *models.Repository, lastName string) (int, error) {
+// pagination). Optionally, it is possible to pass a string to be used as a partial match filter for tag names. The
+// search is not filtered if this value is an empty string.
+func (s *repositoryStore) TagsCountAfterName(ctx context.Context, r *models.Repository, lastName, nameFilter string) (int, error) {
 	defer metrics.InstrumentQuery("repository_tags_count_after_name")()
 	q := `SELECT
 			COUNT(id)
@@ -768,10 +782,11 @@ func (s *repositoryStore) TagsCountAfterName(ctx context.Context, r *models.Repo
 		WHERE
 			top_level_namespace_id = $1
 			AND repository_id = $2
-			AND name > $3`
+			AND name LIKE $3
+			AND name > $4`
 
 	var count int
-	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, lastName).Scan(&count); err != nil {
+	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, sqlPartialMatch(nameFilter), lastName).Scan(&count); err != nil {
 		return count, fmt.Errorf("counting tags lexicographically after name: %w", err)
 	}
 

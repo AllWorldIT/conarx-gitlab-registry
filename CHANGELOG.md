@@ -1,3 +1,47 @@
+# [3.76.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.75.0-gitlab...v3.76.0-gitlab) (2023-06-06)
+
+
+### Features
+
+* **api/gitlab/v1:** filter tags by name on List Repository Tags endpoint ([094db66](https://gitlab.com/gitlab-org/container-registry/commit/094db66344e47e06dd039cb3e3cb5ac856c9a244))
+* **auth:** parse and log JWT meta project path ([0fed8be](https://gitlab.com/gitlab-org/container-registry/commit/0fed8be2cddb836e38fffe91138bf032c11fa973))
+
+# [3.75.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.74.0-gitlab...v3.75.0-gitlab) (2023-05-24)
+
+
+### Bug Fixes
+
+* **handlers:** add debug messages for repository blob link checking ([42f6bba](https://gitlab.com/gitlab-org/container-registry/commit/42f6bba50c179134a5b9c87f4bad66ce44e0fc22))
+* **storage:** prevent panic in inmemory driver ([6d2935d](https://gitlab.com/gitlab-org/container-registry/commit/6d2935da4c05fa33d981bfcbb51586c3f03648f4))
+
+
+### Features
+
+* **api/gitlab/v1:** revert filter tags by name on List Repository Tags endpoint ([1d79415](https://gitlab.com/gitlab-org/container-registry/commit/1d79415b01813c271109daf524efa7abdac13fde))
+* **notification:** revert add blob download meta object to notifications ([1317de1](https://gitlab.com/gitlab-org/container-registry/commit/1317de1c3965d18a6e343d84201a868ac637a58a))
+
+# [3.74.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.73.1-gitlab...v3.74.0-gitlab) (2023-05-18)
+
+
+### Features
+
+* **api/gitlab/v1:** filter tags by name on List Repository Tags endpoint ([e7c6630](https://gitlab.com/gitlab-org/container-registry/commit/e7c66304bd3a0fa555c3f107c5460a8ae52928ef))
+* **notification:** add blob download meta object to notifications ([5d7c130](https://gitlab.com/gitlab-org/container-registry/commit/5d7c130287bab4789eb073c93a53303988729cbc))
+
+## [3.73.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.73.0-gitlab...v3.73.1-gitlab) (2023-05-16)
+
+
+### Bug Fixes
+
+* **handlers:** disable filesystem layer link metadata if the database is enabled ([aae69ab](https://gitlab.com/gitlab-org/container-registry/commit/aae69ab826d412dd0785d1f5c0175afd4a1188b5))
+
+# [3.73.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.72.0-gitlab...v3.73.0-gitlab) (2023-05-08)
+
+
+### Features
+
+* **handlers:** log unknown layer media types ([e53aee9](https://gitlab.com/gitlab-org/container-registry/commit/e53aee93c459ea7fb4c79b5fa293cc0b31237ba8))
+
 # [3.72.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.71.0-gitlab...v3.72.0-gitlab) (2023-05-02)
 
 

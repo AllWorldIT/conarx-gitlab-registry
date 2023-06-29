@@ -68,6 +68,7 @@ const (
 	nQueryParamValueMax                    = 1000
 	lastQueryParamKey                      = "last"
 	dryRunParamKey                         = "dry_run"
+	tagNameQueryParamKey                   = "name"
 	defaultDryRunRenameOperationTimeout    = 5 * time.Second
 	maxRepositoriesToRename                = 1000
 )
@@ -82,6 +83,11 @@ var (
 
 	lastTagQueryParamPattern  = reference.TagRegexp
 	lastPathQueryParamPattern = reference.NameRegexp
+
+	// tagNameQueryParamPattern is a modified version of the OCI Distribution tag name regexp pattern (described in
+	// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests) to allow the tag name
+	// filter string to start with `.` and `-` characters (not just `_`). This is required to support a partial match.
+	tagNameQueryParamPattern = regexp.MustCompile("^[a-zA-Z0-9._-]{1,128}$")
 )
 
 func isQueryParamValueValid(value string, validValues []string) bool {
@@ -291,6 +297,10 @@ type RepositoryTagResponse struct {
 	UpdatedAt    string `json:"updated_at,omitempty"`
 }
 
+func tagNameQueryParamValue(r *http.Request) string {
+	return r.URL.Query().Get(tagNameQueryParamKey)
+}
+
 // GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution tags list API. `n` is capped
 // to 100 entries by default.
@@ -324,6 +334,15 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	nameFilter := tagNameQueryParamValue(r)
+	if nameFilter != "" {
+		if !queryParamValueMatchesPattern(nameFilter, tagNameQueryParamPattern) {
+			detail := v1.InvalidQueryParamValuePatternErrorDetail(tagNameQueryParamKey, tagNameQueryParamPattern)
+			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
+			return
+		}
+	}
+
 	path := h.Repository.Named().Name()
 	rStore := datastore.NewRepositoryStore(h.db)
 	repo, err := rStore.FindByPath(h.Context, path)
@@ -336,7 +355,7 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	tagsList, err := rStore.TagsDetailPaginated(h.Context, repo, maxEntries, lastEntry)
+	tagsList, err := rStore.TagsDetailPaginated(h.Context, repo, maxEntries, lastEntry, nameFilter)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
@@ -344,14 +363,19 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 
 	// Add a link header if there are more entries to retrieve
 	if len(tagsList) > 0 {
-		n, err := rStore.TagsCountAfterName(h.Context, repo, tagsList[len(tagsList)-1].Name)
+		n, err := rStore.TagsCountAfterName(h.Context, repo, tagsList[len(tagsList)-1].Name, nameFilter)
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
 		}
 		if n > 0 {
 			lastEntry = tagsList[len(tagsList)-1].Name
-			urlStr, err := createLinkEntry(r.URL.String(), maxEntries, lastEntry)
+			extra := url.Values{}
+			if nameFilter != "" {
+				extra.Add(tagNameQueryParamKey, nameFilter)
+			}
+
+			urlStr, err := createLinkEntry(r.URL.String(), maxEntries, lastEntry, extra)
 			if err != nil {
 				h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 				return

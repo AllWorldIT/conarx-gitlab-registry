@@ -15,6 +15,27 @@ import (
 	"gitlab.com/gitlab-org/labkit/correlation"
 )
 
+const (
+	methodKey        = "method"
+	hostKey          = "host"
+	uriKey           = "uri"
+	refererKey       = "referer"
+	userAgentKey     = "user_agent"
+	remoteAddressKey = "remote_addr"
+	contentTypeKey   = "content_type"
+)
+
+// LogRequestFields is a map of log fields to thier associated context keys
+var LogRequestFields = map[string]string{
+	methodKey:        "http.request.method",
+	hostKey:          "http.request.host",
+	uriKey:           "http.request.uri",
+	refererKey:       "http.request.referer",
+	userAgentKey:     "http.request.useragent",
+	remoteAddressKey: "http.request.remoteaddr",
+	contentTypeKey:   "http.request.contenttype",
+}
+
 // Common errors used with this package.
 var (
 	ErrNoRequestContext        = errors.New("no http request in context")
@@ -78,11 +99,13 @@ func WithRequest(ctx context.Context, r *http.Request) context.Context {
 		panic("only one request per context")
 	}
 
-	return &httpRequestContext{
-		Context:   ctx,
-		startedAt: time.Now(),
-		id:        uuid.Generate().String(),
-		r:         r,
+	return &httpMappedRequestContext{
+		Context: &httpRequestContext{
+			Context:   ctx,
+			startedAt: time.Now(),
+			id:        uuid.Generate().String(),
+			r:         r,
+		},
 	}
 }
 
@@ -166,19 +189,19 @@ func WithCFRayID(ctx context.Context, r *http.Request) context.Context {
 
 }
 
-// GetRequestLogger returns a logger that contains fields from the request in
-// the current context. If the request is not available in the context, no
-// fields will display. Request loggers can safely be pushed onto the context.
-func GetRequestLogger(ctx context.Context) Logger {
+// GetMappedRequestLogger returns a logger that contains specific keyed fields from the request in the current context.
+// The fields displayed by MappedRequestLogger relies on the presence of a http request in the chained context, this is
+// typically satisfied by calling `WithRequest` on the context (or one of the context inhereted from the existing context).
+// If the request is not available in the context chain, no fields will display. Request loggers can safely be pushed onto the context.
+func GetMappedRequestLogger(ctx context.Context) Logger {
 	return GetLogger(ctx,
-		"http.request.id",
-		"http.request.method",
-		"http.request.host",
-		"http.request.uri",
-		"http.request.referer",
-		"http.request.useragent",
-		"http.request.remoteaddr",
-		"http.request.contenttype")
+		methodKey,
+		hostKey,
+		uriKey,
+		refererKey,
+		userAgentKey,
+		remoteAddressKey,
+		contentTypeKey)
 }
 
 // GetRequestCorrelationLogger returns a logger that contains a correlation ID, if available in ctx. Request loggers
@@ -263,6 +286,25 @@ func (ctx *httpRequestContext) Value(key interface{}) interface{} {
 	}
 
 fallback:
+	return ctx.Context.Value(key)
+}
+
+// httpMappedRequestContext makes information about a request available to context through `httpRequestContext`.
+// keys requested from this context that match `MappedLogRequestFields` keys are converted to thier `httpRequestContext` counterparts.
+type httpMappedRequestContext struct {
+	context.Context
+}
+
+// Value returns a keyed element of the request for use in the context. To get
+// the request itself, query "request". For other components, access them as
+// "request.<component>". For example, r.RequestURI
+func (ctx *httpMappedRequestContext) Value(key interface{}) interface{} {
+	if keyStr, ok := key.(string); ok {
+		// retrieve the actual http request key that corresponds to the request field
+		if requestFieldKey, ok := LogRequestFields[keyStr]; ok {
+			return ctx.Context.Value(requestFieldKey)
+		}
+	}
 	return ctx.Context.Value(key)
 }
 

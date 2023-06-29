@@ -1,5 +1,4 @@
 //go:build include_gcs && integration
-// +build include_gcs,integration
 
 /*
 These tests require a GCS bucket and a functional Cloud CDN endpoint.

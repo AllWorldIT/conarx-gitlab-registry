@@ -9,6 +9,7 @@
 - [Offline Garbage Collection Testing](garbage-collection-testing-guide.md)
 - [Database Development Guidelines](database-dev-guidelines.md)
 - [Database Migrations](database-migrations.md)
+- [Feature Flags](feature-flags.md)
 
 ### Technical Documentation
 

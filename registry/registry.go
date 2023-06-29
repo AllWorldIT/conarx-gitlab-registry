@@ -636,7 +636,7 @@ func nextProtos(http2Disabled bool) []string {
 
 // TODO: this method is not used yet but will be part of a follow-up MR for
 // https://gitlab.com/gitlab-org/container-registry/-/issues/890
-func dbPrimaryFromConfig(config *configuration.Configuration) (*datastore.DB, error) {
+func dbFromServiceDiscovery(config *configuration.Configuration, recordName string, options ...datastore.OpenOption) (*datastore.DB, error) {
 	sd := config.Database.Discovery
 	network := "udp"
 	if sd.TCP {
@@ -646,7 +646,7 @@ func dbPrimaryFromConfig(config *configuration.Configuration) (*datastore.DB, er
 	resolver := dns.NewResolver(sd.Nameserver, sd.Port, network)
 
 	// Try to resolve the SRV records for from the nameserver.
-	srvRecords, err := resolver.LookupSRV(sd.PrimaryRecord)
+	srvRecords, err := resolver.LookupSRV(recordName)
 	if err != nil {
 		return nil, err
 	}
@@ -659,6 +659,20 @@ func dbPrimaryFromConfig(config *configuration.Configuration) (*datastore.DB, er
 		return nil, err
 	}
 
+	opts := []datastore.OpenOption{
+		datastore.WithLogger(log.WithFields(log.Fields{"database": config.Database.DBName})),
+		datastore.WithLogLevel(config.Log.Level),
+		datastore.WithPoolConfig(&datastore.PoolConfig{
+			MaxIdle:     config.Database.Pool.MaxIdle,
+			MaxOpen:     config.Database.Pool.MaxOpen,
+			MaxLifetime: config.Database.Pool.MaxLifetime,
+			MaxIdleTime: config.Database.Pool.MaxIdleTime,
+		}),
+		datastore.WithPreparedStatements(config.Database.PreparedStatements),
+	}
+
+	opts = append(opts, options...)
+
 	return datastore.Open(&datastore.DSN{
 		Host:        ips[0].A.String(),
 		Port:        int(record.Port),
@@ -669,20 +683,7 @@ func dbPrimaryFromConfig(config *configuration.Configuration) (*datastore.DB, er
 		SSLCert:     config.Database.SSLCert,
 		SSLKey:      config.Database.SSLKey,
 		SSLRootCert: config.Database.SSLRootCert,
-	},
-		datastore.WithLogger(log.WithFields(log.Fields{"database": config.Database.DBName})),
-		datastore.WithLogLevel(config.Log.Level),
-		datastore.WithPoolConfig(&datastore.PoolConfig{
-			// override max open connections for applying migrations
-			// TODO: expose options for MaxIdle and MaxOpen
-			// https://gitlab.com/gitlab-org/container-registry/-/issues/994
-			MaxIdle:     1,
-			MaxOpen:     1,
-			MaxLifetime: config.Database.Pool.MaxLifetime,
-			MaxIdleTime: config.Database.Pool.MaxIdleTime,
-		}),
-		datastore.WithPreparedStatements(config.Database.PreparedStatements),
-	)
+	}, opts...)
 }
 
 func dbFromConfig(config *configuration.Configuration) (*datastore.DB, error) {

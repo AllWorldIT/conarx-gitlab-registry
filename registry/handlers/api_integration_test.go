@@ -668,22 +668,27 @@ func testManifestWithStorageError(t *testing.T, env *testEnv, imageName referenc
 	return
 }
 
-func TestManifestAPI_Get_Schema2LayersAndConfigNotInDatabase(t *testing.T) {
-	env := newTestEnv(t)
-	defer env.Shutdown()
+func TestManifestAPI_Get_Schema2NotInDatabase(t *testing.T) {
+	skipDatabaseNotEnabled(t)
 
-	tagName := "schema2fallbacktag"
-	repoPath := "schema2/fallback"
+	rootDir := t.TempDir()
 
-	if !env.config.Database.Enabled {
-		t.Skip("skipping test because the metadata database is not enabled")
-	}
+	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	defer env1.Shutdown()
 
-	deserializedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName), writeToFilesystemOnly)
+	env2 := newTestEnv(t, withFSDriver(rootDir))
+	defer env2.Shutdown()
 
-	// Build URLs.
-	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
-	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
+	tagName := "schema2"
+	repoPath := "schema2/not/in/database"
+
+	// Push up image to filesystem storage only environment.
+	deserializedManifest := seedRandomSchema2Manifest(t, env1, repoPath, putByTag(tagName))
+
+	// Build URLs targeting an environment using the database, we should not
+	// have visibility into filesystem metadata.
+	tagURL := buildManifestTagURL(t, env2, repoPath, tagName)
+	digestURL := buildManifestDigestURL(t, env2, repoPath, deserializedManifest)
 
 	tt := []struct {
 		name        string
@@ -717,6 +722,42 @@ func TestManifestAPI_Get_Schema2LayersAndConfigNotInDatabase(t *testing.T) {
 			require.Equal(t, http.StatusNotFound, resp.StatusCode)
 		})
 	}
+}
+
+// Prevent regression related to https://gitlab.com/gitlab-com/gl-infra/production/-/issues/14260
+func TestManifestAPI_Put_Schema2WritesNoFilesystemBlobLinkMetadata(t *testing.T) {
+	skipDatabaseNotEnabled(t)
+
+	rootDir := t.TempDir()
+
+	env1 := newTestEnv(t, withFSDriver(rootDir))
+	defer env1.Shutdown()
+
+	env2 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	defer env2.Shutdown()
+
+	tagName := "schema2"
+	repoPath := "schema2/not/in/database"
+
+	// Push up image to database environment.
+	deserializedManifest := seedRandomSchema2Manifest(t, env1, repoPath, putByTag(tagName))
+
+	// Try to get a layer from the filesystem, we should not encounter any layer
+	// metadata written by the database environment.
+	repoRef, err := reference.WithName(repoPath)
+	require.NoError(t, err)
+
+	ref, err := reference.WithDigest(repoRef, deserializedManifest.Manifest.Layers[0].Digest)
+	require.NoError(t, err)
+
+	layerURL, err := env2.builder.BuildBlobURL(ref)
+	require.NoError(t, err)
+
+	res, err := http.Get(layerURL)
+	require.NoError(t, err)
+
+	defer res.Body.Close()
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
 func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentInDatabase(t *testing.T) {
@@ -1053,23 +1094,33 @@ func TestManifestAPI_Get_Schema1(t *testing.T) {
 }
 
 func TestManifestAPI_Delete_Schema2ManifestNotInDatabase(t *testing.T) {
-	env := newTestEnv(t, withDelete)
-	defer env.Shutdown()
+	skipDatabaseNotEnabled(t)
+
+	// Setup
+
+	rootDir := t.TempDir()
+
+	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	defer env1.Shutdown()
+
+	env2 := newTestEnv(t, withDelete, withFSDriver(rootDir))
+	defer env2.Shutdown()
 
 	tagName := "schema2deletetag"
 	repoPath := "schema2/delete"
 
-	if !env.config.Database.Enabled {
-		t.Skip("skipping test because the metadata database is not enabled")
-	}
+	// Push a random schema 2 manifest to the environment using the database so
+	// that the repository is present on the database.
+	seedRandomSchema2Manifest(t, env2, repoPath)
 
-	// Push a random schema 2 manifest to the repository so that it is present in
-	// the database, so only the manifest is not present in the database.
-	seedRandomSchema2Manifest(t, env, repoPath, putByDigest)
+	// Test
 
-	deserializedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName), writeToFilesystemOnly)
+	// Push a schema 2 manifest to the repository so that it is only present in the filesystem.
+	deserializedManifest := seedRandomSchema2Manifest(t, env1, repoPath, putByTag(tagName))
 
-	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
+	// Attempt to delete the manifest pushed to the filesystme from the environment using the database, it should not
+	// have visibility into the fileystem metadata.
+	manifestDigestURL := buildManifestDigestURL(t, env2, repoPath, deserializedManifest)
 
 	resp, err := httpDelete(manifestDigestURL)
 	require.NoError(t, err)
@@ -1103,35 +1154,6 @@ func TestManifestAPI_Delete_ManifestReferencedByList(t *testing.T) {
 
 	require.Equal(t, http.StatusConflict, resp.StatusCode)
 	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeManifestReferencedInList)
-}
-
-func TestManifestAPI_Put_OCIFilesystemFallbackLayersNotInDatabase(t *testing.T) {
-	env := newTestEnv(t)
-	defer env.Shutdown()
-
-	tagName := "ocifallbacktag"
-	repoPath := "oci/fallback"
-
-	if !env.config.Database.Enabled {
-		t.Skip("skipping test because the metadata database is not enabled")
-	}
-
-	deserializedManifest := seedRandomOCIManifest(t, env, repoPath, writeToFilesystemOnly)
-
-	// Build URLs.
-	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
-	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
-
-	resp := putManifest(t, "putting manifest no error", tagURL, v1.MediaTypeImageManifest, deserializedManifest.Manifest)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-	require.Equal(t, digestURL, resp.Header.Get("Location"))
-
-	_, payload, err := deserializedManifest.Payload()
-	require.NoError(t, err)
-	dgst := digest.FromBytes(payload)
-	require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
 }
 
 func TestManifestAPI_Put_DatabaseEnabled_InvalidConfigMediaType(t *testing.T) {
@@ -1186,7 +1208,7 @@ func TestManifestAPI_Put_DatabaseEnabled_InvalidConfigMediaType(t *testing.T) {
 	require.Equal(t, datastore.ErrUnknownMediaType{MediaType: unknownMediaType}.Error(), errc.Detail)
 }
 
-func TestManifestAPI_Put_OCIImageIndexByTagManifestsNotPresentInDatabase(t *testing.T) {
+func TestManifestAPI_Put_UnknownLayerMediaType(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.Shutdown()
 
@@ -1194,14 +1216,68 @@ func TestManifestAPI_Put_OCIImageIndexByTagManifestsNotPresentInDatabase(t *test
 		t.Skip("skipping test because the metadata database is not enabled")
 	}
 
+	tagName := "latest"
+	repoPath := "foo/bar"
+	unknownMediaType := "application/vnd.foo.layer.v1+json"
+
+	cfgPayload, cfgDesc := schema2Config()
+	assertBlobPutResponse(t, env, repoPath, cfgDesc.Digest, bytes.NewReader(cfgPayload), 201)
+
+	// Create and push 1 random layer with an unknown media type.
+	rs, dgst, size := createRandomSmallLayer()
+	assertBlobPutResponse(t, env, repoPath, dgst, rs, http.StatusCreated)
+	layerDesc := distribution.Descriptor{
+		MediaType: unknownMediaType,
+		Digest:    dgst,
+		Size:      size,
+	}
+
+	m := &schema2.Manifest{
+		Versioned: manifest.Versioned{
+			SchemaVersion: 2,
+			MediaType:     schema2.MediaTypeManifest,
+		},
+		Config: cfgDesc,
+		Layers: []distribution.Descriptor{layerDesc},
+	}
+
+	dm, err := schema2.FromStruct(*m)
+	require.NoError(t, err)
+
+	// Push manifest, for now we should not error out, but with
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/990 we will
+	// expect to see the put operation fail.
+	u := buildManifestTagURL(t, env, repoPath, tagName)
+	resp := putManifest(t, "", u, schema2.MediaTypeManifest, dm.Manifest)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+}
+
+func TestManifestAPI_Put_OCIImageIndexByTagManifestsNotPresentInDatabase(t *testing.T) {
+	skipDatabaseNotEnabled(t)
+
+	// Setup
+
+	rootDir := t.TempDir()
+
+	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	defer env1.Shutdown()
+
+	env2 := newTestEnv(t, withFSDriver(rootDir))
+	defer env2.Shutdown()
+
 	tagName := "ociindexmissingmanifeststag"
 	repoPath := "ociindex/missingmanifests"
 
-	// putRandomOCIImageIndex with putByTag tests that the manifest put happened without issue.
-	deserializedManifest := seedRandomOCIImageIndex(t, env, repoPath, writeToFilesystemOnly)
+	// Test
 
-	// Build URLs.
-	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
+	// Push index manifests to the filesystem only environment.
+	deserializedManifest := seedRandomOCIImageIndex(t, env1, repoPath)
+
+	// Try to put the index, the database environment should not have visibility
+	// into the filesystem manifests.
+	tagURL := buildManifestTagURL(t, env2, repoPath, tagName)
 
 	resp := putManifest(t, "putting OCI image index missing manifests", tagURL, v1.MediaTypeImageIndex, deserializedManifest.ManifestList)
 	defer resp.Body.Close()

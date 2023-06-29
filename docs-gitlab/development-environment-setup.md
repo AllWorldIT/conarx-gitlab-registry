@@ -205,29 +205,9 @@ If you use macOS without [Docker Desktop](https://hub.docker.com/editions/commun
    docker pull alpine:latest
    ```
 
-To work with an insecure local registry (HTTP for push and pull):
-
-1. Update the Colima docker daemon configuration file with any insecure local registries you are using. The file is located in `~/.colima/docker/daemon.json`:
-
-   ```json
-   {
-     "experimental":true,
-     "insecure-registries":[ "172.16.123.1:5000" ]
-   }
-   ```
-
-   If you previously used Docker Desktop, you can copy your old configuration file to the new location:
-
-   ```shell
-   cp ~/.docker/daemon.json ~/.colima/docker/daemon.json
-   ```
-
-1. Restart Colima to apply the configuration changes:
-
-   ```shell
-   colima stop
-   colima start
-   ```
+To work with an insecure local registry (HTTP for push and pull),
+[update the Colima configuration](https://github.com/abiosoft/colima/blob/main/docs/FAQ.md#how-to-customize-docker-config-eg-add-insecure-registries)
+with any insecure local registries you are using.
 
 1. Assuming your local registry is running, you can now log in and push images to the insecure registry:
 
@@ -384,7 +364,7 @@ You may check if the port is in use, using: `lsof -i tcp:5000`.
 
 If the culprit happens to be `AirPlay Receiver`, you can disable it by opening **System Preferences > Sharing** and unchecking **AirPlay Receiver**.
 
-### $XDG_RUNTIME_DIR is not set 
+### $XDG_RUNTIME_DIR is not set
 
 If you are running `lima+nerdctl` and get an error about `$XDG_RUNTIME_DIR` not being set, ensure there are no other
 `nerdctl` installations such as [Rancher Desktop](#rancher-desktop) and restart the Docker virtual machine.

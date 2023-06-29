@@ -47,17 +47,56 @@ The due date is set to the 12th of each month to create a buffer of 5 days befor
 
 ### 2. Release
 
-Generate a new release ([documentation](https://gitlab.com/gitlab-org/container-registry/-/tree/master/docs-gitlab#releases)).
+1. Read the [release documentation](https://gitlab.com/gitlab-org/container-registry/-/tree/master/docs-gitlab#releases).
+1. Run the `make release-dry-run` command.
+1. Review each MR and check if the ~"cannot-rollback" or the ~"high-risk-change" label has been applied. If any MR contains the label:
+   1. Ensure that _no_ code changes that rely on the ~"cannot-rollback" MRg are included in this release. These should be separated into two consecutive releases.
+1. Run the `make release` command.
+1. A new tag should have been created and pushed.
+
 
 ### 3. Update
 
 1. [ ] Version bump in [CNG](https://gitlab.com/gitlab-org/build/CNG) is automatically done using the internal `release-cli`. An MR should be found open on the [CNG MR page](https://gitlab.com/gitlab-org/build/CNG/-/merge_requests) after manually triggering the `version-bump:cng` job. If opening this MR manually please give it the title "Update gitlab-org/container-registry [version]".
+1. [ ] Version bumps in [K8s Workloads](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com) are automatically done using the internal `release-cli`. There should be three separate MRs, listed below, on the [K8s Workloads MR page](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com/-/merge_requests) after manually triggering the `version-bump:k8s` job (which requires `version-bump:cng` to be triggered first). Each environment needs to be deployed and confirmed working in the order listed below, before merging the next MR. If opening this MR manually please give it the title "Bump Container Registry to [version]".
+    - [ ] Check MRs included in the release for the labels ~high-risk-change, ~cannot-rollback.
+       - [ ] If they exist, add the same label to each deployment stage.
+       - [ ] Follow the [potentially risky deployments](#potentially-risky-deployments) instructions.
+    - [ ] Version bump for Pre-Production and Staging.
+    - [ ] Version bump for Production Canary.
+    - [ ] Version bump for Production Main Stage.
 1. [ ] Version bumps for specific distribution paths:
    - [ ] Version bump in [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab) is automatically done using the internal `release-cli`. An MR should be found open on the [Omnibus MR page](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests) after manually triggering the `version-bump:omnibus` job (which requires `version-bump:cng` to be triggered first). If opening this MR manually please give it the title "Update gitlab-org/container-registry [version]".
    - [ ] Version bump in [Charts](https://gitlab.com/gitlab-org/charts) is automatically done using the internal `release-cli`. An MR should be found open on the [Charts MR page](https://gitlab.com/groups/gitlab-org/charts/-/merge_requests) after manually triggering the `version-bump:charts` job (which requires `version-bump:cng` to be triggered first). If opening this MR manually please give it the title "Update gitlab-org/container-registry [version]".
-   - [ ] Version bump in [K8s Workloads](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com) is automatically done using the internal `release-cli`. There should be two separate MRs, one for Pre-production and Staging and another for Production, on the [K8s Workloads MR page](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com/-/merge_requests) after manually triggering the `version-bump:k8s` job (which requires `version-bump:cng` to be triggered first). If opening this MR manually please give it the title "Bump Container Registry to [version]".
 1. [ ] Version bump for [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit) is automatically done using the internal `release-cli`. An MR should be found open on the [GDK MR page](https://gitlab.com/gitlab-org/gitlab-development-kit/-/merge_requests) after manually triggering the `version-bump:gdk` job (which requires `version-bump:cng` to be triggered first). If opening this MR manually please give it the title "Bump Container Registry to [version]".
    - [ ] Assign to the reviewer suggested by reviewer roulette
+
+
+#### Potentially risky deployments
+
+<details>
+<summary><b>Instructions</b></summary>
+
+1. Add the following instructions to each deployment MR.
+
+   - [ ] Version bump for Pre-Production and Staging.
+       - [ ] Check the [`#qa-staging` Slack channel](https://gitlab.slack.com/archives/CBS3YKMGD) for `staging end-to-end tests passed!`. Make sure the corresponding pipeline started _after_ the registry deployment completed. Otherwise, wait for the next one.
+     - [ ] Check [logs](https://nonprod-log.gitlab.net/goto/f3fbccdb9dea6805ff5bbf1e0144a04e) for errors.
+     - [ ] Check [metrics dashboard](https://dashboards.gitlab.net/d/registry-main/registry-overview?orgId=1&var-PROMETHEUS_DS=Global&var-environment=gstg&var-stage=main).
+   - [ ] Version bump for Production Canary.
+      - [ ] Check the [`#qa-production` Slack channel](https://gitlab.slack.com/archives/CCNNKFP8B) for `canary end-to-end tests passed!`.
+      - [ ] Check [logs](https://log.gprd.gitlab.net/goto/9a66e350-fea0-11ed-a017-0d32180b1390) for errors (`json.stage: cny`).
+     - [ ] Check [metrics dashboard](https://dashboards.gitlab.net/d/registry-main/registry-overview?orgId=1&var-PROMETHEUS_DS=Global&var-environment=gprd&var-stage=cny).
+   - [ ] Version bump for Production Main Stage.
+     - [ ] Check the [`#qa-production` Slack channel](https://gitlab.slack.com/archives/CCNNKFP8B) for `production end-to-end tests passed!`. Make sure the corresponding pipeline started _after_ the registry deployment completed. Otherwise, wait for the next one.
+     - [ ] Check [logs](https://log.gprd.gitlab.net/goto/7dc6f73d5dd4cc4bebcd4af3b767cae4) for errors.
+     - [ ] Check [metrics dashboard](https://dashboards.gitlab.net/d/registry-main/registry-overview?orgId=1&var-PROMETHEUS_DS=Global&var-environment=gprd&var-stage=main).
+
+2. Let the assignee SRE know about these changes.
+
+</details>
+
+#### Release instructions
 
 <details>
 <summary><b>Instructions</b></summary>
@@ -119,6 +158,6 @@ To see the version deployed in each environment, look at the [Grafana Container 
 
 ![image](/uploads/3fd5b4902472f6cdcc56b9c2d333472f/image.png)
 
-/label ~"devops::package" ~"group::container registry" ~"Category:Container Registry" ~golang ~"workflow::scheduling"
+/label ~"devops::package" ~"group::container registry" ~"Category:Container Registry" ~golang ~"workflow::in dev" ~"type::maintenance" ~"maintenance::release"
 
 </details>

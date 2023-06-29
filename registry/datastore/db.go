@@ -175,6 +175,28 @@ func WithPoolConfig(c *PoolConfig) OpenOption {
 	}
 }
 
+// WithPoolMaxIdle configures the maximum number of idle pool connections.
+func WithPoolMaxIdle(c int) OpenOption {
+	return func(opts *openOpts) {
+		if opts.pool == nil {
+			opts.pool = &PoolConfig{}
+		}
+
+		opts.pool.MaxIdle = c
+	}
+}
+
+// WithPoolMaxOpen configures the maximum number of open pool connections.
+func WithPoolMaxOpen(c int) OpenOption {
+	return func(opts *openOpts) {
+		if opts.pool == nil {
+			opts.pool = &PoolConfig{}
+		}
+
+		opts.pool.MaxOpen = c
+	}
+}
+
 // WithPreparedStatements configures the settings to allow the database
 // driver to use prepared statements.
 func WithPreparedStatements(b bool) OpenOption {

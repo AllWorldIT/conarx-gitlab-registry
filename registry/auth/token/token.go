@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/docker/libtrust"
-	log "github.com/sirupsen/logrus"
 
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/auth"
 )
 
@@ -37,6 +37,7 @@ type ResourceActions struct {
 	Class   string   `json:"class,omitempty"`
 	Name    string   `json:"name"`
 	Actions []string `json:"actions"`
+	Meta    *Meta    `json:"meta"`
 }
 
 // ClaimSet describes the main section of a JSON Web Token.
@@ -53,6 +54,12 @@ type ClaimSet struct {
 	// Private claims
 	Access   []*ResourceActions `json:"access"`
 	AuthType string             `json:"auth_type"`
+}
+
+// Meta stores extra metadata available in the JSON Web Token passed by rails.
+type Meta struct {
+	// ProjectPath contains the full path of the GitLab project of a repository that a token was issued for.
+	ProjectPath string `json:"project_path"`
 }
 
 // Header describes the header section of a JSON Web Token.
@@ -95,19 +102,21 @@ func NewToken(rawToken string) (*Token, error) {
 		err                    error
 	)
 
+	logger := log.GetLogger()
+
 	defer func() {
 		if err != nil {
-			log.Infof("error while unmarshalling raw token: %s", err)
+			logger.WithError(err).Error("error while unmarshalling raw token")
 		}
 	}()
 
 	if headerJSON, err = joseBase64UrlDecode(rawHeader); err != nil {
-		err = fmt.Errorf("unable to decode header: %s", err)
+		logger.WithError(err).Error("unable to decode token header")
 		return nil, ErrMalformedToken
 	}
 
 	if claimsJSON, err = joseBase64UrlDecode(rawClaims); err != nil {
-		err = fmt.Errorf("unable to decode claims: %s", err)
+		logger.WithError(err).Error("unable to decode token claims")
 		return nil, ErrMalformedToken
 	}
 
@@ -117,7 +126,7 @@ func NewToken(rawToken string) (*Token, error) {
 
 	token.Raw = strings.Join(parts[:2], TokenSeparator)
 	if token.Signature, err = joseBase64UrlDecode(parts[2]); err != nil {
-		err = fmt.Errorf("unable to decode signature: %s", err)
+		logger.WithError(err).Error("unable to decode token signature")
 		return nil, ErrMalformedToken
 	}
 
@@ -135,15 +144,19 @@ func NewToken(rawToken string) (*Token, error) {
 // Verify attempts to verify this token using the given options.
 // Returns a nil error if the token is valid.
 func (t *Token) Verify(verifyOpts VerifyOptions) error {
+	logger := log.GetLogger()
+
 	// Verify that the Issuer claim is a trusted authority.
 	if !contains(verifyOpts.TrustedIssuers, t.Claims.Issuer) {
-		log.Infof("token from untrusted issuer: %q", t.Claims.Issuer)
+		logger.WithFields(log.Fields{"issuer": t.Claims.Issuer, "trusted_issuers": verifyOpts.TrustedIssuers}).
+			Error("token from untrusted issuer")
 		return ErrInvalidToken
 	}
 
 	// Verify that the Audience claim is allowed.
 	if !contains(verifyOpts.AcceptedAudiences, t.Claims.Audience) {
-		log.Infof("token intended for another audience: %q", t.Claims.Audience)
+		logger.WithFields(log.Fields{"audience": t.Claims.Audience, "accepted_audiences": verifyOpts.AcceptedAudiences}).
+			Error("token intended for another audience")
 		return ErrInvalidToken
 	}
 
@@ -152,32 +165,32 @@ func (t *Token) Verify(verifyOpts VerifyOptions) error {
 
 	ExpWithLeeway := time.Unix(t.Claims.Expiration, 0).Add(Leeway)
 	if currentTime.After(ExpWithLeeway) {
-		log.Infof("token not to be used after %s - currently %s", ExpWithLeeway, currentTime)
+		logger.WithFields(log.Fields{"valid_until": ExpWithLeeway}).Warn("token has expired")
 		return ErrInvalidToken
 	}
 
 	NotBeforeWithLeeway := time.Unix(t.Claims.NotBefore, 0).Add(-Leeway)
 	if currentTime.Before(NotBeforeWithLeeway) {
-		log.Infof("token not to be used before %s - currently %s", NotBeforeWithLeeway, currentTime)
+		logger.WithFields(log.Fields{"valid_after": NotBeforeWithLeeway}).Warn("token used before time")
 		return ErrInvalidToken
 	}
 
 	// Verify the token signature.
 	if len(t.Signature) == 0 {
-		log.Info("token has no signature")
+		logger.Error("token has no signature")
 		return ErrInvalidToken
 	}
 
 	// Verify that the signing key is trusted.
 	signingKey, err := t.VerifySigningKey(verifyOpts)
 	if err != nil {
-		log.Info(err)
+		logger.WithError(err).Error("error verifying that signing key is trusted")
 		return ErrInvalidToken
 	}
 
 	// Finally, verify the signature of the token using the key which signed it.
 	if err := signingKey.Verify(strings.NewReader(t.Raw), t.Header.SigningAlg, t.Signature); err != nil {
-		log.Infof("unable to verify token signature: %s", err)
+		logger.WithError(err).Error("unable to verify token signature")
 		return ErrInvalidToken
 	}
 
@@ -186,13 +199,15 @@ func (t *Token) Verify(verifyOpts VerifyOptions) error {
 
 // VerifySigningKey attempts to get the key which was used to sign this token.
 // The token header should contain either of these 3 fields:
-//      `x5c` - The x509 certificate chain for the signing key. Needs to be
-//              verified.
-//      `jwk` - The JSON Web Key representation of the signing key.
-//              May contain its own `x5c` field which needs to be verified.
-//      `kid` - The unique identifier for the key. This library interprets it
-//              as a libtrust fingerprint. The key itself can be looked up in
-//              the trustedKeys field of the given verify options.
+//
+//	`x5c` - The x509 certificate chain for the signing key. Needs to be
+//	        verified.
+//	`jwk` - The JSON Web Key representation of the signing key.
+//	        May contain its own `x5c` field which needs to be verified.
+//	`kid` - The unique identifier for the key. This library interprets it
+//	        as a libtrust fingerprint. The key itself can be looked up in
+//	        the trustedKeys field of the given verify options.
+//
 // Each of these methods are tried in that order of preference until the
 // signing key is found or an error is returned.
 func (t *Token) VerifySigningKey(verifyOpts VerifyOptions) (signingKey libtrust.PublicKey, err error) {
@@ -362,6 +377,9 @@ func (t *Token) resources() []auth.Resource {
 			Type:  resourceActions.Type,
 			Class: resourceActions.Class,
 			Name:  resourceActions.Name,
+		}
+		if resourceActions.Meta != nil {
+			resource.ProjectPath = resourceActions.Meta.ProjectPath
 		}
 		resourceSet[resource] = struct{}{}
 	}

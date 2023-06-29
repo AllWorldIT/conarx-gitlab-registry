@@ -319,6 +319,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	if config.Database.Enabled {
 		log.Warn("the metadata database is an experimental feature, please do not enable it in production")
 
+		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
+		options = append(options, storage.DisableMirrorFS)
+
 		// TODO: this function only exists to test https://gitlab.com/gitlab-org/container-registry/-/issues/890
 		// as the migration code runs on a separate container that does not output any searchable logs.
 		go func() {
@@ -1098,8 +1101,8 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 			return
 		}
 
-		// Add username and user-type to request logging
-		ctx.Context = dcontext.WithLogger(ctx.Context, dcontext.GetLogger(ctx.Context, auth.UserNameKey, auth.UserTypeKey))
+		// Add extra context to request logging
+		ctx.Context = dcontext.WithLogger(ctx.Context, dcontext.GetLogger(ctx.Context, auth.UserNameKey, auth.UserTypeKey, auth.ResourceProjectPathsKey))
 		// sync up context on the request.
 		r = r.WithContext(ctx)
 
@@ -1183,8 +1186,8 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 			return
 		}
 
-		// Add username and user-type to request logging
-		ctx.Context = dcontext.WithLogger(ctx.Context, dcontext.GetLogger(ctx.Context, auth.UserNameKey, auth.UserTypeKey))
+		// Add extra context to request logging
+		ctx.Context = dcontext.WithLogger(ctx.Context, dcontext.GetLogger(ctx.Context, auth.UserNameKey, auth.UserTypeKey, auth.ResourceProjectPathsKey))
 		// sync up context on the request.
 		r = r.WithContext(ctx)
 
@@ -1231,7 +1234,8 @@ func (app *App) logError(ctx context.Context, r *http.Request, errors errcode.Er
 			message = ex.Error()
 		}
 
-		l := dcontext.GetLogger(ctx).WithField("code", code.String())
+		// inject request specifc fields into the error logs
+		l := dcontext.GetMappedRequestLogger(ctx).WithField("code", code.String())
 		if detail != "" {
 			l = l.WithField("detail", detail)
 		}
@@ -1352,7 +1356,7 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 		return err
 	}
 
-	dcontext.GetLogger(ctx, auth.UserNameKey, auth.UserTypeKey).Info("authorized request")
+	dcontext.GetLogger(ctx, auth.UserNameKey, auth.UserTypeKey, auth.ResourceProjectPathsKey).Info("authorized request")
 	// TODO(stevvooe): This pattern needs to be cleaned up a bit. One context
 	// should be replaced by another, rather than replacing the context on a
 	// mutable object.

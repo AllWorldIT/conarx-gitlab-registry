@@ -106,6 +106,10 @@ func withSchema1PreseededInMemoryDriver(config *configuration.Configuration) {
 	config.Storage["schema1Preseededinmemorydriver"] = configuration.Parameters{}
 }
 
+func withDBDisabled(config *configuration.Configuration) {
+	config.Database.Enabled = false
+}
+
 func withDBHostAndPort(host string, port int) configOpt {
 	return func(config *configuration.Configuration) {
 		config.Database.Host = host
@@ -210,6 +214,14 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 	}
 
 	return *config
+}
+
+func skipDatabaseNotEnabled(tb testing.TB) {
+	tb.Helper()
+
+	if os.Getenv("REGISTRY_DATABASE_ENABLED") != "true" {
+		tb.Skip("skipping test because the metadata database is not enabled")
+	}
 }
 
 var (
@@ -408,11 +420,10 @@ func (t *testEnv) Shutdown() {
 }
 
 type manifestOpts struct {
-	manifestURL           string
-	putManifest           bool
-	writeToFilesystemOnly bool
-	assertNotification    bool
-	withoutMediaType      bool
+	manifestURL        string
+	putManifest        bool
+	assertNotification bool
+	withoutMediaType   bool
 	// Non-optional values which be passed through by the testing func for ease of use.
 	repoPath string
 }
@@ -428,12 +439,6 @@ func putByTag(tagName string) manifestOptsFunc {
 
 func putByDigest(t *testing.T, env *testEnv, opts *manifestOpts) {
 	opts.putManifest = true
-}
-
-func writeToFilesystemOnly(t *testing.T, env *testEnv, opts *manifestOpts) {
-	require.True(t, env.config.Database.Enabled, "this option is only available when the database is enabled")
-
-	opts.writeToFilesystemOnly = true
 }
 
 func withAssertNotification(t *testing.T, env *testEnv, opts *manifestOpts) {
@@ -487,11 +492,6 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 
 	for _, o := range opts {
 		o(t, env, config)
-	}
-
-	if config.writeToFilesystemOnly {
-		env.config.Database.Enabled = false
-		defer func() { env.config.Database.Enabled = true }()
 	}
 
 	repoRef, err := reference.WithName(repoPath)
@@ -739,11 +739,6 @@ func seedRandomOCIImageIndex(t *testing.T, env *testEnv, repoPath string, opts .
 
 	for _, o := range opts {
 		o(t, env, config)
-	}
-
-	if config.writeToFilesystemOnly {
-		env.config.Database.Enabled = false
-		defer func() { env.config.Database.Enabled = true }()
 	}
 
 	ociImageIndex := &manifestlist.ManifestList{

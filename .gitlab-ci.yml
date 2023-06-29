@@ -28,9 +28,22 @@ variables:
   CGO_ENABLED: "1"
   GOPATH: $CI_PROJECT_DIR/.GOPATH
   GOTESTSUM_VERSION: v1.8.1
+  PG_PREV_VERSION: "12"
+  PG_CURR_VERSION: "13"
+  PG_NEXT_VERSION: "14"
 
 stages:
   - validate
   - test
   - integration
   - release
+
+.go-pg-version-matrix:
+  parallel:
+    matrix:
+      - PG_VERSION: $PG_PREV_VERSION
+        GO_VERSION: [ "1.18", "1.19", "1.20" ]
+      - PG_VERSION: $PG_CURR_VERSION
+        GO_VERSION: [ "1.18", "1.19", "1.20" ]
+      - PG_VERSION: $PG_NEXT_VERSION
+        GO_VERSION: [ "1.18", "1.19", "1.20" ]

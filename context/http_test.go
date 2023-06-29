@@ -98,6 +98,58 @@ func TestWithRequest(t *testing.T) {
 	}
 }
 
+func TestWithRequest_MappedKeys(t *testing.T) {
+	var req http.Request
+
+	req.Method = "GET"
+	req.Host = "example.com"
+	req.RequestURI = "/test-test"
+	req.Header = make(http.Header)
+	req.Header.Set("Referer", "foo.com/referer")
+	req.Header.Set("User-Agent", "test/0.1")
+
+	ctx := WithRequest(Background(), &req)
+	for _, testcase := range []struct {
+		key      string
+		expected interface{}
+	}{
+		{
+			key:      "method",
+			expected: req.Method,
+		},
+		{
+			key:      "host",
+			expected: req.Host,
+		},
+		{
+			key:      "uri",
+			expected: req.RequestURI,
+		},
+		{
+			key:      "referer",
+			expected: req.Referer(),
+		},
+		{
+			key:      "user_agent",
+			expected: req.UserAgent(),
+		},
+		{
+			key:      "remote_addr",
+			expected: req.RemoteAddr,
+		},
+	} {
+		v := ctx.Value(testcase.key)
+
+		if v == nil {
+			t.Fatalf("value not found for %q", testcase.key)
+		}
+
+		if testcase.expected != nil && v != testcase.expected {
+			t.Fatalf("%s: %v != %v", testcase.key, v, testcase.expected)
+		}
+	}
+}
+
 type testResponseWriter struct {
 	flushed bool
 	status  int
