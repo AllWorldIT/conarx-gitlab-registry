@@ -38,8 +38,8 @@ type tagsAPIResponse struct {
 	Tags []string `json:"tags"`
 }
 
-func dbGetTags(ctx context.Context, db datastore.Queryer, repoPath string, n int, last string) ([]string, bool, error) {
-	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "limit": n, "marker": last})
+func dbGetTags(ctx context.Context, db datastore.Queryer, repoPath string, filters datastore.FilterParams) ([]string, bool, error) {
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "limit": filters.MaxEntries, "marker": filters.LastEntry})
 	l.Debug("finding tags in database")
 
 	rStore := datastore.NewRepositoryStore(db)
@@ -51,7 +51,7 @@ func dbGetTags(ctx context.Context, db datastore.Queryer, repoPath string, n int
 		return nil, false, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": repoPath})
 	}
 
-	tt, err := rStore.TagsPaginated(ctx, r, n, last)
+	tt, err := rStore.TagsPaginated(ctx, r, filters)
 	if err != nil {
 		return nil, false, err
 	}
@@ -63,7 +63,8 @@ func dbGetTags(ctx context.Context, db datastore.Queryer, repoPath string, n int
 
 	var moreEntries bool
 	if len(tt) > 0 {
-		n, err := rStore.TagsCountAfterName(ctx, r, tt[len(tt)-1].Name, "")
+		filters.LastEntry = tt[len(tt)-1].Name
+		n, err := rStore.TagsCountAfterName(ctx, r, filters)
 		if err != nil {
 			return nil, false, err
 		}
@@ -85,11 +86,16 @@ func (th *tagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 		maxEntries = maximumReturnedEntries
 	}
 
+	filters := datastore.FilterParams{
+		LastEntry:  lastEntry,
+		MaxEntries: maxEntries,
+	}
+
 	var tags []string
 	var moreEntries bool
 
 	if th.useDatabase {
-		tags, moreEntries, err = dbGetTags(th.Context, th.db, th.Repository.Named().Name(), maxEntries, lastEntry)
+		tags, moreEntries, err = dbGetTags(th.Context, th.db, th.Repository.Named().Name(), filters)
 		if err != nil {
 			th.Errors = append(th.Errors, errcode.FromUnknownError(err))
 			return
@@ -117,8 +123,8 @@ func (th *tagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 
 	// Add a link header if there are more entries to retrieve (only supported by the metadata database backend)
 	if moreEntries {
-		lastEntry = tags[len(tags)-1]
-		urlStr, err := createLinkEntry(r.URL.String(), maxEntries, lastEntry)
+		filters.LastEntry = tags[len(tags)-1]
+		urlStr, err := createLinkEntry(r.URL.String(), filters)
 		if err != nil {
 			th.Errors = append(th.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			return
@@ -240,7 +246,7 @@ func (th *tagHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if th.useDatabase {
-		// To be removed on completion of: https://gitlab.com/groups/gitlab-org/-/epics/9050
+		// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
 		var repoCache datastore.RepositoryCache
 		if th.App.redisCache != nil {
 			repoCache = datastore.NewCentralRepositoryCache(th.App.redisCache)

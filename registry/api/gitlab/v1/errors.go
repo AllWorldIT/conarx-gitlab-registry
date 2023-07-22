@@ -33,6 +33,10 @@ func InvalidQueryParamValuePatternErrorDetail(key string, pattern *regexp.Regexp
 	return fmt.Sprintf("the '%s' query parameter value must match the pattern '%s'", key, pattern)
 }
 
+func MutuallyExclusiveParametersErrorDetail(keys ...string) string {
+	return fmt.Sprintf("keys: %+v are mutually exclusive", keys)
+}
+
 // ErrorCodeInvalidQueryParamType is returned when the value of a query parameter is of an invalid type.
 var ErrorCodeInvalidQueryParamType = errcode.Register(errGroup, errcode.ErrorDescriptor{
 	Value:          "INVALID_QUERY_PARAMETER_TYPE",
@@ -63,6 +67,22 @@ var ErrorCodeNotImplemented = errcode.Register(errGroup, errcode.ErrorDescriptor
 	Message:        "operation not available",
 	Description:    "The requested operation is not available",
 	HTTPStatusCode: http.StatusNotFound,
+})
+
+// ErrorCodeUnknownProjectPath is returned when a project path could not be found for a repository.
+var ErrorCodeUnknownProjectPath = errcode.Register(errGroup, errcode.ErrorDescriptor{
+	Value:          "UNKNOWN_JWT_PROJECT_PATH_CLAIM",
+	Message:        "meta.project_path claim not found",
+	Description:    "The value of meta.project_path JWT claim is not assigned to the accesed repository",
+	HTTPStatusCode: http.StatusBadRequest,
+})
+
+// ErrorCodeMismatchProjectPath is returned when a project path does not match a requested repository.
+var ErrorCodeMismatchProjectPath = errcode.Register(errGroup, errcode.ErrorDescriptor{
+	Value:          "MISMATCH_PROJECT_PATH_CLAIM",
+	Message:        "meta.project_path claim does not match requested repository",
+	Description:    "The value of meta.project_path JWT claim does not match the requested repository",
+	HTTPStatusCode: http.StatusBadRequest,
 })
 
 func InvalidQueryParamTypeErrorDetail(key string, validTypes []reflect.Kind) string {
@@ -183,7 +203,7 @@ var ErrorCodeRenameConflict = errcode.Register(errGroup, errcode.ErrorDescriptor
 	Value:   "RENAME_CONFLICT",
 	Message: "repository name is already taken",
 	Description: `This is returned if the name used during a rename operation is
-			already in use in the registry.`,
+        already in use in the registry.`,
 	HTTPStatusCode: http.StatusConflict,
 })
 

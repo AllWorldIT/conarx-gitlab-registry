@@ -7,6 +7,7 @@ import (
 	"github.com/docker/distribution"
 
 	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/notifications/meta"
 	"github.com/docker/distribution/reference"
 	"github.com/opencontainers/go-digest"
 )
@@ -21,7 +22,7 @@ type ManifestListener interface {
 // BlobListener describes a listener that can respond to layer related events.
 type BlobListener interface {
 	BlobPushed(repo reference.Named, desc distribution.Descriptor) error
-	BlobPulled(repo reference.Named, desc distribution.Descriptor) error
+	BlobPulled(repo reference.Named, desc distribution.Descriptor, eventMeta *meta.Blob) error
 	BlobMounted(repo reference.Named, desc distribution.Descriptor, fromRepo reference.Named) error
 	BlobDeleted(repo reference.Named, desc digest.Digest) error
 }
@@ -146,7 +147,8 @@ func (bsl *blobServiceListener) Get(ctx context.Context, dgst digest.Digest) ([]
 		if desc, err := bsl.Stat(ctx, dgst); err != nil {
 			dcontext.GetLogger(ctx).Errorf("error resolving descriptor in ServeBlob listener: %v", err)
 		} else {
-			if err := bsl.parent.listener.BlobPulled(bsl.parent.Repository.Named(), desc); err != nil {
+			// for now we ignore the blob download meta when the blob is not downloaded via an API request
+			if err := bsl.parent.listener.BlobPulled(bsl.parent.Repository.Named(), desc, nil); err != nil {
 				dcontext.GetLogger(ctx).Errorf("error dispatching layer pull to listener: %v", err)
 			}
 		}
@@ -164,7 +166,8 @@ func (bsl *blobServiceListener) Open(ctx context.Context, dgst digest.Digest) (d
 		if desc, err := bsl.Stat(ctx, dgst); err != nil {
 			dcontext.GetLogger(ctx).Errorf("error resolving descriptor in ServeBlob listener: %v", err)
 		} else {
-			if err := bsl.parent.listener.BlobPulled(bsl.parent.Repository.Named(), desc); err != nil {
+			// for now we ignore the blob download meta when the blob is not downloaded via an API request
+			if err := bsl.parent.listener.BlobPulled(bsl.parent.Repository.Named(), desc, nil); err != nil {
 				dcontext.GetLogger(ctx).Errorf("error dispatching layer pull to listener: %v", err)
 			}
 		}
@@ -173,22 +176,22 @@ func (bsl *blobServiceListener) Open(ctx context.Context, dgst digest.Digest) (d
 	return rc, err
 }
 
-func (bsl *blobServiceListener) ServeBlob(ctx context.Context, w http.ResponseWriter, r *http.Request, dgst digest.Digest) error {
-	err := bsl.BlobStore.ServeBlob(ctx, w, r, dgst)
+func (bsl *blobServiceListener) ServeBlob(ctx context.Context, w http.ResponseWriter, r *http.Request, dgst digest.Digest) (*meta.Blob, error) {
+	eventMeta, err := bsl.BlobStore.ServeBlob(ctx, w, r, dgst)
 	if err == nil {
 		if bsl.fsMirroringDisabled {
-			return nil
+			return eventMeta, nil
 		}
 		if desc, err := bsl.Stat(ctx, dgst); err != nil {
 			dcontext.GetLogger(ctx).Errorf("error resolving descriptor in ServeBlob listener: %v", err)
 		} else {
-			if err := bsl.parent.listener.BlobPulled(bsl.parent.Repository.Named(), desc); err != nil {
+			if err := bsl.parent.listener.BlobPulled(bsl.parent.Repository.Named(), desc, eventMeta); err != nil {
 				dcontext.GetLogger(ctx).Errorf("error dispatching layer pull to listener: %v", err)
 			}
 		}
 	}
 
-	return err
+	return eventMeta, err
 }
 
 func (bsl *blobServiceListener) Put(ctx context.Context, mediaType string, p []byte) (distribution.Descriptor, error) {

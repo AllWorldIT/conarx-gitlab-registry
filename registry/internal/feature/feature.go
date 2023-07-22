@@ -21,3 +21,12 @@ func (f Feature) Enabled() bool {
 
 	return env == "true"
 }
+
+// OngoingRenameCheck is used to check redis for any GitLab projects (i.e base repositories - if exists) that are undergoing a rename.
+// The record to signal that a GitLab project is undergoing a rename is created in redis on a call to `PATCH /gitlab/v1/repositories/<path>/`.
+// This "check" feature is triggered on a "per-repository-write" basis, meaning the number of (read) requests to redis will be at least
+// the number of registry repository write requests received, with this feature enabled. Proceed with caution.
+var OngoingRenameCheck = Feature{
+	EnvVariable: "REGISTRY_FF_ONGOING_RENAME_CHECK",
+	// defaults to false
+}

@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const versionPlaceholder = "{VERSION}"
+
 type Release struct {
 	ProjectID     int      `mapstructure:"project_id"`
 	BranchName    string   `mapstructure:"branch_name"`
@@ -31,7 +33,7 @@ func initConfig() {
 	}
 }
 
-func readConfig(cmd string) (*Release, error) {
+func readConfig(cmd, version string) (*Release, error) {
 	err := viper.ReadInConfig()
 	if err != nil {
 		return nil, err
@@ -43,6 +45,11 @@ func readConfig(cmd string) (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// replace version placeholder in branch name, commit message and MR title (if applicable)
+	release.BranchName = strings.ReplaceAll(release.BranchName, versionPlaceholder, version)
+	release.CommitMessage = strings.ReplaceAll(release.CommitMessage, versionPlaceholder, version)
+	release.MRTitle = strings.ReplaceAll(release.MRTitle, versionPlaceholder, version)
 
 	return &release, nil
 }

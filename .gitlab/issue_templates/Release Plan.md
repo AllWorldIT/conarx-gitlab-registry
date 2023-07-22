@@ -57,20 +57,22 @@ The due date is set to the 12th of each month to create a buffer of 5 days befor
 
 ### 3. Update
 
-1. [ ] Version bump in [CNG](https://gitlab.com/gitlab-org/build/CNG) is automatically done using the internal `release-cli`. An MR should be found open on the [CNG MR page](https://gitlab.com/gitlab-org/build/CNG/-/merge_requests) after manually triggering the `version-bump:cng` job. If opening this MR manually please give it the title "Update gitlab-org/container-registry [version]".
-1. [ ] Version bumps in [K8s Workloads](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com) are automatically done using the internal `release-cli`. There should be three separate MRs, listed below, on the [K8s Workloads MR page](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com/-/merge_requests) after manually triggering the `version-bump:k8s` job (which requires `version-bump:cng` to be triggered first). Each environment needs to be deployed and confirmed working in the order listed below, before merging the next MR. If opening this MR manually please give it the title "Bump Container Registry to [version]".
+**Note:** Version bumps for CNG, Omnibus and GDK can be triggered at the "same" time. Only the Charts and K8s Workloads
+bumps need to wait for the CNG one. It's highly recommended to trigger both CNG and Omnibus bumps together so that the
+Distribution team can see them while reviewing.
+
+1. [ ] Version bump in [CNG](https://gitlab.com/gitlab-org/build/CNG) is automatically done using the internal `release-cli`. An MR should be found open on the [CNG MR page](https://gitlab.com/gitlab-org/build/CNG/-/merge_requests) after manually triggering the `version-bump:cng` job. If opening this MR manually please give it the title "Bump Container Registry to [version]".
+1. [ ] Version bump in [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab) is automatically done using the internal `release-cli`. An MR should be found open on the [Omnibus MR page](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests) after manually triggering the `version-bump:omnibus` job. If opening this MR manually please give it the title "Bump Container Registry to [version]".
+1. [ ] Version bump in [Charts](https://gitlab.com/gitlab-org/charts) is automatically done using the internal `release-cli`. An MR should be found open on the [Charts MR page](https://gitlab.com/groups/gitlab-org/charts/-/merge_requests) after manually triggering the `version-bump:charts` job (which requires `version-bump:cng` to be triggered first). If opening this MR manually please give it the title "Bump Container Registry to [version]".
+1. [ ] Version bumps in [K8s Workloads](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com) are automatically done using the internal `release-cli`. There should be three separate MRs, listed below, on the [K8s Workloads MR page](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com/-/merge_requests) after manually triggering the `version-bump:k8s` job (which requires `version-bump:cng` to be triggered first). Each environment needs to be deployed and confirmed working in the order listed below, before merging the next MR. If opening this MR manually please give it the title "Bump Container Registry to [version] ([environment(s)])".
     - [ ] Check MRs included in the release for the labels ~high-risk-change, ~cannot-rollback.
        - [ ] If they exist, add the same label to each deployment stage.
        - [ ] Follow the [potentially risky deployments](#potentially-risky-deployments) instructions.
     - [ ] Version bump for Pre-Production and Staging.
     - [ ] Version bump for Production Canary.
     - [ ] Version bump for Production Main Stage.
-1. [ ] Version bumps for specific distribution paths:
-   - [ ] Version bump in [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab) is automatically done using the internal `release-cli`. An MR should be found open on the [Omnibus MR page](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests) after manually triggering the `version-bump:omnibus` job (which requires `version-bump:cng` to be triggered first). If opening this MR manually please give it the title "Update gitlab-org/container-registry [version]".
-   - [ ] Version bump in [Charts](https://gitlab.com/gitlab-org/charts) is automatically done using the internal `release-cli`. An MR should be found open on the [Charts MR page](https://gitlab.com/groups/gitlab-org/charts/-/merge_requests) after manually triggering the `version-bump:charts` job (which requires `version-bump:cng` to be triggered first). If opening this MR manually please give it the title "Update gitlab-org/container-registry [version]".
-1. [ ] Version bump for [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit) is automatically done using the internal `release-cli`. An MR should be found open on the [GDK MR page](https://gitlab.com/gitlab-org/gitlab-development-kit/-/merge_requests) after manually triggering the `version-bump:gdk` job (which requires `version-bump:cng` to be triggered first). If opening this MR manually please give it the title "Bump Container Registry to [version]".
+1. [ ] Version bump for [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit) is automatically done using the internal `release-cli`. An MR should be found open on the [GDK MR page](https://gitlab.com/gitlab-org/gitlab-development-kit/-/merge_requests) after manually triggering the `version-bump:gdk` job. If opening this MR manually please give it the title "Bump Container Registry to [version]".
    - [ ] Assign to the reviewer suggested by reviewer roulette
-
 
 #### Potentially risky deployments
 

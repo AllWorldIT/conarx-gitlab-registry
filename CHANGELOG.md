@@ -1,3 +1,25 @@
+# [3.78.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.77.0-gitlab...v3.78.0-gitlab) (2023-07-05)
+
+
+### Bug Fixes
+
+* upgrade github.com/miekg/dns to v1.1.15 ([8792ceb](https://gitlab.com/gitlab-org/container-registry/commit/8792ceb36d5da78f8428489888ca1d975a6b3412))
+
+
+### Features
+
+* **api/gitlab/v1:** support before query in repository tags list ([c3cda5e](https://gitlab.com/gitlab-org/container-registry/commit/c3cda5ee0ac385d52ab96fcfba4e9d49ee903ec4))
+* **handlers:** use Redis repository cache for OCI blob delete operation ([a841762](https://gitlab.com/gitlab-org/container-registry/commit/a841762e1666d3514ddb7d3296c9eb8b688902c0))
+
+# [3.77.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.76.0-gitlab...v3.77.0-gitlab) (2023-06-15)
+
+
+### Features
+
+* **api/gitlab/v1:** add project lease procurement to rename api ([3129e6e](https://gitlab.com/gitlab-org/container-registry/commit/3129e6e503f454d715539f85dc53387bbba079b2))
+* **ff:** add OngoingRenameCheck feature flag ([1b6b74c](https://gitlab.com/gitlab-org/container-registry/commit/1b6b74c3c44138cb0801a23cb96d9de0fa60c1e5))
+* **notification:** add blob download meta object to notifications ([c240863](https://gitlab.com/gitlab-org/container-registry/commit/c2408631b88d749922c2ae4df1687ea538fe920f))
+
 # [3.76.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.75.0-gitlab...v3.76.0-gitlab) (2023-06-06)
 
 

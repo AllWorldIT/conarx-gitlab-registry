@@ -113,7 +113,7 @@ func TestDeleteBlobDB(t *testing.T) {
 
 	// Test
 
-	err = dbDeleteBlob(env.ctx, env.config, env.db, r.Path, b.Digest)
+	err = dbDeleteBlob(env.ctx, env.config, env.db, datastore.NewNoOpRepositoryCache(), r.Path, b.Digest)
 	require.NoError(t, err)
 
 	// the layer blob should still be there
@@ -129,6 +129,6 @@ func TestDeleteBlobDB_RepositoryNotFound(t *testing.T) {
 	env := newEnv(t)
 	defer env.shutdown(t)
 
-	err := dbDeleteBlob(env.ctx, env.config, env.db, "foo", "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9")
+	err := dbDeleteBlob(env.ctx, env.config, env.db, datastore.NewNoOpRepositoryCache(), "foo", "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9")
 	require.Error(t, err)
 }

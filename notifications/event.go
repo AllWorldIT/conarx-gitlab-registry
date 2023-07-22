@@ -63,7 +63,16 @@ type Event struct {
 	// differently, while the actor "initiates" the event, the source
 	// "generates" it.
 	Source SourceRecord `json:"source,omitempty"`
+
+	// Meta is a map of key-value pairs that are loosely associated to an event.
+	// This field should be used only to propagate non-common/highly-specific details
+	// of an event in cases where the detail can not be communicated in existing attributes of the `Event` struct.
+	// Meta is not guaranteed to be in every event or to have simiar keys across event types.
+	Meta map[string]Meta `json:"meta,omitempty"`
 }
+
+// Meta is the event meta type
+type Meta interface{}
 
 // Target uniquely describes the target of the event.
 type Target struct {

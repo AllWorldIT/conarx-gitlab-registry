@@ -26,6 +26,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
+	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -90,6 +91,7 @@ func TestAPIConformance(t *testing.T) {
 		blob_Get,
 		blob_Get_BlobNotFound,
 		blob_Get_RepositoryNotFound,
+		blob_Delete,
 		blob_Delete_AlreadyDeleted,
 		blob_Delete_Disabled,
 		blob_Delete_UnknownRepository,
@@ -124,6 +126,10 @@ func TestAPIConformance(t *testing.T) {
 			name:                 "with notifications enabled",
 			opts:                 []configOpt{},
 			notificationsEnabled: true,
+		},
+		{
+			name: "with redis cache",
+			opts: []configOpt{withRedisCache(testutil.RedisServer(t).Addr())},
 		},
 	}
 
@@ -2535,10 +2541,12 @@ func blob_Delete_Disabled(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusMethodNotAllowed, res.StatusCode)
 }
 
-func blob_Delete_AlreadyDeleted(t *testing.T, opts ...configOpt) {
+func blobDelete(t *testing.T, opts ...configOpt) string {
+	t.Helper()
+
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	t.Cleanup(env.Shutdown)
 
 	// create repository with a layer
 	args := makeBlobArgs(t)
@@ -2551,7 +2559,7 @@ func blob_Delete_AlreadyDeleted(t *testing.T, opts ...configOpt) {
 	defer res.Body.Close()
 	require.Equal(t, http.StatusAccepted, res.StatusCode)
 
-	// test
+	// ensure it's gone
 	res, err = http.Head(location)
 	require.NoError(t, err)
 	defer res.Body.Close()
@@ -2561,8 +2569,18 @@ func blob_Delete_AlreadyDeleted(t *testing.T, opts ...configOpt) {
 	require.NoError(t, err)
 	require.Empty(t, body)
 
+	return location
+}
+
+func blob_Delete(t *testing.T, opts ...configOpt) {
+	blobDelete(t, opts...)
+}
+
+func blob_Delete_AlreadyDeleted(t *testing.T, opts ...configOpt) {
+	location := blobDelete(t, opts...)
+
 	// Attempt to delete blob link from repository again.
-	res, err = httpDelete(location)
+	res, err := httpDelete(location)
 	require.NoError(t, err)
 	defer res.Body.Close()
 	require.Equal(t, http.StatusNotFound, res.StatusCode)

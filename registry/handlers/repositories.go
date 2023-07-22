@@ -19,6 +19,7 @@ import (
 	"github.com/docker/distribution/registry/api/errcode"
 	v1 "github.com/docker/distribution/registry/api/gitlab/v1"
 	v2 "github.com/docker/distribution/registry/api/v2"
+	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
 	"gitlab.com/gitlab-org/labkit/errortracking"
@@ -66,11 +67,13 @@ const (
 	nQueryParamKey                         = "n"
 	nQueryParamValueMin                    = 1
 	nQueryParamValueMax                    = 1000
+	beforeQueryParamKey                    = "before"
 	lastQueryParamKey                      = "last"
 	dryRunParamKey                         = "dry_run"
 	tagNameQueryParamKey                   = "name"
 	defaultDryRunRenameOperationTimeout    = 5 * time.Second
 	maxRepositoriesToRename                = 1000
+	defaultProjectLeaseDuration            = 60 * time.Second
 )
 
 var (
@@ -81,8 +84,7 @@ var (
 		sizeQueryParamSelfWithDescendantsValue,
 	}
 
-	lastTagQueryParamPattern  = reference.TagRegexp
-	lastPathQueryParamPattern = reference.NameRegexp
+	tagQueryParamPattern = reference.TagRegexp
 
 	// tagNameQueryParamPattern is a modified version of the OCI Distribution tag name regexp pattern (described in
 	// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests) to allow the tag name
@@ -175,6 +177,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 	}
 
 	var opts []datastore.RepositoryStoreOption
+	// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
 	if h.App.redisCache != nil {
 		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(h.App.redisCache)))
 	}
@@ -301,46 +304,73 @@ func tagNameQueryParamValue(r *http.Request) string {
 	return r.URL.Query().Get(tagNameQueryParamKey)
 }
 
-// GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
-// using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution tags list API. `n` is capped
-// to 100 entries by default.
-func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
+	var filters datastore.FilterParams
 
+	q := r.URL.Query()
 	maxEntries := maximumReturnedEntries
 	if q.Has(nQueryParamKey) {
 		val, valid := isQueryParamTypeInt(q.Get(nQueryParamKey))
 		if !valid {
 			detail := v1.InvalidQueryParamTypeErrorDetail(nQueryParamKey, nQueryParamValidTypes)
-			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamType.WithDetail(detail))
-			return
+			return filters, v1.ErrorCodeInvalidQueryParamType.WithDetail(detail)
 		}
 		if !isQueryParamIntValueInBetween(val, nQueryParamValueMin, nQueryParamValueMax) {
 			detail := v1.InvalidQueryParamValueRangeErrorDetail(nQueryParamKey, nQueryParamValueMin, nQueryParamValueMax)
-			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
-			return
+			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
 		}
+
 		maxEntries = val
 	}
+	filters.MaxEntries = maxEntries
+
+	// `last` and `before` are mutually exclusive
+	if q.Has(lastQueryParamKey) && q.Has(beforeQueryParamKey) {
+		detail := v1.MutuallyExclusiveParametersErrorDetail(lastQueryParamKey, beforeQueryParamKey)
+		return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
+	}
+
+	var beforeEntry string
+	if q.Has(beforeQueryParamKey) {
+		beforeEntry = q.Get(beforeQueryParamKey)
+		if !queryParamValueMatchesPattern(beforeEntry, tagQueryParamPattern) {
+			detail := v1.InvalidQueryParamValuePatternErrorDetail(beforeQueryParamKey, tagQueryParamPattern)
+			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
+		}
+	}
+	filters.BeforeEntry = beforeEntry
 
 	// `lastEntry` must conform to the tag name regexp
 	var lastEntry string
 	if q.Has(lastQueryParamKey) {
 		lastEntry = q.Get(lastQueryParamKey)
-		if !queryParamValueMatchesPattern(lastEntry, lastTagQueryParamPattern) {
-			detail := v1.InvalidQueryParamValuePatternErrorDetail(lastQueryParamKey, lastTagQueryParamPattern)
-			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
-			return
+		if !queryParamValueMatchesPattern(lastEntry, tagQueryParamPattern) {
+			detail := v1.InvalidQueryParamValuePatternErrorDetail(lastQueryParamKey, tagQueryParamPattern)
+			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
 		}
 	}
+	filters.LastEntry = lastEntry
 
 	nameFilter := tagNameQueryParamValue(r)
 	if nameFilter != "" {
 		if !queryParamValueMatchesPattern(nameFilter, tagNameQueryParamPattern) {
 			detail := v1.InvalidQueryParamValuePatternErrorDetail(tagNameQueryParamKey, tagNameQueryParamPattern)
-			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
-			return
+			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
 		}
+	}
+	filters.Name = nameFilter
+
+	return filters, nil
+}
+
+// GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
+// using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution tags list API. `n` is capped
+// to 100 entries by default.
+func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
+	filters, err := filterParamsFromRequest(r)
+	if err != nil {
+		h.Errors = append(h.Errors, err)
+		return
 	}
 
 	path := h.Repository.Named().Name()
@@ -355,7 +385,7 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	tagsList, err := rStore.TagsDetailPaginated(h.Context, repo, maxEntries, lastEntry, nameFilter)
+	tagsList, err := rStore.TagsDetailPaginated(h.Context, repo, filters)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
@@ -363,25 +393,33 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 
 	// Add a link header if there are more entries to retrieve
 	if len(tagsList) > 0 {
-		n, err := rStore.TagsCountAfterName(h.Context, repo, tagsList[len(tagsList)-1].Name, nameFilter)
+		filters.LastEntry = tagsList[len(tagsList)-1].Name
+		afterCount, err := rStore.TagsCountAfterName(h.Context, repo, filters)
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
 		}
-		if n > 0 {
-			lastEntry = tagsList[len(tagsList)-1].Name
-			extra := url.Values{}
-			if nameFilter != "" {
-				extra.Add(tagNameQueryParamKey, nameFilter)
-			}
-
-			urlStr, err := createLinkEntry(r.URL.String(), maxEntries, lastEntry, extra)
-			if err != nil {
-				h.Errors = append(h.Errors, errcode.FromUnknownError(err))
-				return
-			}
-			w.Header().Set("Link", urlStr)
+		if afterCount == 0 {
+			filters.LastEntry = ""
 		}
+
+		filters.BeforeEntry = tagsList[0].Name
+		beforeCount, err := rStore.TagsCountBeforeName(h.Context, repo, filters)
+		if err != nil {
+			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+			return
+		}
+
+		if beforeCount == 0 {
+			filters.BeforeEntry = ""
+		}
+
+		urlStr, err := createLinkEntry(r.URL.String(), filters)
+		if err != nil {
+			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+			return
+		}
+		w.Header().Set("Link", urlStr)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -429,33 +467,10 @@ func subRepositoriesDispatcher(ctx *Context, _ *http.Request) http.Handler {
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution catalog list API. `n` can not exceed 1000.
 // if no `n` query parameter is specified the default of `100` is used.
 func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-
-	maxEntries := maximumReturnedEntries
-	if q.Has(nQueryParamKey) {
-		val, valid := isQueryParamTypeInt(q.Get(nQueryParamKey))
-		if !valid {
-			detail := v1.InvalidQueryParamTypeErrorDetail(nQueryParamKey, nQueryParamValidTypes)
-			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamType.WithDetail(detail))
-			return
-		}
-		if !isQueryParamIntValueInBetween(val, nQueryParamValueMin, nQueryParamValueMax) {
-			detail := v1.InvalidQueryParamValueRangeErrorDetail(nQueryParamKey, nQueryParamValueMin, nQueryParamValueMax)
-			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
-			return
-		}
-		maxEntries = val
-	}
-
-	// `lastEntry` must conform to the repository name regexp
-	var lastEntry string
-	if q.Has(lastQueryParamKey) {
-		lastEntry = q.Get(lastQueryParamKey)
-		if !queryParamValueMatchesPattern(lastEntry, lastPathQueryParamPattern) {
-			detail := v1.InvalidQueryParamValuePatternErrorDetail(lastQueryParamKey, lastPathQueryParamPattern)
-			h.Errors = append(h.Errors, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail))
-			return
-		}
+	filters, err := filterParamsFromRequest(r)
+	if err != nil {
+		h.Errors = append(h.Errors, err)
+		return
 	}
 
 	// extract the repository name to create the a preliminary repository
@@ -481,16 +496,16 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 	repo.Name = repo.Path[strings.LastIndex(repo.Path, "/")+1:]
 
 	rStore := datastore.NewRepositoryStore(h.db)
-	repoList, err := rStore.FindPagingatedRepositoriesForPath(h.Context, repo, lastEntry, maxEntries)
+	repoList, err := rStore.FindPagingatedRepositoriesForPath(h.Context, repo, filters)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
 
 	// Add a link header if there might be more entries to retrieve
-	if len(repoList) == maxEntries {
-		lastEntry = repoList[len(repoList)-1].Path
-		urlStr, err := createLinkEntry(r.URL.String(), maxEntries, lastEntry)
+	if len(repoList) == filters.MaxEntries {
+		filters.LastEntry = repoList[len(repoList)-1].Path
+		urlStr, err := createLinkEntry(r.URL.String(), filters)
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			return
@@ -533,6 +548,19 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 	if h.App.redisCache == nil {
 		detail := v1.MissingServerDependencyTypeErrorDetail("redis")
 		h.Errors = append(h.Errors, v1.ErrorCodeNotImplemented.WithDetail(detail))
+		return
+	}
+
+	// extract the repository projectPath from the Auth token resource
+	projectPath, err := findProjectPath(h.Repository.Named().Name(), auth.AuthorizedResources(h))
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	// validate the repository name starts with the project path
+	if !strings.HasPrefix(h.Repository.Named().Name(), projectPath) {
+		h.Errors = append(h.Errors, v1.ErrorCodeMismatchProjectPath)
 		return
 	}
 
@@ -621,6 +649,25 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
+	}
+
+	if !dryRun {
+		// enact a lease on the project path which will be used to block all
+		// write operations to the existing repositories in the given GitLab project.
+		plStore, err := datastore.NewProjectLeaseStore(datastore.NewCentralProjectLeaseCache(h.App.redisCache))
+		if err != nil {
+			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+			return
+		}
+		if err := plStore.Set(h.Context, projectPath, defaultProjectLeaseDuration); err != nil {
+			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+			return
+		}
+		defer func() {
+			if err := plStore.Invalidate(h.Context, projectPath); err != nil {
+				errortracking.Capture(err, errortracking.WithContext(h.Context))
+			}
+		}()
 	}
 
 	// start a transaction to rename the repository (and sub-repository attributes)
@@ -816,4 +863,19 @@ func isRepositoryNameTaken(ctx context.Context, rStore datastore.RepositoryStore
 		}
 	}
 	return false, nil
+}
+
+// findProjectPath extracts the project path from the auth token resource
+// for a repository that matches the resource repository name
+func findProjectPath(repoName string, resources []auth.Resource) (string, error) {
+	for _, r := range resources {
+		// once the repo name in the request url matches the one in the token, then extract the project path
+		if r.Name == repoName {
+			if r.ProjectPath != "" {
+				return r.ProjectPath, nil
+			}
+			return r.ProjectPath, v1.ErrorCodeUnknownProjectPath.WithDetail("project path not found")
+		}
+	}
+	return "", v1.ErrorCodeUnknownProjectPath.WithDetail("requested repository does not match authorized repository in token")
 }

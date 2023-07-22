@@ -73,7 +73,7 @@ func (g *Client) GetFile(fileName, ref string, pid int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	f, err := ioutil.TempFile("", "tmp")
 	if err != nil {
 		return "", err
@@ -88,24 +88,24 @@ func (g *Client) GetFile(fileName, ref string, pid int) (string, error) {
 	return f.Name(), err
 }
 
-
-func (g *Client) SendRequestToDeps(projectID int, triggerToken, ref string) error {
+func (g *Client) SendRequestToDeps(projectID int, triggerToken, ref string) (string, error) {
 	rpto := &gitlab.RunPipelineTriggerOptions{
 		Ref:       &ref,
 		Token:     &triggerToken,
 		Variables: map[string]string{"DEPS_PIPELINE": "true"},
 	}
 
-	_, _, err := g.client.PipelineTriggers.RunPipelineTrigger(projectID, rpto)
+	pipeline, _, err := g.client.PipelineTriggers.RunPipelineTrigger(projectID, rpto)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return nil
+
+	return pipeline.WebURL, nil
 }
 
 func (g *Client) GetChangelog(version string) (string, error) {
 	projectID, err := strconv.Atoi(os.Getenv("CI_PROJECT_ID"))
-	if err != nil{
+	if err != nil {
 		return "", err
 	}
 
@@ -122,4 +122,3 @@ func (g *Client) GetChangelog(version string) (string, error) {
 
 	return "", fmt.Errorf("release with version %s not found", version)
 }
-

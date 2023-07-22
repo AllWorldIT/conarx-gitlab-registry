@@ -26,7 +26,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/jszwec/csvutil v1.7.1
-	github.com/miekg/dns v1.0.14
+	github.com/miekg/dns v1.1.55
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/ncw/swift v1.0.53
 	github.com/olekukonko/tablewriter v0.0.5
@@ -35,14 +35,14 @@ require (
 	github.com/prometheus/client_golang v1.14.0
 	github.com/redis/go-redis/v9 v9.0.2
 	github.com/rubenv/sql-migrate v1.2.0
-	github.com/sirupsen/logrus v1.9.0
+	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.14.0
 	github.com/stretchr/testify v1.8.1
 	github.com/trim21/go-redis-prometheus v0.0.0
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	github.com/xanzy/go-gitlab v0.73.1
-	gitlab.com/gitlab-org/labkit v1.17.0
+	gitlab.com/gitlab-org/labkit v1.19.0
 	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
@@ -122,9 +122,11 @@ require (
 	github.com/yuin/gopher-lua v0.0.0-20220504180219-658193537a64 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0 // indirect
+	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/tools v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect

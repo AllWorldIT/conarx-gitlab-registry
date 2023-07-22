@@ -135,23 +135,23 @@ information about each tag and not just their name.
 GET /gitlab/v1/repositories/<path>/tags/list/
 ```
 
-| Attribute | Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-|-----------|--------|----------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `path`    | String | Yes      |         | The full path of the target repository. Equivalent to the `name` parameter in the `/v2/` API, described in the [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md). The same pattern validation applies.                                                                                                                                                                                                                                                           |
-| `last`    | String | No       |         | Query parameter used as marker for pagination. Set this to the tag name lexicographically after which (exclusive) you want the requested page to start. The value of this query parameter must be a valid tag name. More precisely, it must respect the `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}` pattern as defined in the OCI Distribution spec [here](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests). Otherwise, an `INVALID_QUERY_PARAMETER_VALUE` error is returned. |
-| `n`       | String | No       | 100     | Query parameter used as limit for pagination. Defaults to 100. Must be a positive integer between `1` and `1000` (inclusive). If the value is not a valid integer, the `INVALID_QUERY_PARAMETER_TYPE` error is returned. If the value is a valid integer but is out of the rage then an `INVALID_QUERY_PARAMETER_VALUE` error is returned.                                                                                                                                                                    |
-| `name`    | String | No       |         | Tag name filter. If set, tags are filtered using a partial match against its value. Does not support regular expressions. Only lowercase and uppercase letters, digits, underscores, periods, and hyphen characters are allowed. Maximum of 128 characters. It must respect the `[a-zA-Z0-9._-]{1,128}` pattern. If the value is not valid, the `INVALID_QUERY_PARAMETER_VALUE` error is returned.                                                                                                                                                                  |
+| Attribute | Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+|-----------|--------|----------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `path`    | String | Yes      |         | The full path of the target repository. Equivalent to the `name` parameter in the `/v2/` API, described in the [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md). The same pattern validation applies.                                                                                                                                                                                                                                                                                                         |
+| `before`  | String | No       |         | Query parameter used as marker for pagination. Set this to the tag name lexicographically _before_ which (exclusive) you want the requested page to start. The value of this query parameter must be a valid tag name. More precisely, it must respect the `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}` pattern as defined in the OCI Distribution spec [here](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests). Otherwise, an `INVALID_QUERY_PARAMETER_VALUE` error is returned. Cannot be used in conjunction with `last`. |
+| `last`    | String | No       |         | Query parameter used as marker for pagination. Set this to the tag name lexicographically after which (exclusive) you want the requested page to start. The value of this query parameter must be a valid tag name. More precisely, it must respect the `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}` pattern as defined in the OCI Distribution spec [here](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests). Otherwise, an `INVALID_QUERY_PARAMETER_VALUE` error is returned.                                               |
+| `n`       | String | No       | 100     | Query parameter used as limit for pagination. Defaults to 100. Must be a positive integer between `1` and `1000` (inclusive). If the value is not a valid integer, the `INVALID_QUERY_PARAMETER_TYPE` error is returned. If the value is a valid integer but is out of the rage then an `INVALID_QUERY_PARAMETER_VALUE` error is returned.                                                                                                                                                                                                                  |
+| `name`    | String | No       |         | Tag name filter. If set, tags are filtered using a partial match against its value. Does not support regular expressions. Only lowercase and uppercase letters, digits, underscores, periods, and hyphen characters are allowed. Maximum of 128 characters. It must respect the `[a-zA-Z0-9._-]{1,128}` pattern. If the value is not valid, the `INVALID_QUERY_PARAMETER_VALUE` error is returned.                                                                                                                                                          |
 
 #### Pagination
 
-The response is marker-based paginated, using marker (`last`) and limit (`n`) query parameters to paginate through tags.
+The response is marker-based paginated, using a marker (`last` or `before`, which are mutually exclusive) and limit (`n`) query parameters to paginate through tags.
 The default page size is 100, and it can be optionally increased to a maximum of 1000.
 
 In case more tags exist beyond those included in each response, the response `Link` header will contain the URL for the
-next page, encoded as specified in [RFC5988](https://tools.ietf.org/html/rfc5988). If the header is not present, the
-client can assume that all tags have been retrieved already.
+next page or previous page (depending on if `last` or `before` was used), encoded as specified in [RFC5988](https://tools.ietf.org/html/rfc5988). If the header is not present, the client can assume that all tags have been retrieved already.
 
-As an example, consider a repository named `app` with four tags: `a`, `b`, `c` and `d`. To start retrieving the details
+As an example, consider a repository named `app` with six tags: `a`, `b`, `c`, `d`, `e` and `f`. To start retrieving the details
 of these tags with a page size of `2`, the `n` query parameter should be set to `2`:
 
 ```text
@@ -168,14 +168,42 @@ Link: <https://registry.gitlab.com/gitlab/v1/repositories/app/tags/list/?n=2&las
 ```
 
 Note that `last` is set to `b`, as that was the last tag included in the first page. Invoking this URL will therefore
-give us the second page with tags `c` and `d`. As there are no additional tags to receive, the response will not include
+give us the second page with tags `c` and `d`. 
+
+Requesting the tags list from the `Link` header will return the list of tags _and_ the `Link` header with the `next` and `previous`
+URLs:
+
+```http
+200 OK
+Content-Type: application/json
+Link: <https://registry.gitlab.com/gitlab/v1/repositories/mygroup/myproject/tags/list/?n=2&before=c>; rel="previous", <https://registry.gitlab.com/gitlab/v1/repositories/mygroup/myproject/tags/list/?n=2&last=d>; rel="next"
+```
+
+Note that the `Link` header includes `before=c` with `rel=previous` and `last=d` with `rel=next` query parameters.
+Requesting the last page `https://registry.gitlab.com/gitlab/v1/repositories/mygroup/myproject/tags/list/?n=2&last=d`
+should reply with tags `e` and `f`. As there are no additional tags to receive, the response will not include
 a `Link` header this time.
 
-#### Example
+
+#### Examples
+
+##### `last` marker
 
 ```shell
 curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/repositories/gitlab-org/build/cng/gitlab-container-registry/tags/list/?n=20&last=0.0.1"
 ```
+
+##### `before` marker
+
+Similar to the `last` marker when this query parameter is used, the list of tags will contain up to `n` tags
+from `before` the requested tag (exclusive).
+
+
+```shell
+curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/repositories/gitlab-org/build/cng/gitlab-container-registry/tags/list/?n=20&before=0.21.0"
+```
+
+Assuming there are 20 tags from `before=0.21.0` the response will include all 20 tags, for example ["0.1.0", "0.2.0",...,"0.20.0"].
 
 ### Response
 

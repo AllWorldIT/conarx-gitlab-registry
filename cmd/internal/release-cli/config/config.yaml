@@ -10,10 +10,10 @@ releases:
     ref: master
   gdk:
     project_id: 74823
-    branch_name: bump-registry-version-gdk
-    commit_message: Bump Container Registry version
+    branch_name: bump-registry-version-gdk-{VERSION}
+    commit_message: Bump Container Registry version to {VERSION}
     ref: main
-    mr_title: Bump Container Registry version
+    mr_title: Bump Container Registry version to {VERSION}
     paths:
       - support/docker-registry
       - lib/gdk/config.rb
@@ -21,27 +21,27 @@ releases:
       - gdk.example.yml
   k8s_gprd:
     project_id: 12547113
-    branch_name: bump-registry-version-gprd
-    commit_message: Bump Container Registry version (gprd)
+    branch_name: bump-registry-version-gprd-{VERSION}
+    commit_message: Bump Container Registry version to {VERSION} (gprd)
     ref: master
-    mr_title: Bump Container Registry (gprd)
+    mr_title: Bump Container Registry to {VERSION} (gprd)
     paths:
       - bases/gprd.yaml
   k8s_gstg_pre:
     project_id: 12547113
-    branch_name: bump-registry-version-gstg-pre
-    commit_message: Bump Container Registry version (gstg/pre)
+    branch_name: bump-registry-version-pre-gstg-{VERSION}
+    commit_message: Bump Container Registry version to {VERSION} (pre/gstg)
     ref: master
-    mr_title: Bump Container Registry (gstg/pre)
+    mr_title: Bump Container Registry to {VERSION} (pre/gstg)
     paths:
       - bases/pre.yaml
-      - bases/gstg.yaml     
+      - bases/gstg.yaml
   k8s_gprd_cny:
     project_id: 12547113
-    branch_name: bump-registry-version-gprd-cny
-    commit_message: Bump Container Registry version (gprd-cny)
+    branch_name: bump-registry-version-gprd-cny-{VERSION}
+    commit_message: Bump Container Registry version to {VERSION} (gprd-cny)
     ref: master
-    mr_title: Bump Container Registry (gprd-cny)
+    mr_title: Bump Container Registry to {VERSION} (gprd-cny)
     paths:
       - bases/gprd.yaml
 

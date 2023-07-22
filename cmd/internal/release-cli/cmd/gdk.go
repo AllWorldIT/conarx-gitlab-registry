@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 	"os"
 
 	"github.com/docker/distribution/cmd/internal/release-cli/client"
+	"github.com/docker/distribution/cmd/internal/release-cli/slack"
 	"github.com/docker/distribution/cmd/internal/release-cli/utils"
 	"github.com/spf13/cobra"
 	"github.com/xanzy/go-gitlab"
@@ -30,13 +30,18 @@ var gdkCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
+		webhookUrl, err := cmd.Flags().GetString("slack-webhook-url")
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		labels := &gitlab.Labels{
 			"workflow::ready for review",
 			"group::container registry",
 			"devops::package",
 		}
 
-		release, err := readConfig(cmd.Use)
+		release, err := readConfig(cmd.Use, version)
 		if err != nil {
 			log.Fatalf("Error reading config: %v", err)
 			return
@@ -74,9 +79,21 @@ var gdkCmd = &cobra.Command{
 
 		mr, err := gdkClient.CreateMergeRequest(release.ProjectID, branch, desc, release.Ref, release.MRTitle, labels)
 		if err != nil {
-			log.Fatalf("Failed to create MR: %v", err)
+			errMsg := "Failed to create MR in GDK: " + err.Error()
+			err = slack.SendSlackNotification(webhookUrl, errMsg)
+			if err != nil {
+				log.Printf("Failed to send error notification to Slack: %v", err)
+			}
+			log.Fatalf(errMsg)
 		}
-		fmt.Printf("Created MR: %s\n", mr.WebURL)
+
+		msg := "GDK MR version bump: " + mr.WebURL
+		err = slack.SendSlackNotification(webhookUrl, msg)
+		if err != nil {
+			log.Printf("Failed to send notification to Slack: %v", err)
+		}
+
+		log.Println(msg)
 	},
 }
 

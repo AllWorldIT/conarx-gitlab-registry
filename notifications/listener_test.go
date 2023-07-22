@@ -9,6 +9,7 @@ import (
 	"github.com/docker/distribution/context"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/schema1"
+	"github.com/docker/distribution/notifications/meta"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/cache/memory"
@@ -88,7 +89,7 @@ func (tl *testListener) BlobPushed(repo reference.Named, desc distribution.Descr
 	return nil
 }
 
-func (tl *testListener) BlobPulled(repo reference.Named, desc distribution.Descriptor) error {
+func (tl *testListener) BlobPulled(repo reference.Named, desc distribution.Descriptor, meta *meta.Blob) error {
 	tl.ops["layer:pull"]++
 	return nil
 }

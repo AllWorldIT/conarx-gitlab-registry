@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/notifications/meta"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/urls"
 	"github.com/docker/distribution/registry/client/transport"
@@ -689,7 +690,7 @@ func (bs *blobs) Open(ctx context.Context, dgst digest.Digest) (distribution.Rea
 		}), nil
 }
 
-func (bs *blobs) ServeBlob(ctx context.Context, w http.ResponseWriter, r *http.Request, dgst digest.Digest) error {
+func (bs *blobs) ServeBlob(ctx context.Context, w http.ResponseWriter, r *http.Request, dgst digest.Digest) (*meta.Blob, error) {
 	panic("not implemented")
 }
 

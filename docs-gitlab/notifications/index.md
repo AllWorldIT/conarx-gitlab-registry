@@ -37,6 +37,12 @@ Below is a sample payload of an event notification sent by the registry on diffe
       "source": {
         "addr": "127.0.0.1:5000",
         "instanceID": "45681f21-a006-42f2-ab7c-4cc37d8906b4"
+      },
+      "meta":{
+        "blob":{
+            "redirected": true,
+            "storageBackend": "s3aws"
+        }
       }
     }
   ]
@@ -55,6 +61,7 @@ Below is a sample payload of an event notification sent by the registry on diffe
 | `request`   | Object | Yes            | See [`request`](#request).                                                                                                                                  |
 | `actor`     | Object | Yes            | See [`actor`](#actor).                                                                                                                                      |
 | `source`    | Object | Yes            | See [`source`](#source).                                                                                                                                    |
+| `meta`      | Object | No             | Meta contains additional (optional) information related to an event. See [`meta`](#meta).                                                                                                                                      |
 
 #### `target`
 
@@ -103,3 +110,17 @@ Below is a sample payload of an event notification sent by the registry on diffe
 |--------------|--------|----------------|-----------------------------------------------------------------------------------------|
 | `addr`       | String | No             | Contains the IP or hostname and the port of the registry node that generated the event. |
 | `instanceID` | String | No             | Identifies a running instance of the registry node.                                     |
+
+
+#### `meta`
+
+| Field        | Type   | Always present | Description                                                                             |
+|--------------|--------|----------------|-----------------------------------------------------------------------------------------|
+| `blob`       | Object | No             | Only present on blob download events. Contains additional metadata on downloaded blobs. See [`blob`](#blob)                               |
+
+#### `blob`
+
+| Field             | Type    | Always present | Description                                                                                                               |
+|-------------------|---------|----------------|---------------------------------------------------------------------------------------------------------------------------|
+| `redirected`      | Boolean | Yes            | Identifies if a blob download request was served via a redirect url to the requesting client.                                                                                                         |
+| `storageBackend`  | String  | Yes            | Identifies the backend that was used to serve a blob download request. This is always the configured storage backend (and not the redirect url provider) until  https://gitlab.com/gitlab-org/container-registry/-/issues/1003 is addressed.  |

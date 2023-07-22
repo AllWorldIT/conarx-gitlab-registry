@@ -20,6 +20,7 @@ import (
 	"github.com/docker/distribution/registry/api/errcode"
 	v1 "github.com/docker/distribution/registry/api/gitlab/v1"
 	v2 "github.com/docker/distribution/registry/api/v2"
+	"github.com/docker/distribution/registry/auth/token"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -274,6 +275,18 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			expectedError:  &v1.ErrorCodeInvalidQueryParamType,
 		},
 		{
+			name:           "empty before query parameter",
+			queryParams:    url.Values{"before": []string{""}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
+			name:           "before and last mutually exclusive",
+			queryParams:    url.Values{"before": []string{"hpgkt"}, "last": []string{"dcsl6"}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
 			name:           "non integer n query parameter",
 			queryParams:    url.Values{"n": []string{"foo"}},
 			expectedStatus: http.StatusBadRequest,
@@ -301,7 +314,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 				"kav2-jyi7b",
 				"kb0j5",
 			},
-			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=kb0j5&n=4>; rel="next"`,
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=jyi7b&n=4>; rel="previous", </gitlab/v1/repositories/foo/bar/tags/list/?last=kb0j5&n=4>; rel="next"`,
 		},
 		{
 			name:           "last page",
@@ -312,6 +325,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 				"sjyi7by",
 				"x_y_z",
 			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=n343n&n=4>; rel="previous"`,
 		},
 		{
 			name:           "zero page size",
@@ -340,6 +354,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 				"sjyi7by",
 				"x_y_z",
 			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=n343n&n=100>; rel="previous"`,
 		},
 		{
 			name:           "non existent marker",
@@ -355,12 +370,81 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 				"sjyi7by",
 				"x_y_z",
 			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=hpgkt&n=100>; rel="previous"`,
 		},
 		{
 			name:           "invalid marker",
 			queryParams:    url.Values{"last": []string{"-"}},
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
+			name:           "before marker",
+			queryParams:    url.Values{"before": []string{"dcsl6"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"2j2ar",
+				"asj9e",
+			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=asj9e&n=100>; rel="next"`,
+		},
+		{
+			name:           "before marker nth",
+			queryParams:    url.Values{"before": []string{"jyi7b"}, "n": []string{"2"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"dcsl6",
+				"hpgkt",
+			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=dcsl6&n=2>; rel="previous", </gitlab/v1/repositories/foo/bar/tags/list/?last=hpgkt&n=2>; rel="next"`,
+		},
+		{
+			name:           "before marker last page",
+			queryParams:    url.Values{"before": []string{"x_y_z"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"2j2ar",
+				"asj9e",
+				"dcsl6",
+				"hpgkt",
+				"jyi7b",
+				"jyi7b-fxt1v",
+				"kav2-jyi7b",
+				"kb0j5",
+				"n343n",
+				"sjyi7by",
+			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=sjyi7by&n=100>; rel="next"`,
+		},
+		{
+			name:           "before non-existent marker",
+			queryParams:    url.Values{"before": []string{"z"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"2j2ar",
+				"asj9e",
+				"dcsl6",
+				"hpgkt",
+				"jyi7b",
+				"jyi7b-fxt1v",
+				"kav2-jyi7b",
+				"kb0j5",
+				"n343n",
+				"sjyi7by",
+				"x_y_z",
+			},
+			expectedLinkHeader: ``,
+		},
+		{
+			name:           "before marker filtered by name",
+			queryParams:    url.Values{"before": []string{"sjyi7by"}, "name": []string{"jyi7b"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"jyi7b",
+				"jyi7b-fxt1v",
+				"kav2-jyi7b",
+			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=kav2-jyi7b&n=100&name=jyi7b>; rel="next"`,
 		},
 		{
 			name:           "filtered by name",
@@ -397,7 +481,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			expectedOrderedTags: []string{
 				"jyi7b-fxt1v",
 			},
-			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=jyi7b-fxt1v&n=1&name=jyi7b>; rel="next"`,
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=jyi7b-fxt1v&n=1&name=jyi7b>; rel="previous", </gitlab/v1/repositories/foo/bar/tags/list/?last=jyi7b-fxt1v&n=1&name=jyi7b>; rel="next"`,
 		},
 		{
 			name:           "filtered by name last page",
@@ -407,6 +491,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 				"kav2-jyi7b",
 				"sjyi7by",
 			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=kav2-jyi7b&n=2&name=jyi7b>; rel="previous"`,
 		},
 		{
 			name:           "valid name filter value characters",
@@ -876,6 +961,12 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 	baseRepoName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
 
+	// create an auth token provider
+	tokenProvider := NewAuthTokenProvider(t)
+
+	// generate one full access auth token for all tests
+	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+
 	tt := []struct {
 		name               string
 		queryParams        url.Values
@@ -928,13 +1019,17 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			srv := testutil.RedisServer(t)
-			env := newTestEnv(t, withRedisCache(srv.Addr()))
+			// apply base app config/setup (without authorization) to allow seeding repository with test data
+			env := newTestEnv(t)
 			env.requireDB(t)
 			t.Cleanup(env.Shutdown)
 
 			// seed repos
 			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+
+			// override test config/setup to use token based authorization for all proceeding requests
+			srv := testutil.RedisServer(t)
+			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
 
 			// create and execute test request
 			u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, test.queryParams)
@@ -942,6 +1037,9 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 
 			req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader(test.requestBody))
 			require.NoError(t, err)
+
+			// attach authourization header to request
+			req = tokenProvider.RequestWithAuthToken(req, token)
 
 			// make request
 			resp, err := http.DefaultClient.Do(req)
@@ -978,6 +1076,11 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 
 	baseRepoName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
+
+	// create an auth token provider
+	tokenProvider := NewAuthTokenProvider(t)
+	// generate one full access auth token for all tests
+	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	tt := []struct {
 		name               string
@@ -1039,22 +1142,29 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			srv := testutil.RedisServer(t)
-			env := newTestEnv(t, withRedisCache(srv.Addr()))
+			// apply base app config/setup (without authorization) to allow seeding repository with test data
+			env := newTestEnv(t)
 			env.requireDB(t)
 			t.Cleanup(env.Shutdown)
 
 			// seed repos
 			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
 
-			// create and execute test request
+			// override test config/setup to use token based authorization for all proceeding requests
+			srv := testutil.RedisServer(t)
+			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+			// create request
 			u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, test.queryParams)
 			require.NoError(t, err)
 
 			req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader(test.requestBody))
 			require.NoError(t, err)
 
-			// make request
+			// attach authourization header to request
+			req = tokenProvider.RequestWithAuthToken(req, token)
+
+			// execute request
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
@@ -1105,8 +1215,12 @@ func TestGitlabAPI_RenameRepository_WithoutRedis(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_Empty(t *testing.T) {
-	srv := testutil.RedisServer(t)
-	env := newTestEnv(t, withRedisCache(srv.Addr()))
+	// create an auth token provider
+	tokenProvider := NewAuthTokenProvider(t)
+
+	// config/setup to use token based
+	// authorization for all proceeding requests
+	env := newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 
@@ -1120,6 +1234,9 @@ func TestGitlabAPI_RenameRepository_Empty(t *testing.T) {
 	req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 
+	// attach authourization header to request
+	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -1129,8 +1246,9 @@ func TestGitlabAPI_RenameRepository_Empty(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
-	srv := testutil.RedisServer(t)
-	env := newTestEnv(t, withRedisCache(srv.Addr()))
+
+	// apply base app config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 
@@ -1146,17 +1264,25 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, firstRepoPath, putByTag(tagname))
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
+	// override registry config/setup to use token based authorization for all proceeding requests
+	tokenProvider := NewAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"true"}})
 	require.NoError(t, err)
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
+	// attach authourization header to request
+	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "foo" in "foo/foo" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"true"}})
 	require.NoError(t, err)
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
+	// attach authourization header to request
+	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -1181,8 +1307,8 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
-	srv := testutil.RedisServer(t)
-	env := newTestEnv(t, withRedisCache(srv.Addr()))
+	// apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 
@@ -1198,17 +1324,25 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, firstRepoPath, putByTag(tagname))
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
+	// override registry config/setup to use token based authorization for all proceeding requests
+	tokenProvider := NewAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"true"}})
 	require.NoError(t, err)
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
+	// attach authourization header to request
+	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "zag" in "foo/bar/zag" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"true"}})
 	require.NoError(t, err)
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
+	// attach authourization header to request
+	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -1239,8 +1373,8 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
-	srv := testutil.RedisServer(t)
-	env := newTestEnv(t, withRedisCache(srv.Addr()))
+	// apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 
@@ -1256,17 +1390,25 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, firstRepoPath, putByTag(tagname))
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
+	// override registry config/setup to use token based authorization for all proceeding requests
+	tokenProvider := NewAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"false"}})
 	require.NoError(t, err)
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
+	// attach authourization header to request
+	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "foo" in "foo/foo" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"false"}})
 	require.NoError(t, err)
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
+	// attach authourization header to request
+	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -1286,8 +1428,8 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
-	srv := testutil.RedisServer(t)
-	env := newTestEnv(t, withRedisCache(srv.Addr()))
+	// apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 
@@ -1302,6 +1444,10 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 	}
 	seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
 
+	// override registry config/setup to use token based authorization for all proceeding requests
+	tokenProvider := NewAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
 	// create and execute test request
 	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, url.Values{"dry_run": []string{"false"}})
 	require.NoError(t, err)
@@ -1309,10 +1455,79 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 	req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 
+	// attach authourization header to request
+	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	// assert results
 	checkBodyHasErrorCodes(t, "", resp, v1.ErrorCodeExceedsLimit)
+}
+
+func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
+
+	baseRepoName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	// apply base app config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// create an auth token provider
+	tokenProvider := NewAuthTokenProvider(t)
+
+	// seed repo
+	seedRandomSchema2Manifest(t, env, baseRepoName.Name(), putByTag("latest"))
+
+	// override test config/setup to use token based authorization for all proceeding requests
+	srv := testutil.RedisServer(t)
+	env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+	requestBody := []byte(`{ "name" : "not-bar" }`)
+
+	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName)
+	require.NoError(t, err)
+
+	tt := []struct {
+		name               string
+		expectedRespStatus int
+		expectedRespError  *errcode.ErrorCode
+		tokenActions       []*token.ResourceActions
+	}{
+		{
+			name:               "no project path param in token",
+			expectedRespError:  &v1.ErrorCodeUnknownProjectPath,
+			expectedRespStatus: http.StatusBadRequest,
+			tokenActions:       fullAccessToken(baseRepoName.Name()),
+		},
+		{
+			name:               "token project path param not issued for the specified repository",
+			expectedRespError:  &v1.ErrorCodeMismatchProjectPath,
+			expectedRespStatus: http.StatusBadRequest,
+			tokenActions:       fullAccessTokenWithProjectMeta("different/project/from/repository", baseRepoName.Name()),
+		},
+	}
+
+	for _, test := range tt {
+		t.Run(test.name, func(t *testing.T) {
+			// create request
+			req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader(requestBody))
+			require.NoError(t, err)
+
+			// attach authourization header to request
+			req = tokenProvider.RequestWithAuthActions(req, test.tokenActions)
+
+			// make request
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// assert results
+			require.Equal(t, test.expectedRespStatus, resp.StatusCode)
+			checkBodyHasErrorCodes(t, "", resp, *test.expectedRespError)
+		})
+	}
 }
