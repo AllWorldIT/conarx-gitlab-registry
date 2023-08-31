@@ -318,7 +318,7 @@ func (t *tags) Get(ctx context.Context, tag string) (distribution.Descriptor, er
 		return resp, err
 	}
 
-	resp, err := newRequest("HEAD")
+	resp, err := newRequest(http.MethodHead)
 	if err != nil {
 		return distribution.Descriptor{}, err
 	}
@@ -333,7 +333,7 @@ func (t *tags) Get(ctx context.Context, tag string) (distribution.Descriptor, er
 		// Issue a GET request:
 		//   - for data from a server that does not handle HEAD
 		//   - to get error details in case of a failure
-		resp, err = newRequest("GET")
+		resp, err = newRequest(http.MethodGet)
 		if err != nil {
 			return distribution.Descriptor{}, err
 		}
@@ -365,7 +365,7 @@ func (t *tags) Untag(ctx context.Context, tag string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("DELETE", u, nil)
+	req, err := http.NewRequest(http.MethodDelete, u, nil)
 	if err != nil {
 		return err
 	}
@@ -492,7 +492,7 @@ func (ms *manifests) Get(ctx context.Context, dgst digest.Digest, options ...dis
 		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", u, nil)
+	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +577,7 @@ func (ms *manifests) Put(ctx context.Context, m distribution.Manifest, options .
 		return "", err
 	}
 
-	putRequest, err := http.NewRequest("PUT", manifestURL, bytes.NewReader(p))
+	putRequest, err := http.NewRequest(http.MethodPut, manifestURL, bytes.NewReader(p))
 	if err != nil {
 		return "", err
 	}
@@ -612,7 +612,7 @@ func (ms *manifests) Delete(ctx context.Context, dgst digest.Digest) error {
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest("DELETE", u, nil)
+	req, err := http.NewRequest(http.MethodDelete, u, nil)
 	if err != nil {
 		return err
 	}
@@ -869,7 +869,7 @@ func (bs *blobStatter) Clear(ctx context.Context, dgst digest.Digest) error {
 		return err
 	}
 
-	req, err := http.NewRequest("DELETE", blobURL, nil)
+	req, err := http.NewRequest(http.MethodDelete, blobURL, nil)
 	if err != nil {
 		return err
 	}

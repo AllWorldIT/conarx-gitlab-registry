@@ -37,8 +37,7 @@ type Context struct {
 
 	urlBuilder *urls.Builder
 
-	useDatabase     bool
-	writeFSMetadata bool
+	useDatabase bool
 
 	blobProvider distribution.BlobProvider
 

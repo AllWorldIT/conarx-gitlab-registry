@@ -102,11 +102,12 @@ dev-tools:
 	@npm install -g \
 		@commitlint/cli@17 \
 		@commitlint/config-conventional@17 \
-		semantic-release@19 \
-		@semantic-release/commit-analyzer@9 \
-		@semantic-release/release-notes-generator@10 \
+		semantic-release@21 \
+		@semantic-release/commit-analyzer@10 \
+		@semantic-release/release-notes-generator@11 \
 		@semantic-release/changelog@6 \
-		@semantic-release/git@10
+		@semantic-release/git@10 \
+		conventional-changelog-conventionalcommits@6
 
 # https://github.com/semantic-release/git#environment-variables
 export GIT_AUTHOR_NAME="$(shell git config user.name)"

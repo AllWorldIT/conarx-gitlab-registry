@@ -1,3 +1,32 @@
+## [3.79.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.78.0-gitlab...v3.79.0-gitlab) (2023-08-01)
+
+
+### ✨ Features ✨
+
+* add Cosign media types ([4387862](https://gitlab.com/gitlab-org/container-registry/commit/438786223e7ed15287adf63ed551cd654da23911))
+* **api/gitlab/v1:** support sorting tags detail in descending order ([3c193e1](https://gitlab.com/gitlab-org/container-registry/commit/3c193e11c8c6fe5d56c1697b9528310d95f5eb54))
+* **handlers:** use accurate media types for layers ([85f4d3a](https://gitlab.com/gitlab-org/container-registry/commit/85f4d3a330e2f98d022910758bfe642e1c360e21))
+* **handlers:** use repository cache for the cross repository blob mount ([b875607](https://gitlab.com/gitlab-org/container-registry/commit/b875607c77b9db8b2664121b7bad1593d4c31ad2))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **api/gitlab/v1:** do not set link header when it is empty ([24a3c97](https://gitlab.com/gitlab-org/container-registry/commit/24a3c976043af3d846cf392c11fc9314c495177b))
+* **api/gitlab/v1:** rename fix and docs update ([f52942f](https://gitlab.com/gitlab-org/container-registry/commit/f52942fef465ec88299b724e32524c1e109229ee))
+* **s3:** handle pagination of parts in s3 ([4871f7c](https://gitlab.com/gitlab-org/container-registry/commit/4871f7c57a9dfc97ed11dbe65277d561627c6ad0))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update github.com/denverdino/aliyungo digest to ab98a91 ([e18857d](https://gitlab.com/gitlab-org/container-registry/commit/e18857dfce3ba16d4f00030b563731b78a4a7ae3))
+* **deps:** update module github.com/alicebob/miniredis/v2 to v2.30.4 ([379ce81](https://gitlab.com/gitlab-org/container-registry/commit/379ce814e9ee5a5a671ac2a948a711bbb4b7486c))
+* **deps:** update module github.com/aws/aws-sdk-go to v1.44.312 ([58381d9](https://gitlab.com/gitlab-org/container-registry/commit/58381d9eafe36f6b9c65eb6958b3e81a2c3edf00))
+* **deps:** update module github.com/benbjohnson/clock to v1.3.5 ([aeb4be8](https://gitlab.com/gitlab-org/container-registry/commit/aeb4be85e577920a4c359e0df0c23b722a8373c6))
+* **deps:** update module github.com/cenkalti/backoff/v4 to v4.2.1 ([f3f50d3](https://gitlab.com/gitlab-org/container-registry/commit/f3f50d3305683bd3f8a1783a08473b82f61d6bf3))
+* **deps:** update module github.com/go-redis/redismock/v9 to v9.0.3 ([e04acb8](https://gitlab.com/gitlab-org/container-registry/commit/e04acb8f158ebe5c4eddf5d6c953c8d526c7018d))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.0.5 ([c24fffe](https://gitlab.com/gitlab-org/container-registry/commit/c24fffe2c514374d011f085ee19d4e015a1f7a33))
+* upgrade cloud.google.com/go/storage from v1.29.0 to v1.31.0 ([cf94c33](https://gitlab.com/gitlab-org/container-registry/commit/cf94c33c478416706a614ea299b5ad8426f2d356))
+
 # [3.78.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.77.0-gitlab...v3.78.0-gitlab) (2023-07-05)
 
 

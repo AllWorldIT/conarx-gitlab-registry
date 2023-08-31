@@ -356,7 +356,6 @@ func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, uuid, path string
 		digester:               digest.Canonical.Digester(),
 		fileWriter:             fw,
 		driver:                 lbs.driver,
-		db:                     lbs.registry.db,
 		path:                   path,
 		resumableDigestEnabled: lbs.resumableDigestEnabled,
 	}

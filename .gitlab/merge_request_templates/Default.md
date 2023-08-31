@@ -4,6 +4,8 @@
 
 %{first_multiline_commit}
 
+Related to <!-- add the issue URL here -->
+
 ## Author checklist
 
 - [Feature flags](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/feature-flags.md)

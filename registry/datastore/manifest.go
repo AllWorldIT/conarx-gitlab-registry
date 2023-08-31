@@ -186,14 +186,15 @@ func (s *manifestStore) LayerBlobs(ctx context.Context, m *models.Manifest) (mod
 			b.size,
 			b.created_at
 		FROM
-			blobs AS b
-			JOIN layers AS l ON l.digest = b.digest
-			JOIN manifests AS m ON m.id = l.manifest_id
-			JOIN media_types AS mt ON mt.id = b.media_type_id
+			layers AS l
+			INNER JOIN blobs AS b ON l.digest = b.digest
+			JOIN media_types AS mt ON mt.id = l.media_type_id
 		WHERE
-			m.id = $1`
+			l.manifest_id = $1
+			AND l.repository_id = $2
+			AND l.top_level_namespace_id = $3`
 
-	rows, err := s.db.QueryContext(ctx, q, m.ID)
+	rows, err := s.db.QueryContext(ctx, q, m.ID, m.RepositoryID, m.NamespaceID)
 	if err != nil {
 		return nil, fmt.Errorf("finding blobs: %w", err)
 	}

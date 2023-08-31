@@ -23,7 +23,7 @@ func tagsDispatcher(ctx *Context, r *http.Request) http.Handler {
 		Context: ctx,
 	}
 	h := handlers.MethodHandler{
-		"GET": http.HandlerFunc(tagsHandler.GetTags),
+		http.MethodGet: http.HandlerFunc(tagsHandler.GetTags),
 	}
 	return h
 }
@@ -129,7 +129,9 @@ func (th *tagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 			th.Errors = append(th.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			return
 		}
-		w.Header().Set("Link", urlStr)
+		if urlStr != "" {
+			w.Header().Set("Link", urlStr)
+		}
 	}
 
 	enc := json.NewEncoder(w)
@@ -152,7 +154,7 @@ func tagDispatcher(ctx *Context, r *http.Request) http.Handler {
 	}
 
 	if !ctx.readOnly {
-		thandler["DELETE"] = http.HandlerFunc(tagHandler.DeleteTag)
+		thandler[http.MethodDelete] = http.HandlerFunc(tagHandler.DeleteTag)
 	}
 
 	return thandler
@@ -237,15 +239,13 @@ func (th *tagHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(th))
 	l.Debug("DeleteTag")
 
-	if th.writeFSMetadata {
+	if !th.useDatabase {
 		tagService := th.Repository.Tags(th)
 		if err := tagService.Untag(th.Context, th.Tag); err != nil {
 			th.appendDeleteTagError(err)
 			return
 		}
-	}
-
-	if th.useDatabase {
+	} else {
 		// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
 		var repoCache datastore.RepositoryCache
 		if th.App.redisCache != nil {

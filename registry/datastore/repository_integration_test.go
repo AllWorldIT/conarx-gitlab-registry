@@ -1025,6 +1025,7 @@ func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
 
 	tt := []struct {
 		name          string
+		sort          datastore.SortOrder
 		lastName      string
 		expectedCount int
 	}{
@@ -1039,6 +1040,11 @@ func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
 			expectedCount: 3,
 		},
 		{
+			name:          "nth",
+			lastName:      "stable-91ac07a9",
+			expectedCount: 1,
+		},
+		{
 			name:          "last",
 			lastName:      "stable-9ede8db0",
 			expectedCount: 0,
@@ -1048,6 +1054,36 @@ func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
 			lastName:      "does-not-exist",
 			expectedCount: 3,
 		},
+		{
+			name:          "all desc",
+			sort:          datastore.OrderDesc,
+			lastName:      "",
+			expectedCount: 0,
+		},
+		{
+			name:          "first desc",
+			sort:          datastore.OrderDesc,
+			lastName:      "stable-9ede8db0",
+			expectedCount: 3,
+		},
+		{
+			name:          "nth desc",
+			sort:          datastore.OrderDesc,
+			lastName:      "stable-91ac07a9",
+			expectedCount: 2,
+		},
+		{
+			name:          "last desc",
+			sort:          datastore.OrderDesc,
+			lastName:      "1.0.0",
+			expectedCount: 0,
+		},
+		{
+			name:          "non existent desc",
+			sort:          datastore.OrderDesc,
+			lastName:      "z-does-not-exist",
+			expectedCount: 4,
+		},
 	}
 
 	s := datastore.NewRepositoryStore(suite.db)
@@ -1055,6 +1091,7 @@ func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			filters := datastore.FilterParams{
+				Sort:      test.sort,
 				LastEntry: test.lastName,
 			}
 
@@ -1077,6 +1114,7 @@ func TestRepositoryStore_TagsCountBeforeName(t *testing.T) {
 
 	tt := []struct {
 		name          string
+		sort          datastore.SortOrder
 		beforeName    string
 		expectedCount int
 	}{
@@ -1105,6 +1143,36 @@ func TestRepositoryStore_TagsCountBeforeName(t *testing.T) {
 			beforeName:    "z-does-not-exist",
 			expectedCount: 4,
 		},
+		{
+			name:          "empty desc",
+			beforeName:    "",
+			sort:          datastore.OrderDesc,
+			expectedCount: 0,
+		},
+		{
+			name:          "first desc",
+			sort:          datastore.OrderDesc,
+			beforeName:    "stable-9ede8db0",
+			expectedCount: 0,
+		},
+		{
+			name:          "nth desc",
+			sort:          datastore.OrderDesc,
+			beforeName:    "stable-91ac07a9",
+			expectedCount: 1,
+		},
+		{
+			name:          "last desc",
+			sort:          datastore.OrderDesc,
+			beforeName:    "1.0.0",
+			expectedCount: 3,
+		},
+		{
+			name:          "non existent desc",
+			sort:          datastore.OrderDesc,
+			beforeName:    "z-does-not-exist",
+			expectedCount: 0,
+		},
 	}
 
 	s := datastore.NewRepositoryStore(suite.db)
@@ -1112,6 +1180,7 @@ func TestRepositoryStore_TagsCountBeforeName(t *testing.T) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			filters := datastore.FilterParams{
+				Sort:        test.sort,
 				BeforeEntry: test.beforeName,
 			}
 
@@ -2500,7 +2569,7 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 			limit:        1,
 			beforeName:   "100",
 			lastName:     "1.0.0",
-			expectedTags: []*models.TagDetail{firstTag},
+			expectedTags: []*models.TagDetail{secondTag},
 		},
 		{
 			name:         "before 1st returns empty list",
@@ -2547,6 +2616,185 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			require.Equal(t, test.expectedTags, rr)
+		})
+	}
+}
+
+func TestRepositoryStore_TagsDetailPaginated_Sort(t *testing.T) {
+	reloadTagFixtures(t)
+
+	r := &models.Repository{NamespaceID: 3, ID: 10}
+	// see testdata/fixtures/tags.sql (sorted):
+	// a
+	// b
+	// c
+	// d
+	// e
+	// f
+
+	a := &models.TagDetail{
+		Name:   "a",
+		Digest: digest.Digest("sha256:85fe223d9762cb7c409635e4072bf52aa11d08fc55d0e7a61ac339fd2e41570f"),
+		ConfigDigest: models.NullDigest{
+			Digest: "sha256:65f60633aab53c6abe938ac80b761342c1f7880a95e7f233168b0575dd2dad17",
+			Valid:  true,
+		},
+		MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+		Size:      898023,
+	}
+	b := &models.TagDetail{
+		Name:   "b",
+		Digest: digest.Digest("sha256:af468acedecdad7e7a40ecc7b497ca972ada9778911e340e51791a4a606dbc85"),
+		ConfigDigest: models.NullDigest{
+			Digest: "sha256:b051081eac10ae5607e7846677924d7ac3824954248d0247e0d24dd5063fb4c0",
+			Valid:  true,
+		},
+		MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+		Size:      1151618,
+	}
+	c := &models.TagDetail{
+		Name:      "c",
+		Digest:    digest.Digest("sha256:47be6fe0d7fe76bd73bf8ab0b2a8a08c76814ca44cde20cea0f0073a5f3788e6"),
+		MediaType: "application/vnd.docker.distribution.manifest.list.v2+json",
+	}
+	d := &models.TagDetail{
+		Name:      "d",
+		Digest:    digest.Digest("sha256:624a638727aaa9b1fd5d7ebfcde3eb3771fb83ecf143ec1aa5965401d1573f2a"),
+		MediaType: "application/vnd.docker.distribution.manifest.list.v2+json",
+	}
+	e := &models.TagDetail{
+		Name:      "e",
+		Digest:    digest.Digest("sha256:624a638727aaa9b1fd5d7ebfcde3eb3771fb83ecf143ec1aa5965401d1573f2a"),
+		MediaType: "application/vnd.docker.distribution.manifest.list.v2+json",
+	}
+	f := &models.TagDetail{
+		Name:      "f",
+		Digest:    digest.Digest("sha256:624a638727aaa9b1fd5d7ebfcde3eb3771fb83ecf143ec1aa5965401d1573f2a"),
+		MediaType: "application/vnd.docker.distribution.manifest.list.v2+json",
+	}
+
+	allAsc := []*models.TagDetail{a, b, c, d, e, f}
+	allDesc := []*models.TagDetail{f, e, d, c, b, a}
+
+	tt := map[string]struct {
+		squirrel     bool
+		template     bool
+		sort         datastore.SortOrder
+		beforeName   string
+		lastName     string
+		limit        int
+		expectedTags []*models.TagDetail
+	}{
+		"last all tags asc": {
+			lastName:     "0",
+			limit:        100,
+			expectedTags: allAsc,
+		},
+		"last all tags desc": {
+			sort:         datastore.OrderDesc,
+			lastName:     "z",
+			limit:        100,
+			expectedTags: allDesc,
+		},
+		"before all tags asc": {
+			sort:         datastore.OrderAsc,
+			beforeName:   "z",
+			limit:        100,
+			expectedTags: allAsc,
+		},
+		"before all tags desc": {
+			sort: datastore.OrderDesc,
+			// use character lower than "a" to check filters.BeforeEntry != ""
+			beforeName:   "_",
+			limit:        100,
+			expectedTags: allDesc,
+		},
+		"1st page size 2 lastName desc": {
+			sort:         datastore.OrderDesc,
+			limit:        2,
+			expectedTags: []*models.TagDetail{f, e},
+		},
+		"2nd page size 2 lastName desc": {
+			squirrel:     false,
+			sort:         datastore.OrderDesc,
+			lastName:     "e",
+			limit:        2,
+			expectedTags: []*models.TagDetail{d, c},
+		},
+		"last page size 2 lastName desc": {
+			sort:         datastore.OrderDesc,
+			lastName:     "c",
+			limit:        2,
+			expectedTags: []*models.TagDetail{b, a},
+		},
+		"1st page size 2 lastName asc": {
+			limit:        2,
+			expectedTags: []*models.TagDetail{a, b},
+		},
+		"2nd page size 2 lastName asc": {
+			lastName:     "b",
+			limit:        2,
+			expectedTags: []*models.TagDetail{c, d},
+		},
+		"last page size 2 lastName asc": {
+			lastName:     "d",
+			limit:        2,
+			expectedTags: []*models.TagDetail{e, f},
+		},
+		"get first page size 2 with beforeName desc": {
+			sort:         datastore.OrderDesc,
+			beforeName:   "d",
+			limit:        2,
+			expectedTags: []*models.TagDetail{f, e},
+		},
+		"get second page size 2 with beforeName desc": {
+			sort:         datastore.OrderDesc,
+			beforeName:   "b",
+			limit:        2,
+			expectedTags: []*models.TagDetail{d, c},
+		},
+		"get last page size 2 with beforeName desc": {
+			sort:         datastore.OrderDesc,
+			beforeName:   "_",
+			limit:        2,
+			expectedTags: []*models.TagDetail{b, a},
+		},
+		"last page size 2 beforeName asc": {
+			limit:        2,
+			beforeName:   "z",
+			expectedTags: []*models.TagDetail{e, f},
+		},
+		"2nd page size 2 beforeName asc": {
+			beforeName:   "e",
+			limit:        2,
+			expectedTags: []*models.TagDetail{c, d},
+		},
+		"first page size 2 beforeName asc": {
+			beforeName:   "c",
+			limit:        2,
+			expectedTags: []*models.TagDetail{a, b},
+		},
+	}
+
+	s := datastore.NewRepositoryStore(suite.db)
+
+	for name, test := range tt {
+		t.Run(name, func(t *testing.T) {
+			filters := datastore.FilterParams{
+				Sort:        test.sort,
+				BeforeEntry: test.beforeName,
+				LastEntry:   test.lastName,
+				MaxEntries:  test.limit,
+			}
+
+			rr, err := s.TagsDetailPaginated(suite.ctx, r, filters)
+			require.NoError(t, err)
+			// reset created_at and updated_at attributes for reproducible comparisons
+			for _, r := range rr {
+				r.CreatedAt = time.Time{}
+				r.UpdatedAt = sql.NullTime{}
+			}
 			require.Equal(t, test.expectedTags, rr)
 		})
 	}

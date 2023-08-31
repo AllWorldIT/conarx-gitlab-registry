@@ -2,6 +2,8 @@ dry-run:
   image: node:lts
   stage: release
   needs: []
+  variables:
+    GIT_COMMITTER_EMAIL: $GITLAB_TOKEN_EMAIL
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
@@ -12,6 +14,8 @@ cut:
   image: node:lts
   stage: release
   needs: [ "dry-run" ]
+  variables:
+    GIT_COMMITTER_EMAIL: $GITLAB_TOKEN_EMAIL
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
@@ -68,8 +72,9 @@ version-bump:k8s:gstgpre:
   <<: *version-bump
   needs: [ "version-bump:cng"]
   variables:
-   TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
-   SOURCE_AUTH_TOKEN: $RELEASE_PAT
+    TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
+    SOURCE_AUTH_TOKEN: $RELEASE_PAT
+    MR_REVIWER_IDS: $MR_REVIWER_IDS_K8S
   script:
    - go run cmd/internal/release-cli/main.go k8s --stage gstg-pre --k8s-access-token $TARGET_AUTH_TOKEN --registry-access-token $SOURCE_AUTH_TOKEN --slack-webhook-url $SLACK_WEBHOOK_URL
 
@@ -77,8 +82,9 @@ version-bump:k8s:gprdcny:
   <<: *version-bump
   needs: [ "version-bump:cng"]
   variables:
-   TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
-   SOURCE_AUTH_TOKEN: $RELEASE_PAT
+    TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
+    SOURCE_AUTH_TOKEN: $RELEASE_PAT
+    MR_REVIWER_IDS: $MR_REVIWER_IDS_K8S
   script:
    - go run cmd/internal/release-cli/main.go k8s --stage gprd-cny --k8s-access-token $TARGET_AUTH_TOKEN --registry-access-token $SOURCE_AUTH_TOKEN --slack-webhook-url $SLACK_WEBHOOK_URL
 
@@ -86,8 +92,9 @@ version-bump:k8s:gprd:
   <<: *version-bump
   needs: [ "version-bump:cng"]
   variables:
-   TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
-   SOURCE_AUTH_TOKEN: $RELEASE_PAT
+    TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
+    SOURCE_AUTH_TOKEN: $RELEASE_PAT
+    MR_REVIWER_IDS: $MR_REVIWER_IDS_K8S
   script:
    - go run cmd/internal/release-cli/main.go k8s --stage gprd --k8s-access-token $TARGET_AUTH_TOKEN --registry-access-token $SOURCE_AUTH_TOKEN --slack-webhook-url $SLACK_WEBHOOK_URL
 
@@ -96,5 +103,6 @@ version-bump:gdk:
   variables:
     TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_GDK
     SOURCE_AUTH_TOKEN: $RELEASE_PAT
+    MR_REVIWER_IDS: $MR_REVIWER_IDS_GDK
   script:
    - go run cmd/internal/release-cli/main.go gdk --gdk-access-token $TARGET_AUTH_TOKEN --registry-access-token $SOURCE_AUTH_TOKEN --slack-webhook-url $SLACK_WEBHOOK_URL

@@ -957,7 +957,7 @@ func putManifest(t *testing.T, msg, url, contentType string, v interface{}) *htt
 		}
 	}
 
-	req, err := http.NewRequest("PUT", url, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("error creating request for %s: %v", msg, err)
 	}
@@ -1033,7 +1033,7 @@ func doPushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst dige
 	uploadURL := u.String()
 
 	// Just do a monolithic upload
-	req, err := http.NewRequest("PUT", uploadURL, body)
+	req, err := http.NewRequest(http.MethodPut, uploadURL, body)
 	if err != nil {
 		t.Fatalf("unexpected error creating new request: %v", err)
 	}
@@ -1112,7 +1112,7 @@ func doPushChunk(t *testing.T, uploadURLBase string, body io.Reader) (*http.Resp
 
 	digester := digest.Canonical.Digester()
 
-	req, err := http.NewRequest("PATCH", uploadURL, io.TeeReader(body, digester.Hash()))
+	req, err := http.NewRequest(http.MethodPatch, uploadURL, io.TeeReader(body, digester.Hash()))
 	if err != nil {
 		t.Fatalf("unexpected error creating new request: %v", err)
 	}
@@ -1302,7 +1302,7 @@ func createRepositoryWithMultipleIdenticalTags(t *testing.T, env *testEnv, repoP
 }
 
 func httpDelete(url string) (*http.Response, error) {
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1415,7 +1415,7 @@ func assertHeadResponse(t *testing.T, url string, expectedStatus int) {
 func assertPutResponse(t *testing.T, url string, body io.Reader, headers http.Header, expectedStatus int) {
 	t.Helper()
 
-	req, err := http.NewRequest("PUT", url, body)
+	req, err := http.NewRequest(http.MethodPut, url, body)
 	require.NoError(t, err)
 	for k, vv := range headers {
 		req.Header.Set(k, strings.Join(vv, ","))
@@ -1431,7 +1431,7 @@ func assertPutResponse(t *testing.T, url string, body io.Reader, headers http.He
 func assertPostResponse(t *testing.T, url string, body io.Reader, headers http.Header, expectedStatus int) {
 	t.Helper()
 
-	req, err := http.NewRequest("POST", url, body)
+	req, err := http.NewRequest(http.MethodPost, url, body)
 	require.NoError(t, err)
 	for k, vv := range headers {
 		req.Header.Set(k, strings.Join(vv, ","))
@@ -1726,4 +1726,14 @@ func fullAccessTokenWithProjectMeta(projectPath, repositoryName string) []*token
 		{Type: "repository", Name: repositoryName, Actions: []string{"pull", "push"}, Meta: &token.Meta{ProjectPath: projectPath}},
 		{Type: "repository", Name: repositoryName + "/*", Actions: []string{"pull"}},
 	}
+}
+
+// requireRenameTTLInRange makes sure that the rename operation TTL is within an acceptable range of an expected duration
+func requireRenameTTLInRange(t *testing.T, actualTTL time.Time, expectedTTLDuration time.Duration) {
+	t.Helper()
+	lowerBound := time.Now()
+	upperBound := time.Now().Add(expectedTTLDuration)
+	require.WithinRange(t, actualTTL, lowerBound, upperBound,
+		"rename TTL of %s should be between %s and %s",
+		actualTTL.String(), lowerBound.String(), upperBound.String())
 }

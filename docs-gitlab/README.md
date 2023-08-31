@@ -82,7 +82,7 @@ Defaults to the `true` to remove legacy root prefix. It is recomended to use
 
 `legacyrootprefix`
 
-This parameter is the recomended configuration (as opposed to `trimlegacyrootprefix`) to be used to preserve 
+This parameter is the recomended configuration (as opposed to `trimlegacyrootprefix`) to be used to preserve
 the Azure driver legacy behaviour of using  `//` (appearing in some places as `/<no-name>/` within the Azure UI)
 as the root directory. When `legacyrootprefix` is set to `true` the azure driver uses the legacy azure root directory.
 When this parameter is specified together with `trimlegacyrootprefix` the registry will fail to start if the parameters conflict
@@ -138,10 +138,10 @@ API, enabling the deletion of tags by name.
 #### Broken link files when fetching a manifest by tag
 
 When fetching a manifest by tag, through `GET /v2/<name>/manifests/<tag>`, if
-the manifest link file in 
+the manifest link file in
 `/docker/registry/v2/repositories/<name>/_manifests/tags/<tag>/current/link` is
 empty or corrupted, instead of returning a `500 Internal Server Error` response
-like the upstream implementation, it returns a `404 Not Found` response with a 
+like the upstream implementation, it returns a `404 Not Found` response with a
 `MANIFEST_UNKNOWN` error in the body.
 
 If for some reason a tag manifest link file is broken, in practice, it's as if
@@ -153,12 +153,12 @@ the broken link file.
 Two new headers were added to the response of `GET /v2/` requests:
 
 * `Gitlab-Container-Registry-Version`: The semantic version of the GitLab
-Container Registry (e.g. `2.9.0-gitlab`). This is set during build time (in
-`version.Version`).
+  Container Registry (e.g. `2.9.0-gitlab`). This is set during build time (in
+  `version.Version`).
 * `Gitlab-Container-Registry-Features`: A comma separated list of supported
-features/extensions that are not part of the Docker Distribution spec (e.g.
-`tag_delete,...`). Its value (hardcoded in `version.ExtFeatures`) should be
-updated whenever a custom feature is added/deprecated.
+  features/extensions that are not part of the Docker Distribution spec (e.g.
+  `tag_delete,...`). Its value (hardcoded in `version.ExtFeatures`) should be
+  updated whenever a custom feature is added/deprecated.
 
 This is necessary to detect whether a registry is the GitLab Container Registry
 and which extra features it supports.
@@ -176,11 +176,11 @@ release, you must invoke the `make dev-tools` command to install the required
 dependencies. This requires having [Node.js](https://nodejs.org/en/) and
 [npm](https://docs.npmjs.com/cli/) installed locally.
 
-Once a new tag is pushed to this repository, a CI pipeline is created 
+Once a new tag is pushed to this repository, a CI pipeline is created
 ([sample](https://gitlab.com/gitlab-org/container-registry/-/pipelines/713632199)).
 Within the `release` stage, there are several ordered jobs that Maintainers
 are responsible for triggering. These jobs are responsible for releasing in several GitLab
-projects and their sequence is described in the [Release Plan](https://gitlab.com/gitlab-org/container-registry/-/blob/master/.gitlab/issue_templates/Release%20Plan.md) issue template. A new issue based on the the same 
+projects and their sequence is described in the [Release Plan](https://gitlab.com/gitlab-org/container-registry/-/blob/master/.gitlab/issue_templates/Release%20Plan.md) issue template. A new issue based on the the same
 template is automatically created as part of the CI pipeline with title `Release Version vX.Y.Z-gitlab`.
 
 ## Contributing
@@ -190,15 +190,15 @@ template is automatically created as part of the CI pipeline with title `Release
 Commit messages must:
 
 - Be formatted following the
-[Conventional Commits 1.0](https://www.conventionalcommits.org/en/v1.0.0/)
-specification;
+  [Conventional Commits 1.0](https://www.conventionalcommits.org/en/v1.0.0/)
+  specification;
 
 - Be all lower case, except for acronyms and source code identifiers;
 
 - Have the affected package full path in the scope portion, whenever applicable;
 
-- Include the module name and the target version if upgrading or adding a
-dependency;
+- For dependencies, use `build` type and `deps` scope. Include the module name
+  and the target version if upgrading or adding a dependency;
 
 - End with ` (<issue reference>)` if the commit is fixing an issue.
 
@@ -207,7 +207,7 @@ Please see [this](https://github.com/angular/angular/blob/8ce1ac603a9936784225c2
 #### Examples
 
 ```
-build: upgrade cloud.google.com/go/storage to v1.16.0
+build(deps): upgrade cloud.google.com/go/storage to v1.16.0
 ```
 
 ```

@@ -29,7 +29,7 @@ func catalogDispatcher(ctx *Context, r *http.Request) http.Handler {
 	}
 
 	return handlers.MethodHandler{
-		"GET": http.HandlerFunc(catalogHandler.GetCatalog),
+		http.MethodGet: http.HandlerFunc(catalogHandler.GetCatalog),
 	}
 }
 
@@ -114,7 +114,9 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 			ch.Errors = append(ch.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			return
 		}
-		w.Header().Set("Link", urlStr)
+		if urlStr != "" {
+			w.Header().Set("Link", urlStr)
+		}
 	}
 
 	enc := json.NewEncoder(w)
@@ -175,6 +177,9 @@ func generateLink(originalURL, rel string, filters datastore.FilterParams) (stri
 
 	if filters.Name != "" {
 		qValues.Add(tagNameQueryParamKey, filters.Name)
+	}
+	if filters.Sort != "" {
+		qValues.Add(sortQueryPAramKey, string(filters.Sort))
 	}
 
 	calledURL.RawQuery = qValues.Encode()

@@ -397,7 +397,7 @@ type getTokenResponse struct {
 }
 
 func (th *tokenHandler) fetchTokenWithBasicAuth(realm *url.URL, service string, scopes []string) (token string, expiration time.Time, err error) {
-	req, err := http.NewRequest("GET", realm.String(), nil)
+	req, err := http.NewRequest(http.MethodGet, realm.String(), nil)
 	if err != nil {
 		return "", time.Time{}, err
 	}

@@ -17,7 +17,7 @@ func TestWithRequest(t *testing.T) {
 	var req http.Request
 
 	start := time.Now()
-	req.Method = "GET"
+	req.Method = http.MethodGet
 	req.Host = "example.com"
 	req.RequestURI = "/test-test"
 	req.Header = make(http.Header)
@@ -101,7 +101,7 @@ func TestWithRequest(t *testing.T) {
 func TestWithRequest_MappedKeys(t *testing.T) {
 	var req http.Request
 
-	req.Method = "GET"
+	req.Method = http.MethodGet
 	req.Host = "example.com"
 	req.RequestURI = "/test-test"
 	req.Header = make(http.Header)
@@ -308,7 +308,7 @@ func TestRemoteAddr(t *testing.T) {
 
 	// X-Forwarded-For set by proxy
 	expectedRemote = "127.0.0.1"
-	proxyReq, err := http.NewRequest("GET", frontend.URL, nil)
+	proxyReq, err := http.NewRequest(http.MethodGet, frontend.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestRemoteAddr(t *testing.T) {
 	rsp.Body.Close()
 
 	// RemoteAddr in X-Real-Ip
-	getReq, err := http.NewRequest("GET", backend.URL, nil)
+	getReq, err := http.NewRequest(http.MethodGet, backend.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

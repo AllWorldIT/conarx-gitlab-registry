@@ -44,14 +44,14 @@ var omnibusCmd = &cobra.Command{
 
 		pipelineURL, err := gitlabClient.SendRequestToDeps(release.ProjectID, triggerToken, release.Ref)
 		if err != nil {
-			errMsg := "Failed to trigger a pipeline in Omnibus: " + err.Error()
-			err = slack.SendSlackNotification(webhookUrl, errMsg)
+			msg := fmt.Sprintf("%s release: Failed to trigger Omnibus version bump MR: %s", version, err.Error())
+			err = slack.SendSlackNotification(webhookUrl, msg)
 			if err != nil {
 				log.Printf("Failed to send error notification to Slack: %v", err)
 			}
-			log.Fatalf(errMsg)
+			log.Fatalf(msg)
 		}
-		msg := "Omnibus trigger pipeline URL for version bump: " + pipelineURL
+		msg := fmt.Sprintf("%s release: Omnibus version bump MR trigger pipeline: %s", version, pipelineURL)
 		err = slack.SendSlackNotification(webhookUrl, msg)
 		if err != nil {
 			log.Printf("Failed to send notification to Slack: %v", err)

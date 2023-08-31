@@ -344,7 +344,7 @@ func TestAccessController(t *testing.T) {
 	}
 
 	// 1. Make a mock http.Request with no token.
-	req, err := http.NewRequest("GET", "http://example.com/foo", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://example.com/foo", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -541,7 +541,7 @@ func TestNewAccessControllerPemBlock(t *testing.T) {
 // TestAccessController_Meta tests that the meta data is correctly unmarshalled
 // from the JWT into the context (if it exist) and that the meta data is retreivable from the context.
 func TestAccessController_Meta(t *testing.T) {
-	req, err := http.NewRequest("GET", "https://registry.gitlab.com/v2/myrepo/", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://registry.gitlab.com/v2/myrepo/", nil)
 	require.NoError(t, err)
 	ctx := dcontext.WithRequest(dcontext.Background(), req)
 

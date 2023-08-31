@@ -27,15 +27,15 @@ func blobUploadDispatcher(ctx *Context, r *http.Request) http.Handler {
 	}
 
 	handler := handlers.MethodHandler{
-		"GET":  http.HandlerFunc(buh.GetUploadStatus),
-		"HEAD": http.HandlerFunc(buh.GetUploadStatus),
+		http.MethodGet:  http.HandlerFunc(buh.GetUploadStatus),
+		http.MethodHead: http.HandlerFunc(buh.GetUploadStatus),
 	}
 
 	if !ctx.readOnly {
-		handler["POST"] = http.HandlerFunc(buh.StartBlobUpload)
-		handler["PATCH"] = http.HandlerFunc(buh.PatchBlobData)
-		handler["PUT"] = http.HandlerFunc(buh.PutBlobUploadComplete)
-		handler["DELETE"] = http.HandlerFunc(buh.CancelBlobUpload)
+		handler[http.MethodPost] = http.HandlerFunc(buh.StartBlobUpload)
+		handler[http.MethodPatch] = http.HandlerFunc(buh.PatchBlobData)
+		handler[http.MethodPut] = http.HandlerFunc(buh.PutBlobUploadComplete)
+		handler[http.MethodDelete] = http.HandlerFunc(buh.CancelBlobUpload)
 	}
 
 	return buh.validateUpload(handler)
@@ -460,9 +460,14 @@ func (buh *blobUploadHandler) createBlobMountOption(fromRepo, mountDigest string
 		return storage.WithMountFrom(canonical), nil
 	}
 
+	var opts []datastore.RepositoryStoreOption
+	if buh.App.redisCache != nil {
+		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(buh.App.redisCache)))
+	}
+
 	// Check for blob access on the database and pass that information via the
 	// BlobCreateOption.
-	rStore := datastore.NewRepositoryStore(buh.db)
+	rStore := datastore.NewRepositoryStore(buh.db, opts...)
 	b, err := dbFindRepositoryBlob(buh, rStore, distribution.Descriptor{Digest: dgst}, ref.Name())
 	if err != nil {
 		return nil, err

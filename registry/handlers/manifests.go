@@ -25,6 +25,7 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/registry/internal/feature"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/validation"
 	"github.com/gorilla/handlers"
@@ -84,13 +85,13 @@ func manifestDispatcher(ctx *Context, r *http.Request) http.Handler {
 	}
 
 	mhandler := handlers.MethodHandler{
-		"GET":  http.HandlerFunc(manifestHandler.GetManifest),
-		"HEAD": http.HandlerFunc(manifestHandler.GetManifest),
+		http.MethodGet:  http.HandlerFunc(manifestHandler.GetManifest),
+		http.MethodHead: http.HandlerFunc(manifestHandler.GetManifest),
 	}
 
 	if !ctx.readOnly {
-		mhandler["PUT"] = http.HandlerFunc(manifestHandler.PutManifest)
-		mhandler["DELETE"] = http.HandlerFunc(manifestHandler.DeleteManifest)
+		mhandler[http.MethodPut] = http.HandlerFunc(manifestHandler.PutManifest)
+		mhandler[http.MethodDelete] = http.HandlerFunc(manifestHandler.DeleteManifest)
 	}
 
 	return mhandler
@@ -173,7 +174,7 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if isManifestList {
-		logIfManifestListInvalid(imh, manifestList, "GET")
+		logIfManifestListInvalid(imh, manifestList, http.MethodGet)
 	}
 
 	// Only rewrite manifests lists when they are being fetched by tag. If they
@@ -308,20 +309,11 @@ func (imh *manifestHandler) newManifestGetter(req *http.Request) (manifestGetter
 }
 
 func (imh *manifestHandler) newManifestWriter() (manifestWriter, error) {
-	if imh.useDatabase && !imh.writeFSMetadata {
-		return &dbManifestWriter{}, nil
+	if !imh.useDatabase {
+		return newFSManifestWriter(imh)
 	}
 
-	fsWriter, err := newFSManifestWriter(imh)
-	if err != nil {
-		return nil, err
-	}
-
-	if !imh.useDatabase && imh.writeFSMetadata {
-		return fsWriter, nil
-	}
-
-	return &mirroringManifestWriter{fs: fsWriter, db: &dbManifestWriter{}}, nil
+	return &dbManifestWriter{}, nil
 }
 
 type manifestGetter interface {
@@ -549,27 +541,6 @@ func (p *dbManifestWriter) Tag(imh *manifestHandler, mfst distribution.Manifest,
 	return nil
 }
 
-type mirroringManifestWriter struct {
-	fs *fsManifestWriter
-	db *dbManifestWriter
-}
-
-func (p *mirroringManifestWriter) Put(imh *manifestHandler, mfst distribution.Manifest) error {
-	if err := p.fs.Put(imh, mfst); err != nil {
-		return err
-	}
-
-	return p.db.Put(imh, mfst)
-}
-
-func (p *mirroringManifestWriter) Tag(imh *manifestHandler, mfst distribution.Manifest, tag string, desc distribution.Descriptor) error {
-	if err := p.fs.Tag(imh, mfst, tag, desc); err != nil {
-		return err
-	}
-
-	return p.db.Tag(imh, mfst, tag, desc)
-}
-
 func dbManifestToManifest(dbm *models.Manifest) (distribution.Manifest, error) {
 	if dbm.SchemaVersion == 1 {
 		return nil, distribution.ErrSchemaV1Unsupported
@@ -697,7 +668,7 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 	manifestList, isManifestList := manifest.(*manifestlist.DeserializedManifestList)
 
 	if isManifestList {
-		logIfManifestListInvalid(imh, manifestList, "PUT")
+		logIfManifestListInvalid(imh, manifestList, http.MethodPut)
 	}
 
 	if err := imh.applyResourcePolicy(manifest); err != nil {
@@ -922,7 +893,13 @@ func dbPutManifestSchema2(imh *manifestHandler, manifest *schema2.DeserializedMa
 func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload []byte, nonConformant bool) error {
 	repoPath := imh.Repository.Named().Name()
 
-	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{"repository": repoPath, "manifest_digest": imh.Digest, "schema_version": mfst.Version().SchemaVersion})
+	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{
+		"repository":      repoPath,
+		"manifest_digest": imh.Digest,
+		"schema_version":  mfst.Version().SchemaVersion,
+		feature.FailOnUnknownLayerMediaTypes.EnvVariable: feature.FailOnUnknownLayerMediaTypes.Enabled(),
+		feature.AccurateLayerMediaTypes.EnvVariable:      feature.AccurateLayerMediaTypes.Enabled(),
+	})
 
 	// create or find target repository
 	rStore := datastore.NewRepositoryStore(imh.App.db, datastore.WithRepositoryCache(imh.repoCache))
@@ -989,14 +966,31 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 
 		// find and associate distributable manifest layer blobs
 		for _, reqLayer := range mfst.DistributableLayers() {
-			// Monitor for unknown layer media types before implementing
-			// https://gitlab.com/gitlab-org/container-registry/-/issues/990
-			logUnknownLayerMediaType(imh, reqLayer.MediaType)
-
 			dbBlob, err := dbFindRepositoryBlob(imh.Context, rStore, reqLayer, dbRepo.Path)
 			if err != nil {
 				return err
 			}
+
+			// Overwrite the media type from common blob storage with the one
+			// specified in the manifest json for the layer entity. The layer entity
+			// has a 1-1 relationship with with the manifest, so we want to reflect
+			// the manifest's description of the layer. Multiple manifest can reference
+			// the same blob, so the common blob storage should remain generic.
+			ok, err := layerMediaTypeExists(imh, reqLayer.MediaType)
+			if feature.AccurateLayerMediaTypes.Enabled() {
+				if err != nil && feature.FailOnUnknownLayerMediaTypes.Enabled() {
+					return err
+				}
+
+				if ok {
+					dbBlob.MediaType = reqLayer.MediaType
+				}
+
+				if !ok && feature.FailOnUnknownLayerMediaTypes.Enabled() {
+					return datastore.ErrUnknownMediaType{MediaType: reqLayer.MediaType}
+				}
+			}
+
 			if err := mStore.AssociateLayerBlob(imh.Context, dbManifest, dbBlob); err != nil {
 				return err
 			}
@@ -1006,23 +1000,27 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 	return nil
 }
 
-func logUnknownLayerMediaType(imh *manifestHandler, mt string) {
+func layerMediaTypeExists(imh *manifestHandler, mt string) (bool, error) {
 	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{"media_type": mt})
 	mtStore := datastore.NewMediaTypeStore(imh.App.db)
 
 	exists, err := mtStore.Exists(imh.Context, mt)
 	if err != nil {
-		// Log error only. We should not introduce a possible failure in manifest
-		// uploads here since we are setting up temporary monitoring.
-		l.Error("error checking for existence of media type: %v", err)
-		return
+		if !feature.FailOnUnknownLayerMediaTypes.Enabled() {
+			// Log error if we aren't failing on unknown layer media types so that we
+			// have visibility into the error.
+			l.Error("error checking for existence of media type: %v", err)
+		}
+		return false, fmt.Errorf("checking for existence of layer media type: %v", err)
 	}
 
 	if exists {
-		return
+		return true, nil
 	}
 
 	l.Warn("unknown layer media type")
+
+	return false, nil
 }
 
 // dbFindRepositoryBlob finds a blob which is linked to the repository.
@@ -1385,7 +1383,7 @@ func (imh *manifestHandler) DeleteManifest(w http.ResponseWriter, r *http.Reques
 	l := log.GetLogger(log.WithContext(imh))
 	l.Debug("DeleteImageManifest")
 
-	if imh.writeFSMetadata {
+	if !imh.useDatabase {
 		manifests, err := imh.Repository.Manifests(imh)
 		if err != nil {
 			imh.Errors = append(imh.Errors, err)
@@ -1420,9 +1418,7 @@ func (imh *manifestHandler) DeleteManifest(w http.ResponseWriter, r *http.Reques
 				l.WithError(err).Error("queuing tag delete inside manifest delete handler")
 			}
 		}
-	}
-
-	if imh.useDatabase {
+	} else {
 		if !deleteEnabled(imh.App.Config) {
 			imh.Errors = append(imh.Errors, errcode.ErrorCodeUnsupported)
 			return

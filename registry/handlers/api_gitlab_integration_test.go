@@ -234,6 +234,19 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 		"sjyi7by",
 		"x_y_z",
 	}
+	sortedTagsDesc := []string{
+		"x_y_z",
+		"sjyi7by",
+		"n343n",
+		"kb0j5",
+		"kav2-jyi7b",
+		"jyi7b-fxt1v",
+		"jyi7b",
+		"hpgkt",
+		"dcsl6",
+		"asj9e",
+		"2j2ar",
+	}
 
 	// shuffle tags before creation to make sure results are consistent regardless of creation order
 	shuffledTags := shuffledCopy(sortedTags)
@@ -277,6 +290,12 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 		{
 			name:           "empty before query parameter",
 			queryParams:    url.Values{"before": []string{""}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
+			name:           "invalid sort value",
+			queryParams:    url.Values{"sort": []string{"bad"}},
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
 		},
@@ -328,6 +347,41 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=n343n&n=4>; rel="previous"`,
 		},
 		{
+			name:           "1st page sort desc",
+			queryParams:    url.Values{"n": []string{"4"}, "sort": []string{"desc"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"x_y_z",
+				"sjyi7by",
+				"n343n",
+				"kb0j5",
+			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=kb0j5&n=4&sort=desc>; rel="next"`,
+		},
+		{
+			name:           "nth page sort desc",
+			queryParams:    url.Values{"last": []string{"kb0j5"}, "n": []string{"4"}, "sort": []string{"desc"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"kav2-jyi7b",
+				"jyi7b-fxt1v",
+				"jyi7b",
+				"hpgkt",
+			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=kav2-jyi7b&n=4&sort=desc>; rel="previous", </gitlab/v1/repositories/foo/bar/tags/list/?last=hpgkt&n=4&sort=desc>; rel="next"`,
+		},
+		{
+			name:           "last page sort desc",
+			queryParams:    url.Values{"last": []string{"hpgkt"}, "n": []string{"4"}, "sort": []string{"desc"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"dcsl6",
+				"asj9e",
+				"2j2ar",
+			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=dcsl6&n=4&sort=desc>; rel="previous"`,
+		},
+		{
 			name:           "zero page size",
 			queryParams:    url.Values{"n": []string{"0"}},
 			expectedStatus: http.StatusBadRequest,
@@ -344,6 +398,12 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			queryParams:         url.Values{"n": []string{"1000"}},
 			expectedStatus:      http.StatusOK,
 			expectedOrderedTags: sortedTags,
+		},
+		{
+			name:                "page size bigger than full list sort desc",
+			queryParams:         url.Values{"n": []string{"1000"}, "sort": []string{"desc"}},
+			expectedStatus:      http.StatusOK,
+			expectedOrderedTags: sortedTagsDesc,
 		},
 		{
 			name:           "after marker",
@@ -555,7 +615,14 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			}
 
 			require.Equal(t, expectedBody, body)
-			require.Equal(t, test.expectedLinkHeader, resp.Header.Get("Link"))
+
+			_, ok := resp.Header["Link"]
+			if test.expectedLinkHeader != "" {
+				require.True(t, ok)
+				require.Equal(t, test.expectedLinkHeader, resp.Header.Get("Link"))
+			} else {
+				require.False(t, ok, "Link header should not exist: %s", resp.Header.Get("Link"))
+			}
 		})
 	}
 }
@@ -976,21 +1043,17 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 		expectedRespBody   *handlers.RenameRepositoryAPIResponse
 	}{
 		{
-			name:               "dry run param not set means implicit true",
+			name:               "dry run param not set means implicit false",
 			requestBody:        []byte(`{ "name" : "not-bar" }`),
-			expectedRespStatus: http.StatusOK,
-			expectedRespBody: &handlers.RenameRepositoryAPIResponse{
-				TTL: 0,
-			},
+			expectedRespStatus: http.StatusNoContent,
+			expectedRespBody:   nil,
 		},
 		{
 			name:               "dry run param is set explicitly to true",
 			queryParams:        url.Values{"dry_run": []string{"true"}},
 			requestBody:        []byte(`{ "name" : "not-bar" }`),
-			expectedRespStatus: http.StatusOK,
-			expectedRespBody: &handlers.RenameRepositoryAPIResponse{
-				TTL: 0,
-			},
+			expectedRespStatus: http.StatusAccepted,
+			expectedRespBody:   &handlers.RenameRepositoryAPIResponse{},
 		},
 		{
 			name:               "dry run param is set explicitly to false",
@@ -1057,11 +1120,10 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&body)
 			if test.expectedRespBody != nil {
 				require.NoError(t, err)
-				// assert that the TTL parameter is set and is greater than 0
-				require.Greater(t, body.TTL, 0*time.Second)
-				require.LessOrEqual(t, body.TTL, 60*time.Second)
-				// set the TTL parameter to zero to avoid test time drift comparison
-				body.TTL = 0
+				// assert that the TTL parameter is set and is within 60 seconds
+				requireRenameTTLInRange(t, body.TTL, 60*time.Second)
+				// set the TTL parameter to zero value to avoid test time drift comparison
+				body.TTL = time.Time{}
 			}
 			require.Equal(t, test.expectedRespBody, body)
 		})
@@ -1091,21 +1153,17 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 		expectedRespBody   *handlers.RenameRepositoryAPIResponse
 	}{
 		{
-			name:               "dry run param not set means implicit true",
+			name:               "dry run param not set means implicit false",
 			requestBody:        []byte(`{ "name" : "not-bar" }`),
-			expectedRespStatus: http.StatusOK,
-			expectedRespBody: &handlers.RenameRepositoryAPIResponse{
-				TTL: 0,
-			},
+			expectedRespStatus: http.StatusNoContent,
+			expectedRespBody:   nil,
 		},
 		{
 			name:               "dry run param is set explicitly to true",
 			queryParams:        url.Values{"dry_run": []string{"true"}},
 			requestBody:        []byte(`{ "name" : "not-bar" }`),
-			expectedRespStatus: http.StatusOK,
-			expectedRespBody: &handlers.RenameRepositoryAPIResponse{
-				TTL: 0,
-			},
+			expectedRespStatus: http.StatusAccepted,
+			expectedRespBody:   &handlers.RenameRepositoryAPIResponse{},
 		},
 		{
 			name:               "dry run param is set explicitly to false",
@@ -1180,11 +1238,10 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&body)
 			if test.expectedRespBody != nil {
 				require.NoError(t, err)
-				// assert that the TTL parameter is set and is greater than 0
-				require.Greater(t, body.TTL, 0*time.Second)
-				require.LessOrEqual(t, body.TTL, 60*time.Second)
+				// assert that the TTL parameter is set and is within 60 seconds
+				requireRenameTTLInRange(t, body.TTL, 60*time.Second)
 				// set the TTL parameter to zero to avoid test time drift comparison
-				body.TTL = 0
+				body.TTL = time.Time{}
 			}
 			require.Equal(t, test.expectedRespBody, body)
 		})
@@ -1214,7 +1271,7 @@ func TestGitlabAPI_RenameRepository_WithoutRedis(t *testing.T) {
 	checkBodyHasErrorCodes(t, "", resp, v1.ErrorCodeNotImplemented)
 }
 
-func TestGitlabAPI_RenameRepository_Empty(t *testing.T) {
+func TestGitlabAPI_RenameRepository_Namespace_Empty(t *testing.T) {
 	// create an auth token provider
 	tokenProvider := NewAuthTokenProvider(t)
 
@@ -1232,6 +1289,51 @@ func TestGitlabAPI_RenameRepository_Empty(t *testing.T) {
 	require.NoError(t, err)
 
 	req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
+	require.NoError(t, err)
+
+	// attach authourization header to request
+	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// assert results
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
+
+	// apply base app config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// seed a repo into a project namespace "foo/bar"
+	repoPath := "foo/bar/existing-repo"
+	_, err := reference.WithName(repoPath)
+	require.NoError(t, err)
+
+	tagname := "latest"
+	seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagname))
+
+	// create an auth token provider
+	tokenProvider := NewAuthTokenProvider(t)
+
+	// override config/setup to use token based
+	// authorization for all proceeding requests
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+	// rename a non existing path (i.e. a path with no associated repositories or sub repositories)
+	// under the seeded namespace "foo/bar"
+	baseRepoName, err := reference.WithName("foo/bar/non-existing-repo")
+	require.NoError(t, err)
+
+	// create and execute test request
+	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, url.Values{"dry_run": []string{"false"}})
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "new-name"}`)))
 	require.NoError(t, err)
 
 	// attach authourization header to request
@@ -1290,12 +1392,11 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 	defer resp.Body.Close()
 
 	// assert that the lease was obtained
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 	var body *handlers.RenameRepositoryAPIResponse
 	err = json.NewDecoder(resp.Body).Decode(&body)
 	require.NoError(t, err)
-	require.Greater(t, body.TTL, 0*time.Second)
-	require.LessOrEqual(t, body.TTL, 60*time.Second)
+	requireRenameTTLInRange(t, body.TTL, 60*time.Second)
 
 	// send second request
 	resp, err = http.DefaultClient.Do(secondReq)
@@ -1350,12 +1451,11 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 	defer resp.Body.Close()
 
 	// assert that the lease was obtained
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 	body := handlers.RenameRepositoryAPIResponse{}
 	err = json.NewDecoder(resp.Body).Decode(&body)
 	require.NoError(t, err)
-	require.Greater(t, body.TTL, 0*time.Second)
-	require.LessOrEqual(t, body.TTL, 60*time.Second)
+	requireRenameTTLInRange(t, body.TTL, 60*time.Second)
 
 	// send second request
 	resp, err = http.DefaultClient.Do(secondReq)
@@ -1364,12 +1464,11 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 
 	// assert there is no conflict obtaining the second lease in the presence of the first
 	// assert that the lease was obtained
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 	body = handlers.RenameRepositoryAPIResponse{}
 	err = json.NewDecoder(resp.Body).Decode(&body)
 	require.NoError(t, err)
-	require.Greater(t, body.TTL, 0*time.Second)
-	require.LessOrEqual(t, body.TTL, 60*time.Second)
+	requireRenameTTLInRange(t, body.TTL, 60*time.Second)
 }
 
 func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {

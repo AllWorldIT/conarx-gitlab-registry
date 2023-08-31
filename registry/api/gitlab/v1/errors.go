@@ -71,7 +71,7 @@ var ErrorCodeNotImplemented = errcode.Register(errGroup, errcode.ErrorDescriptor
 
 // ErrorCodeUnknownProjectPath is returned when a project path could not be found for a repository.
 var ErrorCodeUnknownProjectPath = errcode.Register(errGroup, errcode.ErrorDescriptor{
-	Value:          "UNKNOWN_JWT_PROJECT_PATH_CLAIM",
+	Value:          "UNKNOWN_PROJECT_PATH_CLAIM",
 	Message:        "meta.project_path claim not found",
 	Description:    "The value of meta.project_path JWT claim is not assigned to the accesed repository",
 	HTTPStatusCode: http.StatusBadRequest,
@@ -93,8 +93,8 @@ func InvalidQueryParamTypeErrorDetail(key string, validTypes []reflect.Kind) str
 	return fmt.Sprintf("the '%s' query parameter value type must be one of: %s", key, strings.Join(strTypes, ", "))
 }
 
-func InvalidPatchBodyTypeErrorDetail(key string, pattern *regexp.Regexp) string {
-	return fmt.Sprintf("the '%s' body parameter value must match the pattern '%s'", key, pattern)
+func InvalidPatchBodyTypeErrorDetail(key string, patterns ...string) string {
+	return fmt.Sprintf("the '%s' body parameter value must match the following pattern(s): %s", key, strings.Join(patterns, ", "))
 }
 
 func MissingServerDependencyTypeErrorDetail(key string) string {

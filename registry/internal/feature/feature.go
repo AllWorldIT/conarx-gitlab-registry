@@ -30,3 +30,20 @@ var OngoingRenameCheck = Feature{
 	EnvVariable: "REGISTRY_FF_ONGOING_RENAME_CHECK",
 	// defaults to false
 }
+
+// AccurateLayerMediaTypes is used to store the layer media type specified by
+// the manifest json in the layers table. Without this feature enabled, layers
+// are stored with the generic blob media type "application/octet-stream".
+var AccurateLayerMediaTypes = Feature{
+	EnvVariable:    "REGISTRY_FF_ACCURATE_LAYER_MEDIA_TYPES",
+	defaultEnabled: false,
+}
+
+// FailOnUnknownLayerMediaTypes is used to toggle failure on manifest PUTs when
+// a layer has an unknown layer media type when AccurateLayerMediaTypes is
+// enabled. With this feature disabled, layers with an unknown media type are
+// stored with the generic blob media type and the PUT allowed to succeed.
+var FailOnUnknownLayerMediaTypes = Feature{
+	EnvVariable:    "REGISTRY_FF_FAIL_ON_UNKNOWN_LAYER_MEDIA_TYPES",
+	defaultEnabled: false,
+}

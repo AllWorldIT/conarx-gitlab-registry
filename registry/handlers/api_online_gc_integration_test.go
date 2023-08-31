@@ -256,7 +256,7 @@ func TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 
 	// attempt to tag manifest through the API, this should succeed after waiting for lockDuration
 	u := buildManifestTagURL(t, env, repoName.String(), "latest")
-	req, err := http.NewRequest("PUT", u, bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(payload))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", m.MediaType)
 
@@ -308,7 +308,7 @@ func TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview_DanglingManifes
 
 	// attempt to tag manifest through the API, this should resume after lockDuration and recreate and tag the manifest
 	u := buildManifestTagURL(t, env, repoName.String(), "latest")
-	req, err := http.NewRequest("PUT", u, bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(payload))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", m.MediaType)
 
@@ -348,7 +348,7 @@ func TestManifestsAPI_Tag_OnlineGC_TimeoutOnProlongedReview(t *testing.T) {
 
 	// attempt to tag manifest through the API, this should fail after waiting for manifestTagGCLockTimeout (5 seconds)
 	u := buildManifestTagURL(t, env, repoName.String(), "latest")
-	req, err := http.NewRequest("PUT", u, bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(payload))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", m.MediaType)
 

@@ -431,7 +431,7 @@ func TestManifestStore_Layers(t *testing.T) {
 	reloadManifestFixtures(t)
 
 	s := datastore.NewManifestStore(suite.db)
-	bb, err := s.LayerBlobs(suite.ctx, &models.Manifest{ID: 1})
+	bb, err := s.LayerBlobs(suite.ctx, &models.Manifest{NamespaceID: 1, RepositoryID: 3, ID: 1})
 	require.NoError(t, err)
 
 	// see testdata/fixtures/layers.sql

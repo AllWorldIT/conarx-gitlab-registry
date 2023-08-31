@@ -652,9 +652,9 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (d *driver) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
+func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (storagedriver.FileWriter, error) {
 	key := d.s3Path(path)
-	if !append {
+	if !appendParam {
 		// TODO (brianbland): cancel other uploads at this path
 
 		resp, err := d.S3.CreateMultipartUploadWithContext(
@@ -683,7 +683,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 	if err != nil {
 		return nil, parseError(path, err)
 	}
-
+	var allParts []*s3.Part
 	for _, multi := range resp.Uploads {
 		if key != *multi.Key {
 			continue
@@ -699,11 +699,22 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 		if err != nil {
 			return nil, parseError(path, err)
 		}
-		var multiSize int64
-		for _, part := range resp.Parts {
-			multiSize += *part.Size
+		allParts = append(allParts, resp.Parts...)
+		for *resp.IsTruncated {
+			resp, err = d.S3.ListPartsWithContext(
+				ctx,
+				&s3.ListPartsInput{
+					Bucket:           aws.String(d.Bucket),
+					Key:              aws.String(key),
+					UploadId:         multi.UploadId,
+					PartNumberMarker: resp.NextPartNumberMarker,
+				})
+			if err != nil {
+				return nil, parseError(path, err)
+			}
+			allParts = append(allParts, resp.Parts...)
 		}
-		return d.newWriter(key, *multi.UploadId, resp.Parts), nil
+		return d.newWriter(key, *multi.UploadId, allParts), nil
 	}
 	return nil, storagedriver.PathNotFoundError{Path: path}
 }
@@ -1087,11 +1098,11 @@ var systemClock internal.Clock = clock.New()
 // URLFor returns a URL which may be used to retrieve the content stored at the given path.
 // May return an UnsupportedMethodErr in certain StorageDriver implementations.
 func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
-	methodString := "GET"
+	methodString := http.MethodGet
 	method, ok := options["method"]
 	if ok {
 		methodString, ok = method.(string)
-		if !ok || (methodString != "GET" && methodString != "HEAD") {
+		if !ok || (methodString != http.MethodGet && methodString != http.MethodHead) {
 			return "", storagedriver.ErrUnsupportedMethod{}
 		}
 	}
@@ -1108,12 +1119,12 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]int
 	var req *request.Request
 
 	switch methodString {
-	case "GET":
+	case http.MethodGet:
 		req, _ = d.S3.GetObjectRequest(&s3.GetObjectInput{
 			Bucket: aws.String(d.Bucket),
 			Key:    aws.String(d.s3Path(path)),
 		})
-	case "HEAD":
+	case http.MethodHead:
 		req, _ = d.S3.HeadObjectRequest(&s3.HeadObjectInput{
 			Bucket: aws.String(d.Bucket),
 			Key:    aws.String(d.s3Path(path)),

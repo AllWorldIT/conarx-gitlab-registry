@@ -26,12 +26,22 @@ import (
 	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
-// cacheOpTimeout defines the timeout applied to cache operations against Redis
-const cacheOpTimeout = 500 * time.Millisecond
+type SortOrder string
+
+const (
+	// cacheOpTimeout defines the timeout applied to cache operations against Redis
+	cacheOpTimeout = 500 * time.Millisecond
+
+	// OrderDesc is the normalized string to be used for sorting results in descending order
+	OrderDesc SortOrder = "desc"
+	// OrderAsc is the normalized string to be used for sorting results in ascending order
+	OrderAsc SortOrder = "asc"
+)
 
 // FilterParams contains the specific filters used to get
 // the request results from the repositoryStore.
 type FilterParams struct {
+	Sort        SortOrder
 	Name        string
 	BeforeEntry string
 	LastEntry   string
@@ -754,6 +764,22 @@ func sqlPartialMatch(value string) string {
 // The search is not filtered if this value is an empty string.
 func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error) {
 	defer metrics.InstrumentQuery("repository_tags_detail_paginated")()
+
+	// default to ascending order to keep backwards compatibility
+	if filters.Sort == "" {
+		filters.Sort = OrderAsc
+	}
+
+	q, args := tagsDetailPaginatedQuery(r, filters)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("finding tags detail with pagination: %w", err)
+	}
+
+	return scanFullTagsDetail(rows)
+}
+
+func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (string, []any) {
 	baseQuery := `SELECT
 			t.name,
 			encode(m.digest, 'hex') AS digest,
@@ -772,37 +798,55 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 			t.top_level_namespace_id = $1
 			AND t.repository_id = $2
 		  	AND t.name LIKE $3
-			%s
+			%s`
+
+	var q string
+	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
+
+	if filters.LastEntry == "" && filters.BeforeEntry == "" {
+		// this should always return the first page up to filters.MaxEntries
+		tagFilter := fmt.Sprintf(`ORDER BY t.name %s LIMIT $4`, filters.Sort)
+		q = fmt.Sprintf(baseQuery, tagFilter)
+		args = append(args, filters.MaxEntries)
+	} else if filters.LastEntry != "" {
+		tagFilter := formatTagFilter(">", OrderAsc)
+		if filters.Sort == OrderDesc {
+			// we must use less than `<` when sorting in descending order to ensure proper pagination
+			tagFilter = formatTagFilter("<", OrderDesc)
+		}
+
+		q = fmt.Sprintf(baseQuery, tagFilter)
+		args = append(args, filters.LastEntry, filters.MaxEntries)
+	} else if filters.BeforeEntry != "" {
+		// if we are fetching by filters.BeforeEntry we need to sort in DESC order
+		if filters.BeforeEntry != "" {
+			if filters.Sort == OrderDesc {
+				tagFilter := formatTagFilter(">", OrderAsc)
+				// The results will be reversed, so we need to wrap the query in a
+				// SELECT statement that sorts the tags in the correct order
+				subQuery := fmt.Sprintf(baseQuery, tagFilter)
+				q = fmt.Sprintf(`SELECT * FROM (%s) AS tags ORDER BY tags.name DESC`, subQuery)
+			} else {
+				tagFilter := formatTagFilter("<", OrderDesc)
+				// The results will be reversed, so we need to wrap the query in a
+				// SELECT statement that sorts the tags in the correct order
+				subQuery := fmt.Sprintf(baseQuery, tagFilter)
+				q = fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name ASC`, subQuery)
+			}
+		}
+		args = append(args, filters.BeforeEntry, filters.MaxEntries)
+	}
+
+	return q, args
+}
+
+func formatTagFilter(comparisonSign string, order SortOrder) string {
+	filter := `AND t.name %s $4
+		ORDER BY
+			t.name %s
 		LIMIT $5`
 
-	// TODO: consider using an SQL builder library as we move forward
-	// https://gitlab.com/gitlab-org/container-registry/-/issues/1054
-
-	entry := filters.LastEntry
-	tagFilter := `AND t.name > $4
-		ORDER BY
-			t.name`
-	q := fmt.Sprintf(baseQuery, tagFilter)
-
-	// if we are fetching by filters.BeforeEntry we need to sort in DESC order
-	if filters.BeforeEntry != "" {
-		entry = filters.BeforeEntry
-		tagFilter := `AND t.name < $4
-		ORDER BY
-			t.name DESC`
-
-		// The results will be reversed, so we need to wrap the query in a
-		// SELECT statement that sorts the tags in the correct order
-		subQuery := fmt.Sprintf(baseQuery, tagFilter)
-		q = fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name`, subQuery)
-	}
-
-	rows, err := s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), entry, filters.MaxEntries)
-	if err != nil {
-		return nil, fmt.Errorf("finding tags detail with pagination: %w", err)
-	}
-
-	return scanFullTagsDetail(rows)
+	return fmt.Sprintf(filter, comparisonSign, order)
 }
 
 // TagsCountAfterName counts all tags of a given repository with name lexicographically after `filters.LastEntry`. This is used
@@ -821,7 +865,14 @@ func (s *repositoryStore) TagsCountAfterName(ctx context.Context, r *models.Repo
 			top_level_namespace_id = $1
 			AND repository_id = $2
 			AND name LIKE $3
-			AND name > $4`
+			AND name %s $4`
+
+	comparison := ">"
+	if filters.Sort == OrderDesc {
+		comparison = "<"
+	}
+
+	q = fmt.Sprintf(q, comparison)
 
 	var count int
 	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), filters.LastEntry).Scan(&count); err != nil {
@@ -853,7 +904,14 @@ func (s *repositoryStore) TagsCountBeforeName(ctx context.Context, r *models.Rep
 			top_level_namespace_id = $1
 			AND repository_id = $2
 			AND name LIKE $3
-			AND name < $4`
+			AND name %s $4`
+
+	comparison := "<"
+	if filters.Sort == OrderDesc {
+		comparison = ">"
+	}
+
+	q = fmt.Sprintf(q, comparison)
 
 	var count int
 	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), filters.BeforeEntry).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {

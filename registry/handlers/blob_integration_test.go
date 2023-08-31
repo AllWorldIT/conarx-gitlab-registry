@@ -62,7 +62,16 @@ func initDatabase(t *testing.T, env *env) {
 	require.NoError(t, err)
 }
 
-func newEnv(t *testing.T) *env {
+type configOpt func(*configuration.Configuration)
+
+func withRedisCache(srvAddr string) configOpt {
+	return func(config *configuration.Configuration) {
+		config.Redis.Cache.Enabled = true
+		config.Redis.Cache.Addr = srvAddr
+	}
+}
+
+func newEnv(t *testing.T, opts ...configOpt) *env {
 	t.Helper()
 
 	env := &env{
@@ -74,6 +83,10 @@ func newEnv(t *testing.T) *env {
 				},
 			},
 		},
+	}
+
+	for _, o := range opts {
+		o(env.config)
 	}
 
 	initDatabase(t, env)

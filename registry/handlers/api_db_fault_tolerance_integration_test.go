@@ -15,6 +15,7 @@ import (
 	toxiproxy "github.com/Shopify/toxiproxy/client"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/datastore/testutil"
+	htestutil "github.com/docker/distribution/registry/internal/testutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
@@ -238,10 +239,19 @@ func TestDBFaultTolerance_ConnectionRefused_BlobPut(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionRefused_BlobPostMount(t *testing.T) {
+	testDBFaultTolerance_ConnectionRefused_BlobPostMount(t)
+}
+
+func TestDBFaultTolerance_ConnectionRefused_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
+	testDBFaultTolerance_ConnectionRefused_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
+}
+
+func testDBFaultTolerance_ConnectionRefused_BlobPostMount(t *testing.T, opts ...configOpt) {
 	dbProxy := newDBProxy(t)
 	defer dbProxy.Delete()
 
-	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
+	opts = append(opts, withDBHostAndPort(dbProxy.HostAndPort()))
+	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
 	args, _ := createRepoWithBlob(t, env)
@@ -533,10 +543,19 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobPut(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T) {
+	testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t)
+}
+
+func TestDBFaultTolerance_ConnectionTimeout_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
+	testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
+}
+
+func testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T, opts ...configOpt) {
 	dbProxy := newDBProxy(t)
 	defer dbProxy.Delete()
 
-	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
+	opts = append(opts, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
+	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
 	args, _ := createRepoWithBlob(t, env)
@@ -855,7 +874,15 @@ func TestDBFaultTolerance_ConnectionLeak_BlobPut(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_BlobPostMount(t *testing.T) {
-	env := newTestEnv(t)
+	testDBFaultTolerance_ConnectionLeak_BlobPostMount(t)
+}
+
+func TestDBFaultTolerance_ConnectionLeak_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
+	testDBFaultTolerance_ConnectionLeak_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
+}
+
+func testDBFaultTolerance_ConnectionLeak_BlobPostMount(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
 	blobArgs, _ := createRepoWithBlob(t, env)

@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/docker/distribution/registry/internal/testutil"
+
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
@@ -126,7 +128,15 @@ func findBlob(t *testing.T, env *env, d digest.Digest) *models.Blob {
 }
 
 func TestDBMountBlob_NonExistentSourceRepo(t *testing.T) {
-	env := newEnv(t)
+	testDBMountBlob_NonExistentSourceRepo(t)
+}
+
+func TestDBMountBlob_NonExistentSourceRepo_WithCentralRepositoryCache(t *testing.T) {
+	testDBMountBlob_NonExistentSourceRepo(t, withRedisCache(testutil.RedisServer(t).Addr()))
+}
+
+func testDBMountBlob_NonExistentSourceRepo(t *testing.T, opts ...configOpt) {
+	env := newEnv(t, opts...)
 	defer env.shutdown(t)
 
 	// Test for cases where only the source repo does not exist.
@@ -140,7 +150,14 @@ func TestDBMountBlob_NonExistentSourceRepo(t *testing.T) {
 }
 
 func TestDBMountBlob_NonExistentBlob(t *testing.T) {
-	env := newEnv(t)
+	testDBMountBlob_NonExistentBlob(t)
+}
+func TestDBMountBlob_NonExistentBlob_WithCentralRepositoryCache(t *testing.T) {
+	testDBMountBlob_NonExistentBlob(t, withRedisCache(testutil.RedisServer(t).Addr()))
+}
+
+func testDBMountBlob_NonExistentBlob(t *testing.T, opts ...configOpt) {
+	env := newEnv(t, opts...)
 	defer env.shutdown(t)
 
 	fromRepo := buildRepository(t, env, "from")
@@ -151,7 +168,15 @@ func TestDBMountBlob_NonExistentBlob(t *testing.T) {
 }
 
 func TestDBMountBlob_NonExistentBlobLinkInSourceRepo(t *testing.T) {
-	env := newEnv(t)
+	testDBMountBlob_NonExistentBlobLinkInSourceRepo(t)
+}
+
+func TestDBMountBlob_NonExistentBlobLinkInSourceRepo_WithCentralRepositoryCache(t *testing.T) {
+	testDBMountBlob_NonExistentBlobLinkInSourceRepo(t, withRedisCache(testutil.RedisServer(t).Addr()))
+}
+
+func testDBMountBlob_NonExistentBlobLinkInSourceRepo(t *testing.T, opts ...configOpt) {
+	env := newEnv(t, opts...)
 	defer env.shutdown(t)
 
 	fromRepo := buildRepository(t, env, "from")
@@ -163,7 +188,15 @@ func TestDBMountBlob_NonExistentBlobLinkInSourceRepo(t *testing.T) {
 }
 
 func TestDBMountBlob_NonExistentDestinationRepo(t *testing.T) {
-	env := newEnv(t)
+	testDBMountBlob_NonExistentDestinationRepo(t)
+}
+
+func TestDBMountBlob_NonExistentDestinationRepo_WithCentralRepositoryCache(t *testing.T) {
+	testDBMountBlob_NonExistentDestinationRepo(t, withRedisCache(testutil.RedisServer(t).Addr()))
+}
+
+func testDBMountBlob_NonExistentDestinationRepo(t *testing.T, opts ...configOpt) {
+	env := newEnv(t, opts...)
 	defer env.shutdown(t)
 
 	fromRepo := buildRepository(t, env, "from")
@@ -178,7 +211,15 @@ func TestDBMountBlob_NonExistentDestinationRepo(t *testing.T) {
 }
 
 func TestDBMountBlob_AlreadyLinked(t *testing.T) {
-	env := newEnv(t)
+	testDBMountBlob_AlreadyLinked(t)
+}
+
+func TestDBMountBlob_AlreadyLinked_WithCentralRepositoryCache(t *testing.T) {
+	testDBMountBlob_AlreadyLinked(t, withRedisCache(testutil.RedisServer(t).Addr()))
+}
+
+func testDBMountBlob_AlreadyLinked(t *testing.T, opts ...configOpt) {
+	env := newEnv(t, opts...)
 	defer env.shutdown(t)
 
 	b := buildRandomBlob(t, env)

@@ -256,7 +256,7 @@ func manifest_Put_Schema2_ReuseTagManifestToManifest(t *testing.T, opts ...confi
 	// Fetch original manifest by tag name
 	manifestURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	req, err := http.NewRequest("GET", manifestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestURL, nil)
 	require.NoError(t, err)
 
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
@@ -279,7 +279,7 @@ func manifest_Put_Schema2_ReuseTagManifestToManifest(t *testing.T, opts ...confi
 	newManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
 
 	// Fetch new manifest by tag name
-	req, err = http.NewRequest("GET", manifestURL, nil)
+	req, err = http.NewRequest(http.MethodGet, manifestURL, nil)
 	require.NoError(t, err)
 
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
@@ -386,7 +386,7 @@ func manifest_Get_Schema2_NonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", test.manifestURL, nil)
+			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
 			require.NoError(t, err)
 
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
@@ -470,7 +470,7 @@ func manifest_Get_Schema2_MatchingEtag(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", test.manifestURL, nil)
+			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
 			require.NoError(t, err)
 
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
@@ -537,7 +537,7 @@ func baseURLAuth(t *testing.T, opts ...configOpt) {
 
 			// Get baseurl with Authorization header set, which is the only thing
 			// silly auth checks for.
-			req, err := http.NewRequest("GET", test.url, nil)
+			req, err := http.NewRequest(http.MethodGet, test.url, nil)
 			require.NoError(t, err)
 			req.Header.Set("Authorization", "sillySecret")
 
@@ -1141,7 +1141,7 @@ func manifest_Get_Schema2_ByDigest_MissingManifest(t *testing.T, opts ...configO
 	bogusManifestDigestURL, err := env.builder.BuildManifestURL(digestRef)
 	require.NoError(t, err)
 
-	req, err := http.NewRequest("GET", bogusManifestDigestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, bogusManifestDigestURL, nil)
 	require.NoError(t, err)
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1166,7 +1166,7 @@ func manifest_Get_Schema2_ByDigest_MissingRepository(t *testing.T, opts ...confi
 
 	manifestDigestURL := buildManifestDigestURL(t, env, "fake/repo", deserializedManifest)
 
-	req, err := http.NewRequest("GET", manifestDigestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestDigestURL, nil)
 	require.NoError(t, err)
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1191,7 +1191,7 @@ func manifest_Get_Schema2_ByTag_MissingRepository(t *testing.T, opts ...configOp
 
 	manifestURL := buildManifestTagURL(t, env, "fake/repo", tagName)
 
-	req, err := http.NewRequest("GET", manifestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestURL, nil)
 	require.NoError(t, err)
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1216,7 +1216,7 @@ func manifest_Get_Schema2_ByTag_MissingTag(t *testing.T, opts ...configOpt) {
 
 	manifestURL := buildManifestTagURL(t, env, repoPath, "faketag")
 
-	req, err := http.NewRequest("GET", manifestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestURL, nil)
 	require.NoError(t, err)
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1246,7 +1246,7 @@ func manifest_Get_Schema2_ByDigest_NotAssociatedWithRepository(t *testing.T, opt
 
 	mismatchedManifestURL := buildManifestDigestURL(t, env, repoPath1, deserializedManifest2)
 
-	req, err := http.NewRequest("GET", mismatchedManifestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, mismatchedManifestURL, nil)
 	require.NoError(t, err)
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1276,7 +1276,7 @@ func manifest_Get_Schema2_ByTag_NotAssociatedWithRepository(t *testing.T, opts .
 
 	mismatchedManifestURL := buildManifestTagURL(t, env, repoPath1, tagName2)
 
-	req, err := http.NewRequest("GET", mismatchedManifestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, mismatchedManifestURL, nil)
 	require.NoError(t, err)
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1425,7 +1425,7 @@ func manifest_Head_Schema2(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest("HEAD", test.manifestURL, nil)
+			req, err := http.NewRequest(http.MethodHead, test.manifestURL, nil)
 			require.NoError(t, err)
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1491,7 +1491,7 @@ func manifest_Head_Schema2_MissingManifest(t *testing.T, opts ...configOpt) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 
-			req, err := http.NewRequest("HEAD", test.manifestURL, nil)
+			req, err := http.NewRequest(http.MethodHead, test.manifestURL, nil)
 			require.NoError(t, err)
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1587,7 +1587,7 @@ func manifest_Delete_Schema2(t *testing.T, opts ...configOpt) {
 
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 
-	req, err := http.NewRequest("GET", manifestDigestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestDigestURL, nil)
 	require.NoError(t, err)
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1689,7 +1689,7 @@ func manifest_Delete_Schema2_Reupload(t *testing.T, opts ...configOpt) {
 	require.Equal(t, manifestDigestURL, resp.Header.Get("Location"))
 
 	// Attempt to fetch re-uploaded deleted digest
-	req, err := http.NewRequest("GET", manifestDigestURL, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestDigestURL, nil)
 	require.NoError(t, err)
 	req.Header.Set("Accept", schema2.MediaTypeManifest)
 
@@ -1887,7 +1887,7 @@ func manifest_Get_OCI_NonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", test.manifestURL, nil)
+			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
 			require.NoError(t, err)
 
 			req.Header.Set("Accept", v1.MediaTypeImageManifest)
@@ -1971,7 +1971,7 @@ func manifest_Get_OCI_MatchingEtag(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", test.manifestURL, nil)
+			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
 			require.NoError(t, err)
 
 			req.Header.Set("Accept", v1.MediaTypeImageManifest)
@@ -2178,7 +2178,7 @@ func manifest_Get_OCIIndex_NonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", test.manifestURL, nil)
+			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
 			require.NoError(t, err)
 
 			req.Header.Set("Accept", v1.MediaTypeImageIndex)
@@ -2262,7 +2262,7 @@ func manifest_Get_OCIIndex_MatchingEtag(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", test.manifestURL, nil)
+			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
 			require.NoError(t, err)
 
 			req.Header.Set("Accept", v1.MediaTypeImageIndex)
@@ -2343,7 +2343,7 @@ func manifest_Get_ManifestList_FallbackToSchema2(t *testing.T, opts ...configOpt
 	}
 
 	// Get manifest list with without avertising support for manifest lists.
-	req, err := http.NewRequest("GET", manifestTagURL, nil)
+	req, err := http.NewRequest(http.MethodGet, manifestTagURL, nil)
 	require.NoError(t, err)
 
 	resp, err = http.DefaultClient.Do(req)
@@ -2835,7 +2835,7 @@ func tags_Delete_AllowedMethods(t *testing.T, opts ...configOpt) {
 	tagURL, err := env.builder.BuildTagURL(ref)
 	checkErr(t, err, "building tag URL")
 
-	checkAllowedMethods(t, tagURL, []string{"DELETE"})
+	checkAllowedMethods(t, tagURL, []string{http.MethodDelete})
 }
 
 func tags_Delete_AllowedMethodsReadOnly(t *testing.T, opts ...configOpt) {
