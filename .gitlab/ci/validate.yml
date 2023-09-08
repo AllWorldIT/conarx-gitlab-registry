@@ -1,5 +1,4 @@
 include:
-  - template: Security/License-Scanning.gitlab-ci.yml
   - template: Security/SAST.gitlab-ci.yml
   - template: Security/Dependency-Scanning.gitlab-ci.yml
   - template: Security/Secret-Detection.gitlab-ci.yml
@@ -16,9 +15,6 @@ include:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
     # For tags, create a pipeline.
     - if: '$CI_COMMIT_TAG'
-
-license_scanning:
-  <<: *rules-for-scanners
 
 gemnasium-dependency_scanning:
   <<: *rules-for-scanners
