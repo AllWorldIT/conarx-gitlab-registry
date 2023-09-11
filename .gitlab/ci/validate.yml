@@ -27,6 +27,8 @@ secret_detection:
 
 semgrep-sast:
   <<: *rules-for-scanners
+  before_script:
+    - echo ".GOPATH/" > .semgrepignore
 
 commitlint:
   cache: {}
