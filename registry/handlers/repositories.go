@@ -72,7 +72,8 @@ const (
 	lastQueryParamKey                      = "last"
 	dryRunParamKey                         = "dry_run"
 	tagNameQueryParamKey                   = "name"
-	sortQueryPAramKey                      = "sort"
+	sortQueryParamKey                      = "sort"
+	sortOrderDescPrefix                    = "-"
 	defaultDryRunRenameOperationTimeout    = 5 * time.Second
 	maxRepositoriesToRename                = 1000
 )
@@ -86,8 +87,9 @@ var (
 	}
 
 	sortQueryParamValidValues = []string{
-		string(datastore.OrderAsc),
-		string(datastore.OrderDesc),
+		// name in descending order
+		fmt.Sprintf("-%s", tagNameQueryParamKey),
+		tagNameQueryParamKey,
 	}
 
 	tagQueryParamPattern = reference.TagRegexp
@@ -317,6 +319,10 @@ func tagNameQueryParamValue(r *http.Request) string {
 	return r.URL.Query().Get(tagNameQueryParamKey)
 }
 
+func sortQueryParamValue(r *http.Request) string {
+	return strings.ToLower(strings.TrimSpace(r.URL.Query().Get(sortQueryParamKey)))
+}
+
 func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	var filters datastore.FilterParams
 
@@ -373,19 +379,29 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	}
 	filters.Name = nameFilter
 
-	var sort datastore.SortOrder
-	if q.Has(sortQueryPAramKey) {
-		// ensure we compare against the values of datastore.OrderDesc or datastore.OrderAsc
-		sort = datastore.SortOrder(strings.ToLower(q.Get(sortQueryPAramKey)))
-		if sort != datastore.OrderDesc && sort != datastore.OrderAsc {
-			detail := v1.InvalidQueryParamValueErrorDetail(sortQueryPAramKey, sortQueryParamValidValues)
+	sort := sortQueryParamValue(r)
+	if sort != "" {
+		if !isQueryParamValueValid(sort, sortQueryParamValidValues) {
+			detail := v1.InvalidQueryParamValueErrorDetail(sortQueryParamKey, sortQueryParamValidValues)
 			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
 		}
-
+		filters.OrderBy, filters.SortOrder = getSortOrderParams(sort)
 	}
-	filters.Sort = sort
 
 	return filters, nil
+}
+
+func getSortOrderParams(sort string) (string, datastore.SortOrder) {
+	orderBy := tagNameQueryParamKey
+	sortOrder := datastore.OrderAsc
+
+	values := strings.Split(sort, sortOrderDescPrefix)
+	if len(values) == 2 {
+		sortOrder = datastore.OrderDesc
+		orderBy = values[1]
+	}
+
+	return orderBy, sortOrder
 }
 
 // GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination

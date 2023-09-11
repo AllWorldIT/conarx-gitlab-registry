@@ -1046,7 +1046,7 @@ func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			filters := datastore.FilterParams{
-				Sort:      test.sort,
+				SortOrder: test.sort,
 				LastEntry: test.lastName,
 			}
 
@@ -1135,7 +1135,7 @@ func TestRepositoryStore_TagsCountBeforeName(t *testing.T) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			filters := datastore.FilterParams{
-				Sort:        test.sort,
+				SortOrder:   test.sort,
 				BeforeEntry: test.beforeName,
 			}
 
@@ -2695,7 +2695,7 @@ func TestRepositoryStore_TagsDetailPaginated_Sort(t *testing.T) {
 	for name, test := range tt {
 		t.Run(name, func(t *testing.T) {
 			filters := datastore.FilterParams{
-				Sort:        test.sort,
+				SortOrder:   test.sort,
 				BeforeEntry: test.beforeName,
 				LastEntry:   test.lastName,
 				MaxEntries:  test.limit,

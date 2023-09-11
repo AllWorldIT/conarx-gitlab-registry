@@ -34,12 +34,15 @@ const (
 	OrderDesc SortOrder = "desc"
 	// OrderAsc is the normalized string to be used for sorting results in ascending order
 	OrderAsc SortOrder = "asc"
+
+	orderByName = "name"
 )
 
 // FilterParams contains the specific filters used to get
 // the request results from the repositoryStore.
 type FilterParams struct {
-	Sort        SortOrder
+	SortOrder   SortOrder
+	OrderBy     string
 	Name        string
 	BeforeEntry string
 	LastEntry   string
@@ -739,11 +742,6 @@ func sqlPartialMatch(value string) string {
 func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error) {
 	defer metrics.InstrumentQuery("repository_tags_detail_paginated")()
 
-	// default to ascending order to keep backwards compatibility
-	if filters.Sort == "" {
-		filters.Sort = OrderAsc
-	}
-
 	q, args := tagsDetailPaginatedQuery(r, filters)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -777,16 +775,24 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 	var q string
 	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
 
+	// default to ascending order to keep backwards compatibility
+	if filters.SortOrder == "" {
+		filters.SortOrder = OrderAsc
+	}
+	if filters.OrderBy == "" {
+		filters.OrderBy = orderByName
+	}
+
 	if filters.LastEntry == "" && filters.BeforeEntry == "" {
 		// this should always return the first page up to filters.MaxEntries
-		tagFilter := fmt.Sprintf(`ORDER BY t.name %s LIMIT $4`, filters.Sort)
+		tagFilter := fmt.Sprintf(`ORDER BY t.%s %s LIMIT $4`, filters.OrderBy, filters.SortOrder)
 		q = fmt.Sprintf(baseQuery, tagFilter)
 		args = append(args, filters.MaxEntries)
 	} else if filters.LastEntry != "" {
-		tagFilter := formatTagFilter(">", OrderAsc)
-		if filters.Sort == OrderDesc {
+		tagFilter := formatTagFilter(">", filters.OrderBy, OrderAsc)
+		if filters.SortOrder == OrderDesc {
 			// we must use less than `<` when sorting in descending order to ensure proper pagination
-			tagFilter = formatTagFilter("<", OrderDesc)
+			tagFilter = formatTagFilter("<", filters.OrderBy, OrderDesc)
 		}
 
 		q = fmt.Sprintf(baseQuery, tagFilter)
@@ -794,18 +800,18 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 	} else if filters.BeforeEntry != "" {
 		// if we are fetching by filters.BeforeEntry we need to sort in DESC order
 		if filters.BeforeEntry != "" {
-			if filters.Sort == OrderDesc {
-				tagFilter := formatTagFilter(">", OrderAsc)
+			if filters.SortOrder == OrderDesc {
+				tagFilter := formatTagFilter(">", filters.OrderBy, OrderAsc)
 				// The results will be reversed, so we need to wrap the query in a
 				// SELECT statement that sorts the tags in the correct order
 				subQuery := fmt.Sprintf(baseQuery, tagFilter)
-				q = fmt.Sprintf(`SELECT * FROM (%s) AS tags ORDER BY tags.name DESC`, subQuery)
+				q = fmt.Sprintf(`SELECT * FROM (%s) AS tags ORDER BY tags.%s DESC`, subQuery, filters.OrderBy)
 			} else {
-				tagFilter := formatTagFilter("<", OrderDesc)
+				tagFilter := formatTagFilter("<", filters.OrderBy, OrderDesc)
 				// The results will be reversed, so we need to wrap the query in a
 				// SELECT statement that sorts the tags in the correct order
 				subQuery := fmt.Sprintf(baseQuery, tagFilter)
-				q = fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name ASC`, subQuery)
+				q = fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.%s ASC`, subQuery, filters.OrderBy)
 			}
 		}
 		args = append(args, filters.BeforeEntry, filters.MaxEntries)
@@ -814,13 +820,13 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 	return q, args
 }
 
-func formatTagFilter(comparisonSign string, order SortOrder) string {
+func formatTagFilter(comparisonSign, orderBy string, sortOrder SortOrder) string {
 	filter := `AND t.name %s $4
 		ORDER BY
-			t.name %s
+			t.%s %s
 		LIMIT $5`
 
-	return fmt.Sprintf(filter, comparisonSign, order)
+	return fmt.Sprintf(filter, comparisonSign, orderBy, sortOrder)
 }
 
 // TagsCountAfterName counts all tags of a given repository with name lexicographically after `filters.LastEntry`. This is used
@@ -842,7 +848,7 @@ func (s *repositoryStore) TagsCountAfterName(ctx context.Context, r *models.Repo
 			AND name %s $4`
 
 	comparison := ">"
-	if filters.Sort == OrderDesc {
+	if filters.SortOrder == OrderDesc {
 		comparison = "<"
 	}
 
@@ -881,7 +887,7 @@ func (s *repositoryStore) TagsCountBeforeName(ctx context.Context, r *models.Rep
 			AND name %s $4`
 
 	comparison := "<"
-	if filters.Sort == OrderDesc {
+	if filters.SortOrder == OrderDesc {
 		comparison = ">"
 	}
 

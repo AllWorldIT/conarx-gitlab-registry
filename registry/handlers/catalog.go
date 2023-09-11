@@ -184,8 +184,13 @@ func generateLink(originalURL, rel string, filters datastore.FilterParams) (stri
 	if filters.Name != "" {
 		qValues.Add(tagNameQueryParamKey, filters.Name)
 	}
-	if filters.Sort != "" {
-		qValues.Add(sortQueryPAramKey, string(filters.Sort))
+
+	orderBy := filters.OrderBy
+	if orderBy != "" {
+		if filters.SortOrder == datastore.OrderDesc {
+			orderBy = "-" + orderBy
+		}
+		qValues.Add(sortQueryParamKey, orderBy)
 	}
 
 	calledURL.RawQuery = qValues.Encode()
