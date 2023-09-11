@@ -34,7 +34,8 @@ var OngoingRenameCheck = Feature{
 // the manifest json in the layers table. Without this feature enabled, layers
 // are stored with the generic blob media type "application/octet-stream".
 var AccurateLayerMediaTypes = Feature{
-	EnvVariable: "REGISTRY_FF_ACCURATE_LAYER_MEDIA_TYPES",
+	EnvVariable:    "REGISTRY_FF_ACCURATE_LAYER_MEDIA_TYPES",
+	defaultEnabled: true,
 }
 
 // testFeature is used for testing purposes only
