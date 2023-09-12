@@ -51,10 +51,11 @@ func copyFullPayload(ctx context.Context, responseWriter http.ResponseWriter, r 
 			responseWriter.WriteHeader(499)
 
 			dcontext.GetLoggerWithFields(ctx, map[interface{}]interface{}{
-				"error":         err,
-				"copied":        copied,
-				"contentLength": r.ContentLength,
-			}, "error", "copied", "contentLength").Warn("client disconnected during " + action)
+				"error":          err,
+				"copied":         copied,
+				"content_length": r.ContentLength,
+				"action":         action,
+			}, "error", "copied", "content_length").Warn("client disconnected during " + action)
 			return errcode.ErrorCodeConnectionReset.WithDetail("client disconnected")
 		default:
 		}
@@ -64,6 +65,12 @@ func copyFullPayload(ctx context.Context, responseWriter http.ResponseWriter, r 
 		dcontext.GetLogger(ctx).Errorf("unknown error reading request payload: %v", err)
 		return err
 	}
+
+	dcontext.GetLoggerWithFields(ctx, map[interface{}]interface{}{
+		"copied":         copied,
+		"content_length": r.ContentLength,
+		"action":         action,
+	}).Info("payload copied")
 
 	return nil
 }
