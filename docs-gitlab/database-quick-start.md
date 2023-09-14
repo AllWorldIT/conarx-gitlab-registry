@@ -3,9 +3,13 @@ Follow this guide to start using the metadata database with the container regist
 
 **Warning:** The metadata database is a
 [beta](https://docs.gitlab.com/ee/policy/experiment-beta-support.html#beta)
-feature. **Carefully review the documentation before enabling the registry database in production!**
+feature available starting at GitLab version 16.4.
+**Carefully review the documentation before enabling the registry database in production!**
 If you encounter a problem with either the import or normal operation of the
 registry, please open an issue [here](https://gitlab.com/gitlab-org/container-registry/-/issues).
+
+Please review the [feedback issue](https://gitlab.com/gitlab-org/gitlab/-/issues/423459)
+before using this feature.
 
 The metadata database enables you make use of many new features, such as
 [online garbage collection](./db/online-garbage-collection.md) and increases the
@@ -147,6 +151,8 @@ the registry service:
 database:
   enabled: false
 storage:
+  filesystem:
+    rootdirectory: "/<path>/<to>/<dir>"
   maintenance:
     readonly:
       enabled: true
@@ -166,6 +172,8 @@ and start the registry service:
 database:
   enabled: true
 storage:
+  filesystem:
+    rootdirectory: "/<path>/<to>/<dir>"
   maintenance:
     readonly:
       enabled: false
@@ -208,6 +216,8 @@ the registry service:
 database:
   enabled: false
 storage:
+  filesystem:
+    rootdirectory: "/<path>/<to>/<dir>"
   maintenance:
     readonly:
       enabled: true
@@ -227,6 +237,8 @@ start the registry service:
 database:
   enabled: true
 storage:
+  filesystem:
+    rootdirectory: "/<path>/<to>/<dir>"
   maintenance:
     readonly:
       enabled: false
