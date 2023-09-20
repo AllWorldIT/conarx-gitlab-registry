@@ -90,7 +90,7 @@ sequenceDiagram
             R->>RR: Procure (at most) a 6 seconds lease on the current project path to prevent writes to all repositories under path "my-group/my-sub-group/old-name" 
             R->>P: Execute Rename
             alt Rename was successful
-              R->>G: 201 No Content
+              R->>G: 204 No Content
             else Rename was unsuccessful
               R->>G: 500 Internal Error
             end
