@@ -150,7 +150,7 @@ the broken link file.
 
 #### Custom Headers on `GET /v2/`
 
-Two new headers were added to the response of `GET /v2/` requests:
+The following headers were added to the response of `GET /v2/` requests:
 
 * `Gitlab-Container-Registry-Version`: The semantic version of the GitLab
   Container Registry (e.g. `2.9.0-gitlab`). This is set during build time (in
@@ -159,6 +159,8 @@ Two new headers were added to the response of `GET /v2/` requests:
   features/extensions that are not part of the Docker Distribution spec (e.g.
   `tag_delete,...`). Its value (hardcoded in `version.ExtFeatures`) should be
   updated whenever a custom feature is added/deprecated.
+* `Gitlab-Container-Registry-Database-Enabled`: A boolean indicating whether
+  the metadata database is enabled in the registry configuration.
 
 This is necessary to detect whether a registry is the GitLab Container Registry
 and which extra features it supports.

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -981,7 +982,7 @@ func (app *App) initMetaRouter() error {
 
 	// Register the handler dispatchers.
 	app.registerDistribution(v2.RouteNameBase, func(ctx *Context, r *http.Request) http.Handler {
-		return http.HandlerFunc(distributionAPIBase)
+		return distributionAPIBase(app.Config.Database.Enabled)
 	})
 	app.registerDistribution(v2.RouteNameManifest, manifestDispatcher)
 	app.registerDistribution(v2.RouteNameCatalog, catalogDispatcher)
@@ -1403,10 +1404,12 @@ func (app *App) nameRequired(r *http.Request) bool {
 
 // distributionAPIBase provides clients with extra information about extended
 // features the distribution API via the Gitlab-Container-Registry-Features header.
-func distributionAPIBase(w http.ResponseWriter, r *http.Request) {
-	// Provide clients with information about extended distribu
-	w.Header().Set("Gitlab-Container-Registry-Features", version.ExtFeatures)
-	apiBase(w, r)
+func distributionAPIBase(dbEnabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Gitlab-Container-Registry-Features", version.ExtFeatures)
+		w.Header().Set("Gitlab-Container-Registry-Database-Enabled", strconv.FormatBool(dbEnabled))
+		apiBase(w, r)
+	}
 }
 
 // apiBase implements a simple yes-man for doing overall checks against the

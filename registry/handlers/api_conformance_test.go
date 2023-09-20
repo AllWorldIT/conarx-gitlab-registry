@@ -579,6 +579,7 @@ func baseURLAuth(t *testing.T, opts ...configOpt) {
 
 			if test.wantExtFeatures {
 				require.Equal(t, version.ExtFeatures, resp.Header.Get("Gitlab-Container-Registry-Features"))
+				require.Equal(t, strconv.FormatBool(env.config.Database.Enabled), resp.Header.Get("Gitlab-Container-Registry-Database-Enabled"))
 			} else {
 				require.Empty(t, resp.Header.Get("Gitlab-Container-Registry-Features"))
 			}
