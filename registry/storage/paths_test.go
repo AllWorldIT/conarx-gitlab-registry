@@ -90,6 +90,12 @@ func TestPathMapper(t *testing.T) {
 			},
 			expected: "/docker/registry/v2/repositories/foo/bar",
 		},
+		{
+			spec: lockFilePathSpec{
+				name: "test.lock",
+			},
+			expected: "/docker/registry/lockfiles/test.lock",
+		},
 	} {
 		p, err := pathFor(testcase.spec)
 		if err != nil {
