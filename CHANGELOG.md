@@ -1,3 +1,24 @@
+## [3.84.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.83.0-gitlab...v3.84.0-gitlab) (2023-09-26)
+
+
+### ✨ Features ✨
+
+* **cache:** use repository cache to complete blob upload ([c678843](https://gitlab.com/gitlab-org/container-registry/commit/c67884383bcd88bf4a1c6083034b2bcac4dac81c))
+* **handlers:** expose database usage in v2 headers ([121e440](https://gitlab.com/gitlab-org/container-registry/commit/121e440d086de331a4f4bd80d3b312b349a73412))
+* **handlers:** use accurate layer media types by default ([1d7dc96](https://gitlab.com/gitlab-org/container-registry/commit/1d7dc9693ffc2cba08656cdf8485e7d9927b9743))
+* use JSON format for sorting tags by name in descending order ([eb20a87](https://gitlab.com/gitlab-org/container-registry/commit/eb20a874c22e92f202205b77476d025d2e3f637a))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go to v1.45.11 ([c2e742b](https://gitlab.com/gitlab-org/container-registry/commit/c2e742b76a9e026289cf8e99788a2b6b477819ac))
+* **deps:** update module github.com/aws/aws-sdk-go to v1.45.6 ([97ac190](https://gitlab.com/gitlab-org/container-registry/commit/97ac1908b3c805955fa9492ff719cf6428cc3c3d))
+* **deps:** update module github.com/getsentry/sentry-go to v0.24.0 ([3f90827](https://gitlab.com/gitlab-org/container-registry/commit/3f908279a7b943a94f0d2eb613ae675e67e1427f))
+* **deps:** update module github.com/getsentry/sentry-go to v0.24.1 ([970f81a](https://gitlab.com/gitlab-org/container-registry/commit/970f81a482766ce34be0e48ffcf43a5dac98439e))
+* **deps:** update module github.com/miekg/dns to v1.1.56 ([62c3c4e](https://gitlab.com/gitlab-org/container-registry/commit/62c3c4ebb98efd40801a255ccbfa11e695b45020))
+* **deps:** update module golang.org/x/oauth2 to v0.12.0 ([837e746](https://gitlab.com/gitlab-org/container-registry/commit/837e7466583274a1462f9ef1b95d71859e8ea8ec))
+* **deps:** update module google.golang.org/api to v0.142.0 ([2991e99](https://gitlab.com/gitlab-org/container-registry/commit/2991e993d4b449d5754f5c0aac41b10683f1fdd6))
+
 ## [3.83.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.82.2-gitlab...v3.83.0-gitlab) (2023-09-08)
 
 
