@@ -28,6 +28,10 @@ the database was active.
 [import step](#import-exisiting-data) has been completed. That command is not compatible with registries using
 the database and it will delete good data. 
    - Check that you have not used a service, such as cron, to automate offline garbage collection!
+- You are running GitLab Verison 16.4 or higher
+- Geo replication is not enabled
+- Be aware that all untagged images will be removed automatically by online garbage collection
+
 ## Prepare the Database Instance
 
 If you only wish to experiment, follow [this document](./database-local-setup.md)
@@ -50,8 +54,12 @@ the same configuration file as the registry.
 Therefore, in the course of running database migrations and importing, we can
 ensure that the database is reachable via the values supplied in the configuration.
 
-Locate your registry configuration, for omnibus this is
-`/var/opt/gitlab/registry/config.yml`.
+Locate your registry configuration.
+
+For omnibus, you will need to edit `/etc/gitlab/gitlab.rb` using the ruby hash
+syntax as shown in the [configuration template](https://gitlab.com/gitlab-org/omnibus-gitlab/-/blob/e54e2ed029a5312617a990f0809407b72703bf87/files/gitlab-config-template/gitlab.rb.template#L938) and run `gitlab-ctl reconfigure` to propagate those changes to
+`/var/opt/gitlab/registry/config.yml`. The registry commands in this guide need
+to be pointed to this second file.
 
 Add the following to your configuration as a top-level stanza, filling in the
 placeholder information with the values specific to the database that was
