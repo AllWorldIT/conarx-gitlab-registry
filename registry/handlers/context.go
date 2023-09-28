@@ -113,3 +113,12 @@ func getUserName(ctx context.Context, r *http.Request) string {
 func getUserType(ctx context.Context) string {
 	return dcontext.GetStringValue(ctx, auth.UserTypeKey)
 }
+
+func getUserJWT(ctx context.Context) string {
+	user, ok := ctx.Value(auth.UserKey).(auth.UserInfo)
+	if !ok {
+		return ""
+	}
+
+	return user.JWT
+}

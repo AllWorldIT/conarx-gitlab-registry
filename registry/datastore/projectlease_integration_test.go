@@ -175,7 +175,7 @@ func TestProjectLeaseStore_Set_Fails(t *testing.T) {
 	// create a lease
 	err = s.Set(suite.ctx, path, ttl)
 
-	// verify the lease is created succesfully
+	// verify the lease is created successfully
 	require.Error(t, err)
 	require.ErrorIs(t, err, expectedErr)
 }

@@ -114,6 +114,10 @@ type ActorRecord struct {
 	// successfully against the auth service.
 	UserType string `json:"user_type,omitempty"`
 
+	// User is a JWT that GitLab Rails generates during authentication. It is forwarded in the notification
+	// events for tracking purposes. See https://gitlab.com/gitlab-org/container-registry/-/issues/1097.
+	User string `json:"user,omitempty"`
+
 	// TODO(stevvooe): Look into setting a session cookie to get this
 	// without docker daemon.
 	//    SessionID

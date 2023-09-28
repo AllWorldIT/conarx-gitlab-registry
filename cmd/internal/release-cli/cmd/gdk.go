@@ -53,11 +53,21 @@ var gdkCmd = &cobra.Command{
 		gdkClient := client.NewClient(accessTokenGDK)
 		registryClient := client.NewClient(accessTokenRegistry)
 
+		exists, err := gdkClient.BranchExists(release.ProjectID, release.BranchName)
+		if err != nil {
+			log.Fatalf("Error checking if branch exists: %v", err)
+		}
+		
+		if exists {
+			log.Printf("Branch %s already exists. Aborting.", release.BranchName)
+			return
+		}
+		
 		branch, err := gdkClient.CreateBranch(release.ProjectID, release.BranchName, release.Ref)
 		if err != nil {
 			log.Fatalf("Failed to create branch: %v", err)
 		}
-
+		
 		desc, err := registryClient.GetChangelog(version)
 		if err != nil {
 			log.Fatalf("Failed to get changelog: %v", err)

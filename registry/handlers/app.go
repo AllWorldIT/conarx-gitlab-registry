@@ -317,7 +317,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 	// Connect to the metadata database, if enabled.
 	if config.Database.Enabled {
-		log.Warn("the metadata database is an experimental feature, please do not enable it in production")
+		log.Warn("the metadata database is a beta feature, please carefully review the documentation before enabling it in production")
 
 		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
 		options = append(options, storage.DisableMirrorFS)
@@ -1378,6 +1378,7 @@ func (app *App) queueBridge(ctx *Context, r *http.Request) *notifications.QueueB
 	actor := notifications.ActorRecord{
 		Name:     getUserName(ctx, r),
 		UserType: getUserType(ctx),
+		User:     getUserJWT(ctx),
 	}
 	request := notifications.NewRequestRecord(dcontext.GetRequestID(ctx), r)
 

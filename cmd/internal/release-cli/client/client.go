@@ -2,10 +2,13 @@ package client
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 
 	"github.com/xanzy/go-gitlab"
@@ -122,4 +125,38 @@ func (g *Client) GetChangelog(version string) (string, error) {
 	}
 
 	return "", fmt.Errorf("release with version %s not found", version)
+}
+
+func (g *Client) BranchExists(projectID int, branchName string) (bool, error) {
+	_, _, err := g.client.Branches.GetBranch(projectID, branchName)
+	if err != nil {
+		var errResp *gitlab.ErrorResponse
+		if errors.As(err, &errResp) && errResp.Response.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (g *Client) MergeRequestExistsByPattern(projectID int, pattern *regexp.Regexp) (bool, error) {
+	state := "opened"
+	search := "Update gitlab-org/container-registry"
+	opts := &gitlab.ListProjectMergeRequestsOptions{
+		Search: &search,
+		State:  &state,
+	}
+
+	mrs, _, err := g.client.MergeRequests.ListProjectMergeRequests(projectID, opts)
+	if err != nil {
+		return false, err
+	}
+
+	for _, mr := range mrs {
+		if pattern.MatchString(mr.Title) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

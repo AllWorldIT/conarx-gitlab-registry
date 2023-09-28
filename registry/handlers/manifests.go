@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/manifestlist"
@@ -25,7 +26,6 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
-	"github.com/docker/distribution/registry/internal/feature"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/validation"
 	"github.com/gorilla/handlers"
@@ -94,7 +94,7 @@ func manifestDispatcher(ctx *Context, r *http.Request) http.Handler {
 		mhandler[http.MethodDelete] = http.HandlerFunc(manifestHandler.DeleteManifest)
 	}
 
-	return mhandler
+	return checkOngoingRename(mhandler, ctx)
 }
 
 // manifestHandler handles http operations on image manifests.
@@ -347,7 +347,7 @@ func (g *dbManifestGetter) GetByTag(ctx context.Context, tagName string) (distri
 		return nil, "", distribution.ErrTagUnknown{Tag: tagName}
 	}
 
-	l.WithFields(log.Fields{"db_migration_status": dbRepo.MigrationStatus}).Info("getting manifest by tag from database")
+	l.Info("getting manifest by tag from database")
 	dbManifest, err := g.FindManifestByTagName(ctx, dbRepo, tagName)
 	if err != nil {
 		return nil, "", err
@@ -389,7 +389,7 @@ func (g *dbManifestGetter) GetByDigest(ctx context.Context, dgst digest.Digest) 
 			Revision: dgst,
 		}
 	}
-	l.WithFields(log.Fields{"db_migration_status": dbRepo.MigrationStatus}).Info("getting manifest by digest from database")
+	l.Info("getting manifest by digest from database")
 
 	// Find manifest by its digest
 	dbManifest, err := g.FindManifestByDigest(ctx, dbRepo, dgst)
@@ -897,8 +897,7 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 		"repository":      repoPath,
 		"manifest_digest": imh.Digest,
 		"schema_version":  mfst.Version().SchemaVersion,
-		feature.FailOnUnknownLayerMediaTypes.EnvVariable: feature.FailOnUnknownLayerMediaTypes.Enabled(),
-		feature.AccurateLayerMediaTypes.EnvVariable:      feature.AccurateLayerMediaTypes.Enabled(),
+		feature.AccurateLayerMediaTypes.EnvVariable: feature.AccurateLayerMediaTypes.Enabled(),
 	})
 
 	// create or find target repository
@@ -907,7 +906,7 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 	if err != nil {
 		return err
 	}
-	l.WithFields(log.Fields{"db_migration_status": dbRepo.MigrationStatus}).Info("putting manifest")
+	l.Info("putting manifest")
 
 	// Find the config now to ensure that the config's blob is associated with the repository.
 	dbCfgBlob, err := dbFindRepositoryBlob(imh.Context, rStore, mfst.Config(), dbRepo.Path)
@@ -976,19 +975,8 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 			// has a 1-1 relationship with with the manifest, so we want to reflect
 			// the manifest's description of the layer. Multiple manifest can reference
 			// the same blob, so the common blob storage should remain generic.
-			ok, err := layerMediaTypeExists(imh, reqLayer.MediaType)
-			if feature.AccurateLayerMediaTypes.Enabled() {
-				if err != nil && feature.FailOnUnknownLayerMediaTypes.Enabled() {
-					return err
-				}
-
-				if ok {
-					dbBlob.MediaType = reqLayer.MediaType
-				}
-
-				if !ok && feature.FailOnUnknownLayerMediaTypes.Enabled() {
-					return datastore.ErrUnknownMediaType{MediaType: reqLayer.MediaType}
-				}
+			if ok := layerMediaTypeExists(imh, reqLayer.MediaType); ok && feature.AccurateLayerMediaTypes.Enabled() {
+				dbBlob.MediaType = reqLayer.MediaType
 			}
 
 			if err := mStore.AssociateLayerBlob(imh.Context, dbManifest, dbBlob); err != nil {
@@ -1000,27 +988,23 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 	return nil
 }
 
-func layerMediaTypeExists(imh *manifestHandler, mt string) (bool, error) {
+func layerMediaTypeExists(imh *manifestHandler, mt string) bool {
 	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{"media_type": mt})
 	mtStore := datastore.NewMediaTypeStore(imh.App.db)
 
 	exists, err := mtStore.Exists(imh.Context, mt)
 	if err != nil {
-		if !feature.FailOnUnknownLayerMediaTypes.Enabled() {
-			// Log error if we aren't failing on unknown layer media types so that we
-			// have visibility into the error.
-			l.Error("error checking for existence of media type: %v", err)
-		}
-		return false, fmt.Errorf("checking for existence of layer media type: %v", err)
+		l.Error("error checking for existence of media type: %v", err)
+		return false
 	}
 
 	if exists {
-		return true, nil
+		return true
 	}
 
 	l.Warn("unknown layer media type")
 
-	return false, nil
+	return false
 }
 
 // dbFindRepositoryBlob finds a blob which is linked to the repository.
@@ -1378,29 +1362,67 @@ func dbDeleteManifest(ctx context.Context, db datastore.Handler, cache datastore
 	return nil
 }
 
-// DeleteManifest removes the manifest with the given digest from the registry.
-func (imh *manifestHandler) DeleteManifest(w http.ResponseWriter, r *http.Request) {
+func (imh *manifestHandler) appendTagDeleteError(err error) {
+	switch err.(type) {
+	case distribution.ErrRepositoryUnknown:
+		imh.Errors = append(imh.Errors, v2.ErrorCodeNameUnknown)
+	case distribution.ErrTagUnknown, storagedriver.PathNotFoundError:
+		imh.Errors = append(imh.Errors, v2.ErrorCodeManifestUnknown)
+	default:
+		imh.Errors = append(imh.Errors, errcode.FromUnknownError(err))
+	}
+}
+
+// DeleteTag deletes a tag for a specific image name.
+func (imh *manifestHandler) deleteTag() error {
+	l := log.GetLogger(log.WithContext(imh))
+	l.Debug("DeleteImageTag")
+
+	if !imh.useDatabase {
+		tagService := imh.Repository.Tags(imh)
+		if err := tagService.Untag(imh.Context, imh.Tag); err != nil {
+			return err
+		}
+	} else {
+		// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
+		var repoCache datastore.RepositoryCache
+		if imh.App.redisCache != nil {
+			repoCache = datastore.NewCentralRepositoryCache(imh.App.redisCache)
+		} else {
+			repoCache = imh.repoCache
+		}
+
+		if err := dbDeleteTag(imh.Context, imh.db, repoCache, imh.Repository.Named().Name(), imh.Tag); err != nil {
+			return err
+		}
+	}
+
+	if err := imh.queueBridge.TagDeleted(imh.Repository.Named(), imh.Tag); err != nil {
+		l.WithError(err).Error("dispatching tag delete to queue")
+	}
+
+	return nil
+}
+
+func (imh *manifestHandler) deleteManifest() error {
 	l := log.GetLogger(log.WithContext(imh))
 	l.Debug("DeleteImageManifest")
 
 	if !imh.useDatabase {
 		manifests, err := imh.Repository.Manifests(imh)
 		if err != nil {
-			imh.Errors = append(imh.Errors, err)
-			return
+			return err
 		}
 
 		err = manifests.Delete(imh, imh.Digest)
 		if err != nil {
-			imh.appendManifestDeleteError(err)
-			return
+			return err
 		}
 
 		tagService := imh.Repository.Tags(imh)
 		referencedTags, err := tagService.Lookup(imh, distribution.Descriptor{Digest: imh.Digest})
 		if err != nil {
-			imh.Errors = append(imh.Errors, err)
-			return
+			return err
 		}
 
 		for _, tag := range referencedTags {
@@ -1409,8 +1431,7 @@ func (imh *manifestHandler) DeleteManifest(w http.ResponseWriter, r *http.Reques
 				if errors.As(err, &storagedriver.PathNotFoundError{}) {
 					continue
 				}
-				imh.Errors = append(imh.Errors, err)
-				return
+				return err
 			}
 
 			// we also need to send the event here since we decoupled the events from the storage drivers
@@ -1419,11 +1440,6 @@ func (imh *manifestHandler) DeleteManifest(w http.ResponseWriter, r *http.Reques
 			}
 		}
 	} else {
-		if !deleteEnabled(imh.App.Config) {
-			imh.Errors = append(imh.Errors, errcode.ErrorCodeUnsupported)
-			return
-		}
-
 		// To be removed on completion of: https://gitlab.com/groups/gitlab-org/-/epics/9050
 		var repoCache datastore.RepositoryCache
 		if imh.App.redisCache != nil {
@@ -1433,13 +1449,34 @@ func (imh *manifestHandler) DeleteManifest(w http.ResponseWriter, r *http.Reques
 		}
 
 		if err := dbDeleteManifest(imh.Context, imh.db, repoCache, imh.Repository.Named().String(), imh.Digest); err != nil {
-			imh.appendManifestDeleteError(err)
-			return
+			return err
 		}
 	}
 
 	if err := imh.queueBridge.ManifestDeleted(imh.Repository.Named(), imh.Digest); err != nil {
 		l.WithError(err).Error("queuing manifest delete")
+	}
+
+	return nil
+}
+
+// DeleteManifest removes the manifest with the given digest or the tag with the given name from the registry.
+func (imh *manifestHandler) DeleteManifest(w http.ResponseWriter, _ *http.Request) {
+	if !deleteEnabled(imh.App.Config) {
+		imh.Errors = append(imh.Errors, errcode.ErrorCodeUnsupported)
+		return
+	}
+
+	if imh.Tag != "" {
+		if err := imh.deleteTag(); err != nil {
+			imh.appendTagDeleteError(err)
+			return
+		}
+	} else {
+		if err := imh.deleteManifest(); err != nil {
+			imh.appendManifestDeleteError(err)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusAccepted)

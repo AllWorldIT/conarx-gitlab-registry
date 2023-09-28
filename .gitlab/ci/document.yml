@@ -1,0 +1,39 @@
+generate-db-ERD:
+    stage: document
+    needs: ["database:structure-sql"]
+    # This job always runs on the main branch, otherwise it has to be triggered manually
+    rules:
+      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+        when: always
+      - when: manual
+        allow_failure: true
+    services:
+      - name: postgres:${PG_CURR_VERSION}-alpine
+        alias: "db"
+    image: 
+        name: aahme144/schemacrawler:latest
+        entrypoint: [""]
+    variables:
+      POSTGRES_HOST: "db"
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: "registry_dev"
+      POSTGRES_USER: "registry"
+      POSTGRES_PASSWORD: "apassword"
+      PGPASSWORD: "apassword"
+    before_script:
+      - apk update && apk add postgresql graphviz
+      # Load the prior db dump articfact generated in the "database:structure-sql" job and discard references to partitions before graphing.
+      # This is done because there are too many partitions, having the effect of making the generated graph un-readable.
+      - | 
+        awk '/ATTACH[[:space:]]+PARTITION/,/;$/{ next } { print }' registry/datastore/migrations/structure.sql | 
+        awk '/PARTITION BY/ { if (/\);$/) { gsub(/PARTITION BY[^\n]*;/, ";"); print $0; } else { inside = 1; statement = $0; } next; } inside { statement = statement "\n" $0; if ($0 ~ /;$/) { sub(/PARTITION BY[^\n]*\n/, "", statement); print statement; inside = 0; statement = ""; } next; } 
+        { print }' > registry/datastore/migrations/new_structure.sql
+      - psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} --dbname=${POSTGRES_DB} < registry/datastore/migrations/new_structure.sql
+    script:
+        # Generate the db graph
+        - bash -c "/opt/schemacrawler/bin/schemacrawler.sh --server=postgresql --database=${POSTGRES_DB} --password=${POSTGRES_PASSWORD} --user=${POSTGRES_USER} --host=${POSTGRES_HOST} --port=${POSTGRES_PORT} --info-level=maximum --command=schema --schemas=public --output-format=png --output-file=db-DAG.png"
+    artifacts:
+        expire_in: 30d
+        when: on_success
+        paths:
+          - db-DAG.png

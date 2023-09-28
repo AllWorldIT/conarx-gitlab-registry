@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	toxiproxy "github.com/Shopify/toxiproxy/client"
+	toxiproxy "github.com/Shopify/toxiproxy/v2/client"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	htestutil "github.com/docker/distribution/registry/internal/testutil"

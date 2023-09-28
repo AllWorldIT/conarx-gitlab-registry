@@ -42,9 +42,9 @@ sequenceDiagram
             else There is an existing repository lease for  <br>"my-group/my-sub-group/old-name" to "my-group/my-sub-group/new-name"
               R->>RR: Extend the existing repository lease TTL of "new-name" for 60 seconds (to allow time to successfully complete a rename)
             end
-            alt Lease procurment/extension for "new-name" was succesful
+            alt Lease procurment/extension for "new-name" was successful
               R->>G: 202 Body:{ttl:"2009-11-10T23:00:00.005Z"} 
-            else Lease procurment for "new-name" was unsuccesful
+            else Lease procurment for "new-name" was unsuccessful
                 R->>G: 500 Internal Error
             end
           end
@@ -89,9 +89,9 @@ sequenceDiagram
             end
             R->>RR: Procure (at most) a 6 seconds lease on the current project path to prevent writes to all repositories under path "my-group/my-sub-group/old-name" 
             R->>P: Execute Rename
-            alt Rename was succesful
+            alt Rename was successful
               R->>G: 201 No Content
-            else Rename was unsuccesful
+            else Rename was unsuccessful
               R->>G: 500 Internal Error
             end
           end

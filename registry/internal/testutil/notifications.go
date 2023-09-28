@@ -188,6 +188,9 @@ func (ns *NotificationServer) validateManifestDelete(t *testing.T, expectedEvent
 		return fmt.Errorf("expected tag to be empty but but got: %q", receivedEvent.Target.Tag)
 	}
 
+	if expectedEvent.Actor != receivedEvent.Actor {
+		return fmt.Errorf("expected actor: %q but got: %q", expectedEvent.Actor, receivedEvent.Actor)
+	}
 	return nil
 }
 

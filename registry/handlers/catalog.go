@@ -9,10 +9,11 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/docker/distribution/registry/datastore"
-
 	"github.com/docker/distribution/registry/api/errcode"
+	v2 "github.com/docker/distribution/registry/api/v2"
+	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/storage/driver"
+
 	"github.com/gorilla/handlers"
 )
 
@@ -20,7 +21,8 @@ const (
 	linkPrevious = "previous"
 	linkNext     = "next"
 
-	maximumReturnedEntries = 100
+	defaultMaximumReturnedEntries  = 100
+	maximumReturnEntriesUpperLimit = 1000
 )
 
 func catalogDispatcher(ctx *Context, r *http.Request) http.Handler {
@@ -72,7 +74,11 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	lastEntry := q.Get("last")
 	maxEntries, err := strconv.Atoi(q.Get("n"))
 	if err != nil || maxEntries <= 0 {
-		maxEntries = maximumReturnedEntries
+		maxEntries = defaultMaximumReturnedEntries
+	}
+	if maxEntries > maximumReturnEntriesUpperLimit {
+		ch.Errors = append(ch.Errors, v2.ErrorCodePaginationNumberInvalid.WithDetail(fmt.Sprintf("n must be no larger than %d", maximumReturnEntriesUpperLimit)))
+		return
 	}
 
 	filters := datastore.FilterParams{

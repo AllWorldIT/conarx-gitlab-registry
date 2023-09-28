@@ -12,6 +12,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const (
+	// RedisCacheTTL defines a duration for the test cache TTL.
+	RedisCacheTTL = 30 * time.Second
+)
+
 // RedisServer start a new miniredis server and registers the cleanup after the test is done.
 // See https://github.com/alicebob/miniredis.
 func RedisServer(tb testing.TB) *miniredis.Miniredis {
@@ -57,4 +62,22 @@ func RedisCacheMock(tb testing.TB, ttl time.Duration) (*gocache.Cache[any], redi
 	client, mock := redismock.NewClientMock()
 
 	return redisCache(tb, client, ttl), mock
+}
+
+// NewRedisCacheController creates a new gocache cache based on Redis using a new miniredis server and redis client. A global TTL for
+// cached objects can be specific (defaults to no TTL).
+func NewRedisCacheController(tb testing.TB, ttl time.Duration) RedisCacheController {
+	tb.Helper()
+
+	srv := RedisServer(tb)
+	return RedisCacheController{
+		redisCache(tb, redis.NewClient(&redis.Options{Addr: srv.Addr()}), ttl),
+		srv,
+	}
+}
+
+// RedisCacheController contains the necessary cache client and underlying redis server used for a test
+type RedisCacheController struct {
+	*gocache.Cache[any]
+	*miniredis.Miniredis
 }

@@ -60,6 +60,11 @@ const maxChunkSize = 5 << 30
 
 const defaultChunkSize = 2 * minChunkSize
 
+// maxListRespLoop is the max number of traversed loops/parts-pages allowed to be pushed.
+// It is set to 10000 part pages, which signifies 10000 * 10485760 bytes (i.e. 100GB) of data.
+// This is defined in order to prevent infinite loops (i.e. an unbounded amount of parts-pages).
+const maxListRespLoop = 10000
+
 const (
 	// defaultMultipartCopyChunkSize defines the default chunk size for all
 	// but the last Upload Part - Copy operation of a multipart copy.
@@ -112,6 +117,9 @@ var validRegions = map[string]struct{}{}
 
 // validObjectACLs contains known s3 object Acls
 var validObjectACLs = map[string]struct{}{}
+
+// errMaxListRespExceeded signifies a multi part layer upload has exceeded the allowable maximum size
+var errMaxListRespExceeded = fmt.Errorf("layer parts pages exceeds the maximum of %d allowed", maxListRespLoop)
 
 // DriverParameters A struct that encapsulates all of the driver parameters after all values have been set
 type DriverParameters struct {
@@ -689,30 +697,36 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 			continue
 		}
 
-		resp, err := d.S3.ListPartsWithContext(
-			ctx,
-			&s3.ListPartsInput{
-				Bucket:   aws.String(d.Bucket),
-				Key:      aws.String(key),
-				UploadId: multi.UploadId,
-			})
-		if err != nil {
-			return nil, parseError(path, err)
-		}
-		allParts = append(allParts, resp.Parts...)
-		for *resp.IsTruncated {
-			resp, err = d.S3.ListPartsWithContext(
+		var (
+			listResp = &s3.ListPartsOutput{}
+			trueVar  = true
+			// respLoopCount is the number of response pages traversed.
+			// Each increment of respLoopCount signifies that (at most) 1 full page of parts was pushed,
+			// where one full page of parts is equivalent to 1,000 uploaded parts
+			// which in turn is equivalent to 10485760 bytes of data. https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html
+			respLoopCount int
+		)
+		// assume the first response was truncated
+		listResp.IsTruncated = &trueVar
+
+		for *listResp.IsTruncated {
+			// error out if we have pushed up to 100GB of parts
+			if respLoopCount > maxListRespLoop {
+				return nil, errMaxListRespExceeded
+			}
+			listResp, err = d.S3.ListPartsWithContext(
 				ctx,
 				&s3.ListPartsInput{
 					Bucket:           aws.String(d.Bucket),
 					Key:              aws.String(key),
 					UploadId:         multi.UploadId,
-					PartNumberMarker: resp.NextPartNumberMarker,
+					PartNumberMarker: listResp.NextPartNumberMarker,
 				})
 			if err != nil {
 				return nil, parseError(path, err)
 			}
-			allParts = append(allParts, resp.Parts...)
+			allParts = append(allParts, listResp.Parts...)
+			respLoopCount++
 		}
 		return d.newWriter(key, *multi.UploadId, allParts), nil
 	}

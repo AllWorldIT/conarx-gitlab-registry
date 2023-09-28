@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
@@ -22,11 +23,11 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
-	"gitlab.com/gitlab-org/labkit/errortracking"
 
 	"github.com/gorilla/handlers"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
+	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
 type repositoryHandler struct {
@@ -95,6 +96,14 @@ var (
 	// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests) to allow the tag name
 	// filter string to start with `.` and `-` characters (not just `_`). This is required to support a partial match.
 	tagNameQueryParamPattern = regexp.MustCompile("^[a-zA-Z0-9._-]{1,128}$")
+
+	// writeMethods are a map of http methods that modify registry data
+	writeMethods = map[string]struct{}{
+		http.MethodPost:   {},
+		http.MethodDelete: {},
+		http.MethodPut:    {},
+		http.MethodPatch:  {},
+	}
 )
 
 func isQueryParamValueValid(value string, validValues []string) bool {
@@ -312,7 +321,7 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	var filters datastore.FilterParams
 
 	q := r.URL.Query()
-	maxEntries := maximumReturnedEntries
+	maxEntries := defaultMaximumReturnedEntries
 	if q.Has(nQueryParamKey) {
 		val, valid := isQueryParamTypeInt(q.Get(nQueryParamKey))
 		if !valid {
@@ -884,7 +893,7 @@ func isRepositoryNameTaken(ctx context.Context, rStore datastore.RepositoryStore
 	}
 
 	// if a base path does not contain a repository, we still need to check
-	// that no sub-repositories potentially exist withing the nested path
+	// that no sub-repositories potentially exist within the nested path
 	if newRepo == nil {
 		// check that no sub-repositories exist for the path
 		subrepositories, err := rStore.CountPathSubRepositories(ctx, namespaceId, newPath)
@@ -912,4 +921,65 @@ func findProjectPath(repoName string, resources []auth.Resource) (string, error)
 		}
 	}
 	return "", v1.ErrorCodeUnknownProjectPath.WithDetail("requested repository does not match authorized repository in token")
+}
+
+// checkOngoingRename is a wrappper around http request handlers. It checks if write or delete requests can be made to a repository at the time
+// and prevents the request from proceeding to the wrapped handler if so.
+// It determines blocked vs allowed request based on if the repository in question is "undergoing a rename operation".
+func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		repo := h.Repository.Named().Name()
+		// check if this is a http method that does writes
+		_, isRegistryWrite := writeMethods[r.Method]
+		checkOngoingRename := isRegistryWrite && feature.OngoingRenameCheck.Enabled()
+
+		if !checkOngoingRename || !h.useDatabase || h.App.redisCache == nil {
+			handler.ServeHTTP(w, r)
+			return
+		}
+
+		l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"repository": repo})
+		l.Debug("ongoing rename check: starting check for potential ongoing renames on the requested repository")
+		// extract the repository projectPath from the Auth token resource
+		projectPath, err := findProjectPath(repo, auth.AuthorizedResources(h))
+		// prevent the request from proceeding if we cannot find the project path for the referenced repository
+		if err != nil {
+			err = errors.New("ongoing rename check: failed to find project path parameter in token")
+			errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r))
+			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+			return
+		}
+
+		if strings.HasPrefix(repo, projectPath+"/") || (repo == projectPath) {
+			plStore, err := datastore.NewProjectLeaseStore(datastore.NewCentralProjectLeaseCache(h.App.redisCache))
+			// prevent the request from proceeding if we cannot gain access to the lease store
+			if err != nil {
+				l.WithError(err).Error("ongoing rename check: failed to instantiate project lease store")
+				h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+				return
+			}
+
+			// if any errors occur when accessing the underlying redis store we will not block write requests as this could seriously degrade the registry
+			// until the redis store is fixed. Instead, we will skip checking renames, notify of the issue via errors and proceed to handle the request as usual.
+			// See: https://gitlab.com/gitlab-org/container-registry/-/merge_requests/1333#note_1482777410 on the rationale behind this.
+			exist, err := plStore.Exists(h.Context, projectPath)
+			if err != nil {
+				errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r))
+				l.WithError(err).Error("ongoing rename check: failed to check lease store for ongoing lease, skipping")
+				handler.ServeHTTP(w, r)
+				return
+			}
+
+			// prevent the request from proceeding if an ongoing rename operation is underway in the project space
+			if exist {
+				err = errors.New("ongoing rename check: the current repository is undergoing a rename")
+				errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r))
+				h.Errors = append(h.Errors, v2.ErrorCodeRenameInProgress.WithDetail(fmt.Sprintf("the base repository path: %s, is undergoing a rename", projectPath)))
+				return
+			}
+		}
+		l.Debug("ongoing rename check: no ongoing renames were detected")
+
+		handler.ServeHTTP(w, r)
+	})
 }

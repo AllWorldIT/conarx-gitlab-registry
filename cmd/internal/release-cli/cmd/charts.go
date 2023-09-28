@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 
 	"github.com/docker/distribution/cmd/internal/release-cli/client"
 	"github.com/docker/distribution/cmd/internal/release-cli/slack"
@@ -42,6 +43,22 @@ var chartsCmd = &cobra.Command{
 
 		gitlabClient := client.NewClient(accessToken)
 
+		patternStr := fmt.Sprintf(`Update gitlab-org/container-registry from .* to %s`, version)
+		pattern, err := regexp.Compile(patternStr)
+		if err != nil {
+			log.Fatalf("Error compiling regex pattern: %v", err)
+		}
+		
+		exists, err := gitlabClient.MergeRequestExistsByPattern(release.ProjectID, pattern)
+		if err != nil {
+			log.Fatalf("Error checking if MR exists: %v", err)
+		}
+		
+		if exists {
+			log.Printf("Merge Request matching pattern '%s' already exists. Aborting.", patternStr)
+			return
+		}
+				
 		pipelineURL, err := gitlabClient.SendRequestToDeps(release.ProjectID, triggerToken, release.Ref)
 		if err != nil {
 			msg := fmt.Sprintf("%s release: Failed to trigger Charts version bump MR: %s", version, err.Error())

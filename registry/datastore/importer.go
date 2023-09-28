@@ -18,9 +18,7 @@ import (
 	mlcompat "github.com/docker/distribution/manifest/manifestlist/compat"
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/distribution/reference"
-	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/datastore/models"
-	"github.com/docker/distribution/registry/internal/migration"
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/jackc/pgconn"
 	"github.com/opencontainers/go-digest"
@@ -29,8 +27,6 @@ import (
 )
 
 var (
-	ErrImportCanceled       = errors.New("repository import has been canceled")
-	ErrPreImportCanceled    = errors.New("repository pre import has been canceled")
 	errNegativeTestingDelay = errors.New("negative testing delay")
 	errManifestSkip         = errors.New("the manifest is invalid and its (pre)import should be skipped")
 )
@@ -252,7 +248,7 @@ func (imp *Importer) importManifestV2(ctx context.Context, fsRepo distribution.R
 	}
 
 	// Use the generic octet stream media type for common blob storage, but set
-	// the orginal media type on the *models.Blob object populated by CreateOrFind.
+	// the original media type on the *models.Blob object populated by CreateOrFind.
 	// This way, when the configuration is stored with the manifest, the media
 	// type will match what is present in the manifest JSON.
 	dbConfigBlob.MediaType = mtOctetStream
@@ -1299,49 +1295,11 @@ func (imp *Importer) Import(ctx context.Context, path string) error {
 		return err
 	}
 
-	err = imp.checkStatusAndCommitTx(ctx, path, tx)
-	if err != nil {
-		if errors.Is(err, ErrImportCanceled) {
-			l.Warn("import was canceled before committing transaction")
-			return err
-		}
-
+	if err = tx.Commit(); err != nil {
 		l.WithError(err).Error("committing transaction for final import")
 	}
 
 	return err
-}
-
-func (imp *Importer) checkStatusAndCommitTx(ctx context.Context, path string, tx Transactor) error {
-	if err := imp.checkStatus(ctx, path); err != nil {
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit repository transaction: %w", err)
-	}
-
-	return nil
-}
-
-func (imp *Importer) checkStatus(ctx context.Context, path string) error {
-	dbRepo, err := imp.repositoryStore.FindByPath(ctx, path)
-	if err != nil {
-		return fmt.Errorf("getting repository after import completed: %w", err)
-	}
-
-	if dbRepo == nil {
-		return v2.ErrorCodeNameUnknown
-	}
-
-	switch dbRepo.MigrationStatus {
-	case migration.RepositoryStatusImportCanceled:
-		return ErrImportCanceled
-	case migration.RepositoryStatusPreImportCanceled:
-		return ErrPreImportCanceled
-	}
-
-	return nil
 }
 
 // PreImport populates repository data without including any tag information.
@@ -1430,13 +1388,6 @@ func (imp *Importer) PreImport(ctx context.Context, path string) error {
 			logCounters[t] = n
 		}
 		l = l.WithFields(logCounters)
-	}
-
-	if err := imp.checkStatus(ctx, path); err != nil {
-		if errors.Is(err, ErrPreImportCanceled) {
-			l.Warn("pre import was canceled before completion")
-		}
-		return err
 	}
 
 	t := time.Since(start).Seconds()

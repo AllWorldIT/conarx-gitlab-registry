@@ -3,6 +3,7 @@ include:
   - local: .gitlab/ci/test.yml
   - local: .gitlab/ci/integration.yml
   - local: .gitlab/ci/release.yml
+  - local: .gitlab/ci/document.yml
   - project: 'gitlab-org/quality/pipeline-common'
     file:
       - '/ci/danger-review.yml'
@@ -37,6 +38,7 @@ stages:
   - test
   - integration
   - release
+  - document
 
 .go-pg-version-matrix:
   parallel:

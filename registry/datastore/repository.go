@@ -14,8 +14,6 @@ import (
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
-	"github.com/docker/distribution/registry/internal/migration"
-
 	gocache "github.com/eko/gocache/lib/v4/cache"
 	"github.com/eko/gocache/lib/v4/marshaler"
 	libstore "github.com/eko/gocache/lib/v4/store"
@@ -94,14 +92,6 @@ type RepositoryWriter interface {
 }
 
 type repositoryOption func(*models.Repository)
-
-// WithMigrationStatus instantiates the repository with the provided
-// migration status.
-func WithMigrationStatus(status migration.RepositoryStatus) repositoryOption {
-	return func(r *models.Repository) {
-		r.MigrationStatus = status
-	}
-}
 
 // RepositoryStoreOption allows customizing a repositoryStore with additional options.
 type RepositoryStoreOption func(*repositoryStore)
@@ -395,7 +385,7 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 func scanFullRepository(row *sql.Row) (*models.Repository, error) {
 	r := new(models.Repository)
 
-	if err := row.Scan(&r.ID, &r.NamespaceID, &r.Name, &r.Path, &r.ParentID, &r.MigrationStatus, &r.MigrationError, &r.CreatedAt, &r.UpdatedAt); err != nil {
+	if err := row.Scan(&r.ID, &r.NamespaceID, &r.Name, &r.Path, &r.ParentID, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		if err != sql.ErrNoRows {
 			return nil, fmt.Errorf("scanning repository: %w", err)
 		}
@@ -411,7 +401,7 @@ func scanFullRepositories(rows *sql.Rows) (models.Repositories, error) {
 
 	for rows.Next() {
 		r := new(models.Repository)
-		if err := rows.Scan(&r.ID, &r.NamespaceID, &r.Name, &r.Path, &r.ParentID, &r.MigrationStatus, &r.MigrationError, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.NamespaceID, &r.Name, &r.Path, &r.ParentID, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning repository: %w", err)
 		}
 		rr = append(rr, r)
@@ -436,8 +426,6 @@ func (s *repositoryStore) FindByPath(ctx context.Context, path string) (*models.
 			name,
 			path,
 			parent_id,
-			migration_status,
-			migration_error,
 			created_at,
 			updated_at
 		FROM
@@ -467,8 +455,6 @@ func (s *repositoryStore) FindAll(ctx context.Context) (models.Repositories, err
 			name,
 			path,
 			parent_id,
-			migration_status,
-			migration_error,
 			created_at,
 			updated_at
 		FROM
@@ -495,8 +481,6 @@ func (s *repositoryStore) FindAllPaginated(ctx context.Context, filters FilterPa
 			r.name,
 			r.path,
 			r.parent_id,
-			r.migration_status,
-			r.migration_error,
 			r.created_at,
 			r.updated_at
 		FROM
@@ -531,8 +515,6 @@ func (s *repositoryStore) FindDescendantsOf(ctx context.Context, id int64) (mode
 				name,
 				path,
 				parent_id,
-				migration_status,
-				migration_error,
 				created_at,
 				updated_at
 			FROM
@@ -546,8 +528,6 @@ func (s *repositoryStore) FindDescendantsOf(ctx context.Context, id int64) (mode
 				r.name,
 				r.path,
 				r.parent_id,
-				r.migration_status,
-				r.migration_error,
 				r.created_at,
 				r.updated_at
 			FROM
@@ -579,8 +559,6 @@ func (s *repositoryStore) FindAncestorsOf(ctx context.Context, id int64) (models
 				name,
 				path,
 				parent_id,
-				migration_status,
-				migration_error,
 				created_at,
 				updated_at
 			FROM
@@ -594,8 +572,6 @@ func (s *repositoryStore) FindAncestorsOf(ctx context.Context, id int64) (models
 				r.name,
 				r.path,
 				r.parent_id,
-				r.migration_status,
-				r.migration_error,
 				r.created_at,
 				r.updated_at
 			FROM
@@ -626,8 +602,6 @@ func (s *repositoryStore) FindSiblingsOf(ctx context.Context, id int64) (models.
 			siblings.name,
 			siblings.path,
 			siblings.parent_id,
-			siblings.migration_status,
-			siblings.migration_error,
 			siblings.created_at,
 			siblings.updated_at
 		FROM
@@ -1167,16 +1141,12 @@ func (s *repositoryStore) ExistsBlob(ctx context.Context, r *models.Repository, 
 func (s *repositoryStore) Create(ctx context.Context, r *models.Repository) error {
 	defer metrics.InstrumentQuery("repository_create")()
 
-	if r.MigrationStatus == "" {
-		r.MigrationStatus = migration.RepositoryStatusNative
-	}
-
-	q := `INSERT INTO repositories (top_level_namespace_id, name, path, parent_id, migration_status)
-			VALUES ($1, $2, $3, $4, $5)
+	q := `INSERT INTO repositories (top_level_namespace_id, name, path, parent_id)
+			VALUES ($1, $2, $3, $4)
 		RETURNING
 			id, created_at`
 
-	row := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.Name, r.Path, r.ParentID, r.MigrationStatus)
+	row := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.Name, r.Path, r.ParentID)
 	if err := row.Scan(&r.ID, &r.CreatedAt); err != nil {
 		return fmt.Errorf("creating repository: %w", err)
 	}
@@ -1495,25 +1465,19 @@ func (s *repositoryStore) CreateOrFind(ctx context.Context, r *models.Repository
 		return nil
 	}
 
-	if r.MigrationStatus == "" {
-		r.MigrationStatus = migration.RepositoryStatusNative
-	}
-
 	// if not, proceed with creation attempt...
 	// ON CONFLICT (path) DO UPDATE SET is a temporary measure until
 	// https://gitlab.com/gitlab-org/container-registry/-/issues/625. If a repo record already exists for `path` but is
-	// marked as soft deleted, we should undo the soft delete and proceed gracefully. Additionally, we also update the
-	// `migration_status` as this method is also used by the Importer and in such case we want to switch the `native`
-	// status to `(pre_)import_in_progress`.
-	q := `INSERT INTO repositories (top_level_namespace_id, name, path, parent_id, migration_status)
-			VALUES ($1, $2, $3, $4, $5)
+	// marked as soft deleted, we should undo the soft delete and proceed gracefully.
+	q := `INSERT INTO repositories (top_level_namespace_id, name, path, parent_id)
+			VALUES ($1, $2, $3, $4)
 		ON CONFLICT (path)
 			DO UPDATE SET
-				deleted_at = NULL, migration_status = $5
+				deleted_at = NULL
 		RETURNING
 			id, created_at, deleted_at` // deleted_at returned for test validation purposes only
 
-	row := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.Name, r.Path, r.ParentID, r.MigrationStatus)
+	row := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.Name, r.Path, r.ParentID)
 	if err := row.Scan(&r.ID, &r.CreatedAt, &r.DeletedAt); err != nil {
 		if err != sql.ErrNoRows {
 			return fmt.Errorf("creating repository: %w", err)
@@ -1603,14 +1567,14 @@ func (s *repositoryStore) Update(ctx context.Context, r *models.Repository) erro
 	q := `UPDATE
 			repositories
 		SET
-			(name, path, parent_id, updated_at, migration_status, migration_error) = ($1, $2, $3, now(), $6, left($7, 255))
+			(name, path, parent_id, updated_at) = ($1, $2, $3, now())
 		WHERE
 			top_level_namespace_id = $4
 			AND id = $5
 		RETURNING
 			updated_at`
 
-	row := s.db.QueryRowContext(ctx, q, r.Name, r.Path, r.ParentID, r.NamespaceID, r.ID, r.MigrationStatus, r.MigrationError)
+	row := s.db.QueryRowContext(ctx, q, r.Name, r.Path, r.ParentID, r.NamespaceID, r.ID)
 	if err := row.Scan(&r.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("repository not found")
@@ -1723,7 +1687,7 @@ func (s *repositoryStore) DeleteManifest(ctx context.Context, r *models.Reposito
 // Also, even if there is no repository with a path equivalent to `filters.LastEntry`, the returned
 // repositories will still be those with a base path of the requested repository and lexicographically after `filters.LastEntry`.
 func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error) {
-	// start from a path lexicographically before r.Path when no last path is availaible.
+	// start from a path lexicographically before r.Path when no last path is available.
 	// this improves the query performance as we will not need to filter from `r.path > ""` in the query below.
 	if filters.LastEntry == "" {
 		filters.LastEntry = lexicographicallyBeforePath(r.Path)
@@ -1736,8 +1700,6 @@ func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context,
 			name,
 			path,
 			parent_id,
-			migration_status,
-			migration_error,
 			created_at,
 			updated_at  
 		FROM
@@ -1821,7 +1783,7 @@ func lexicographicallyNextPath(path string) string {
 // lexicographicallyBeforePath takes a path string and returns the lexicographical path just before the provided path.
 // e.g gitlab-con => gitlab-com , gitlab-com/  => gitlab-com.
 // In the event that an empty string is provided as a path it returns 'z'.
-// In the event where only "a's" exist in the path; the last 'a' carachter of the path is converted to a "z".
+// In the event where only "a's" exist in the path; the last 'a' character of the path is converted to a "z".
 // This function serves primarily as a helper for optimizing paginated db queries used in `FindPagingatedRepositoriesForPath.
 func lexicographicallyBeforePath(path string) string {
 	// this shouldn't be possible but to be safe we return a z on empty path

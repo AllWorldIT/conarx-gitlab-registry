@@ -106,16 +106,14 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 
 	// expected fake repository attributes
 	want := &models.Repository{
-		ID:              1,
-		NamespaceID:     1,
-		Name:            "foo",
-		Path:            "foo",
-		ParentID:        sql.NullInt64{},
-		MigrationStatus: "native",
-		MigrationError:  sql.NullString{},
-		CreatedAt:       time.Now(),
-		UpdatedAt:       sql.NullTime{},
-		DeletedAt:       sql.NullTime{},
+		ID:          1,
+		NamespaceID: 1,
+		Name:        "foo",
+		Path:        "foo",
+		ParentID:    sql.NullInt64{},
+		CreatedAt:   time.Now(),
+		UpdatedAt:   sql.NullTime{},
+		DeletedAt:   sql.NullTime{},
 	}
 	wantSizePrecise := int64(12345)
 	wantSizeEstimate := int64(12678)
@@ -136,7 +134,7 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 		estimateQueryErr error
 	}{
 		{
-			name: "fallback to estimate on new precise timeout",
+			name:            "fallback to estimate on new precise timeout",
 			preciseQueryErr: pgTimeoutErr,
 		},
 		{
@@ -166,11 +164,9 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 				"name",
 				"path",
 				"parent_id",
-				"migration_status",
-				"migration_error",
 				"created_at",
 				"updated_at",
-			}).AddRow(want.ID, want.NamespaceID, want.Name, want.Path, want.ParentID, want.MigrationStatus, want.MigrationError, want.CreatedAt, want.UpdatedAt)
+			}).AddRow(want.ID, want.NamespaceID, want.Name, want.Path, want.ParentID, want.CreatedAt, want.UpdatedAt)
 
 			// There are plenty `\n` and `\t` on the actual queries, and they are pretty long, so a full match is hard to digest
 			// and unnecessary because there is a limited known set of queries involved. So we simplify and use a partial match.

@@ -140,7 +140,7 @@ func NewRegistry(ctx context.Context, config *configuration.Configuration) (*Reg
 	}, nil
 }
 
-// Channel to capture singals used to gracefully shutdown the registry.
+// Channel to capture signals used to gracefully shutdown the registry.
 // It is global to ease unit testing
 var quit = make(chan os.Signal, 1)
 

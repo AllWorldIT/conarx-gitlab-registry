@@ -83,7 +83,7 @@ func (th *tagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	lastEntry := q.Get("last")
 	maxEntries, err := strconv.Atoi(q.Get("n"))
 	if err != nil || maxEntries <= 0 {
-		maxEntries = maximumReturnedEntries
+		maxEntries = defaultMaximumReturnedEntries
 	}
 
 	filters := datastore.FilterParams{
@@ -157,7 +157,7 @@ func tagDispatcher(ctx *Context, r *http.Request) http.Handler {
 		thandler[http.MethodDelete] = http.HandlerFunc(tagHandler.DeleteTag)
 	}
 
-	return thandler
+	return checkOngoingRename(thandler, ctx)
 }
 
 // tagHandler handles requests for a specific tag under a repository name.
@@ -238,6 +238,9 @@ func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.Repo
 func (th *tagHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(th))
 	l.Debug("DeleteTag")
+	l.Warn("The DELETE /v2/<name>/tags/reference/<tag> API endpoint is deprecated and will be removed in " +
+		"GitLab 17.0. Please use the new DELETE /v2/<name>/manifests/<tag> endpoint to delete tags. " +
+		"See https://gitlab.com/gitlab-org/container-registry/-/issues/1094 for more details")
 
 	if !th.useDatabase {
 		tagService := th.Repository.Tags(th)

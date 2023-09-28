@@ -2,6 +2,7 @@ package s3
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -93,6 +94,11 @@ func (w *s3wrapper) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInp
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.PutObjectWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("PutObjectWithContext")
+		}
 		return err
 	})
 
@@ -105,6 +111,11 @@ func (w *s3wrapper) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInp
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.GetObjectWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("GetObjectWithContext")
+		}
 		return err
 	})
 
@@ -117,6 +128,11 @@ func (w *s3wrapper) CreateMultipartUploadWithContext(ctx aws.Context, input *s3.
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.CreateMultipartUploadWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("CreateMultipartUploadWithContext")
+		}
 		return err
 	})
 
@@ -129,6 +145,11 @@ func (w *s3wrapper) ListMultipartUploadsWithContext(ctx aws.Context, input *s3.L
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.ListMultipartUploadsWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("ListMultipartUploadsWithContext")
+		}
 		return err
 	})
 
@@ -141,6 +162,17 @@ func (w *s3wrapper) ListPartsWithContext(ctx aws.Context, input *s3.ListPartsInp
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.ListPartsWithContext(ctx, input, opts...)
+		// make sure we never have a situation where `IsTruncated` is empty if we have a response
+		if out != nil {
+			if out.IsTruncated == nil {
+				out.IsTruncated = new(bool)
+			}
+		}
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("ListPartsWithContext")
+		}
 		return err
 	})
 
@@ -153,6 +185,11 @@ func (w *s3wrapper) ListObjectsV2WithContext(ctx aws.Context, input *s3.ListObje
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.ListObjectsV2WithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("ListObjectsV2WithContext")
+		}
 		return err
 	})
 
@@ -165,6 +202,11 @@ func (w *s3wrapper) CopyObjectWithContext(ctx aws.Context, input *s3.CopyObjectI
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.CopyObjectWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("CopyObjectWithContext")
+		}
 		return err
 	})
 
@@ -177,6 +219,11 @@ func (w *s3wrapper) UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadP
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.UploadPartCopyWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("UploadPartCopyWithContext")
+		}
 		return err
 	})
 
@@ -189,6 +236,11 @@ func (w *s3wrapper) CompleteMultipartUploadWithContext(ctx aws.Context, input *s
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.CompleteMultipartUploadWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("CompleteMultipartUploadWithContext")
+		}
 		return err
 	})
 
@@ -201,6 +253,11 @@ func (w *s3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteOb
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.DeleteObjectsWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("DeleteObjectsWithContext")
+		}
 		return err
 	})
 
@@ -229,6 +286,12 @@ func (w *s3wrapper) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.A
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.AbortMultipartUploadWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("AbortMultipartUploadWithContext")
+		}
+
 		return err
 	})
 
@@ -241,6 +304,12 @@ func (w *s3wrapper) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartI
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.UploadPartWithContext(ctx, input, opts...)
+
+		// a nil response must be captured as an error (if no error is provided)
+		if out == nil && err == nil {
+			err = nilRespError("UploadPartWithContext")
+		}
+
 		return err
 	})
 
@@ -293,4 +362,8 @@ func wrapAWSerr(e error) error {
 	}
 
 	return e
+}
+
+func nilRespError(s3API string) error {
+	return fmt.Errorf("received a nil response for %q from s3", s3API)
 }

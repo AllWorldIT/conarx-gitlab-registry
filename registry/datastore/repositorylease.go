@@ -9,13 +9,12 @@ import (
 
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore/models"
-	"github.com/opencontainers/go-digest"
-	"github.com/vmihailenco/msgpack"
-
 	gocache "github.com/eko/gocache/lib/v4/cache"
 	"github.com/eko/gocache/lib/v4/marshaler"
 	"github.com/eko/gocache/lib/v4/store"
+	"github.com/opencontainers/go-digest"
 	"github.com/redis/go-redis/v9"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 var (

@@ -16,13 +16,16 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/ocischema"
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/distribution/manifest/schema2"
+	"github.com/docker/distribution/notifications"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
@@ -70,8 +73,12 @@ func TestAPIConformance(t *testing.T) {
 		manifest_Delete_Schema2_MissingManifest,
 		manifest_Delete_Schema2_ClearsTags,
 		manifest_Delete_Schema2_DeleteDisabled,
-		manifest_Put_Schema2_WithNonDistributableLayers,
 
+		manifest_Delete_Tag,
+		manifest_Delete_Tag_Unknown,
+		manifest_Delete_Tag_DeleteDisabled,
+
+		manifest_Put_Schema2_WithNonDistributableLayers,
 		manifest_Put_OCI_ByDigest,
 		manifest_Put_OCI_ByTag,
 		manifest_Get_OCI_MatchingEtag,
@@ -100,6 +107,7 @@ func TestAPIConformance(t *testing.T) {
 		tags_Get_EmptyRepository,
 		tags_Get_RepositoryNotFound,
 		tags_Delete,
+		tags_Delete_WithAuth,
 		tags_Delete_AllowedMethods,
 		tags_Delete_AllowedMethodsReadOnly,
 		tags_Delete_ReadOnly,
@@ -109,12 +117,13 @@ func TestAPIConformance(t *testing.T) {
 
 		catalog_Get,
 		catalog_Get_Empty,
+		catalog_Get_TooLarge,
 	}
 
 	type envOpt struct {
 		name                 string
 		opts                 []configOpt
-		notificationsEnabled bool
+		webhookNotifications bool
 	}
 
 	var envOpts = []envOpt{
@@ -123,9 +132,9 @@ func TestAPIConformance(t *testing.T) {
 			opts: []configOpt{},
 		},
 		{
-			name:                 "with notifications enabled",
+			name:                 "with webhook notifications enabled",
 			opts:                 []configOpt{},
-			notificationsEnabled: true,
+			webhookNotifications: true,
 		},
 		{
 			name: "with redis cache",
@@ -153,6 +162,24 @@ func TestAPIConformance(t *testing.T) {
 				rootDir := t.TempDir()
 
 				o.opts = append(o.opts, withFSDriver(rootDir))
+
+				if o.webhookNotifications {
+					notifCfg := configuration.Notifications{
+						Endpoints: []configuration.Endpoint{
+							{
+								Name:              t.Name(),
+								Disabled:          false,
+								Headers:           http.Header{"test-header": []string{t.Name()}},
+								Timeout:           100 * time.Millisecond,
+								Threshold:         1,
+								Backoff:           100 * time.Millisecond,
+								IgnoredMediaTypes: []string{"application/octet-stream"},
+							},
+						},
+					}
+
+					o.opts = append(o.opts, withWebhookNotifications(notifCfg))
+				}
 
 				f(t, o.opts...)
 			})
@@ -298,7 +325,7 @@ func manifest_Put_Schema2_ReuseTagManifestToManifest(t *testing.T, opts ...confi
 	// Ensure that we pulled down the new manifest by the same tag.
 	require.Equal(t, *newManifest, fetchedNewManifest)
 
-	// Ensure that the tag refered to different manifests over time.
+	// Ensure that the tag referred to different manifests over time.
 	require.NotEqual(t, fetchedOriginalManifest, fetchedNewManifest)
 
 	_, newPayload, err := fetchedNewManifest.Payload()
@@ -904,7 +931,7 @@ func manifest_Put_Schema2_MissingConfigAndLayers(t *testing.T, opts ...configOpt
 	_, cfgDesc := schema2Config()
 	manifest.Config = cfgDesc
 
-	// Create and push up 2 random layers, but do not push thier content.
+	// Create and push up 2 random layers, but do not push their content.
 	manifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range manifest.Layers {
@@ -1161,7 +1188,7 @@ func manifest_Get_Schema2_ByDigest_MissingRepository(t *testing.T, opts ...confi
 	repoPath := "schema2/missingrepository"
 
 	// Push up a manifest so that it exists within the registry. We'll attempt to
-	// get the manifest by digest from a non-existant repository, which should fail.
+	// get the manifest by digest from a non-existent repository, which should fail.
 	deserializedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
 
 	manifestDigestURL := buildManifestDigestURL(t, env, "fake/repo", deserializedManifest)
@@ -1186,7 +1213,7 @@ func manifest_Get_Schema2_ByTag_MissingRepository(t *testing.T, opts ...configOp
 	repoPath := "schema2/missingrepository"
 
 	// Push up a manifest so that it exists within the registry. We'll attempt to
-	// get the manifest by tag from a non-existant repository, which should fail.
+	// get the manifest by tag from a non-existent repository, which should fail.
 	seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
 
 	manifestURL := buildManifestTagURL(t, env, "fake/repo", tagName)
@@ -1211,7 +1238,7 @@ func manifest_Get_Schema2_ByTag_MissingTag(t *testing.T, opts ...configOpt) {
 	repoPath := "schema2/missingtag"
 
 	// Push up a manifest so that it exists within the registry. We'll attempt to
-	// get the manifest by a non-existant tag, which should fail.
+	// get the manifest by a non-existent tag, which should fail.
 	seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
 
 	manifestURL := buildManifestTagURL(t, env, repoPath, "faketag")
@@ -1607,8 +1634,10 @@ func manifest_Delete_Schema2(t *testing.T, opts ...configOpt) {
 		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
-		expectedEvent := buildEventManifestDeleteByTag(schema2.MediaTypeManifest, repoPath, tagName)
-		env.ns.AssertEventNotification(t, expectedEvent)
+		if env.db == nil {
+			expectedEvent := buildEventManifestDeleteByTag(schema2.MediaTypeManifest, repoPath, tagName)
+			env.ns.AssertEventNotification(t, expectedEvent)
+		}
 	}
 }
 
@@ -1639,8 +1668,10 @@ func manifest_Delete_Schema2_AlreadyDeleted(t *testing.T, opts ...configOpt) {
 		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
-		expectedEventByTag := buildEventManifestDeleteByTag("", repoPath, tagName)
-		env.ns.AssertEventNotification(t, expectedEventByTag)
+		if env.db == nil {
+			expectedEventByTag := buildEventManifestDeleteByTag("", repoPath, tagName)
+			env.ns.AssertEventNotification(t, expectedEventByTag)
+		}
 	}
 
 	resp, err = httpDelete(manifestDigestURL)
@@ -1677,8 +1708,10 @@ func manifest_Delete_Schema2_Reupload(t *testing.T, opts ...configOpt) {
 		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
-		expectedEvent := buildEventManifestDeleteByTag(schema2.MediaTypeManifest, repoPath, tagName)
-		env.ns.AssertEventNotification(t, expectedEvent)
+		if env.db == nil {
+			expectedEvent := buildEventManifestDeleteByTag(schema2.MediaTypeManifest, repoPath, tagName)
+			env.ns.AssertEventNotification(t, expectedEvent)
+		}
 	}
 
 	// Re-upload manifest by digest
@@ -1776,8 +1809,10 @@ func manifest_Delete_Schema2_ClearsTags(t *testing.T, opts ...configOpt) {
 		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
-		expectedEvent := buildEventManifestDeleteByTag(schema2.MediaTypeManifest, repoPath, tagName)
-		env.ns.AssertEventNotification(t, expectedEvent)
+		if env.db == nil {
+			expectedEvent := buildEventManifestDeleteByTag(schema2.MediaTypeManifest, repoPath, tagName)
+			env.ns.AssertEventNotification(t, expectedEvent)
+		}
 	}
 
 	// Ensure that the tag is not listed.
@@ -1808,6 +1843,87 @@ func manifest_Delete_Schema2_DeleteDisabled(t *testing.T, opts ...configOpt) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
+	require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
+}
+
+func manifest_Delete_Tag(t *testing.T, opts ...configOpt) {
+	opts = append(opts, withDelete)
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	tag := "latest"
+	dgst := createRepository(t, env, imageName.Name(), tag)
+
+	ref, err := reference.WithTag(imageName, tag)
+	require.NoError(t, err)
+
+	u, err := env.builder.BuildManifestURL(ref)
+	require.NoError(t, err)
+
+	resp, err := httpDelete(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+
+	resp, err = http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	digestRef, err := reference.WithDigest(imageName, dgst)
+	require.NoError(t, err)
+
+	u, err = env.builder.BuildManifestURL(digestRef)
+	require.NoError(t, err)
+
+	resp, err = http.Head(u)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func manifest_Delete_Tag_Unknown(t *testing.T, opts ...configOpt) {
+	opts = append(opts, withDelete)
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	// create repo with another tag so that we don't hit a repository unknown error
+	createRepository(t, env, imageName.Name(), "1.2.3")
+
+	ref, err := reference.WithTag(imageName, "3.2.1")
+	require.NoError(t, err)
+
+	u, err := env.builder.BuildManifestURL(ref)
+	require.NoError(t, err)
+
+	resp, err := httpDelete(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	checkBodyHasErrorCodes(t, "deleting unknown tag", resp, v2.ErrorCodeManifestUnknown)
+}
+
+func manifest_Delete_Tag_DeleteDisabled(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+	ref, err := reference.WithTag(imageName, "latest")
+	require.NoError(t, err)
+
+	u, err := env.builder.BuildManifestURL(ref)
+	require.NoError(t, err)
+
+	resp, err := httpDelete(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 	require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 }
 
@@ -2899,6 +3015,58 @@ func tags_Delete(t *testing.T, opts ...configOpt) {
 	}
 }
 
+func tags_Delete_WithAuth(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	imageName, err := reference.WithName("foo/bar")
+	checkErr(t, err, "building named object")
+
+	tag := "latest"
+	createRepository(t, env, imageName.Name(), tag)
+
+	ref, err := reference.WithTag(imageName, tag)
+	checkErr(t, err, "building tag reference")
+
+	tokenProvider := NewAuthTokenProvider(t)
+	opts = append(opts, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+	// override registry config/setup to use token based authorization for all proceeding requests
+	env = newTestEnv(t, opts...)
+
+	tagURL, err := env.builder.BuildTagURL(ref)
+	checkErr(t, err, "building tag URL")
+
+	req, err := http.NewRequest(http.MethodDelete, tagURL, nil)
+
+	// attach authourization header to request
+	req = tokenProvider.RequestWithAuthActions(req, deleteAccessToken("foo/bar"))
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	msg := "checking tag delete"
+	checkResponse(t, msg, resp, http.StatusAccepted)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Empty(t, body)
+
+	if env.ns != nil {
+		// see the token.ClaimSet inside generateAuthToken
+		opt := func(e *notifications.Event) {
+			e.Actor = notifications.ActorRecord{
+				Name:     authUsername,
+				UserType: authUserType,
+				User:     authUserJWT,
+			}
+		}
+		expectedEvent := buildEventManifestDeleteByTag(schema2.MediaTypeManifest, "foo/bar", tag, opt)
+		env.ns.AssertEventNotification(t, expectedEvent)
+	}
+}
+
 func tags_Delete_Unknown(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -3207,4 +3375,19 @@ func catalog_Get_Empty(t *testing.T, opts ...configOpt) {
 
 	require.Len(t, body.Repositories, 0)
 	require.Empty(t, resp.Header.Get("Link"))
+}
+
+func catalog_Get_TooLarge(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	catalogURL, err := env.builder.BuildCatalogURL(url.Values{"n": []string{"500000000000"}})
+	require.NoError(t, err)
+
+	resp, err := http.Get(catalogURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	checkBodyHasErrorCodes(t, "requesting too many repos", resp, v2.ErrorCodePaginationNumberInvalid)
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"github.com/vmihailenco/msgpack"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 func TestCentralRepositoryLeaseCache(t *testing.T) {
@@ -369,7 +369,7 @@ func TestRepositoryLeaseStore_RenameLease_CreateLease_Fails(t *testing.T) {
 	// create a lease
 	createdLease, err := s.UpsertRename(suite.ctx, repoLease)
 
-	// verify the lease is created succesfully
+	// verify the lease is created successfully
 	require.Error(t, err)
 	require.Empty(t, createdLease)
 }

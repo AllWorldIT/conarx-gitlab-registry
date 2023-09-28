@@ -44,3 +44,27 @@ func TestEnabled(t *testing.T) {
 		})
 	}
 }
+
+func TestIsKnownEnvVar(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{
+			name:  "known",
+			input: testFeature.EnvVariable,
+			want:  true,
+		},
+		{
+			name:  "unknown",
+			input: "REGISTRY_FF__TEST",
+			want:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, KnownEnvVar(tt.input))
+		})
+	}
+}

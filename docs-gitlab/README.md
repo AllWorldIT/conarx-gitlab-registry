@@ -77,12 +77,12 @@ Originally, the Azure driver would write to `//` as the root directory, also
 appearing in some places as `/<no-name>/` within the Azure UI. This legacy
 behavior must be preserved to support older deployments using this driver.
 Set to `false` to build root paths with an extra leading slash (i.e `//`).
-Defaults to the `true` to remove legacy root prefix. It is recomended to use
+Defaults to the `true` to remove legacy root prefix. It is recommended to use
 `legacyrootprefix` to control this behaviour.
 
 `legacyrootprefix`
 
-This parameter is the recomended configuration (as opposed to `trimlegacyrootprefix`) to be used to preserve
+This parameter is the recommended configuration (as opposed to `trimlegacyrootprefix`) to be used to preserve
 the Azure driver legacy behaviour of using  `//` (appearing in some places as `/<no-name>/` within the Azure UI)
 as the root directory. When `legacyrootprefix` is set to `true` the azure driver uses the legacy azure root directory.
 When this parameter is specified together with `trimlegacyrootprefix` the registry will fail to start if the parameters conflict

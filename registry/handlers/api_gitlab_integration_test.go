@@ -1514,7 +1514,7 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	// assert that the raname succeded
+	// assert that rename succeeded
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	// send second request

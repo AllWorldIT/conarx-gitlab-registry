@@ -8,24 +8,22 @@ import (
 
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
-	"github.com/docker/distribution/registry/internal/migration"
 	"github.com/docker/distribution/registry/internal/testutil"
 
 	"github.com/stretchr/testify/require"
-	"github.com/vmihailenco/msgpack"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 func TestCentralRepositoryCache(t *testing.T) {
 	var size int64 = 1
 	repo := &models.Repository{
-		ID:              1,
-		NamespaceID:     1,
-		Name:            "gitlab",
-		Path:            "gitlab-org/gitlab",
-		MigrationStatus: migration.RepositoryStatusImportComplete,
-		CreatedAt:       time.Now().Local(),
-		UpdatedAt:       sql.NullTime{Time: time.Now().Local(), Valid: true},
-		Size:            &size,
+		ID:          1,
+		NamespaceID: 1,
+		Name:        "gitlab",
+		Path:        "gitlab-org/gitlab",
+		CreatedAt:   time.Now().Local(),
+		UpdatedAt:   sql.NullTime{Time: time.Now().Local(), Valid: true},
+		Size:        &size,
 	}
 
 	ttl := 30 * time.Minute

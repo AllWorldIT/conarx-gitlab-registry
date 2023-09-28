@@ -67,6 +67,7 @@ var (
 type UserInfo struct {
 	Name string
 	Type string
+	JWT  string
 }
 
 // Resource describes a resource by type, name and project path.

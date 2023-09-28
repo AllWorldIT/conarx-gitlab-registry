@@ -56,7 +56,7 @@ func (v *baseValidator) exceedsPayloadSizeLimit(mnfst distribution.Manifest) err
 	return nil
 }
 
-// ManifestExister checks for the existance of a manifest.
+// ManifestExister checks for the existence of a manifest.
 type ManifestExister interface {
 	// Exists returns true if the manifest exists.
 	Exists(ctx context.Context, dgst digest.Digest) (bool, error)

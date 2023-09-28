@@ -136,8 +136,6 @@ func (s *tagStore) Repository(ctx context.Context, t *models.Tag) (*models.Repos
 			name,
 			path,
 			parent_id,
-			migration_status,
-			migration_error,
 			created_at,
 			updated_at
 		FROM

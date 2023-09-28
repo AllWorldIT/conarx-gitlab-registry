@@ -25,7 +25,7 @@ const (
 	contentTypeKey   = "content_type"
 )
 
-// LogRequestFields is a map of log fields to thier associated context keys
+// LogRequestFields is a map of log fields to their associated context keys
 var LogRequestFields = map[string]string{
 	methodKey:        "http.request.method",
 	hostKey:          "http.request.host",
@@ -290,7 +290,7 @@ fallback:
 }
 
 // httpMappedRequestContext makes information about a request available to context through `httpRequestContext`.
-// keys requested from this context that match `MappedLogRequestFields` keys are converted to thier `httpRequestContext` counterparts.
+// keys requested from this context that match `MappedLogRequestFields` keys are converted to their `httpRequestContext` counterparts.
 type httpMappedRequestContext struct {
 	context.Context
 }

@@ -284,7 +284,7 @@ func (ac *accessController) Authorized(ctx context.Context, accessItems ...auth.
 
 	ctx = auth.WithResources(ctx, token.resources())
 
-	return auth.WithUser(ctx, auth.UserInfo{Name: token.Claims.Subject, Type: token.Claims.AuthType}), nil
+	return auth.WithUser(ctx, auth.UserInfo{Name: token.Claims.Subject, Type: token.Claims.AuthType, JWT: token.Claims.User}), nil
 }
 
 // init handles registering the token auth backend.

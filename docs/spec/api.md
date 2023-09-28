@@ -1141,7 +1141,7 @@ A list of methods and URIs are covered in the table below:
 | DELETE | `/v2/<name>/tags/reference/<tag>` | Tag | Delete a tag identified by `name` and `reference`, where reference can be the tag name. This method never deletes a manifest the tag references. |
 | GET | `/v2/<name>/manifests/<reference>` | Manifest | Fetch the manifest identified by `name` and `reference` where `reference` can be a tag or digest. A `HEAD` request can also be issued to this endpoint to obtain resource information without receiving all data. |
 | PUT | `/v2/<name>/manifests/<reference>` | Manifest | Put the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
-| DELETE | `/v2/<name>/manifests/<reference>` | Manifest | Delete the manifest identified by `name` and `reference`. Note that a manifest can _only_ be deleted by `digest`. |
+| DELETE | `/v2/<name>/manifests/<reference>` | Manifest | Delete the manifest or tag identified by `name` and `reference` where `reference` can be a tag or digest. Note that a manifest can _only_ be deleted by digest. |
 | GET | `/v2/<name>/blobs/<digest>` | Blob | Retrieve the blob from the registry identified by `digest`. A `HEAD` request can also be issued to this endpoint to obtain resource information without receiving all data. |
 | DELETE | `/v2/<name>/blobs/<digest>` | Blob | Delete the blob identified by `name` and `digest` |
 | POST | `/v2/<name>/blobs/uploads/` | Initiate Blob Upload | Initiate a resumable blob upload. If successful, an upload location will be provided to complete the upload. Optionally, if the `digest` parameter is present, the request body will be used to complete the upload in a single request. |
@@ -1175,7 +1175,9 @@ The error codes encountered via the API are enumerated in the following table:
  `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate.
  `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource.
  `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters.
-
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename. | This is returned when the path where a repository resides is undergoing a rename.
+ `CONTENT_RANGE_INVALID` | invalid content range | A layer chunked upload is checked against the pre-uploaded chunks - using the content range header, this error code is returned when a layer chunk is uploaded out of order.
+ `PAGINATION_NUMBER_INVALID` | `invalid number of results requested` | `Returned when the "n" parameter (number of results to return) is not an integer, "n" is negative or "n" is bigger than the maximum allowed.`
 
 
 ### Base
@@ -1736,6 +1738,12 @@ Delete tags.
 
 #### DELETE Tag
 
+> **DEPRECATED:** This endpoint is deprecated and will be removed in GitLab 17.0. Please use the new 
+> `DELETE /v2/<name>/manifests/<tag>` endpoint instead, which is documented in the
+> [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/6bc87156eacf3b73362db343eb6b63d7abeedf7e/spec.md#deleting-tags).
+> See [gitlab-org/container-registry#1094](https://gitlab.com/gitlab-org/container-registry/-/issues/1094) for more
+> details.
+
 Delete a tag identified by `name` and `reference`, where reference can be the tag name. This method never deletes a manifest the tag references.
 
 
@@ -2002,6 +2010,31 @@ The error codes that may be included in the response body are enumerated below:
 
 
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 ### Manifest
@@ -2549,10 +2582,35 @@ The error codes that may be included in the response body are enumerated below:
 
 
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 #### DELETE Manifest
 
-Delete the manifest identified by `name` and `reference`. Note that a manifest can _only_ be deleted by `digest`.
+Delete the manifest or tag identified by `name` and `reference` where `reference` can be a tag or digest. Note that a manifest can _only_ be deleted by digest.
 
 
 
@@ -2787,7 +2845,7 @@ Content-Type: application/json
 }
 ```
 
-The specified `name` or `reference` are unknown to the registry and the delete was unable to proceed. Clients can assume the manifest was already deleted if this response is returned.
+The specified `name` or `reference` are unknown to the registry and the delete was unable to proceed. Clients can assume the manifest or tag was already deleted if this response is returned.
 
 
 
@@ -2806,7 +2864,7 @@ The error codes that may be included in the response body are enumerated below:
 405 Method Not Allowed
 ```
 
-Manifest delete is not allowed because the registry is configured as a pull-through cache or `delete` has been disabled.
+Manifest or tag delete is not allowed because the registry is configured as a pull-through cache or `delete` has been disabled.
 
 
 
@@ -2818,6 +2876,31 @@ The error codes that may be included in the response body are enumerated below:
 
 
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 ### Blob
@@ -3652,6 +3735,31 @@ The error codes that may be included in the response body are enumerated below:
 |----|-------|-----------|
 | `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. 
 
 
 
@@ -3902,6 +4010,31 @@ The error codes that may be included in the response body are enumerated below:
 |----|-------|-----------|
 | `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 ##### Initiate Resumable Blob Upload
@@ -4119,6 +4252,31 @@ The error codes that may be included in the response body are enumerated below:
 |----|-------|-----------|
 | `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 ##### Mount Blob
@@ -4354,6 +4512,31 @@ The error codes that may be included in the response body are enumerated below:
 |----|-------|-----------|
 | `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 
@@ -4891,6 +5074,31 @@ The error codes that may be included in the response body are enumerated below:
 |----|-------|-----------|
 | `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 ##### Chunked upload
@@ -5013,9 +5221,29 @@ The error codes that may be included in the response body are enumerated below:
 
 ```
 416 Requested Range Not Satisfiable
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
 ```
 
 The `Content-Range` specification cannot be accepted, either because it does not overlap with the current progress or it is invalid.
+
+
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `CONTENT_RANGE_INVALID` | invalid content range | If a layer chunk is uploaded with the content range out of order, this error will be returned. |
 
 
 
@@ -5167,6 +5395,31 @@ The error codes that may be included in the response body are enumerated below:
 |----|-------|-----------|
 | `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 
@@ -5438,6 +5691,31 @@ The error codes that may be included in the response body are enumerated below:
 |----|-------|-----------|
 | `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 
@@ -5697,6 +5975,31 @@ The error codes that may be included in the response body are enumerated below:
 |----|-------|-----------|
 | `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+###### On Failure: Repository Rename In Progress
+
+```
+409 Conflict
+Content-Type: application/json
+
+{
+	"errors:" [
+	    {
+            "code": <error code>,
+            "message": "<error message>",
+            "detail": ...
+        },
+        ...
+    ]
+}
+```
+
+The repository is undergoing a rename.
+
+The error codes that may be included in the response body are enumerated below:
+
+|Code|Message|Description|
+|----|-------|-----------|
+| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 
 

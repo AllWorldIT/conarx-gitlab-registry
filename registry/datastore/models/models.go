@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/distribution/registry/internal/migration"
-
 	"github.com/opencontainers/go-digest"
 )
 
@@ -30,15 +28,13 @@ type Namespace struct {
 }
 
 type Repository struct {
-	ID              int64
-	NamespaceID     int64
-	Name            string
-	Path            string
-	ParentID        sql.NullInt64
-	MigrationStatus migration.RepositoryStatus
-	MigrationError  sql.NullString
-	CreatedAt       time.Time
-	UpdatedAt       sql.NullTime
+	ID          int64
+	NamespaceID int64
+	Name        string
+	Path        string
+	ParentID    sql.NullInt64
+	CreatedAt   time.Time
+	UpdatedAt   sql.NullTime
 	// This is a temporary attribute for the duration of https://gitlab.com/gitlab-org/container-registry/-/issues/570,
 	// and is only here to allow us to test selects and inserts for soft-deleted repositories:
 	DeletedAt sql.NullTime

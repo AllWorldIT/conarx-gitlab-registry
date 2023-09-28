@@ -3,38 +3,21 @@
 package handlers
 
 import (
-	"context"
 	"math/rand"
 	"testing"
-
-	"github.com/docker/distribution/registry/internal/testutil"
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
 
-type notFoundBlobStatter struct{}
-
-func (bs *notFoundBlobStatter) Stat(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
-	return distribution.Descriptor{}, distribution.ErrBlobUnknown
-}
-
-type expectedBlobStatter struct {
-	digest digest.Digest
-}
-
-func (bs *expectedBlobStatter) Stat(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
-	return distribution.Descriptor{Digest: bs.digest, MediaType: "application/octet-stream"}, nil
-}
-
 func buildRepository(t *testing.T, env *env, path string) *models.Repository {
 	t.Helper()
 
-	rStore := datastore.NewRepositoryStore(env.db)
-	r, err := rStore.CreateByPath(env.ctx, path)
+	r, err := env.rStore.CreateByPath(env.ctx, path)
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
@@ -90,16 +73,14 @@ func descriptorFromBlob(t *testing.T, b *models.Blob) distribution.Descriptor {
 func linkBlob(t *testing.T, env *env, r *models.Repository, d digest.Digest) {
 	t.Helper()
 
-	rStore := datastore.NewRepositoryStore(env.db)
-	err := rStore.LinkBlob(env.ctx, r, d)
+	err := env.rStore.LinkBlob(env.ctx, r, d)
 	require.NoError(t, err)
 }
 
 func isBlobLinked(t *testing.T, env *env, r *models.Repository, d digest.Digest) bool {
 	t.Helper()
 
-	rStore := datastore.NewRepositoryStore(env.db)
-	linked, err := rStore.ExistsBlob(env.ctx, r, d)
+	linked, err := env.rStore.ExistsBlob(env.ctx, r, d)
 	require.NoError(t, err)
 
 	return linked
@@ -108,8 +89,7 @@ func isBlobLinked(t *testing.T, env *env, r *models.Repository, d digest.Digest)
 func findRepository(t *testing.T, env *env, path string) *models.Repository {
 	t.Helper()
 
-	rStore := datastore.NewRepositoryStore(env.db)
-	r, err := rStore.FindByPath(env.ctx, path)
+	r, err := env.rStore.FindByPath(env.ctx, path)
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
@@ -119,8 +99,8 @@ func findRepository(t *testing.T, env *env, path string) *models.Repository {
 func findBlob(t *testing.T, env *env, d digest.Digest) *models.Blob {
 	t.Helper()
 
-	rStore := datastore.NewBlobStore(env.db)
-	b, err := rStore.FindByDigest(env.ctx, d)
+	bStore := datastore.NewBlobStore(env.db)
+	b, err := bStore.FindByDigest(env.ctx, d)
 	require.NoError(t, err)
 	require.NotNil(t, b)
 
@@ -128,15 +108,7 @@ func findBlob(t *testing.T, env *env, d digest.Digest) *models.Blob {
 }
 
 func TestDBMountBlob_NonExistentSourceRepo(t *testing.T) {
-	testDBMountBlob_NonExistentSourceRepo(t)
-}
-
-func TestDBMountBlob_NonExistentSourceRepo_WithCentralRepositoryCache(t *testing.T) {
-	testDBMountBlob_NonExistentSourceRepo(t, withRedisCache(testutil.RedisServer(t).Addr()))
-}
-
-func testDBMountBlob_NonExistentSourceRepo(t *testing.T, opts ...configOpt) {
-	env := newEnv(t, opts...)
+	env := newEnv(t)
 	defer env.shutdown(t)
 
 	// Test for cases where only the source repo does not exist.
@@ -144,82 +116,68 @@ func testDBMountBlob_NonExistentSourceRepo(t *testing.T, opts ...configOpt) {
 
 	b := buildRandomBlob(t, env)
 
-	err := dbMountBlob(env.ctx, env.db, "from", "to", b.Digest)
+	err := dbMountBlob(env.ctx, env.rStore, "from", "to", b.Digest)
 	require.Error(t, err)
 	require.Equal(t, "source repository not found in database", err.Error())
+
 }
 
 func TestDBMountBlob_NonExistentBlob(t *testing.T) {
-	testDBMountBlob_NonExistentBlob(t)
-}
-func TestDBMountBlob_NonExistentBlob_WithCentralRepositoryCache(t *testing.T) {
-	testDBMountBlob_NonExistentBlob(t, withRedisCache(testutil.RedisServer(t).Addr()))
-}
-
-func testDBMountBlob_NonExistentBlob(t *testing.T, opts ...configOpt) {
-	env := newEnv(t, opts...)
+	env := newEnv(t)
 	defer env.shutdown(t)
 
 	fromRepo := buildRepository(t, env, "from")
 
-	err := dbMountBlob(env.ctx, env.db, fromRepo.Path, "to", randomDigest(t))
+	err := dbMountBlob(env.ctx, env.rStore, fromRepo.Path, "to", randomDigest(t))
 	require.Error(t, err)
 	require.Equal(t, "blob not found in database", err.Error())
 }
 
 func TestDBMountBlob_NonExistentBlobLinkInSourceRepo(t *testing.T) {
-	testDBMountBlob_NonExistentBlobLinkInSourceRepo(t)
-}
-
-func TestDBMountBlob_NonExistentBlobLinkInSourceRepo_WithCentralRepositoryCache(t *testing.T) {
-	testDBMountBlob_NonExistentBlobLinkInSourceRepo(t, withRedisCache(testutil.RedisServer(t).Addr()))
-}
-
-func testDBMountBlob_NonExistentBlobLinkInSourceRepo(t *testing.T, opts ...configOpt) {
-	env := newEnv(t, opts...)
+	env := newEnv(t)
 	defer env.shutdown(t)
 
 	fromRepo := buildRepository(t, env, "from")
 	b := buildRandomBlob(t, env) // not linked in fromRepo
 
-	err := dbMountBlob(env.ctx, env.db, fromRepo.Path, "to", b.Digest)
+	err := dbMountBlob(env.ctx, env.rStore, fromRepo.Path, "to", b.Digest)
 	require.Error(t, err)
 	require.Equal(t, "blob not found in database", err.Error())
 }
 
 func TestDBMountBlob_NonExistentDestinationRepo(t *testing.T) {
-	testDBMountBlob_NonExistentDestinationRepo(t)
-}
+	tcs := map[string]struct {
+		useCache bool
+	}{
+		"non existent dest repo":            {},
+		"non existent dest repo with cache": {useCache: true},
+	}
 
-func TestDBMountBlob_NonExistentDestinationRepo_WithCentralRepositoryCache(t *testing.T) {
-	testDBMountBlob_NonExistentDestinationRepo(t, withRedisCache(testutil.RedisServer(t).Addr()))
-}
+	for tn, tc := range tcs {
+		t.Run(tn, func(t *testing.T) {
+			var opts []envOpt
+			if tc.useCache {
+				redisCache := testutil.RedisCache(t, testutil.RedisCacheTTL)
+				opts = append(opts, witCachedRepositoryStore(redisCache))
+			}
 
-func testDBMountBlob_NonExistentDestinationRepo(t *testing.T, opts ...configOpt) {
-	env := newEnv(t, opts...)
-	defer env.shutdown(t)
+			env := newEnv(t, opts...)
+			defer env.shutdown(t)
 
-	fromRepo := buildRepository(t, env, "from")
-	b := buildRandomBlob(t, env)
-	linkBlob(t, env, fromRepo, b.Digest)
+			fromRepo := buildRepository(t, env, "from")
+			b := buildRandomBlob(t, env)
+			linkBlob(t, env, fromRepo, b.Digest)
+			err := dbMountBlob(env.ctx, env.rStore, fromRepo.Path, "to", b.Digest)
+			require.NoError(t, err)
 
-	err := dbMountBlob(env.ctx, env.db, fromRepo.Path, "to", b.Digest)
-	require.NoError(t, err)
-
-	destRepo := findRepository(t, env, "to")
-	require.True(t, isBlobLinked(t, env, destRepo, b.Digest))
+			destRepo := findRepository(t, env, "to")
+			require.True(t, isBlobLinked(t, env, destRepo, b.Digest))
+		})
+	}
 }
 
 func TestDBMountBlob_AlreadyLinked(t *testing.T) {
-	testDBMountBlob_AlreadyLinked(t)
-}
-
-func TestDBMountBlob_AlreadyLinked_WithCentralRepositoryCache(t *testing.T) {
-	testDBMountBlob_AlreadyLinked(t, withRedisCache(testutil.RedisServer(t).Addr()))
-}
-
-func testDBMountBlob_AlreadyLinked(t *testing.T, opts ...configOpt) {
-	env := newEnv(t, opts...)
+	env := newEnv(t)
 	defer env.shutdown(t)
 
 	b := buildRandomBlob(t, env)
@@ -230,7 +188,7 @@ func testDBMountBlob_AlreadyLinked(t *testing.T, opts ...configOpt) {
 	destRepo := buildRepository(t, env, "to")
 	linkBlob(t, env, destRepo, b.Digest)
 
-	err := dbMountBlob(env.ctx, env.db, fromRepo.Path, destRepo.Path, b.Digest)
+	err := dbMountBlob(env.ctx, env.rStore, fromRepo.Path, destRepo.Path, b.Digest)
 	require.NoError(t, err)
 
 	require.True(t, isBlobLinked(t, env, destRepo, b.Digest))

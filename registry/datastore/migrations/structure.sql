@@ -4034,7 +4034,8 @@ CREATE TABLE public.manifests (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 )
 PARTITION BY HASH (top_level_namespace_id);
 
@@ -4052,7 +4053,8 @@ CREATE TABLE partitions.manifests_p_0 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_0
@@ -4072,7 +4074,8 @@ CREATE TABLE partitions.manifests_p_1 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_1
@@ -4092,7 +4095,8 @@ CREATE TABLE partitions.manifests_p_10 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_10
@@ -4112,7 +4116,8 @@ CREATE TABLE partitions.manifests_p_11 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_11
@@ -4132,7 +4137,8 @@ CREATE TABLE partitions.manifests_p_12 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_12
@@ -4152,7 +4158,8 @@ CREATE TABLE partitions.manifests_p_13 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_13
@@ -4172,7 +4179,8 @@ CREATE TABLE partitions.manifests_p_14 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_14
@@ -4192,7 +4200,8 @@ CREATE TABLE partitions.manifests_p_15 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_15
@@ -4212,7 +4221,8 @@ CREATE TABLE partitions.manifests_p_16 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_16
@@ -4232,7 +4242,8 @@ CREATE TABLE partitions.manifests_p_17 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_17
@@ -4252,7 +4263,8 @@ CREATE TABLE partitions.manifests_p_18 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_18
@@ -4272,7 +4284,8 @@ CREATE TABLE partitions.manifests_p_19 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_19
@@ -4292,7 +4305,8 @@ CREATE TABLE partitions.manifests_p_2 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_2
@@ -4312,7 +4326,8 @@ CREATE TABLE partitions.manifests_p_20 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_20
@@ -4332,7 +4347,8 @@ CREATE TABLE partitions.manifests_p_21 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_21
@@ -4352,7 +4368,8 @@ CREATE TABLE partitions.manifests_p_22 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_22
@@ -4372,7 +4389,8 @@ CREATE TABLE partitions.manifests_p_23 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_23
@@ -4392,7 +4410,8 @@ CREATE TABLE partitions.manifests_p_24 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_24
@@ -4412,7 +4431,8 @@ CREATE TABLE partitions.manifests_p_25 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_25
@@ -4432,7 +4452,8 @@ CREATE TABLE partitions.manifests_p_26 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_26
@@ -4452,7 +4473,8 @@ CREATE TABLE partitions.manifests_p_27 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_27
@@ -4472,7 +4494,8 @@ CREATE TABLE partitions.manifests_p_28 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_28
@@ -4492,7 +4515,8 @@ CREATE TABLE partitions.manifests_p_29 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_29
@@ -4512,7 +4536,8 @@ CREATE TABLE partitions.manifests_p_3 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_3
@@ -4532,7 +4557,8 @@ CREATE TABLE partitions.manifests_p_30 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_30
@@ -4552,7 +4578,8 @@ CREATE TABLE partitions.manifests_p_31 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_31
@@ -4572,7 +4599,8 @@ CREATE TABLE partitions.manifests_p_32 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_32
@@ -4592,7 +4620,8 @@ CREATE TABLE partitions.manifests_p_33 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_33
@@ -4612,7 +4641,8 @@ CREATE TABLE partitions.manifests_p_34 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_34
@@ -4632,7 +4662,8 @@ CREATE TABLE partitions.manifests_p_35 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_35
@@ -4652,7 +4683,8 @@ CREATE TABLE partitions.manifests_p_36 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_36
@@ -4672,7 +4704,8 @@ CREATE TABLE partitions.manifests_p_37 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_37
@@ -4692,7 +4725,8 @@ CREATE TABLE partitions.manifests_p_38 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_38
@@ -4712,7 +4746,8 @@ CREATE TABLE partitions.manifests_p_39 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_39
@@ -4732,7 +4767,8 @@ CREATE TABLE partitions.manifests_p_4 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_4
@@ -4752,7 +4788,8 @@ CREATE TABLE partitions.manifests_p_40 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_40
@@ -4772,7 +4809,8 @@ CREATE TABLE partitions.manifests_p_41 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_41
@@ -4792,7 +4830,8 @@ CREATE TABLE partitions.manifests_p_42 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_42
@@ -4812,7 +4851,8 @@ CREATE TABLE partitions.manifests_p_43 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_43
@@ -4832,7 +4872,8 @@ CREATE TABLE partitions.manifests_p_44 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_44
@@ -4852,7 +4893,8 @@ CREATE TABLE partitions.manifests_p_45 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_45
@@ -4872,7 +4914,8 @@ CREATE TABLE partitions.manifests_p_46 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_46
@@ -4892,7 +4935,8 @@ CREATE TABLE partitions.manifests_p_47 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_47
@@ -4912,7 +4956,8 @@ CREATE TABLE partitions.manifests_p_48 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_48
@@ -4932,7 +4977,8 @@ CREATE TABLE partitions.manifests_p_49 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_49
@@ -4952,7 +4998,8 @@ CREATE TABLE partitions.manifests_p_5 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_5
@@ -4972,7 +5019,8 @@ CREATE TABLE partitions.manifests_p_50 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_50
@@ -4992,7 +5040,8 @@ CREATE TABLE partitions.manifests_p_51 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_51
@@ -5012,7 +5061,8 @@ CREATE TABLE partitions.manifests_p_52 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_52
@@ -5032,7 +5082,8 @@ CREATE TABLE partitions.manifests_p_53 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_53
@@ -5052,7 +5103,8 @@ CREATE TABLE partitions.manifests_p_54 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_54
@@ -5072,7 +5124,8 @@ CREATE TABLE partitions.manifests_p_55 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_55
@@ -5092,7 +5145,8 @@ CREATE TABLE partitions.manifests_p_56 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_56
@@ -5112,7 +5166,8 @@ CREATE TABLE partitions.manifests_p_57 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_57
@@ -5132,7 +5187,8 @@ CREATE TABLE partitions.manifests_p_58 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_58
@@ -5152,7 +5208,8 @@ CREATE TABLE partitions.manifests_p_59 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_59
@@ -5172,7 +5229,8 @@ CREATE TABLE partitions.manifests_p_6 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_6
@@ -5192,7 +5250,8 @@ CREATE TABLE partitions.manifests_p_60 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_60
@@ -5212,7 +5271,8 @@ CREATE TABLE partitions.manifests_p_61 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_61
@@ -5232,7 +5292,8 @@ CREATE TABLE partitions.manifests_p_62 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_62
@@ -5252,7 +5313,8 @@ CREATE TABLE partitions.manifests_p_63 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_63
@@ -5272,7 +5334,8 @@ CREATE TABLE partitions.manifests_p_7 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_7
@@ -5292,7 +5355,8 @@ CREATE TABLE partitions.manifests_p_8 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_8
@@ -5312,7 +5376,8 @@ CREATE TABLE partitions.manifests_p_9 (
     payload bytea NOT NULL,
     non_conformant boolean DEFAULT FALSE,
     total_size bigint NOT NULL,
-    non_distributable_layers boolean DEFAULT FALSE
+    non_distributable_layers boolean DEFAULT FALSE,
+    subject_id bigint
 );
 
 ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_9
@@ -7035,11 +7100,7 @@ CREATE TABLE public.repositories (
     updated_at timestamp with time zone,
     name text NOT NULL,
     path text NOT NULL,
-    migration_status text DEFAULT 'native' ::text NOT NULL,
     deleted_at timestamp with time zone,
-    migration_error text,
-    CONSTRAINT check_repositories_migration_error_length CHECK ((char_length(migration_error) <= 255)),
-    CONSTRAINT check_repositories_migration_status_length CHECK ((char_length(migration_status) <= 255)),
     CONSTRAINT check_repositories_name_length CHECK ((char_length(name) <= 255)),
     CONSTRAINT check_repositories_path_length CHECK ((char_length(path) <= 255))
 );
@@ -16073,6 +16134,9 @@ ALTER TABLE public.manifests
 
 ALTER TABLE public.manifests
     ADD CONSTRAINT fk_manifests_media_type_id_media_types FOREIGN KEY (media_type_id) REFERENCES public.media_types (id);
+
+ALTER TABLE public.manifests
+    ADD CONSTRAINT fk_manifests_subject_id_manifests FOREIGN KEY (top_level_namespace_id, repository_id, subject_id) REFERENCES public.manifests (top_level_namespace_id, repository_id, id) ON DELETE CASCADE;
 
 ALTER TABLE public.manifests
     ADD CONSTRAINT fk_manifests_top_lvl_nmespace_id_and_repository_id_repositories FOREIGN KEY (top_level_namespace_id, repository_id) REFERENCES public.repositories (top_level_namespace_id, id) ON DELETE CASCADE;

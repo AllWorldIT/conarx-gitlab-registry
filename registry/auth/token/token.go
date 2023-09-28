@@ -54,6 +54,9 @@ type ClaimSet struct {
 	// Private claims
 	Access   []*ResourceActions `json:"access"`
 	AuthType string             `json:"auth_type"`
+	// User is an encoded JWT that is used for tracking purposes
+	// See https://gitlab.com/gitlab-org/container-registry/-/issues/1097
+	User string `json:"user,omitempty"`
 }
 
 // Meta stores extra metadata available in the JSON Web Token passed by rails.

@@ -1,9 +1,9 @@
 Follow this guide to start using the metadata database with the container registry.
 
 
-**Warning:** The metadata database is an
-[experimental](https://docs.gitlab.com/ee/policy/alpha-beta-support.html#experiment)
-feature suitable only for testing. **Do not enable the registry database in production!**
+**Warning:** The metadata database is a
+[beta](https://docs.gitlab.com/ee/policy/experiment-beta-support.html#beta)
+feature. **Carefully review the documentation before enabling the registry database in production!**
 If you encounter a problem with either the import or normal operation of the
 registry, please open an issue [here](https://gitlab.com/gitlab-org/container-registry/-/issues).
 

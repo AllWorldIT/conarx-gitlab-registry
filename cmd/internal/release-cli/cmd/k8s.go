@@ -69,6 +69,16 @@ var k8sCmd = &cobra.Command{
 		k8sClient := client.NewClient(accessTokenK8s)
 		registryClient := client.NewClient(accessTokenRegistry)
 
+		exists, err := k8sClient.BranchExists(release.ProjectID, release.BranchName)
+		if err != nil {
+			log.Fatalf("Error checking if branch exists: %v", err)
+		}
+
+		if exists {
+			log.Printf("Branch %s already exists. Aborting.", release.BranchName)
+			return
+		}
+
 		branch, err := k8sClient.CreateBranch(release.ProjectID, release.BranchName, release.Ref)
 		if err != nil {
 			log.Fatalf("Failed to create branch: %v", err)

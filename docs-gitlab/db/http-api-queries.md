@@ -227,7 +227,7 @@ GET /v2/<name>/blobs/<digest>
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
 2. [Find blob with digest `<digest>` in repository `<name>`](#find-blob-by-digest-in-repository).
 
-#### Check existance
+#### Check existence
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#existing-layers)
 

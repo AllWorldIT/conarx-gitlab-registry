@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
 
 	"gopkg.in/yaml.v2"
@@ -196,7 +197,9 @@ func (p *Parser) overwriteStruct(v reflect.Value, fullpath string, path []string
 
 	fieldIndex, present := byUpperCase[path[0]]
 	if !present {
-		log.GetLogger().WithFields(log.Fields{"name": fullpath}).Warn("ignoring unrecognized environment variable")
+		if !feature.KnownEnvVar(fullpath) {
+			log.GetLogger().WithFields(log.Fields{"name": fullpath}).Warn("ignoring unrecognized environment variable")
+		}
 		return nil
 	}
 	field := v.Field(fieldIndex)

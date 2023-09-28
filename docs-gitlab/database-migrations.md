@@ -29,11 +29,10 @@ BEGIN
         SELECT
             1
         FROM
-            information_schema.constraint_column_usage
+            pg_constraint
         WHERE
-            table_name = 'repositories'
-            AND column_name = 'path'
-            AND constraint_name = 'uq_repositories_path') THEN
+            conrelid = 'public.repositories'::regclass
+            AND conname = 'uq_repositories_path') THEN
         ALTER TABLE public.repositories
             ADD CONSTRAINT uq_repositories_path UNIQUE (path);
     END IF;
@@ -98,6 +97,16 @@ FROM
 ```
 
 Please note that this is not appropriate for large and/or partitioned tables, as it triggers a scan on the whole table to eliminate rows it might insert.
+
+##### Long-Running Migrations
+
+For (usually post-deployment) migrations that contain statements expected to take a considerable amount of time to
+complete when applied to a production database (e.g. when creating indexes or validating constraints), we must wrap all
+`Up` statements with `SET statement_timeout TO 0` and
+`RESET statement_timeout` instructions. This will ensure that the default statement timeout
+(e.g. 15 seconds for GitLab.com) does not apply and cause the statement to fail. See migration
+[`20221129145757_post_add_layers_simplified_usage_index_batch_2`](https://gitlab.com/gitlab-org/container-registry/blob/85d0fe473c2fc167cc3ca0c1c08752a0498a839c/registry/datastore/migrations/20221129145757_post_add_layers_simplified_usage_index_batch_2.go)
+for an example.
 
 ## Development
 

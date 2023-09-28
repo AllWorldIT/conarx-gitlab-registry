@@ -19,6 +19,7 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/manifestlist"
 	mlcompat "github.com/docker/distribution/manifest/manifestlist/compat"
@@ -30,11 +31,11 @@ import (
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
-	"github.com/docker/distribution/registry/internal/feature"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	"github.com/docker/distribution/testutil"
 
+	internaltestutil "github.com/docker/distribution/registry/internal/testutil"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -290,6 +291,19 @@ func testBlobAPI(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
 	uploadURLBase, dgst := pushChunk(t, env.builder, imageName, uploadURLBase, layerFile, layerLength)
 	finishUpload(t, env.builder, imageName, uploadURLBase, dgst)
+
+	// -----------------------------------------
+	// Push a chunk with unordered content range
+
+	layerFile.Seek(0, io.SeekStart)
+
+	uploadURLBase, _ = startPushLayer(t, env, imageName)
+	resp, _, err = doPushChunk(t, uploadURLBase, layerFile, witContentRangeHeader("8-30"))
+	if err != nil {
+		t.Fatalf("unexpected error on pushing layer: %v", err)
+	}
+	defer resp.Body.Close()
+	checkResponse(t, "uploading out of order chunk", resp, http.StatusRequestedRangeNotSatisfiable)
 
 	// ------------------------
 	// Use a head request to see if the layer exists.
@@ -774,77 +788,35 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 	genericBlobMediaType := "application/octet-stream"
 
 	tt := []struct {
-		name                         string
-		unknownLayerMediaType        bool
-		failOnUnknownLayerMediaTypes bool
-		accurateLayerMediaTypes      bool
+		name                    string
+		unknownLayerMediaType   bool
+		accurateLayerMediaTypes bool
 
 		wantGenericBlobMediaType bool
-		wantError                bool
 	}{
 		{
-			name:                         "known layer media type accurate layer media types disabled and no fail on unknown media types",
-			unknownLayerMediaType:        false,
-			failOnUnknownLayerMediaTypes: false,
-			accurateLayerMediaTypes:      false,
-			wantGenericBlobMediaType:     true,
-			wantError:                    false,
+			name:                     "known layer media type and accurate layer media types disabled",
+			unknownLayerMediaType:    false,
+			accurateLayerMediaTypes:  false,
+			wantGenericBlobMediaType: true,
 		},
 		{
-			name:                         "known layer media type accurate layer media types enabled and no fail on unknown media types",
-			unknownLayerMediaType:        false,
-			failOnUnknownLayerMediaTypes: false,
-			accurateLayerMediaTypes:      true,
-			wantGenericBlobMediaType:     false,
-			wantError:                    false,
+			name:                     "known layer media type and accurate layer media types enabled",
+			unknownLayerMediaType:    false,
+			accurateLayerMediaTypes:  true,
+			wantGenericBlobMediaType: false,
 		},
 		{
-			name:                         "known layer media type accurate layer media types disabled and fail on unknown media types",
-			unknownLayerMediaType:        false,
-			failOnUnknownLayerMediaTypes: true,
-			accurateLayerMediaTypes:      false,
-			wantGenericBlobMediaType:     true,
-			wantError:                    false,
+			name:                     "unknown layer media type and accurate layer media types disabled",
+			unknownLayerMediaType:    true,
+			accurateLayerMediaTypes:  false,
+			wantGenericBlobMediaType: true,
 		},
 		{
-			name:                         "known layer media type accurate layer media types enabled and fail on unknown media types",
-			unknownLayerMediaType:        false,
-			failOnUnknownLayerMediaTypes: true,
-			accurateLayerMediaTypes:      true,
-			wantGenericBlobMediaType:     false,
-			wantError:                    false,
-		},
-		{
-			name:                         "unknown layer media type accurate layer media types disabled and no fail on unknown media types",
-			unknownLayerMediaType:        true,
-			failOnUnknownLayerMediaTypes: false,
-			accurateLayerMediaTypes:      false,
-			wantGenericBlobMediaType:     true,
-			wantError:                    false,
-		},
-		{
-			name:                         "unknown layer media type accurate layer media types enabled and no fail on unknown media types",
-			unknownLayerMediaType:        true,
-			failOnUnknownLayerMediaTypes: false,
-			accurateLayerMediaTypes:      true,
-			wantGenericBlobMediaType:     true,
-			wantError:                    false,
-		},
-		{
-			name:                         "unknown layer media type accurate layer media types disabled and fail on unknown media types",
-			unknownLayerMediaType:        true,
-			failOnUnknownLayerMediaTypes: true,
-			accurateLayerMediaTypes:      false,
-			wantGenericBlobMediaType:     true,
-			wantError:                    false,
-		},
-		{
-			name:                         "unknown layer media type accurate layer media types enabled and fail on unknown media types",
-			unknownLayerMediaType:        true,
-			failOnUnknownLayerMediaTypes: true,
-			accurateLayerMediaTypes:      true,
-			wantGenericBlobMediaType:     false,
-			wantError:                    true,
+			name:                     "unknown layer media type and accurate layer media types enabled",
+			unknownLayerMediaType:    true,
+			accurateLayerMediaTypes:  true,
+			wantGenericBlobMediaType: true,
 		},
 	}
 
@@ -897,16 +869,9 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 
 			// Enable envvars
 			t.Setenv(feature.AccurateLayerMediaTypes.EnvVariable, strconv.FormatBool(test.accurateLayerMediaTypes))
-			t.Setenv(feature.FailOnUnknownLayerMediaTypes.EnvVariable, strconv.FormatBool(test.failOnUnknownLayerMediaTypes))
 
 			resp := putManifest(t, "putting manifest", tagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
 			defer resp.Body.Close()
-
-			if test.wantError {
-				require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-				checkBodyHasErrorCodes(t, "invalid manifest", resp, v2.ErrorCodeManifestInvalid)
-				return
-			}
 
 			require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -2129,4 +2094,378 @@ func Test_PrometheusMetricsCollectionDoesNotPanic(t *testing.T) {
 	defer env.Shutdown()
 
 	testPrometheusMetricsCollectionDoesNotPanic(t, env)
+}
+
+func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
+	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// Seed repository "foo/bar"
+	repoName := "foo/bar"
+	tag := "latest"
+	refrencedRepo, err := reference.WithName(repoName)
+	require.NoError(t, err)
+	createRepository(t, env, repoName, tag)
+
+	env, redisController, tokenProvider := setupValidRenameEnv(t)
+
+	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
+	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
+	// However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour. This makes sure we have enough time to assert the behaviour
+	// of an existing project lease while avoiding race-conditions/flakiness in the test.
+	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+
+	// Generate an Auth token with push and pull access to the base repository "foo/bar"
+	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
+
+	// Create and execute API request to start blob upload (while project lease is in effect for "foo/bar")
+	req := newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(token))
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	// Assert "rename in progress" error code
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeRenameInProgress)
+	releaseProjectLease(t, redisController.Cache, repoName)
+
+	// Start another layer push with the project lease no longer in place for "foo/bar"
+	req = newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(token))
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+
+	// Create and execute API request to continue with the started push (while a project lease is suddenly in effect for "foo/bar")
+	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+	args := makeBlobArgs(t)
+	req = newRequest(doPushLayerRequest(t, env.builder, args.imageName, args.layerDigest, resp.Header.Get("Location"), args.layerFile), witAuthToken(token))
+	// Send request
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	// Assert "rename in progress" error code
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeRenameInProgress)
+}
+
+func TestExistingRenameLease_Prevents_Layer_Delete(t *testing.T) {
+	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// Seed repository "foo/bar"
+	repoName := "foo/bar"
+	args, _ := createNamedRepoWithBlob(t, env, repoName)
+	repository := args.imageName
+
+	env, redisController, tokenProvider := setupValidRenameEnv(t)
+
+	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
+	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
+	// However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour. This makes sure we have enough time to assert the behaviour
+	// of an existing project lease while avoiding race-conditions/flakiness in the test.
+	acquireProjectLease(t, redisController.Cache, repository.Name(), 1*time.Hour)
+
+	// Generate an Auth token with delete access to the base repository "foo/bar"
+	token := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+
+	// Create and execute API request to delete a blob (while project lease is in effect for "foo/bar")
+	ref, err := reference.WithDigest(repository, args.layerDigest)
+	require.NoError(t, err)
+	blobDigestURL, err := env.builder.BuildBlobURL(ref)
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodDelete, blobDigestURL, nil)
+	require.NoError(t, err)
+	req = newRequest(req, witAuthToken(token))
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	// Assert "rename in progress" error code
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeRenameInProgress)
+}
+
+func TestExistingRenameLease_Prevents_Manifest_Push(t *testing.T) {
+	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// Seed a repository "foo/bar"
+	repoName := "foo/bar"
+	tag := "latest"
+	repository, err := reference.WithName(repoName)
+	require.NoError(t, err)
+	deserializedManifest := seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+
+	env, redisController, tokenProvider := setupValidRenameEnv(t)
+
+	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
+	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
+	// However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour. This makes sure we have enough time to assert the behaviour
+	// of an existing project lease while avoiding race-conditions/flakiness in the test.
+	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+
+	// Generate an Auth token with push and pull access to the base repository "foo/bar"
+	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+
+	// Create and execute API request upload manifest (while project lease is in effect for "foo/bar")
+	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
+	req := newRequest(putManifestRequest(t, "putting manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest), witAuthToken(token))
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	// Assert "rename in progress" error code
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeRenameInProgress)
+}
+
+func TestExistingRenameLeaseExpires_Eventually_Allows_Manifest_Push(t *testing.T) {
+	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// Seed repository "foo/bar"
+	repoName := "foo/bar"
+	tag := "latest"
+	repository, err := reference.WithName(repoName)
+	require.NoError(t, err)
+	deserializedManifest := seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+
+	env, redisController, tokenProvider := setupValidRenameEnv(t)
+
+	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
+	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
+	// However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour. This makes sure we have enough time to assert the behaviour
+	// of an existing project lease while avoiding race-conditions/flakiness in the test.
+	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+
+	// Generate an Auth token with push and pull access to the base repository "foo/bar"
+	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+
+	// Create and execute API request upload a manifest (while project lease is in effect for "foo/bar")
+	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
+	req := newRequest(putManifestRequest(t, "putting manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest), witAuthToken(token))
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	// Assert "rename in progress" error code
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeRenameInProgress)
+
+	// Move redis 1 hour into the future (i.e after the lease has expired)
+	redisController.FastForward(1 * time.Hour)
+	// Send the same request
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	// Assert successfully push of manifest
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+}
+
+func TestExistingRenameLease_Prevents_Manifest_Delete(t *testing.T) {
+
+	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// Seed repository "foo/bar"
+	repoName := "foo/bar"
+	tag := "latest"
+	repository, err := reference.WithName(repoName)
+	require.NoError(t, err)
+	deserializedManifest := seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+
+	env, redisController, tokenProvider := setupValidRenameEnv(t)
+
+	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
+	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
+	// However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour. This makes sure we have enough time to assert the behaviour
+	// of an existing project lease while avoiding race-conditions/flakiness in the test.
+	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+
+	// Generate an Auth token with delete access to the base repository "foo/bar"
+	token := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+
+	// Create and execute API request delete a manifest (while project lease is in effect for "foo/bar")
+	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
+	req, err := http.NewRequest(http.MethodDelete, manifestDigestURL, nil)
+	require.NoError(t, err)
+	req = newRequest(req, witAuthToken(token))
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	// Assert "rename in progress" error code
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeRenameInProgress)
+}
+
+func TestExistingRenameLease_Prevents_Tag_Delete(t *testing.T) {
+
+	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// Seed a repository "foo/bar"
+	repoName := "foo/bar"
+	tag := "latest"
+	repository, err := reference.WithName(repoName)
+	require.NoError(t, err)
+	seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+
+	env, redisController, tokenProvider := setupValidRenameEnv(t)
+
+	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
+	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
+	// However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour. This makes sure we have enough time to assert the behaviour
+	// of an existing project lease while avoiding race-conditions/flakiness in the test.
+	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+
+	// Generate an Auth token with delete access to the base repository "foo/bar"
+	token := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+
+	// Create and execute API request to delete tag (while project lease is in effect for "foo/bar")
+	ref, err := reference.WithTag(repository, "latest")
+	require.NoError(t, err)
+	tagURL, err := env.builder.BuildTagURL(ref)
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodDelete, tagURL, nil)
+	require.NoError(t, err)
+	req = newRequest(req, witAuthToken(token))
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	// Assert "rename in progress" error code
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeRenameInProgress)
+}
+
+func TestExistingRenameLease_Allows_Reads(t *testing.T) {
+	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
+	// We also need the FS driver configured correctly since we will be attempting to retrieve the seeded blobs
+	rootDir := t.TempDir()
+	env := newTestEnv(t, withFSDriver(rootDir))
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// Seed repository "foo/bar"
+	repoName := "foo/bar"
+	tag := "latest"
+	repository, err := reference.WithName(repoName)
+	require.NoError(t, err)
+	deserializedManifest := seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+
+	env, redisController, tokenProvider := setupValidRenameEnv(t, withFSDriver(rootDir))
+
+	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
+	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
+	// However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour. This makes sure we have enough time to assert the behaviour
+	// of an existing project lease while avoiding race-conditions/flakiness in the test.
+	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+
+	// Generate an Auth token with full access to the base repository "foo/bar"
+	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+
+	// try reading from repository ongoing rename
+	assertManifestGetByDigestResponse(t, env, repository.Name(), deserializedManifest, http.StatusOK, witAuthToken(token))
+	assertManifestGetByTagResponse(t, env, repository.Name(), tag, http.StatusOK, witAuthToken(token))
+	assertManifestHeadByTagResponse(t, env, repository.Name(), tag, http.StatusOK, witAuthToken(token))
+	assertBlobGetResponse(t, env, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(token))
+	assertBlobHeadResponse(t, env, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(token))
+}
+
+func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
+	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
+	env := newTestEnv(t)
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	// Seed a repository "foo/bar"
+	repoName := "foo/bar"
+	createNamedRepoWithBlob(t, env, repoName)
+
+	// create a token provider
+	tokenProvider := NewAuthTokenProvider(t)
+	// Generate an Auth token with full access to the base repository "foo/bar"
+	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
+
+	tt := []struct {
+		name                 string
+		ongoingRenameCheckFF bool
+		redisEnabled         bool
+		redisUnReachable     bool
+		dbEnabled            bool
+	}{
+		{
+			name:                 "feature flag enabled without redis",
+			ongoingRenameCheckFF: true,
+			redisEnabled:         false,
+			dbEnabled:            true,
+		},
+		{
+			name:                 "feature flag enabled with redis unreachable",
+			ongoingRenameCheckFF: true,
+			redisEnabled:         true,
+			dbEnabled:            true,
+			redisUnReachable:     true,
+		},
+		{
+			name:                 "feature flag enabled without redis and database",
+			ongoingRenameCheckFF: true,
+			redisEnabled:         false,
+			dbEnabled:            false,
+		},
+		{
+			name:                 "feature flag enabled without database",
+			ongoingRenameCheckFF: true,
+			redisEnabled:         true,
+			dbEnabled:            false,
+		},
+		{
+			name:                 "feature flag explicitly disabled",
+			ongoingRenameCheckFF: false,
+			redisEnabled:         true,
+			dbEnabled:            true,
+		},
+	}
+
+	for _, test := range tt {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(feature.OngoingRenameCheck.EnvVariable, strconv.FormatBool(test.ongoingRenameCheckFF))
+
+			var opts []configOpt
+			var redisController internaltestutil.RedisCacheController
+
+			if test.redisEnabled {
+				// Attatch a redis cache to registry configuration
+				redisController = internaltestutil.NewRedisCacheController(t, 0)
+				opts = append(opts, withRedisCache(redisController.Addr()))
+
+				// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
+				// Note: Project lease last for at most 5 seconds in the codebase. However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour.
+				// This is to make sure we have enough time to assert the behaviour of an existing project lease while avoiding race-conditions/flakiness in the test.
+				acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+			}
+
+			if !test.dbEnabled {
+				opts = append(opts, withDBDisabled)
+			}
+
+			// Use token based authorization for all proceeding requests.
+			// Token based authorization is required for checking for an ongoing rename during push & delete operations.
+			env = newTestEnv(t, append(opts, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))...)
+
+			// Shutdown redis cache before making a request
+			if test.redisEnabled && test.redisUnReachable {
+				redisController.Close()
+			}
+			// Try pushing to the repository allegedly undergoing a rename and ensure it is successful.
+			// This signifies that a lease check on the enacted lease is never actioned upon.
+			seedRandomSchema2Manifest(t, env, repoName, putByTag("latest"), withAuthToken(token))
+		})
+	}
 }

@@ -173,3 +173,9 @@ database:structure-sql:
     # Dump and validate
     - make db-structure-dump
     - git diff --exit-code
+  # Stash the db dump for 24 hrs
+  artifacts:
+        expire_in: 24h
+        when: on_success
+        paths:
+          - registry/datastore/migrations/structure.sql

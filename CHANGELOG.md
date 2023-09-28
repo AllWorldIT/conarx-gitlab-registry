@@ -1,3 +1,123 @@
+## [3.83.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.82.2-gitlab...v3.83.0-gitlab) (2023-09-08)
+
+
+### ✨ Features ✨
+
+* use repository cache for start blob upload including blob mount ([70b62a9](https://gitlab.com/gitlab-org/container-registry/commit/70b62a97dd338d6d4996755f6adb5ee1c73a9c09))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module golang.org/x/crypto to v0.13.0 ([60a51bb](https://gitlab.com/gitlab-org/container-registry/commit/60a51bb0df00ed7feefc7d6be25b793c717e2e58))
+
+## [3.82.2](https://gitlab.com/gitlab-org/container-registry/compare/v3.82.1-gitlab...v3.82.2-gitlab) (2023-09-06)
+
+
+### 🐛 Bug Fixes 🐛
+
+* **datastore:** drop repositories table unused migration columns ([09fafa5](https://gitlab.com/gitlab-org/container-registry/commit/09fafa592386e4b8581f6e6bf423a035c83e0f88))
+* do not log unknown env var for feature flags ([12c905c](https://gitlab.com/gitlab-org/container-registry/commit/12c905c278e5e107010e1dbfce627881d24b135d))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module google.golang.org/api to v0.138.0 ([6000de4](https://gitlab.com/gitlab-org/container-registry/commit/6000de4d6237b34b73816f013495a2ad11a39ccb))
+
+## [3.82.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.82.0-gitlab...v3.82.1-gitlab) (2023-09-05)
+
+
+### 🐛 Bug Fixes 🐛
+
+* **datastore:** drop repositories table unused migration columns ([4e7d5bb](https://gitlab.com/gitlab-org/container-registry/commit/4e7d5bb68f5eee32dc3262540d5ce99bb8f902e2))
+* disable statement timeout for subject ID FK validation migrations ([7e8ecb3](https://gitlab.com/gitlab-org/container-registry/commit/7e8ecb39cc7a871450a6333afee411e085a3c542))
+
+
+### ⏮️️ Reverts ⏮️️
+
+* drop repositories table unused migration columns ([6576a7e](https://gitlab.com/gitlab-org/container-registry/commit/6576a7e10afecbab5479955c1aa767f9ddd23852))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go to v1.45.2 ([33cd579](https://gitlab.com/gitlab-org/container-registry/commit/33cd579f913fb7dbf6cf9c79f9113d2591a900da))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.91.1 ([b3e045a](https://gitlab.com/gitlab-org/container-registry/commit/b3e045a2bf474e70c3fe41942cf194d0d052000d))
+* **deps:** update module golang.org/x/oauth2 to v0.11.0 ([c586de0](https://gitlab.com/gitlab-org/container-registry/commit/c586de0d0669ad3751f5ae5707209a9002d674ea))
+
+## [3.82.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.81.0-gitlab...v3.82.0-gitlab) (2023-09-01)
+
+
+### ✨ Features ✨
+
+* forward user JWT claims for webhook notifications ([715cb0c](https://gitlab.com/gitlab-org/container-registry/commit/715cb0c060349b9640f848003d43feb01b778f84))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **handlers:** limit max v2/_catalog entries to 1000 ([cf635c3](https://gitlab.com/gitlab-org/container-registry/commit/cf635c335646013547aabc0a1e2270d01b2d8cde))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/azure/azure-sdk-for-go to v68.0.0 ([47df1ee](https://gitlab.com/gitlab-org/container-registry/commit/47df1ee68097871e92a703772a9cefda37965940))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.20.0 ([3815349](https://gitlab.com/gitlab-org/container-registry/commit/3815349ca0f07236d971971014f85c4e9c935cfb))
+* **deps:** update module golang.org/x/crypto to v0.12.0 ([b897961](https://gitlab.com/gitlab-org/container-registry/commit/b89796111f3b7a81f9f33d60029ea353708f9863))
+* upgrade github.com/vmihailenco/msgpack to v5 ([c9a0f3d](https://gitlab.com/gitlab-org/container-registry/commit/c9a0f3d2eee5a484fed026fc093923799adaf2c9))
+
+## [3.81.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.80.0-gitlab...v3.81.0-gitlab) (2023-08-29)
+
+
+### ✨ Features ✨
+
+* add subject_id to manifests table ([8361276](https://gitlab.com/gitlab-org/container-registry/commit/836127676dae03ad8fda9c8c580d2efbfa7c39cc))
+* **api/v2:** deprecate DELETE /v2/<name>/tags/reference/<tag> API endpoint ([fb43d7e](https://gitlab.com/gitlab-org/container-registry/commit/fb43d7ed7645f7827f0db5cdd3fddaee4a1d2c72))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **v2:** handle content range header during layer chunk upload ([fae36b7](https://gitlab.com/gitlab-org/container-registry/commit/fae36b77c5d39775ba13558b9ae85376a78d0cca))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/alicebob/miniredis/v2 to v2.30.5 ([bad3cba](https://gitlab.com/gitlab-org/container-registry/commit/bad3cba18b776076a2c2a8a9f8c193fbe89fa5b5))
+* **deps:** update module github.com/aws/aws-sdk-go to v1.44.323 ([c595854](https://gitlab.com/gitlab-org/container-registry/commit/c595854cedecf9a9cac2c2fdd697437fa56936be))
+* **deps:** update module github.com/aws/aws-sdk-go to v1.44.327 ([b630712](https://gitlab.com/gitlab-org/container-registry/commit/b6307123d41a1114e9874724a91a1fc093bc1cc2))
+* **deps:** update module github.com/aws/aws-sdk-go to v1.44.332 ([109c0ce](https://gitlab.com/gitlab-org/container-registry/commit/109c0cedb2806bd1a5fa1350aa1fa361e3636f5e))
+* **deps:** update module github.com/eko/gocache/lib/v4 to v4.1.4 ([dde91b3](https://gitlab.com/gitlab-org/container-registry/commit/dde91b39d33de7aac73a21087cb96a8e0f7c1d36))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.1.0 ([60a4928](https://gitlab.com/gitlab-org/container-registry/commit/60a49283a53fc2c877044870bb99fa56444a5ba2))
+* **deps:** update module github.com/shopify/toxiproxy to v2.5.0 ([5d54bb2](https://gitlab.com/gitlab-org/container-registry/commit/5d54bb2be6be3bc1e3acd827da706d9f0e431aee))
+* **deps:** update module github.com/shopify/toxiproxy/v2 to v2.6.0 ([e9d67aa](https://gitlab.com/gitlab-org/container-registry/commit/e9d67aa90a6906f6fe42bd38a23e49085bd7defc))
+* **deps:** update module github.com/spf13/cobra to v1.7.0 ([3dea471](https://gitlab.com/gitlab-org/container-registry/commit/3dea471257e651f3e4bd1a6f0940a3229567d68f))
+* **deps:** update module github.com/spf13/viper to v1.16.0 ([825f022](https://gitlab.com/gitlab-org/container-registry/commit/825f02270d92039b10b36445f478cb31ab94f8d3))
+
+## [3.80.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.79.0-gitlab...v3.80.0-gitlab) (2023-08-14)
+
+
+### ✨ Features ✨
+
+* add support for DELETE /v2/<name>/manifests/<tag> operation (OCI v1.1) ([a72ecc0](https://gitlab.com/gitlab-org/container-registry/commit/a72ecc086a8b5ab406c3d621b21e64cc1ede233b))
+* add support for Development Containers media types ([352ab6b](https://gitlab.com/gitlab-org/container-registry/commit/352ab6b97203490069b0cca60e28209dc3046e65))
+* add support for Falcoctl media types ([0694731](https://gitlab.com/gitlab-org/container-registry/commit/0694731c1e92b04eec6a44de27db2ef5ffe34223))
+* **handlers:** add code path to check ongoing rename ([6ab5cff](https://gitlab.com/gitlab-org/container-registry/commit/6ab5cff997128bc16399bea676b89d98f0726cc5))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **s3:** limit multi part upload max layer parts size ([8a32ccb](https://gitlab.com/gitlab-org/container-registry/commit/8a32ccbf4d15292556b3297cfedb4ac309902cba))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go to v1.44.317 ([0be1318](https://gitlab.com/gitlab-org/container-registry/commit/0be1318f778c97b81bf1e16a2b71e7639417f9ee))
+* **deps:** update module github.com/getsentry/sentry-go to v0.23.0 ([f3d1500](https://gitlab.com/gitlab-org/container-registry/commit/f3d15001429df1196c1bacd2a5653a52eba9ed11))
+* **deps:** update module github.com/jackc/pgconn to v1.14.1 ([3d23ea3](https://gitlab.com/gitlab-org/container-registry/commit/3d23ea3d60475b69b2cee6a97752c715f9e71618))
+* **deps:** update module github.com/jackc/pgx/v4 to v4.18.1 ([087933e](https://gitlab.com/gitlab-org/container-registry/commit/087933e488099524ba2981b9bf8bd4233f558432))
+* **deps:** update module github.com/jszwec/csvutil to v1.8.0 ([427758d](https://gitlab.com/gitlab-org/container-registry/commit/427758d4bf484c49a72084c765b6697cdd7283d6))
+* **deps:** update module github.com/prometheus/client_golang to v1.16.0 ([77e784c](https://gitlab.com/gitlab-org/container-registry/commit/77e784c00eb647d97b947229659c2a61a70878ae))
+* **deps:** update module github.com/rubenv/sql-migrate to v1.5.2 ([57a9a9e](https://gitlab.com/gitlab-org/container-registry/commit/57a9a9ec2de2c872e1f7c1f7331ece1018b49af6))
+* **deps:** update module github.com/stretchr/testify to v1.8.4 ([265c146](https://gitlab.com/gitlab-org/container-registry/commit/265c14672310bb27ad992fade6c47be16cc775fd))
+* **deps:** update module go.uber.org/automaxprocs to v1.5.3 ([b2142e1](https://gitlab.com/gitlab-org/container-registry/commit/b2142e1e6a178e17adeba634a9757f5f9bb8318b))
+
 ## [3.79.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.78.0-gitlab...v3.79.0-gitlab) (2023-08-01)
 
 

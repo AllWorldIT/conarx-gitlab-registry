@@ -9,7 +9,6 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
-	"github.com/docker/distribution/registry/internal/migration"
 	"github.com/stretchr/testify/require"
 )
 
@@ -255,13 +254,12 @@ func TestTagStore_Repository(t *testing.T) {
 
 	// see testdata/fixtures/tags.sql
 	expected := &models.Repository{
-		NamespaceID:     1,
-		ID:              3,
-		Name:            "backend",
-		Path:            "gitlab-org/gitlab-test/backend",
-		ParentID:        sql.NullInt64{Int64: 2, Valid: true},
-		MigrationStatus: migration.RepositoryStatusNative,
-		CreatedAt:       testutil.ParseTimestamp(t, "2020-03-02 17:42:12.566212", r.CreatedAt.Location()),
+		NamespaceID: 1,
+		ID:          3,
+		Name:        "backend",
+		Path:        "gitlab-org/gitlab-test/backend",
+		ParentID:    sql.NullInt64{Int64: 2, Valid: true},
+		CreatedAt:   testutil.ParseTimestamp(t, "2020-03-02 17:42:12.566212", r.CreatedAt.Location()),
 	}
 	require.Equal(t, expected, r)
 }

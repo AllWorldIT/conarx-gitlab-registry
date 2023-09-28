@@ -22,3 +22,55 @@ coverage:
   coverage: '/total:.+\(statements\).+\d+\.\d+/'
   script:
     - make coverage
+
+# See https://github.com/opencontainers/distribution-spec/tree/main/conformance for documentation
+oci-conformance:
+  stage: test
+  image: golang:${GO_VERSION}-buster
+  needs: ['modules:download']
+  allow_failure: true
+  variables:
+    OCI_ROOT_URL: http://localhost:5000
+    OCI_NAMESPACE: oci-conformance/repo-a
+    OCI_CROSSMOUNT_NAMESPACE: oci-conformance/repo-b
+    # Enable all test workflows
+    OCI_TEST_PULL: 1
+    OCI_TEST_PUSH: 1
+    OCI_TEST_CONTENT_DISCOVERY: 1
+    OCI_TEST_CONTENT_MANAGEMENT: 1
+    # Enable cross-repository blob mounts
+    OCI_AUTOMATIC_CROSSMOUNT: 1
+    # Toggle verbose output using a project CI env var for simplicity
+    OCI_DEBUG: $OCI_CONFORMANCE_DEBUG
+    # For integrity reasons, delete manifests first
+    OCI_DELETE_MANIFEST_BEFORE_BLOBS: 1
+    # Other
+    FF_NETWORK_PER_BUILD: 1
+    POSTGRES_DB: "registry_dev"
+    POSTGRES_USER: "registry"
+    POSTGRES_PASSWORD: "apassword"
+    PGPASSWORD: "apassword"
+    REGISTRY_DATABASE_HOST: "db"
+  services:
+    - name: postgres:${PG_CURR_VERSION}-alpine
+      alias: "db"
+  before_script:
+    # Start local registry instance to test against
+    - make binaries
+    - chmod +x ./bin/*
+    - ./bin/registry database migrate up config/database-filesystem.yml
+    - ./bin/registry serve config/database-filesystem.yml &>/dev/null &
+    # Test against latest OCI Distribution Spec release (stable), not trunk (unstable)
+    - |
+      VERSION=$(curl --silent "https://api.github.com/repos/opencontainers/distribution-spec/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")')
+    - echo "====== Testing against OCI Distribution Spec $VERSION ======"
+    - git clone --depth 1 --branch $VERSION https://github.com/opencontainers/distribution-spec.git
+    - cd distribution-spec/conformance
+    - go test -c
+  script:
+    - ./conformance.test
+  artifacts:
+    paths:
+      - distribution-spec/conformance/report.html
+    reports:
+      junit: distribution-spec/conformance/junit.xml

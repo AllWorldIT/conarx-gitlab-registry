@@ -12,6 +12,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/datastore/models"
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
+	gocache "github.com/eko/gocache/lib/v4/cache"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,6 +20,7 @@ type env struct {
 	ctx    context.Context
 	db     *datastore.DB
 	config *configuration.Configuration
+	rStore datastore.RepositoryStore
 
 	// isShutdown helps ensure that tests do not try to access the db after the
 	// connection has been closed.
@@ -62,16 +64,15 @@ func initDatabase(t *testing.T, env *env) {
 	require.NoError(t, err)
 }
 
-type configOpt func(*configuration.Configuration)
+type envOpt func(*env)
 
-func withRedisCache(srvAddr string) configOpt {
-	return func(config *configuration.Configuration) {
-		config.Redis.Cache.Enabled = true
-		config.Redis.Cache.Addr = srvAddr
+func witCachedRepositoryStore(cache *gocache.Cache[any]) envOpt {
+	return func(e *env) {
+		e.rStore = datastore.NewRepositoryStore(e.db, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(cache)))
 	}
 }
 
-func newEnv(t *testing.T, opts ...configOpt) *env {
+func newEnv(t *testing.T, opts ...envOpt) *env {
 	t.Helper()
 
 	env := &env{
@@ -85,11 +86,16 @@ func newEnv(t *testing.T, opts ...configOpt) *env {
 		},
 	}
 
+	initDatabase(t, env)
+
 	for _, o := range opts {
-		o(env.config)
+		o(env)
 	}
 
-	initDatabase(t, env)
+	// set a default repository store if not set by options
+	if env.rStore == nil {
+		env.rStore = datastore.NewRepositoryStore(env.db)
+	}
 
 	return env
 }
