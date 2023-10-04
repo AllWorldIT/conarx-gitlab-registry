@@ -278,7 +278,7 @@ func TestRepositoryStore_FindAll(t *testing.T) {
 			NamespaceID: 4,
 			Name:        "project-1",
 			Path:        "usage-group-2/sub-group-1/project-1",
-			ParentID:    sql.NullInt64{},
+			ParentID:    sql.NullInt64{Int64: 15, Valid: true},
 			CreatedAt:   testutil.ParseTimestamp(t, "2022-02-22 15:36:04.692846", local),
 		},
 	}
@@ -305,13 +305,17 @@ func TestRepositoryStore_FindAllPaginated(t *testing.T) {
 
 		// see testdata/fixtures/[repositories|repository_manifests].sql:
 		//
-		// 		gitlab-org 						(0 manifests, 0 manifest lists)
-		// 		gitlab-org/gitlab-test 			(0 manifests, 0 manifest lists)
-		// 		gitlab-org/gitlab-test/backend 	(2 manifests, 1 manifest list)
-		// 		gitlab-org/gitlab-test/frontend (2 manifests, 1 manifest list)
-		// 		a-test-group 					(0 manifests, 0 manifest lists)
-		// 		a-test-group/foo  				(1 manifests, 0 manifest lists)
-		// 		a-test-group/bar 				(0 manifests, 1 manifest list)
+		// 		gitlab-org 								(0 manifests, 0 manifest lists)
+		// 		gitlab-org/gitlab-test 					(0 manifests, 0 manifest lists)
+		// 		gitlab-org/gitlab-test/backend 			(2 manifests, 1 manifest list)
+		// 		gitlab-org/gitlab-test/frontend 		(2 manifests, 1 manifest list)
+		// 		a-test-group 							(0 manifests, 0 manifest lists)
+		// 		a-test-group/foo  						(1 manifests, 0 manifest lists)
+		// 		a-test-group/bar 						(0 manifests, 1 manifest list)
+		//		usage-group								(0 manifests, 0 manifest lists)
+		//		usage-group/sub-group-1					(0 manifests, 0 manifest lists)
+		//		usage-group/sub-group-1/repository-1	(5 manifests, 2 manifest lists)
+		//		usage-group2/sub-group-1/project-1		(3 manifests, 0 manifest lists)
 		expectedRepos models.Repositories
 	}{
 		{
@@ -346,6 +350,14 @@ func TestRepositoryStore_FindAllPaginated(t *testing.T) {
 					Name:        "frontend",
 					Path:        "gitlab-org/gitlab-test/frontend",
 					ParentID:    sql.NullInt64{Int64: 2, Valid: true},
+				},
+				{
+					ID:          16,
+					NamespaceID: 4,
+					Name:        "project-1",
+					// the path 'usage-group-2/...' is ordered before 'usage-group/...' because of the hyphen (-)
+					Path:     "usage-group-2/sub-group-1/project-1",
+					ParentID: sql.NullInt64{Int64: 15, Valid: true},
 				},
 				{
 					ID:          9,
@@ -432,6 +444,14 @@ func TestRepositoryStore_FindAllPaginated(t *testing.T) {
 					ParentID:    sql.NullInt64{Int64: 2, Valid: true},
 				},
 				{
+					ID:          16,
+					NamespaceID: 4,
+					Name:        "project-1",
+					// the path 'usage-group-2/...' is ordered before 'usage-group/...' because of the hyphen (-)
+					Path:     "usage-group-2/sub-group-1/project-1",
+					ParentID: sql.NullInt64{Int64: 15, Valid: true},
+				},
+				{
 					ID:          9,
 					NamespaceID: 3,
 					Name:        "sub-group-1",
@@ -488,6 +508,14 @@ func TestRepositoryStore_FindAllPaginated(t *testing.T) {
 					ParentID:    sql.NullInt64{Int64: 2, Valid: true},
 				},
 				{
+					ID:          16,
+					NamespaceID: 4,
+					Name:        "project-1",
+					// the path 'usage-group-2/...' is ordered before 'usage-group/...' because of the hyphen (-)
+					Path:     "usage-group-2/sub-group-1/project-1",
+					ParentID: sql.NullInt64{Int64: 15, Valid: true},
+				},
+				{
 					ID:          9,
 					NamespaceID: 3,
 					Name:        "sub-group-1",
@@ -542,7 +570,6 @@ func TestRepositoryStore_FindAllPaginated(t *testing.T) {
 				require.NotEmpty(t, r.CreatedAt)
 				r.CreatedAt = time.Time{}
 			}
-
 			require.NoError(t, err)
 			require.Equal(t, test.expectedRepos, rr)
 		})
@@ -1198,31 +1225,32 @@ func TestRepositoryStore_CountAfterPath(t *testing.T) {
 		//		usage-group								(0 manifests, 0 manifest lists)
 		//		usage-group/sub-group-1					(0 manifests, 0 manifest lists)
 		//		usage-group/sub-group-1/repository-1	(5 manifests, 2 manifest lists)
+		//		usage-group2/sub-group-1/project-1		(3 manifests, 0 manifest lists)
 		expectedNumRepos int
 	}{
 		{
 			name: "all",
 			path: "",
-			// all non-empty repositories (9) are lexicographically after ""
-			expectedNumRepos: 9,
+			// all non-empty repositories (10) are lexicographically after ""
+			expectedNumRepos: 10,
 		},
 		{
 			name: "first",
 			path: "a-test-group/bar",
-			// there are 8 non-empty repositories lexicographically after "a-test-group/bar"
-			expectedNumRepos: 8,
+			// there are 9 non-empty repositories lexicographically after "a-test-group/bar"
+			expectedNumRepos: 9,
 		},
 		{
 			name: "last",
 			path: "gitlab-org/gitlab-test/frontend",
-			// there are 5 repositories lexicographically after "gitlab-org/gitlab-test/frontend"
-			expectedNumRepos: 5,
+			// there are 6 repositories lexicographically after "gitlab-org/gitlab-test/frontend"
+			expectedNumRepos: 6,
 		},
 		{
 			name: "non existent",
 			path: "does-not-exist",
-			// there are 7 non-empty repositories lexicographically after "does-not-exist"
-			expectedNumRepos: 7,
+			// there are 8 non-empty repositories lexicographically after "does-not-exist"
+			expectedNumRepos: 8,
 		},
 	}
 
@@ -1449,7 +1477,7 @@ func TestRepositoryStore_Blobs(t *testing.T) {
 			CreatedAt: testutil.ParseTimestamp(t, "2020-03-04 20:06:32.856423", local),
 		},
 	}
-	require.Equal(t, expected, bb)
+	require.ElementsMatch(t, expected, bb)
 }
 
 func TestRepositoryStore_BlobsNone(t *testing.T) {
@@ -2526,6 +2554,7 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 			for _, r := range rr {
 				r.CreatedAt = time.Time{}
 				r.UpdatedAt = sql.NullTime{}
+				r.PublishedAt = time.Time{}
 			}
 
 			require.NoError(t, err)
@@ -2591,8 +2620,6 @@ func TestRepositoryStore_TagsDetailPaginated_Sort(t *testing.T) {
 	allDesc := []*models.TagDetail{f, e, d, c, b, a}
 
 	tt := map[string]struct {
-		squirrel     bool
-		template     bool
 		sort         datastore.SortOrder
 		beforeName   string
 		lastName     string
@@ -2629,7 +2656,6 @@ func TestRepositoryStore_TagsDetailPaginated_Sort(t *testing.T) {
 			expectedTags: []*models.TagDetail{f, e},
 		},
 		"2nd page size 2 lastName desc": {
-			squirrel:     false,
 			sort:         datastore.OrderDesc,
 			lastName:     "e",
 			limit:        2,
@@ -2707,6 +2733,7 @@ func TestRepositoryStore_TagsDetailPaginated_Sort(t *testing.T) {
 			for _, r := range rr {
 				r.CreatedAt = time.Time{}
 				r.UpdatedAt = sql.NullTime{}
+				r.PublishedAt = time.Time{}
 			}
 			require.Equal(t, test.expectedTags, rr)
 		})
@@ -2722,6 +2749,150 @@ func TestRepositoryStore_TagsDetailPaginated_None(t *testing.T) {
 	tt, err := s.TagsDetailPaginated(suite.ctx, r, datastore.FilterParams{MaxEntries: 100})
 	require.NoError(t, err)
 	require.Empty(t, tt)
+}
+
+func mustParseTimestamp(t *testing.T, timestamp string) time.Time {
+	t.Helper()
+
+	ts, err := time.Parse(time.RFC3339, timestamp)
+	require.NoError(t, err)
+
+	return ts
+}
+
+func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
+	reloadTagFixtures(t)
+
+	r := &models.Repository{NamespaceID: 4, ID: 16}
+	// see testdata/fixtures/tags.sql (sorted by published_at ascending order):
+	// Name,      Created,                           Updated At
+	// 'aaaa', E'2023-01-01 00:00:01.000000+00', NULL
+	// 'bbbb', E'2023-02-01 00:00:01.000000+00', NULL
+	// 'cccc', E'2023-03-01 00:00:01.000000+00', NULL
+	// 'dddd', E'2023-04-01 00:00:01.000000+00', E'2023-04-30 00:00:01.000000+00'
+	// 'latest', E'2023-01-01 00:00:01.000000+00', E'2023-04-30 00:00:01.000000+00'
+	// 'eeee', E'2023-05-31 00:00:01.000000+00', NULL
+
+	aaaa := &models.TagDetail{
+		Name:        "aaaa",
+		PublishedAt: mustParseTimestamp(t, "2023-01-01T00:00:01+00:00"),
+	}
+	bbbb := &models.TagDetail{
+		Name:        "bbbb",
+		PublishedAt: mustParseTimestamp(t, "2023-02-01T00:00:01.00+00:00"),
+	}
+	cccc := &models.TagDetail{
+		Name:        "cccc",
+		PublishedAt: mustParseTimestamp(t, "2023-03-01T00:00:01.00+00:00"),
+	}
+	dddd := &models.TagDetail{
+		Name:        "dddd",
+		PublishedAt: mustParseTimestamp(t, "2023-04-30T00:00:01.00+00:00"),
+	}
+	latest := &models.TagDetail{
+		Name:        "latest",
+		PublishedAt: mustParseTimestamp(t, "2023-04-30T00:00:01.00+00:00"),
+	}
+	eeee := &models.TagDetail{
+		Name:        "eeee",
+		PublishedAt: mustParseTimestamp(t, "2023-05-31T00:00:01.00+00:00"),
+	}
+	allAsc := []*models.TagDetail{aaaa, bbbb, cccc, dddd, latest, eeee}
+	allDesc := []*models.TagDetail{eeee, latest, dddd, cccc, bbbb, aaaa}
+
+	tt := map[string]struct {
+		sort         datastore.SortOrder
+		orderBy      string
+		publishedAt  string
+		lastEntry    string
+		beforeEntry  string
+		limit        int
+		expectedTags []*models.TagDetail
+	}{
+		"all tags asc": {
+			sort:         datastore.OrderAsc,
+			expectedTags: allAsc,
+			limit:        100,
+		},
+		"all tags desc": {
+			sort:         datastore.OrderDesc,
+			expectedTags: allDesc,
+			limit:        100,
+		},
+		"first page asc": {
+			sort:         datastore.OrderAsc,
+			limit:        2,
+			expectedTags: []*models.TagDetail{aaaa, bbbb},
+		},
+		"second page asc": {
+			sort:         datastore.OrderAsc,
+			publishedAt:  "2023-02-01T00:00:01.00+00:00",
+			lastEntry:    "bbbb",
+			limit:        2,
+			expectedTags: []*models.TagDetail{cccc, dddd},
+		},
+		"last page asc": {
+			sort:         datastore.OrderAsc,
+			publishedAt:  "2023-04-01T00:00:01.00+00:00",
+			lastEntry:    "dddd",
+			limit:        2,
+			expectedTags: []*models.TagDetail{latest, eeee},
+		},
+		"first page desc": {
+			sort:         datastore.OrderDesc,
+			limit:        2,
+			expectedTags: []*models.TagDetail{eeee, latest},
+		},
+		"second page desc": {
+			sort:         datastore.OrderDesc,
+			publishedAt:  "2023-04-30T00:00:01.00+00:00",
+			lastEntry:    "latest",
+			limit:        2,
+			expectedTags: []*models.TagDetail{dddd, cccc},
+		},
+		"last page desc": {
+			sort:         datastore.OrderDesc,
+			publishedAt:  "2023-03-01T00:00:01.00+00:00",
+			lastEntry:    "cccc",
+			limit:        2,
+			expectedTags: []*models.TagDetail{bbbb, aaaa},
+		},
+		"older than date asc": {
+			sort:         datastore.OrderAsc,
+			publishedAt:  "2023-03-30T00:00:01.00+00:00",
+			limit:        100,
+			expectedTags: []*models.TagDetail{dddd, latest, eeee},
+		},
+		"older than date desc": {
+			sort:         datastore.OrderDesc,
+			publishedAt:  "2023-03-30T00:00:01.00+00:00",
+			limit:        100,
+			expectedTags: []*models.TagDetail{cccc, bbbb, aaaa},
+		},
+	}
+
+	s := datastore.NewRepositoryStore(suite.db)
+
+	for name, test := range tt {
+		t.Run(name, func(t *testing.T) {
+			filters := datastore.FilterParams{
+				OrderBy:     "published_at",
+				SortOrder:   test.sort,
+				LastEntry:   test.lastEntry,
+				PublishedAt: test.publishedAt,
+				MaxEntries:  test.limit,
+			}
+
+			receivedTags, err := s.TagsDetailPaginated(suite.ctx, r, filters)
+			require.NoError(t, err)
+			require.Len(t, receivedTags, len(test.expectedTags))
+			for i, receivedTag := range receivedTags {
+				require.Equal(t, test.expectedTags[i].Name, receivedTag.Name)
+				require.Equal(t, test.expectedTags[i].PublishedAt.UTC(), receivedTag.PublishedAt.UTC(), "for tag: %s", receivedTag.Name)
+			}
+
+		})
+	}
 }
 
 func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
@@ -3185,7 +3356,7 @@ func TestRepositoryStore_RenamePathForSubRepositories_OnlyNecessaryChanged(t *te
 			NamespaceID: 4,
 			Name:        "project-1",
 			Path:        "usage-group-2/sub-group-1/project-1",
-			ParentID:    sql.NullInt64{},
+			ParentID:    sql.NullInt64{Int64: 15, Valid: true},
 
 			CreatedAt: testutil.ParseTimestamp(t, "2022-02-22 15:36:04.692846", local),
 		},

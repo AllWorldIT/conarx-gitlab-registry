@@ -121,6 +121,7 @@ type TagDetail struct {
 	Size         int64
 	CreatedAt    time.Time
 	UpdatedAt    sql.NullTime
+	PublishedAt  time.Time
 }
 
 type Blob struct {

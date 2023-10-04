@@ -36,6 +36,9 @@ const (
 	OrderAsc SortOrder = "asc"
 
 	orderByName = "name"
+
+	lessThan    = "<"
+	greaterThan = ">"
 )
 
 // FilterParams contains the specific filters used to get
@@ -46,6 +49,7 @@ type FilterParams struct {
 	Name        string
 	BeforeEntry string
 	LastEntry   string
+	PublishedAt string
 	MaxEntries  int
 }
 
@@ -686,7 +690,7 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 		var dgst Digest
 		var cfgDgst sql.NullString
 		t := new(models.TagDetail)
-		if err := rows.Scan(&t.Name, &dgst, &cfgDgst, &t.MediaType, &t.Size, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.Name, &dgst, &cfgDgst, &t.MediaType, &t.Size, &t.CreatedAt, &t.UpdatedAt, &t.PublishedAt); err != nil {
 			return nil, fmt.Errorf("scanning tag details: %w", err)
 		}
 
@@ -759,7 +763,8 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 			mt.media_type,
 			m.total_size,
 			t.created_at,
-			t.updated_at
+			t.updated_at,
+			GREATEST(t.created_at, t.updated_at) as published_at
 		FROM
 			tags AS t
 			JOIN manifests AS m ON m.top_level_namespace_id = t.top_level_namespace_id
@@ -772,7 +777,11 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 		  	AND t.name LIKE $3
 			%s`
 
-	var q string
+	var (
+		q       string
+		subArgs []any
+	)
+
 	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
 
 	// default to ascending order to keep backwards compatibility
@@ -783,50 +792,147 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 		filters.OrderBy = orderByName
 	}
 
-	if filters.LastEntry == "" && filters.BeforeEntry == "" {
+	switch {
+	case filters.LastEntry == "" && filters.BeforeEntry == "" && filters.PublishedAt == "":
 		// this should always return the first page up to filters.MaxEntries
-		tagFilter := fmt.Sprintf(`ORDER BY t.%s %s LIMIT $4`, filters.OrderBy, filters.SortOrder)
-		q = fmt.Sprintf(baseQuery, tagFilter)
-		args = append(args, filters.MaxEntries)
-	} else if filters.LastEntry != "" {
-		tagFilter := formatTagFilter(">", filters.OrderBy, OrderAsc)
-		if filters.SortOrder == OrderDesc {
-			// we must use less than `<` when sorting in descending order to ensure proper pagination
-			tagFilter = formatTagFilter("<", filters.OrderBy, OrderDesc)
+		tagFilter := fmt.Sprintf(`ORDER BY name %s LIMIT $4`, filters.SortOrder)
+		if filters.OrderBy == "published_at" {
+			tagFilter = fmt.Sprintf(`ORDER BY published_at %s, name %s LIMIT $4`, filters.SortOrder, filters.SortOrder)
 		}
 
 		q = fmt.Sprintf(baseQuery, tagFilter)
-		args = append(args, filters.LastEntry, filters.MaxEntries)
-	} else if filters.BeforeEntry != "" {
-		// if we are fetching by filters.BeforeEntry we need to sort in DESC order
-		if filters.BeforeEntry != "" {
-			if filters.SortOrder == OrderDesc {
-				tagFilter := formatTagFilter(">", filters.OrderBy, OrderAsc)
-				// The results will be reversed, so we need to wrap the query in a
-				// SELECT statement that sorts the tags in the correct order
-				subQuery := fmt.Sprintf(baseQuery, tagFilter)
-				q = fmt.Sprintf(`SELECT * FROM (%s) AS tags ORDER BY tags.%s DESC`, subQuery, filters.OrderBy)
-			} else {
-				tagFilter := formatTagFilter("<", filters.OrderBy, OrderDesc)
-				// The results will be reversed, so we need to wrap the query in a
-				// SELECT statement that sorts the tags in the correct order
-				subQuery := fmt.Sprintf(baseQuery, tagFilter)
-				q = fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.%s ASC`, subQuery, filters.OrderBy)
-			}
-		}
-		args = append(args, filters.BeforeEntry, filters.MaxEntries)
+		subArgs = []any{filters.MaxEntries}
+	case filters.LastEntry != "":
+		q, subArgs = getLastEntryQuery(baseQuery, filters)
+	case filters.BeforeEntry != "":
+		q, subArgs = getBeforeEntryQuery(baseQuery, filters)
+	case filters.PublishedAt != "":
+		q, subArgs = getPublishedAtQuery(baseQuery, filters)
 	}
+
+	args = append(args, subArgs...)
 
 	return q, args
 }
 
+func getPublishedAtQuery(baseQuery string, filters FilterParams) (string, []any) {
+	var q string
+	var args []any
+
+	var tagFilter string
+	if filters.SortOrder == OrderDesc {
+		tagFilter = formatTagFilterWithPublishedAtWithoutName(lessThan, OrderAsc)
+		// The results will be reversed, so we need to wrap the query in a
+		// SELECT statement that sorts the tags in the correct order
+		subQuery := fmt.Sprintf(baseQuery, tagFilter)
+		q = fmt.Sprintf(`SELECT * FROM (%s) AS tags ORDER BY tags.%s DESC`, subQuery, filters.OrderBy)
+	} else {
+		tagFilter = formatTagFilterWithPublishedAtWithoutName(greaterThan, OrderAsc)
+		q = fmt.Sprintf(baseQuery, tagFilter)
+	}
+
+	args = []any{filters.PublishedAt, filters.MaxEntries}
+
+	return q, args
+}
+
+func getLastEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
+	var (
+		comparisonOperator string
+		q                  string
+		orderDirection     SortOrder
+		args               []any
+	)
+
+	switch filters.SortOrder {
+	case OrderDesc:
+		orderDirection = OrderDesc
+		comparisonOperator = lessThan
+	case OrderAsc:
+		orderDirection = OrderAsc
+		comparisonOperator = greaterThan
+	}
+
+	tagFilter := formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection)
+	q = fmt.Sprintf(baseQuery, tagFilter)
+	if filters.PublishedAt != "" {
+		tagFilter := formatTagFilterWithPublishedAt(comparisonOperator, orderDirection)
+		q = fmt.Sprintf(baseQuery, tagFilter)
+		args = []any{filters.LastEntry, filters.PublishedAt, filters.MaxEntries}
+	} else {
+		args = []any{filters.LastEntry, filters.MaxEntries}
+	}
+
+	return q, args
+}
+func getBeforeEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
+	var (
+		comparisonOperator     string
+		q                      string
+		rootQueryOderDirection string
+		orderDirection         SortOrder
+		args                   []any
+	)
+
+	switch filters.SortOrder {
+	case OrderDesc:
+		orderDirection = OrderAsc
+		comparisonOperator = greaterThan
+		rootQueryOderDirection = "DESC"
+	case OrderAsc:
+		orderDirection = OrderDesc
+		comparisonOperator = lessThan
+		rootQueryOderDirection = "ASC"
+	}
+
+	tagFilter := formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection)
+	if filters.PublishedAt != "" {
+		tagFilter = formatTagFilterWithPublishedAt(comparisonOperator, orderDirection)
+		args = append(args, filters.BeforeEntry, filters.PublishedAt, filters.MaxEntries)
+	} else {
+		args = append(args, filters.BeforeEntry, filters.MaxEntries)
+	}
+
+	// The results will be reversed, so we need to wrap the query in a
+	// SELECT statement that sorts the tags in the correct order
+	subQuery := fmt.Sprintf(baseQuery, tagFilter)
+	// if we are fetching by filters.BeforeEntry we need to sort in DESC order
+	q = fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.%s %s`, subQuery, filters.OrderBy, rootQueryOderDirection)
+
+	return q, args
+}
+
+// formatTagFilter using the base query from tagsDetailPaginatedQuery as reference
 func formatTagFilter(comparisonSign, orderBy string, sortOrder SortOrder) string {
 	filter := `AND t.name %s $4
 		ORDER BY
-			t.%s %s
+			%s %s
 		LIMIT $5`
 
 	return fmt.Sprintf(filter, comparisonSign, orderBy, sortOrder)
+}
+
+// formatTagFilterWithPublishedAt using the base query from tagsDetailPaginatedQuery as reference
+func formatTagFilterWithPublishedAt(comparisonSign string, sortOrder SortOrder) string {
+	filter := `AND t.name %s $4
+		AND GREATEST(t.created_at,t.updated_at) %s= $5
+		ORDER BY
+			published_at %s,
+			t.name %s
+		LIMIT $6`
+
+	return fmt.Sprintf(filter, comparisonSign, comparisonSign, sortOrder, sortOrder)
+}
+
+// formatTagFilterWithPublishedAtWithoutName using the base query from tagsDetailPaginatedQuery as reference
+func formatTagFilterWithPublishedAtWithoutName(comparisonSign, sortOrder SortOrder) string {
+	filter := `AND GREATEST(t.created_at,t.updated_at) %s= $4
+		ORDER BY
+			published_at %s,
+			t.name %s
+		LIMIT $5`
+
+	return fmt.Sprintf(filter, comparisonSign, sortOrder, sortOrder)
 }
 
 // TagsCountAfterName counts all tags of a given repository with name lexicographically after `filters.LastEntry`. This is used
@@ -847,9 +953,9 @@ func (s *repositoryStore) TagsCountAfterName(ctx context.Context, r *models.Repo
 			AND name LIKE $3
 			AND name %s $4`
 
-	comparison := ">"
+	comparison := greaterThan
 	if filters.SortOrder == OrderDesc {
-		comparison = "<"
+		comparison = lessThan
 	}
 
 	q = fmt.Sprintf(q, comparison)
@@ -886,9 +992,9 @@ func (s *repositoryStore) TagsCountBeforeName(ctx context.Context, r *models.Rep
 			AND name LIKE $3
 			AND name %s $4`
 
-	comparison := "<"
+	comparison := lessThan
 	if filters.SortOrder == OrderDesc {
-		comparison = ">"
+		comparison = greaterThan
 	}
 
 	q = fmt.Sprintf(q, comparison)
