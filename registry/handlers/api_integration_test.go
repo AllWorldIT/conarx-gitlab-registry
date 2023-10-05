@@ -788,35 +788,16 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 	genericBlobMediaType := "application/octet-stream"
 
 	tt := []struct {
-		name                    string
-		unknownLayerMediaType   bool
-		accurateLayerMediaTypes bool
-
-		wantGenericBlobMediaType bool
+		name                  string
+		unknownLayerMediaType bool
 	}{
 		{
-			name:                     "known layer media type and accurate layer media types disabled",
-			unknownLayerMediaType:    false,
-			accurateLayerMediaTypes:  false,
-			wantGenericBlobMediaType: true,
+			name:                  "known layer media type",
+			unknownLayerMediaType: false,
 		},
 		{
-			name:                     "known layer media type and accurate layer media types enabled",
-			unknownLayerMediaType:    false,
-			accurateLayerMediaTypes:  true,
-			wantGenericBlobMediaType: false,
-		},
-		{
-			name:                     "unknown layer media type and accurate layer media types disabled",
-			unknownLayerMediaType:    true,
-			accurateLayerMediaTypes:  false,
-			wantGenericBlobMediaType: true,
-		},
-		{
-			name:                     "unknown layer media type and accurate layer media types enabled",
-			unknownLayerMediaType:    true,
-			accurateLayerMediaTypes:  true,
-			wantGenericBlobMediaType: true,
+			name:                  "unknown layer media type",
+			unknownLayerMediaType: true,
 		},
 	}
 
@@ -867,9 +848,6 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 			// Build URLs.
 			tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-			// Enable envvars
-			t.Setenv(feature.AccurateLayerMediaTypes.EnvVariable, strconv.FormatBool(test.accurateLayerMediaTypes))
-
 			resp := putManifest(t, "putting manifest", tagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
 			defer resp.Body.Close()
 
@@ -896,7 +874,7 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 
 			wantMT := layerMT
 
-			if test.wantGenericBlobMediaType {
+			if test.unknownLayerMediaType {
 				wantMT = genericBlobMediaType
 			}
 

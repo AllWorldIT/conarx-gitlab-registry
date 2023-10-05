@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/docker/distribution"
-	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/manifestlist"
@@ -897,7 +896,6 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 		"repository":      repoPath,
 		"manifest_digest": imh.Digest,
 		"schema_version":  mfst.Version().SchemaVersion,
-		feature.AccurateLayerMediaTypes.EnvVariable: feature.AccurateLayerMediaTypes.Enabled(),
 	})
 
 	// create or find target repository
@@ -975,7 +973,7 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 			// has a 1-1 relationship with with the manifest, so we want to reflect
 			// the manifest's description of the layer. Multiple manifest can reference
 			// the same blob, so the common blob storage should remain generic.
-			if ok := layerMediaTypeExists(imh, reqLayer.MediaType); ok && feature.AccurateLayerMediaTypes.Enabled() {
+			if ok := layerMediaTypeExists(imh, reqLayer.MediaType); ok {
 				dbBlob.MediaType = reqLayer.MediaType
 			}
 

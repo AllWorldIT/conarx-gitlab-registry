@@ -30,14 +30,6 @@ var OngoingRenameCheck = Feature{
 	EnvVariable: "REGISTRY_FF_ONGOING_RENAME_CHECK",
 }
 
-// AccurateLayerMediaTypes is used to store the layer media type specified by
-// the manifest json in the layers table. Without this feature enabled, layers
-// are stored with the generic blob media type "application/octet-stream".
-var AccurateLayerMediaTypes = Feature{
-	EnvVariable:    "REGISTRY_FF_ACCURATE_LAYER_MEDIA_TYPES",
-	defaultEnabled: true,
-}
-
 // testFeature is used for testing purposes only
 var testFeature = Feature{
 	EnvVariable: "REGISTRY_FF_TEST",
@@ -46,7 +38,6 @@ var testFeature = Feature{
 var all = []Feature{
 	testFeature,
 	OngoingRenameCheck,
-	AccurateLayerMediaTypes,
 }
 
 // KnownEnvVar evaluates whether the input string matches the name of one of the known feature flag env vars.
