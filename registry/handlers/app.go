@@ -420,6 +420,16 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		}()
 
 		startOnlineGC(app.Context, app.db, app.driver, config)
+
+		// Now that we've started the database successfully, lock the filesystem
+		// to signal that this object storage needs to be managed by the database.
+		dbLock := storage.DatabaseInUseLocker{Driver: app.driver}
+		if err := dbLock.Lock(app.Context); err != nil {
+			// Right now, the server doesn't make use of this lock, only the offline
+			// garbage collector reads this file, so we are fee to log a warning
+			// and move on with spinning up the application.
+			log.WithError(err).Warn("failed to mark filesystem for database only usage, continuing")
+		}
 	}
 
 	// configure storage caches
