@@ -81,6 +81,8 @@ func TestAPIConformance(t *testing.T) {
 		manifest_Put_Schema2_WithNonDistributableLayers,
 		manifest_Put_OCI_ByDigest,
 		manifest_Put_OCI_ByTag,
+		manifest_Put_OCI_WithSubject,
+		manifest_Put_OCI_WithNonMatchingSubject,
 		manifest_Get_OCI_MatchingEtag,
 		manifest_Get_OCI_NonMatchingEtag,
 
@@ -1947,6 +1949,93 @@ func manifest_Put_OCI_ByDigest(t *testing.T, opts ...configOpt) {
 
 	// seedRandomOCIManifest with putByDigest tests that the manifest put happened without issue.
 	seedRandomOCIManifest(t, env, repoPath, putByDigest)
+}
+
+func manifest_Put_OCI_WithSubject(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	repoPath := "oci/happypath"
+
+	// create random manifest with seedRandomOCIManifest,
+	// use this manifest as the subject for the artifact manifest
+	mfst := seedRandomOCIManifest(t, env, repoPath, putByDigest)
+	artifactMfst := seedRandomOCIManifest(t, env, repoPath, putByDigest, withSubject(mfst))
+
+	// Fetch the artifact manifest just pushed and check subject is present
+	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, artifactMfst)
+
+	req, err := http.NewRequest(http.MethodGet, manifestDigestURL, nil)
+	require.NoError(t, err)
+	req.Header.Set("Accept", v1.MediaTypeImageManifest)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	var fetchedManifest *ocischema.DeserializedManifest
+	dec := json.NewDecoder(resp.Body)
+
+	err = dec.Decode(&fetchedManifest)
+	require.NoError(t, err)
+
+	_, subjPayload, err := mfst.Payload()
+	require.NoError(t, err)
+
+	require.Equal(t, digest.FromBytes(subjPayload), fetchedManifest.Subject().Digest)
+}
+
+func manifest_Put_OCI_WithNonMatchingSubject(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	repoPath := "oci/happypath"
+
+	repoRef, err := reference.WithName(repoPath)
+	require.NoError(t, err)
+
+	manifest := &ocischema.Manifest{
+		Versioned: manifest.Versioned{
+			SchemaVersion: 2,
+			MediaType:     v1.MediaTypeImageManifest,
+		},
+	}
+
+	// Create and push config layer
+	cfgPayload, cfgDesc := ociConfig()
+	uploadURLBase, _ := startPushLayer(t, env, repoRef)
+	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
+	manifest.Config = cfgDesc
+
+	// Create one random layer for this manifest
+	manifest.Layers = make([]distribution.Descriptor, 1)
+	rs, dgst, size := createRandomSmallLayer()
+	uploadURLBase, _ = startPushLayer(t, env, repoRef)
+	pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
+	manifest.Layers[0] = distribution.Descriptor{
+		Digest:    dgst,
+		MediaType: v1.MediaTypeImageLayer,
+		Size:      size,
+	}
+
+	// Set subject as a nonexistent manifest reference
+	manifest.Subject = &distribution.Descriptor{
+		Digest:    digest.Digest("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+		MediaType: v1.MediaTypeImageManifest,
+		Size:      42,
+	}
+
+	deserializedManifest, err := ocischema.FromStruct(*manifest)
+	require.NoError(t, err)
+
+	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
+
+	resp := putManifest(t, "putting manifest with missing subject", manifestDigestURL, v1.MediaTypeImageManifest, deserializedManifest)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	checkBodyHasErrorCodes(t, "putting manifest with missing subject", resp, v2.ErrorCodeManifestBlobUnknown)
 }
 
 func manifest_Get_OCI_NonMatchingEtag(t *testing.T, opts ...configOpt) {

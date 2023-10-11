@@ -43,6 +43,18 @@ type ManifestV2 interface {
 	DistributableLayers() []Descriptor
 }
 
+// ManifestOCI extends ManifestV2 with property descriptions from the
+// OCI Image Manifest specification (v1.1).
+// https://github.com/opencontainers/image-spec/blob/main/manifest.md#image-manifest-property-descriptions
+type ManifestOCI interface {
+	ManifestV2
+
+	// This OPTIONAL property specifies a descriptor of another manifest.
+	// This value, used by the referrers API, indicates a relationship
+	// to the specified manifest.
+	Subject() Descriptor
+}
+
 // ManifestBuilder creates a manifest allowing one to include dependencies.
 // Instances can be obtained from a version-specific manifest package.  Manifest
 // specific data is passed into the function which creates the builder.

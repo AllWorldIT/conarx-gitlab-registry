@@ -635,6 +635,7 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 
 	mediaType := r.Header.Get("Content-Type")
 	manifest, desc, err := distribution.UnmarshalManifest(mediaType, jsonBuf.Bytes())
+
 	if err != nil {
 		imh.Errors = append(imh.Errors, v2.ErrorCodeManifestInvalid.WithDetail(err.Error()))
 		return
@@ -715,6 +716,7 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Location", location)
 	w.Header().Set("Docker-Content-Digest", imh.Digest.String())
+
 	w.WriteHeader(http.StatusCreated)
 
 	l.WithFields(log.Fields{
@@ -947,6 +949,27 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 			Payload:       payload,
 			Configuration: cfg,
 			NonConformant: nonConformant,
+		}
+
+		// if Subject present in mfst, set SubjectID in model
+		ocim, ok := mfst.(distribution.ManifestOCI)
+		if ok {
+			subject := ocim.Subject()
+			if subject.Digest.String() != "" {
+				// Fetch subject_id from digest
+				dbSubject, err := rStore.FindManifestByDigest(imh.Context, dbRepo, subject.Digest)
+				if err != nil {
+					return err
+				}
+
+				if dbSubject == nil {
+					// in case something happened to the referenced manifest after validation
+					return distribution.ErrManifestBlobUnknown{Digest: subject.Digest}
+				}
+
+				m.SubjectID.Int64 = dbSubject.ID
+				m.SubjectID.Valid = true
+			}
 		}
 
 		// check if the manifest references non-distributable layers and mark it as such on the DB

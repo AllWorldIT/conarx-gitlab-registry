@@ -1105,6 +1105,7 @@ func (s *repositoryStore) Manifests(ctx context.Context, r *models.Repository) (
 			m.configuration_payload,
 			m.non_conformant,
 			m.non_distributable_layers,
+			m.subject_id,
 			m.created_at
 		FROM
 			manifests AS m
@@ -1152,6 +1153,7 @@ func (s *repositoryStore) FindManifestByTagName(ctx context.Context, r *models.R
 			m.configuration_payload,
 			m.non_conformant,
 			m.non_distributable_layers,
+			m.subject_id,
 			m.created_at
 		FROM
 			manifests AS m

@@ -165,6 +165,7 @@ func (s *tagStore) Manifest(ctx context.Context, t *models.Tag) (*models.Manifes
 			m.configuration_payload,
 			m.non_conformant,
 			m.non_distributable_layers,
+			m.subject_id,
 			m.created_at
 		FROM
 			manifests AS m

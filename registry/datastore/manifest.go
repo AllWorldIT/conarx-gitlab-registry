@@ -57,7 +57,7 @@ func scanFullManifest(row *sql.Row) (*models.Manifest, error) {
 	m := new(models.Manifest)
 
 	err := row.Scan(&m.ID, &m.NamespaceID, &m.RepositoryID, &m.TotalSize, &m.SchemaVersion, &m.MediaType, &dgst, &m.Payload,
-		&cfgMediaType, &cfgDigest, &cfgPayload, &m.NonConformant, &m.NonDistributableLayers, &m.CreatedAt)
+		&cfgMediaType, &cfgDigest, &cfgPayload, &m.NonConformant, &m.NonDistributableLayers, &m.SubjectID, &m.CreatedAt)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, fmt.Errorf("scanning manifest: %w", err)
@@ -98,7 +98,7 @@ func scanFullManifests(rows *sql.Rows) (models.Manifests, error) {
 		m := new(models.Manifest)
 
 		err := rows.Scan(&m.ID, &m.NamespaceID, &m.RepositoryID, &m.TotalSize, &m.SchemaVersion, &m.MediaType, &dgst, &m.Payload,
-			&cfgMediaType, &cfgDigest, &cfgPayload, &m.NonConformant, &m.NonDistributableLayers, &m.CreatedAt)
+			&cfgMediaType, &cfgDigest, &cfgPayload, &m.NonConformant, &m.NonDistributableLayers, &m.SubjectID, &m.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scanning manifest: %w", err)
 		}
@@ -148,6 +148,7 @@ func (s *manifestStore) FindAll(ctx context.Context) (models.Manifests, error) {
 			m.configuration_payload,
 			m.non_conformant,
 			m.non_distributable_layers,
+			m.subject_id,
 			m.created_at
 		FROM
 			manifests AS m
@@ -219,6 +220,7 @@ func (s *manifestStore) References(ctx context.Context, m *models.Manifest) (mod
 			m.configuration_payload,
 			m.non_conformant,
 			m.non_distributable_layers,
+			m.subject_id,
 			m.created_at
 		FROM
 			manifests AS m
@@ -263,8 +265,8 @@ func mapMediaType(ctx context.Context, db Queryer, mediaType string) (int, error
 func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 	defer metrics.InstrumentQuery("manifest_create")()
 	q := `INSERT INTO manifests (top_level_namespace_id, repository_id, total_size, schema_version, media_type_id, digest, payload,
-				configuration_media_type_id, configuration_blob_digest, configuration_payload, non_conformant, non_distributable_layers)
-			VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, decode($9, 'hex'), $10, $11, $12)
+				configuration_media_type_id, configuration_blob_digest, configuration_payload, non_conformant, non_distributable_layers, subject_id)
+			VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, decode($9, 'hex'), $10, $11, $12, $13)
 		RETURNING
 			id, created_at`
 
@@ -297,7 +299,7 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 	}
 
 	row := s.db.QueryRowContext(ctx, q, m.NamespaceID, m.RepositoryID, m.TotalSize, m.SchemaVersion, mediaTypeID, dgst, m.Payload,
-		configMediaTypeID, configDgst, configPayload, m.NonConformant, m.NonDistributableLayers)
+		configMediaTypeID, configDgst, configPayload, m.NonConformant, m.NonDistributableLayers, m.SubjectID)
 	if err := row.Scan(&m.ID, &m.CreatedAt); err != nil {
 		return fmt.Errorf("creating manifest: %w", err)
 	}
@@ -313,8 +315,8 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) error {
 	defer metrics.InstrumentQuery("manifest_create_or_find")()
 	q := `INSERT INTO manifests (top_level_namespace_id, repository_id, total_size, schema_version, media_type_id, digest, payload,
-				configuration_media_type_id, configuration_blob_digest, configuration_payload, non_conformant, non_distributable_layers)
-			VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, decode($9, 'hex'), $10, $11, $12)
+				configuration_media_type_id, configuration_blob_digest, configuration_payload, non_conformant, non_distributable_layers, subject_id)
+			VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, decode($9, 'hex'), $10, $11, $12, $13)
 			ON CONFLICT (top_level_namespace_id, repository_id, digest) DO NOTHING
 		RETURNING
 			id, created_at`
@@ -348,7 +350,7 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 	}
 
 	row := s.db.QueryRowContext(ctx, q, m.NamespaceID, m.RepositoryID, m.TotalSize, m.SchemaVersion, mediaTypeID, dgst, m.Payload,
-		configMediaTypeID, configDgst, configPayload, m.NonConformant, m.NonDistributableLayers)
+		configMediaTypeID, configDgst, configPayload, m.NonConformant, m.NonDistributableLayers, m.SubjectID)
 	if err := row.Scan(&m.ID, &m.CreatedAt); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("creating manifest: %w", err)
@@ -507,6 +509,7 @@ func findManifestByDigest(ctx context.Context, db Queryer, namespaceID, reposito
 			m.configuration_payload,
 			m.non_conformant,
 			m.non_distributable_layers,
+			m.subject_id,
 			m.created_at
 		FROM
 			manifests AS m

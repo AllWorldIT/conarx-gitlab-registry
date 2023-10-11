@@ -77,6 +77,7 @@ type Manifest struct {
 	Digest        digest.Digest
 	Payload       Payload
 	Configuration *Configuration
+	SubjectID     sql.NullInt64
 	NonConformant bool
 	// NonDistributableLayers identifies whether a manifest references foreign/non-distributable layers. For now, we are
 	// not registering metadata about these layers, but we may wish to backfill that metadata in the future by parsing
