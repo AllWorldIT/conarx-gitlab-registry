@@ -183,6 +183,7 @@ Requesting the last page `https://registry.gitlab.com/gitlab/v1/repositories/myg
 should reply with tags `e` and `f`. As there are no additional tags to receive, the response will not include
 a `Link` header this time.
 
+See [sorting by published date](#sorting-by-published-date) for a special use case.
 
 #### Examples
 
@@ -216,24 +217,76 @@ Tags are returned in lexicographical order as specified by the `sort` query para
 If used in combination with the `before` or `last` query parameter, the tags are first filtered by these values
 and then sorted in the requested order.
 
+##### Sorting by published date
+
+You can specify the sort parameter as `?sort=published_at` to request the list of tags by the published date, that is,
+the latest time when the tag as created or updated.
+
+For pagination purposes, when used in conjunction with the `last` and `before` query parameters, the values must be base64
+encoded with the following format `base64(TIMESTAMP|TAG_NAME)`, where `TIMESTAMP` is a string in ISO 8061 format with 
+millisecond precision, followed by the separator character `|` and finishing with the tag name. For example, for 
+the timestamp `2023-02-01T00:00:01.000Z` and tag name `latest`, the encoded value will be `MjAyMy0wMi0wMVQwMDowMDowMS4wMDBafGxhdGVzdAo=`
+
+```shell
+echo "2023-02-01T00:00:01.000Z|latest" | base64
+MjAyMy0wMi0wMVQwMDowMDowMS4wMDBafGxhdGVzdAo=
+
+echo "MjAyMy0wMi0wMVQwMDowMDowMS4wMDBafGxhdGVzdAo=" | base64 -d
+2023-02-01T00:00:01.000Z|latest
+```
+
+For the example above, the request URL would look like:
+
+```shell
+/gitlab/vi/repositories/<path>/tags/list/?sort=published_at&last=MjAyMy0wMi0wMVQwMDowMDowMS4wMDBafGxhdGVzdAo=
+```
+
+The `Link` header will return and encoded value in the `last` or `before` query parameters of the `next` and `previous` 
+URLs.
+
+When two or more tags have the same published at date, they will be ordered by name in ascending or descending order.
+
 ##### Sort examples with pagination
 
-Given a list of tags `["a", "b", "c", "d", "e", "f"]`:
+Sorting by name given a list of tags `["a", "b", "c", "d", "e", "f"]`:
 
-| n | before | last | sort | Expected Result                  |
-|---|--------|------|------|----------------------------------|
-|   |        |      | asc  | `["a", "b", "c", "d", "e", "f"]` |
-|   |        |      | desc | `["f", "e", "d", "c", "b", "a"]` |
-| 3 |        |      | asc  | `["a", "b", "c"]`                |
-| 3 |        |      | desc | `["f", "e", "d"]`                |
-|   | "c"    |      | asc  | `["a", "b"]`                     |
-|   | "c"    |      | desc | `["f", "e", "d"]`                |
-| 2 | "c"    |      | asc  | `["a", "b"]`                     |
-| 2 | "d"    |      | desc | `["f", "e"]`                     |
-|   |        | "c"  | asc  | `["d", "e", "f"]`                |
-|   |        | "c"  | desc | `["b", "a"]`                     |
-| 2 |        | "b"  | asc  | `["c", "d"]`                     |
-| 2 |        | "e"  | desc | `["d", "c"]`                     |
+| n | before | last | sort  | Expected Result                  |
+|---|--------|------|-------|----------------------------------|
+|   |        |      | name  | `["a", "b", "c", "d", "e", "f"]` |
+|   |        |      | -name | `["f", "e", "d", "c", "b", "a"]` |
+| 3 |        |      | name  | `["a", "b", "c"]`                |
+| 3 |        |      | -name | `["f", "e", "d"]`                |
+|   | "c"    |      | name  | `["a", "b"]`                     |
+|   | "c"    |      | -name | `["f", "e", "d"]`                |
+| 2 | "c"    |      | name  | `["a", "b"]`                     |
+| 2 | "d"    |      | -name | `["f", "e"]`                     |
+|   |        | "c"  | name  | `["d", "e", "f"]`                |
+|   |        | "c"  | -name | `["b", "a"]`                     |
+| 2 |        | "b"  | name  | `["c", "d"]`                     |
+| 2 |        | "e"  | -name | `["d", "c"]`                     |
+
+Sorting by published_at given a list of tags with the following values:
+
+| name   | created_at               | updated_at               | published_at             |
+|--------|--------------------------|--------------------------|--------------------------|
+| older  | 2023-01-01T00:00:01.000Z | NULL                     | 2023-01-01T00:00:01.000Z |
+| old    | 2023-02-01T00:00:01.000Z | 2023-03-01T00:00:01.000Z | 2023-03-01T00:00:01.000Z |
+| latest | 2023-03-01T00:00:01.000Z | 2023-05-01T00:00:01.000Z | 2023-05-01T00:00:01.000Z |
+| new    | 2023-04-01T00:00:01.000Z | NULL                     | 2023-04-01T00:00:01.000Z |
+| newer  | 2023-05-01T00:00:01.000Z | NULL                     | 2023-05-01T00:00:01.000Z |
+
+Expected parameters and responses
+
+| n | before                                  | last                                    | sort              | Expected Result                              |
+|---|-----------------------------------------|-----------------------------------------|-------------------|----------------------------------------------|
+|   |                                         |                                         | published_at      | `["older", old", "new", "latest", "newer"]`  |
+|   |                                         |                                         | -published_at     | `["newer", "latest", "new", "old", "older"]` |
+| 2 |                                         |                                         | published_at      | `["older", "old"]`                           |
+| 2 |                                         |                                         | -published_at     | `["newer", "latest"]`                        |
+| 2 | `base64(2023-04-01T00:00:01.000Z\|new)` |                                         | published_at      | `["older", "old"]`                           |
+| 2 | `base64(2023-02-01T00:00:01.000Z\|old)` |                                         | -published_at     | `["newer", "latest"]`                        |
+| 2 |                                         | `base64(2023-02-01T00:00:01.000Z\|old)` | published_at      | `["new", "latest"]`                          |
+| 2 |                                         | `base64(2023-02-01T00:00:01.000Z\|new)` | -published_at     | `["old", "older"]`                           |
 
 ### Response
 
@@ -250,15 +303,16 @@ Given a list of tags `["a", "b", "c", "d", "e", "f"]`:
 
 The response body is an array of objects (one per tag, if any) with the following attributes:
 
-| Key             | Value                                            | Type   | Format                              | Condition                                                                                                |
-|-----------------|--------------------------------------------------|--------|-------------------------------------|----------------------------------------------------------------------------------------------------------|
-| `name`          | The tag name.                                    | String |                                     |                                                                                                          |
-| `digest`        | The digest of the tagged manifest.               | String |                                     |                                                                                                          |
-| `config_digest` | The configuration digest of the tagged image.    | String |                                     | Only present if image has an associated configuration.                                                   |
-| `media_type`    | The media type of the tagged manifest.           | String |                                     |                                                                                                          |
-| `size_bytes`    | The size of the tagged image.                    | Number | Bytes                               |                                                                                                          |
-| `created_at`    | The timestamp at which the tag was created.      | String | ISO 8601 with millisecond precision |                                                                                                          |
-| `updated_at`    | The timestamp at which the tag was last updated. | String | ISO 8601 with millisecond precision | Only present if updated at least once. An update happens when a tag is switched to a different manifest. |
+| Key             | Value                                            | Type   | Format                               | Condition                                                                                                |
+|-----------------|--------------------------------------------------|--------|--------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `name`          | The tag name.                                    | String |                                      |                                                                                                          |
+| `digest`        | The digest of the tagged manifest.               | String |                                      |                                                                                                          |
+| `config_digest` | The configuration digest of the tagged image.    | String |                                      | Only present if image has an associated configuration.                                                   |
+| `media_type`    | The media type of the tagged manifest.           | String |                                      |                                                                                                          |
+| `size_bytes`    | The size of the tagged image.                    | Number | Bytes                                |                                                                                                          |
+| `created_at`    | The timestamp at which the tag was created.      | String | ISO 8601 with millisecond precision  |                                                                                                          |
+| `updated_at`    | The timestamp at which the tag was last updated. | String | ISO 8601 with millisecond precision  | Only present if updated at least once. An update happens when a tag is switched to a different manifest. |
+| `published_at`   | The latest timestamp when the tag was published. | String | ISO 8601 with millisecond precision  | Must match the latest value of either `created_at` or `updated_at`.                                      |
 
 The tag objects are sorted lexicographically by tag name to enable marker-based pagination.
 
