@@ -67,8 +67,8 @@ type RepositoryReader interface {
 	Manifests(ctx context.Context, r *models.Repository) (models.Manifests, error)
 	Tags(ctx context.Context, r *models.Repository) (models.Tags, error)
 	TagsPaginated(ctx context.Context, r *models.Repository, filters FilterParams) (models.Tags, error)
-	TagsCountAfterName(ctx context.Context, r *models.Repository, filters FilterParams) (int, error)
-	TagsCountBeforeName(ctx context.Context, r *models.Repository, filters FilterParams) (int, error)
+	HasTagsAfterName(ctx context.Context, r *models.Repository, filters FilterParams) (bool, error)
+	HasTagsBeforeName(ctx context.Context, r *models.Repository, filters FilterParams) (bool, error)
 	ManifestTags(ctx context.Context, r *models.Repository, m *models.Manifest) (models.Tags, error)
 	FindManifestByDigest(ctx context.Context, r *models.Repository, d digest.Digest) (*models.Manifest, error)
 	FindManifestByTagName(ctx context.Context, r *models.Repository, tagName string) (*models.Manifest, error)
@@ -935,16 +935,16 @@ func formatTagFilterWithPublishedAtWithoutName(comparisonSign, sortOrder SortOrd
 	return fmt.Sprintf(filter, comparisonSign, sortOrder, sortOrder)
 }
 
-// TagsCountAfterName counts all tags of a given repository with name lexicographically after `filters.LastEntry`. This is used
+// HasTagsAfterName checks if a given repository has any more tags after `filters.LastEntry`. This is used
 // exclusively for the GET /v2/<name>/tags/list API route, where pagination is done with a marker (`filters.LastEntry`). Even if
 // there is no tag with a name of `filters.LastEntry`, the counted tags will always be those with a path lexicographically after
 // `filters.LastEntry`. This constraint exists to preserve the existing API behavior (when doing a filesystem walk based
 // pagination). Optionally, it is possible to pass a string to be used as a partial match filter for tag names using `filters.Name`.
 // The search is not filtered if this value is an empty string.
-func (s *repositoryStore) TagsCountAfterName(ctx context.Context, r *models.Repository, filters FilterParams) (int, error) {
+func (s *repositoryStore) HasTagsAfterName(ctx context.Context, r *models.Repository, filters FilterParams) (bool, error) {
 	defer metrics.InstrumentQuery("repository_tags_count_after_name")()
 	q := `SELECT
-			COUNT(id)
+			1
 		FROM
 			tags
 		WHERE
@@ -958,32 +958,41 @@ func (s *repositoryStore) TagsCountAfterName(ctx context.Context, r *models.Repo
 		comparison = lessThan
 	}
 
+	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), filters.LastEntry}
+
+	if filters.OrderBy == "published_at" {
+		q += fmt.Sprintf(`
+		AND GREATEST(created_at, updated_at) %s= $5
+		`, comparison)
+		args = append(args, filters.PublishedAt)
+	}
+
 	q = fmt.Sprintf(q, comparison)
 
 	var count int
-	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), filters.LastEntry).Scan(&count); err != nil {
-		return count, fmt.Errorf("counting tags lexicographically after name: %w", err)
+	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, fmt.Errorf("checking if there are more tags after name: %w", err)
 	}
 
-	return count, nil
+	return count == 1, nil
 }
 
-// TagsCountBeforeName counts all tags of a given repository with name lexicographically before `filters.BeforeEntry`. This is used
+// HasTagsBeforeName checks if a given repository has any more tags before `filters.BeforeEntry`. This is used
 // exclusively for the GET /v2/<name>/tags/list API route, where pagination is done with a marker (`filters.BeforeEntry`). Even if
 // there is no tag with a name of `filters.BeforeEntry`, the counted tags will always be those with a path lexicographically before
 // `filters.BeforeEntry`. This constraint exists to preserve the existing API behavior (when doing a filesystem walk based
 // pagination). Optionally, it is possible to pass a string to be used as a partial match filter for tag names using `filters.Name`.
 // The search is not filtered if this value is an empty string.
-func (s *repositoryStore) TagsCountBeforeName(ctx context.Context, r *models.Repository, filters FilterParams) (int, error) {
+func (s *repositoryStore) HasTagsBeforeName(ctx context.Context, r *models.Repository, filters FilterParams) (bool, error) {
 	// There is no point in querying this as it would mean we need to count ALL the tags
 	if filters.BeforeEntry == "" {
-		return 0, nil
+		return false, nil
 	}
 
 	defer metrics.InstrumentQuery("repository_tags_count_before_name")()
 
 	q := `SELECT
-			COUNT(id)
+			1
 		FROM
 			tags
 		WHERE
@@ -997,14 +1006,22 @@ func (s *repositoryStore) TagsCountBeforeName(ctx context.Context, r *models.Rep
 		comparison = greaterThan
 	}
 
-	q = fmt.Sprintf(q, comparison)
+	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), filters.BeforeEntry}
 
-	var count int
-	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), filters.BeforeEntry).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return count, fmt.Errorf("counting tags lexicographically before name: %w", err)
+	if filters.OrderBy == "published_at" {
+		q += fmt.Sprintf(`
+		AND GREATEST(created_at, updated_at) %s= $5
+		`, comparison)
+		args = append(args, filters.PublishedAt)
 	}
 
-	return count, nil
+	q = fmt.Sprintf(q, comparison)
+	var count int
+	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, fmt.Errorf("checking if there are more tags before name: %w", err)
+	}
+
+	return count == 1, nil
 }
 
 // ManifestTags finds all tags of a given repository manifest.

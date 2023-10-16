@@ -995,7 +995,7 @@ func TestRepositoryStore_TagsPaginated(t *testing.T) {
 	}
 }
 
-func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
+func TestRepositoryStore_HasTagsAfterName(t *testing.T) {
 	reloadTagFixtures(t)
 
 	// see testdata/fixtures/tags.sql (sorted):
@@ -1006,65 +1006,65 @@ func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
 	r := &models.Repository{NamespaceID: 1, ID: 4}
 
 	tt := []struct {
-		name          string
-		sort          datastore.SortOrder
-		lastName      string
-		expectedCount int
+		name     string
+		sort     datastore.SortOrder
+		lastName string
+		expected bool
 	}{
 		{
-			name:          "all",
-			lastName:      "",
-			expectedCount: 4,
+			name:     "all",
+			lastName: "",
+			expected: true,
 		},
 		{
-			name:          "first",
-			lastName:      "1.0.0",
-			expectedCount: 3,
+			name:     "first",
+			lastName: "1.0.0",
+			expected: true,
 		},
 		{
-			name:          "nth",
-			lastName:      "stable-91ac07a9",
-			expectedCount: 1,
+			name:     "nth",
+			lastName: "stable-91ac07a9",
+			expected: true,
 		},
 		{
-			name:          "last",
-			lastName:      "stable-9ede8db0",
-			expectedCount: 0,
+			name:     "last",
+			lastName: "stable-9ede8db0",
+			expected: false,
 		},
 		{
-			name:          "non existent",
-			lastName:      "does-not-exist",
-			expectedCount: 3,
+			name:     "non existent",
+			lastName: "does-not-exist",
+			expected: true,
 		},
 		{
-			name:          "all desc",
-			sort:          datastore.OrderDesc,
-			lastName:      "",
-			expectedCount: 0,
+			name:     "all desc",
+			sort:     datastore.OrderDesc,
+			lastName: "",
+			expected: false,
 		},
 		{
-			name:          "first desc",
-			sort:          datastore.OrderDesc,
-			lastName:      "stable-9ede8db0",
-			expectedCount: 3,
+			name:     "first desc",
+			sort:     datastore.OrderDesc,
+			lastName: "stable-9ede8db0",
+			expected: true,
 		},
 		{
-			name:          "nth desc",
-			sort:          datastore.OrderDesc,
-			lastName:      "stable-91ac07a9",
-			expectedCount: 2,
+			name:     "nth desc",
+			sort:     datastore.OrderDesc,
+			lastName: "stable-91ac07a9",
+			expected: true,
 		},
 		{
-			name:          "last desc",
-			sort:          datastore.OrderDesc,
-			lastName:      "1.0.0",
-			expectedCount: 0,
+			name:     "last desc",
+			sort:     datastore.OrderDesc,
+			lastName: "1.0.0",
+			expected: false,
 		},
 		{
-			name:          "non existent desc",
-			sort:          datastore.OrderDesc,
-			lastName:      "z-does-not-exist",
-			expectedCount: 4,
+			name:     "non existent desc",
+			sort:     datastore.OrderDesc,
+			lastName: "z-does-not-exist",
+			expected: true,
 		},
 	}
 
@@ -1077,14 +1077,14 @@ func TestRepositoryStore_TagsCountAfterName(t *testing.T) {
 				LastEntry: test.lastName,
 			}
 
-			c, err := s.TagsCountAfterName(suite.ctx, r, filters)
+			c, err := s.HasTagsAfterName(suite.ctx, r, filters)
 			require.NoError(t, err)
-			require.Equal(t, test.expectedCount, c)
+			require.Equal(t, test.expected, c)
 		})
 	}
 }
 
-func TestRepositoryStore_TagsCountBeforeName(t *testing.T) {
+func TestRepositoryStore_HasTagsBeforeName(t *testing.T) {
 	reloadTagFixtures(t)
 
 	// see testdata/fixtures/tags.sql (sorted):
@@ -1095,65 +1095,65 @@ func TestRepositoryStore_TagsCountBeforeName(t *testing.T) {
 	r := &models.Repository{NamespaceID: 1, ID: 4}
 
 	tt := []struct {
-		name          string
-		sort          datastore.SortOrder
-		beforeName    string
-		expectedCount int
+		name       string
+		sort       datastore.SortOrder
+		beforeName string
+		expected   bool
 	}{
 		{
-			name:          "empty",
-			beforeName:    "",
-			expectedCount: 0,
+			name:       "empty",
+			beforeName: "",
+			expected:   false,
 		},
 		{
-			name:          "first",
-			beforeName:    "1.0.0",
-			expectedCount: 0,
+			name:       "first",
+			beforeName: "1.0.0",
+			expected:   false,
 		},
 		{
-			name:          "nth",
-			beforeName:    "stable-91ac07a9",
-			expectedCount: 2,
+			name:       "nth",
+			beforeName: "stable-91ac07a9",
+			expected:   true,
 		},
 		{
-			name:          "last",
-			beforeName:    "stable-9ede8db0",
-			expectedCount: 3,
+			name:       "last",
+			beforeName: "stable-9ede8db0",
+			expected:   true,
 		},
 		{
-			name:          "non existent",
-			beforeName:    "z-does-not-exist",
-			expectedCount: 4,
+			name:       "non existent",
+			beforeName: "z-does-not-exist",
+			expected:   true,
 		},
 		{
-			name:          "empty desc",
-			beforeName:    "",
-			sort:          datastore.OrderDesc,
-			expectedCount: 0,
+			name:       "empty desc",
+			beforeName: "",
+			sort:       datastore.OrderDesc,
+			expected:   false,
 		},
 		{
-			name:          "first desc",
-			sort:          datastore.OrderDesc,
-			beforeName:    "stable-9ede8db0",
-			expectedCount: 0,
+			name:       "first desc",
+			sort:       datastore.OrderDesc,
+			beforeName: "stable-9ede8db0",
+			expected:   false,
 		},
 		{
-			name:          "nth desc",
-			sort:          datastore.OrderDesc,
-			beforeName:    "stable-91ac07a9",
-			expectedCount: 1,
+			name:       "nth desc",
+			sort:       datastore.OrderDesc,
+			beforeName: "stable-91ac07a9",
+			expected:   true,
 		},
 		{
-			name:          "last desc",
-			sort:          datastore.OrderDesc,
-			beforeName:    "1.0.0",
-			expectedCount: 3,
+			name:       "last desc",
+			sort:       datastore.OrderDesc,
+			beforeName: "1.0.0",
+			expected:   true,
 		},
 		{
-			name:          "non existent desc",
-			sort:          datastore.OrderDesc,
-			beforeName:    "z-does-not-exist",
-			expectedCount: 0,
+			name:       "non existent desc",
+			sort:       datastore.OrderDesc,
+			beforeName: "z-does-not-exist",
+			expected:   false,
 		},
 	}
 
@@ -1166,9 +1166,9 @@ func TestRepositoryStore_TagsCountBeforeName(t *testing.T) {
 				BeforeEntry: test.beforeName,
 			}
 
-			c, err := s.TagsCountBeforeName(suite.ctx, r, filters)
+			hasMore, err := s.HasTagsBeforeName(suite.ctx, r, filters)
 			require.NoError(t, err)
-			require.Equal(t, test.expectedCount, c)
+			require.Equal(t, test.expected, hasMore)
 		})
 	}
 }

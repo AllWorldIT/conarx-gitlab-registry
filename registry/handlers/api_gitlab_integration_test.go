@@ -21,6 +21,7 @@ import (
 	v1 "github.com/docker/distribution/registry/api/gitlab/v1"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/auth/token"
+	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -649,13 +650,16 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 				})
 			}
 
-			// Check that created_at is not empty but updated_at is. We then need to erase the created_at attribute from
-			// the response payload before comparing. This is the best we can do as we have no control/insight into the
+			// Check that created_at and published_at are not empty but updated_at is.
+			// We then need to erase the created_at and published_at attributes from the response payload
+			// before comparing. This is the best we can do as we have no control/insight into the
 			// timestamps at which records are inserted on the DB.
 			for _, d := range body {
 				require.Empty(t, d.UpdatedAt)
 				require.NotEmpty(t, d.CreatedAt)
+				require.NotEmpty(t, d.PublishedAt)
 				d.CreatedAt = ""
+				d.PublishedAt = ""
 			}
 
 			require.Equal(t, expectedBody, body)
@@ -669,6 +673,259 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGitlabAPI_RepositoryTagsList_PublishedAt is similar to TestGitlabAPI_RepositoryTagsList but
+// we focus comparisons on sorting by published_at and updated_at.
+func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	dbtestutil.ReloadFixtures(t, env.db, "../datastore/",
+		// A Tag has a foreign key for a Manifest, which in turn references a Repository (insert order matters)
+		dbtestutil.NamespacesTable, dbtestutil.RepositoriesTable, dbtestutil.BlobsTable, dbtestutil.ManifestsTable, dbtestutil.TagsTable)
+	t.Cleanup(func() {
+		require.NoError(t, dbtestutil.TruncateAllTables(env.db))
+	})
+
+	// see ../datastore/testdata/fixtures/tags.sql
+	imageName, err := reference.WithName("usage-group-2/sub-group-1/project-1")
+	require.NoError(t, err)
+
+	// by published at
+	sortedTags := []string{
+		"aaaa",   // 2023-01-01T00:00:01+00:00.000Z
+		"bbbb",   // 2023-02-01T00:00:01+00:00.000Z
+		"cccc",   // 2023-03-01T00:00:01+00:00.000Z
+		"dddd",   // 2023-04-30T00:00:01.00+00.000Z
+		"latest", // 2023-04-30T00:00:01.00+00.000Z
+		"eeee",   // 2023-05-31T00:00:01+00:00.000Z
+	}
+
+	sortedTagsDesc := []string{
+		"eeee",
+		"latest",
+		"dddd",
+		"cccc",
+		"bbbb",
+		"aaaa",
+	}
+
+	encodeFilter := func(publishedAt, tagName string) string {
+		// the Link header is escaped when the bytes are written, so we need to escape it before sending the query
+		return url.QueryEscape(handlers.EncodeFilter(publishedAt, tagName))
+	}
+	encodedTags := map[string]string{
+		"aaaa":   encodeFilter("2023-01-01T00:00:01.000Z", "aaaa"),
+		"bbbb":   encodeFilter("2023-02-01T00:00:01.000Z", "bbbb"),
+		"cccc":   encodeFilter("2023-03-01T00:00:01.000Z", "cccc"),
+		"dddd":   encodeFilter("2023-04-30T00:00:01.000Z", "dddd"),
+		"latest": encodeFilter("2023-04-30T00:00:01.000Z", "latest"),
+		"eeee":   encodeFilter("2023-05-31T00:00:01.000Z", "eeee"),
+	}
+
+	tt := map[string]struct {
+		descending          bool
+		queryParams         url.Values
+		expectedOrderedTags []string
+		expectedBefore      string
+		expectedLast        string
+	}{
+		"all tags asc": {
+			queryParams:         url.Values{},
+			expectedOrderedTags: sortedTags,
+		},
+		"all tags desc": {
+			descending:          true,
+			queryParams:         url.Values{},
+			expectedOrderedTags: sortedTagsDesc,
+		},
+		"last entry name without timestamp": {
+			queryParams:         url.Values{"n": []string{"2"}, "last": []string{"dddd"}},
+			expectedOrderedTags: []string{"latest", "eeee"},
+			expectedBefore:      encodedTags["latest"],
+		},
+		"before entry name without timestamp": {
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{"cccc"}},
+			expectedOrderedTags: []string{"aaaa", "bbbb"},
+			expectedLast:        encodedTags["bbbb"],
+		},
+		"last entry name without timestamp desc": {
+			descending:          true,
+			queryParams:         url.Values{"n": []string{"2"}, "last": []string{"dddd"}},
+			expectedOrderedTags: []string{"cccc", "bbbb"},
+			expectedBefore:      encodedTags["cccc"],
+			expectedLast:        encodedTags["bbbb"],
+		},
+		"before entry name without timestamp desc": {
+			descending:          true,
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{"aaaa"}},
+			expectedOrderedTags: []string{"cccc", "bbbb"},
+			expectedBefore:      encodedTags["cccc"],
+			expectedLast:        encodedTags["bbbb"],
+		},
+		"last entry asc first page size 2": {
+			queryParams:         url.Values{"n": []string{"2"}},
+			expectedOrderedTags: []string{"aaaa", "bbbb"},
+			expectedLast:        encodedTags["bbbb"],
+		},
+		"last entry asc second page size 2": {
+			queryParams:         url.Values{"n": []string{"2"}, "last": []string{encodedTags["bbbb"]}},
+			expectedOrderedTags: []string{"cccc", "dddd"},
+			expectedBefore:      encodedTags["cccc"],
+			expectedLast:        encodedTags["dddd"],
+		},
+		"last entry asc last page size 2": {
+			queryParams:         url.Values{"n": []string{"2"}, "last": []string{encodedTags["dddd"]}},
+			expectedOrderedTags: []string{"latest", "eeee"},
+			expectedBefore:      encodedTags["latest"],
+		},
+		"last entry desc first page size 2": {
+			descending:          true,
+			queryParams:         url.Values{"n": []string{"2"}},
+			expectedOrderedTags: []string{"eeee", "latest"},
+			expectedLast:        encodedTags["latest"],
+		},
+		"last entry desc second page size 2": {
+			descending:          true,
+			queryParams:         url.Values{"n": []string{"2"}, "last": []string{encodedTags["latest"]}},
+			expectedOrderedTags: []string{"dddd", "cccc"},
+			expectedBefore:      encodedTags["dddd"],
+			expectedLast:        encodedTags["cccc"],
+		},
+		"last entry desc last page size 2": {
+			descending:          true,
+			queryParams:         url.Values{"n": []string{"2"}, "last": []string{encodedTags["cccc"]}},
+			expectedOrderedTags: []string{"bbbb", "aaaa"},
+			expectedBefore:      encodedTags["bbbb"],
+		},
+		"before entry asc last page size 2": {
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodeFilter("2023-12-31T00:00:01.000000+00", "z")}},
+			expectedOrderedTags: []string{"latest", "eeee"},
+			expectedBefore:      encodedTags["latest"],
+		},
+		"before entry asc second page size 2": {
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodedTags["latest"]}},
+			expectedOrderedTags: []string{"cccc", "dddd"},
+			expectedBefore:      encodedTags["cccc"],
+			expectedLast:        encodedTags["dddd"],
+		},
+		"before entry asc first page size 2": {
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodedTags["cccc"]}},
+			expectedOrderedTags: []string{"aaaa", "bbbb"},
+			expectedLast:        encodedTags["bbbb"],
+		},
+		"before entry desc first page size 2": {
+			descending:          true,
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodeFilter("2022-12-31T00:00:01.000000+00", "_")}},
+			expectedOrderedTags: []string{"bbbb", "aaaa"},
+			expectedBefore:      encodedTags["bbbb"],
+		},
+		"before entry desc second page size 2": {
+			descending:          true,
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodedTags["bbbb"]}},
+			expectedOrderedTags: []string{"dddd", "cccc"},
+			expectedBefore:      encodedTags["dddd"],
+			expectedLast:        encodedTags["cccc"],
+		},
+
+		"before entry desc last page size 2": {
+			descending:          true,
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodedTags["dddd"]}},
+			expectedOrderedTags: []string{"eeee", "latest"},
+			expectedLast:        encodedTags["latest"],
+		},
+	}
+
+	for tn, test := range tt {
+		t.Run(tn, func(t *testing.T) {
+			sort := "published_at"
+			if test.descending {
+				sort = "-" + sort
+			}
+			test.queryParams.Set("sort", sort)
+
+			u, err := env.builder.BuildGitlabV1RepositoryTagsURL(imageName, test.queryParams)
+			require.NoError(t, err)
+			resp, err := http.Get(u)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var body []*handlers.RepositoryTagResponse
+			dec := json.NewDecoder(resp.Body)
+			err = dec.Decode(&body)
+			require.NoError(t, err)
+
+			require.Equal(t, len(test.expectedOrderedTags), len(body))
+
+			// the updated tags will contain a different digest and setting this up is not practical
+			// we can just test for the names in order and make sure that the published_at date is what
+			// we expect
+			for k, receivedRepoTag := range body {
+				require.Equal(t, test.expectedOrderedTags[k], receivedRepoTag.Name)
+				require.NotEmpty(t, receivedRepoTag.CreatedAt)
+				require.NotEmpty(t, receivedRepoTag.PublishedAt)
+
+				if receivedRepoTag.UpdatedAt != "" {
+					require.Equal(t, receivedRepoTag.UpdatedAt, receivedRepoTag.PublishedAt)
+				} else {
+					require.Empty(t, receivedRepoTag.UpdatedAt)
+					require.Equal(t, receivedRepoTag.CreatedAt, receivedRepoTag.PublishedAt)
+				}
+			}
+
+			assertLinkHeaderForPublishedAt(t, resp.Header.Get("Link"), test.expectedBefore, test.expectedLast, imageName.Name(), sort)
+		})
+	}
+}
+
+// assertLinkHeaderForPublishedAt formats the expected links according to the response we want from the
+// repositories tags list endpoint with the escaped base64 encoded pagination marker.
+func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expectedLast, path, sort string) {
+	t.Helper()
+
+	if expectedBefore == "" && expectedLast == "" {
+		require.Empty(t, gotLink, "Link header should not exist: %s", gotLink)
+	}
+
+	linkBase := fmt.Sprintf(`</gitlab/v1/repositories/%s/tags/list/`, path)
+	gotPreviousLink := ""
+	gotNextLink := ""
+	links := strings.Split(gotLink, ",")
+
+	switch len(links) {
+	case 1:
+		switch {
+		case strings.Contains(gotLink, "previous"):
+			gotPreviousLink = gotLink
+		case strings.Contains(gotLink, "next"):
+			gotNextLink = gotLink
+		}
+
+	case 2:
+		gotPreviousLink = strings.TrimSpace(links[0])
+		gotNextLink = strings.TrimSpace(links[1])
+	}
+
+	if expectedBefore != "" {
+		require.NotEmpty(t, gotPreviousLink, "previous link")
+		expectedPreviousLink := fmt.Sprintf("%s?before=%s&n=2&sort=%s>; rel=\"previous\"", linkBase, expectedBefore, sort)
+		require.Equal(t, expectedPreviousLink, gotPreviousLink)
+	} else {
+		require.Empty(t, gotPreviousLink)
+	}
+
+	if expectedLast != "" {
+		require.NotEmpty(t, gotNextLink, "next link")
+		expectedNextLink := fmt.Sprintf("%s?last=%s&n=2&sort=%s>; rel=\"next\"", linkBase, expectedLast, sort)
+		require.Equal(t, expectedNextLink, gotNextLink)
+	} else {
+		require.Empty(t, gotNextLink)
+	}
+
 }
 
 // TestGitlabAPI_RepositoryTagsList_DefaultPageSize asserts that the API enforces a default page size of 100. We do it

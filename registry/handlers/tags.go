@@ -64,11 +64,10 @@ func dbGetTags(ctx context.Context, db datastore.Queryer, repoPath string, filte
 	var moreEntries bool
 	if len(tt) > 0 {
 		filters.LastEntry = tt[len(tt)-1].Name
-		n, err := rStore.TagsCountAfterName(ctx, r, filters)
+		moreEntries, err = rStore.HasTagsAfterName(ctx, r, filters)
 		if err != nil {
 			return nil, false, err
 		}
-		moreEntries = n > 0
 	}
 
 	return tags, moreEntries, nil
@@ -124,7 +123,7 @@ func (th *tagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	// Add a link header if there are more entries to retrieve (only supported by the metadata database backend)
 	if moreEntries {
 		filters.LastEntry = tags[len(tags)-1]
-		urlStr, err := createLinkEntry(r.URL.String(), filters)
+		urlStr, err := createLinkEntry(r.URL.String(), filters, "", "")
 		if err != nil {
 			th.Errors = append(th.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			return

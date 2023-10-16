@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
@@ -18,8 +20,9 @@ import (
 )
 
 const (
-	linkPrevious = "previous"
-	linkNext     = "next"
+	linkPrevious      = "previous"
+	linkNext          = "next"
+	encodingSeparator = "|"
 
 	defaultMaximumReturnedEntries  = 100
 	maximumReturnEntriesUpperLimit = 1000
@@ -115,7 +118,7 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	// Add a link header if there are more entries to retrieve
 	if moreEntries {
 		filters.LastEntry = repos[len(repos)-1]
-		urlStr, err := createLinkEntry(r.URL.String(), filters)
+		urlStr, err := createLinkEntry(r.URL.String(), filters, "", "")
 		if err != nil {
 			ch.Errors = append(ch.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			return
@@ -136,11 +139,11 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 
 // Use the original URL from the request to create a new URL for
 // the link header
-func createLinkEntry(origURL string, filters datastore.FilterParams) (string, error) {
+func createLinkEntry(origURL string, filters datastore.FilterParams, publishedBefore, publishedLast string) (string, error) {
 	var combinedURL string
 
 	if filters.BeforeEntry != "" {
-		beforeURL, err := generateLink(origURL, linkPrevious, filters)
+		beforeURL, err := generateLink(origURL, linkPrevious, filters, publishedBefore, publishedLast)
 		if err != nil {
 			return "", err
 		}
@@ -148,7 +151,7 @@ func createLinkEntry(origURL string, filters datastore.FilterParams) (string, er
 	}
 
 	if filters.LastEntry != "" {
-		lastURL, err := generateLink(origURL, linkNext, filters)
+		lastURL, err := generateLink(origURL, linkNext, filters, publishedBefore, publishedLast)
 		if err != nil {
 			return "", err
 		}
@@ -165,7 +168,7 @@ func createLinkEntry(origURL string, filters datastore.FilterParams) (string, er
 	return combinedURL, nil
 }
 
-func generateLink(originalURL, rel string, filters datastore.FilterParams) (string, error) {
+func generateLink(originalURL, rel string, filters datastore.FilterParams, publishedBefore, publishedLast string) (string, error) {
 	calledURL, err := url.Parse(originalURL)
 	if err != nil {
 		return "", err
@@ -176,9 +179,17 @@ func generateLink(originalURL, rel string, filters datastore.FilterParams) (stri
 
 	switch rel {
 	case linkPrevious:
-		qValues.Add(beforeQueryParamKey, filters.BeforeEntry)
+		before := filters.BeforeEntry
+		if filters.OrderBy == publishedAtQueryParamKey && publishedBefore != "" {
+			before = EncodeFilter(publishedBefore, filters.BeforeEntry)
+		}
+		qValues.Add(beforeQueryParamKey, before)
 	case linkNext:
-		qValues.Add(lastQueryParamKey, filters.LastEntry)
+		last := filters.LastEntry
+		if filters.OrderBy == publishedAtQueryParamKey && publishedLast != "" {
+			last = EncodeFilter(publishedLast, filters.LastEntry)
+		}
+		qValues.Add(lastQueryParamKey, last)
 	}
 
 	if filters.Name != "" {
@@ -199,4 +210,32 @@ func generateLink(originalURL, rel string, filters datastore.FilterParams) (stri
 	urlStr := fmt.Sprintf("<%s>; rel=\"%s\"", calledURL.String(), rel)
 
 	return urlStr, nil
+}
+
+// EncodeFilter base64 encode by concatenating the published_at value with the tagName using an encodingSeparator
+func EncodeFilter(publishedAt, tagName string) (v string) {
+	return base64.StdEncoding.EncodeToString(
+		[]byte(fmt.Sprintf("%s%s%s", publishedAt, encodingSeparator, tagName)),
+	)
+
+}
+
+// DecodeFilter base64 filter using encodingSeparator to obtain the values for published_at and tag name
+func DecodeFilter(encodedStr string) (a string, b string, e error) {
+	urlUnescaped, err := url.QueryUnescape(encodedStr)
+	if err != nil {
+		return "", "", err
+	}
+
+	bytes, err := base64.StdEncoding.DecodeString(urlUnescaped)
+	if err != nil {
+		return "", "", err
+	}
+	str := string(bytes)
+	values := strings.Split(str, encodingSeparator)
+	if len(values) != 2 {
+		return "", "", fmt.Errorf("invalid encode value %q", str)
+	}
+
+	return values[0], values[1], nil
 }
