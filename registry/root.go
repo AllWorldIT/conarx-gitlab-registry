@@ -86,7 +86,7 @@ var (
 	rowCount             bool
 	importCommonBlobs    bool
 	importAllRepos       bool
-	preImportAll         bool
+	tagConcurrency       *int
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -466,6 +466,11 @@ var ImportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		if tagConcurrency != nil && (*tagConcurrency < 1 || *tagConcurrency > 5) {
+			fmt.Fprintf(os.Stderr, "tag-concurrency must be between 1 and 5")
+			os.Exit(1)
+		}
+
 		parameters := config.Storage.Parameters()
 		if parameters[parallelwalkKey] == true {
 			parameters[parallelwalkKey] = false
@@ -526,6 +531,10 @@ var ImportCmd = &cobra.Command{
 		}
 		if rowCount {
 			opts = append(opts, datastore.WithRowCount)
+		}
+
+		if tagConcurrency != nil {
+			opts = append(opts, datastore.WithTagConcurrency(*tagConcurrency))
 		}
 
 		p := datastore.NewImporter(db, registry, opts...)

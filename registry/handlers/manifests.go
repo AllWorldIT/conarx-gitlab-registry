@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/docker/distribution"
-	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/manifestlist"
@@ -636,6 +635,7 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 
 	mediaType := r.Header.Get("Content-Type")
 	manifest, desc, err := distribution.UnmarshalManifest(mediaType, jsonBuf.Bytes())
+
 	if err != nil {
 		imh.Errors = append(imh.Errors, v2.ErrorCodeManifestInvalid.WithDetail(err.Error()))
 		return
@@ -716,6 +716,7 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Location", location)
 	w.Header().Set("Docker-Content-Digest", imh.Digest.String())
+
 	w.WriteHeader(http.StatusCreated)
 
 	l.WithFields(log.Fields{
@@ -897,7 +898,6 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 		"repository":      repoPath,
 		"manifest_digest": imh.Digest,
 		"schema_version":  mfst.Version().SchemaVersion,
-		feature.AccurateLayerMediaTypes.EnvVariable: feature.AccurateLayerMediaTypes.Enabled(),
 	})
 
 	// create or find target repository
@@ -951,6 +951,27 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 			NonConformant: nonConformant,
 		}
 
+		// if Subject present in mfst, set SubjectID in model
+		ocim, ok := mfst.(distribution.ManifestOCI)
+		if ok {
+			subject := ocim.Subject()
+			if subject.Digest.String() != "" {
+				// Fetch subject_id from digest
+				dbSubject, err := rStore.FindManifestByDigest(imh.Context, dbRepo, subject.Digest)
+				if err != nil {
+					return err
+				}
+
+				if dbSubject == nil {
+					// in case something happened to the referenced manifest after validation
+					return distribution.ErrManifestBlobUnknown{Digest: subject.Digest}
+				}
+
+				m.SubjectID.Int64 = dbSubject.ID
+				m.SubjectID.Valid = true
+			}
+		}
+
 		// check if the manifest references non-distributable layers and mark it as such on the DB
 		ll := mfst.DistributableLayers()
 		m.NonDistributableLayers = len(ll) < len(mfst.Layers())
@@ -975,7 +996,7 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 			// has a 1-1 relationship with with the manifest, so we want to reflect
 			// the manifest's description of the layer. Multiple manifest can reference
 			// the same blob, so the common blob storage should remain generic.
-			if ok := layerMediaTypeExists(imh, reqLayer.MediaType); ok && feature.AccurateLayerMediaTypes.Enabled() {
+			if ok := layerMediaTypeExists(imh, reqLayer.MediaType); ok {
 				dbBlob.MediaType = reqLayer.MediaType
 			}
 

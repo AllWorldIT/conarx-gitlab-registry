@@ -48,15 +48,23 @@ type Manifest struct {
 	// configuration.
 	Layers []distribution.Descriptor `json:"layers"`
 
+	// This OPTIONAL property specifies a descriptor of another manifest.
+	// This value, used by the referrers API, indicates a relationship to
+	// the specified manifest.
+	Subject *distribution.Descriptor `json:"subject,omitempty"`
+
 	// Annotations contains arbitrary metadata for the image manifest.
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // References returns the descriptors of this manifests references.
 func (m Manifest) References() []distribution.Descriptor {
-	references := make([]distribution.Descriptor, 0, 1+len(m.Layers))
+	references := make([]distribution.Descriptor, 0, 2+len(m.Layers))
 	references = append(references, m.Config)
 	references = append(references, m.Layers...)
+	if m.Subject != nil {
+		references = append(references, *m.Subject)
+	}
 	return references
 }
 
@@ -137,6 +145,12 @@ func (m *DeserializedManifest) Version() manifest.Versioned {
 
 func (m *DeserializedManifest) Config() distribution.Descriptor   { return m.Target() }
 func (m *DeserializedManifest) Layers() []distribution.Descriptor { return m.Manifest.Layers }
+func (m *DeserializedManifest) Subject() distribution.Descriptor {
+	if m.Manifest.Subject == nil {
+		return distribution.Descriptor{}
+	}
+	return *m.Manifest.Subject
+}
 
 func (m *DeserializedManifest) DistributableLayers() []distribution.Descriptor {
 	var ll []distribution.Descriptor

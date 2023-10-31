@@ -467,8 +467,13 @@ type manifestOpts struct {
 	assertNotification bool
 	withoutMediaType   bool
 	authToken          string
+	subjectManifest    *ocischema.DeserializedManifest
 	// Non-optional values which be passed through by the testing func for ease of use.
 	repoPath string
+}
+
+func (m manifestOpts) hasSubject() bool {
+	return m.subjectManifest != nil
 }
 
 type manifestOptsFunc func(*testing.T, *testEnv, *manifestOpts)
@@ -490,6 +495,12 @@ func withAssertNotification(t *testing.T, env *testEnv, opts *manifestOpts) {
 
 func withoutMediaType(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 	opts.withoutMediaType = true
+}
+
+func withSubject(subject *ocischema.DeserializedManifest) manifestOptsFunc {
+	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
+		opts.subjectManifest = subject
+	}
 }
 
 func withAuthToken(token string) manifestOptsFunc {
@@ -707,11 +718,16 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 		},
 	}
 
-	// Create a manifest config and push up its content.
-	cfgPayload, cfgDesc := ociConfig()
-	uploadURLBase, _ := startPushLayer(t, env, repoRef)
-	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-	manifest.Config = cfgDesc
+	// Use the config from the subject manifest, if present;
+	// otherwise, create a manifest config and push up its content.
+	if config.hasSubject() {
+		manifest.Config = config.subjectManifest.Config()
+	} else {
+		cfgPayload, cfgDesc := ociConfig()
+		uploadURLBase, _ := startPushLayer(t, env, repoRef)
+		pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
+		manifest.Config = cfgDesc
+	}
 
 	// Create and push up 2 random layers.
 	manifest.Layers = make([]distribution.Descriptor, 2)
@@ -729,6 +745,18 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 		}
 	}
 
+	// Set subject descriptor
+	if config.hasSubject() {
+		_, payload, err := config.subjectManifest.Payload()
+		require.NoError(t, err)
+
+		manifest.Subject = &distribution.Descriptor{
+			Digest:    digest.FromBytes(payload),
+			MediaType: v1.MediaTypeImageManifest,
+			Size:      int64(len(payload)),
+		}
+	}
+
 	deserializedManifest, err := ocischema.FromStruct(*manifest)
 	require.NoError(t, err)
 
@@ -741,6 +769,7 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 
 		resp := putManifest(t, "putting manifest no error", config.manifestURL, v1.MediaTypeImageManifest, deserializedManifest)
 		defer resp.Body.Close()
+
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 		require.Equal(t, manifestDigestURL, resp.Header.Get("Location"))

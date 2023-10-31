@@ -72,7 +72,9 @@ const (
 	lastQueryParamKey                      = "last"
 	dryRunParamKey                         = "dry_run"
 	tagNameQueryParamKey                   = "name"
-	sortQueryPAramKey                      = "sort"
+	sortQueryParamKey                      = "sort"
+	publishedAtQueryParamKey               = "published_at"
+	sortOrderDescPrefix                    = "-"
 	defaultDryRunRenameOperationTimeout    = 5 * time.Second
 	maxRepositoriesToRename                = 1000
 )
@@ -85,9 +87,13 @@ var (
 		sizeQueryParamSelfWithDescendantsValue,
 	}
 
+	// sortQueryParamValidValues is a list of accepted values to sort by.
+	// Using  `-` means values in descending order
 	sortQueryParamValidValues = []string{
-		string(datastore.OrderAsc),
-		string(datastore.OrderDesc),
+		fmt.Sprintf("-%s", tagNameQueryParamKey),
+		tagNameQueryParamKey,
+		fmt.Sprintf("-%s", publishedAtQueryParamKey),
+		publishedAtQueryParamKey,
 	}
 
 	tagQueryParamPattern = reference.TagRegexp
@@ -311,10 +317,15 @@ type RepositoryTagResponse struct {
 	Size         int64  `json:"size_bytes"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at,omitempty"`
+	PublishedAt  string `json:"published_at,omitempty"`
 }
 
 func tagNameQueryParamValue(r *http.Request) string {
 	return r.URL.Query().Get(tagNameQueryParamKey)
+}
+
+func sortQueryParamValue(q url.Values) string {
+	return strings.ToLower(strings.TrimSpace(q.Get(sortQueryParamKey)))
 }
 
 func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
@@ -346,6 +357,13 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	var beforeEntry string
 	if q.Has(beforeQueryParamKey) {
 		beforeEntry = q.Get(beforeQueryParamKey)
+		// check if entry is base64 encoded, when is not, an error will be returned so we can ignore and continue
+		publishedAt, tagName, err := DecodeFilter(beforeEntry)
+		if err == nil {
+			beforeEntry = tagName
+			filters.PublishedAt = publishedAt
+		}
+
 		if !queryParamValueMatchesPattern(beforeEntry, tagQueryParamPattern) {
 			detail := v1.InvalidQueryParamValuePatternErrorDetail(beforeQueryParamKey, tagQueryParamPattern)
 			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
@@ -357,6 +375,13 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	var lastEntry string
 	if q.Has(lastQueryParamKey) {
 		lastEntry = q.Get(lastQueryParamKey)
+		// check if entry is base64 encoded, when is not, an error will be returned so we can ignore and continue
+		publishedAt, tagName, err := DecodeFilter(lastEntry)
+		if err == nil {
+			lastEntry = tagName
+			filters.PublishedAt = publishedAt
+		}
+
 		if !queryParamValueMatchesPattern(lastEntry, tagQueryParamPattern) {
 			detail := v1.InvalidQueryParamValuePatternErrorDetail(lastQueryParamKey, tagQueryParamPattern)
 			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
@@ -373,19 +398,32 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	}
 	filters.Name = nameFilter
 
-	var sort datastore.SortOrder
-	if q.Has(sortQueryPAramKey) {
-		// ensure we compare against the values of datastore.OrderDesc or datastore.OrderAsc
-		sort = datastore.SortOrder(strings.ToLower(q.Get(sortQueryPAramKey)))
-		if sort != datastore.OrderDesc && sort != datastore.OrderAsc {
-			detail := v1.InvalidQueryParamValueErrorDetail(sortQueryPAramKey, sortQueryParamValidValues)
+	sort := sortQueryParamValue(q)
+	if sort != "" {
+		if !isQueryParamValueValid(sort, sortQueryParamValidValues) {
+			detail := v1.InvalidQueryParamValueErrorDetail(sortQueryParamKey, sortQueryParamValidValues)
 			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
 		}
 
+		filters.OrderBy, filters.SortOrder = getSortOrderParams(sort)
 	}
-	filters.Sort = sort
 
 	return filters, nil
+}
+
+func getSortOrderParams(sort string) (string, datastore.SortOrder) {
+	orderBy := tagNameQueryParamKey
+	sortOrder := datastore.OrderAsc
+
+	values := strings.Split(sort, sortOrderDescPrefix)
+	if len(values) == 2 {
+		sortOrder = datastore.OrderDesc
+		orderBy = values[1]
+	} else {
+		orderBy = sort
+	}
+
+	return orderBy, sortOrder
 }
 
 // GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
@@ -419,27 +457,34 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	// Add a link header if there are more entries to retrieve
 	if len(tagsList) > 0 {
 		filters.LastEntry = tagsList[len(tagsList)-1].Name
-		afterCount, err := rStore.TagsCountAfterName(h.Context, repo, filters)
+		filters.PublishedAt = timeToString(tagsList[len(tagsList)-1].PublishedAt)
+		publishedLast := filters.PublishedAt
+		hasTagsAfter, err := rStore.HasTagsAfterName(h.Context, repo, filters)
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
 		}
-		if afterCount == 0 {
+
+		if !hasTagsAfter {
 			filters.LastEntry = ""
+			publishedLast = ""
 		}
 
 		filters.BeforeEntry = tagsList[0].Name
-		beforeCount, err := rStore.TagsCountBeforeName(h.Context, repo, filters)
+		filters.PublishedAt = timeToString(tagsList[0].PublishedAt)
+		publishedBefore := filters.PublishedAt
+		hasTagsBefore, err := rStore.HasTagsBeforeName(h.Context, repo, filters)
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
 		}
 
-		if beforeCount == 0 {
+		if !hasTagsBefore {
 			filters.BeforeEntry = ""
+			publishedBefore = ""
 		}
 
-		urlStr, err := createLinkEntry(r.URL.String(), filters)
+		urlStr, err := createLinkEntry(r.URL.String(), filters, publishedBefore, publishedLast)
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
@@ -454,11 +499,12 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	resp := make([]RepositoryTagResponse, 0, len(tagsList))
 	for _, t := range tagsList {
 		d := RepositoryTagResponse{
-			Name:      t.Name,
-			Digest:    t.Digest.String(),
-			MediaType: t.MediaType,
-			Size:      t.Size,
-			CreatedAt: timeToString(t.CreatedAt),
+			Name:        t.Name,
+			Digest:      t.Digest.String(),
+			MediaType:   t.MediaType,
+			Size:        t.Size,
+			CreatedAt:   timeToString(t.CreatedAt),
+			PublishedAt: timeToString(t.PublishedAt),
 		}
 		if t.ConfigDigest.Valid {
 			d.ConfigDigest = t.ConfigDigest.Digest.String()
@@ -532,7 +578,7 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 	// Add a link header if there might be more entries to retrieve
 	if len(repoList) == filters.MaxEntries {
 		filters.LastEntry = repoList[len(repoList)-1].Path
-		urlStr, err := createLinkEntry(r.URL.String(), filters)
+		urlStr, err := createLinkEntry(r.URL.String(), filters, "", "")
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			return

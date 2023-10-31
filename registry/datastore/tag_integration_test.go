@@ -219,6 +219,62 @@ func TestTagStore_FindAll(t *testing.T) {
 			ManifestID:   18,
 			CreatedAt:    testutil.ParseTimestamp(t, "2021-11-24 11:59:13.421427", local),
 		},
+		{
+			ID:           19,
+			NamespaceID:  4,
+			Name:         "latest",
+			RepositoryID: 16,
+			ManifestID:   27,
+			CreatedAt:    testutil.ParseTimestamp(t, "2023-01-01 00:00:01.000000", local),
+			UpdatedAt: sql.NullTime{
+				Time:  testutil.ParseTimestamp(t, "2023-04-30 00:00:01.000000", local),
+				Valid: true,
+			},
+		},
+		{
+			ID:           20,
+			NamespaceID:  4,
+			Name:         "aaaa",
+			RepositoryID: 16,
+			ManifestID:   25,
+			CreatedAt:    testutil.ParseTimestamp(t, "2023-01-01 00:00:01.000000", local),
+		},
+		{
+			ID:           21,
+			NamespaceID:  4,
+			Name:         "bbbb",
+			RepositoryID: 16,
+			ManifestID:   26,
+			CreatedAt:    testutil.ParseTimestamp(t, "2023-02-01 00:00:01.000000", local),
+		},
+		{
+			ID:           22,
+			NamespaceID:  4,
+			Name:         "cccc",
+			RepositoryID: 16,
+			ManifestID:   26,
+			CreatedAt:    testutil.ParseTimestamp(t, "2023-03-01 00:00:01.000000", local),
+		},
+		{
+			ID:           23,
+			NamespaceID:  4,
+			Name:         "dddd",
+			RepositoryID: 16,
+			ManifestID:   25,
+			CreatedAt:    testutil.ParseTimestamp(t, "2023-04-01 00:00:01.000000", local),
+			UpdatedAt: sql.NullTime{
+				Time:  testutil.ParseTimestamp(t, "2023-04-30 00:00:01.000000", local),
+				Valid: true,
+			},
+		},
+		{
+			ID:           24,
+			NamespaceID:  4,
+			Name:         "eeee",
+			RepositoryID: 16,
+			ManifestID:   27,
+			CreatedAt:    testutil.ParseTimestamp(t, "2023-05-31 00:00:01.000000", local),
+		},
 	}
 	require.Equal(t, expected, tt)
 }
@@ -241,7 +297,7 @@ func TestTagStore_Count(t *testing.T) {
 	require.NoError(t, err)
 
 	// see testdata/fixtures/tags.sql
-	require.Equal(t, 18, count)
+	require.Equal(t, 24, count)
 }
 
 func TestTagStore_Repository(t *testing.T) {

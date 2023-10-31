@@ -12,7 +12,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var expectedManifestSerialization = []byte(`{
+func makeTestManifest(mediaType string) Manifest {
+	return Manifest{
+		Versioned: manifest.Versioned{
+			SchemaVersion: 2,
+			MediaType:     mediaType,
+		},
+		Config: distribution.Descriptor{
+			Digest:      "sha256:1a9ec845ee94c202b2d5da74a24f0ed2058318bfa9879fa541efaecba272e86b",
+			Size:        985,
+			MediaType:   v1.MediaTypeImageConfig,
+			Annotations: map[string]string{"apple": "orange"},
+		},
+		Layers: []distribution.Descriptor{
+			{
+				Digest:      "sha256:62d8908bee94c202b2d35224a221aaa2058318bfa9879fa541efaecba272331b",
+				Size:        153263,
+				MediaType:   v1.MediaTypeImageLayerGzip,
+				Annotations: map[string]string{"lettuce": "wrap"},
+			},
+		},
+		Annotations: map[string]string{"hot": "potato"},
+	}
+}
+
+func makeTestManifestWithSubject(mediaType string) Manifest {
+	m := makeTestManifest(mediaType)
+	m.Subject = &distribution.Descriptor{
+		Digest:    "sha256:57d3be92c2f857566ecc7f9306a80021c0a7fa631e0ef5146957235aea859961",
+		Size:      23456,
+		MediaType: v1.MediaTypeImageManifest,
+	}
+	return m
+}
+
+func TestManifest(t *testing.T) {
+	expectedManifestSerialization := []byte(`{
    "schemaVersion": 2,
    "mediaType": "application/vnd.oci.image.manifest.v1+json",
    "config": {
@@ -38,33 +73,7 @@ var expectedManifestSerialization = []byte(`{
    }
 }`)
 
-func makeTestManifest(mediaType string) Manifest {
-	return Manifest{
-		Versioned: manifest.Versioned{
-			SchemaVersion: 2,
-			MediaType:     mediaType,
-		},
-		Config: distribution.Descriptor{
-			Digest:      "sha256:1a9ec845ee94c202b2d5da74a24f0ed2058318bfa9879fa541efaecba272e86b",
-			Size:        985,
-			MediaType:   v1.MediaTypeImageConfig,
-			Annotations: map[string]string{"apple": "orange"},
-		},
-		Layers: []distribution.Descriptor{
-			{
-				Digest:      "sha256:62d8908bee94c202b2d35224a221aaa2058318bfa9879fa541efaecba272331b",
-				Size:        153263,
-				MediaType:   v1.MediaTypeImageLayerGzip,
-				Annotations: map[string]string{"lettuce": "wrap"},
-			},
-		},
-		Annotations: map[string]string{"hot": "potato"},
-	}
-}
-
-func TestManifest(t *testing.T) {
 	manifest := makeTestManifest(v1.MediaTypeImageManifest)
-
 	deserialized, err := FromStruct(manifest)
 	if err != nil {
 		t.Fatalf("error creating DeserializedManifest: %v", err)
@@ -141,6 +150,61 @@ func TestManifest(t *testing.T) {
 	}
 }
 
+func TestManifestWithSubject(t *testing.T) {
+	expectedManifestSerialization := []byte(`{
+   "schemaVersion": 2,
+   "mediaType": "application/vnd.oci.image.manifest.v1+json",
+   "config": {
+      "mediaType": "application/vnd.oci.image.config.v1+json",
+      "size": 985,
+      "digest": "sha256:1a9ec845ee94c202b2d5da74a24f0ed2058318bfa9879fa541efaecba272e86b",
+      "annotations": {
+         "apple": "orange"
+      }
+   },
+   "layers": [
+      {
+         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+         "size": 153263,
+         "digest": "sha256:62d8908bee94c202b2d35224a221aaa2058318bfa9879fa541efaecba272331b",
+         "annotations": {
+            "lettuce": "wrap"
+         }
+      }
+   ],
+   "subject": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": 23456,
+      "digest": "sha256:57d3be92c2f857566ecc7f9306a80021c0a7fa631e0ef5146957235aea859961"
+   },
+   "annotations": {
+      "hot": "potato"
+   }
+}`)
+
+	manifest := makeTestManifestWithSubject(v1.MediaTypeImageManifest)
+
+	deserialized, err := FromStruct(manifest)
+	require.NoError(t, err)
+
+	mediaType, canonical, _ := deserialized.Payload()
+	require.Equal(t, v1.MediaTypeImageManifest, mediaType)
+
+	// Check that canonical field matches expected value.
+	require.Truef(t, bytes.Equal(expectedManifestSerialization, canonical),
+		"manifest bytes not equal: %q != %q", string(canonical), string(expectedManifestSerialization))
+
+	// Test the subject
+	subject := deserialized.Subject()
+	require.Equal(t, "sha256:57d3be92c2f857566ecc7f9306a80021c0a7fa631e0ef5146957235aea859961", subject.Digest.String())
+	require.EqualValues(t, 23456, subject.Size)
+	require.Equal(t, v1.MediaTypeImageManifest, subject.MediaType)
+
+	// Should include the subject in this manifest's references
+	references := deserialized.References()
+	require.Equal(t, 3, len(references))
+}
+
 func mediaTypeTest(t *testing.T, mediaType string, shouldError bool) {
 	manifest := makeTestManifest(mediaType)
 
@@ -193,12 +257,29 @@ func TestTotalSize(t *testing.T) {
 	_, payload, err := deserialized.Payload()
 	require.NoError(t, err)
 
-	var refSize int64
-	for _, ref := range manifest.References() {
-		refSize += ref.Size
+	var layerSize int64
+	for _, layer := range deserialized.Layers() {
+		layerSize += layer.Size
 	}
 
-	require.Equal(t, refSize+int64(len(payload)), deserialized.TotalSize())
+	require.Equal(t, layerSize+deserialized.Config().Size+int64(len(payload)), deserialized.TotalSize())
+}
+
+func TestTotalSizeWithSubject(t *testing.T) {
+	manifest := makeTestManifestWithSubject(v1.MediaTypeImageManifest)
+
+	deserialized, err := FromStruct(manifest)
+	require.NoError(t, err)
+
+	_, payload, err := deserialized.Payload()
+	require.NoError(t, err)
+
+	var layerSize int64
+	for _, layer := range deserialized.Layers() {
+		layerSize += layer.Size
+	}
+
+	require.Equal(t, layerSize+deserialized.Config().Size+int64(len(payload)), deserialized.TotalSize())
 }
 
 func TestDistributableLayers(t *testing.T) {

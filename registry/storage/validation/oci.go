@@ -71,8 +71,6 @@ func (v *OCIValidator) Validate(ctx context.Context, mnfst *ocischema.Deserializ
 			if err != nil || !exists {
 				err = distribution.ErrBlobUnknown // just coerce to unknown.
 			}
-
-			fallthrough // double check the blob store.
 		default:
 			// forward all else to blob storage
 			if len(descriptor.URLs) == 0 {

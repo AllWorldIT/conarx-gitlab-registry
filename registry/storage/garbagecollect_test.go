@@ -587,3 +587,26 @@ func TestGarbageCollectRepositoryRootNonExistence(t *testing.T) {
 	// Assert requirements.
 	require.NoError(t, MarkAndSweep(context.Background(), inmemoryDriver, registry, GCOpts{}))
 }
+
+func TestFailWhenDatabaseInUse(t *testing.T) {
+	inmemoryDriver := inmemory.New()
+	registry := createRegistry(t, inmemoryDriver)
+	repo := makeRepository(t, registry, "mothra")
+	ctx := context.Background()
+
+	testutil.UploadRandomImageList(t, registry, repo)
+
+	before := allBlobs(t, registry)
+	require.NotEmpty(t, before)
+
+	// Manually engage the database in use lock.
+	dbLock := DatabaseInUseLocker{Driver: inmemoryDriver}
+	dbLock.Lock(ctx)
+
+	// Run GC
+	err := MarkAndSweep(ctx, inmemoryDriver, registry, GCOpts{
+		DryRun:         false,
+		RemoveUntagged: false,
+	})
+	require.EqualError(t, err, "database managed filesystem, cannot continue")
+}

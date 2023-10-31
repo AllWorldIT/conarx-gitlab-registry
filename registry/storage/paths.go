@@ -9,13 +9,9 @@ import (
 )
 
 const (
-	storagePathVersion = "v2"                // fixed storage layout version
-	storagePathRoot    = "/docker/registry/" // all driver paths have a prefix
-
-	// TODO(stevvooe): Get rid of the "storagePathRoot". Initially, we though
-	// storage path root would configurable for all drivers through this
-	// package. In reality, we've found it simpler to do this on a per driver
-	// basis.
+	storagePathVersion   = "v2"                // fixed storage layout version
+	storagePathRoot      = "/docker/registry/" // all driver paths have a prefix
+	storagePathLockfiles = "lockfiles/"
 )
 
 // pathFor maps paths based on "object names" and their ids. The "object
@@ -23,27 +19,30 @@ const (
 //
 // The path layout in the storage backend is roughly as follows:
 //
-//		<root>/v2
-//			-> repositories/
-// 				-><name>/
-// 					-> _manifests/
-// 						revisions
-//							-> <manifest digest path>
-//								-> link
-// 						tags/<tag>
-//							-> current/link
-// 							-> index
-//								-> <algorithm>/<hex digest>/link
-// 					-> _layers/
-// 						<layer links to blob store>
-// 					-> _uploads/<id>
-// 						data
-// 						startedat
-// 						hashstates/<algorithm>/<offset>
-//			-> blob/<algorithm>
-//				<split directory content addressable storage>
+//			<root>
+//	     -> /lockfiles/
+//	         -> lockfile
+//	     -> /v2
+//			  	-> repositories/
+//	  				-><name>/
+//		  				-> _manifests/
+//			  				revisions
+//			  					-> <manifest digest path>
+//			  						-> link
+//			  				tags/<tag>
+//			  					-> current/link
+//			  					-> index
+//			  						-> <algorithm>/<hex digest>/link
+//			  			-> _layers/
+//			  				<layer links to blob store>
+//			  			-> _uploads/<id>
+//			  				data
+//			  				startedat
+//			  				hashstates/<algorithm>/<offset>
+//			  	-> blob/<algorithm>
+//			  		<split directory content addressable storage>
 //
-// The storage backend layout is broken up into a content-addressable blob
+// The storage backend layout for the V2 API is broken up into a content-addressable blob
 // store and repositories. The content-addressable blob store holds most data
 // throughout the backend, keyed by algorithm and digests of the underlying
 // content. Access to the blob store is controlled through links from the
@@ -67,39 +66,48 @@ const (
 // named tag directory. An index is maintained to support deletions of all
 // revisions of a given manifest tag.
 //
+// The lockfiles directory is used to implement a durable communication method
+// for all users of the file system layout. This path is intended to be used to
+// communicate across multiple processes and long periods of time. It is not
+// suitable for short-lived states or for intra-process communication.
+//
 // We cover the path formats implemented by this path mapper below.
 //
 //	Manifests:
 //
-// 	manifestRevisionsPathSpec:      <root>/v2/repositories/<name>/_manifests/revisions/
-// 	manifestRevisionPathSpec:      <root>/v2/repositories/<name>/_manifests/revisions/<algorithm>/<hex digest>/
-// 	manifestRevisionLinkPathSpec:  <root>/v2/repositories/<name>/_manifests/revisions/<algorithm>/<hex digest>/link
+//	manifestRevisionsPathSpec:      <root>/v2/repositories/<name>/_manifests/revisions/
+//	manifestRevisionPathSpec:      <root>/v2/repositories/<name>/_manifests/revisions/<algorithm>/<hex digest>/
+//	manifestRevisionLinkPathSpec:  <root>/v2/repositories/<name>/_manifests/revisions/<algorithm>/<hex digest>/link
 //
 //	Tags:
 //
-// 	manifestTagsPathSpec:                  <root>/v2/repositories/<name>/_manifests/tags/
-// 	manifestTagPathSpec:                   <root>/v2/repositories/<name>/_manifests/tags/<tag>/
-// 	manifestTagCurrentPathSpec:            <root>/v2/repositories/<name>/_manifests/tags/<tag>/current/link
-// 	manifestTagIndexPathSpec:              <root>/v2/repositories/<name>/_manifests/tags/<tag>/index/
-// 	manifestTagIndexEntryPathSpec:         <root>/v2/repositories/<name>/_manifests/tags/<tag>/index/<algorithm>/<hex digest>/
-// 	manifestTagIndexEntryLinkPathSpec:     <root>/v2/repositories/<name>/_manifests/tags/<tag>/index/<algorithm>/<hex digest>/link
+//	manifestTagsPathSpec:                  <root>/v2/repositories/<name>/_manifests/tags/
+//	manifestTagPathSpec:                   <root>/v2/repositories/<name>/_manifests/tags/<tag>/
+//	manifestTagCurrentPathSpec:            <root>/v2/repositories/<name>/_manifests/tags/<tag>/current/link
+//	manifestTagIndexPathSpec:              <root>/v2/repositories/<name>/_manifests/tags/<tag>/index/
+//	manifestTagIndexEntryPathSpec:         <root>/v2/repositories/<name>/_manifests/tags/<tag>/index/<algorithm>/<hex digest>/
+//	manifestTagIndexEntryLinkPathSpec:     <root>/v2/repositories/<name>/_manifests/tags/<tag>/index/<algorithm>/<hex digest>/link
 //
-// 	Blobs:
+//	Blobs:
 //
-// 	layerLinkPathSpec:            <root>/v2/repositories/<name>/_layers/<algorithm>/<hex digest>/link
+//	layerLinkPathSpec:            <root>/v2/repositories/<name>/_layers/<algorithm>/<hex digest>/link
 //
 //	Uploads:
 //
-// 	uploadDataPathSpec:             <root>/v2/repositories/<name>/_uploads/<id>/data
-// 	uploadStartedAtPathSpec:        <root>/v2/repositories/<name>/_uploads/<id>/startedat
-// 	uploadHashStatePathSpec:        <root>/v2/repositories/<name>/_uploads/<id>/hashstates/<algorithm>/<offset>
+//	uploadDataPathSpec:             <root>/v2/repositories/<name>/_uploads/<id>/data
+//	uploadStartedAtPathSpec:        <root>/v2/repositories/<name>/_uploads/<id>/startedat
+//	uploadHashStatePathSpec:        <root>/v2/repositories/<name>/_uploads/<id>/hashstates/<algorithm>/<offset>
 //
 //	Blob Store:
 //
 //	blobsPathSpec:                  <root>/v2/blobs/
-// 	blobPathSpec:                   <root>/v2/blobs/<algorithm>/<first two hex bytes of digest>/<hex digest>
-// 	blobDataPathSpec:               <root>/v2/blobs/<algorithm>/<first two hex bytes of digest>/<hex digest>/data
-// 	blobMediaTypePathSpec:               <root>/v2/blobs/<algorithm>/<first two hex bytes of digest>/<hex digest>/data
+//	blobPathSpec:                   <root>/v2/blobs/<algorithm>/<first two hex bytes of digest>/<hex digest>
+//	blobDataPathSpec:               <root>/v2/blobs/<algorithm>/<first two hex bytes of digest>/<hex digest>/data
+//	blobMediaTypePathSpec:               <root>/v2/blobs/<algorithm>/<first two hex bytes of digest>/<hex digest>/data
+//
+// Lock Files:
+//
+//	lockFilePathSpec:               <root>/lockfiles/lockfile
 //
 // For more information on the semantic meaning of each path and their
 // contents, please see the path spec documentation.
@@ -252,6 +260,8 @@ func pathFor(spec pathSpec) (string, error) {
 		return path.Join(repoPrefix...), nil
 	case repositoryRootPathSpec:
 		return path.Join(append(repoPrefix, v.name)...), nil
+	case lockFilePathSpec:
+		return path.Join(storagePathRoot, "lockfiles", v.name), nil
 	default:
 		// TODO(sday): This is an internal error. Ensure it doesn't escape (panic?).
 		return "", fmt.Errorf("unknown path spec: %#v", v)
@@ -352,11 +362,11 @@ func (manifestTagIndexEntryLinkPathSpec) pathSpec() {}
 // blob id. The blob link will contain a content addressable blob id reference
 // into the blob store. The format of the contents is as follows:
 //
-// 	<algorithm>:<hex digest of layer data>
+//	<algorithm>:<hex digest of layer data>
 //
 // The following example of the file contents is more illustrative:
 //
-// 	sha256:96443a84ce518ac22acb2e985eda402b58ac19ce6f91980bde63726a79d80b36
+//	sha256:96443a84ce518ac22acb2e985eda402b58ac19ce6f91980bde63726a79d80b36
 //
 // This  indicates that there is a blob with the id/digest, calculated via
 // sha256 that can be fetched from the blob store.
@@ -446,16 +456,21 @@ type repositoryRootPathSpec struct {
 
 func (repositoryRootPathSpec) pathSpec() {}
 
+type lockFilePathSpec struct {
+	name string
+}
+
+func (lockFilePathSpec) pathSpec() {}
+
 // digestPathComponents provides a consistent path breakdown for a given
 // digest. For a generic digest, it will be as follows:
 //
-// 	<algorithm>/<hex digest>
+//	<algorithm>/<hex digest>
 //
 // If multilevel is true, the first two bytes of the digest will separate
 // groups of digest folder. It will be as follows:
 //
-// 	<algorithm>/<first two bytes of digest>/<full digest>
-//
+//	<algorithm>/<first two bytes of digest>/<full digest>
 func digestPathComponents(dgst digest.Digest, multilevel bool) ([]string, error) {
 	if err := dgst.Validate(); err != nil {
 		return nil, err

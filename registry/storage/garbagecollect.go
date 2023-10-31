@@ -84,6 +84,33 @@ func (s *syncDigestSet) len() int {
 
 // MarkAndSweep performs a mark and sweep of registry data
 func MarkAndSweep(ctx context.Context, storageDriver driver.StorageDriver, registry distribution.Namespace, opts GCOpts) error {
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"stage":   "mark",
+		"driver":  storageDriver.Name(),
+		"dry_run": opts.DryRun,
+	})
+
+	// Check that the database does **not** manage this filesystem.
+	// We should both log and exit during the failure cases becase we send the
+	// final error to stderr and this is not always captured in user reports.
+	dbLock := DatabaseInUseLocker{Driver: storageDriver}
+	locked, err := dbLock.IsLocked(ctx)
+	if err != nil {
+		l.WithError(err).Error("unable to check for database in use lock, exiting")
+		return err
+	}
+	if locked {
+		dbLockPath, err := dbLock.path()
+		if err != nil {
+			// This error should not be possible, but just in case.
+			l.WithError(err).Error("failed to get database in use lock path")
+		}
+		l.WithFields(log.Fields{
+			"lock_path": dbLockPath,
+		}).Error("this filesystem is managed by the metadata database, and offline garbage collection is no longer possible, if you are not using the database anymore, remove the file at the lock_path in this log message")
+		return fmt.Errorf("database managed filesystem, cannot continue")
+	}
+
 	if opts.MaxParallelManifestGets < 1 {
 		opts.MaxParallelManifestGets = 1
 	}
@@ -95,11 +122,6 @@ func MarkAndSweep(ctx context.Context, storageDriver driver.StorageDriver, regis
 
 	// mark
 	markStart := time.Now()
-	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
-		"stage":   "mark",
-		"driver":  storageDriver.Name(),
-		"dry_run": opts.DryRun,
-	})
 	l.Info("starting mark stage")
 
 	// check registry root repository path exists, if path is non existent log warning
@@ -109,15 +131,14 @@ func MarkAndSweep(ctx context.Context, storageDriver driver.StorageDriver, regis
 		if errors.As(err, &driver.PathNotFoundError{}) {
 			l.WithError(err).Warn("skipping garbage collection")
 			return nil
-		} else {
-			return fmt.Errorf("checking root path: %w", err)
 		}
+		return fmt.Errorf("checking root path: %w", err)
 	}
 
 	markSet := newSyncDigestSet()
 	manifestArr := syncManifestDelContainer{sync.Mutex{}, make([]ManifestDel, 0)}
 
-	err := repositoryEnumerator.Enumerate(ctx, func(repoName string) error {
+	err = repositoryEnumerator.Enumerate(ctx, func(repoName string) error {
 		rLog := l.WithFields(log.Fields{"repository": repoName})
 		rLog.Info("marking repository")
 

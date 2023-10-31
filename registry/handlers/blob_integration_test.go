@@ -12,6 +12,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/datastore/models"
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
+	"github.com/docker/distribution/registry/internal/testutil"
 	gocache "github.com/eko/gocache/lib/v4/cache"
 	"github.com/stretchr/testify/require"
 )
@@ -19,6 +20,7 @@ import (
 type env struct {
 	ctx    context.Context
 	db     *datastore.DB
+	cache  *gocache.Cache[any]
 	config *configuration.Configuration
 	rStore datastore.RepositoryStore
 
@@ -66,9 +68,12 @@ func initDatabase(t *testing.T, env *env) {
 
 type envOpt func(*env)
 
-func witCachedRepositoryStore(cache *gocache.Cache[any]) envOpt {
+func witCachedRepositoryStore(t *testing.T) envOpt {
 	return func(e *env) {
-		e.rStore = datastore.NewRepositoryStore(e.db, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(cache)))
+		if e.cache == nil {
+			e.cache = testutil.RedisCache(t, testutil.RedisCacheTTL)
+		}
+		e.rStore = datastore.NewRepositoryStore(e.db, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(e.cache)))
 	}
 }
 

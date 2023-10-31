@@ -1,3 +1,46 @@
+## [3.85.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.84.0-gitlab...v3.85.0-gitlab) (2023-10-16)
+
+
+### ✨ Features ✨
+
+* add support for docker attestation media type ([3e32cd6](https://gitlab.com/gitlab-org/container-registry/commit/3e32cd6d6b4012e08c92f19ba3f764e3d3b01338))
+* **api/gitlab/v1:** sort repository tags by published_at ([12de379](https://gitlab.com/gitlab-org/container-registry/commit/12de379f80aa5355a688c63796d5c64cdb01e07d))
+* enable registry to store subject reference with OCI manifests ([bed5981](https://gitlab.com/gitlab-org/container-registry/commit/bed5981c0c53ecf1797ef7bc6642403cc648eee9))
+* **handlers:** always use accurate layer media types ([7b85e5a](https://gitlab.com/gitlab-org/container-registry/commit/7b85e5a843dc2f205881a4da74b9ad274b0d1aef))
+* **storage:** prevent offline gc from running against database metadata backed storage ([a224a21](https://gitlab.com/gitlab-org/container-registry/commit/a224a21515c5225e1a5d57813489b92a12d86d69))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go to v1.45.14 ([08e35ce](https://gitlab.com/gitlab-org/container-registry/commit/08e35ce2ce09f78d32eaca53767bbd85bd069b6b))
+* **deps:** update module github.com/aws/aws-sdk-go to v1.45.19 ([7d033e8](https://gitlab.com/gitlab-org/container-registry/commit/7d033e80b7031babde8e31b5cc37198ec08d4ef2))
+* **deps:** update module github.com/aws/aws-sdk-go to v1.45.24 ([3e8f3c4](https://gitlab.com/gitlab-org/container-registry/commit/3e8f3c40d885cf961bb63868568093739846e3dd))
+* **deps:** update module github.com/getsentry/sentry-go to v0.25.0 ([95f1348](https://gitlab.com/gitlab-org/container-registry/commit/95f1348c86ab13aca80f81e357bc355fff36841b))
+* **deps:** update module github.com/prometheus/client_golang to v1.17.0 ([0dbe576](https://gitlab.com/gitlab-org/container-registry/commit/0dbe5763db4de340960609bb65c8354391a76fbc))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.92.1 ([5127f32](https://gitlab.com/gitlab-org/container-registry/commit/5127f32faf4575fa6c5dadb121efbc09533be3ad))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.92.3 ([06e937f](https://gitlab.com/gitlab-org/container-registry/commit/06e937fc3eb94cec7e810f945c3f06ad1bd54498))
+
+## [3.84.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.83.0-gitlab...v3.84.0-gitlab) (2023-09-26)
+
+
+### ✨ Features ✨
+
+* **cache:** use repository cache to complete blob upload ([c678843](https://gitlab.com/gitlab-org/container-registry/commit/c67884383bcd88bf4a1c6083034b2bcac4dac81c))
+* **handlers:** expose database usage in v2 headers ([121e440](https://gitlab.com/gitlab-org/container-registry/commit/121e440d086de331a4f4bd80d3b312b349a73412))
+* **handlers:** use accurate layer media types by default ([1d7dc96](https://gitlab.com/gitlab-org/container-registry/commit/1d7dc9693ffc2cba08656cdf8485e7d9927b9743))
+* use JSON format for sorting tags by name in descending order ([eb20a87](https://gitlab.com/gitlab-org/container-registry/commit/eb20a874c22e92f202205b77476d025d2e3f637a))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go to v1.45.11 ([c2e742b](https://gitlab.com/gitlab-org/container-registry/commit/c2e742b76a9e026289cf8e99788a2b6b477819ac))
+* **deps:** update module github.com/aws/aws-sdk-go to v1.45.6 ([97ac190](https://gitlab.com/gitlab-org/container-registry/commit/97ac1908b3c805955fa9492ff719cf6428cc3c3d))
+* **deps:** update module github.com/getsentry/sentry-go to v0.24.0 ([3f90827](https://gitlab.com/gitlab-org/container-registry/commit/3f908279a7b943a94f0d2eb613ae675e67e1427f))
+* **deps:** update module github.com/getsentry/sentry-go to v0.24.1 ([970f81a](https://gitlab.com/gitlab-org/container-registry/commit/970f81a482766ce34be0e48ffcf43a5dac98439e))
+* **deps:** update module github.com/miekg/dns to v1.1.56 ([62c3c4e](https://gitlab.com/gitlab-org/container-registry/commit/62c3c4ebb98efd40801a255ccbfa11e695b45020))
+* **deps:** update module golang.org/x/oauth2 to v0.12.0 ([837e746](https://gitlab.com/gitlab-org/container-registry/commit/837e7466583274a1462f9ef1b95d71859e8ea8ec))
+* **deps:** update module google.golang.org/api to v0.142.0 ([2991e99](https://gitlab.com/gitlab-org/container-registry/commit/2991e993d4b449d5754f5c0aac41b10683f1fdd6))
+
 ## [3.83.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.82.2-gitlab...v3.83.0-gitlab) (2023-09-08)
 
 

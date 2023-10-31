@@ -14,5 +14,5 @@ VALUES (1, 1, 'gitlab-org', 'gitlab-org', NULL, '2020-03-02 17:47:39.849864+00')
        (13, 3, 'repository-1', 'usage-group/sub-group-2/repository-1', 12, '2022-02-22 11:33:12.434732+00'),
        (14, 3, 'sub-repository-1', 'usage-group/sub-group-2/repository-1/sub-repository-1', 13, '2022-02-22 11:33:12.434732+00'),
        (15, 4, 'usage-group-2', 'usage-group-2', NULL, '2022-02-22 15:36:04.692846+00'),
-       (16, 4, 'project-1', 'usage-group-2/sub-group-1/project-1', NULL, '2022-02-22 15:36:04.692846+00');
+       (16, 4, 'project-1', 'usage-group-2/sub-group-1/project-1', 15, '2022-02-22 15:36:04.692846+00');
 

@@ -414,6 +414,12 @@ var routeDescriptors = []RouteDescriptor{
 										Description: "A list of features supported by the GitLab Container Registry API.",
 										Format:      "<comma separated list of features>",
 									},
+									{
+										Name:      "Gitlab-Container-Registry-Database-Enabled",
+										Type:        "string",
+										Description: "A boolean indicating whether the registry database is enabled.",
+										Format:      "<bool>",
+									},
 								},
 							},
 						},

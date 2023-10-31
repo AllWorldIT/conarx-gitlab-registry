@@ -9,7 +9,6 @@ import (
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
-	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
@@ -157,8 +156,7 @@ func TestDBMountBlob_NonExistentDestinationRepo(t *testing.T) {
 		t.Run(tn, func(t *testing.T) {
 			var opts []envOpt
 			if tc.useCache {
-				redisCache := testutil.RedisCache(t, testutil.RedisCacheTTL)
-				opts = append(opts, witCachedRepositoryStore(redisCache))
+				opts = append(opts, witCachedRepositoryStore(t))
 			}
 
 			env := newEnv(t, opts...)
@@ -194,12 +192,25 @@ func TestDBMountBlob_AlreadyLinked(t *testing.T) {
 	require.True(t, isBlobLinked(t, env, destRepo, b.Digest))
 }
 
-func TestDBPutBlobUploadComplete_NonExistentRepoAndBlob(t *testing.T) {
-	env := newEnv(t)
+func TestDBPutBlobUploadComplete_NonExistentRepoAndBlob_WithCache(t *testing.T) {
+	testDBPutBlobUploadComplete_NonExistentRepoAndBlob(t, witCachedRepositoryStore(t))
+}
+
+func TestDBPutBlobUploadComplete_NonExistentRepoAndBlob_WithoutCache(t *testing.T) {
+	testDBPutBlobUploadComplete_NonExistentRepoAndBlob(t)
+}
+
+func testDBPutBlobUploadComplete_NonExistentRepoAndBlob(t *testing.T, envOpts ...envOpt) {
+	env := newEnv(t, envOpts...)
 	defer env.shutdown(t)
 
 	desc := randomBlobDescriptor(t)
-	err := dbPutBlobUploadComplete(env.ctx, env.db, "foo", desc)
+
+	var repoStoreOpts []datastore.RepositoryStoreOption
+	if env.cache != nil {
+		repoStoreOpts = append(repoStoreOpts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(env.cache)))
+	}
+	err := dbPutBlobUploadComplete(env.ctx, env.db, "foo", desc, repoStoreOpts)
 	require.NoError(t, err)
 
 	// the blob should have been created
@@ -210,14 +221,26 @@ func TestDBPutBlobUploadComplete_NonExistentRepoAndBlob(t *testing.T) {
 	require.True(t, isBlobLinked(t, env, r, b.Digest))
 }
 
-func TestDBPutBlobUploadComplete_NonExistentRepoAndExistentBlob(t *testing.T) {
-	env := newEnv(t)
+func TestDBPutBlobUploadComplete_NonExistentRepoAndExistentBlob_WithCache(t *testing.T) {
+	testDBPutBlobUploadComplete_NonExistentRepoAndExistentBlob(t, witCachedRepositoryStore(t))
+}
+
+func TestDBPutBlobUploadComplete_NonExistentRepoAndExistentBlob_WithoutCache(t *testing.T) {
+	testDBPutBlobUploadComplete_NonExistentRepoAndExistentBlob(t)
+}
+
+func testDBPutBlobUploadComplete_NonExistentRepoAndExistentBlob(t *testing.T, envOpts ...envOpt) {
+	env := newEnv(t, envOpts...)
 	defer env.shutdown(t)
 
 	b := buildRandomBlob(t, env)
-
 	desc := descriptorFromBlob(t, b)
-	err := dbPutBlobUploadComplete(env.ctx, env.db, "foo", desc)
+
+	var repoStoreOpts []datastore.RepositoryStoreOption
+	if env.cache != nil {
+		repoStoreOpts = append(repoStoreOpts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(env.cache)))
+	}
+	err := dbPutBlobUploadComplete(env.ctx, env.db, "foo", desc, repoStoreOpts)
 	require.NoError(t, err)
 
 	// the repository should have been created
@@ -226,14 +249,26 @@ func TestDBPutBlobUploadComplete_NonExistentRepoAndExistentBlob(t *testing.T) {
 	require.True(t, isBlobLinked(t, env, r, b.Digest))
 }
 
-func TestDBPutBlobUploadComplete_ExistentRepoAndNonExistentBlob(t *testing.T) {
-	env := newEnv(t)
+func TestDBPutBlobUploadComplete_ExistentRepoAndNonExistentBlob_WithCache(t *testing.T) {
+	testDBPutBlobUploadComplete_ExistentRepoAndNonExistentBlob(t, witCachedRepositoryStore(t))
+}
+
+func TestDBPutBlobUploadComplete_ExistentRepoAndNonExistentBlob_WithoutCache(t *testing.T) {
+	testDBPutBlobUploadComplete_ExistentRepoAndNonExistentBlob(t)
+}
+
+func testDBPutBlobUploadComplete_ExistentRepoAndNonExistentBlob(t *testing.T, envOpts ...envOpt) {
+	env := newEnv(t, envOpts...)
 	defer env.shutdown(t)
 
 	r := buildRepository(t, env, "foo")
-
 	desc := randomBlobDescriptor(t)
-	err := dbPutBlobUploadComplete(env.ctx, env.db, r.Path, desc)
+
+	var repoStoreOpts []datastore.RepositoryStoreOption
+	if env.cache != nil {
+		repoStoreOpts = append(repoStoreOpts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(env.cache)))
+	}
+	err := dbPutBlobUploadComplete(env.ctx, env.db, r.Path, desc, repoStoreOpts)
 	require.NoError(t, err)
 
 	// the blob should have been created
@@ -242,31 +277,55 @@ func TestDBPutBlobUploadComplete_ExistentRepoAndNonExistentBlob(t *testing.T) {
 	require.True(t, isBlobLinked(t, env, r, b.Digest))
 }
 
-func TestDBPutBlobUploadComplete_ExistentRepoAndBlobButNotLinked(t *testing.T) {
-	env := newEnv(t)
+func TestDBPutBlobUploadComplete_ExistentRepoAndBlobButNotLinked_WithCache(t *testing.T) {
+	testDBPutBlobUploadComplete_ExistentRepoAndBlobButNotLinked(t, witCachedRepositoryStore(t))
+}
+
+func TestDBPutBlobUploadComplete_ExistentRepoAndBlobButNotLinked_WithoutCache(t *testing.T) {
+	testDBPutBlobUploadComplete_ExistentRepoAndBlobButNotLinked(t)
+}
+
+func testDBPutBlobUploadComplete_ExistentRepoAndBlobButNotLinked(t *testing.T, envOpts ...envOpt) {
+	env := newEnv(t, envOpts...)
 	defer env.shutdown(t)
 
 	r := buildRepository(t, env, "foo")
 	b := buildRandomBlob(t, env)
-
 	desc := descriptorFromBlob(t, b)
-	err := dbPutBlobUploadComplete(env.ctx, env.db, r.Path, desc)
+
+	var repoStoreOpts []datastore.RepositoryStoreOption
+	if env.cache != nil {
+		repoStoreOpts = append(repoStoreOpts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(env.cache)))
+	}
+	err := dbPutBlobUploadComplete(env.ctx, env.db, r.Path, desc, repoStoreOpts)
 	require.NoError(t, err)
 
 	// the link between blob and repository should have been created
 	require.True(t, isBlobLinked(t, env, r, b.Digest))
 }
 
-func TestDBPutBlobUploadComplete_ExistentRepoAndBlobAlreadyLinked(t *testing.T) {
-	env := newEnv(t)
+func TestDBPutBlobUploadComplete_ExistentRepoAndBlobAlreadyLinked_WithCache(t *testing.T) {
+	testDBPutBlobUploadComplete_ExistentRepoAndBlobAlreadyLinked(t, witCachedRepositoryStore(t))
+}
+
+func TestDBPutBlobUploadComplete_ExistentRepoAndBlobAlreadyLinked_WithoutCache(t *testing.T) {
+	testDBPutBlobUploadComplete_ExistentRepoAndBlobAlreadyLinked(t)
+}
+
+func testDBPutBlobUploadComplete_ExistentRepoAndBlobAlreadyLinked(t *testing.T, envOpts ...envOpt) {
+	env := newEnv(t, envOpts...)
 	defer env.shutdown(t)
 
 	r := buildRepository(t, env, "foo")
 	b := buildRandomBlob(t, env)
 	linkBlob(t, env, r, b.Digest)
-
 	desc := descriptorFromBlob(t, b)
-	err := dbPutBlobUploadComplete(env.ctx, env.db, r.Path, desc)
+
+	var repoStoreOpts []datastore.RepositoryStoreOption
+	if env.cache != nil {
+		repoStoreOpts = append(repoStoreOpts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(env.cache)))
+	}
+	err := dbPutBlobUploadComplete(env.ctx, env.db, r.Path, desc, repoStoreOpts)
 	require.NoError(t, err)
 
 	// the link between blob and repository should remain
