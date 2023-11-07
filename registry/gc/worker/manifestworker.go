@@ -11,7 +11,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/gc/internal/metrics"
 	"github.com/hashicorp/go-multierror"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (

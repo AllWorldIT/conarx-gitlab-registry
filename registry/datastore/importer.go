@@ -20,7 +20,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/storage/driver"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"google.golang.org/api/googleapi"

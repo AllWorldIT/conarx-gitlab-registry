@@ -16,8 +16,8 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	gorilla "github.com/gorilla/handlers"
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/gitlab-org/labkit/correlation"
 

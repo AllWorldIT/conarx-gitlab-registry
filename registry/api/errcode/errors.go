@@ -12,8 +12,8 @@ import (
 	"syscall"
 
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"google.golang.org/api/googleapi"
 )
 
