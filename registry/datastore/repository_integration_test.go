@@ -17,8 +17,8 @@ import (
 	"github.com/docker/distribution/registry/datastore/testutil"
 	itestutil "github.com/docker/distribution/registry/internal/testutil"
 
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )

@@ -14,8 +14,9 @@ import (
 	"time"
 
 	"github.com/docker/distribution/configuration"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/sirupsen/logrus"
 )
 
@@ -125,7 +126,7 @@ func (dsn *DSN) Address() string {
 
 type openOpts struct {
 	logger               *logrus.Entry
-	logLevel             pgx.LogLevel
+	logLevel             tracelog.LogLevel
 	pool                 *PoolConfig
 	preferSimpleProtocol bool
 }
@@ -149,18 +150,18 @@ func WithLogger(l *logrus.Entry) OpenOption {
 
 // WithLogLevel configures the logger level for the database connection driver.
 func WithLogLevel(l configuration.Loglevel) OpenOption {
-	var lvl pgx.LogLevel
+	var lvl tracelog.LogLevel
 	switch l {
 	case configuration.LogLevelTrace:
-		lvl = pgx.LogLevelTrace
+		lvl = tracelog.LogLevelTrace
 	case configuration.LogLevelDebug:
-		lvl = pgx.LogLevelDebug
+		lvl = tracelog.LogLevelDebug
 	case configuration.LogLevelInfo:
-		lvl = pgx.LogLevelInfo
+		lvl = tracelog.LogLevelInfo
 	case configuration.LogLevelWarn:
-		lvl = pgx.LogLevelWarn
+		lvl = tracelog.LogLevelWarn
 	default:
-		lvl = pgx.LogLevelError
+		lvl = tracelog.LogLevelError
 	}
 
 	return func(opts *openOpts) {
@@ -229,10 +230,10 @@ type logger struct {
 // used to minify SQL statements on log entries by removing multiple spaces, tabs and new lines.
 var logMinifyPattern = regexp.MustCompile(`\s+|\t+|\n+`)
 
-// Log implements the pgx.Logger interface.
-func (l *logger) Log(_ context.Context, level pgx.LogLevel, msg string, data map[string]interface{}) {
+// Log implements the tracelog.Logger interface.
+func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, data map[string]interface{}) {
 	// silence if debug level is not enabled, unless it's a warn or error
-	if !l.Logger.IsLevelEnabled(logrus.DebugLevel) && level != pgx.LogLevelWarn && level != pgx.LogLevelError {
+	if !l.Logger.IsLevelEnabled(logrus.DebugLevel) && level != tracelog.LogLevelWarn && level != tracelog.LogLevelError {
 		return
 	}
 	var log *logrus.Entry
@@ -262,15 +263,15 @@ func (l *logger) Log(_ context.Context, level pgx.LogLevel, msg string, data map
 	}
 
 	switch level {
-	case pgx.LogLevelTrace:
+	case tracelog.LogLevelTrace:
 		log.Trace(msg)
-	case pgx.LogLevelDebug:
+	case tracelog.LogLevelDebug:
 		log.Debug(msg)
-	case pgx.LogLevelInfo:
+	case tracelog.LogLevelInfo:
 		log.Info(msg)
-	case pgx.LogLevelWarn:
+	case tracelog.LogLevelWarn:
 		log.Warn(msg)
-	case pgx.LogLevelError:
+	case tracelog.LogLevelError:
 		log.Error(msg)
 	default:
 		// this should never happen, but if it does, something went wrong and we need to notice it
@@ -286,9 +287,16 @@ func Open(dsn *DSN, opts ...OpenOption) (*DB, error) {
 		return nil, fmt.Errorf("datastore: parse config: %w", err)
 	}
 
-	pgxConfig.Logger = &logger{config.logger}
-	pgxConfig.LogLevel = config.logLevel
-	pgxConfig.PreferSimpleProtocol = config.preferSimpleProtocol
+	pgxConfig.Tracer = &tracelog.TraceLog{
+		Logger:   &logger{config.logger},
+		LogLevel: config.logLevel,
+	}
+
+	if config.preferSimpleProtocol {
+		// TODO: there are more query execution modes that we may want to consider in the future
+		// https://pkg.go.dev/github.com/jackc/pgx/v5#QueryExecMode
+		pgxConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	}
 
 	connStr := stdlib.RegisterConnConfig(pgxConfig)
 	db, err := sql.Open(driverName, connStr)

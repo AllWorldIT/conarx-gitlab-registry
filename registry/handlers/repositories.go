@@ -25,8 +25,8 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 
 	"github.com/gorilla/handlers"
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
