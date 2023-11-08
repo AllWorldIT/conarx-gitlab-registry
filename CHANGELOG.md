@@ -1,3 +1,11 @@
+## [3.86.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.86.0-gitlab...v3.86.1-gitlab) (2023-11-08)
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/spf13/viper to v1.17.0 ([9d1659f](https://gitlab.com/gitlab-org/container-registry/commit/9d1659f0a96f707138ea9bc775ed49dd3c345bda))
+* **deps:** upgrade github.com/jackc/pgx driver to latest v5 ([d9769f8](https://gitlab.com/gitlab-org/container-registry/commit/d9769f8ad15ec15e1e107a703292282aacddb897))
+
 ## [3.86.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.85.0-gitlab...v3.86.0-gitlab) (2023-11-02)
 
 
