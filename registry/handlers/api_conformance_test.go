@@ -93,6 +93,7 @@ func TestAPIConformance(t *testing.T) {
 		manifest_Put_OCI_WithNonDistributableLayers,
 
 		manifest_Get_ManifestList_FallbackToSchema2,
+		manifest_Put_ManifestList_ByTag_SameDigest_Parallel_IsIdempotent,
 
 		blob_Head,
 		blob_Head_BlobNotFound,
@@ -273,6 +274,70 @@ func manifest_Put_Schema2_ByTag_SameDigest_Parallel_IsIdempotent(t *testing.T, o
 
 	wg.Wait()
 }
+
+// proof for https://gitlab.com/gitlab-org/container-registry/-/issues/1132 where creating the same manifest list
+// with the same digest in parallel can cause a race condition
+func manifest_Put_ManifestList_ByTag_SameDigest_Parallel_IsIdempotent(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	tagCount := 2
+	repoPath := "schema2/manifest-list/idempotent"
+
+	manifestList := &manifestlist.ManifestList{
+		Versioned: manifest.Versioned{
+			SchemaVersion: 2,
+			MediaType:     manifestlist.MediaTypeManifestList,
+		},
+		Manifests: make([]manifestlist.ManifestDescriptor, tagCount),
+	}
+
+	for i := 0; i < tagCount; i++ {
+		deserializedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByDigest)
+
+		_, manifestPayload, err := deserializedManifest.Payload()
+		require.NoError(t, err)
+		manifestDigest := digest.FromBytes(manifestPayload)
+		manifestList.Manifests[i] = manifestlist.ManifestDescriptor{
+			Descriptor: distribution.Descriptor{
+				Digest:    manifestDigest,
+				MediaType: schema2.MediaTypeManifest,
+			},
+			Platform: randomPlatformSpec(),
+		}
+	}
+
+	deserializedManifestList, err := manifestlist.FromDescriptorsWithMediaType(manifestList.Manifests, manifestlist.MediaTypeManifestList)
+	require.NoError(t, err)
+
+	manifestListURL1 := buildManifestTagURL(t, env, repoPath, "list-1")
+	manifestListURL2 := buildManifestTagURL(t, env, repoPath, "list-2")
+
+	_, payload, err := deserializedManifestList.Payload()
+	require.NoError(t, err)
+
+	dgst := digest.FromBytes(payload)
+
+	expectedManifestListURL := buildManifestDigestURL(t, env, repoPath, deserializedManifestList)
+
+	wg := &sync.WaitGroup{}
+	// Put the same manifest list with tag one and two to test idempotency.
+	for _, manifestListURL := range []string{manifestListURL1, manifestListURL2} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp := putManifest(t, "putting manifest list by tag no error", manifestListURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+			defer resp.Body.Close()
+			require.Equal(t, http.StatusCreated, resp.StatusCode)
+			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(t, expectedManifestListURL, resp.Header.Get("Location"))
+			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+		}()
+	}
+
+	wg.Wait()
+}
+
 func manifest_Put_Schema2_ReuseTagManifestToManifest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()

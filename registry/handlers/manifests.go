@@ -1162,9 +1162,10 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 		return err
 	}
 
-	// create manifest list
+	// use CreateOrFind to prevent race conditions when the same digest is used by different tags
+	// and pushed at the same time https://gitlab.com/gitlab-org/container-registry/-/issues/1132
 	mStore := datastore.NewManifestStore(tx)
-	if err := mStore.Create(imh, ml); err != nil {
+	if err := mStore.CreateOrFind(imh, ml); err != nil {
 		return err
 	}
 
