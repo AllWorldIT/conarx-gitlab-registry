@@ -429,24 +429,6 @@ type Database struct {
 	DrainTimeout time.Duration `yaml:"draintimeout,omitempty"`
 	// PreparedStatements can be used to enable prepared statements. Defaults to false.
 	PreparedStatements bool `yaml:"preparedstatements,omitempty"`
-	// Discovery has the required configuration parameters to find a service's host and port
-	// from a DNS server.
-	Discovery Discovery `yaml:"discovery,omitempty"`
-}
-
-// Discovery has the required configuration parameters to find a service's host and port
-// from a DNS server.
-type Discovery struct {
-	// Enabled defines whether the registry attempts to resolve addresses from a Nameserver
-	Enabled bool `yaml:"enabled,omitempty"`
-	// Nameserver is the IP address or discoverable name of the DNS server to query from.
-	Nameserver string `yaml:"nameserver,omitempty"`
-	// PrimaryRecord used to obtain the database's primary host address. The value must be a FQDN.
-	PrimaryRecord string `yaml:"primaryrecord,omitempty"`
-	// Port of the Nameserver. Defaults to 53.
-	Port string `yaml:"port,omitempty"`
-	// TCP specifies if the DNS query should happen over TCP instead of UDP.
-	TCP bool `yaml:"tcp,omitempty"`
 }
 
 // Regexp wraps regexp.Regexp to implement the encoding.TextMarshaler interface.
