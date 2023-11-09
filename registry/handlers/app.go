@@ -319,43 +319,6 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
 		options = append(options, storage.DisableMirrorFS)
 
-		// TODO: this function only exists to test that we are able to connect to the primary database node via its FQDN
-		// This function (and everything related to service discovery) will be removed upon verifying the registry can
-		// establish a connection directly to the primary database node FQDN
-		go func() {
-			// reuse existing service discovery config to obtain the primary database node FQDN
-			if config.Database.Discovery.PrimaryRecord == "" {
-				return
-			}
-
-			sd := config.Database.Discovery
-			db, err := datastore.Open(&datastore.DSN{
-				Host:           sd.PrimaryRecord,
-				Port:           config.Database.Port,
-				User:           config.Database.User,
-				Password:       config.Database.Password,
-				DBName:         config.Database.DBName,
-				SSLMode:        config.Database.SSLMode,
-				SSLCert:        config.Database.SSLCert,
-				SSLKey:         config.Database.SSLKey,
-				SSLRootCert:    config.Database.SSLRootCert,
-				ConnectTimeout: config.Database.ConnectTimeout,
-			})
-			defer db.Close()
-			if err != nil {
-				log.WithError(err).Error("failed to open connection to primary database node")
-				return
-			}
-
-			err = db.Ping()
-			if err != nil {
-				log.WithError(err).Error("failed to ping primary database node")
-				return
-			}
-
-			log.Info("successfully connected to primary database node")
-		}()
-
 		db, err := datastore.Open(&datastore.DSN{
 			Host:           config.Database.Host,
 			Port:           config.Database.Port,
