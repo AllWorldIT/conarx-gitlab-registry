@@ -38,7 +38,7 @@ require (
 	github.com/spf13/viper v1.17.0
 	github.com/stretchr/testify v1.8.4
 	github.com/trim21/go-redis-prometheus v0.0.0
-	github.com/vmihailenco/msgpack/v5 v5.3.5
+	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/xanzy/go-gitlab v0.92.3
 	gitlab.com/gitlab-org/labkit v1.20.0
 	go.uber.org/automaxprocs v1.5.3
