@@ -1,3 +1,22 @@
+## [3.86.2](https://gitlab.com/gitlab-org/container-registry/compare/v3.86.1-gitlab...v3.86.2-gitlab) (2023-11-14)
+
+
+### 🐛 Bug Fixes 🐛
+
+* **handlers:** race condition pushing manifest lists with the same digest ([57dcae0](https://gitlab.com/gitlab-org/container-registry/commit/57dcae059c6a80e572b8d96cd001b371d579d3c9))
+
+
+### ⏮️️ Reverts ⏮️️
+
+* **database:** use service discovery for primary address ([ce1b374](https://gitlab.com/gitlab-org/container-registry/commit/ce1b374ddcdbe05993a7cfa7e45fd9475ac50de9))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.35.1 ([49d315a](https://gitlab.com/gitlab-org/container-registry/commit/49d315a74db3720fc7e4c4c6251b7d5d5c3ff9a9))
+* **deps:** update module github.com/gorilla/handlers to v1.5.2 ([6158b6b](https://gitlab.com/gitlab-org/container-registry/commit/6158b6b428360439a7f5e4741ebceac19b4de400))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.3.0 ([bab8af8](https://gitlab.com/gitlab-org/container-registry/commit/bab8af8314b4c37a073d57c234f34f2a4a9bac3d))
+
 ## [3.86.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.86.0-gitlab...v3.86.1-gitlab) (2023-11-08)
 
 
