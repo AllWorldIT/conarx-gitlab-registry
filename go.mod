@@ -34,7 +34,7 @@ require (
 	github.com/redis/go-redis/v9 v9.3.0
 	github.com/rubenv/sql-migrate v1.5.2
 	github.com/sirupsen/logrus v1.9.3
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.17.0
 	github.com/stretchr/testify v1.8.4
 	github.com/trim21/go-redis-prometheus v0.0.0
