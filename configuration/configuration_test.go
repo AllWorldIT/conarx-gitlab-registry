@@ -65,6 +65,7 @@ var configStruct = Configuration{
 		Password: "",
 		DBName:   "registry",
 		SSLMode:  "disable",
+		Primary:  "primary.record.fqdn",
 	},
 	Auth: Auth{
 		"silly": Parameters{
@@ -160,6 +161,7 @@ database:
   dbname: registry
   schema: public
   sslmode: disable
+  primary: primary.record.fqdn
 auth:
   silly:
     realm: silly
@@ -623,6 +625,7 @@ func (suite *ConfigSuite) TestParseWithDifferentEnvDatabase(c *C) {
 		Password: "passwd",
 		DBName:   "foo",
 		SSLMode:  "allow",
+		Primary:  "primary.record.fqdn",
 	}
 	suite.expectedConfig.Database = expected
 

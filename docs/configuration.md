@@ -175,6 +175,7 @@ database:
   connecttimeout: 5s
   draintimeout: 2m
   preparedstatements: false
+  primary: primary.record.fqdn
   pool:
     maxidle: 25
     maxopen: 25
@@ -636,6 +637,7 @@ database:
   connecttimeout: 5s
   draintimeout: 2m
   preparedstatements: false
+  primary: primary.record.fqdn
   pool:
     maxidle: 25
     maxopen: 25
@@ -656,7 +658,8 @@ database:
 | `sslrootcert`  | no       | The PEM encoded root certificate file path. |
 | `connecttimeout`  | no       | Maximum time to wait for a connection. Zero or not specified means waiting indefinitely. |
 | `draintimeout`    | no       | Maximum time to wait to drain all connections on shutdown. Zero or not specified means waiting indefinitely. |
-| `preparedstatements`  | no       | When set to `true`, prepared statements may be used. Defaults to `false` for compatibility with PgBouncer.
+| `preparedstatements`  | no       | When set to `true`, prepared statements may be used. Defaults to `false` for compatibility with PgBouncer. |
+| `primary`  | no       | The database server hostname to target for schema migrations. Useful for high availability PostgreSQL deployments, where connecting to the primary server directly is required to avoid timeouts while executing long-running schema migrations. Should be set to the primary PostgreSQL server hostname. Defaults to `database.host`. |
 
 ### `pool`
 
