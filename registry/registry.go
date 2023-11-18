@@ -655,3 +655,14 @@ func dbFromConfig(config *configuration.Configuration) (*datastore.DB, error) {
 		datastore.WithPreparedStatements(config.Database.PreparedStatements),
 	)
 }
+
+func dbFromPrimary(config *configuration.Configuration) (*datastore.DB, error) {
+	// deep copy the config object so we don't mistakenly modify the pointer
+	primaryConfig := *config
+
+	if config.Database.Primary != "" {
+		primaryConfig.Database.Host = config.Database.Primary
+		log.WithFields(log.Fields{"host": config.Database.Primary}).Info("database connection to primary host")
+	}
+	return dbFromConfig(&primaryConfig)
+}

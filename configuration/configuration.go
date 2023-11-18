@@ -429,6 +429,8 @@ type Database struct {
 	DrainTimeout time.Duration `yaml:"draintimeout,omitempty"`
 	// PreparedStatements can be used to enable prepared statements. Defaults to false.
 	PreparedStatements bool `yaml:"preparedstatements,omitempty"`
+	// Primary is the primary database server's hostname
+	Primary string `yaml:"primary,omitempty"`
 }
 
 // Regexp wraps regexp.Regexp to implement the encoding.TextMarshaler interface.
