@@ -35,7 +35,7 @@ if ! command -v pg_dump &> /dev/null; then
 fi
 PG_DUMP_CURRENT_MAJOR_VERSION="$(pg_dump --version | cut -d' ' -f3 | cut -d. -f1)"
 if [[ $PG_DUMP_CURRENT_MAJOR_VERSION != "$PG_CLIENT_REQUIRED_MAJOR_VERSION" ]]; then
-  echo "The pg_dump major version is ${CURRENT_MAJOR_VERSION}, but ${PG_CLIENT_REQUIRED_MAJOR_VERSION} is required."
+  echo "The pg_dump major version is ${PG_DUMP_CURRENT_MAJOR_VERSION}, but ${PG_CLIENT_REQUIRED_MAJOR_VERSION} is required."
   exit 1
 fi
 
