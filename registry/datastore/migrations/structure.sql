@@ -210,18 +210,12 @@ CREATE TABLE partitions.blobs_p_0 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_0
-FOR VALUES WITH (MODULUS 64, REMAINDER 0);
-
 CREATE TABLE partitions.blobs_p_1 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_1
-FOR VALUES WITH (MODULUS 64, REMAINDER 1);
 
 CREATE TABLE partitions.blobs_p_10 (
     size bigint NOT NULL,
@@ -230,18 +224,12 @@ CREATE TABLE partitions.blobs_p_10 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_10
-FOR VALUES WITH (MODULUS 64, REMAINDER 10);
-
 CREATE TABLE partitions.blobs_p_11 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_11
-FOR VALUES WITH (MODULUS 64, REMAINDER 11);
 
 CREATE TABLE partitions.blobs_p_12 (
     size bigint NOT NULL,
@@ -250,18 +238,12 @@ CREATE TABLE partitions.blobs_p_12 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_12
-FOR VALUES WITH (MODULUS 64, REMAINDER 12);
-
 CREATE TABLE partitions.blobs_p_13 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_13
-FOR VALUES WITH (MODULUS 64, REMAINDER 13);
 
 CREATE TABLE partitions.blobs_p_14 (
     size bigint NOT NULL,
@@ -270,18 +252,12 @@ CREATE TABLE partitions.blobs_p_14 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_14
-FOR VALUES WITH (MODULUS 64, REMAINDER 14);
-
 CREATE TABLE partitions.blobs_p_15 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_15
-FOR VALUES WITH (MODULUS 64, REMAINDER 15);
 
 CREATE TABLE partitions.blobs_p_16 (
     size bigint NOT NULL,
@@ -290,18 +266,12 @@ CREATE TABLE partitions.blobs_p_16 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_16
-FOR VALUES WITH (MODULUS 64, REMAINDER 16);
-
 CREATE TABLE partitions.blobs_p_17 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_17
-FOR VALUES WITH (MODULUS 64, REMAINDER 17);
 
 CREATE TABLE partitions.blobs_p_18 (
     size bigint NOT NULL,
@@ -310,18 +280,12 @@ CREATE TABLE partitions.blobs_p_18 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_18
-FOR VALUES WITH (MODULUS 64, REMAINDER 18);
-
 CREATE TABLE partitions.blobs_p_19 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_19
-FOR VALUES WITH (MODULUS 64, REMAINDER 19);
 
 CREATE TABLE partitions.blobs_p_2 (
     size bigint NOT NULL,
@@ -330,18 +294,12 @@ CREATE TABLE partitions.blobs_p_2 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_2
-FOR VALUES WITH (MODULUS 64, REMAINDER 2);
-
 CREATE TABLE partitions.blobs_p_20 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_20
-FOR VALUES WITH (MODULUS 64, REMAINDER 20);
 
 CREATE TABLE partitions.blobs_p_21 (
     size bigint NOT NULL,
@@ -350,18 +308,12 @@ CREATE TABLE partitions.blobs_p_21 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_21
-FOR VALUES WITH (MODULUS 64, REMAINDER 21);
-
 CREATE TABLE partitions.blobs_p_22 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_22
-FOR VALUES WITH (MODULUS 64, REMAINDER 22);
 
 CREATE TABLE partitions.blobs_p_23 (
     size bigint NOT NULL,
@@ -370,18 +322,12 @@ CREATE TABLE partitions.blobs_p_23 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_23
-FOR VALUES WITH (MODULUS 64, REMAINDER 23);
-
 CREATE TABLE partitions.blobs_p_24 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_24
-FOR VALUES WITH (MODULUS 64, REMAINDER 24);
 
 CREATE TABLE partitions.blobs_p_25 (
     size bigint NOT NULL,
@@ -390,18 +336,12 @@ CREATE TABLE partitions.blobs_p_25 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_25
-FOR VALUES WITH (MODULUS 64, REMAINDER 25);
-
 CREATE TABLE partitions.blobs_p_26 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_26
-FOR VALUES WITH (MODULUS 64, REMAINDER 26);
 
 CREATE TABLE partitions.blobs_p_27 (
     size bigint NOT NULL,
@@ -410,18 +350,12 @@ CREATE TABLE partitions.blobs_p_27 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_27
-FOR VALUES WITH (MODULUS 64, REMAINDER 27);
-
 CREATE TABLE partitions.blobs_p_28 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_28
-FOR VALUES WITH (MODULUS 64, REMAINDER 28);
 
 CREATE TABLE partitions.blobs_p_29 (
     size bigint NOT NULL,
@@ -430,18 +364,12 @@ CREATE TABLE partitions.blobs_p_29 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_29
-FOR VALUES WITH (MODULUS 64, REMAINDER 29);
-
 CREATE TABLE partitions.blobs_p_3 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_3
-FOR VALUES WITH (MODULUS 64, REMAINDER 3);
 
 CREATE TABLE partitions.blobs_p_30 (
     size bigint NOT NULL,
@@ -450,18 +378,12 @@ CREATE TABLE partitions.blobs_p_30 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_30
-FOR VALUES WITH (MODULUS 64, REMAINDER 30);
-
 CREATE TABLE partitions.blobs_p_31 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_31
-FOR VALUES WITH (MODULUS 64, REMAINDER 31);
 
 CREATE TABLE partitions.blobs_p_32 (
     size bigint NOT NULL,
@@ -470,18 +392,12 @@ CREATE TABLE partitions.blobs_p_32 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_32
-FOR VALUES WITH (MODULUS 64, REMAINDER 32);
-
 CREATE TABLE partitions.blobs_p_33 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_33
-FOR VALUES WITH (MODULUS 64, REMAINDER 33);
 
 CREATE TABLE partitions.blobs_p_34 (
     size bigint NOT NULL,
@@ -490,18 +406,12 @@ CREATE TABLE partitions.blobs_p_34 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_34
-FOR VALUES WITH (MODULUS 64, REMAINDER 34);
-
 CREATE TABLE partitions.blobs_p_35 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_35
-FOR VALUES WITH (MODULUS 64, REMAINDER 35);
 
 CREATE TABLE partitions.blobs_p_36 (
     size bigint NOT NULL,
@@ -510,18 +420,12 @@ CREATE TABLE partitions.blobs_p_36 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_36
-FOR VALUES WITH (MODULUS 64, REMAINDER 36);
-
 CREATE TABLE partitions.blobs_p_37 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_37
-FOR VALUES WITH (MODULUS 64, REMAINDER 37);
 
 CREATE TABLE partitions.blobs_p_38 (
     size bigint NOT NULL,
@@ -530,18 +434,12 @@ CREATE TABLE partitions.blobs_p_38 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_38
-FOR VALUES WITH (MODULUS 64, REMAINDER 38);
-
 CREATE TABLE partitions.blobs_p_39 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_39
-FOR VALUES WITH (MODULUS 64, REMAINDER 39);
 
 CREATE TABLE partitions.blobs_p_4 (
     size bigint NOT NULL,
@@ -550,18 +448,12 @@ CREATE TABLE partitions.blobs_p_4 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_4
-FOR VALUES WITH (MODULUS 64, REMAINDER 4);
-
 CREATE TABLE partitions.blobs_p_40 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_40
-FOR VALUES WITH (MODULUS 64, REMAINDER 40);
 
 CREATE TABLE partitions.blobs_p_41 (
     size bigint NOT NULL,
@@ -570,18 +462,12 @@ CREATE TABLE partitions.blobs_p_41 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_41
-FOR VALUES WITH (MODULUS 64, REMAINDER 41);
-
 CREATE TABLE partitions.blobs_p_42 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_42
-FOR VALUES WITH (MODULUS 64, REMAINDER 42);
 
 CREATE TABLE partitions.blobs_p_43 (
     size bigint NOT NULL,
@@ -590,18 +476,12 @@ CREATE TABLE partitions.blobs_p_43 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_43
-FOR VALUES WITH (MODULUS 64, REMAINDER 43);
-
 CREATE TABLE partitions.blobs_p_44 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_44
-FOR VALUES WITH (MODULUS 64, REMAINDER 44);
 
 CREATE TABLE partitions.blobs_p_45 (
     size bigint NOT NULL,
@@ -610,18 +490,12 @@ CREATE TABLE partitions.blobs_p_45 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_45
-FOR VALUES WITH (MODULUS 64, REMAINDER 45);
-
 CREATE TABLE partitions.blobs_p_46 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_46
-FOR VALUES WITH (MODULUS 64, REMAINDER 46);
 
 CREATE TABLE partitions.blobs_p_47 (
     size bigint NOT NULL,
@@ -630,18 +504,12 @@ CREATE TABLE partitions.blobs_p_47 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_47
-FOR VALUES WITH (MODULUS 64, REMAINDER 47);
-
 CREATE TABLE partitions.blobs_p_48 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_48
-FOR VALUES WITH (MODULUS 64, REMAINDER 48);
 
 CREATE TABLE partitions.blobs_p_49 (
     size bigint NOT NULL,
@@ -650,18 +518,12 @@ CREATE TABLE partitions.blobs_p_49 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_49
-FOR VALUES WITH (MODULUS 64, REMAINDER 49);
-
 CREATE TABLE partitions.blobs_p_5 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_5
-FOR VALUES WITH (MODULUS 64, REMAINDER 5);
 
 CREATE TABLE partitions.blobs_p_50 (
     size bigint NOT NULL,
@@ -670,18 +532,12 @@ CREATE TABLE partitions.blobs_p_50 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_50
-FOR VALUES WITH (MODULUS 64, REMAINDER 50);
-
 CREATE TABLE partitions.blobs_p_51 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_51
-FOR VALUES WITH (MODULUS 64, REMAINDER 51);
 
 CREATE TABLE partitions.blobs_p_52 (
     size bigint NOT NULL,
@@ -690,18 +546,12 @@ CREATE TABLE partitions.blobs_p_52 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_52
-FOR VALUES WITH (MODULUS 64, REMAINDER 52);
-
 CREATE TABLE partitions.blobs_p_53 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_53
-FOR VALUES WITH (MODULUS 64, REMAINDER 53);
 
 CREATE TABLE partitions.blobs_p_54 (
     size bigint NOT NULL,
@@ -710,18 +560,12 @@ CREATE TABLE partitions.blobs_p_54 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_54
-FOR VALUES WITH (MODULUS 64, REMAINDER 54);
-
 CREATE TABLE partitions.blobs_p_55 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_55
-FOR VALUES WITH (MODULUS 64, REMAINDER 55);
 
 CREATE TABLE partitions.blobs_p_56 (
     size bigint NOT NULL,
@@ -730,18 +574,12 @@ CREATE TABLE partitions.blobs_p_56 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_56
-FOR VALUES WITH (MODULUS 64, REMAINDER 56);
-
 CREATE TABLE partitions.blobs_p_57 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_57
-FOR VALUES WITH (MODULUS 64, REMAINDER 57);
 
 CREATE TABLE partitions.blobs_p_58 (
     size bigint NOT NULL,
@@ -750,18 +588,12 @@ CREATE TABLE partitions.blobs_p_58 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_58
-FOR VALUES WITH (MODULUS 64, REMAINDER 58);
-
 CREATE TABLE partitions.blobs_p_59 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_59
-FOR VALUES WITH (MODULUS 64, REMAINDER 59);
 
 CREATE TABLE partitions.blobs_p_6 (
     size bigint NOT NULL,
@@ -770,18 +602,12 @@ CREATE TABLE partitions.blobs_p_6 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_6
-FOR VALUES WITH (MODULUS 64, REMAINDER 6);
-
 CREATE TABLE partitions.blobs_p_60 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_60
-FOR VALUES WITH (MODULUS 64, REMAINDER 60);
 
 CREATE TABLE partitions.blobs_p_61 (
     size bigint NOT NULL,
@@ -790,18 +616,12 @@ CREATE TABLE partitions.blobs_p_61 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_61
-FOR VALUES WITH (MODULUS 64, REMAINDER 61);
-
 CREATE TABLE partitions.blobs_p_62 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_62
-FOR VALUES WITH (MODULUS 64, REMAINDER 62);
 
 CREATE TABLE partitions.blobs_p_63 (
     size bigint NOT NULL,
@@ -810,18 +630,12 @@ CREATE TABLE partitions.blobs_p_63 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_63
-FOR VALUES WITH (MODULUS 64, REMAINDER 63);
-
 CREATE TABLE partitions.blobs_p_7 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_7
-FOR VALUES WITH (MODULUS 64, REMAINDER 7);
 
 CREATE TABLE partitions.blobs_p_8 (
     size bigint NOT NULL,
@@ -830,18 +644,12 @@ CREATE TABLE partitions.blobs_p_8 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_8
-FOR VALUES WITH (MODULUS 64, REMAINDER 8);
-
 CREATE TABLE partitions.blobs_p_9 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_9
-FOR VALUES WITH (MODULUS 64, REMAINDER 9);
 
 CREATE TABLE public.gc_blobs_configurations (
     id bigint NOT NULL,
@@ -860,9 +668,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_0 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_0
-FOR VALUES WITH (MODULUS 64, REMAINDER 0);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_1 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -870,9 +675,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_1 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_1
-FOR VALUES WITH (MODULUS 64, REMAINDER 1);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_10 (
     id bigint NOT NULL,
@@ -882,9 +684,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_10 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_10
-FOR VALUES WITH (MODULUS 64, REMAINDER 10);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_11 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -892,9 +691,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_11 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_11
-FOR VALUES WITH (MODULUS 64, REMAINDER 11);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_12 (
     id bigint NOT NULL,
@@ -904,9 +700,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_12 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_12
-FOR VALUES WITH (MODULUS 64, REMAINDER 12);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_13 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -914,9 +707,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_13 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_13
-FOR VALUES WITH (MODULUS 64, REMAINDER 13);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_14 (
     id bigint NOT NULL,
@@ -926,9 +716,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_14 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_14
-FOR VALUES WITH (MODULUS 64, REMAINDER 14);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_15 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -936,9 +723,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_15 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_15
-FOR VALUES WITH (MODULUS 64, REMAINDER 15);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_16 (
     id bigint NOT NULL,
@@ -948,9 +732,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_16 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_16
-FOR VALUES WITH (MODULUS 64, REMAINDER 16);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_17 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -958,9 +739,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_17 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_17
-FOR VALUES WITH (MODULUS 64, REMAINDER 17);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_18 (
     id bigint NOT NULL,
@@ -970,9 +748,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_18 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_18
-FOR VALUES WITH (MODULUS 64, REMAINDER 18);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_19 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -980,9 +755,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_19 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_19
-FOR VALUES WITH (MODULUS 64, REMAINDER 19);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_2 (
     id bigint NOT NULL,
@@ -992,9 +764,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_2 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_2
-FOR VALUES WITH (MODULUS 64, REMAINDER 2);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_20 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1002,9 +771,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_20 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_20
-FOR VALUES WITH (MODULUS 64, REMAINDER 20);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_21 (
     id bigint NOT NULL,
@@ -1014,9 +780,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_21 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_21
-FOR VALUES WITH (MODULUS 64, REMAINDER 21);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_22 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1024,9 +787,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_22 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_22
-FOR VALUES WITH (MODULUS 64, REMAINDER 22);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_23 (
     id bigint NOT NULL,
@@ -1036,9 +796,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_23 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_23
-FOR VALUES WITH (MODULUS 64, REMAINDER 23);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_24 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1046,9 +803,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_24 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_24
-FOR VALUES WITH (MODULUS 64, REMAINDER 24);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_25 (
     id bigint NOT NULL,
@@ -1058,9 +812,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_25 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_25
-FOR VALUES WITH (MODULUS 64, REMAINDER 25);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_26 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1068,9 +819,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_26 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_26
-FOR VALUES WITH (MODULUS 64, REMAINDER 26);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_27 (
     id bigint NOT NULL,
@@ -1080,9 +828,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_27 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_27
-FOR VALUES WITH (MODULUS 64, REMAINDER 27);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_28 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1090,9 +835,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_28 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_28
-FOR VALUES WITH (MODULUS 64, REMAINDER 28);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_29 (
     id bigint NOT NULL,
@@ -1102,9 +844,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_29 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_29
-FOR VALUES WITH (MODULUS 64, REMAINDER 29);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_3 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1112,9 +851,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_3 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_3
-FOR VALUES WITH (MODULUS 64, REMAINDER 3);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_30 (
     id bigint NOT NULL,
@@ -1124,9 +860,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_30 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_30
-FOR VALUES WITH (MODULUS 64, REMAINDER 30);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_31 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1134,9 +867,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_31 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_31
-FOR VALUES WITH (MODULUS 64, REMAINDER 31);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_32 (
     id bigint NOT NULL,
@@ -1146,9 +876,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_32 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_32
-FOR VALUES WITH (MODULUS 64, REMAINDER 32);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_33 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1156,9 +883,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_33 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_33
-FOR VALUES WITH (MODULUS 64, REMAINDER 33);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_34 (
     id bigint NOT NULL,
@@ -1168,9 +892,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_34 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_34
-FOR VALUES WITH (MODULUS 64, REMAINDER 34);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_35 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1178,9 +899,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_35 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_35
-FOR VALUES WITH (MODULUS 64, REMAINDER 35);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_36 (
     id bigint NOT NULL,
@@ -1190,9 +908,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_36 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_36
-FOR VALUES WITH (MODULUS 64, REMAINDER 36);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_37 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1200,9 +915,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_37 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_37
-FOR VALUES WITH (MODULUS 64, REMAINDER 37);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_38 (
     id bigint NOT NULL,
@@ -1212,9 +924,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_38 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_38
-FOR VALUES WITH (MODULUS 64, REMAINDER 38);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_39 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1222,9 +931,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_39 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_39
-FOR VALUES WITH (MODULUS 64, REMAINDER 39);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_4 (
     id bigint NOT NULL,
@@ -1234,9 +940,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_4 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_4
-FOR VALUES WITH (MODULUS 64, REMAINDER 4);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_40 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1244,9 +947,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_40 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_40
-FOR VALUES WITH (MODULUS 64, REMAINDER 40);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_41 (
     id bigint NOT NULL,
@@ -1256,9 +956,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_41 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_41
-FOR VALUES WITH (MODULUS 64, REMAINDER 41);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_42 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1266,9 +963,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_42 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_42
-FOR VALUES WITH (MODULUS 64, REMAINDER 42);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_43 (
     id bigint NOT NULL,
@@ -1278,9 +972,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_43 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_43
-FOR VALUES WITH (MODULUS 64, REMAINDER 43);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_44 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1288,9 +979,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_44 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_44
-FOR VALUES WITH (MODULUS 64, REMAINDER 44);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_45 (
     id bigint NOT NULL,
@@ -1300,9 +988,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_45 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_45
-FOR VALUES WITH (MODULUS 64, REMAINDER 45);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_46 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1310,9 +995,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_46 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_46
-FOR VALUES WITH (MODULUS 64, REMAINDER 46);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_47 (
     id bigint NOT NULL,
@@ -1322,9 +1004,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_47 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_47
-FOR VALUES WITH (MODULUS 64, REMAINDER 47);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_48 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1332,9 +1011,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_48 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_48
-FOR VALUES WITH (MODULUS 64, REMAINDER 48);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_49 (
     id bigint NOT NULL,
@@ -1344,9 +1020,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_49 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_49
-FOR VALUES WITH (MODULUS 64, REMAINDER 49);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_5 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1354,9 +1027,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_5 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_5
-FOR VALUES WITH (MODULUS 64, REMAINDER 5);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_50 (
     id bigint NOT NULL,
@@ -1366,9 +1036,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_50 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_50
-FOR VALUES WITH (MODULUS 64, REMAINDER 50);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_51 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1376,9 +1043,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_51 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_51
-FOR VALUES WITH (MODULUS 64, REMAINDER 51);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_52 (
     id bigint NOT NULL,
@@ -1388,9 +1052,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_52 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_52
-FOR VALUES WITH (MODULUS 64, REMAINDER 52);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_53 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1398,9 +1059,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_53 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_53
-FOR VALUES WITH (MODULUS 64, REMAINDER 53);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_54 (
     id bigint NOT NULL,
@@ -1410,9 +1068,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_54 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_54
-FOR VALUES WITH (MODULUS 64, REMAINDER 54);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_55 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1420,9 +1075,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_55 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_55
-FOR VALUES WITH (MODULUS 64, REMAINDER 55);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_56 (
     id bigint NOT NULL,
@@ -1432,9 +1084,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_56 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_56
-FOR VALUES WITH (MODULUS 64, REMAINDER 56);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_57 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1442,9 +1091,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_57 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_57
-FOR VALUES WITH (MODULUS 64, REMAINDER 57);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_58 (
     id bigint NOT NULL,
@@ -1454,9 +1100,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_58 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_58
-FOR VALUES WITH (MODULUS 64, REMAINDER 58);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_59 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1464,9 +1107,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_59 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_59
-FOR VALUES WITH (MODULUS 64, REMAINDER 59);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_6 (
     id bigint NOT NULL,
@@ -1476,9 +1116,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_6 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_6
-FOR VALUES WITH (MODULUS 64, REMAINDER 6);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_60 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1486,9 +1123,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_60 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_60
-FOR VALUES WITH (MODULUS 64, REMAINDER 60);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_61 (
     id bigint NOT NULL,
@@ -1498,9 +1132,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_61 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_61
-FOR VALUES WITH (MODULUS 64, REMAINDER 61);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_62 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1508,9 +1139,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_62 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_62
-FOR VALUES WITH (MODULUS 64, REMAINDER 62);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_63 (
     id bigint NOT NULL,
@@ -1520,9 +1148,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_63 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_63
-FOR VALUES WITH (MODULUS 64, REMAINDER 63);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_7 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1530,9 +1155,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_7 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_7
-FOR VALUES WITH (MODULUS 64, REMAINDER 7);
 
 CREATE TABLE partitions.gc_blobs_configurations_p_8 (
     id bigint NOT NULL,
@@ -1542,9 +1164,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_8 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_8
-FOR VALUES WITH (MODULUS 64, REMAINDER 8);
-
 CREATE TABLE partitions.gc_blobs_configurations_p_9 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1552,9 +1171,6 @@ CREATE TABLE partitions.gc_blobs_configurations_p_9 (
     manifest_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_9
-FOR VALUES WITH (MODULUS 64, REMAINDER 9);
 
 CREATE TABLE public.gc_blobs_layers (
     id bigint NOT NULL,
@@ -1573,9 +1189,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_0 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_0
-FOR VALUES WITH (MODULUS 64, REMAINDER 0);
-
 CREATE TABLE partitions.gc_blobs_layers_p_1 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1583,9 +1196,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_1 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_1
-FOR VALUES WITH (MODULUS 64, REMAINDER 1);
 
 CREATE TABLE partitions.gc_blobs_layers_p_10 (
     id bigint NOT NULL,
@@ -1595,9 +1205,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_10 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_10
-FOR VALUES WITH (MODULUS 64, REMAINDER 10);
-
 CREATE TABLE partitions.gc_blobs_layers_p_11 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1605,9 +1212,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_11 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_11
-FOR VALUES WITH (MODULUS 64, REMAINDER 11);
 
 CREATE TABLE partitions.gc_blobs_layers_p_12 (
     id bigint NOT NULL,
@@ -1617,9 +1221,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_12 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_12
-FOR VALUES WITH (MODULUS 64, REMAINDER 12);
-
 CREATE TABLE partitions.gc_blobs_layers_p_13 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1627,9 +1228,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_13 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_13
-FOR VALUES WITH (MODULUS 64, REMAINDER 13);
 
 CREATE TABLE partitions.gc_blobs_layers_p_14 (
     id bigint NOT NULL,
@@ -1639,9 +1237,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_14 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_14
-FOR VALUES WITH (MODULUS 64, REMAINDER 14);
-
 CREATE TABLE partitions.gc_blobs_layers_p_15 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1649,9 +1244,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_15 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_15
-FOR VALUES WITH (MODULUS 64, REMAINDER 15);
 
 CREATE TABLE partitions.gc_blobs_layers_p_16 (
     id bigint NOT NULL,
@@ -1661,9 +1253,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_16 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_16
-FOR VALUES WITH (MODULUS 64, REMAINDER 16);
-
 CREATE TABLE partitions.gc_blobs_layers_p_17 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1671,9 +1260,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_17 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_17
-FOR VALUES WITH (MODULUS 64, REMAINDER 17);
 
 CREATE TABLE partitions.gc_blobs_layers_p_18 (
     id bigint NOT NULL,
@@ -1683,9 +1269,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_18 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_18
-FOR VALUES WITH (MODULUS 64, REMAINDER 18);
-
 CREATE TABLE partitions.gc_blobs_layers_p_19 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1693,9 +1276,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_19 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_19
-FOR VALUES WITH (MODULUS 64, REMAINDER 19);
 
 CREATE TABLE partitions.gc_blobs_layers_p_2 (
     id bigint NOT NULL,
@@ -1705,9 +1285,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_2 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_2
-FOR VALUES WITH (MODULUS 64, REMAINDER 2);
-
 CREATE TABLE partitions.gc_blobs_layers_p_20 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1715,9 +1292,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_20 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_20
-FOR VALUES WITH (MODULUS 64, REMAINDER 20);
 
 CREATE TABLE partitions.gc_blobs_layers_p_21 (
     id bigint NOT NULL,
@@ -1727,9 +1301,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_21 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_21
-FOR VALUES WITH (MODULUS 64, REMAINDER 21);
-
 CREATE TABLE partitions.gc_blobs_layers_p_22 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1737,9 +1308,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_22 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_22
-FOR VALUES WITH (MODULUS 64, REMAINDER 22);
 
 CREATE TABLE partitions.gc_blobs_layers_p_23 (
     id bigint NOT NULL,
@@ -1749,9 +1317,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_23 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_23
-FOR VALUES WITH (MODULUS 64, REMAINDER 23);
-
 CREATE TABLE partitions.gc_blobs_layers_p_24 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1759,9 +1324,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_24 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_24
-FOR VALUES WITH (MODULUS 64, REMAINDER 24);
 
 CREATE TABLE partitions.gc_blobs_layers_p_25 (
     id bigint NOT NULL,
@@ -1771,9 +1333,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_25 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_25
-FOR VALUES WITH (MODULUS 64, REMAINDER 25);
-
 CREATE TABLE partitions.gc_blobs_layers_p_26 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1781,9 +1340,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_26 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_26
-FOR VALUES WITH (MODULUS 64, REMAINDER 26);
 
 CREATE TABLE partitions.gc_blobs_layers_p_27 (
     id bigint NOT NULL,
@@ -1793,9 +1349,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_27 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_27
-FOR VALUES WITH (MODULUS 64, REMAINDER 27);
-
 CREATE TABLE partitions.gc_blobs_layers_p_28 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1803,9 +1356,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_28 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_28
-FOR VALUES WITH (MODULUS 64, REMAINDER 28);
 
 CREATE TABLE partitions.gc_blobs_layers_p_29 (
     id bigint NOT NULL,
@@ -1815,9 +1365,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_29 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_29
-FOR VALUES WITH (MODULUS 64, REMAINDER 29);
-
 CREATE TABLE partitions.gc_blobs_layers_p_3 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1825,9 +1372,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_3 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_3
-FOR VALUES WITH (MODULUS 64, REMAINDER 3);
 
 CREATE TABLE partitions.gc_blobs_layers_p_30 (
     id bigint NOT NULL,
@@ -1837,9 +1381,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_30 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_30
-FOR VALUES WITH (MODULUS 64, REMAINDER 30);
-
 CREATE TABLE partitions.gc_blobs_layers_p_31 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1847,9 +1388,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_31 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_31
-FOR VALUES WITH (MODULUS 64, REMAINDER 31);
 
 CREATE TABLE partitions.gc_blobs_layers_p_32 (
     id bigint NOT NULL,
@@ -1859,9 +1397,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_32 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_32
-FOR VALUES WITH (MODULUS 64, REMAINDER 32);
-
 CREATE TABLE partitions.gc_blobs_layers_p_33 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1869,9 +1404,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_33 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_33
-FOR VALUES WITH (MODULUS 64, REMAINDER 33);
 
 CREATE TABLE partitions.gc_blobs_layers_p_34 (
     id bigint NOT NULL,
@@ -1881,9 +1413,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_34 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_34
-FOR VALUES WITH (MODULUS 64, REMAINDER 34);
-
 CREATE TABLE partitions.gc_blobs_layers_p_35 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1891,9 +1420,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_35 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_35
-FOR VALUES WITH (MODULUS 64, REMAINDER 35);
 
 CREATE TABLE partitions.gc_blobs_layers_p_36 (
     id bigint NOT NULL,
@@ -1903,9 +1429,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_36 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_36
-FOR VALUES WITH (MODULUS 64, REMAINDER 36);
-
 CREATE TABLE partitions.gc_blobs_layers_p_37 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1913,9 +1436,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_37 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_37
-FOR VALUES WITH (MODULUS 64, REMAINDER 37);
 
 CREATE TABLE partitions.gc_blobs_layers_p_38 (
     id bigint NOT NULL,
@@ -1925,9 +1445,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_38 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_38
-FOR VALUES WITH (MODULUS 64, REMAINDER 38);
-
 CREATE TABLE partitions.gc_blobs_layers_p_39 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1935,9 +1452,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_39 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_39
-FOR VALUES WITH (MODULUS 64, REMAINDER 39);
 
 CREATE TABLE partitions.gc_blobs_layers_p_4 (
     id bigint NOT NULL,
@@ -1947,9 +1461,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_4 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_4
-FOR VALUES WITH (MODULUS 64, REMAINDER 4);
-
 CREATE TABLE partitions.gc_blobs_layers_p_40 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1957,9 +1468,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_40 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_40
-FOR VALUES WITH (MODULUS 64, REMAINDER 40);
 
 CREATE TABLE partitions.gc_blobs_layers_p_41 (
     id bigint NOT NULL,
@@ -1969,9 +1477,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_41 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_41
-FOR VALUES WITH (MODULUS 64, REMAINDER 41);
-
 CREATE TABLE partitions.gc_blobs_layers_p_42 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -1979,9 +1484,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_42 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_42
-FOR VALUES WITH (MODULUS 64, REMAINDER 42);
 
 CREATE TABLE partitions.gc_blobs_layers_p_43 (
     id bigint NOT NULL,
@@ -1991,9 +1493,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_43 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_43
-FOR VALUES WITH (MODULUS 64, REMAINDER 43);
-
 CREATE TABLE partitions.gc_blobs_layers_p_44 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2001,9 +1500,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_44 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_44
-FOR VALUES WITH (MODULUS 64, REMAINDER 44);
 
 CREATE TABLE partitions.gc_blobs_layers_p_45 (
     id bigint NOT NULL,
@@ -2013,9 +1509,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_45 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_45
-FOR VALUES WITH (MODULUS 64, REMAINDER 45);
-
 CREATE TABLE partitions.gc_blobs_layers_p_46 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2023,9 +1516,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_46 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_46
-FOR VALUES WITH (MODULUS 64, REMAINDER 46);
 
 CREATE TABLE partitions.gc_blobs_layers_p_47 (
     id bigint NOT NULL,
@@ -2035,9 +1525,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_47 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_47
-FOR VALUES WITH (MODULUS 64, REMAINDER 47);
-
 CREATE TABLE partitions.gc_blobs_layers_p_48 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2045,9 +1532,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_48 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_48
-FOR VALUES WITH (MODULUS 64, REMAINDER 48);
 
 CREATE TABLE partitions.gc_blobs_layers_p_49 (
     id bigint NOT NULL,
@@ -2057,9 +1541,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_49 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_49
-FOR VALUES WITH (MODULUS 64, REMAINDER 49);
-
 CREATE TABLE partitions.gc_blobs_layers_p_5 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2067,9 +1548,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_5 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_5
-FOR VALUES WITH (MODULUS 64, REMAINDER 5);
 
 CREATE TABLE partitions.gc_blobs_layers_p_50 (
     id bigint NOT NULL,
@@ -2079,9 +1557,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_50 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_50
-FOR VALUES WITH (MODULUS 64, REMAINDER 50);
-
 CREATE TABLE partitions.gc_blobs_layers_p_51 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2089,9 +1564,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_51 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_51
-FOR VALUES WITH (MODULUS 64, REMAINDER 51);
 
 CREATE TABLE partitions.gc_blobs_layers_p_52 (
     id bigint NOT NULL,
@@ -2101,9 +1573,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_52 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_52
-FOR VALUES WITH (MODULUS 64, REMAINDER 52);
-
 CREATE TABLE partitions.gc_blobs_layers_p_53 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2111,9 +1580,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_53 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_53
-FOR VALUES WITH (MODULUS 64, REMAINDER 53);
 
 CREATE TABLE partitions.gc_blobs_layers_p_54 (
     id bigint NOT NULL,
@@ -2123,9 +1589,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_54 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_54
-FOR VALUES WITH (MODULUS 64, REMAINDER 54);
-
 CREATE TABLE partitions.gc_blobs_layers_p_55 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2133,9 +1596,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_55 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_55
-FOR VALUES WITH (MODULUS 64, REMAINDER 55);
 
 CREATE TABLE partitions.gc_blobs_layers_p_56 (
     id bigint NOT NULL,
@@ -2145,9 +1605,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_56 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_56
-FOR VALUES WITH (MODULUS 64, REMAINDER 56);
-
 CREATE TABLE partitions.gc_blobs_layers_p_57 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2155,9 +1612,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_57 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_57
-FOR VALUES WITH (MODULUS 64, REMAINDER 57);
 
 CREATE TABLE partitions.gc_blobs_layers_p_58 (
     id bigint NOT NULL,
@@ -2167,9 +1621,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_58 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_58
-FOR VALUES WITH (MODULUS 64, REMAINDER 58);
-
 CREATE TABLE partitions.gc_blobs_layers_p_59 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2177,9 +1628,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_59 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_59
-FOR VALUES WITH (MODULUS 64, REMAINDER 59);
 
 CREATE TABLE partitions.gc_blobs_layers_p_6 (
     id bigint NOT NULL,
@@ -2189,9 +1637,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_6 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_6
-FOR VALUES WITH (MODULUS 64, REMAINDER 6);
-
 CREATE TABLE partitions.gc_blobs_layers_p_60 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2199,9 +1644,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_60 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_60
-FOR VALUES WITH (MODULUS 64, REMAINDER 60);
 
 CREATE TABLE partitions.gc_blobs_layers_p_61 (
     id bigint NOT NULL,
@@ -2211,9 +1653,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_61 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_61
-FOR VALUES WITH (MODULUS 64, REMAINDER 61);
-
 CREATE TABLE partitions.gc_blobs_layers_p_62 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2221,9 +1660,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_62 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_62
-FOR VALUES WITH (MODULUS 64, REMAINDER 62);
 
 CREATE TABLE partitions.gc_blobs_layers_p_63 (
     id bigint NOT NULL,
@@ -2233,9 +1669,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_63 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_63
-FOR VALUES WITH (MODULUS 64, REMAINDER 63);
-
 CREATE TABLE partitions.gc_blobs_layers_p_7 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2243,9 +1676,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_7 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_7
-FOR VALUES WITH (MODULUS 64, REMAINDER 7);
 
 CREATE TABLE partitions.gc_blobs_layers_p_8 (
     id bigint NOT NULL,
@@ -2255,9 +1685,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_8 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_8
-FOR VALUES WITH (MODULUS 64, REMAINDER 8);
-
 CREATE TABLE partitions.gc_blobs_layers_p_9 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2265,9 +1692,6 @@ CREATE TABLE partitions.gc_blobs_layers_p_9 (
     layer_id bigint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_9
-FOR VALUES WITH (MODULUS 64, REMAINDER 9);
 
 CREATE TABLE public.layers (
     id bigint NOT NULL,
@@ -2292,9 +1716,6 @@ CREATE TABLE partitions.layers_p_0 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_0
-FOR VALUES WITH (MODULUS 64, REMAINDER 0);
-
 CREATE TABLE partitions.layers_p_1 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2305,9 +1726,6 @@ CREATE TABLE partitions.layers_p_1 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_1
-FOR VALUES WITH (MODULUS 64, REMAINDER 1);
 
 CREATE TABLE partitions.layers_p_10 (
     id bigint NOT NULL,
@@ -2320,9 +1738,6 @@ CREATE TABLE partitions.layers_p_10 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_10
-FOR VALUES WITH (MODULUS 64, REMAINDER 10);
-
 CREATE TABLE partitions.layers_p_11 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2333,9 +1748,6 @@ CREATE TABLE partitions.layers_p_11 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_11
-FOR VALUES WITH (MODULUS 64, REMAINDER 11);
 
 CREATE TABLE partitions.layers_p_12 (
     id bigint NOT NULL,
@@ -2348,9 +1760,6 @@ CREATE TABLE partitions.layers_p_12 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_12
-FOR VALUES WITH (MODULUS 64, REMAINDER 12);
-
 CREATE TABLE partitions.layers_p_13 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2361,9 +1770,6 @@ CREATE TABLE partitions.layers_p_13 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_13
-FOR VALUES WITH (MODULUS 64, REMAINDER 13);
 
 CREATE TABLE partitions.layers_p_14 (
     id bigint NOT NULL,
@@ -2376,9 +1782,6 @@ CREATE TABLE partitions.layers_p_14 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_14
-FOR VALUES WITH (MODULUS 64, REMAINDER 14);
-
 CREATE TABLE partitions.layers_p_15 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2389,9 +1792,6 @@ CREATE TABLE partitions.layers_p_15 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_15
-FOR VALUES WITH (MODULUS 64, REMAINDER 15);
 
 CREATE TABLE partitions.layers_p_16 (
     id bigint NOT NULL,
@@ -2404,9 +1804,6 @@ CREATE TABLE partitions.layers_p_16 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_16
-FOR VALUES WITH (MODULUS 64, REMAINDER 16);
-
 CREATE TABLE partitions.layers_p_17 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2417,9 +1814,6 @@ CREATE TABLE partitions.layers_p_17 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_17
-FOR VALUES WITH (MODULUS 64, REMAINDER 17);
 
 CREATE TABLE partitions.layers_p_18 (
     id bigint NOT NULL,
@@ -2432,9 +1826,6 @@ CREATE TABLE partitions.layers_p_18 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_18
-FOR VALUES WITH (MODULUS 64, REMAINDER 18);
-
 CREATE TABLE partitions.layers_p_19 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2445,9 +1836,6 @@ CREATE TABLE partitions.layers_p_19 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_19
-FOR VALUES WITH (MODULUS 64, REMAINDER 19);
 
 CREATE TABLE partitions.layers_p_2 (
     id bigint NOT NULL,
@@ -2460,9 +1848,6 @@ CREATE TABLE partitions.layers_p_2 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_2
-FOR VALUES WITH (MODULUS 64, REMAINDER 2);
-
 CREATE TABLE partitions.layers_p_20 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2473,9 +1858,6 @@ CREATE TABLE partitions.layers_p_20 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_20
-FOR VALUES WITH (MODULUS 64, REMAINDER 20);
 
 CREATE TABLE partitions.layers_p_21 (
     id bigint NOT NULL,
@@ -2488,9 +1870,6 @@ CREATE TABLE partitions.layers_p_21 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_21
-FOR VALUES WITH (MODULUS 64, REMAINDER 21);
-
 CREATE TABLE partitions.layers_p_22 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2501,9 +1880,6 @@ CREATE TABLE partitions.layers_p_22 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_22
-FOR VALUES WITH (MODULUS 64, REMAINDER 22);
 
 CREATE TABLE partitions.layers_p_23 (
     id bigint NOT NULL,
@@ -2516,9 +1892,6 @@ CREATE TABLE partitions.layers_p_23 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_23
-FOR VALUES WITH (MODULUS 64, REMAINDER 23);
-
 CREATE TABLE partitions.layers_p_24 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2529,9 +1902,6 @@ CREATE TABLE partitions.layers_p_24 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_24
-FOR VALUES WITH (MODULUS 64, REMAINDER 24);
 
 CREATE TABLE partitions.layers_p_25 (
     id bigint NOT NULL,
@@ -2544,9 +1914,6 @@ CREATE TABLE partitions.layers_p_25 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_25
-FOR VALUES WITH (MODULUS 64, REMAINDER 25);
-
 CREATE TABLE partitions.layers_p_26 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2557,9 +1924,6 @@ CREATE TABLE partitions.layers_p_26 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_26
-FOR VALUES WITH (MODULUS 64, REMAINDER 26);
 
 CREATE TABLE partitions.layers_p_27 (
     id bigint NOT NULL,
@@ -2572,9 +1936,6 @@ CREATE TABLE partitions.layers_p_27 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_27
-FOR VALUES WITH (MODULUS 64, REMAINDER 27);
-
 CREATE TABLE partitions.layers_p_28 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2585,9 +1946,6 @@ CREATE TABLE partitions.layers_p_28 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_28
-FOR VALUES WITH (MODULUS 64, REMAINDER 28);
 
 CREATE TABLE partitions.layers_p_29 (
     id bigint NOT NULL,
@@ -2600,9 +1958,6 @@ CREATE TABLE partitions.layers_p_29 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_29
-FOR VALUES WITH (MODULUS 64, REMAINDER 29);
-
 CREATE TABLE partitions.layers_p_3 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2613,9 +1968,6 @@ CREATE TABLE partitions.layers_p_3 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_3
-FOR VALUES WITH (MODULUS 64, REMAINDER 3);
 
 CREATE TABLE partitions.layers_p_30 (
     id bigint NOT NULL,
@@ -2628,9 +1980,6 @@ CREATE TABLE partitions.layers_p_30 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_30
-FOR VALUES WITH (MODULUS 64, REMAINDER 30);
-
 CREATE TABLE partitions.layers_p_31 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2641,9 +1990,6 @@ CREATE TABLE partitions.layers_p_31 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_31
-FOR VALUES WITH (MODULUS 64, REMAINDER 31);
 
 CREATE TABLE partitions.layers_p_32 (
     id bigint NOT NULL,
@@ -2656,9 +2002,6 @@ CREATE TABLE partitions.layers_p_32 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_32
-FOR VALUES WITH (MODULUS 64, REMAINDER 32);
-
 CREATE TABLE partitions.layers_p_33 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2669,9 +2012,6 @@ CREATE TABLE partitions.layers_p_33 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_33
-FOR VALUES WITH (MODULUS 64, REMAINDER 33);
 
 CREATE TABLE partitions.layers_p_34 (
     id bigint NOT NULL,
@@ -2684,9 +2024,6 @@ CREATE TABLE partitions.layers_p_34 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_34
-FOR VALUES WITH (MODULUS 64, REMAINDER 34);
-
 CREATE TABLE partitions.layers_p_35 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2697,9 +2034,6 @@ CREATE TABLE partitions.layers_p_35 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_35
-FOR VALUES WITH (MODULUS 64, REMAINDER 35);
 
 CREATE TABLE partitions.layers_p_36 (
     id bigint NOT NULL,
@@ -2712,9 +2046,6 @@ CREATE TABLE partitions.layers_p_36 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_36
-FOR VALUES WITH (MODULUS 64, REMAINDER 36);
-
 CREATE TABLE partitions.layers_p_37 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2725,9 +2056,6 @@ CREATE TABLE partitions.layers_p_37 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_37
-FOR VALUES WITH (MODULUS 64, REMAINDER 37);
 
 CREATE TABLE partitions.layers_p_38 (
     id bigint NOT NULL,
@@ -2740,9 +2068,6 @@ CREATE TABLE partitions.layers_p_38 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_38
-FOR VALUES WITH (MODULUS 64, REMAINDER 38);
-
 CREATE TABLE partitions.layers_p_39 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2753,9 +2078,6 @@ CREATE TABLE partitions.layers_p_39 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_39
-FOR VALUES WITH (MODULUS 64, REMAINDER 39);
 
 CREATE TABLE partitions.layers_p_4 (
     id bigint NOT NULL,
@@ -2768,9 +2090,6 @@ CREATE TABLE partitions.layers_p_4 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_4
-FOR VALUES WITH (MODULUS 64, REMAINDER 4);
-
 CREATE TABLE partitions.layers_p_40 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2781,9 +2100,6 @@ CREATE TABLE partitions.layers_p_40 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_40
-FOR VALUES WITH (MODULUS 64, REMAINDER 40);
 
 CREATE TABLE partitions.layers_p_41 (
     id bigint NOT NULL,
@@ -2796,9 +2112,6 @@ CREATE TABLE partitions.layers_p_41 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_41
-FOR VALUES WITH (MODULUS 64, REMAINDER 41);
-
 CREATE TABLE partitions.layers_p_42 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2809,9 +2122,6 @@ CREATE TABLE partitions.layers_p_42 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_42
-FOR VALUES WITH (MODULUS 64, REMAINDER 42);
 
 CREATE TABLE partitions.layers_p_43 (
     id bigint NOT NULL,
@@ -2824,9 +2134,6 @@ CREATE TABLE partitions.layers_p_43 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_43
-FOR VALUES WITH (MODULUS 64, REMAINDER 43);
-
 CREATE TABLE partitions.layers_p_44 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2837,9 +2144,6 @@ CREATE TABLE partitions.layers_p_44 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_44
-FOR VALUES WITH (MODULUS 64, REMAINDER 44);
 
 CREATE TABLE partitions.layers_p_45 (
     id bigint NOT NULL,
@@ -2852,9 +2156,6 @@ CREATE TABLE partitions.layers_p_45 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_45
-FOR VALUES WITH (MODULUS 64, REMAINDER 45);
-
 CREATE TABLE partitions.layers_p_46 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2865,9 +2166,6 @@ CREATE TABLE partitions.layers_p_46 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_46
-FOR VALUES WITH (MODULUS 64, REMAINDER 46);
 
 CREATE TABLE partitions.layers_p_47 (
     id bigint NOT NULL,
@@ -2880,9 +2178,6 @@ CREATE TABLE partitions.layers_p_47 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_47
-FOR VALUES WITH (MODULUS 64, REMAINDER 47);
-
 CREATE TABLE partitions.layers_p_48 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2893,9 +2188,6 @@ CREATE TABLE partitions.layers_p_48 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_48
-FOR VALUES WITH (MODULUS 64, REMAINDER 48);
 
 CREATE TABLE partitions.layers_p_49 (
     id bigint NOT NULL,
@@ -2908,9 +2200,6 @@ CREATE TABLE partitions.layers_p_49 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_49
-FOR VALUES WITH (MODULUS 64, REMAINDER 49);
-
 CREATE TABLE partitions.layers_p_5 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2921,9 +2210,6 @@ CREATE TABLE partitions.layers_p_5 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_5
-FOR VALUES WITH (MODULUS 64, REMAINDER 5);
 
 CREATE TABLE partitions.layers_p_50 (
     id bigint NOT NULL,
@@ -2936,9 +2222,6 @@ CREATE TABLE partitions.layers_p_50 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_50
-FOR VALUES WITH (MODULUS 64, REMAINDER 50);
-
 CREATE TABLE partitions.layers_p_51 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2949,9 +2232,6 @@ CREATE TABLE partitions.layers_p_51 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_51
-FOR VALUES WITH (MODULUS 64, REMAINDER 51);
 
 CREATE TABLE partitions.layers_p_52 (
     id bigint NOT NULL,
@@ -2964,9 +2244,6 @@ CREATE TABLE partitions.layers_p_52 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_52
-FOR VALUES WITH (MODULUS 64, REMAINDER 52);
-
 CREATE TABLE partitions.layers_p_53 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -2977,9 +2254,6 @@ CREATE TABLE partitions.layers_p_53 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_53
-FOR VALUES WITH (MODULUS 64, REMAINDER 53);
 
 CREATE TABLE partitions.layers_p_54 (
     id bigint NOT NULL,
@@ -2992,9 +2266,6 @@ CREATE TABLE partitions.layers_p_54 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_54
-FOR VALUES WITH (MODULUS 64, REMAINDER 54);
-
 CREATE TABLE partitions.layers_p_55 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3005,9 +2276,6 @@ CREATE TABLE partitions.layers_p_55 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_55
-FOR VALUES WITH (MODULUS 64, REMAINDER 55);
 
 CREATE TABLE partitions.layers_p_56 (
     id bigint NOT NULL,
@@ -3020,9 +2288,6 @@ CREATE TABLE partitions.layers_p_56 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_56
-FOR VALUES WITH (MODULUS 64, REMAINDER 56);
-
 CREATE TABLE partitions.layers_p_57 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3033,9 +2298,6 @@ CREATE TABLE partitions.layers_p_57 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_57
-FOR VALUES WITH (MODULUS 64, REMAINDER 57);
 
 CREATE TABLE partitions.layers_p_58 (
     id bigint NOT NULL,
@@ -3048,9 +2310,6 @@ CREATE TABLE partitions.layers_p_58 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_58
-FOR VALUES WITH (MODULUS 64, REMAINDER 58);
-
 CREATE TABLE partitions.layers_p_59 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3061,9 +2320,6 @@ CREATE TABLE partitions.layers_p_59 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_59
-FOR VALUES WITH (MODULUS 64, REMAINDER 59);
 
 CREATE TABLE partitions.layers_p_6 (
     id bigint NOT NULL,
@@ -3076,9 +2332,6 @@ CREATE TABLE partitions.layers_p_6 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_6
-FOR VALUES WITH (MODULUS 64, REMAINDER 6);
-
 CREATE TABLE partitions.layers_p_60 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3089,9 +2342,6 @@ CREATE TABLE partitions.layers_p_60 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_60
-FOR VALUES WITH (MODULUS 64, REMAINDER 60);
 
 CREATE TABLE partitions.layers_p_61 (
     id bigint NOT NULL,
@@ -3104,9 +2354,6 @@ CREATE TABLE partitions.layers_p_61 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_61
-FOR VALUES WITH (MODULUS 64, REMAINDER 61);
-
 CREATE TABLE partitions.layers_p_62 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3117,9 +2364,6 @@ CREATE TABLE partitions.layers_p_62 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_62
-FOR VALUES WITH (MODULUS 64, REMAINDER 62);
 
 CREATE TABLE partitions.layers_p_63 (
     id bigint NOT NULL,
@@ -3132,9 +2376,6 @@ CREATE TABLE partitions.layers_p_63 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_63
-FOR VALUES WITH (MODULUS 64, REMAINDER 63);
-
 CREATE TABLE partitions.layers_p_7 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3145,9 +2386,6 @@ CREATE TABLE partitions.layers_p_7 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_7
-FOR VALUES WITH (MODULUS 64, REMAINDER 7);
 
 CREATE TABLE partitions.layers_p_8 (
     id bigint NOT NULL,
@@ -3160,9 +2398,6 @@ CREATE TABLE partitions.layers_p_8 (
     digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_8
-FOR VALUES WITH (MODULUS 64, REMAINDER 8);
-
 CREATE TABLE partitions.layers_p_9 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3173,9 +2408,6 @@ CREATE TABLE partitions.layers_p_9 (
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_9
-FOR VALUES WITH (MODULUS 64, REMAINDER 9);
 
 CREATE TABLE public.manifest_references (
     id bigint NOT NULL,
@@ -3198,9 +2430,6 @@ CREATE TABLE partitions.manifest_references_p_0 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_0
-FOR VALUES WITH (MODULUS 64, REMAINDER 0);
-
 CREATE TABLE partitions.manifest_references_p_1 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3210,9 +2439,6 @@ CREATE TABLE partitions.manifest_references_p_1 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_1
-FOR VALUES WITH (MODULUS 64, REMAINDER 1);
 
 CREATE TABLE partitions.manifest_references_p_10 (
     id bigint NOT NULL,
@@ -3224,9 +2450,6 @@ CREATE TABLE partitions.manifest_references_p_10 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_10
-FOR VALUES WITH (MODULUS 64, REMAINDER 10);
-
 CREATE TABLE partitions.manifest_references_p_11 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3236,9 +2459,6 @@ CREATE TABLE partitions.manifest_references_p_11 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_11
-FOR VALUES WITH (MODULUS 64, REMAINDER 11);
 
 CREATE TABLE partitions.manifest_references_p_12 (
     id bigint NOT NULL,
@@ -3250,9 +2470,6 @@ CREATE TABLE partitions.manifest_references_p_12 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_12
-FOR VALUES WITH (MODULUS 64, REMAINDER 12);
-
 CREATE TABLE partitions.manifest_references_p_13 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3262,9 +2479,6 @@ CREATE TABLE partitions.manifest_references_p_13 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_13
-FOR VALUES WITH (MODULUS 64, REMAINDER 13);
 
 CREATE TABLE partitions.manifest_references_p_14 (
     id bigint NOT NULL,
@@ -3276,9 +2490,6 @@ CREATE TABLE partitions.manifest_references_p_14 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_14
-FOR VALUES WITH (MODULUS 64, REMAINDER 14);
-
 CREATE TABLE partitions.manifest_references_p_15 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3288,9 +2499,6 @@ CREATE TABLE partitions.manifest_references_p_15 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_15
-FOR VALUES WITH (MODULUS 64, REMAINDER 15);
 
 CREATE TABLE partitions.manifest_references_p_16 (
     id bigint NOT NULL,
@@ -3302,9 +2510,6 @@ CREATE TABLE partitions.manifest_references_p_16 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_16
-FOR VALUES WITH (MODULUS 64, REMAINDER 16);
-
 CREATE TABLE partitions.manifest_references_p_17 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3314,9 +2519,6 @@ CREATE TABLE partitions.manifest_references_p_17 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_17
-FOR VALUES WITH (MODULUS 64, REMAINDER 17);
 
 CREATE TABLE partitions.manifest_references_p_18 (
     id bigint NOT NULL,
@@ -3328,9 +2530,6 @@ CREATE TABLE partitions.manifest_references_p_18 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_18
-FOR VALUES WITH (MODULUS 64, REMAINDER 18);
-
 CREATE TABLE partitions.manifest_references_p_19 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3340,9 +2539,6 @@ CREATE TABLE partitions.manifest_references_p_19 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_19
-FOR VALUES WITH (MODULUS 64, REMAINDER 19);
 
 CREATE TABLE partitions.manifest_references_p_2 (
     id bigint NOT NULL,
@@ -3354,9 +2550,6 @@ CREATE TABLE partitions.manifest_references_p_2 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_2
-FOR VALUES WITH (MODULUS 64, REMAINDER 2);
-
 CREATE TABLE partitions.manifest_references_p_20 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3366,9 +2559,6 @@ CREATE TABLE partitions.manifest_references_p_20 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_20
-FOR VALUES WITH (MODULUS 64, REMAINDER 20);
 
 CREATE TABLE partitions.manifest_references_p_21 (
     id bigint NOT NULL,
@@ -3380,9 +2570,6 @@ CREATE TABLE partitions.manifest_references_p_21 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_21
-FOR VALUES WITH (MODULUS 64, REMAINDER 21);
-
 CREATE TABLE partitions.manifest_references_p_22 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3392,9 +2579,6 @@ CREATE TABLE partitions.manifest_references_p_22 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_22
-FOR VALUES WITH (MODULUS 64, REMAINDER 22);
 
 CREATE TABLE partitions.manifest_references_p_23 (
     id bigint NOT NULL,
@@ -3406,9 +2590,6 @@ CREATE TABLE partitions.manifest_references_p_23 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_23
-FOR VALUES WITH (MODULUS 64, REMAINDER 23);
-
 CREATE TABLE partitions.manifest_references_p_24 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3418,9 +2599,6 @@ CREATE TABLE partitions.manifest_references_p_24 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_24
-FOR VALUES WITH (MODULUS 64, REMAINDER 24);
 
 CREATE TABLE partitions.manifest_references_p_25 (
     id bigint NOT NULL,
@@ -3432,9 +2610,6 @@ CREATE TABLE partitions.manifest_references_p_25 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_25
-FOR VALUES WITH (MODULUS 64, REMAINDER 25);
-
 CREATE TABLE partitions.manifest_references_p_26 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3444,9 +2619,6 @@ CREATE TABLE partitions.manifest_references_p_26 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_26
-FOR VALUES WITH (MODULUS 64, REMAINDER 26);
 
 CREATE TABLE partitions.manifest_references_p_27 (
     id bigint NOT NULL,
@@ -3458,9 +2630,6 @@ CREATE TABLE partitions.manifest_references_p_27 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_27
-FOR VALUES WITH (MODULUS 64, REMAINDER 27);
-
 CREATE TABLE partitions.manifest_references_p_28 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3470,9 +2639,6 @@ CREATE TABLE partitions.manifest_references_p_28 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_28
-FOR VALUES WITH (MODULUS 64, REMAINDER 28);
 
 CREATE TABLE partitions.manifest_references_p_29 (
     id bigint NOT NULL,
@@ -3484,9 +2650,6 @@ CREATE TABLE partitions.manifest_references_p_29 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_29
-FOR VALUES WITH (MODULUS 64, REMAINDER 29);
-
 CREATE TABLE partitions.manifest_references_p_3 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3496,9 +2659,6 @@ CREATE TABLE partitions.manifest_references_p_3 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_3
-FOR VALUES WITH (MODULUS 64, REMAINDER 3);
 
 CREATE TABLE partitions.manifest_references_p_30 (
     id bigint NOT NULL,
@@ -3510,9 +2670,6 @@ CREATE TABLE partitions.manifest_references_p_30 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_30
-FOR VALUES WITH (MODULUS 64, REMAINDER 30);
-
 CREATE TABLE partitions.manifest_references_p_31 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3522,9 +2679,6 @@ CREATE TABLE partitions.manifest_references_p_31 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_31
-FOR VALUES WITH (MODULUS 64, REMAINDER 31);
 
 CREATE TABLE partitions.manifest_references_p_32 (
     id bigint NOT NULL,
@@ -3536,9 +2690,6 @@ CREATE TABLE partitions.manifest_references_p_32 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_32
-FOR VALUES WITH (MODULUS 64, REMAINDER 32);
-
 CREATE TABLE partitions.manifest_references_p_33 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3548,9 +2699,6 @@ CREATE TABLE partitions.manifest_references_p_33 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_33
-FOR VALUES WITH (MODULUS 64, REMAINDER 33);
 
 CREATE TABLE partitions.manifest_references_p_34 (
     id bigint NOT NULL,
@@ -3562,9 +2710,6 @@ CREATE TABLE partitions.manifest_references_p_34 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_34
-FOR VALUES WITH (MODULUS 64, REMAINDER 34);
-
 CREATE TABLE partitions.manifest_references_p_35 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3574,9 +2719,6 @@ CREATE TABLE partitions.manifest_references_p_35 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_35
-FOR VALUES WITH (MODULUS 64, REMAINDER 35);
 
 CREATE TABLE partitions.manifest_references_p_36 (
     id bigint NOT NULL,
@@ -3588,9 +2730,6 @@ CREATE TABLE partitions.manifest_references_p_36 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_36
-FOR VALUES WITH (MODULUS 64, REMAINDER 36);
-
 CREATE TABLE partitions.manifest_references_p_37 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3600,9 +2739,6 @@ CREATE TABLE partitions.manifest_references_p_37 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_37
-FOR VALUES WITH (MODULUS 64, REMAINDER 37);
 
 CREATE TABLE partitions.manifest_references_p_38 (
     id bigint NOT NULL,
@@ -3614,9 +2750,6 @@ CREATE TABLE partitions.manifest_references_p_38 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_38
-FOR VALUES WITH (MODULUS 64, REMAINDER 38);
-
 CREATE TABLE partitions.manifest_references_p_39 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3626,9 +2759,6 @@ CREATE TABLE partitions.manifest_references_p_39 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_39
-FOR VALUES WITH (MODULUS 64, REMAINDER 39);
 
 CREATE TABLE partitions.manifest_references_p_4 (
     id bigint NOT NULL,
@@ -3640,9 +2770,6 @@ CREATE TABLE partitions.manifest_references_p_4 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_4
-FOR VALUES WITH (MODULUS 64, REMAINDER 4);
-
 CREATE TABLE partitions.manifest_references_p_40 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3652,9 +2779,6 @@ CREATE TABLE partitions.manifest_references_p_40 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_40
-FOR VALUES WITH (MODULUS 64, REMAINDER 40);
 
 CREATE TABLE partitions.manifest_references_p_41 (
     id bigint NOT NULL,
@@ -3666,9 +2790,6 @@ CREATE TABLE partitions.manifest_references_p_41 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_41
-FOR VALUES WITH (MODULUS 64, REMAINDER 41);
-
 CREATE TABLE partitions.manifest_references_p_42 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3678,9 +2799,6 @@ CREATE TABLE partitions.manifest_references_p_42 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_42
-FOR VALUES WITH (MODULUS 64, REMAINDER 42);
 
 CREATE TABLE partitions.manifest_references_p_43 (
     id bigint NOT NULL,
@@ -3692,9 +2810,6 @@ CREATE TABLE partitions.manifest_references_p_43 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_43
-FOR VALUES WITH (MODULUS 64, REMAINDER 43);
-
 CREATE TABLE partitions.manifest_references_p_44 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3704,9 +2819,6 @@ CREATE TABLE partitions.manifest_references_p_44 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_44
-FOR VALUES WITH (MODULUS 64, REMAINDER 44);
 
 CREATE TABLE partitions.manifest_references_p_45 (
     id bigint NOT NULL,
@@ -3718,9 +2830,6 @@ CREATE TABLE partitions.manifest_references_p_45 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_45
-FOR VALUES WITH (MODULUS 64, REMAINDER 45);
-
 CREATE TABLE partitions.manifest_references_p_46 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3730,9 +2839,6 @@ CREATE TABLE partitions.manifest_references_p_46 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_46
-FOR VALUES WITH (MODULUS 64, REMAINDER 46);
 
 CREATE TABLE partitions.manifest_references_p_47 (
     id bigint NOT NULL,
@@ -3744,9 +2850,6 @@ CREATE TABLE partitions.manifest_references_p_47 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_47
-FOR VALUES WITH (MODULUS 64, REMAINDER 47);
-
 CREATE TABLE partitions.manifest_references_p_48 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3756,9 +2859,6 @@ CREATE TABLE partitions.manifest_references_p_48 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_48
-FOR VALUES WITH (MODULUS 64, REMAINDER 48);
 
 CREATE TABLE partitions.manifest_references_p_49 (
     id bigint NOT NULL,
@@ -3770,9 +2870,6 @@ CREATE TABLE partitions.manifest_references_p_49 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_49
-FOR VALUES WITH (MODULUS 64, REMAINDER 49);
-
 CREATE TABLE partitions.manifest_references_p_5 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3782,9 +2879,6 @@ CREATE TABLE partitions.manifest_references_p_5 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_5
-FOR VALUES WITH (MODULUS 64, REMAINDER 5);
 
 CREATE TABLE partitions.manifest_references_p_50 (
     id bigint NOT NULL,
@@ -3796,9 +2890,6 @@ CREATE TABLE partitions.manifest_references_p_50 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_50
-FOR VALUES WITH (MODULUS 64, REMAINDER 50);
-
 CREATE TABLE partitions.manifest_references_p_51 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3808,9 +2899,6 @@ CREATE TABLE partitions.manifest_references_p_51 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_51
-FOR VALUES WITH (MODULUS 64, REMAINDER 51);
 
 CREATE TABLE partitions.manifest_references_p_52 (
     id bigint NOT NULL,
@@ -3822,9 +2910,6 @@ CREATE TABLE partitions.manifest_references_p_52 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_52
-FOR VALUES WITH (MODULUS 64, REMAINDER 52);
-
 CREATE TABLE partitions.manifest_references_p_53 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3834,9 +2919,6 @@ CREATE TABLE partitions.manifest_references_p_53 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_53
-FOR VALUES WITH (MODULUS 64, REMAINDER 53);
 
 CREATE TABLE partitions.manifest_references_p_54 (
     id bigint NOT NULL,
@@ -3848,9 +2930,6 @@ CREATE TABLE partitions.manifest_references_p_54 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_54
-FOR VALUES WITH (MODULUS 64, REMAINDER 54);
-
 CREATE TABLE partitions.manifest_references_p_55 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3860,9 +2939,6 @@ CREATE TABLE partitions.manifest_references_p_55 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_55
-FOR VALUES WITH (MODULUS 64, REMAINDER 55);
 
 CREATE TABLE partitions.manifest_references_p_56 (
     id bigint NOT NULL,
@@ -3874,9 +2950,6 @@ CREATE TABLE partitions.manifest_references_p_56 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_56
-FOR VALUES WITH (MODULUS 64, REMAINDER 56);
-
 CREATE TABLE partitions.manifest_references_p_57 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3886,9 +2959,6 @@ CREATE TABLE partitions.manifest_references_p_57 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_57
-FOR VALUES WITH (MODULUS 64, REMAINDER 57);
 
 CREATE TABLE partitions.manifest_references_p_58 (
     id bigint NOT NULL,
@@ -3900,9 +2970,6 @@ CREATE TABLE partitions.manifest_references_p_58 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_58
-FOR VALUES WITH (MODULUS 64, REMAINDER 58);
-
 CREATE TABLE partitions.manifest_references_p_59 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3912,9 +2979,6 @@ CREATE TABLE partitions.manifest_references_p_59 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_59
-FOR VALUES WITH (MODULUS 64, REMAINDER 59);
 
 CREATE TABLE partitions.manifest_references_p_6 (
     id bigint NOT NULL,
@@ -3926,9 +2990,6 @@ CREATE TABLE partitions.manifest_references_p_6 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_6
-FOR VALUES WITH (MODULUS 64, REMAINDER 6);
-
 CREATE TABLE partitions.manifest_references_p_60 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3938,9 +2999,6 @@ CREATE TABLE partitions.manifest_references_p_60 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_60
-FOR VALUES WITH (MODULUS 64, REMAINDER 60);
 
 CREATE TABLE partitions.manifest_references_p_61 (
     id bigint NOT NULL,
@@ -3952,9 +3010,6 @@ CREATE TABLE partitions.manifest_references_p_61 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_61
-FOR VALUES WITH (MODULUS 64, REMAINDER 61);
-
 CREATE TABLE partitions.manifest_references_p_62 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3964,9 +3019,6 @@ CREATE TABLE partitions.manifest_references_p_62 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_62
-FOR VALUES WITH (MODULUS 64, REMAINDER 62);
 
 CREATE TABLE partitions.manifest_references_p_63 (
     id bigint NOT NULL,
@@ -3978,9 +3030,6 @@ CREATE TABLE partitions.manifest_references_p_63 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_63
-FOR VALUES WITH (MODULUS 64, REMAINDER 63);
-
 CREATE TABLE partitions.manifest_references_p_7 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -3990,9 +3039,6 @@ CREATE TABLE partitions.manifest_references_p_7 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_7
-FOR VALUES WITH (MODULUS 64, REMAINDER 7);
 
 CREATE TABLE partitions.manifest_references_p_8 (
     id bigint NOT NULL,
@@ -4004,9 +3050,6 @@ CREATE TABLE partitions.manifest_references_p_8 (
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
 
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_8
-FOR VALUES WITH (MODULUS 64, REMAINDER 8);
-
 CREATE TABLE partitions.manifest_references_p_9 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4016,9 +3059,6 @@ CREATE TABLE partitions.manifest_references_p_9 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT check_manifest_references_parent_id_and_child_id_differ CHECK ((parent_id <> child_id))
 );
-
-ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_9
-FOR VALUES WITH (MODULUS 64, REMAINDER 9);
 
 CREATE TABLE public.manifests (
     id bigint NOT NULL,
@@ -4059,9 +3099,6 @@ CREATE TABLE partitions.manifests_p_0 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_0
-FOR VALUES WITH (MODULUS 64, REMAINDER 0);
-
 CREATE TABLE partitions.manifests_p_1 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4080,9 +3117,6 @@ CREATE TABLE partitions.manifests_p_1 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_1
-FOR VALUES WITH (MODULUS 64, REMAINDER 1);
 
 CREATE TABLE partitions.manifests_p_10 (
     id bigint NOT NULL,
@@ -4103,9 +3137,6 @@ CREATE TABLE partitions.manifests_p_10 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_10
-FOR VALUES WITH (MODULUS 64, REMAINDER 10);
-
 CREATE TABLE partitions.manifests_p_11 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4124,9 +3155,6 @@ CREATE TABLE partitions.manifests_p_11 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_11
-FOR VALUES WITH (MODULUS 64, REMAINDER 11);
 
 CREATE TABLE partitions.manifests_p_12 (
     id bigint NOT NULL,
@@ -4147,9 +3175,6 @@ CREATE TABLE partitions.manifests_p_12 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_12
-FOR VALUES WITH (MODULUS 64, REMAINDER 12);
-
 CREATE TABLE partitions.manifests_p_13 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4168,9 +3193,6 @@ CREATE TABLE partitions.manifests_p_13 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_13
-FOR VALUES WITH (MODULUS 64, REMAINDER 13);
 
 CREATE TABLE partitions.manifests_p_14 (
     id bigint NOT NULL,
@@ -4191,9 +3213,6 @@ CREATE TABLE partitions.manifests_p_14 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_14
-FOR VALUES WITH (MODULUS 64, REMAINDER 14);
-
 CREATE TABLE partitions.manifests_p_15 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4212,9 +3231,6 @@ CREATE TABLE partitions.manifests_p_15 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_15
-FOR VALUES WITH (MODULUS 64, REMAINDER 15);
 
 CREATE TABLE partitions.manifests_p_16 (
     id bigint NOT NULL,
@@ -4235,9 +3251,6 @@ CREATE TABLE partitions.manifests_p_16 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_16
-FOR VALUES WITH (MODULUS 64, REMAINDER 16);
-
 CREATE TABLE partitions.manifests_p_17 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4256,9 +3269,6 @@ CREATE TABLE partitions.manifests_p_17 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_17
-FOR VALUES WITH (MODULUS 64, REMAINDER 17);
 
 CREATE TABLE partitions.manifests_p_18 (
     id bigint NOT NULL,
@@ -4279,9 +3289,6 @@ CREATE TABLE partitions.manifests_p_18 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_18
-FOR VALUES WITH (MODULUS 64, REMAINDER 18);
-
 CREATE TABLE partitions.manifests_p_19 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4300,9 +3307,6 @@ CREATE TABLE partitions.manifests_p_19 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_19
-FOR VALUES WITH (MODULUS 64, REMAINDER 19);
 
 CREATE TABLE partitions.manifests_p_2 (
     id bigint NOT NULL,
@@ -4323,9 +3327,6 @@ CREATE TABLE partitions.manifests_p_2 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_2
-FOR VALUES WITH (MODULUS 64, REMAINDER 2);
-
 CREATE TABLE partitions.manifests_p_20 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4344,9 +3345,6 @@ CREATE TABLE partitions.manifests_p_20 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_20
-FOR VALUES WITH (MODULUS 64, REMAINDER 20);
 
 CREATE TABLE partitions.manifests_p_21 (
     id bigint NOT NULL,
@@ -4367,9 +3365,6 @@ CREATE TABLE partitions.manifests_p_21 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_21
-FOR VALUES WITH (MODULUS 64, REMAINDER 21);
-
 CREATE TABLE partitions.manifests_p_22 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4388,9 +3383,6 @@ CREATE TABLE partitions.manifests_p_22 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_22
-FOR VALUES WITH (MODULUS 64, REMAINDER 22);
 
 CREATE TABLE partitions.manifests_p_23 (
     id bigint NOT NULL,
@@ -4411,9 +3403,6 @@ CREATE TABLE partitions.manifests_p_23 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_23
-FOR VALUES WITH (MODULUS 64, REMAINDER 23);
-
 CREATE TABLE partitions.manifests_p_24 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4432,9 +3421,6 @@ CREATE TABLE partitions.manifests_p_24 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_24
-FOR VALUES WITH (MODULUS 64, REMAINDER 24);
 
 CREATE TABLE partitions.manifests_p_25 (
     id bigint NOT NULL,
@@ -4455,9 +3441,6 @@ CREATE TABLE partitions.manifests_p_25 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_25
-FOR VALUES WITH (MODULUS 64, REMAINDER 25);
-
 CREATE TABLE partitions.manifests_p_26 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4476,9 +3459,6 @@ CREATE TABLE partitions.manifests_p_26 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_26
-FOR VALUES WITH (MODULUS 64, REMAINDER 26);
 
 CREATE TABLE partitions.manifests_p_27 (
     id bigint NOT NULL,
@@ -4499,9 +3479,6 @@ CREATE TABLE partitions.manifests_p_27 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_27
-FOR VALUES WITH (MODULUS 64, REMAINDER 27);
-
 CREATE TABLE partitions.manifests_p_28 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4520,9 +3497,6 @@ CREATE TABLE partitions.manifests_p_28 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_28
-FOR VALUES WITH (MODULUS 64, REMAINDER 28);
 
 CREATE TABLE partitions.manifests_p_29 (
     id bigint NOT NULL,
@@ -4543,9 +3517,6 @@ CREATE TABLE partitions.manifests_p_29 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_29
-FOR VALUES WITH (MODULUS 64, REMAINDER 29);
-
 CREATE TABLE partitions.manifests_p_3 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4564,9 +3535,6 @@ CREATE TABLE partitions.manifests_p_3 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_3
-FOR VALUES WITH (MODULUS 64, REMAINDER 3);
 
 CREATE TABLE partitions.manifests_p_30 (
     id bigint NOT NULL,
@@ -4587,9 +3555,6 @@ CREATE TABLE partitions.manifests_p_30 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_30
-FOR VALUES WITH (MODULUS 64, REMAINDER 30);
-
 CREATE TABLE partitions.manifests_p_31 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4608,9 +3573,6 @@ CREATE TABLE partitions.manifests_p_31 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_31
-FOR VALUES WITH (MODULUS 64, REMAINDER 31);
 
 CREATE TABLE partitions.manifests_p_32 (
     id bigint NOT NULL,
@@ -4631,9 +3593,6 @@ CREATE TABLE partitions.manifests_p_32 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_32
-FOR VALUES WITH (MODULUS 64, REMAINDER 32);
-
 CREATE TABLE partitions.manifests_p_33 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4652,9 +3611,6 @@ CREATE TABLE partitions.manifests_p_33 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_33
-FOR VALUES WITH (MODULUS 64, REMAINDER 33);
 
 CREATE TABLE partitions.manifests_p_34 (
     id bigint NOT NULL,
@@ -4675,9 +3631,6 @@ CREATE TABLE partitions.manifests_p_34 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_34
-FOR VALUES WITH (MODULUS 64, REMAINDER 34);
-
 CREATE TABLE partitions.manifests_p_35 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4696,9 +3649,6 @@ CREATE TABLE partitions.manifests_p_35 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_35
-FOR VALUES WITH (MODULUS 64, REMAINDER 35);
 
 CREATE TABLE partitions.manifests_p_36 (
     id bigint NOT NULL,
@@ -4719,9 +3669,6 @@ CREATE TABLE partitions.manifests_p_36 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_36
-FOR VALUES WITH (MODULUS 64, REMAINDER 36);
-
 CREATE TABLE partitions.manifests_p_37 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4740,9 +3687,6 @@ CREATE TABLE partitions.manifests_p_37 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_37
-FOR VALUES WITH (MODULUS 64, REMAINDER 37);
 
 CREATE TABLE partitions.manifests_p_38 (
     id bigint NOT NULL,
@@ -4763,9 +3707,6 @@ CREATE TABLE partitions.manifests_p_38 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_38
-FOR VALUES WITH (MODULUS 64, REMAINDER 38);
-
 CREATE TABLE partitions.manifests_p_39 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4784,9 +3725,6 @@ CREATE TABLE partitions.manifests_p_39 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_39
-FOR VALUES WITH (MODULUS 64, REMAINDER 39);
 
 CREATE TABLE partitions.manifests_p_4 (
     id bigint NOT NULL,
@@ -4807,9 +3745,6 @@ CREATE TABLE partitions.manifests_p_4 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_4
-FOR VALUES WITH (MODULUS 64, REMAINDER 4);
-
 CREATE TABLE partitions.manifests_p_40 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4828,9 +3763,6 @@ CREATE TABLE partitions.manifests_p_40 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_40
-FOR VALUES WITH (MODULUS 64, REMAINDER 40);
 
 CREATE TABLE partitions.manifests_p_41 (
     id bigint NOT NULL,
@@ -4851,9 +3783,6 @@ CREATE TABLE partitions.manifests_p_41 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_41
-FOR VALUES WITH (MODULUS 64, REMAINDER 41);
-
 CREATE TABLE partitions.manifests_p_42 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4872,9 +3801,6 @@ CREATE TABLE partitions.manifests_p_42 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_42
-FOR VALUES WITH (MODULUS 64, REMAINDER 42);
 
 CREATE TABLE partitions.manifests_p_43 (
     id bigint NOT NULL,
@@ -4895,9 +3821,6 @@ CREATE TABLE partitions.manifests_p_43 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_43
-FOR VALUES WITH (MODULUS 64, REMAINDER 43);
-
 CREATE TABLE partitions.manifests_p_44 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4916,9 +3839,6 @@ CREATE TABLE partitions.manifests_p_44 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_44
-FOR VALUES WITH (MODULUS 64, REMAINDER 44);
 
 CREATE TABLE partitions.manifests_p_45 (
     id bigint NOT NULL,
@@ -4939,9 +3859,6 @@ CREATE TABLE partitions.manifests_p_45 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_45
-FOR VALUES WITH (MODULUS 64, REMAINDER 45);
-
 CREATE TABLE partitions.manifests_p_46 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -4960,9 +3877,6 @@ CREATE TABLE partitions.manifests_p_46 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_46
-FOR VALUES WITH (MODULUS 64, REMAINDER 46);
 
 CREATE TABLE partitions.manifests_p_47 (
     id bigint NOT NULL,
@@ -4983,9 +3897,6 @@ CREATE TABLE partitions.manifests_p_47 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_47
-FOR VALUES WITH (MODULUS 64, REMAINDER 47);
-
 CREATE TABLE partitions.manifests_p_48 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5004,9 +3915,6 @@ CREATE TABLE partitions.manifests_p_48 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_48
-FOR VALUES WITH (MODULUS 64, REMAINDER 48);
 
 CREATE TABLE partitions.manifests_p_49 (
     id bigint NOT NULL,
@@ -5027,9 +3935,6 @@ CREATE TABLE partitions.manifests_p_49 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_49
-FOR VALUES WITH (MODULUS 64, REMAINDER 49);
-
 CREATE TABLE partitions.manifests_p_5 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5048,9 +3953,6 @@ CREATE TABLE partitions.manifests_p_5 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_5
-FOR VALUES WITH (MODULUS 64, REMAINDER 5);
 
 CREATE TABLE partitions.manifests_p_50 (
     id bigint NOT NULL,
@@ -5071,9 +3973,6 @@ CREATE TABLE partitions.manifests_p_50 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_50
-FOR VALUES WITH (MODULUS 64, REMAINDER 50);
-
 CREATE TABLE partitions.manifests_p_51 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5092,9 +3991,6 @@ CREATE TABLE partitions.manifests_p_51 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_51
-FOR VALUES WITH (MODULUS 64, REMAINDER 51);
 
 CREATE TABLE partitions.manifests_p_52 (
     id bigint NOT NULL,
@@ -5115,9 +4011,6 @@ CREATE TABLE partitions.manifests_p_52 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_52
-FOR VALUES WITH (MODULUS 64, REMAINDER 52);
-
 CREATE TABLE partitions.manifests_p_53 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5136,9 +4029,6 @@ CREATE TABLE partitions.manifests_p_53 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_53
-FOR VALUES WITH (MODULUS 64, REMAINDER 53);
 
 CREATE TABLE partitions.manifests_p_54 (
     id bigint NOT NULL,
@@ -5159,9 +4049,6 @@ CREATE TABLE partitions.manifests_p_54 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_54
-FOR VALUES WITH (MODULUS 64, REMAINDER 54);
-
 CREATE TABLE partitions.manifests_p_55 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5180,9 +4067,6 @@ CREATE TABLE partitions.manifests_p_55 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_55
-FOR VALUES WITH (MODULUS 64, REMAINDER 55);
 
 CREATE TABLE partitions.manifests_p_56 (
     id bigint NOT NULL,
@@ -5203,9 +4087,6 @@ CREATE TABLE partitions.manifests_p_56 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_56
-FOR VALUES WITH (MODULUS 64, REMAINDER 56);
-
 CREATE TABLE partitions.manifests_p_57 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5224,9 +4105,6 @@ CREATE TABLE partitions.manifests_p_57 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_57
-FOR VALUES WITH (MODULUS 64, REMAINDER 57);
 
 CREATE TABLE partitions.manifests_p_58 (
     id bigint NOT NULL,
@@ -5247,9 +4125,6 @@ CREATE TABLE partitions.manifests_p_58 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_58
-FOR VALUES WITH (MODULUS 64, REMAINDER 58);
-
 CREATE TABLE partitions.manifests_p_59 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5268,9 +4143,6 @@ CREATE TABLE partitions.manifests_p_59 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_59
-FOR VALUES WITH (MODULUS 64, REMAINDER 59);
 
 CREATE TABLE partitions.manifests_p_6 (
     id bigint NOT NULL,
@@ -5291,9 +4163,6 @@ CREATE TABLE partitions.manifests_p_6 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_6
-FOR VALUES WITH (MODULUS 64, REMAINDER 6);
-
 CREATE TABLE partitions.manifests_p_60 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5312,9 +4181,6 @@ CREATE TABLE partitions.manifests_p_60 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_60
-FOR VALUES WITH (MODULUS 64, REMAINDER 60);
 
 CREATE TABLE partitions.manifests_p_61 (
     id bigint NOT NULL,
@@ -5335,9 +4201,6 @@ CREATE TABLE partitions.manifests_p_61 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_61
-FOR VALUES WITH (MODULUS 64, REMAINDER 61);
-
 CREATE TABLE partitions.manifests_p_62 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5356,9 +4219,6 @@ CREATE TABLE partitions.manifests_p_62 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_62
-FOR VALUES WITH (MODULUS 64, REMAINDER 62);
 
 CREATE TABLE partitions.manifests_p_63 (
     id bigint NOT NULL,
@@ -5379,9 +4239,6 @@ CREATE TABLE partitions.manifests_p_63 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_63
-FOR VALUES WITH (MODULUS 64, REMAINDER 63);
-
 CREATE TABLE partitions.manifests_p_7 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5400,9 +4257,6 @@ CREATE TABLE partitions.manifests_p_7 (
     subject_id bigint,
     artifact_media_type_id bigint
 );
-
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_7
-FOR VALUES WITH (MODULUS 64, REMAINDER 7);
 
 CREATE TABLE partitions.manifests_p_8 (
     id bigint NOT NULL,
@@ -5423,9 +4277,6 @@ CREATE TABLE partitions.manifests_p_8 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_8
-FOR VALUES WITH (MODULUS 64, REMAINDER 8);
-
 CREATE TABLE partitions.manifests_p_9 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5445,9 +4296,6 @@ CREATE TABLE partitions.manifests_p_9 (
     artifact_media_type_id bigint
 );
 
-ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_9
-FOR VALUES WITH (MODULUS 64, REMAINDER 9);
-
 CREATE TABLE public.repository_blobs (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5465,9 +4313,6 @@ CREATE TABLE partitions.repository_blobs_p_0 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_0
-FOR VALUES WITH (MODULUS 64, REMAINDER 0);
-
 CREATE TABLE partitions.repository_blobs_p_1 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5475,9 +4320,6 @@ CREATE TABLE partitions.repository_blobs_p_1 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_1
-FOR VALUES WITH (MODULUS 64, REMAINDER 1);
 
 CREATE TABLE partitions.repository_blobs_p_10 (
     id bigint NOT NULL,
@@ -5487,9 +4329,6 @@ CREATE TABLE partitions.repository_blobs_p_10 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_10
-FOR VALUES WITH (MODULUS 64, REMAINDER 10);
-
 CREATE TABLE partitions.repository_blobs_p_11 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5497,9 +4336,6 @@ CREATE TABLE partitions.repository_blobs_p_11 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_11
-FOR VALUES WITH (MODULUS 64, REMAINDER 11);
 
 CREATE TABLE partitions.repository_blobs_p_12 (
     id bigint NOT NULL,
@@ -5509,9 +4345,6 @@ CREATE TABLE partitions.repository_blobs_p_12 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_12
-FOR VALUES WITH (MODULUS 64, REMAINDER 12);
-
 CREATE TABLE partitions.repository_blobs_p_13 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5519,9 +4352,6 @@ CREATE TABLE partitions.repository_blobs_p_13 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_13
-FOR VALUES WITH (MODULUS 64, REMAINDER 13);
 
 CREATE TABLE partitions.repository_blobs_p_14 (
     id bigint NOT NULL,
@@ -5531,9 +4361,6 @@ CREATE TABLE partitions.repository_blobs_p_14 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_14
-FOR VALUES WITH (MODULUS 64, REMAINDER 14);
-
 CREATE TABLE partitions.repository_blobs_p_15 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5541,9 +4368,6 @@ CREATE TABLE partitions.repository_blobs_p_15 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_15
-FOR VALUES WITH (MODULUS 64, REMAINDER 15);
 
 CREATE TABLE partitions.repository_blobs_p_16 (
     id bigint NOT NULL,
@@ -5553,9 +4377,6 @@ CREATE TABLE partitions.repository_blobs_p_16 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_16
-FOR VALUES WITH (MODULUS 64, REMAINDER 16);
-
 CREATE TABLE partitions.repository_blobs_p_17 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5563,9 +4384,6 @@ CREATE TABLE partitions.repository_blobs_p_17 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_17
-FOR VALUES WITH (MODULUS 64, REMAINDER 17);
 
 CREATE TABLE partitions.repository_blobs_p_18 (
     id bigint NOT NULL,
@@ -5575,9 +4393,6 @@ CREATE TABLE partitions.repository_blobs_p_18 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_18
-FOR VALUES WITH (MODULUS 64, REMAINDER 18);
-
 CREATE TABLE partitions.repository_blobs_p_19 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5585,9 +4400,6 @@ CREATE TABLE partitions.repository_blobs_p_19 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_19
-FOR VALUES WITH (MODULUS 64, REMAINDER 19);
 
 CREATE TABLE partitions.repository_blobs_p_2 (
     id bigint NOT NULL,
@@ -5597,9 +4409,6 @@ CREATE TABLE partitions.repository_blobs_p_2 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_2
-FOR VALUES WITH (MODULUS 64, REMAINDER 2);
-
 CREATE TABLE partitions.repository_blobs_p_20 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5607,9 +4416,6 @@ CREATE TABLE partitions.repository_blobs_p_20 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_20
-FOR VALUES WITH (MODULUS 64, REMAINDER 20);
 
 CREATE TABLE partitions.repository_blobs_p_21 (
     id bigint NOT NULL,
@@ -5619,9 +4425,6 @@ CREATE TABLE partitions.repository_blobs_p_21 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_21
-FOR VALUES WITH (MODULUS 64, REMAINDER 21);
-
 CREATE TABLE partitions.repository_blobs_p_22 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5629,9 +4432,6 @@ CREATE TABLE partitions.repository_blobs_p_22 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_22
-FOR VALUES WITH (MODULUS 64, REMAINDER 22);
 
 CREATE TABLE partitions.repository_blobs_p_23 (
     id bigint NOT NULL,
@@ -5641,9 +4441,6 @@ CREATE TABLE partitions.repository_blobs_p_23 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_23
-FOR VALUES WITH (MODULUS 64, REMAINDER 23);
-
 CREATE TABLE partitions.repository_blobs_p_24 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5651,9 +4448,6 @@ CREATE TABLE partitions.repository_blobs_p_24 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_24
-FOR VALUES WITH (MODULUS 64, REMAINDER 24);
 
 CREATE TABLE partitions.repository_blobs_p_25 (
     id bigint NOT NULL,
@@ -5663,9 +4457,6 @@ CREATE TABLE partitions.repository_blobs_p_25 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_25
-FOR VALUES WITH (MODULUS 64, REMAINDER 25);
-
 CREATE TABLE partitions.repository_blobs_p_26 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5673,9 +4464,6 @@ CREATE TABLE partitions.repository_blobs_p_26 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_26
-FOR VALUES WITH (MODULUS 64, REMAINDER 26);
 
 CREATE TABLE partitions.repository_blobs_p_27 (
     id bigint NOT NULL,
@@ -5685,9 +4473,6 @@ CREATE TABLE partitions.repository_blobs_p_27 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_27
-FOR VALUES WITH (MODULUS 64, REMAINDER 27);
-
 CREATE TABLE partitions.repository_blobs_p_28 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5695,9 +4480,6 @@ CREATE TABLE partitions.repository_blobs_p_28 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_28
-FOR VALUES WITH (MODULUS 64, REMAINDER 28);
 
 CREATE TABLE partitions.repository_blobs_p_29 (
     id bigint NOT NULL,
@@ -5707,9 +4489,6 @@ CREATE TABLE partitions.repository_blobs_p_29 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_29
-FOR VALUES WITH (MODULUS 64, REMAINDER 29);
-
 CREATE TABLE partitions.repository_blobs_p_3 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5717,9 +4496,6 @@ CREATE TABLE partitions.repository_blobs_p_3 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_3
-FOR VALUES WITH (MODULUS 64, REMAINDER 3);
 
 CREATE TABLE partitions.repository_blobs_p_30 (
     id bigint NOT NULL,
@@ -5729,9 +4505,6 @@ CREATE TABLE partitions.repository_blobs_p_30 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_30
-FOR VALUES WITH (MODULUS 64, REMAINDER 30);
-
 CREATE TABLE partitions.repository_blobs_p_31 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5739,9 +4512,6 @@ CREATE TABLE partitions.repository_blobs_p_31 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_31
-FOR VALUES WITH (MODULUS 64, REMAINDER 31);
 
 CREATE TABLE partitions.repository_blobs_p_32 (
     id bigint NOT NULL,
@@ -5751,9 +4521,6 @@ CREATE TABLE partitions.repository_blobs_p_32 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_32
-FOR VALUES WITH (MODULUS 64, REMAINDER 32);
-
 CREATE TABLE partitions.repository_blobs_p_33 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5761,9 +4528,6 @@ CREATE TABLE partitions.repository_blobs_p_33 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_33
-FOR VALUES WITH (MODULUS 64, REMAINDER 33);
 
 CREATE TABLE partitions.repository_blobs_p_34 (
     id bigint NOT NULL,
@@ -5773,9 +4537,6 @@ CREATE TABLE partitions.repository_blobs_p_34 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_34
-FOR VALUES WITH (MODULUS 64, REMAINDER 34);
-
 CREATE TABLE partitions.repository_blobs_p_35 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5783,9 +4544,6 @@ CREATE TABLE partitions.repository_blobs_p_35 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_35
-FOR VALUES WITH (MODULUS 64, REMAINDER 35);
 
 CREATE TABLE partitions.repository_blobs_p_36 (
     id bigint NOT NULL,
@@ -5795,9 +4553,6 @@ CREATE TABLE partitions.repository_blobs_p_36 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_36
-FOR VALUES WITH (MODULUS 64, REMAINDER 36);
-
 CREATE TABLE partitions.repository_blobs_p_37 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5805,9 +4560,6 @@ CREATE TABLE partitions.repository_blobs_p_37 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_37
-FOR VALUES WITH (MODULUS 64, REMAINDER 37);
 
 CREATE TABLE partitions.repository_blobs_p_38 (
     id bigint NOT NULL,
@@ -5817,9 +4569,6 @@ CREATE TABLE partitions.repository_blobs_p_38 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_38
-FOR VALUES WITH (MODULUS 64, REMAINDER 38);
-
 CREATE TABLE partitions.repository_blobs_p_39 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5827,9 +4576,6 @@ CREATE TABLE partitions.repository_blobs_p_39 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_39
-FOR VALUES WITH (MODULUS 64, REMAINDER 39);
 
 CREATE TABLE partitions.repository_blobs_p_4 (
     id bigint NOT NULL,
@@ -5839,9 +4585,6 @@ CREATE TABLE partitions.repository_blobs_p_4 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_4
-FOR VALUES WITH (MODULUS 64, REMAINDER 4);
-
 CREATE TABLE partitions.repository_blobs_p_40 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5849,9 +4592,6 @@ CREATE TABLE partitions.repository_blobs_p_40 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_40
-FOR VALUES WITH (MODULUS 64, REMAINDER 40);
 
 CREATE TABLE partitions.repository_blobs_p_41 (
     id bigint NOT NULL,
@@ -5861,9 +4601,6 @@ CREATE TABLE partitions.repository_blobs_p_41 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_41
-FOR VALUES WITH (MODULUS 64, REMAINDER 41);
-
 CREATE TABLE partitions.repository_blobs_p_42 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5871,9 +4608,6 @@ CREATE TABLE partitions.repository_blobs_p_42 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_42
-FOR VALUES WITH (MODULUS 64, REMAINDER 42);
 
 CREATE TABLE partitions.repository_blobs_p_43 (
     id bigint NOT NULL,
@@ -5883,9 +4617,6 @@ CREATE TABLE partitions.repository_blobs_p_43 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_43
-FOR VALUES WITH (MODULUS 64, REMAINDER 43);
-
 CREATE TABLE partitions.repository_blobs_p_44 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5893,9 +4624,6 @@ CREATE TABLE partitions.repository_blobs_p_44 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_44
-FOR VALUES WITH (MODULUS 64, REMAINDER 44);
 
 CREATE TABLE partitions.repository_blobs_p_45 (
     id bigint NOT NULL,
@@ -5905,9 +4633,6 @@ CREATE TABLE partitions.repository_blobs_p_45 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_45
-FOR VALUES WITH (MODULUS 64, REMAINDER 45);
-
 CREATE TABLE partitions.repository_blobs_p_46 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5915,9 +4640,6 @@ CREATE TABLE partitions.repository_blobs_p_46 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_46
-FOR VALUES WITH (MODULUS 64, REMAINDER 46);
 
 CREATE TABLE partitions.repository_blobs_p_47 (
     id bigint NOT NULL,
@@ -5927,9 +4649,6 @@ CREATE TABLE partitions.repository_blobs_p_47 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_47
-FOR VALUES WITH (MODULUS 64, REMAINDER 47);
-
 CREATE TABLE partitions.repository_blobs_p_48 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5937,9 +4656,6 @@ CREATE TABLE partitions.repository_blobs_p_48 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_48
-FOR VALUES WITH (MODULUS 64, REMAINDER 48);
 
 CREATE TABLE partitions.repository_blobs_p_49 (
     id bigint NOT NULL,
@@ -5949,9 +4665,6 @@ CREATE TABLE partitions.repository_blobs_p_49 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_49
-FOR VALUES WITH (MODULUS 64, REMAINDER 49);
-
 CREATE TABLE partitions.repository_blobs_p_5 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5959,9 +4672,6 @@ CREATE TABLE partitions.repository_blobs_p_5 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_5
-FOR VALUES WITH (MODULUS 64, REMAINDER 5);
 
 CREATE TABLE partitions.repository_blobs_p_50 (
     id bigint NOT NULL,
@@ -5971,9 +4681,6 @@ CREATE TABLE partitions.repository_blobs_p_50 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_50
-FOR VALUES WITH (MODULUS 64, REMAINDER 50);
-
 CREATE TABLE partitions.repository_blobs_p_51 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -5981,9 +4688,6 @@ CREATE TABLE partitions.repository_blobs_p_51 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_51
-FOR VALUES WITH (MODULUS 64, REMAINDER 51);
 
 CREATE TABLE partitions.repository_blobs_p_52 (
     id bigint NOT NULL,
@@ -5993,9 +4697,6 @@ CREATE TABLE partitions.repository_blobs_p_52 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_52
-FOR VALUES WITH (MODULUS 64, REMAINDER 52);
-
 CREATE TABLE partitions.repository_blobs_p_53 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6003,9 +4704,6 @@ CREATE TABLE partitions.repository_blobs_p_53 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_53
-FOR VALUES WITH (MODULUS 64, REMAINDER 53);
 
 CREATE TABLE partitions.repository_blobs_p_54 (
     id bigint NOT NULL,
@@ -6015,9 +4713,6 @@ CREATE TABLE partitions.repository_blobs_p_54 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_54
-FOR VALUES WITH (MODULUS 64, REMAINDER 54);
-
 CREATE TABLE partitions.repository_blobs_p_55 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6025,9 +4720,6 @@ CREATE TABLE partitions.repository_blobs_p_55 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_55
-FOR VALUES WITH (MODULUS 64, REMAINDER 55);
 
 CREATE TABLE partitions.repository_blobs_p_56 (
     id bigint NOT NULL,
@@ -6037,9 +4729,6 @@ CREATE TABLE partitions.repository_blobs_p_56 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_56
-FOR VALUES WITH (MODULUS 64, REMAINDER 56);
-
 CREATE TABLE partitions.repository_blobs_p_57 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6047,9 +4736,6 @@ CREATE TABLE partitions.repository_blobs_p_57 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_57
-FOR VALUES WITH (MODULUS 64, REMAINDER 57);
 
 CREATE TABLE partitions.repository_blobs_p_58 (
     id bigint NOT NULL,
@@ -6059,9 +4745,6 @@ CREATE TABLE partitions.repository_blobs_p_58 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_58
-FOR VALUES WITH (MODULUS 64, REMAINDER 58);
-
 CREATE TABLE partitions.repository_blobs_p_59 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6069,9 +4752,6 @@ CREATE TABLE partitions.repository_blobs_p_59 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_59
-FOR VALUES WITH (MODULUS 64, REMAINDER 59);
 
 CREATE TABLE partitions.repository_blobs_p_6 (
     id bigint NOT NULL,
@@ -6081,9 +4761,6 @@ CREATE TABLE partitions.repository_blobs_p_6 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_6
-FOR VALUES WITH (MODULUS 64, REMAINDER 6);
-
 CREATE TABLE partitions.repository_blobs_p_60 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6091,9 +4768,6 @@ CREATE TABLE partitions.repository_blobs_p_60 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_60
-FOR VALUES WITH (MODULUS 64, REMAINDER 60);
 
 CREATE TABLE partitions.repository_blobs_p_61 (
     id bigint NOT NULL,
@@ -6103,9 +4777,6 @@ CREATE TABLE partitions.repository_blobs_p_61 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_61
-FOR VALUES WITH (MODULUS 64, REMAINDER 61);
-
 CREATE TABLE partitions.repository_blobs_p_62 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6113,9 +4784,6 @@ CREATE TABLE partitions.repository_blobs_p_62 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_62
-FOR VALUES WITH (MODULUS 64, REMAINDER 62);
 
 CREATE TABLE partitions.repository_blobs_p_63 (
     id bigint NOT NULL,
@@ -6125,9 +4793,6 @@ CREATE TABLE partitions.repository_blobs_p_63 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_63
-FOR VALUES WITH (MODULUS 64, REMAINDER 63);
-
 CREATE TABLE partitions.repository_blobs_p_7 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6135,9 +4800,6 @@ CREATE TABLE partitions.repository_blobs_p_7 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_7
-FOR VALUES WITH (MODULUS 64, REMAINDER 7);
 
 CREATE TABLE partitions.repository_blobs_p_8 (
     id bigint NOT NULL,
@@ -6147,9 +4809,6 @@ CREATE TABLE partitions.repository_blobs_p_8 (
     blob_digest bytea NOT NULL
 );
 
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_8
-FOR VALUES WITH (MODULUS 64, REMAINDER 8);
-
 CREATE TABLE partitions.repository_blobs_p_9 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6157,9 +4816,6 @@ CREATE TABLE partitions.repository_blobs_p_9 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     blob_digest bytea NOT NULL
 );
-
-ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_9
-FOR VALUES WITH (MODULUS 64, REMAINDER 9);
 
 CREATE TABLE public.tags (
     id bigint NOT NULL,
@@ -6184,9 +4840,6 @@ CREATE TABLE partitions.tags_p_0 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_0
-FOR VALUES WITH (MODULUS 64, REMAINDER 0);
-
 CREATE TABLE partitions.tags_p_1 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6197,9 +4850,6 @@ CREATE TABLE partitions.tags_p_1 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_1
-FOR VALUES WITH (MODULUS 64, REMAINDER 1);
 
 CREATE TABLE partitions.tags_p_10 (
     id bigint NOT NULL,
@@ -6212,9 +4862,6 @@ CREATE TABLE partitions.tags_p_10 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_10
-FOR VALUES WITH (MODULUS 64, REMAINDER 10);
-
 CREATE TABLE partitions.tags_p_11 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6225,9 +4872,6 @@ CREATE TABLE partitions.tags_p_11 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_11
-FOR VALUES WITH (MODULUS 64, REMAINDER 11);
 
 CREATE TABLE partitions.tags_p_12 (
     id bigint NOT NULL,
@@ -6240,9 +4884,6 @@ CREATE TABLE partitions.tags_p_12 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_12
-FOR VALUES WITH (MODULUS 64, REMAINDER 12);
-
 CREATE TABLE partitions.tags_p_13 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6253,9 +4894,6 @@ CREATE TABLE partitions.tags_p_13 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_13
-FOR VALUES WITH (MODULUS 64, REMAINDER 13);
 
 CREATE TABLE partitions.tags_p_14 (
     id bigint NOT NULL,
@@ -6268,9 +4906,6 @@ CREATE TABLE partitions.tags_p_14 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_14
-FOR VALUES WITH (MODULUS 64, REMAINDER 14);
-
 CREATE TABLE partitions.tags_p_15 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6281,9 +4916,6 @@ CREATE TABLE partitions.tags_p_15 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_15
-FOR VALUES WITH (MODULUS 64, REMAINDER 15);
 
 CREATE TABLE partitions.tags_p_16 (
     id bigint NOT NULL,
@@ -6296,9 +4928,6 @@ CREATE TABLE partitions.tags_p_16 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_16
-FOR VALUES WITH (MODULUS 64, REMAINDER 16);
-
 CREATE TABLE partitions.tags_p_17 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6309,9 +4938,6 @@ CREATE TABLE partitions.tags_p_17 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_17
-FOR VALUES WITH (MODULUS 64, REMAINDER 17);
 
 CREATE TABLE partitions.tags_p_18 (
     id bigint NOT NULL,
@@ -6324,9 +4950,6 @@ CREATE TABLE partitions.tags_p_18 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_18
-FOR VALUES WITH (MODULUS 64, REMAINDER 18);
-
 CREATE TABLE partitions.tags_p_19 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6337,9 +4960,6 @@ CREATE TABLE partitions.tags_p_19 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_19
-FOR VALUES WITH (MODULUS 64, REMAINDER 19);
 
 CREATE TABLE partitions.tags_p_2 (
     id bigint NOT NULL,
@@ -6352,9 +4972,6 @@ CREATE TABLE partitions.tags_p_2 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_2
-FOR VALUES WITH (MODULUS 64, REMAINDER 2);
-
 CREATE TABLE partitions.tags_p_20 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6365,9 +4982,6 @@ CREATE TABLE partitions.tags_p_20 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_20
-FOR VALUES WITH (MODULUS 64, REMAINDER 20);
 
 CREATE TABLE partitions.tags_p_21 (
     id bigint NOT NULL,
@@ -6380,9 +4994,6 @@ CREATE TABLE partitions.tags_p_21 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_21
-FOR VALUES WITH (MODULUS 64, REMAINDER 21);
-
 CREATE TABLE partitions.tags_p_22 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6393,9 +5004,6 @@ CREATE TABLE partitions.tags_p_22 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_22
-FOR VALUES WITH (MODULUS 64, REMAINDER 22);
 
 CREATE TABLE partitions.tags_p_23 (
     id bigint NOT NULL,
@@ -6408,9 +5016,6 @@ CREATE TABLE partitions.tags_p_23 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_23
-FOR VALUES WITH (MODULUS 64, REMAINDER 23);
-
 CREATE TABLE partitions.tags_p_24 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6421,9 +5026,6 @@ CREATE TABLE partitions.tags_p_24 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_24
-FOR VALUES WITH (MODULUS 64, REMAINDER 24);
 
 CREATE TABLE partitions.tags_p_25 (
     id bigint NOT NULL,
@@ -6436,9 +5038,6 @@ CREATE TABLE partitions.tags_p_25 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_25
-FOR VALUES WITH (MODULUS 64, REMAINDER 25);
-
 CREATE TABLE partitions.tags_p_26 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6449,9 +5048,6 @@ CREATE TABLE partitions.tags_p_26 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_26
-FOR VALUES WITH (MODULUS 64, REMAINDER 26);
 
 CREATE TABLE partitions.tags_p_27 (
     id bigint NOT NULL,
@@ -6464,9 +5060,6 @@ CREATE TABLE partitions.tags_p_27 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_27
-FOR VALUES WITH (MODULUS 64, REMAINDER 27);
-
 CREATE TABLE partitions.tags_p_28 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6477,9 +5070,6 @@ CREATE TABLE partitions.tags_p_28 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_28
-FOR VALUES WITH (MODULUS 64, REMAINDER 28);
 
 CREATE TABLE partitions.tags_p_29 (
     id bigint NOT NULL,
@@ -6492,9 +5082,6 @@ CREATE TABLE partitions.tags_p_29 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_29
-FOR VALUES WITH (MODULUS 64, REMAINDER 29);
-
 CREATE TABLE partitions.tags_p_3 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6505,9 +5092,6 @@ CREATE TABLE partitions.tags_p_3 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_3
-FOR VALUES WITH (MODULUS 64, REMAINDER 3);
 
 CREATE TABLE partitions.tags_p_30 (
     id bigint NOT NULL,
@@ -6520,9 +5104,6 @@ CREATE TABLE partitions.tags_p_30 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_30
-FOR VALUES WITH (MODULUS 64, REMAINDER 30);
-
 CREATE TABLE partitions.tags_p_31 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6533,9 +5114,6 @@ CREATE TABLE partitions.tags_p_31 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_31
-FOR VALUES WITH (MODULUS 64, REMAINDER 31);
 
 CREATE TABLE partitions.tags_p_32 (
     id bigint NOT NULL,
@@ -6548,9 +5126,6 @@ CREATE TABLE partitions.tags_p_32 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_32
-FOR VALUES WITH (MODULUS 64, REMAINDER 32);
-
 CREATE TABLE partitions.tags_p_33 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6561,9 +5136,6 @@ CREATE TABLE partitions.tags_p_33 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_33
-FOR VALUES WITH (MODULUS 64, REMAINDER 33);
 
 CREATE TABLE partitions.tags_p_34 (
     id bigint NOT NULL,
@@ -6576,9 +5148,6 @@ CREATE TABLE partitions.tags_p_34 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_34
-FOR VALUES WITH (MODULUS 64, REMAINDER 34);
-
 CREATE TABLE partitions.tags_p_35 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6589,9 +5158,6 @@ CREATE TABLE partitions.tags_p_35 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_35
-FOR VALUES WITH (MODULUS 64, REMAINDER 35);
 
 CREATE TABLE partitions.tags_p_36 (
     id bigint NOT NULL,
@@ -6604,9 +5170,6 @@ CREATE TABLE partitions.tags_p_36 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_36
-FOR VALUES WITH (MODULUS 64, REMAINDER 36);
-
 CREATE TABLE partitions.tags_p_37 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6617,9 +5180,6 @@ CREATE TABLE partitions.tags_p_37 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_37
-FOR VALUES WITH (MODULUS 64, REMAINDER 37);
 
 CREATE TABLE partitions.tags_p_38 (
     id bigint NOT NULL,
@@ -6632,9 +5192,6 @@ CREATE TABLE partitions.tags_p_38 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_38
-FOR VALUES WITH (MODULUS 64, REMAINDER 38);
-
 CREATE TABLE partitions.tags_p_39 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6645,9 +5202,6 @@ CREATE TABLE partitions.tags_p_39 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_39
-FOR VALUES WITH (MODULUS 64, REMAINDER 39);
 
 CREATE TABLE partitions.tags_p_4 (
     id bigint NOT NULL,
@@ -6660,9 +5214,6 @@ CREATE TABLE partitions.tags_p_4 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_4
-FOR VALUES WITH (MODULUS 64, REMAINDER 4);
-
 CREATE TABLE partitions.tags_p_40 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6673,9 +5224,6 @@ CREATE TABLE partitions.tags_p_40 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_40
-FOR VALUES WITH (MODULUS 64, REMAINDER 40);
 
 CREATE TABLE partitions.tags_p_41 (
     id bigint NOT NULL,
@@ -6688,9 +5236,6 @@ CREATE TABLE partitions.tags_p_41 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_41
-FOR VALUES WITH (MODULUS 64, REMAINDER 41);
-
 CREATE TABLE partitions.tags_p_42 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6701,9 +5246,6 @@ CREATE TABLE partitions.tags_p_42 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_42
-FOR VALUES WITH (MODULUS 64, REMAINDER 42);
 
 CREATE TABLE partitions.tags_p_43 (
     id bigint NOT NULL,
@@ -6716,9 +5258,6 @@ CREATE TABLE partitions.tags_p_43 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_43
-FOR VALUES WITH (MODULUS 64, REMAINDER 43);
-
 CREATE TABLE partitions.tags_p_44 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6729,9 +5268,6 @@ CREATE TABLE partitions.tags_p_44 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_44
-FOR VALUES WITH (MODULUS 64, REMAINDER 44);
 
 CREATE TABLE partitions.tags_p_45 (
     id bigint NOT NULL,
@@ -6744,9 +5280,6 @@ CREATE TABLE partitions.tags_p_45 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_45
-FOR VALUES WITH (MODULUS 64, REMAINDER 45);
-
 CREATE TABLE partitions.tags_p_46 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6757,9 +5290,6 @@ CREATE TABLE partitions.tags_p_46 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_46
-FOR VALUES WITH (MODULUS 64, REMAINDER 46);
 
 CREATE TABLE partitions.tags_p_47 (
     id bigint NOT NULL,
@@ -6772,9 +5302,6 @@ CREATE TABLE partitions.tags_p_47 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_47
-FOR VALUES WITH (MODULUS 64, REMAINDER 47);
-
 CREATE TABLE partitions.tags_p_48 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6785,9 +5312,6 @@ CREATE TABLE partitions.tags_p_48 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_48
-FOR VALUES WITH (MODULUS 64, REMAINDER 48);
 
 CREATE TABLE partitions.tags_p_49 (
     id bigint NOT NULL,
@@ -6800,9 +5324,6 @@ CREATE TABLE partitions.tags_p_49 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_49
-FOR VALUES WITH (MODULUS 64, REMAINDER 49);
-
 CREATE TABLE partitions.tags_p_5 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6813,9 +5334,6 @@ CREATE TABLE partitions.tags_p_5 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_5
-FOR VALUES WITH (MODULUS 64, REMAINDER 5);
 
 CREATE TABLE partitions.tags_p_50 (
     id bigint NOT NULL,
@@ -6828,9 +5346,6 @@ CREATE TABLE partitions.tags_p_50 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_50
-FOR VALUES WITH (MODULUS 64, REMAINDER 50);
-
 CREATE TABLE partitions.tags_p_51 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6841,9 +5356,6 @@ CREATE TABLE partitions.tags_p_51 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_51
-FOR VALUES WITH (MODULUS 64, REMAINDER 51);
 
 CREATE TABLE partitions.tags_p_52 (
     id bigint NOT NULL,
@@ -6856,9 +5368,6 @@ CREATE TABLE partitions.tags_p_52 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_52
-FOR VALUES WITH (MODULUS 64, REMAINDER 52);
-
 CREATE TABLE partitions.tags_p_53 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6869,9 +5378,6 @@ CREATE TABLE partitions.tags_p_53 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_53
-FOR VALUES WITH (MODULUS 64, REMAINDER 53);
 
 CREATE TABLE partitions.tags_p_54 (
     id bigint NOT NULL,
@@ -6884,9 +5390,6 @@ CREATE TABLE partitions.tags_p_54 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_54
-FOR VALUES WITH (MODULUS 64, REMAINDER 54);
-
 CREATE TABLE partitions.tags_p_55 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6897,9 +5400,6 @@ CREATE TABLE partitions.tags_p_55 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_55
-FOR VALUES WITH (MODULUS 64, REMAINDER 55);
 
 CREATE TABLE partitions.tags_p_56 (
     id bigint NOT NULL,
@@ -6912,9 +5412,6 @@ CREATE TABLE partitions.tags_p_56 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_56
-FOR VALUES WITH (MODULUS 64, REMAINDER 56);
-
 CREATE TABLE partitions.tags_p_57 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6925,9 +5422,6 @@ CREATE TABLE partitions.tags_p_57 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_57
-FOR VALUES WITH (MODULUS 64, REMAINDER 57);
 
 CREATE TABLE partitions.tags_p_58 (
     id bigint NOT NULL,
@@ -6940,9 +5434,6 @@ CREATE TABLE partitions.tags_p_58 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_58
-FOR VALUES WITH (MODULUS 64, REMAINDER 58);
-
 CREATE TABLE partitions.tags_p_59 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6953,9 +5444,6 @@ CREATE TABLE partitions.tags_p_59 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_59
-FOR VALUES WITH (MODULUS 64, REMAINDER 59);
 
 CREATE TABLE partitions.tags_p_6 (
     id bigint NOT NULL,
@@ -6968,9 +5456,6 @@ CREATE TABLE partitions.tags_p_6 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_6
-FOR VALUES WITH (MODULUS 64, REMAINDER 6);
-
 CREATE TABLE partitions.tags_p_60 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -6981,9 +5466,6 @@ CREATE TABLE partitions.tags_p_60 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_60
-FOR VALUES WITH (MODULUS 64, REMAINDER 60);
 
 CREATE TABLE partitions.tags_p_61 (
     id bigint NOT NULL,
@@ -6996,9 +5478,6 @@ CREATE TABLE partitions.tags_p_61 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_61
-FOR VALUES WITH (MODULUS 64, REMAINDER 61);
-
 CREATE TABLE partitions.tags_p_62 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -7009,9 +5488,6 @@ CREATE TABLE partitions.tags_p_62 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_62
-FOR VALUES WITH (MODULUS 64, REMAINDER 62);
 
 CREATE TABLE partitions.tags_p_63 (
     id bigint NOT NULL,
@@ -7024,9 +5500,6 @@ CREATE TABLE partitions.tags_p_63 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_63
-FOR VALUES WITH (MODULUS 64, REMAINDER 63);
-
 CREATE TABLE partitions.tags_p_7 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -7037,9 +5510,6 @@ CREATE TABLE partitions.tags_p_7 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_7
-FOR VALUES WITH (MODULUS 64, REMAINDER 7);
 
 CREATE TABLE partitions.tags_p_8 (
     id bigint NOT NULL,
@@ -7052,9 +5522,6 @@ CREATE TABLE partitions.tags_p_8 (
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
 
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_8
-FOR VALUES WITH (MODULUS 64, REMAINDER 8);
-
 CREATE TABLE partitions.tags_p_9 (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -7065,9 +5532,6 @@ CREATE TABLE partitions.tags_p_9 (
     name text NOT NULL,
     CONSTRAINT check_tags_name_length CHECK ((char_length(name) <= 255))
 );
-
-ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_9
-FOR VALUES WITH (MODULUS 64, REMAINDER 9);
 
 CREATE TABLE public.gc_blob_review_queue (
     review_after timestamp with time zone DEFAULT (now() + '1 day'::interval) NOT NULL,
@@ -7214,6 +5678,1542 @@ ALTER TABLE public.top_level_namespaces
         NO MINVALUE
         NO MAXVALUE
         CACHE 1);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_0
+FOR VALUES WITH (MODULUS 64, REMAINDER 0);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_1
+FOR VALUES WITH (MODULUS 64, REMAINDER 1);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_10
+FOR VALUES WITH (MODULUS 64, REMAINDER 10);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_11
+FOR VALUES WITH (MODULUS 64, REMAINDER 11);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_12
+FOR VALUES WITH (MODULUS 64, REMAINDER 12);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_13
+FOR VALUES WITH (MODULUS 64, REMAINDER 13);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_14
+FOR VALUES WITH (MODULUS 64, REMAINDER 14);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_15
+FOR VALUES WITH (MODULUS 64, REMAINDER 15);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_16
+FOR VALUES WITH (MODULUS 64, REMAINDER 16);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_17
+FOR VALUES WITH (MODULUS 64, REMAINDER 17);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_18
+FOR VALUES WITH (MODULUS 64, REMAINDER 18);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_19
+FOR VALUES WITH (MODULUS 64, REMAINDER 19);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_2
+FOR VALUES WITH (MODULUS 64, REMAINDER 2);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_20
+FOR VALUES WITH (MODULUS 64, REMAINDER 20);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_21
+FOR VALUES WITH (MODULUS 64, REMAINDER 21);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_22
+FOR VALUES WITH (MODULUS 64, REMAINDER 22);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_23
+FOR VALUES WITH (MODULUS 64, REMAINDER 23);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_24
+FOR VALUES WITH (MODULUS 64, REMAINDER 24);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_25
+FOR VALUES WITH (MODULUS 64, REMAINDER 25);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_26
+FOR VALUES WITH (MODULUS 64, REMAINDER 26);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_27
+FOR VALUES WITH (MODULUS 64, REMAINDER 27);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_28
+FOR VALUES WITH (MODULUS 64, REMAINDER 28);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_29
+FOR VALUES WITH (MODULUS 64, REMAINDER 29);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_3
+FOR VALUES WITH (MODULUS 64, REMAINDER 3);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_30
+FOR VALUES WITH (MODULUS 64, REMAINDER 30);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_31
+FOR VALUES WITH (MODULUS 64, REMAINDER 31);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_32
+FOR VALUES WITH (MODULUS 64, REMAINDER 32);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_33
+FOR VALUES WITH (MODULUS 64, REMAINDER 33);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_34
+FOR VALUES WITH (MODULUS 64, REMAINDER 34);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_35
+FOR VALUES WITH (MODULUS 64, REMAINDER 35);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_36
+FOR VALUES WITH (MODULUS 64, REMAINDER 36);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_37
+FOR VALUES WITH (MODULUS 64, REMAINDER 37);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_38
+FOR VALUES WITH (MODULUS 64, REMAINDER 38);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_39
+FOR VALUES WITH (MODULUS 64, REMAINDER 39);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_4
+FOR VALUES WITH (MODULUS 64, REMAINDER 4);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_40
+FOR VALUES WITH (MODULUS 64, REMAINDER 40);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_41
+FOR VALUES WITH (MODULUS 64, REMAINDER 41);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_42
+FOR VALUES WITH (MODULUS 64, REMAINDER 42);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_43
+FOR VALUES WITH (MODULUS 64, REMAINDER 43);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_44
+FOR VALUES WITH (MODULUS 64, REMAINDER 44);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_45
+FOR VALUES WITH (MODULUS 64, REMAINDER 45);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_46
+FOR VALUES WITH (MODULUS 64, REMAINDER 46);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_47
+FOR VALUES WITH (MODULUS 64, REMAINDER 47);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_48
+FOR VALUES WITH (MODULUS 64, REMAINDER 48);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_49
+FOR VALUES WITH (MODULUS 64, REMAINDER 49);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_5
+FOR VALUES WITH (MODULUS 64, REMAINDER 5);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_50
+FOR VALUES WITH (MODULUS 64, REMAINDER 50);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_51
+FOR VALUES WITH (MODULUS 64, REMAINDER 51);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_52
+FOR VALUES WITH (MODULUS 64, REMAINDER 52);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_53
+FOR VALUES WITH (MODULUS 64, REMAINDER 53);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_54
+FOR VALUES WITH (MODULUS 64, REMAINDER 54);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_55
+FOR VALUES WITH (MODULUS 64, REMAINDER 55);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_56
+FOR VALUES WITH (MODULUS 64, REMAINDER 56);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_57
+FOR VALUES WITH (MODULUS 64, REMAINDER 57);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_58
+FOR VALUES WITH (MODULUS 64, REMAINDER 58);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_59
+FOR VALUES WITH (MODULUS 64, REMAINDER 59);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_6
+FOR VALUES WITH (MODULUS 64, REMAINDER 6);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_60
+FOR VALUES WITH (MODULUS 64, REMAINDER 60);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_61
+FOR VALUES WITH (MODULUS 64, REMAINDER 61);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_62
+FOR VALUES WITH (MODULUS 64, REMAINDER 62);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_63
+FOR VALUES WITH (MODULUS 64, REMAINDER 63);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_7
+FOR VALUES WITH (MODULUS 64, REMAINDER 7);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_8
+FOR VALUES WITH (MODULUS 64, REMAINDER 8);
+
+ALTER TABLE ONLY public.blobs ATTACH PARTITION partitions.blobs_p_9
+FOR VALUES WITH (MODULUS 64, REMAINDER 9);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_0
+FOR VALUES WITH (MODULUS 64, REMAINDER 0);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_1
+FOR VALUES WITH (MODULUS 64, REMAINDER 1);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_10
+FOR VALUES WITH (MODULUS 64, REMAINDER 10);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_11
+FOR VALUES WITH (MODULUS 64, REMAINDER 11);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_12
+FOR VALUES WITH (MODULUS 64, REMAINDER 12);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_13
+FOR VALUES WITH (MODULUS 64, REMAINDER 13);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_14
+FOR VALUES WITH (MODULUS 64, REMAINDER 14);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_15
+FOR VALUES WITH (MODULUS 64, REMAINDER 15);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_16
+FOR VALUES WITH (MODULUS 64, REMAINDER 16);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_17
+FOR VALUES WITH (MODULUS 64, REMAINDER 17);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_18
+FOR VALUES WITH (MODULUS 64, REMAINDER 18);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_19
+FOR VALUES WITH (MODULUS 64, REMAINDER 19);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_2
+FOR VALUES WITH (MODULUS 64, REMAINDER 2);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_20
+FOR VALUES WITH (MODULUS 64, REMAINDER 20);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_21
+FOR VALUES WITH (MODULUS 64, REMAINDER 21);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_22
+FOR VALUES WITH (MODULUS 64, REMAINDER 22);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_23
+FOR VALUES WITH (MODULUS 64, REMAINDER 23);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_24
+FOR VALUES WITH (MODULUS 64, REMAINDER 24);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_25
+FOR VALUES WITH (MODULUS 64, REMAINDER 25);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_26
+FOR VALUES WITH (MODULUS 64, REMAINDER 26);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_27
+FOR VALUES WITH (MODULUS 64, REMAINDER 27);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_28
+FOR VALUES WITH (MODULUS 64, REMAINDER 28);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_29
+FOR VALUES WITH (MODULUS 64, REMAINDER 29);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_3
+FOR VALUES WITH (MODULUS 64, REMAINDER 3);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_30
+FOR VALUES WITH (MODULUS 64, REMAINDER 30);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_31
+FOR VALUES WITH (MODULUS 64, REMAINDER 31);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_32
+FOR VALUES WITH (MODULUS 64, REMAINDER 32);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_33
+FOR VALUES WITH (MODULUS 64, REMAINDER 33);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_34
+FOR VALUES WITH (MODULUS 64, REMAINDER 34);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_35
+FOR VALUES WITH (MODULUS 64, REMAINDER 35);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_36
+FOR VALUES WITH (MODULUS 64, REMAINDER 36);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_37
+FOR VALUES WITH (MODULUS 64, REMAINDER 37);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_38
+FOR VALUES WITH (MODULUS 64, REMAINDER 38);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_39
+FOR VALUES WITH (MODULUS 64, REMAINDER 39);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_4
+FOR VALUES WITH (MODULUS 64, REMAINDER 4);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_40
+FOR VALUES WITH (MODULUS 64, REMAINDER 40);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_41
+FOR VALUES WITH (MODULUS 64, REMAINDER 41);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_42
+FOR VALUES WITH (MODULUS 64, REMAINDER 42);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_43
+FOR VALUES WITH (MODULUS 64, REMAINDER 43);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_44
+FOR VALUES WITH (MODULUS 64, REMAINDER 44);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_45
+FOR VALUES WITH (MODULUS 64, REMAINDER 45);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_46
+FOR VALUES WITH (MODULUS 64, REMAINDER 46);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_47
+FOR VALUES WITH (MODULUS 64, REMAINDER 47);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_48
+FOR VALUES WITH (MODULUS 64, REMAINDER 48);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_49
+FOR VALUES WITH (MODULUS 64, REMAINDER 49);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_5
+FOR VALUES WITH (MODULUS 64, REMAINDER 5);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_50
+FOR VALUES WITH (MODULUS 64, REMAINDER 50);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_51
+FOR VALUES WITH (MODULUS 64, REMAINDER 51);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_52
+FOR VALUES WITH (MODULUS 64, REMAINDER 52);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_53
+FOR VALUES WITH (MODULUS 64, REMAINDER 53);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_54
+FOR VALUES WITH (MODULUS 64, REMAINDER 54);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_55
+FOR VALUES WITH (MODULUS 64, REMAINDER 55);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_56
+FOR VALUES WITH (MODULUS 64, REMAINDER 56);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_57
+FOR VALUES WITH (MODULUS 64, REMAINDER 57);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_58
+FOR VALUES WITH (MODULUS 64, REMAINDER 58);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_59
+FOR VALUES WITH (MODULUS 64, REMAINDER 59);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_6
+FOR VALUES WITH (MODULUS 64, REMAINDER 6);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_60
+FOR VALUES WITH (MODULUS 64, REMAINDER 60);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_61
+FOR VALUES WITH (MODULUS 64, REMAINDER 61);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_62
+FOR VALUES WITH (MODULUS 64, REMAINDER 62);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_63
+FOR VALUES WITH (MODULUS 64, REMAINDER 63);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_7
+FOR VALUES WITH (MODULUS 64, REMAINDER 7);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_8
+FOR VALUES WITH (MODULUS 64, REMAINDER 8);
+
+ALTER TABLE ONLY public.gc_blobs_configurations ATTACH PARTITION partitions.gc_blobs_configurations_p_9
+FOR VALUES WITH (MODULUS 64, REMAINDER 9);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_0
+FOR VALUES WITH (MODULUS 64, REMAINDER 0);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_1
+FOR VALUES WITH (MODULUS 64, REMAINDER 1);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_10
+FOR VALUES WITH (MODULUS 64, REMAINDER 10);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_11
+FOR VALUES WITH (MODULUS 64, REMAINDER 11);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_12
+FOR VALUES WITH (MODULUS 64, REMAINDER 12);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_13
+FOR VALUES WITH (MODULUS 64, REMAINDER 13);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_14
+FOR VALUES WITH (MODULUS 64, REMAINDER 14);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_15
+FOR VALUES WITH (MODULUS 64, REMAINDER 15);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_16
+FOR VALUES WITH (MODULUS 64, REMAINDER 16);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_17
+FOR VALUES WITH (MODULUS 64, REMAINDER 17);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_18
+FOR VALUES WITH (MODULUS 64, REMAINDER 18);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_19
+FOR VALUES WITH (MODULUS 64, REMAINDER 19);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_2
+FOR VALUES WITH (MODULUS 64, REMAINDER 2);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_20
+FOR VALUES WITH (MODULUS 64, REMAINDER 20);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_21
+FOR VALUES WITH (MODULUS 64, REMAINDER 21);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_22
+FOR VALUES WITH (MODULUS 64, REMAINDER 22);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_23
+FOR VALUES WITH (MODULUS 64, REMAINDER 23);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_24
+FOR VALUES WITH (MODULUS 64, REMAINDER 24);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_25
+FOR VALUES WITH (MODULUS 64, REMAINDER 25);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_26
+FOR VALUES WITH (MODULUS 64, REMAINDER 26);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_27
+FOR VALUES WITH (MODULUS 64, REMAINDER 27);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_28
+FOR VALUES WITH (MODULUS 64, REMAINDER 28);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_29
+FOR VALUES WITH (MODULUS 64, REMAINDER 29);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_3
+FOR VALUES WITH (MODULUS 64, REMAINDER 3);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_30
+FOR VALUES WITH (MODULUS 64, REMAINDER 30);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_31
+FOR VALUES WITH (MODULUS 64, REMAINDER 31);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_32
+FOR VALUES WITH (MODULUS 64, REMAINDER 32);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_33
+FOR VALUES WITH (MODULUS 64, REMAINDER 33);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_34
+FOR VALUES WITH (MODULUS 64, REMAINDER 34);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_35
+FOR VALUES WITH (MODULUS 64, REMAINDER 35);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_36
+FOR VALUES WITH (MODULUS 64, REMAINDER 36);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_37
+FOR VALUES WITH (MODULUS 64, REMAINDER 37);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_38
+FOR VALUES WITH (MODULUS 64, REMAINDER 38);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_39
+FOR VALUES WITH (MODULUS 64, REMAINDER 39);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_4
+FOR VALUES WITH (MODULUS 64, REMAINDER 4);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_40
+FOR VALUES WITH (MODULUS 64, REMAINDER 40);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_41
+FOR VALUES WITH (MODULUS 64, REMAINDER 41);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_42
+FOR VALUES WITH (MODULUS 64, REMAINDER 42);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_43
+FOR VALUES WITH (MODULUS 64, REMAINDER 43);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_44
+FOR VALUES WITH (MODULUS 64, REMAINDER 44);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_45
+FOR VALUES WITH (MODULUS 64, REMAINDER 45);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_46
+FOR VALUES WITH (MODULUS 64, REMAINDER 46);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_47
+FOR VALUES WITH (MODULUS 64, REMAINDER 47);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_48
+FOR VALUES WITH (MODULUS 64, REMAINDER 48);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_49
+FOR VALUES WITH (MODULUS 64, REMAINDER 49);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_5
+FOR VALUES WITH (MODULUS 64, REMAINDER 5);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_50
+FOR VALUES WITH (MODULUS 64, REMAINDER 50);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_51
+FOR VALUES WITH (MODULUS 64, REMAINDER 51);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_52
+FOR VALUES WITH (MODULUS 64, REMAINDER 52);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_53
+FOR VALUES WITH (MODULUS 64, REMAINDER 53);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_54
+FOR VALUES WITH (MODULUS 64, REMAINDER 54);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_55
+FOR VALUES WITH (MODULUS 64, REMAINDER 55);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_56
+FOR VALUES WITH (MODULUS 64, REMAINDER 56);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_57
+FOR VALUES WITH (MODULUS 64, REMAINDER 57);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_58
+FOR VALUES WITH (MODULUS 64, REMAINDER 58);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_59
+FOR VALUES WITH (MODULUS 64, REMAINDER 59);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_6
+FOR VALUES WITH (MODULUS 64, REMAINDER 6);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_60
+FOR VALUES WITH (MODULUS 64, REMAINDER 60);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_61
+FOR VALUES WITH (MODULUS 64, REMAINDER 61);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_62
+FOR VALUES WITH (MODULUS 64, REMAINDER 62);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_63
+FOR VALUES WITH (MODULUS 64, REMAINDER 63);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_7
+FOR VALUES WITH (MODULUS 64, REMAINDER 7);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_8
+FOR VALUES WITH (MODULUS 64, REMAINDER 8);
+
+ALTER TABLE ONLY public.gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_9
+FOR VALUES WITH (MODULUS 64, REMAINDER 9);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_0
+FOR VALUES WITH (MODULUS 64, REMAINDER 0);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_1
+FOR VALUES WITH (MODULUS 64, REMAINDER 1);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_10
+FOR VALUES WITH (MODULUS 64, REMAINDER 10);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_11
+FOR VALUES WITH (MODULUS 64, REMAINDER 11);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_12
+FOR VALUES WITH (MODULUS 64, REMAINDER 12);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_13
+FOR VALUES WITH (MODULUS 64, REMAINDER 13);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_14
+FOR VALUES WITH (MODULUS 64, REMAINDER 14);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_15
+FOR VALUES WITH (MODULUS 64, REMAINDER 15);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_16
+FOR VALUES WITH (MODULUS 64, REMAINDER 16);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_17
+FOR VALUES WITH (MODULUS 64, REMAINDER 17);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_18
+FOR VALUES WITH (MODULUS 64, REMAINDER 18);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_19
+FOR VALUES WITH (MODULUS 64, REMAINDER 19);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_2
+FOR VALUES WITH (MODULUS 64, REMAINDER 2);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_20
+FOR VALUES WITH (MODULUS 64, REMAINDER 20);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_21
+FOR VALUES WITH (MODULUS 64, REMAINDER 21);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_22
+FOR VALUES WITH (MODULUS 64, REMAINDER 22);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_23
+FOR VALUES WITH (MODULUS 64, REMAINDER 23);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_24
+FOR VALUES WITH (MODULUS 64, REMAINDER 24);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_25
+FOR VALUES WITH (MODULUS 64, REMAINDER 25);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_26
+FOR VALUES WITH (MODULUS 64, REMAINDER 26);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_27
+FOR VALUES WITH (MODULUS 64, REMAINDER 27);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_28
+FOR VALUES WITH (MODULUS 64, REMAINDER 28);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_29
+FOR VALUES WITH (MODULUS 64, REMAINDER 29);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_3
+FOR VALUES WITH (MODULUS 64, REMAINDER 3);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_30
+FOR VALUES WITH (MODULUS 64, REMAINDER 30);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_31
+FOR VALUES WITH (MODULUS 64, REMAINDER 31);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_32
+FOR VALUES WITH (MODULUS 64, REMAINDER 32);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_33
+FOR VALUES WITH (MODULUS 64, REMAINDER 33);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_34
+FOR VALUES WITH (MODULUS 64, REMAINDER 34);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_35
+FOR VALUES WITH (MODULUS 64, REMAINDER 35);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_36
+FOR VALUES WITH (MODULUS 64, REMAINDER 36);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_37
+FOR VALUES WITH (MODULUS 64, REMAINDER 37);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_38
+FOR VALUES WITH (MODULUS 64, REMAINDER 38);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_39
+FOR VALUES WITH (MODULUS 64, REMAINDER 39);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_4
+FOR VALUES WITH (MODULUS 64, REMAINDER 4);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_40
+FOR VALUES WITH (MODULUS 64, REMAINDER 40);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_41
+FOR VALUES WITH (MODULUS 64, REMAINDER 41);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_42
+FOR VALUES WITH (MODULUS 64, REMAINDER 42);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_43
+FOR VALUES WITH (MODULUS 64, REMAINDER 43);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_44
+FOR VALUES WITH (MODULUS 64, REMAINDER 44);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_45
+FOR VALUES WITH (MODULUS 64, REMAINDER 45);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_46
+FOR VALUES WITH (MODULUS 64, REMAINDER 46);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_47
+FOR VALUES WITH (MODULUS 64, REMAINDER 47);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_48
+FOR VALUES WITH (MODULUS 64, REMAINDER 48);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_49
+FOR VALUES WITH (MODULUS 64, REMAINDER 49);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_5
+FOR VALUES WITH (MODULUS 64, REMAINDER 5);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_50
+FOR VALUES WITH (MODULUS 64, REMAINDER 50);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_51
+FOR VALUES WITH (MODULUS 64, REMAINDER 51);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_52
+FOR VALUES WITH (MODULUS 64, REMAINDER 52);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_53
+FOR VALUES WITH (MODULUS 64, REMAINDER 53);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_54
+FOR VALUES WITH (MODULUS 64, REMAINDER 54);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_55
+FOR VALUES WITH (MODULUS 64, REMAINDER 55);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_56
+FOR VALUES WITH (MODULUS 64, REMAINDER 56);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_57
+FOR VALUES WITH (MODULUS 64, REMAINDER 57);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_58
+FOR VALUES WITH (MODULUS 64, REMAINDER 58);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_59
+FOR VALUES WITH (MODULUS 64, REMAINDER 59);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_6
+FOR VALUES WITH (MODULUS 64, REMAINDER 6);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_60
+FOR VALUES WITH (MODULUS 64, REMAINDER 60);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_61
+FOR VALUES WITH (MODULUS 64, REMAINDER 61);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_62
+FOR VALUES WITH (MODULUS 64, REMAINDER 62);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_63
+FOR VALUES WITH (MODULUS 64, REMAINDER 63);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_7
+FOR VALUES WITH (MODULUS 64, REMAINDER 7);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_8
+FOR VALUES WITH (MODULUS 64, REMAINDER 8);
+
+ALTER TABLE ONLY public.layers ATTACH PARTITION partitions.layers_p_9
+FOR VALUES WITH (MODULUS 64, REMAINDER 9);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_0
+FOR VALUES WITH (MODULUS 64, REMAINDER 0);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_1
+FOR VALUES WITH (MODULUS 64, REMAINDER 1);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_10
+FOR VALUES WITH (MODULUS 64, REMAINDER 10);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_11
+FOR VALUES WITH (MODULUS 64, REMAINDER 11);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_12
+FOR VALUES WITH (MODULUS 64, REMAINDER 12);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_13
+FOR VALUES WITH (MODULUS 64, REMAINDER 13);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_14
+FOR VALUES WITH (MODULUS 64, REMAINDER 14);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_15
+FOR VALUES WITH (MODULUS 64, REMAINDER 15);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_16
+FOR VALUES WITH (MODULUS 64, REMAINDER 16);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_17
+FOR VALUES WITH (MODULUS 64, REMAINDER 17);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_18
+FOR VALUES WITH (MODULUS 64, REMAINDER 18);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_19
+FOR VALUES WITH (MODULUS 64, REMAINDER 19);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_2
+FOR VALUES WITH (MODULUS 64, REMAINDER 2);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_20
+FOR VALUES WITH (MODULUS 64, REMAINDER 20);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_21
+FOR VALUES WITH (MODULUS 64, REMAINDER 21);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_22
+FOR VALUES WITH (MODULUS 64, REMAINDER 22);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_23
+FOR VALUES WITH (MODULUS 64, REMAINDER 23);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_24
+FOR VALUES WITH (MODULUS 64, REMAINDER 24);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_25
+FOR VALUES WITH (MODULUS 64, REMAINDER 25);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_26
+FOR VALUES WITH (MODULUS 64, REMAINDER 26);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_27
+FOR VALUES WITH (MODULUS 64, REMAINDER 27);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_28
+FOR VALUES WITH (MODULUS 64, REMAINDER 28);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_29
+FOR VALUES WITH (MODULUS 64, REMAINDER 29);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_3
+FOR VALUES WITH (MODULUS 64, REMAINDER 3);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_30
+FOR VALUES WITH (MODULUS 64, REMAINDER 30);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_31
+FOR VALUES WITH (MODULUS 64, REMAINDER 31);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_32
+FOR VALUES WITH (MODULUS 64, REMAINDER 32);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_33
+FOR VALUES WITH (MODULUS 64, REMAINDER 33);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_34
+FOR VALUES WITH (MODULUS 64, REMAINDER 34);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_35
+FOR VALUES WITH (MODULUS 64, REMAINDER 35);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_36
+FOR VALUES WITH (MODULUS 64, REMAINDER 36);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_37
+FOR VALUES WITH (MODULUS 64, REMAINDER 37);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_38
+FOR VALUES WITH (MODULUS 64, REMAINDER 38);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_39
+FOR VALUES WITH (MODULUS 64, REMAINDER 39);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_4
+FOR VALUES WITH (MODULUS 64, REMAINDER 4);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_40
+FOR VALUES WITH (MODULUS 64, REMAINDER 40);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_41
+FOR VALUES WITH (MODULUS 64, REMAINDER 41);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_42
+FOR VALUES WITH (MODULUS 64, REMAINDER 42);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_43
+FOR VALUES WITH (MODULUS 64, REMAINDER 43);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_44
+FOR VALUES WITH (MODULUS 64, REMAINDER 44);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_45
+FOR VALUES WITH (MODULUS 64, REMAINDER 45);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_46
+FOR VALUES WITH (MODULUS 64, REMAINDER 46);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_47
+FOR VALUES WITH (MODULUS 64, REMAINDER 47);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_48
+FOR VALUES WITH (MODULUS 64, REMAINDER 48);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_49
+FOR VALUES WITH (MODULUS 64, REMAINDER 49);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_5
+FOR VALUES WITH (MODULUS 64, REMAINDER 5);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_50
+FOR VALUES WITH (MODULUS 64, REMAINDER 50);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_51
+FOR VALUES WITH (MODULUS 64, REMAINDER 51);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_52
+FOR VALUES WITH (MODULUS 64, REMAINDER 52);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_53
+FOR VALUES WITH (MODULUS 64, REMAINDER 53);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_54
+FOR VALUES WITH (MODULUS 64, REMAINDER 54);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_55
+FOR VALUES WITH (MODULUS 64, REMAINDER 55);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_56
+FOR VALUES WITH (MODULUS 64, REMAINDER 56);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_57
+FOR VALUES WITH (MODULUS 64, REMAINDER 57);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_58
+FOR VALUES WITH (MODULUS 64, REMAINDER 58);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_59
+FOR VALUES WITH (MODULUS 64, REMAINDER 59);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_6
+FOR VALUES WITH (MODULUS 64, REMAINDER 6);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_60
+FOR VALUES WITH (MODULUS 64, REMAINDER 60);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_61
+FOR VALUES WITH (MODULUS 64, REMAINDER 61);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_62
+FOR VALUES WITH (MODULUS 64, REMAINDER 62);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_63
+FOR VALUES WITH (MODULUS 64, REMAINDER 63);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_7
+FOR VALUES WITH (MODULUS 64, REMAINDER 7);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_8
+FOR VALUES WITH (MODULUS 64, REMAINDER 8);
+
+ALTER TABLE ONLY public.manifest_references ATTACH PARTITION partitions.manifest_references_p_9
+FOR VALUES WITH (MODULUS 64, REMAINDER 9);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_0
+FOR VALUES WITH (MODULUS 64, REMAINDER 0);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_1
+FOR VALUES WITH (MODULUS 64, REMAINDER 1);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_10
+FOR VALUES WITH (MODULUS 64, REMAINDER 10);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_11
+FOR VALUES WITH (MODULUS 64, REMAINDER 11);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_12
+FOR VALUES WITH (MODULUS 64, REMAINDER 12);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_13
+FOR VALUES WITH (MODULUS 64, REMAINDER 13);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_14
+FOR VALUES WITH (MODULUS 64, REMAINDER 14);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_15
+FOR VALUES WITH (MODULUS 64, REMAINDER 15);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_16
+FOR VALUES WITH (MODULUS 64, REMAINDER 16);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_17
+FOR VALUES WITH (MODULUS 64, REMAINDER 17);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_18
+FOR VALUES WITH (MODULUS 64, REMAINDER 18);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_19
+FOR VALUES WITH (MODULUS 64, REMAINDER 19);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_2
+FOR VALUES WITH (MODULUS 64, REMAINDER 2);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_20
+FOR VALUES WITH (MODULUS 64, REMAINDER 20);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_21
+FOR VALUES WITH (MODULUS 64, REMAINDER 21);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_22
+FOR VALUES WITH (MODULUS 64, REMAINDER 22);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_23
+FOR VALUES WITH (MODULUS 64, REMAINDER 23);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_24
+FOR VALUES WITH (MODULUS 64, REMAINDER 24);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_25
+FOR VALUES WITH (MODULUS 64, REMAINDER 25);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_26
+FOR VALUES WITH (MODULUS 64, REMAINDER 26);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_27
+FOR VALUES WITH (MODULUS 64, REMAINDER 27);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_28
+FOR VALUES WITH (MODULUS 64, REMAINDER 28);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_29
+FOR VALUES WITH (MODULUS 64, REMAINDER 29);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_3
+FOR VALUES WITH (MODULUS 64, REMAINDER 3);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_30
+FOR VALUES WITH (MODULUS 64, REMAINDER 30);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_31
+FOR VALUES WITH (MODULUS 64, REMAINDER 31);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_32
+FOR VALUES WITH (MODULUS 64, REMAINDER 32);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_33
+FOR VALUES WITH (MODULUS 64, REMAINDER 33);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_34
+FOR VALUES WITH (MODULUS 64, REMAINDER 34);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_35
+FOR VALUES WITH (MODULUS 64, REMAINDER 35);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_36
+FOR VALUES WITH (MODULUS 64, REMAINDER 36);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_37
+FOR VALUES WITH (MODULUS 64, REMAINDER 37);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_38
+FOR VALUES WITH (MODULUS 64, REMAINDER 38);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_39
+FOR VALUES WITH (MODULUS 64, REMAINDER 39);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_4
+FOR VALUES WITH (MODULUS 64, REMAINDER 4);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_40
+FOR VALUES WITH (MODULUS 64, REMAINDER 40);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_41
+FOR VALUES WITH (MODULUS 64, REMAINDER 41);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_42
+FOR VALUES WITH (MODULUS 64, REMAINDER 42);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_43
+FOR VALUES WITH (MODULUS 64, REMAINDER 43);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_44
+FOR VALUES WITH (MODULUS 64, REMAINDER 44);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_45
+FOR VALUES WITH (MODULUS 64, REMAINDER 45);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_46
+FOR VALUES WITH (MODULUS 64, REMAINDER 46);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_47
+FOR VALUES WITH (MODULUS 64, REMAINDER 47);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_48
+FOR VALUES WITH (MODULUS 64, REMAINDER 48);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_49
+FOR VALUES WITH (MODULUS 64, REMAINDER 49);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_5
+FOR VALUES WITH (MODULUS 64, REMAINDER 5);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_50
+FOR VALUES WITH (MODULUS 64, REMAINDER 50);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_51
+FOR VALUES WITH (MODULUS 64, REMAINDER 51);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_52
+FOR VALUES WITH (MODULUS 64, REMAINDER 52);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_53
+FOR VALUES WITH (MODULUS 64, REMAINDER 53);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_54
+FOR VALUES WITH (MODULUS 64, REMAINDER 54);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_55
+FOR VALUES WITH (MODULUS 64, REMAINDER 55);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_56
+FOR VALUES WITH (MODULUS 64, REMAINDER 56);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_57
+FOR VALUES WITH (MODULUS 64, REMAINDER 57);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_58
+FOR VALUES WITH (MODULUS 64, REMAINDER 58);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_59
+FOR VALUES WITH (MODULUS 64, REMAINDER 59);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_6
+FOR VALUES WITH (MODULUS 64, REMAINDER 6);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_60
+FOR VALUES WITH (MODULUS 64, REMAINDER 60);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_61
+FOR VALUES WITH (MODULUS 64, REMAINDER 61);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_62
+FOR VALUES WITH (MODULUS 64, REMAINDER 62);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_63
+FOR VALUES WITH (MODULUS 64, REMAINDER 63);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_7
+FOR VALUES WITH (MODULUS 64, REMAINDER 7);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_8
+FOR VALUES WITH (MODULUS 64, REMAINDER 8);
+
+ALTER TABLE ONLY public.manifests ATTACH PARTITION partitions.manifests_p_9
+FOR VALUES WITH (MODULUS 64, REMAINDER 9);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_0
+FOR VALUES WITH (MODULUS 64, REMAINDER 0);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_1
+FOR VALUES WITH (MODULUS 64, REMAINDER 1);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_10
+FOR VALUES WITH (MODULUS 64, REMAINDER 10);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_11
+FOR VALUES WITH (MODULUS 64, REMAINDER 11);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_12
+FOR VALUES WITH (MODULUS 64, REMAINDER 12);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_13
+FOR VALUES WITH (MODULUS 64, REMAINDER 13);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_14
+FOR VALUES WITH (MODULUS 64, REMAINDER 14);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_15
+FOR VALUES WITH (MODULUS 64, REMAINDER 15);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_16
+FOR VALUES WITH (MODULUS 64, REMAINDER 16);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_17
+FOR VALUES WITH (MODULUS 64, REMAINDER 17);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_18
+FOR VALUES WITH (MODULUS 64, REMAINDER 18);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_19
+FOR VALUES WITH (MODULUS 64, REMAINDER 19);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_2
+FOR VALUES WITH (MODULUS 64, REMAINDER 2);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_20
+FOR VALUES WITH (MODULUS 64, REMAINDER 20);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_21
+FOR VALUES WITH (MODULUS 64, REMAINDER 21);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_22
+FOR VALUES WITH (MODULUS 64, REMAINDER 22);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_23
+FOR VALUES WITH (MODULUS 64, REMAINDER 23);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_24
+FOR VALUES WITH (MODULUS 64, REMAINDER 24);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_25
+FOR VALUES WITH (MODULUS 64, REMAINDER 25);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_26
+FOR VALUES WITH (MODULUS 64, REMAINDER 26);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_27
+FOR VALUES WITH (MODULUS 64, REMAINDER 27);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_28
+FOR VALUES WITH (MODULUS 64, REMAINDER 28);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_29
+FOR VALUES WITH (MODULUS 64, REMAINDER 29);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_3
+FOR VALUES WITH (MODULUS 64, REMAINDER 3);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_30
+FOR VALUES WITH (MODULUS 64, REMAINDER 30);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_31
+FOR VALUES WITH (MODULUS 64, REMAINDER 31);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_32
+FOR VALUES WITH (MODULUS 64, REMAINDER 32);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_33
+FOR VALUES WITH (MODULUS 64, REMAINDER 33);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_34
+FOR VALUES WITH (MODULUS 64, REMAINDER 34);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_35
+FOR VALUES WITH (MODULUS 64, REMAINDER 35);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_36
+FOR VALUES WITH (MODULUS 64, REMAINDER 36);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_37
+FOR VALUES WITH (MODULUS 64, REMAINDER 37);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_38
+FOR VALUES WITH (MODULUS 64, REMAINDER 38);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_39
+FOR VALUES WITH (MODULUS 64, REMAINDER 39);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_4
+FOR VALUES WITH (MODULUS 64, REMAINDER 4);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_40
+FOR VALUES WITH (MODULUS 64, REMAINDER 40);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_41
+FOR VALUES WITH (MODULUS 64, REMAINDER 41);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_42
+FOR VALUES WITH (MODULUS 64, REMAINDER 42);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_43
+FOR VALUES WITH (MODULUS 64, REMAINDER 43);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_44
+FOR VALUES WITH (MODULUS 64, REMAINDER 44);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_45
+FOR VALUES WITH (MODULUS 64, REMAINDER 45);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_46
+FOR VALUES WITH (MODULUS 64, REMAINDER 46);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_47
+FOR VALUES WITH (MODULUS 64, REMAINDER 47);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_48
+FOR VALUES WITH (MODULUS 64, REMAINDER 48);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_49
+FOR VALUES WITH (MODULUS 64, REMAINDER 49);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_5
+FOR VALUES WITH (MODULUS 64, REMAINDER 5);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_50
+FOR VALUES WITH (MODULUS 64, REMAINDER 50);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_51
+FOR VALUES WITH (MODULUS 64, REMAINDER 51);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_52
+FOR VALUES WITH (MODULUS 64, REMAINDER 52);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_53
+FOR VALUES WITH (MODULUS 64, REMAINDER 53);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_54
+FOR VALUES WITH (MODULUS 64, REMAINDER 54);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_55
+FOR VALUES WITH (MODULUS 64, REMAINDER 55);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_56
+FOR VALUES WITH (MODULUS 64, REMAINDER 56);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_57
+FOR VALUES WITH (MODULUS 64, REMAINDER 57);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_58
+FOR VALUES WITH (MODULUS 64, REMAINDER 58);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_59
+FOR VALUES WITH (MODULUS 64, REMAINDER 59);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_6
+FOR VALUES WITH (MODULUS 64, REMAINDER 6);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_60
+FOR VALUES WITH (MODULUS 64, REMAINDER 60);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_61
+FOR VALUES WITH (MODULUS 64, REMAINDER 61);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_62
+FOR VALUES WITH (MODULUS 64, REMAINDER 62);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_63
+FOR VALUES WITH (MODULUS 64, REMAINDER 63);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_7
+FOR VALUES WITH (MODULUS 64, REMAINDER 7);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_8
+FOR VALUES WITH (MODULUS 64, REMAINDER 8);
+
+ALTER TABLE ONLY public.repository_blobs ATTACH PARTITION partitions.repository_blobs_p_9
+FOR VALUES WITH (MODULUS 64, REMAINDER 9);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_0
+FOR VALUES WITH (MODULUS 64, REMAINDER 0);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_1
+FOR VALUES WITH (MODULUS 64, REMAINDER 1);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_10
+FOR VALUES WITH (MODULUS 64, REMAINDER 10);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_11
+FOR VALUES WITH (MODULUS 64, REMAINDER 11);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_12
+FOR VALUES WITH (MODULUS 64, REMAINDER 12);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_13
+FOR VALUES WITH (MODULUS 64, REMAINDER 13);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_14
+FOR VALUES WITH (MODULUS 64, REMAINDER 14);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_15
+FOR VALUES WITH (MODULUS 64, REMAINDER 15);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_16
+FOR VALUES WITH (MODULUS 64, REMAINDER 16);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_17
+FOR VALUES WITH (MODULUS 64, REMAINDER 17);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_18
+FOR VALUES WITH (MODULUS 64, REMAINDER 18);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_19
+FOR VALUES WITH (MODULUS 64, REMAINDER 19);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_2
+FOR VALUES WITH (MODULUS 64, REMAINDER 2);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_20
+FOR VALUES WITH (MODULUS 64, REMAINDER 20);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_21
+FOR VALUES WITH (MODULUS 64, REMAINDER 21);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_22
+FOR VALUES WITH (MODULUS 64, REMAINDER 22);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_23
+FOR VALUES WITH (MODULUS 64, REMAINDER 23);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_24
+FOR VALUES WITH (MODULUS 64, REMAINDER 24);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_25
+FOR VALUES WITH (MODULUS 64, REMAINDER 25);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_26
+FOR VALUES WITH (MODULUS 64, REMAINDER 26);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_27
+FOR VALUES WITH (MODULUS 64, REMAINDER 27);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_28
+FOR VALUES WITH (MODULUS 64, REMAINDER 28);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_29
+FOR VALUES WITH (MODULUS 64, REMAINDER 29);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_3
+FOR VALUES WITH (MODULUS 64, REMAINDER 3);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_30
+FOR VALUES WITH (MODULUS 64, REMAINDER 30);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_31
+FOR VALUES WITH (MODULUS 64, REMAINDER 31);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_32
+FOR VALUES WITH (MODULUS 64, REMAINDER 32);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_33
+FOR VALUES WITH (MODULUS 64, REMAINDER 33);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_34
+FOR VALUES WITH (MODULUS 64, REMAINDER 34);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_35
+FOR VALUES WITH (MODULUS 64, REMAINDER 35);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_36
+FOR VALUES WITH (MODULUS 64, REMAINDER 36);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_37
+FOR VALUES WITH (MODULUS 64, REMAINDER 37);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_38
+FOR VALUES WITH (MODULUS 64, REMAINDER 38);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_39
+FOR VALUES WITH (MODULUS 64, REMAINDER 39);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_4
+FOR VALUES WITH (MODULUS 64, REMAINDER 4);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_40
+FOR VALUES WITH (MODULUS 64, REMAINDER 40);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_41
+FOR VALUES WITH (MODULUS 64, REMAINDER 41);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_42
+FOR VALUES WITH (MODULUS 64, REMAINDER 42);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_43
+FOR VALUES WITH (MODULUS 64, REMAINDER 43);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_44
+FOR VALUES WITH (MODULUS 64, REMAINDER 44);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_45
+FOR VALUES WITH (MODULUS 64, REMAINDER 45);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_46
+FOR VALUES WITH (MODULUS 64, REMAINDER 46);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_47
+FOR VALUES WITH (MODULUS 64, REMAINDER 47);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_48
+FOR VALUES WITH (MODULUS 64, REMAINDER 48);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_49
+FOR VALUES WITH (MODULUS 64, REMAINDER 49);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_5
+FOR VALUES WITH (MODULUS 64, REMAINDER 5);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_50
+FOR VALUES WITH (MODULUS 64, REMAINDER 50);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_51
+FOR VALUES WITH (MODULUS 64, REMAINDER 51);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_52
+FOR VALUES WITH (MODULUS 64, REMAINDER 52);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_53
+FOR VALUES WITH (MODULUS 64, REMAINDER 53);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_54
+FOR VALUES WITH (MODULUS 64, REMAINDER 54);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_55
+FOR VALUES WITH (MODULUS 64, REMAINDER 55);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_56
+FOR VALUES WITH (MODULUS 64, REMAINDER 56);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_57
+FOR VALUES WITH (MODULUS 64, REMAINDER 57);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_58
+FOR VALUES WITH (MODULUS 64, REMAINDER 58);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_59
+FOR VALUES WITH (MODULUS 64, REMAINDER 59);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_6
+FOR VALUES WITH (MODULUS 64, REMAINDER 6);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_60
+FOR VALUES WITH (MODULUS 64, REMAINDER 60);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_61
+FOR VALUES WITH (MODULUS 64, REMAINDER 61);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_62
+FOR VALUES WITH (MODULUS 64, REMAINDER 62);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_63
+FOR VALUES WITH (MODULUS 64, REMAINDER 63);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_7
+FOR VALUES WITH (MODULUS 64, REMAINDER 7);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_8
+FOR VALUES WITH (MODULUS 64, REMAINDER 8);
+
+ALTER TABLE ONLY public.tags ATTACH PARTITION partitions.tags_p_9
+FOR VALUES WITH (MODULUS 64, REMAINDER 9);
 
 ALTER TABLE ONLY public.blobs
     ADD CONSTRAINT pk_blobs PRIMARY KEY (digest);
