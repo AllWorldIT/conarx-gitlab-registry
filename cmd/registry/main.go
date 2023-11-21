@@ -14,8 +14,13 @@ import (
 	_ "github.com/docker/distribution/registry/storage/driver/oss"
 	_ "github.com/docker/distribution/registry/storage/driver/s3-aws"
 	_ "github.com/docker/distribution/registry/storage/driver/swift"
-	_ "go.uber.org/automaxprocs"
+
+	"go.uber.org/automaxprocs/maxprocs"
 )
+
+func init() {
+	maxprocs.Set()
+}
 
 func main() {
 	registry.RootCmd.Execute()
