@@ -64,6 +64,7 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&importAllRepos, "step-two", "2", false, "perform step two of a multi-step import: alias for `all-repositories`")
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "common-blobs", "B", false, "import all blob metadata from common storage")
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "step-three", "3", false, "perform step three of a multi-step import: alias for `common-blobs`")
+	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 
 	InventoryCmd.Flags().StringVarP(&format, "format", "f", "text", "which format to write output to, text output produces an additional summary for convenience, options: text, json, csv")
 	InventoryCmd.Flags().BoolVarP(&countTags, "tag-count", "t", true, "count repository tags, set this to false to increase inventory speed")
@@ -520,6 +521,15 @@ var ImportCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "there are pending database migrations, use the 'registry database migrate' CLI "+
 				"command to check and apply them")
 			os.Exit(1)
+		}
+
+		if debugAddr != "" {
+			go func() {
+				dcontext.GetLoggerWithField(ctx, "address", debugAddr).Info("debug server listening")
+				if err := http.ListenAndServe(debugAddr, nil); err != nil {
+					dcontext.GetLogger(ctx).WithError(err).Fatal("error listening on debug interface")
+				}
+			}()
 		}
 
 		var opts []datastore.ImporterOption
