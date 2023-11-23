@@ -1402,12 +1402,7 @@ func (imh *manifestHandler) deleteTag() error {
 		}
 	} else {
 		// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
-		var repoCache datastore.RepositoryCache
-		if imh.App.redisCache != nil {
-			repoCache = datastore.NewCentralRepositoryCache(imh.App.redisCache)
-		} else {
-			repoCache = imh.repoCache
-		}
+		repoCache := getRepoCache(imh)
 
 		if err := dbDeleteTag(imh.Context, imh.db, repoCache, imh.Repository.Named().Name(), imh.Tag); err != nil {
 			return err
