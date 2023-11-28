@@ -509,9 +509,7 @@ var ImportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Skip postdeployment migrations to prevent pending post deployment
-		// migrations from preventing the registry from starting.
-		m := migrations.NewMigrator(db.DB, migrations.SkipPostDeployment)
+		m := migrations.NewMigrator(db.DB)
 		pending, err := m.HasPending()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to check database migrations status: %v", err)
