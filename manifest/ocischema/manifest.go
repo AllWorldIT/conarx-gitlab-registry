@@ -41,6 +41,11 @@ func init() {
 type Manifest struct {
 	manifest.Versioned
 
+	// This OPTIONAL property contains the type of an artifact when the
+	// manifest is used for an artifact. This MUST be set when
+	// config.mediaType is set to the empty value.
+	ArtifactType string `json:"artifactType,omitempty"`
+
 	// Config references the image configuration as a blob.
 	Config distribution.Descriptor `json:"config"`
 
@@ -143,6 +148,7 @@ func (m *DeserializedManifest) Version() manifest.Versioned {
 	return m.Versioned
 }
 
+func (m *DeserializedManifest) ArtifactType() string              { return m.Manifest.ArtifactType }
 func (m *DeserializedManifest) Config() distribution.Descriptor   { return m.Target() }
 func (m *DeserializedManifest) Layers() []distribution.Descriptor { return m.Manifest.Layers }
 func (m *DeserializedManifest) Subject() distribution.Descriptor {
