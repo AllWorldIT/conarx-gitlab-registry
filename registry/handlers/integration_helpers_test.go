@@ -467,6 +467,7 @@ type manifestOpts struct {
 	assertNotification bool
 	withoutMediaType   bool
 	authToken          string
+	artifactType       string
 	subjectManifest    *ocischema.DeserializedManifest
 	// Non-optional values which be passed through by the testing func for ease of use.
 	repoPath string
@@ -495,6 +496,12 @@ func withAssertNotification(t *testing.T, env *testEnv, opts *manifestOpts) {
 
 func withoutMediaType(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 	opts.withoutMediaType = true
+}
+
+func withArtifactType(at string) manifestOptsFunc {
+	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
+		opts.artifactType = at
+	}
 }
 
 func withSubject(subject *ocischema.DeserializedManifest) manifestOptsFunc {
@@ -717,6 +724,8 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 			MediaType:     v1.MediaTypeImageManifest,
 		},
 	}
+
+	manifest.ArtifactType = config.artifactType
 
 	// Use the config from the subject manifest, if present;
 	// otherwise, create a manifest config and push up its content.

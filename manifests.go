@@ -49,6 +49,10 @@ type ManifestV2 interface {
 type ManifestOCI interface {
 	ManifestV2
 
+	// This OPTIONAL property contains the type of an artifact when the
+	// manifest is used for an artifact.
+	ArtifactType() string
+
 	// This OPTIONAL property specifies a descriptor of another manifest.
 	// This value, used by the referrers API, indicates a relationship
 	// to the specified manifest.

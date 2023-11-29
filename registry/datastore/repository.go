@@ -1115,6 +1115,7 @@ func (s *repositoryStore) Manifests(ctx context.Context, r *models.Repository) (
 			m.total_size,
 			m.schema_version,
 			mt.media_type,
+			at.media_type as artifact_type,
 			encode(m.digest, 'hex') as digest,
 			m.payload,
 			mtc.media_type as configuration_media_type,
@@ -1128,6 +1129,7 @@ func (s *repositoryStore) Manifests(ctx context.Context, r *models.Repository) (
 			manifests AS m
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 			LEFT JOIN media_types AS mtc ON mtc.id = m.configuration_media_type_id
+			LEFT JOIN media_types AS at ON at.id = m.artifact_media_type_id
 		WHERE
 			m.top_level_namespace_id = $1
 			AND m.repository_id = $2
@@ -1163,6 +1165,7 @@ func (s *repositoryStore) FindManifestByTagName(ctx context.Context, r *models.R
 			m.total_size,
 			m.schema_version,
 			mt.media_type,
+			at.media_type as artifact_type,
 			encode(m.digest, 'hex') as digest,
 			m.payload,
 			mtc.media_type as configuration_media_type,
@@ -1176,6 +1179,7 @@ func (s *repositoryStore) FindManifestByTagName(ctx context.Context, r *models.R
 			manifests AS m
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 			LEFT JOIN media_types AS mtc ON mtc.id = m.configuration_media_type_id
+			LEFT JOIN media_types AS at ON at.id = m.artifact_media_type_id
 			JOIN tags AS t ON t.top_level_namespace_id = m.top_level_namespace_id
 				AND t.repository_id = m.repository_id
 				AND t.manifest_id = m.id

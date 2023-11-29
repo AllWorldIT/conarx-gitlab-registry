@@ -46,6 +46,12 @@ func makeTestManifestWithSubject(mediaType string) Manifest {
 	return m
 }
 
+func makeTestManifestWithArtifactType(mediaType string, artifactType string) Manifest {
+	m := makeTestManifest(mediaType)
+	m.ArtifactType = artifactType
+	return m
+}
+
 func TestManifest(t *testing.T) {
 	expectedManifestSerialization := []byte(`{
    "schemaVersion": 2,
@@ -203,6 +209,47 @@ func TestManifestWithSubject(t *testing.T) {
 	// Should include the subject in this manifest's references
 	references := deserialized.References()
 	require.Equal(t, 3, len(references))
+}
+
+func TestManifestWithArtifactType(t *testing.T) {
+	expectedManifestSerialization := []byte(`{
+   "schemaVersion": 2,
+   "mediaType": "application/vnd.oci.image.manifest.v1+json",
+   "artifactType": "application/vnd.dev.cosign.artifact.sbom.v1+json",
+   "config": {
+      "mediaType": "application/vnd.oci.image.config.v1+json",
+      "size": 985,
+      "digest": "sha256:1a9ec845ee94c202b2d5da74a24f0ed2058318bfa9879fa541efaecba272e86b",
+      "annotations": {
+         "apple": "orange"
+      }
+   },
+   "layers": [
+      {
+         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+         "size": 153263,
+         "digest": "sha256:62d8908bee94c202b2d35224a221aaa2058318bfa9879fa541efaecba272331b",
+         "annotations": {
+            "lettuce": "wrap"
+         }
+      }
+   ],
+   "annotations": {
+      "hot": "potato"
+   }
+}`)
+
+	manifest := makeTestManifestWithArtifactType(v1.MediaTypeImageManifest, "application/vnd.dev.cosign.artifact.sbom.v1+json")
+
+	deserialized, err := FromStruct(manifest)
+	require.NoError(t, err)
+
+	mediaType, canonical, _ := deserialized.Payload()
+	require.Equal(t, v1.MediaTypeImageManifest, mediaType)
+
+	// Check that canonical field matches expected value.
+	require.Truef(t, bytes.Equal(expectedManifestSerialization, canonical),
+		"manifest bytes not equal: %q != %q", string(canonical), string(expectedManifestSerialization))
 }
 
 func mediaTypeTest(t *testing.T, mediaType string, shouldError bool) {

@@ -74,6 +74,7 @@ type Manifest struct {
 	TotalSize     int64
 	SchemaVersion int
 	MediaType     string
+	ArtifactType  sql.NullString
 	Digest        digest.Digest
 	Payload       Payload
 	Configuration *Configuration

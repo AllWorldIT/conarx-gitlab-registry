@@ -965,6 +965,11 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 				m.SubjectID.Int64 = dbSubject.ID
 				m.SubjectID.Valid = true
 			}
+
+			if ocim.ArtifactType() != "" {
+				m.ArtifactType.String = ocim.ArtifactType()
+				m.ArtifactType.Valid = true
+			}
 		}
 
 		// check if the manifest references non-distributable layers and mark it as such on the DB

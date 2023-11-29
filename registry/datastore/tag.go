@@ -158,6 +158,7 @@ func (s *tagStore) Manifest(ctx context.Context, t *models.Tag) (*models.Manifes
 			m.total_size,
 			m.schema_version,
 			mt.media_type,
+			at.media_type as artifact_type,
 			encode(m.digest, 'hex') as digest,
 			m.payload,
 			mtc.media_type as configuration_media_type,
@@ -171,6 +172,7 @@ func (s *tagStore) Manifest(ctx context.Context, t *models.Tag) (*models.Manifes
 			manifests AS m
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 			LEFT JOIN media_types AS mtc ON mtc.id = m.configuration_media_type_id
+			LEFT JOIN media_types AS at ON at.id = m.artifact_media_type_id
 		WHERE
 			m.top_level_namespace_id = $1
 			AND m.repository_id = $2

@@ -56,8 +56,9 @@ func scanFullManifest(row *sql.Row) (*models.Manifest, error) {
 	var cfgPayload *models.Payload
 	m := new(models.Manifest)
 
-	err := row.Scan(&m.ID, &m.NamespaceID, &m.RepositoryID, &m.TotalSize, &m.SchemaVersion, &m.MediaType, &dgst, &m.Payload,
-		&cfgMediaType, &cfgDigest, &cfgPayload, &m.NonConformant, &m.NonDistributableLayers, &m.SubjectID, &m.CreatedAt)
+	err := row.Scan(&m.ID, &m.NamespaceID, &m.RepositoryID, &m.TotalSize, &m.SchemaVersion,
+		&m.MediaType, &m.ArtifactType, &dgst, &m.Payload, &cfgMediaType, &cfgDigest, &cfgPayload,
+		&m.NonConformant, &m.NonDistributableLayers, &m.SubjectID, &m.CreatedAt)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, fmt.Errorf("scanning manifest: %w", err)
@@ -97,8 +98,9 @@ func scanFullManifests(rows *sql.Rows) (models.Manifests, error) {
 		var cfgPayload *models.Payload
 		m := new(models.Manifest)
 
-		err := rows.Scan(&m.ID, &m.NamespaceID, &m.RepositoryID, &m.TotalSize, &m.SchemaVersion, &m.MediaType, &dgst, &m.Payload,
-			&cfgMediaType, &cfgDigest, &cfgPayload, &m.NonConformant, &m.NonDistributableLayers, &m.SubjectID, &m.CreatedAt)
+		err := rows.Scan(&m.ID, &m.NamespaceID, &m.RepositoryID, &m.TotalSize, &m.SchemaVersion,
+			&m.MediaType, &m.ArtifactType, &dgst, &m.Payload, &cfgMediaType, &cfgDigest, &cfgPayload,
+			&m.NonConformant, &m.NonDistributableLayers, &m.SubjectID, &m.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scanning manifest: %w", err)
 		}
@@ -141,6 +143,7 @@ func (s *manifestStore) FindAll(ctx context.Context) (models.Manifests, error) {
 			m.total_size,
 			m.schema_version,
 			mt.media_type,
+			at.media_type as artifact_type,
 			encode(m.digest, 'hex') as digest,
 			m.payload,
 			mtc.media_type as configuration_media_type,
@@ -154,6 +157,7 @@ func (s *manifestStore) FindAll(ctx context.Context) (models.Manifests, error) {
 			manifests AS m
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 			LEFT JOIN media_types AS mtc ON mtc.id = m.configuration_media_type_id
+			LEFT JOIN media_types AS at ON at.id = m.artifact_media_type_id
 		ORDER BY
 			id`
 
@@ -213,6 +217,7 @@ func (s *manifestStore) References(ctx context.Context, m *models.Manifest) (mod
 			m.total_size,
 			m.schema_version,
 			mt.media_type,
+			at.media_type as artifact_type,
 			encode(m.digest, 'hex') as digest,
 			m.payload,
 			mtc.media_type as configuration_media_type,
@@ -228,6 +233,7 @@ func (s *manifestStore) References(ctx context.Context, m *models.Manifest) (mod
 				AND mr.child_id = m.id
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 			LEFT JOIN media_types AS mtc ON mtc.id = m.configuration_media_type_id
+			LEFT JOIN media_types AS at ON at.id = m.artifact_media_type_id
 		WHERE
 			m.top_level_namespace_id = $1
 			AND mr.repository_id = $2
@@ -264,9 +270,10 @@ func mapMediaType(ctx context.Context, db Queryer, mediaType string) (int, error
 // Create saves a new Manifest.
 func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 	defer metrics.InstrumentQuery("manifest_create")()
-	q := `INSERT INTO manifests (top_level_namespace_id, repository_id, total_size, schema_version, media_type_id, digest, payload,
-				configuration_media_type_id, configuration_blob_digest, configuration_payload, non_conformant, non_distributable_layers, subject_id)
-			VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, decode($9, 'hex'), $10, $11, $12, $13)
+	q := `INSERT INTO manifests (top_level_namespace_id, repository_id, total_size, schema_version,
+				media_type_id, artifact_media_type_id, digest, payload, configuration_media_type_id,
+				configuration_blob_digest, configuration_payload, non_conformant, non_distributable_layers, subject_id)
+			VALUES ($1, $2, $3, $4, $5, $6, decode($7, 'hex'), $8, $9, decode($10, 'hex'), $11, $12, $13, $14)
 		RETURNING
 			id, created_at`
 
@@ -277,6 +284,16 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 	mediaTypeID, err := mapMediaType(ctx, s.db, m.MediaType)
 	if err != nil {
 		return fmt.Errorf("mapping manifest media type: %w", err)
+	}
+
+	var artifactTypeID sql.NullInt64
+	if m.ArtifactType.Valid {
+		aid, err := mapMediaType(ctx, s.db, m.ArtifactType.String)
+		if err != nil {
+			return fmt.Errorf("mapping manifest artifact type: %w", err)
+		}
+		artifactTypeID.Valid = true
+		artifactTypeID.Int64 = int64(aid)
 	}
 
 	var configDgst sql.NullString
@@ -298,8 +315,9 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 		configPayload = &m.Configuration.Payload
 	}
 
-	row := s.db.QueryRowContext(ctx, q, m.NamespaceID, m.RepositoryID, m.TotalSize, m.SchemaVersion, mediaTypeID, dgst, m.Payload,
-		configMediaTypeID, configDgst, configPayload, m.NonConformant, m.NonDistributableLayers, m.SubjectID)
+	row := s.db.QueryRowContext(ctx, q, m.NamespaceID, m.RepositoryID, m.TotalSize, m.SchemaVersion,
+		mediaTypeID, artifactTypeID, dgst, m.Payload, configMediaTypeID, configDgst, configPayload,
+		m.NonConformant, m.NonDistributableLayers, m.SubjectID)
 	if err := row.Scan(&m.ID, &m.CreatedAt); err != nil {
 		return fmt.Errorf("creating manifest: %w", err)
 	}
@@ -314,9 +332,10 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 // Separate Find* and Create method calls should be preferred to this when race conditions are not a concern.
 func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) error {
 	defer metrics.InstrumentQuery("manifest_create_or_find")()
-	q := `INSERT INTO manifests (top_level_namespace_id, repository_id, total_size, schema_version, media_type_id, digest, payload,
-				configuration_media_type_id, configuration_blob_digest, configuration_payload, non_conformant, non_distributable_layers, subject_id)
-			VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, $8, decode($9, 'hex'), $10, $11, $12, $13)
+	q := `INSERT INTO manifests (top_level_namespace_id, repository_id, total_size, schema_version,
+				media_type_id, artifact_media_type_id, digest, payload, configuration_media_type_id,
+				configuration_blob_digest, configuration_payload, non_conformant, non_distributable_layers, subject_id)
+			VALUES ($1, $2, $3, $4, $5, $6, decode($7, 'hex'), $8, $9, decode($10, 'hex'), $11, $12, $13, $14)
 			ON CONFLICT (top_level_namespace_id, repository_id, digest) DO NOTHING
 		RETURNING
 			id, created_at`
@@ -328,6 +347,16 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 	mediaTypeID, err := mapMediaType(ctx, s.db, m.MediaType)
 	if err != nil {
 		return fmt.Errorf("mapping manifest media type: %w", err)
+	}
+
+	var artifactTypeID sql.NullInt64
+	if m.ArtifactType.Valid {
+		aid, err := mapMediaType(ctx, s.db, m.ArtifactType.String)
+		if err != nil {
+			return fmt.Errorf("mapping manifest artifact type: %w", err)
+		}
+		artifactTypeID.Valid = true
+		artifactTypeID.Int64 = int64(aid)
 	}
 
 	var configDgst sql.NullString
@@ -349,8 +378,9 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 		configPayload = &m.Configuration.Payload
 	}
 
-	row := s.db.QueryRowContext(ctx, q, m.NamespaceID, m.RepositoryID, m.TotalSize, m.SchemaVersion, mediaTypeID, dgst, m.Payload,
-		configMediaTypeID, configDgst, configPayload, m.NonConformant, m.NonDistributableLayers, m.SubjectID)
+	row := s.db.QueryRowContext(ctx, q, m.NamespaceID, m.RepositoryID, m.TotalSize, m.SchemaVersion,
+		mediaTypeID, artifactTypeID, dgst, m.Payload, configMediaTypeID, configDgst, configPayload,
+		m.NonConformant, m.NonDistributableLayers, m.SubjectID)
 	if err := row.Scan(&m.ID, &m.CreatedAt); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("creating manifest: %w", err)
@@ -502,6 +532,7 @@ func findManifestByDigest(ctx context.Context, db Queryer, namespaceID, reposito
 			m.total_size,
 			m.schema_version,
 			mt.media_type,
+			at.media_type as artifact_type,
 			encode(m.digest, 'hex') as digest,
 			m.payload,
 			mtc.media_type as configuration_media_type,
@@ -515,6 +546,7 @@ func findManifestByDigest(ctx context.Context, db Queryer, namespaceID, reposito
 			manifests AS m
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 			LEFT JOIN media_types AS mtc ON mtc.id = m.configuration_media_type_id
+			LEFT JOIN media_types AS at ON at.id = m.artifact_media_type_id
 		WHERE
 			m.top_level_namespace_id = $1
 			AND m.repository_id = $2

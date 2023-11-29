@@ -83,6 +83,7 @@ func TestAPIConformance(t *testing.T) {
 		manifest_Put_OCI_ByTag,
 		manifest_Put_OCI_WithSubject,
 		manifest_Put_OCI_WithNonMatchingSubject,
+		manifest_Put_OCI_WithArtifactType,
 		manifest_Get_OCI_MatchingEtag,
 		manifest_Get_OCI_NonMatchingEtag,
 
@@ -2101,6 +2102,34 @@ func manifest_Put_OCI_WithNonMatchingSubject(t *testing.T, opts ...configOpt) {
 
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	checkBodyHasErrorCodes(t, "putting manifest with missing subject", resp, v2.ErrorCodeManifestBlobUnknown)
+}
+
+func manifest_Put_OCI_WithArtifactType(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	repoPath := "oci/happypath"
+	artifactType := "application/vnd.dev.cosign.artifact.sbom.v1+json"
+
+	mfst := seedRandomOCIManifest(t, env, repoPath, putByDigest, withArtifactType(artifactType))
+
+	digestURL := buildManifestDigestURL(t, env, repoPath, mfst)
+
+	req, err := http.NewRequest(http.MethodGet, digestURL, nil)
+	require.NoError(t, err)
+
+	req.Header.Set("Accept", v1.MediaTypeImageManifest)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var fetchedManifest *ocischema.DeserializedManifest
+	dec := json.NewDecoder(resp.Body)
+
+	err = dec.Decode(&fetchedManifest)
+	require.NoError(t, err)
+
+	require.EqualValues(t, mfst, fetchedManifest)
 }
 
 func manifest_Get_OCI_NonMatchingEtag(t *testing.T, opts ...configOpt) {
