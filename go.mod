@@ -43,7 +43,7 @@ require (
 	gitlab.com/gitlab-org/labkit v1.21.0
 	go.uber.org/automaxprocs v1.5.3
 	golang.org/x/crypto v0.16.0
-	golang.org/x/oauth2 v0.14.0
+	golang.org/x/oauth2 v0.15.0
 	golang.org/x/sync v0.5.0
 	golang.org/x/time v0.4.0
 	google.golang.org/api v0.151.0
@@ -121,7 +121,7 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/net v0.18.0 // indirect
+	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
