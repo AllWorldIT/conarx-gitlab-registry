@@ -155,6 +155,11 @@ func timeToString(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15:04:05.000Z07:00")
 }
 
+// timeToStringMicroPrecision converts a time.Time to a ISO 8601 with microsecond precision string.
+func timeToStringMicroPrecision(t time.Time) string {
+	return t.UTC().Format("2006-01-02T15:04:05.000000Z07:00")
+}
+
 // replacePathName removes the last part (i.e the name) of `originPath` and replaces it with `newName`
 func replacePathName(originPath string, newName string) string {
 	dir := path.Dir(originPath)
@@ -457,7 +462,7 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	// Add a link header if there are more entries to retrieve
 	if len(tagsList) > 0 {
 		filters.LastEntry = tagsList[len(tagsList)-1].Name
-		filters.PublishedAt = timeToString(tagsList[len(tagsList)-1].PublishedAt)
+		filters.PublishedAt = timeToStringMicroPrecision(tagsList[len(tagsList)-1].PublishedAt)
 		publishedLast := filters.PublishedAt
 		hasTagsAfter, err := rStore.HasTagsAfterName(h.Context, repo, filters)
 		if err != nil {
@@ -471,7 +476,7 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 		}
 
 		filters.BeforeEntry = tagsList[0].Name
-		filters.PublishedAt = timeToString(tagsList[0].PublishedAt)
+		filters.PublishedAt = timeToStringMicroPrecision(tagsList[0].PublishedAt)
 		publishedBefore := filters.PublishedAt
 		hasTagsBefore, err := rStore.HasTagsBeforeName(h.Context, repo, filters)
 		if err != nil {

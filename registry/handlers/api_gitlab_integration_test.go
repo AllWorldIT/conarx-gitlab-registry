@@ -695,16 +695,18 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 
 	// by published at
 	sortedTags := []string{
-		"aaaa",   // 2023-01-01T00:00:01+00:00.000Z
-		"bbbb",   // 2023-02-01T00:00:01+00:00.000Z
-		"cccc",   // 2023-03-01T00:00:01+00:00.000Z
-		"dddd",   // 2023-04-30T00:00:01.00+00.000Z
-		"latest", // 2023-04-30T00:00:01.00+00.000Z
-		"eeee",   // 2023-05-31T00:00:01+00:00.000Z
+		"aaaa",   // 2023-01-01T00:00:01+00:00.000000Z
+		"bbbb",   // 2023-02-01T00:00:01+00:00.000000Z
+		"cccc",   // 2023-03-01T00:00:01+00:00.000000Z
+		"dddd",   // 2023-04-30T00:00:01.00+00.000000Z
+		"latest", // 2023-04-30T00:00:01.00+00.000000Z
+		"ffff",   // 2023-05-31T00:00:01+00:00.000000Z
+		"eeee",   // 2023-06-30T00:00:01+00:00.000000Z
 	}
 
 	sortedTagsDesc := []string{
 		"eeee",
+		"ffff",
 		"latest",
 		"dddd",
 		"cccc",
@@ -717,12 +719,13 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 		return url.QueryEscape(handlers.EncodeFilter(publishedAt, tagName))
 	}
 	encodedTags := map[string]string{
-		"aaaa":   encodeFilter("2023-01-01T00:00:01.000Z", "aaaa"),
-		"bbbb":   encodeFilter("2023-02-01T00:00:01.000Z", "bbbb"),
-		"cccc":   encodeFilter("2023-03-01T00:00:01.000Z", "cccc"),
-		"dddd":   encodeFilter("2023-04-30T00:00:01.000Z", "dddd"),
-		"latest": encodeFilter("2023-04-30T00:00:01.000Z", "latest"),
-		"eeee":   encodeFilter("2023-05-31T00:00:01.000Z", "eeee"),
+		"aaaa":   encodeFilter("2023-01-01T00:00:01.000000Z", "aaaa"),
+		"bbbb":   encodeFilter("2023-02-01T00:00:01.000000Z", "bbbb"),
+		"cccc":   encodeFilter("2023-03-01T00:00:01.000000Z", "cccc"),
+		"dddd":   encodeFilter("2023-04-30T00:00:01.000000Z", "dddd"),
+		"latest": encodeFilter("2023-04-30T00:00:01.000000Z", "latest"),
+		"ffff":   encodeFilter("2023-05-31T00:00:01.000000Z", "ffff"),
+		"eeee":   encodeFilter("2023-06-30T00:00:01.000000Z", "eeee"),
 	}
 
 	tt := map[string]struct {
@@ -743,8 +746,9 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 		},
 		"last entry name without timestamp": {
 			queryParams:         url.Values{"n": []string{"2"}, "last": []string{"dddd"}},
-			expectedOrderedTags: []string{"latest", "eeee"},
+			expectedOrderedTags: []string{"latest", "ffff"},
 			expectedBefore:      encodedTags["latest"],
+			expectedLast:        encodedTags["ffff"],
 		},
 		"before entry name without timestamp": {
 			queryParams:         url.Values{"n": []string{"2"}, "before": []string{"cccc"}},
@@ -777,15 +781,15 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 			expectedLast:        encodedTags["dddd"],
 		},
 		"last entry asc last page size 2": {
-			queryParams:         url.Values{"n": []string{"2"}, "last": []string{encodedTags["dddd"]}},
-			expectedOrderedTags: []string{"latest", "eeee"},
-			expectedBefore:      encodedTags["latest"],
+			queryParams:         url.Values{"n": []string{"2"}, "last": []string{encodedTags["latest"]}},
+			expectedOrderedTags: []string{"ffff", "eeee"},
+			expectedBefore:      encodedTags["ffff"],
 		},
 		"last entry desc first page size 2": {
 			descending:          true,
 			queryParams:         url.Values{"n": []string{"2"}},
-			expectedOrderedTags: []string{"eeee", "latest"},
-			expectedLast:        encodedTags["latest"],
+			expectedOrderedTags: []string{"eeee", "ffff"},
+			expectedLast:        encodedTags["ffff"],
 		},
 		"last entry desc second page size 2": {
 			descending:          true,
@@ -801,9 +805,15 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 			expectedBefore:      encodedTags["bbbb"],
 		},
 		"before entry asc last page size 2": {
-			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodeFilter("2023-12-31T00:00:01.000000+00", "z")}},
-			expectedOrderedTags: []string{"latest", "eeee"},
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodeFilter("2023-06-29T00:00:01.000000+00", "z")}},
+			expectedOrderedTags: []string{"latest", "ffff"},
 			expectedBefore:      encodedTags["latest"],
+			expectedLast:        encodedTags["ffff"],
+		},
+		"last entry asc last page size 1": {
+			queryParams:         url.Values{"n": []string{"2"}, "last": []string{encodedTags["ffff"]}},
+			expectedOrderedTags: []string{"eeee"},
+			expectedBefore:      encodedTags["eeee"],
 		},
 		"before entry asc second page size 2": {
 			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodedTags["latest"]}},
@@ -830,11 +840,12 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 			expectedLast:        encodedTags["cccc"],
 		},
 
-		"before entry desc last page size 2": {
+		"before entry desc 2nd last page size 2": {
 			descending:          true,
 			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodedTags["dddd"]}},
-			expectedOrderedTags: []string{"eeee", "latest"},
+			expectedOrderedTags: []string{"ffff", "latest"},
 			expectedLast:        encodedTags["latest"],
+			expectedBefore:      encodedTags["ffff"],
 		},
 	}
 
