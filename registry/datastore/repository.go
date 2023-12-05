@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -718,12 +717,6 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 	}
 
 	return tt, nil
-}
-
-func sortTagsDesc(tags []*models.TagDetail) {
-	sort.SliceStable(tags, func(i int, j int) bool {
-		return tags[i].Name < tags[j].Name
-	})
 }
 
 // sqlPartialMatch builds a string that can be passed as value for a SQL `LIKE` expression. Besides surrounding the
