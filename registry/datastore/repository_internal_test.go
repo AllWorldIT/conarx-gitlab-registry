@@ -110,24 +110,22 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 		"last entry order by published_at asc": {
 			filters: FilterParams{MaxEntries: 5, LastEntry: "abc", PublishedAt: "TIMESTAMP"},
 			expectedQuery: baseQuery + `
-			AND t.name > $4
-		AND GREATEST(t.created_at,t.updated_at) >= $5
+			AND (GREATEST(t.created_at, t.updated_at), t.name) > ($4, $5)
 		ORDER BY
 			published_at asc,
 			t.name asc
 		LIMIT $6`,
-			expectedArgs: append(baseArgs, "abc", "TIMESTAMP", 5),
+			expectedArgs: append(baseArgs, "TIMESTAMP", "abc", 5),
 		},
 		"last entry order by published_at desc": {
 			filters: FilterParams{MaxEntries: 5, LastEntry: "abc", PublishedAt: "TIMESTAMP", SortOrder: OrderDesc},
 			expectedQuery: baseQuery + `
-			AND t.name < $4
-		AND GREATEST(t.created_at,t.updated_at) <= $5
+			AND (GREATEST(t.created_at, t.updated_at), t.name) < ($4, $5)
 		ORDER BY
 			published_at desc,
 			t.name desc
 		LIMIT $6`,
-			expectedArgs: append(baseArgs, "abc", "TIMESTAMP", 5),
+			expectedArgs: append(baseArgs, "TIMESTAMP", "abc", 5),
 		},
 		"before entry asc": {
 			filters: FilterParams{MaxEntries: 5, BeforeEntry: "abc"},
@@ -159,8 +157,7 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 			filters: FilterParams{MaxEntries: 5, BeforeEntry: "abc", PublishedAt: "TIMESTAMP"},
 			expectedQuery: func() string {
 				q := baseQuery + `
-			AND t.name < $4
-		AND GREATEST(t.created_at,t.updated_at) <= $5
+			AND (GREATEST(t.created_at, t.updated_at), t.name) < ($4, $5)
 		ORDER BY
 			published_at desc,
 			t.name desc
@@ -168,14 +165,13 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 
 				return fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name ASC`, q)
 			}(),
-			expectedArgs: append(baseArgs, "abc", "TIMESTAMP", 5),
+			expectedArgs: append(baseArgs, "TIMESTAMP", "abc", 5),
 		},
 		"before entry order by published_at desc": {
 			filters: FilterParams{MaxEntries: 5, BeforeEntry: "abc", PublishedAt: "TIMESTAMP", SortOrder: OrderDesc},
 			expectedQuery: func() string {
 				q := baseQuery + `
-			AND t.name > $4
-		AND GREATEST(t.created_at,t.updated_at) >= $5
+			AND (GREATEST(t.created_at, t.updated_at), t.name) > ($4, $5)
 		ORDER BY
 			published_at asc,
 			t.name asc
@@ -183,7 +179,7 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 
 				return fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name DESC`, q)
 			}(),
-			expectedArgs: append(baseArgs, "abc", "TIMESTAMP", 5),
+			expectedArgs: append(baseArgs, "TIMESTAMP", "abc", 5),
 		},
 		"publised_at asc": {
 			filters: FilterParams{MaxEntries: 5, PublishedAt: "TIMESTAMP"},
