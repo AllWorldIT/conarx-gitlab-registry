@@ -64,6 +64,7 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&importAllRepos, "step-two", "2", false, "perform step two of a multi-step import: alias for `all-repositories`")
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "common-blobs", "B", false, "import all blob metadata from common storage")
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "step-three", "3", false, "perform step three of a multi-step import: alias for `common-blobs`")
+	ImportCmd.Flags().BoolVarP(&logToSTDOUT, "log-to-stdout", "l", false, "write detailed log to std instead of showing progress bars")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 
 	InventoryCmd.Flags().StringVarP(&format, "format", "f", "text", "which format to write output to, text output produces an additional summary for convenience, options: text, json, csv")
@@ -88,6 +89,7 @@ var (
 	importCommonBlobs    bool
 	importAllRepos       bool
 	tagConcurrency       *int
+	logToSTDOUT          bool
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -540,9 +542,11 @@ var ImportCmd = &cobra.Command{
 		if rowCount {
 			opts = append(opts, datastore.WithRowCount)
 		}
-
 		if tagConcurrency != nil {
 			opts = append(opts, datastore.WithTagConcurrency(*tagConcurrency))
+		}
+		if !logToSTDOUT {
+			opts = append(opts, datastore.WithProgressBar)
 		}
 
 		p := datastore.NewImporter(db, registry, opts...)
