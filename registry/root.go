@@ -66,6 +66,7 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "step-three", "3", false, "perform step three of a multi-step import: alias for `common-blobs`")
 	ImportCmd.Flags().BoolVarP(&logToSTDOUT, "log-to-stdout", "l", false, "write detailed log to std instead of showing progress bars")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
+	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
 
 	InventoryCmd.Flags().StringVarP(&format, "format", "f", "text", "which format to write output to, text output produces an additional summary for convenience, options: text, json, csv")
 	InventoryCmd.Flags().BoolVarP(&countTags, "tag-count", "t", true, "count repository tags, set this to false to increase inventory speed")
@@ -543,6 +544,10 @@ var ImportCmd = &cobra.Command{
 			opts = append(opts, datastore.WithRowCount)
 		}
 		if tagConcurrency != nil {
+			if config.Storage.Type() != "gcs" {
+				fmt.Fprintf(os.Stderr, "the tag concurrency option is only compatible with a gcs backed registry storage")
+				os.Exit(1)
+			}
 			opts = append(opts, datastore.WithTagConcurrency(*tagConcurrency))
 		}
 		if !logToSTDOUT {
