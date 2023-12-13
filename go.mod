@@ -24,7 +24,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.5.1
-	github.com/jszwec/csvutil v1.8.0
+	github.com/jszwec/csvutil v1.9.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/ncw/swift v1.0.53
 	github.com/olekukonko/tablewriter v0.0.5
