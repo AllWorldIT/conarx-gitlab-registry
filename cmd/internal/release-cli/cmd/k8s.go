@@ -42,7 +42,7 @@ var k8sCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		labels := &gitlab.Labels{
+		labels := &gitlab.LabelOptions{
 			"workflow::ready for review",
 			"team::Delivery",
 			"Service::Container Registry",
