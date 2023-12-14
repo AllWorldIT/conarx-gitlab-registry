@@ -36,7 +36,7 @@ var gdkCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		labels := &gitlab.Labels{
+		labels := &gitlab.LabelOptions{
 			"workflow::ready for review",
 			"group::container registry",
 			"devops::package",
