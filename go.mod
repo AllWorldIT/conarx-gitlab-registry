@@ -3,7 +3,7 @@ module github.com/docker/distribution
 go 1.18
 
 require (
-	cloud.google.com/go/storage v1.35.1
+	cloud.google.com/go/storage v1.36.0
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/DATA-DOG/go-sqlmock v1.5.1
 	github.com/Shopify/toxiproxy/v2 v2.7.0
