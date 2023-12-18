@@ -75,6 +75,7 @@ const (
 	sortQueryParamKey                      = "sort"
 	publishedAtQueryParamKey               = "published_at"
 	sortOrderDescPrefix                    = "-"
+	referrersQueryParamKey                 = "referrers"
 	defaultDryRunRenameOperationTimeout    = 5 * time.Second
 	maxRepositoriesToRename                = 1000
 )
@@ -315,14 +316,20 @@ func repositoryTagsDispatcher(ctx *Context, _ *http.Request) http.Handler {
 // implementation details (such as sql.NullTime) without having to implement custom JSON serializers (and having to use
 // our own implementations) for these types. This is therefore a precise representation of the API response structure.
 type RepositoryTagResponse struct {
-	Name         string `json:"name"`
+	Name         string                          `json:"name"`
+	Digest       string                          `json:"digest"`
+	ConfigDigest string                          `json:"config_digest,omitempty"`
+	MediaType    string                          `json:"media_type"`
+	Size         int64                           `json:"size_bytes"`
+	CreatedAt    string                          `json:"created_at"`
+	UpdatedAt    string                          `json:"updated_at,omitempty"`
+	PublishedAt  string                          `json:"published_at,omitempty"`
+	Referrers    []RepositoryTagReferrerResponse `json:"referrers,omitempty"`
+}
+
+type RepositoryTagReferrerResponse struct {
+	ArtifactType string `json:"artifactType"`
 	Digest       string `json:"digest"`
-	ConfigDigest string `json:"config_digest,omitempty"`
-	MediaType    string `json:"media_type"`
-	Size         int64  `json:"size_bytes"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at,omitempty"`
-	PublishedAt  string `json:"published_at,omitempty"`
 }
 
 func tagNameQueryParamValue(r *http.Request) string {
@@ -411,6 +418,10 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 		}
 
 		filters.OrderBy, filters.SortOrder = getSortOrderParams(sort)
+	}
+
+	if q.Has(referrersQueryParamKey) && q.Get(referrersQueryParamKey) == "true" {
+		filters.IncludeReferrers = true
 	}
 
 	return filters, nil
@@ -516,6 +527,15 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 		}
 		if t.UpdatedAt.Valid {
 			d.UpdatedAt = timeToString(t.UpdatedAt.Time)
+		}
+		if t.Referrers != nil {
+			d.Referrers = make([]RepositoryTagReferrerResponse, 0, len(t.Referrers))
+			for _, td := range t.Referrers {
+				d.Referrers = append(d.Referrers, RepositoryTagReferrerResponse{
+					Digest:       td.Digest,
+					ArtifactType: td.ArtifactType,
+				})
+			}
 		}
 		resp = append(resp, d)
 	}

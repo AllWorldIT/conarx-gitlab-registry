@@ -24,6 +24,7 @@ import (
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/internal/testutil"
+	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1069,6 +1070,126 @@ func TestGitlabAPI_RepositoryTagsList_OmitEmptyConfigDigest(t *testing.T) {
 
 	require.Contains(t, string(payload), tag)
 	require.NotContains(t, string(payload), "config_digest")
+}
+
+func TestGitlabAPI_RepositoryTagsList_IncludeReferrers(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	repoRef, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	artifactType := "application/vnd.dev.cosign.artifact.sbom.v1+json"
+
+	mfst := seedRandomOCIManifest(t, env, repoRef.Name(), putByTag("apple"))
+	mfstRef1 := seedRandomOCIManifest(t, env, repoRef.Name(), putByTag("apple-sig-1"), withSubject(mfst))
+	mfstRef2 := seedRandomOCIManifest(t, env, repoRef.Name(), putByTag("apple-sig-2"),
+		withSubject(mfst), withArtifactType(artifactType))
+	seedRandomOCIManifest(t, env, repoRef.Name(), putByTag("banana"))
+
+	params := url.Values{
+		"referrers": {"true"},
+	}
+	tagsURL, err := env.builder.BuildGitlabV1RepositoryTagsURL(repoRef, params)
+	require.NoError(t, err)
+
+	resp, err := http.Get(tagsURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var list []handlers.RepositoryTagResponse
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&list)
+	require.NoError(t, err)
+
+	m := make(map[string]handlers.RepositoryTagResponse)
+	for _, tag := range list {
+		m[tag.Name] = tag
+	}
+	require.Equal(t, 2, len(m["apple"].Referrers))
+	require.Equal(t, 0, len(m["apple-sig"].Referrers))
+	require.Equal(t, 0, len(m["banana"].Referrers))
+
+	// check ref digests match signature digests
+	_, mb1, err := mfstRef1.Payload()
+	require.NoError(t, err)
+	_, mb2, err := mfstRef2.Payload()
+	require.NoError(t, err)
+
+	dgst1, dgst2 := digest.FromBytes(mb1), digest.FromBytes(mb2)
+	require.Contains(t, m["apple"].Referrers, handlers.RepositoryTagReferrerResponse{
+		Digest:       dgst1.String(),
+		ArtifactType: mfstRef1.Manifest.Config.MediaType,
+	})
+	require.Contains(t, m["apple"].Referrers, handlers.RepositoryTagReferrerResponse{
+		Digest:       dgst2.String(),
+		ArtifactType: artifactType,
+	})
+}
+
+func TestGitlabAPI_RepositoryTagsList_DoNotIncludeReferrersByDefault(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	repoRef, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	artifactType := "application/vnd.dev.cosign.artifact.sbom.v1+json"
+
+	mfst := seedRandomOCIManifest(t, env, repoRef.Name(), putByTag("apple"))
+	seedRandomOCIManifest(t, env, repoRef.Name(), putByTag("apple-sig-1"), withSubject(mfst))
+	seedRandomOCIManifest(t, env, repoRef.Name(), putByTag("apple-sig-2"),
+		withSubject(mfst), withArtifactType(artifactType))
+	seedRandomOCIManifest(t, env, repoRef.Name(), putByTag("banana"))
+
+	// no referrers returned by default
+	tagsURL, err := env.builder.BuildGitlabV1RepositoryTagsURL(repoRef)
+	require.NoError(t, err)
+
+	resp, err := http.Get(tagsURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var list []handlers.RepositoryTagResponse
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&list)
+	require.NoError(t, err)
+
+	m := make(map[string]handlers.RepositoryTagResponse)
+	for _, tag := range list {
+		m[tag.Name] = tag
+	}
+	require.Equal(t, 0, len(m["apple"].Referrers))
+	require.Equal(t, 0, len(m["apple-sig"].Referrers))
+	require.Equal(t, 0, len(m["banana"].Referrers))
+
+	// no referrers returned if `referrers` param is set to something other than "true"
+	params := url.Values{
+		"referrers": {"false"},
+	}
+	tagsURL, err = env.builder.BuildGitlabV1RepositoryTagsURL(repoRef, params)
+	require.NoError(t, err)
+
+	resp, err = http.Get(tagsURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	dec = json.NewDecoder(resp.Body)
+	err = dec.Decode(&list)
+	require.NoError(t, err)
+
+	m = make(map[string]handlers.RepositoryTagResponse)
+	for _, tag := range list {
+		m[tag.Name] = tag
+	}
+	require.Equal(t, 0, len(m["apple"].Referrers))
+	require.Equal(t, 0, len(m["apple-sig"].Referrers))
+	require.Equal(t, 0, len(m["banana"].Referrers))
 }
 
 func TestGitlabAPI_SubRepositoryList(t *testing.T) {
