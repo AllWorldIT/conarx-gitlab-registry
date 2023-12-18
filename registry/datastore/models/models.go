@@ -124,6 +124,12 @@ type TagDetail struct {
 	CreatedAt    time.Time
 	UpdatedAt    sql.NullTime
 	PublishedAt  time.Time
+	Referrers    []TagReferrerDetail
+}
+
+type TagReferrerDetail struct {
+	Digest       string
+	ArtifactType string
 }
 
 type Blob struct {
