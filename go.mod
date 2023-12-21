@@ -43,7 +43,7 @@ require (
 	github.com/xanzy/go-gitlab v0.95.2
 	gitlab.com/gitlab-org/labkit v1.21.0
 	go.uber.org/automaxprocs v1.5.3
-	golang.org/x/crypto v0.16.0
+	golang.org/x/crypto v0.17.0
 	golang.org/x/oauth2 v0.15.0
 	golang.org/x/sync v0.5.0
 	golang.org/x/time v0.5.0
