@@ -15,6 +15,22 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// The SDK does not define these constants in the s3 package, other packages
+// define some of them but not both, and the context of each package
+// name will make it confusing.
+// Full list of errors https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
+const (
+	errCodeInternalError = "InternalError"
+	errCodeSlowDown      = "SlowDown"
+)
+
+// retryableErrors contains a list of recommended errors to retry for certain S3 errors
+// https://repost.aws/knowledge-center/http-5xx-errors-s3
+var retryableErrors = []string{
+	errCodeInternalError,
+	errCodeSlowDown,
+}
+
 type backoffConstructor func() backoff.BackOff
 
 func withNoExponentialBackoff() backoff.BackOff {
@@ -253,15 +269,32 @@ func (w *s3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteOb
 	err := w.waitRetryNotify(ctx, func() error {
 		var err error
 		out, err = w.s3.DeleteObjectsWithContext(ctx, input, opts...)
+		if err != nil {
+			return err
+		}
 
 		// a nil response must be captured as an error (if no error is provided)
-		if out == nil && err == nil {
-			err = nilRespError("DeleteObjectsWithContext")
+		if out == nil {
+			return nilRespError("DeleteObjectsWithContext")
 		}
+
+		for _, e := range out.Errors {
+			if e != nil {
+				// TODO: switch to using the the core package `slice.Contains` function introduced in https://tip.golang.org/doc/go1.21 after dropping support for go1.20
+				if contains(retryableErrors, *e.Code) {
+					return errors.New(*e.Code)
+				}
+			}
+		}
+
 		return err
 	})
 
-	return out, err
+	if err != nil && !contains(retryableErrors, err.Error()) {
+		return out, err
+	}
+
+	return out, nil
 }
 
 func (w *s3wrapper) GetObjectRequest(input *s3.GetObjectInput) (*request.Request, *s3.GetObjectOutput) {
@@ -366,4 +399,14 @@ func wrapAWSerr(e error) error {
 
 func nilRespError(s3API string) error {
 	return fmt.Errorf("received a nil response for %q from s3", s3API)
+}
+
+func contains(list []string, s string) bool {
+	for _, l := range list {
+		if s == l {
+			return true
+		}
+	}
+
+	return false
 }
