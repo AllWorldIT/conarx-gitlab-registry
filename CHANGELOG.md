@@ -1,3 +1,34 @@
+## [3.87.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.86.2-gitlab...v3.87.0-gitlab) (2023-12-05)
+
+
+### ✨ Features ✨
+
+* **db:** add primary database config and use for migrations ([4d1bf37](https://gitlab.com/gitlab-org/container-registry/commit/4d1bf37ae35ff240feb1574db49b3a3d96fa50f3))
+* enable registry to store artifactType with OCI manifests ([5e3b76f](https://gitlab.com/gitlab-org/container-registry/commit/5e3b76f5c5d80667d9b70e2ca5b125a4632f9ebd))
+* **registry:** import-command: add debug-server option ([59064d9](https://gitlab.com/gitlab-org/container-registry/commit/59064d9814629693980c3f2dc3f774b049c5c739))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **api/gitlab/v1:** order tag pagination correctly by publish_at ([3c29839](https://gitlab.com/gitlab-org/container-registry/commit/3c298398165d58d1974647b3dbf1e8651794d81f))
+* don't skip check on post-deployment migrations prior to import ([6d76c0e](https://gitlab.com/gitlab-org/container-registry/commit/6d76c0e656af03150c5e75a74229078130190812))
+* silence ominous maxprocs log message ([aaf8577](https://gitlab.com/gitlab-org/container-registry/commit/aaf857796b220c0f9665c8d39a7ebd57acd75d54))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/gorilla/mux to v1.8.1 ([a58bf89](https://gitlab.com/gitlab-org/container-registry/commit/a58bf899abbdfd2cc2a3bc4c2eae9aa32973a3dc))
+* **deps:** update module github.com/spf13/cobra to v1.8.0 ([d85ac07](https://gitlab.com/gitlab-org/container-registry/commit/d85ac07c7f377e2ddec96e60b4e90f36d3423d38))
+* **deps:** update module github.com/vmihailenco/msgpack/v5 to v5.4.1 ([4035764](https://gitlab.com/gitlab-org/container-registry/commit/4035764054ddcbfd50a45dda2cebb1ab4be10817))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.94.0 ([4d4b344](https://gitlab.com/gitlab-org/container-registry/commit/4d4b34404da1040a28e72c9eeba63c37da1390b6))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.21.0 ([51cc6a9](https://gitlab.com/gitlab-org/container-registry/commit/51cc6a9d62f1db4c4454d5402e64d772299992fe))
+* **deps:** update module golang.org/x/crypto to v0.16.0 ([8eaf5e4](https://gitlab.com/gitlab-org/container-registry/commit/8eaf5e41e613a9bb2cba24cb1e65052169699b0d))
+* **deps:** update module golang.org/x/oauth2 to v0.14.0 ([3089ffc](https://gitlab.com/gitlab-org/container-registry/commit/3089ffc180b1bae22a46033636099c31c9546773))
+* **deps:** update module golang.org/x/oauth2 to v0.15.0 ([6f898f7](https://gitlab.com/gitlab-org/container-registry/commit/6f898f756a943d5dd40be52116778cc5ae1093d5))
+* **deps:** update module golang.org/x/time to v0.4.0 ([1b23c8d](https://gitlab.com/gitlab-org/container-registry/commit/1b23c8dc0a9157ca1b399c2155da7cb65c64e381))
+* **deps:** update module google.golang.org/api to v0.151.0 ([5a37085](https://gitlab.com/gitlab-org/container-registry/commit/5a37085cc9744c8bc1d717c0e8ebea2291fdbbf3))
+* **deps:** update module google.golang.org/api to v0.152.0 ([a5ad8c7](https://gitlab.com/gitlab-org/container-registry/commit/a5ad8c708b9e9400f6463d1353a3727fe485f13c))
+
 ## [3.86.2](https://gitlab.com/gitlab-org/container-registry/compare/v3.86.1-gitlab...v3.86.2-gitlab) (2023-11-14)
 
 

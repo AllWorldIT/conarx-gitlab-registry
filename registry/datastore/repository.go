@@ -858,7 +858,7 @@ func getLastEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
 	if filters.PublishedAt != "" {
 		tagFilter := formatTagFilterWithPublishedAt(comparisonOperator, orderDirection)
 		q = fmt.Sprintf(baseQuery, tagFilter)
-		args = []any{filters.LastEntry, filters.PublishedAt, filters.MaxEntries}
+		args = []any{filters.PublishedAt, filters.LastEntry, filters.MaxEntries}
 	} else {
 		args = []any{filters.LastEntry, filters.MaxEntries}
 	}
@@ -888,7 +888,7 @@ func getBeforeEntryQuery(baseQuery string, filters FilterParams) (string, []any)
 	tagFilter := formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection)
 	if filters.PublishedAt != "" {
 		tagFilter = formatTagFilterWithPublishedAt(comparisonOperator, orderDirection)
-		args = append(args, filters.BeforeEntry, filters.PublishedAt, filters.MaxEntries)
+		args = append(args, filters.PublishedAt, filters.BeforeEntry, filters.MaxEntries)
 	} else {
 		args = append(args, filters.BeforeEntry, filters.MaxEntries)
 	}
@@ -914,14 +914,13 @@ func formatTagFilter(comparisonSign, orderBy string, sortOrder SortOrder) string
 
 // formatTagFilterWithPublishedAt using the base query from tagsDetailPaginatedQuery as reference
 func formatTagFilterWithPublishedAt(comparisonSign string, sortOrder SortOrder) string {
-	filter := `AND t.name %s $4
-		AND GREATEST(t.created_at,t.updated_at) %s= $5
+	filter := `AND (GREATEST(t.created_at, t.updated_at), t.name) %s ($4, $5)
 		ORDER BY
 			published_at %s,
 			t.name %s
 		LIMIT $6`
 
-	return fmt.Sprintf(filter, comparisonSign, comparisonSign, sortOrder, sortOrder)
+	return fmt.Sprintf(filter, comparisonSign, sortOrder, sortOrder)
 }
 
 // formatTagFilterWithPublishedAtWithoutName using the base query from tagsDetailPaginatedQuery as reference
@@ -950,24 +949,24 @@ func (s *repositoryStore) HasTagsAfterName(ctx context.Context, r *models.Reposi
 		WHERE
 			top_level_namespace_id = $1
 			AND repository_id = $2
-			AND name LIKE $3
-			AND name %s $4`
+			AND name LIKE $3`
 
 	comparison := greaterThan
 	if filters.SortOrder == OrderDesc {
 		comparison = lessThan
 	}
 
-	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), filters.LastEntry}
+	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
 
-	if filters.OrderBy == "published_at" {
+	if filters.OrderBy != "published_at" {
 		q += fmt.Sprintf(`
-		AND GREATEST(created_at, updated_at) %s= $5
-		`, comparison)
-		args = append(args, filters.PublishedAt)
+		AND name %s $4`, comparison)
+		args = append(args, filters.LastEntry)
+	} else {
+		q += fmt.Sprintf(`
+		AND (GREATEST(created_at, updated_at), name) %s ($4, $5)`, comparison)
+		args = append(args, filters.PublishedAt, filters.LastEntry)
 	}
-
-	q = fmt.Sprintf(q, comparison)
 
 	var count int
 	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -998,24 +997,25 @@ func (s *repositoryStore) HasTagsBeforeName(ctx context.Context, r *models.Repos
 		WHERE
 			top_level_namespace_id = $1
 			AND repository_id = $2
-			AND name LIKE $3
-			AND name %s $4`
+			AND name LIKE $3`
 
 	comparison := lessThan
 	if filters.SortOrder == OrderDesc {
 		comparison = greaterThan
 	}
 
-	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name), filters.BeforeEntry}
+	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
 
-	if filters.OrderBy == "published_at" {
+	if filters.OrderBy != "published_at" {
 		q += fmt.Sprintf(`
-		AND GREATEST(created_at, updated_at) %s= $5
-		`, comparison)
-		args = append(args, filters.PublishedAt)
+		AND name %s $4`, comparison)
+		args = append(args, filters.BeforeEntry)
+	} else {
+		q += fmt.Sprintf(`
+		AND (GREATEST(created_at, updated_at), name) %s ($4, $5)`, comparison)
+		args = append(args, filters.PublishedAt, filters.BeforeEntry)
 	}
 
-	q = fmt.Sprintf(q, comparison)
 	var count int
 	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("checking if there are more tags before name: %w", err)

@@ -224,15 +224,15 @@ the latest time when the tag as created or updated.
 
 For pagination purposes, when used in conjunction with the `last` and `before` query parameters, the values must be base64
 encoded with the following format `base64(TIMESTAMP|TAG_NAME)`, where `TIMESTAMP` is a string in ISO 8061 format with 
-millisecond precision, followed by the separator character `|` and finishing with the tag name. For example, for 
-the timestamp `2023-02-01T00:00:01.000Z` and tag name `latest`, the encoded value will be `MjAyMy0wMi0wMVQwMDowMDowMS4wMDBafGxhdGVzdAo=`
+microsecond precision, followed by the separator character `|` and finishing with the tag name. For example, for 
+the timestamp `2023-02-01T00:00:01.000000Z` and tag name `latest`, the encoded value will be `MjAyMy0wMi0wMVQwMDowMDowMS4wMDAwMDBafGxhdGVzdAo=`
 
 ```shell
-echo "2023-02-01T00:00:01.000Z|latest" | base64
-MjAyMy0wMi0wMVQwMDowMDowMS4wMDBafGxhdGVzdAo=
+echo "2023-02-01T00:00:01.000000Z|latest" | base64
+MjAyMy0wMi0wMVQwMDowMDowMS4wMDAwMDBafGxhdGVzdAo=
 
-echo "MjAyMy0wMi0wMVQwMDowMDowMS4wMDBafGxhdGVzdAo=" | base64 -d
-2023-02-01T00:00:01.000Z|latest
+echo "MjAyMy0wMi0wMVQwMDowMDowMS4wMDAwMDBafGxhdGVzdAo=" | base64 -d
+2023-02-01T00:00:01.000000Z|latest
 ```
 
 For the example above, the request URL would look like:

@@ -2783,7 +2783,8 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 	// 'cccc', E'2023-03-01 00:00:01.000000+00', NULL
 	// 'dddd', E'2023-04-01 00:00:01.000000+00', E'2023-04-30 00:00:01.000000+00'
 	// 'latest', E'2023-01-01 00:00:01.000000+00', E'2023-04-30 00:00:01.000000+00'
-	// 'eeee', E'2023-05-31 00:00:01.000000+00', NULL
+	// 'ffff', E'2023-05-31 00:00:01.000000+00', NULL
+	// 'eeee', E'2023-06-30 00:00:01.000000+00', NULL
 
 	aaaa := &models.TagDetail{
 		Name:        "aaaa",
@@ -2805,12 +2806,16 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 		Name:        "latest",
 		PublishedAt: mustParseTimestamp(t, "2023-04-30T00:00:01.00+00:00"),
 	}
-	eeee := &models.TagDetail{
-		Name:        "eeee",
+	ffff := &models.TagDetail{
+		Name:        "ffff",
 		PublishedAt: mustParseTimestamp(t, "2023-05-31T00:00:01.00+00:00"),
 	}
-	allAsc := []*models.TagDetail{aaaa, bbbb, cccc, dddd, latest, eeee}
-	allDesc := []*models.TagDetail{eeee, latest, dddd, cccc, bbbb, aaaa}
+	eeee := &models.TagDetail{
+		Name:        "eeee",
+		PublishedAt: mustParseTimestamp(t, "2023-06-30T00:00:01.00+00:00"),
+	}
+	allAsc := []*models.TagDetail{aaaa, bbbb, cccc, dddd, latest, ffff, eeee}
+	allDesc := []*models.TagDetail{eeee, ffff, latest, dddd, cccc, bbbb, aaaa}
 
 	tt := map[string]struct {
 		sort         datastore.SortOrder
@@ -2846,14 +2851,14 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 		"last page asc": {
 			sort:         datastore.OrderAsc,
 			publishedAt:  "2023-04-01T00:00:01.00+00:00",
-			lastEntry:    "dddd",
+			lastEntry:    "latest",
 			limit:        2,
-			expectedTags: []*models.TagDetail{latest, eeee},
+			expectedTags: []*models.TagDetail{dddd, latest},
 		},
 		"first page desc": {
 			sort:         datastore.OrderDesc,
 			limit:        2,
-			expectedTags: []*models.TagDetail{eeee, latest},
+			expectedTags: []*models.TagDetail{eeee, ffff},
 		},
 		"second page desc": {
 			sort:         datastore.OrderDesc,
@@ -2873,7 +2878,7 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 			sort:         datastore.OrderAsc,
 			publishedAt:  "2023-03-30T00:00:01.00+00:00",
 			limit:        100,
-			expectedTags: []*models.TagDetail{dddd, latest, eeee},
+			expectedTags: []*models.TagDetail{dddd, latest, ffff, eeee},
 		},
 		"older than date desc": {
 			sort:         datastore.OrderDesc,
