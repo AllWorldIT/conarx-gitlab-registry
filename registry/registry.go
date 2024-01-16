@@ -656,13 +656,21 @@ func dbFromConfig(config *configuration.Configuration) (*datastore.DB, error) {
 	)
 }
 
-func dbFromPrimary(config *configuration.Configuration) (*datastore.DB, error) {
+// migrationDBFromConfig returns a DB instance specifically configured for running database migrations.
+// The returned DB instance targets the primary database (when specified) and uses only a single connection.
+func migrationDBFromConfig(config *configuration.Configuration) (*datastore.DB, error) {
 	// deep copy the config object so we don't mistakenly modify the pointer
 	primaryConfig := *config
 
 	if config.Database.Primary != "" {
 		primaryConfig.Database.Host = config.Database.Primary
 		log.WithFields(log.Fields{"host": config.Database.Primary}).Info("database connection to primary host")
+
+		// Override database.pool.maxopen to 1 when applying migrations.
+		// This is not guaranteed to work forever, but for now, it is an effective workaround to enforce a single connection.
+		// https://gitlab.com/gitlab-org/container-registry/-/issues/922
+		primaryConfig.Database.Pool.MaxOpen = 1
 	}
+
 	return dbFromConfig(&primaryConfig)
 }
