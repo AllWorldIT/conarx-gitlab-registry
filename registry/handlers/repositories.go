@@ -777,7 +777,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		}
 		defer func() {
 			if err := plStore.Invalidate(h.Context, projectPath); err != nil {
-				errortracking.Capture(err, errortracking.WithContext(h.Context))
+				errortracking.Capture(err, errortracking.WithContext(h.Context), errortracking.WithStackTrace())
 			}
 		}()
 	}
@@ -812,7 +812,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		// When a lease fails to be destroyed after it is no longer needed it should not impact the response to the caller.
 		// The lease will eventually expire regardless, but we still need to record these failed cases.
 		if err := rlstore.Destroy(h.Context, lease); err != nil {
-			errortracking.Capture(err, errortracking.WithContext(h.Context))
+			errortracking.Capture(err, errortracking.WithContext(h.Context), errortracking.WithStackTrace())
 		}
 	} else {
 		w.WriteHeader(http.StatusAccepted)
@@ -1016,7 +1016,7 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 		// prevent the request from proceeding if we cannot find the project path for the referenced repository
 		if err != nil {
 			err = errors.New("ongoing rename check: failed to find project path parameter in token")
-			errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r))
+			errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r), errortracking.WithStackTrace())
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
 		}
@@ -1035,7 +1035,7 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 			// See: https://gitlab.com/gitlab-org/container-registry/-/merge_requests/1333#note_1482777410 on the rationale behind this.
 			exist, err := plStore.Exists(h.Context, projectPath)
 			if err != nil {
-				errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r))
+				errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r), errortracking.WithStackTrace())
 				l.WithError(err).Error("ongoing rename check: failed to check lease store for ongoing lease, skipping")
 				handler.ServeHTTP(w, r)
 				return
@@ -1044,7 +1044,7 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 			// prevent the request from proceeding if an ongoing rename operation is underway in the project space
 			if exist {
 				err = errors.New("ongoing rename check: the current repository is undergoing a rename")
-				errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r))
+				errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r), errortracking.WithStackTrace())
 				h.Errors = append(h.Errors, v2.ErrorCodeRenameInProgress.WithDetail(fmt.Sprintf("the base repository path: %s, is undergoing a rename", projectPath)))
 				return
 			}

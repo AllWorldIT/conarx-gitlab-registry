@@ -93,6 +93,7 @@ func (w *baseWorker) logAndReportErr(ctx context.Context, err error) {
 		err,
 		errortracking.WithContext(ctx),
 		errortracking.WithField(componentKey, w.name),
+		errortracking.WithStackTrace(),
 	)
 	log.GetLogger(log.WithContext(ctx)).WithError(err).Error(err.Error())
 }

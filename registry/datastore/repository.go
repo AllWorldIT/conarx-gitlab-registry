@@ -368,7 +368,7 @@ func (c *centralRepositoryCache) HasSizeWithDescendantsTimedOut(ctx context.Cont
 		if !errors.Is(err, redis.Nil) {
 			msg := "failed to read size with descendants timeout key from cache"
 			log.GetLogger(log.WithContext(ctx)).WithError(err).Error(msg)
-			errortracking.Capture(fmt.Errorf("%s: %w", msg, err), errortracking.WithContext(ctx))
+			errortracking.Capture(fmt.Errorf("%s: %w", msg, err), errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		}
 		return false
 	}
@@ -386,7 +386,7 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 		detail := "failed to invalidate repository size in cache for repo: " + r.Path
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn(detail)
 		err := fmt.Errorf("%q: %q", detail, err)
-		errortracking.Capture(err, errortracking.WithContext(ctx))
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
 }
 
