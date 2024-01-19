@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"expvar"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -384,6 +385,7 @@ func configureMonitoring(ctx context.Context, config *configuration.Configuratio
 
 	if addr != "" {
 		mux := http.NewServeMux()
+		mux.HandleFunc("/debug/vars", expvar.Handler().ServeHTTP)
 		mux.HandleFunc("/debug/health", health.StatusHandler)
 		l.WithFields(log.Fields{"address": addr, "path": "/debug/health"}).Info("starting health checker")
 
