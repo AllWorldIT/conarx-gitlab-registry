@@ -104,6 +104,8 @@ var (
 	// filter string to start with `.` and `-` characters (not just `_`). This is required to support a partial match.
 	tagNameQueryParamPattern = regexp.MustCompile("^[a-zA-Z0-9._-]{1,128}$")
 
+	timestampRegexParam = regexp.MustCompile(`^\d{1,}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$`)
+
 	// writeMethods are a map of http methods that modify registry data
 	writeMethods = map[string]struct{}{
 		http.MethodPost:   {},
@@ -371,7 +373,9 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 		beforeEntry = q.Get(beforeQueryParamKey)
 		// check if entry is base64 encoded, when is not, an error will be returned so we can ignore and continue
 		publishedAt, tagName, err := DecodeFilter(beforeEntry)
-		if err == nil {
+		// if we assume we decoded the beforeEntry value successfully then the resulting publishedAt parameter
+		// must be a date, otherwise the value of beforeEntry should be used in its raw form (i.e as a tag name)
+		if err == nil && queryParamValueMatchesPattern(publishedAt, timestampRegexParam) {
 			beforeEntry = tagName
 			filters.PublishedAt = publishedAt
 		}
@@ -389,7 +393,9 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 		lastEntry = q.Get(lastQueryParamKey)
 		// check if entry is base64 encoded, when is not, an error will be returned so we can ignore and continue
 		publishedAt, tagName, err := DecodeFilter(lastEntry)
-		if err == nil {
+		// if we assume we decoded the lastEntry value successfully then the resulting publishedAt parameter
+		// must be a date, otherwise the value of lastEntry should be used in its raw form (i.e as a tag name)
+		if err == nil && queryParamValueMatchesPattern(publishedAt, timestampRegexParam) {
 			lastEntry = tagName
 			filters.PublishedAt = publishedAt
 		}
