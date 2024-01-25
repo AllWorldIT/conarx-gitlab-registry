@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"strings"
 
@@ -76,8 +77,9 @@ func WithLogger(ctx context.Context, logger Logger) context.Context {
 }
 
 type logOptions struct {
-	ctx  context.Context
-	keys []interface{}
+	ctx    context.Context
+	keys   []interface{}
+	writer io.Writer
 }
 
 type logOpt func(o *logOptions)
@@ -100,6 +102,12 @@ func WithKeys(keys ...interface{}) logOpt {
 	}
 }
 
+func WithWriter(w io.Writer) logOpt {
+	return func(o *logOptions) {
+		o.writer = w
+	}
+}
+
 // GetLogger returns a Logger based on a logrus Entry.
 func GetLogger(opts ...logOpt) Logger {
 	cfg := &logOptions{ctx: context.Background()}
@@ -107,7 +115,12 @@ func GetLogger(opts ...logOpt) Logger {
 		o(cfg)
 	}
 
-	return &wrapper{getLogrusLogger(cfg.ctx, cfg.keys...)}
+	l := getLogrusLogger(cfg.ctx, cfg.keys...)
+	if cfg.writer != nil {
+		l.Logger.Out = cfg.writer
+	}
+
+	return &wrapper{l}
 }
 
 // GetLogrusLogger returns the logrus logger for the context. If one more keys

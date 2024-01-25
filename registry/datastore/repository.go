@@ -44,13 +44,14 @@ const (
 // FilterParams contains the specific filters used to get
 // the request results from the repositoryStore.
 type FilterParams struct {
-	SortOrder   SortOrder
-	OrderBy     string
-	Name        string
-	BeforeEntry string
-	LastEntry   string
-	PublishedAt string
-	MaxEntries  int
+	SortOrder        SortOrder
+	OrderBy          string
+	Name             string
+	BeforeEntry      string
+	LastEntry        string
+	PublishedAt      string
+	MaxEntries       int
+	IncludeReferrers bool
 }
 
 // RepositoryReader is the interface that defines read operations for a repository store.
@@ -720,6 +721,98 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 	return tt, nil
 }
 
+// The query for this method takes a list of TagDetails and returns a list of
+// manifests which are referrers to those tags - i.e. `subject_id` points to
+// one of the tags. The method modifies the `tags` collection by populating
+// the `Referrers` field with the query results.
+func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *models.Repository, tags []*models.TagDetail) error {
+	if len(tags) == 0 {
+		return nil
+	}
+
+	sbjDigests := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		nd, err := NewDigest(tag.Digest)
+		if err != nil {
+			return err
+		}
+		sbjDigests = append(sbjDigests, fmt.Sprintf("'%s'", nd))
+	}
+
+	q := fmt.Sprintf(
+		`SELECT
+			encode(m.digest, 'hex') AS digest,
+			COALESCE(at.media_type, cmt.media_type) AS artifact_type,
+			encode(ms.digest, 'hex') AS subject_digest
+		FROM
+			manifests AS m
+			JOIN manifests AS ms ON m.top_level_namespace_id = ms.top_level_namespace_id
+				AND m.subject_id = ms.id
+			LEFT JOIN media_types AS at ON at.id = m.artifact_media_type_id
+			LEFT JOIN media_types AS cmt ON cmt.id = m.configuration_media_type_id
+		WHERE
+			m.top_level_namespace_id = $1
+			AND m.repository_id = $2
+			AND m.subject_id IN (
+				SELECT
+					id
+				FROM
+					manifests
+				WHERE
+					top_level_namespace_id = $1
+					AND repository_id = $2
+					AND digest IN (
+						SELECT
+							decode(n, 'hex')
+						FROM
+							unnest(ARRAY[%s]) AS n))`,
+		strings.Join(sbjDigests, ","))
+
+	rows, err := s.db.QueryContext(ctx, q, r.NamespaceID, r.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	refMap := make(map[string][]models.TagReferrerDetail)
+	var (
+		dgst, sbjDgst Digest
+		at, sbjStr    string
+	)
+	for rows.Next() {
+		if err = rows.Scan(&dgst, &at, &sbjDgst); err != nil {
+			return fmt.Errorf("scanning referrer: %w", err)
+		}
+
+		d, err := dgst.Parse()
+		if err != nil {
+			return err
+		}
+		sbj, err := sbjDgst.Parse()
+		if err != nil {
+			return err
+		}
+		sbjStr = sbj.String()
+
+		if refMap[sbjStr] == nil {
+			refMap[sbjStr] = make([]models.TagReferrerDetail, 0)
+		}
+		refMap[sbjStr] = append(refMap[sbjStr], models.TagReferrerDetail{
+			Digest:       d.String(),
+			ArtifactType: at,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("scanning referrers: %w", err)
+	}
+
+	for _, tag := range tags {
+		tag.Referrers = refMap[tag.Digest.String()]
+	}
+
+	return nil
+}
+
 func sortTagsDesc(tags []*models.TagDetail) {
 	sort.SliceStable(tags, func(i int, j int) bool {
 		return tags[i].Name < tags[j].Name
@@ -752,7 +845,17 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 		return nil, fmt.Errorf("finding tags detail with pagination: %w", err)
 	}
 
-	return scanFullTagsDetail(rows)
+	tags, err := scanFullTagsDetail(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	if filters.IncludeReferrers {
+		if err := s.appendTagsDetailReferrers(ctx, r, tags); err != nil {
+			return nil, fmt.Errorf("populating referrers: %w", err)
+		}
+	}
+	return tags, nil
 }
 
 func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (string, []any) {

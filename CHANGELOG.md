@@ -1,3 +1,25 @@
+## [3.88.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.87.0-gitlab...v3.88.0-gitlab) (2023-12-19)
+
+
+### ✨ Features ✨
+
+* add referrers data to internal List Tags API ([fa28ee6](https://gitlab.com/gitlab-org/container-registry/commit/fa28ee6d333f265fc80aeda127f61a3ceb6462df))
+* **datastore:** importer: use progressbar to show import progress ([3be86b9](https://gitlab.com/gitlab-org/container-registry/commit/3be86b9622c635b5b446d763d08758923f991656))
+* **importer:** import command: expose tag concurrency option gcs ([8a9fdcd](https://gitlab.com/gitlab-org/container-registry/commit/8a9fdcd044cdd4149dc258e9a0522f25bd10712d))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.36.0 ([117dad0](https://gitlab.com/gitlab-org/container-registry/commit/117dad048a2c467e8b89284e326974d24db1b483))
+* **deps:** update module github.com/data-dog/go-sqlmock to v1.5.1 ([d7763ea](https://gitlab.com/gitlab-org/container-registry/commit/d7763ea0792fbd169bc5e6b0e8d352c319dcafcf))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.5.1 ([10b8550](https://gitlab.com/gitlab-org/container-registry/commit/10b85509deda2ff37a8cff78e500d87e7653bdf1))
+* **deps:** update module github.com/jszwec/csvutil to v1.9.0 ([8e181b1](https://gitlab.com/gitlab-org/container-registry/commit/8e181b17501220a84c2c2e6287c724e151682231))
+* **deps:** update module github.com/spf13/viper to v1.18.1 ([1bc5bca](https://gitlab.com/gitlab-org/container-registry/commit/1bc5bca7c74663417fa75f1276f1971792626127))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.95.1 ([2c10193](https://gitlab.com/gitlab-org/container-registry/commit/2c101935a9b936aec3f549899a0eea001525966a))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.95.2 ([7f1d8ec](https://gitlab.com/gitlab-org/container-registry/commit/7f1d8ec9e2a3c689ce0532bad61765d03ee09e4d))
+* **deps:** update module google.golang.org/api to v0.153.0 ([1a9edc1](https://gitlab.com/gitlab-org/container-registry/commit/1a9edc11d4ae3ebb61de69c92d3a42b26a894cf7))
+* **deps:** update module google.golang.org/api to v0.154.0 ([bf21ad7](https://gitlab.com/gitlab-org/container-registry/commit/bf21ad75336e11015f8bb37226197de44e05d95e))
+
 ## [3.87.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.86.2-gitlab...v3.87.0-gitlab) (2023-12-05)
 
 

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -23,12 +24,28 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/schollz/progressbar/v3"
 	"google.golang.org/api/googleapi"
 )
 
 var (
 	errNegativeTestingDelay = errors.New("negative testing delay")
 	errManifestSkip         = errors.New("the manifest is invalid and its (pre)import should be skipped")
+	commonBarOptions        = []progressbar.Option{
+		progressbar.OptionSetElapsedTime(true),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetPredictTime(false),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionShowIts(),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "=",
+			SaucerHead:    ">",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+	}
 )
 
 const mtOctetStream = "application/octet-stream"
@@ -49,6 +66,7 @@ type Importer struct {
 	dryRun                  bool
 	tagConcurrency          int
 	rowCount                bool
+	showProgressBar         bool
 	testingDelay            time.Duration
 	preImportRetryTimeout   time.Duration
 }
@@ -115,6 +133,11 @@ func WithPreImportRetryTimeout(d time.Duration) ImporterOption {
 	return func(imp *Importer) {
 		imp.preImportRetryTimeout = d
 	}
+}
+
+// WithProgressBar shows a progress bar and writes detailed logs to a file.
+func WithProgressBar(imp *Importer) {
+	imp.showProgressBar = true
 }
 
 // NewImporter creates a new Importer.
@@ -607,6 +630,13 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 		close(tagResChan)
 	}()
 
+	opts := append(commonBarOptions, progressbar.OptionSetDescription(fmt.Sprintf("importing tags in %s", dbRepo.Path)), progressbar.OptionSetItsString("tags"))
+	bar := progressbar.NewOptions(total, opts...)
+	defer func() {
+		bar.Finish()
+		bar.Close()
+	}()
+
 	// Consume the tag lookup details serially. In the ideal case, we only need
 	// retrieve the manifest from the database and associate it with a tag. This
 	// is fast enough that concurrency really isn't warranted here as well.
@@ -616,6 +646,7 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 		fsTag := tRes.name
 		desc := tRes.desc
 		err := tRes.err
+		bar.Add(1)
 
 		l := l.WithFields(log.Fields{"tag_name": fsTag, "count": i, "total": total, "digest": desc.Digest})
 		l.Info("importing tag")
@@ -733,9 +764,17 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": dbRepo.Path, "total": total})
 	l.Info("processing tags")
 
+	opts := append(commonBarOptions, progressbar.OptionSetDescription(fmt.Sprintf("pre importing manifests in %s", dbRepo.Path)), progressbar.OptionSetItsString("manifests"))
+	bar := progressbar.NewOptions(total, opts...)
+	defer func() {
+		bar.Finish()
+		bar.Close()
+	}()
+
 	for i, fsTag := range fsTags {
 		l := l.WithFields(log.Fields{"tag_name": fsTag, "count": i + 1})
 		l.Info("processing tag")
+		bar.Add(1)
 
 		// read tag details from the filesystem
 		desc, err := tagService.Get(ctx, fsTag)
@@ -1030,12 +1069,44 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		}
 	}
 
-	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+	var f *os.File
+	bar := progressbar.NewOptions(-1,
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetVisibility(imp.showProgressBar),
+	)
+	defer bar.Close()
+
+	commonBarOptions = append(commonBarOptions, progressbar.OptionSetVisibility(imp.showProgressBar))
+
+	if imp.showProgressBar {
+		fn := fmt.Sprintf("%s-registry-import.log", time.Now().Format(time.RFC3339))
+		f, err = os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("opening log file: %w", err)
+		}
+
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("getting working directory: %w", err)
+		}
+
+		// A little hacky, but we can use a progress bar to show the overall import
+		// progress by printing the bar with different descriptions. Otherwise, the
+		// progress bars and a regular logger would step over one another.
+		bar.Add(1) // Give the bar some state so we can print it.
+		imp.printBar(bar, fmt.Sprintf("registry import starting, detailed log written to: %s", filepath.Join(wd, fn)))
+	} else {
+		f = os.Stdout
+	}
+
+	l := log.GetLogger(log.WithContext(ctx), log.WithWriter(f)).WithFields(log.Fields{
 		"pre_import":        pre,
 		"repository_import": repos,
 		"common_blobs":      blobs,
 		"dry_run":           imp.dryRun,
 	})
+
 	ctx = log.WithLogger(ctx, l)
 
 	if imp.requireEmptyDatabase {
@@ -1061,20 +1132,30 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 	l.Info("starting metadata import")
 
 	if pre {
+		imp.printBar(bar, "step one: import manifests")
+
 		if err := imp.preImportAllRepositories(ctx); err != nil {
 			return fmt.Errorf("pre importing all repositories: %w", err)
 		}
 	}
+
 	if repos {
+		imp.printBar(bar, "step two: import tags")
+
 		if err := imp.importAllRepositories(ctx); err != nil {
 			return fmt.Errorf("importing all repositories: %w", err)
 		}
 	}
+
 	if blobs {
+		imp.printBar(bar, "step three: import blobs")
+
 		if err := imp.importBlobs(ctx); err != nil {
 			return fmt.Errorf("importing blobs: %w", err)
 		}
 	}
+
+	imp.printBar(bar, "registry import complete")
 
 	t := time.Since(start).Seconds()
 
@@ -1172,8 +1253,16 @@ func (imp *Importer) importBlobs(ctx context.Context) error {
 	l := log.GetLogger(log.WithContext(ctx))
 	l.Info("importing all blobs")
 
+	opts := append(commonBarOptions, progressbar.OptionSetDescription("importing blobs"), progressbar.OptionSetItsString("blobs"))
+	bar := progressbar.NewOptions(-1, opts...)
+	defer func() {
+		bar.Finish()
+		bar.Close()
+	}()
+
 	if err := imp.registry.Blobs().Enumerate(ctx, func(desc distribution.Descriptor) error {
 		index++
+		bar.Add(1)
 		l.WithFields(log.Fields{"digest": desc.Digest, "count": index, "size": desc.Size}).Info("importing blob")
 
 		dbBlob, err := imp.blobStore.FindByDigest(ctx, desc.Digest)
@@ -1412,4 +1501,19 @@ func (imp *Importer) PreImport(ctx context.Context, path string) error {
 	l.WithFields(log.Fields{"duration_s": t}).Info("pre-import complete")
 
 	return nil
+}
+
+// printBar prints the bar if showProgressBar is enabled. Optionally, sets the
+// bar description with the passed string. Passing in a string will mutate the
+// bar description.
+func (imp *Importer) printBar(b *progressbar.ProgressBar, s ...string) {
+	if !imp.showProgressBar {
+		return
+	}
+
+	if len(s) > 0 {
+		b.Describe(s[0])
+	}
+
+	fmt.Println(b)
 }
