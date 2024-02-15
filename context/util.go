@@ -23,3 +23,12 @@ func GetStringValue(ctx context.Context, key interface{}) (value string) {
 	}
 	return value
 }
+
+// GetStringSliceValue returns a string slice value from the context. A nil string
+// slice will be returned if not found.
+func GetStringSliceValue(ctx context.Context, key interface{}) (value []string) {
+	if valuev, ok := ctx.Value(key).([]string); ok {
+		value = valuev
+	}
+	return value
+}
