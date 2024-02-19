@@ -600,7 +600,7 @@ func TestCustomParams(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			require.Equal(t, test.expectedURLValues, customParams(test.opt))
+			require.Equal(t, test.expectedURLValues, storagedriver.CustomParams(test.opt, customParamKeys))
 		})
 	}
 }
