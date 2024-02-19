@@ -20,6 +20,9 @@ import (
 	"os"
 	"testing"
 	"time"
+	"errors"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadKeyFile(t *testing.T) {
@@ -45,48 +48,47 @@ func TestReadKeyFile(t *testing.T) {
 	}
 }
 
-func TestSignURL(t *testing.T) {
+func TestSignURLWithPrefix(t *testing.T) {
 	testKey := []byte{0x9d, 0x9b, 0x51, 0xa2, 0x17, 0x4d, 0x17, 0xd9,
 		0xb7, 0x70, 0xa3, 0x36, 0xe0, 0x87, 0x0a, 0xe3} // base64url: nZtRohdNF9m3cKM24IcK4w==
 
-	cases := []struct {
-		testName   string
-		url        string
+	tests := []struct {
+		name       string
+		urlPrefix  string
 		keyName    string
 		expiration time.Time
-		out        string
+		expected   string
+		err        error
 	}{
 		{
-			testName:   "Domain and Exact Path",
-			url:        "http://35.186.234.33/index.html",
+			name:       "Domain and Simple Prefix",
+			urlPrefix:  "https://media.example.com/segments/",
 			keyName:    "my-key",
 			expiration: time.Unix(1558131350, 0),
-			out:        "http://35.186.234.33/index.html?Expires=1558131350&KeyName=my-key&Signature=fm6JZSmKNsB5sys8VGr-JE4LiiE=",
+			expected:   "https://media.example.com/segments/?URLPrefix=aHR0cHM6Ly9tZWRpYS5leGFtcGxlLmNvbS9zZWdtZW50cy8=&Expires=1558131350&KeyName=my-key&Signature=HWE5tBTZgnYVoZzVLG7BtRnOsgk=",
 		},
 		{
-			testName:   "Domain Only",
-			url:        "https://www.google.com/",
+			name:       "Domain Only",
+			urlPrefix:  "https://www.google.com/",
 			keyName:    "my-key",
 			expiration: time.Unix(1549751401, 0),
-			out:        "https://www.google.com/?Expires=1549751401&KeyName=my-key&Signature=M_QO7BGHi2sGqrJO-MDr0uhDFuc=",
+			expected:   "https://www.google.com/?URLPrefix=aHR0cHM6Ly93d3cuZ29vZ2xlLmNvbS8=&Expires=1549751401&KeyName=my-key&Signature=o0zZ77jb7BgtGRPQEaXmX3cCLh8=",
 		},
 		{
-			testName:   "With Query Params",
-			url:        "https://www.example.com/some/path?some=query&another=param",
+			name:       "Includes query param",
+			urlPrefix:  "https://www.google.com/?foo=bar",
 			keyName:    "my-key",
-			expiration: time.Unix(1549751461, 0),
-			out:        "https://www.example.com/some/path?some=query&another=param&Expires=1549751461&KeyName=my-key&Signature=sTqqGX5hUJmlRJ84koAIhWW_c3M=",
+			expiration: time.Unix(1549751401, 0),
+			expected:   "",
+			err:        errors.New("url must not include query params: https://www.google.com/?foo=bar"),
 		},
 	}
 
-	for _, c := range cases {
-		t.Run(c.testName, func(t *testing.T) {
-			signedValue := signURL(
-				c.url, c.keyName, testKey, c.expiration,
-			)
-			if signedValue != c.out {
-				t.Errorf("signed value incorrectly matched: got %s, want %s", signedValue, c.out)
-			}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			signedValue, err := signURLWithPrefix(test.urlPrefix, test.keyName, testKey, test.expiration)
+			require.Equal(t, test.err, err)
+			require.Equal(t, test.expected, signedValue)
 		})
 	}
 }

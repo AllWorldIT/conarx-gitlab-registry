@@ -13,6 +13,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/internal"
+	dstorage "github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/driver"
 	storagemiddleware "github.com/docker/distribution/registry/storage/driver/middleware"
 	"github.com/docker/distribution/registry/storage/internal/metrics"
@@ -32,6 +33,20 @@ var _ driver.StorageDriver = &googleCDNStorageMiddleware{}
 
 // defaultDuration is the default expiration delay for CDN signed URLs
 const defaultDuration = 20 * time.Minute
+
+// customGitlabGoogle... are the query params appended to googlecdn signed redirect url
+const (
+	customGitlabGoogleNamespaceParam = "gitlab-namespace"
+	customGitlabGoogleProjectParam   = "gitlab-project"
+	customGitlabGoogleAuthTypeParam  = "gitlab-auth-type"
+)
+
+// customParamKeys is the mappping between gitlab keys to googlecdn signed-redirect-url query parameter keys
+var customParamKeys = map[string]string{
+	dstorage.NamespaceKey:   customGitlabGoogleNamespaceParam,
+	dstorage.ProjectPathKey: customGitlabGoogleProjectParam,
+	dstorage.AuthTypeKey:    customGitlabGoogleAuthTypeParam,
+}
 
 // newGoogleCDNStorageMiddleware constructs and returns a new Google CDN driver.StorageDriver implementation.
 // Required options: baseurl, authtype, privatekey, keyname
@@ -173,8 +188,21 @@ func (lh *googleCDNStorageMiddleware) URLFor(ctx context.Context, path string, o
 	}
 
 	metrics.CDNRedirect("cdn", false, "")
-	cdnURL := lh.urlSigner.Sign(lh.baseURL+keyer.GCSBucketKey(path), time.Now().Add(lh.duration))
-	return cdnURL, nil
+
+	url := lh.baseURL + keyer.GCSBucketKey(path)
+
+	// sign the url
+	url, err := lh.urlSigner.Sign(url, time.Now().Add(lh.duration))
+	if err != nil {
+		return url, err
+	}
+
+	// add custom params
+	customQueryParams := driver.CustomParams(options, customParamKeys)
+	if len(customQueryParams) != 0 {
+		url = url + "&" + customQueryParams.Encode()
+	}
+	return url, err
 }
 
 // init registers the Google CDN middleware.

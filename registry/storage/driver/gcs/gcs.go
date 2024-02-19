@@ -69,6 +69,20 @@ const (
 
 var rangeHeader = regexp.MustCompile(`^bytes=([0-9])+-([0-9]+)$`)
 
+// customGitlabGoogle... are the query params appended to gcs signed redirect url
+const (
+	customGitlabGoogleNamespaceParam = "x-goog-custom-audit-gitlab-namespace"
+	customGitlabGoogleProjectParam   = "x-goog-custom-audit-gitlab-project"
+	customGitlabGoogleAuthTypeParam  = "x-goog-custom-audit-gitlab-auth-type"
+)
+
+// customParamKeys is the mappping between gitlab keys to gcs signed-redirect-url query parameter keys
+var customParamKeys = map[string]string{
+	dstorage.NamespaceKey:   customGitlabGoogleNamespaceParam,
+	dstorage.ProjectPathKey: customGitlabGoogleProjectParam,
+	dstorage.AuthTypeKey:    customGitlabGoogleAuthTypeParam,
+}
+
 // driverParameters is a struct that encapsulates all of the driver parameters after all values have been set
 type driverParameters struct {
 	bucket        string
@@ -972,7 +986,7 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]int
 		PrivateKey:      d.privateKey,
 		Method:          methodString,
 		Expires:         expiresTime,
-		QueryParameters: customParams(options),
+		QueryParameters: storagedriver.CustomParams(options, customParamKeys),
 		Scheme:          storage.SigningSchemeV4,
 	}
 	return storage.SignedURL(d.bucket, name, opts)
@@ -1120,40 +1134,4 @@ func (d *Wrapper) GCSBucketKey(path string) string {
 	// option than hand over the object full path construction to the underlying GCS driver, instead of manually
 	// concatenating the CDN endpoint with the object path.
 	return d.StorageDriver.(*base.Regulator).StorageDriver.(*driver).pathToKey(path)
-}
-
-// customGitlabGoogle... are the query params appended to gcs signed redirect url
-const (
-	customGitlabGoogleNamespaceParam = "x-goog-custom-audit-gitlab-namespace"
-	customGitlabGoogleProjectParam   = "x-goog-custom-audit-gitlab-project"
-	customGitlabGoogleAuthTypeParam  = "x-goog-custom-audit-gitlab-auth-type"
-)
-
-// customParamKeys is the mappping between gitlab keys to gcs signed-redirect-url query parameter keys
-var customParamKeys = map[string]string{
-	dstorage.NamespaceKey:   customGitlabGoogleNamespaceParam,
-	dstorage.ProjectPathKey: customGitlabGoogleProjectParam,
-	dstorage.AuthTypeKey:    customGitlabGoogleAuthTypeParam,
-}
-
-// customParams generates a url.Values from a list of options
-func customParams(options map[string]any) url.Values {
-	urlParams := url.Values{}
-	for key, val := range customParamKeys {
-		paramVal, ok := options[key]
-		if ok {
-			if paramVal != nil {
-				paramValString, ok := paramVal.(string)
-				if ok {
-					urlParams.Set(val, paramValString)
-				}
-			}
-		}
-	}
-
-	if len(urlParams) == 0 {
-		urlParams = nil
-	}
-
-	return urlParams
 }
