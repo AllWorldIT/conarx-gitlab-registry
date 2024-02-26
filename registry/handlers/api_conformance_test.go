@@ -1529,6 +1529,10 @@ func manifest_Head_Schema2(t *testing.T, opts ...configOpt) {
 			require.NoError(t, err)
 			defer resp.Body.Close()
 
+			b, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.Len(t, b, 0, "body should be empty")
+
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 

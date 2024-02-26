@@ -206,9 +206,10 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Length", fmt.Sprint(len(p)))
 	w.Header().Set("Docker-Content-Digest", imh.Digest.String())
 	w.Header().Set("Etag", fmt.Sprintf(`"%s"`, imh.Digest))
-	w.Write(p)
 
 	if r.Method == http.MethodGet {
+		_, _ = w.Write(p)
+
 		l.WithFields(log.Fields{
 			"media_type":      manifestType.MediaType(),
 			"size_bytes":      len(p),
