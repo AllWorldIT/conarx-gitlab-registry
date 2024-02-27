@@ -71,9 +71,10 @@ var rangeHeader = regexp.MustCompile(`^bytes=([0-9])+-([0-9]+)$`)
 
 // customGitlabGoogle... are the query params appended to gcs signed redirect url
 const (
-	customGitlabGoogleNamespaceParam = "x-goog-custom-audit-gitlab-namespace"
-	customGitlabGoogleProjectParam   = "x-goog-custom-audit-gitlab-project"
-	customGitlabGoogleAuthTypeParam  = "x-goog-custom-audit-gitlab-auth-type"
+	customGitlabGoogleNamespaceParam  = "x-goog-custom-audit-gitlab-namespace"
+	customGitlabGoogleProjectParam    = "x-goog-custom-audit-gitlab-project"
+	customGitlabGoogleAuthTypeParam   = "x-goog-custom-audit-gitlab-auth-type"
+	customGitlabGoogleObjectSizeParam = "x-goog-custom-audit-gitlab-size-bytes"
 )
 
 // customParamKeys is the mappping between gitlab keys to gcs signed-redirect-url query parameter keys
@@ -81,6 +82,7 @@ var customParamKeys = map[string]string{
 	dstorage.NamespaceKey:   customGitlabGoogleNamespaceParam,
 	dstorage.ProjectPathKey: customGitlabGoogleProjectParam,
 	dstorage.AuthTypeKey:    customGitlabGoogleAuthTypeParam,
+	dstorage.SizeBytesKey:   customGitlabGoogleObjectSizeParam,
 }
 
 // driverParameters is a struct that encapsulates all of the driver parameters after all values have been set

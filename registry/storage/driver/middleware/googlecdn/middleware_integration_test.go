@@ -285,6 +285,7 @@ func TestURLFor_Download(t *testing.T) {
 				dstorage.AuthTypeKey:    "pat",
 				dstorage.ProjectPathKey: "gitlab-org/container-registry",
 				dstorage.NamespaceKey:   "gitlab-org",
+				dstorage.SizeBytesKey:   "123",
 			},
 		}}
 	for _, test := range tests {
