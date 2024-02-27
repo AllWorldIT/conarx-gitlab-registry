@@ -1,3 +1,36 @@
+## [3.89.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.88.1-gitlab...v3.89.0-gitlab) (2024-02-27)
+
+
+### ✨ Features ✨
+
+* add support for CUE module media types ([df220ac](https://gitlab.com/gitlab-org/container-registry/commit/df220ac7a55f4af2e8eb622ab3da3451a54972fb))
+* Add support for empty media type from OCI spec version 1.1.0-rc4 documents ([17299df](https://gitlab.com/gitlab-org/container-registry/commit/17299dfa7e316fccd52f2d2af703667e8b46b59d))
+* add support for Zarf Package media types ([3109e55](https://gitlab.com/gitlab-org/container-registry/commit/3109e558fe6ff47eb68c5733c39b2056f9526d61))
+* **gcs:** add object size key to cdn and gcs signed url ([2876234](https://gitlab.com/gitlab-org/container-registry/commit/287623470958a67304164b85aeced6b246563f84))
+* **gcs:** propagate request metadata to gcs audit logs ([8601478](https://gitlab.com/gitlab-org/container-registry/commit/86014783b43dde24521c6a885cd5d667b5802a9b))
+* **googlecdn:** propagate request metadata to googlecdn audit logs ([39ea03d](https://gitlab.com/gitlab-org/container-registry/commit/39ea03d9dbe4803417e6858cb9288cac1e3e2aa4))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **handlers:** do not write manifests on HEAD requests ([9bd696e](https://gitlab.com/gitlab-org/container-registry/commit/9bd696eeebe55906381a961ddee4bf140eafd019))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.37.0 ([8ca8d53](https://gitlab.com/gitlab-org/container-registry/commit/8ca8d535ebc8c71983efc308cd4694f2f5b56fbc))
+* **deps:** update module cloud.google.com/go/storage to v1.38.0 ([b0d3114](https://gitlab.com/gitlab-org/container-registry/commit/b0d31146cd1ffe284ae341c671b6aba10452ceef))
+* **deps:** update module github.com/getsentry/sentry-go to v0.27.0 ([26f36f5](https://gitlab.com/gitlab-org/container-registry/commit/26f36f545c8247cb83d1d0009a54939b2b1fa173))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.5.3 ([457f777](https://gitlab.com/gitlab-org/container-registry/commit/457f77731edd58599ebb7570fe801af5ae72eca0))
+* **deps:** update module github.com/jszwec/csvutil to v1.10.0 ([0028224](https://gitlab.com/gitlab-org/container-registry/commit/0028224d941304c062cfc1f4cdbe9219d3f0ac4a))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.5.1 ([14a624c](https://gitlab.com/gitlab-org/container-registry/commit/14a624cd8d8475756c0aa5077989cd730181b44c))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.14.2 ([2ae5931](https://gitlab.com/gitlab-org/container-registry/commit/2ae5931b76bf94bf7a68e35147916355c26f3133))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.97.0 ([a2401e0](https://gitlab.com/gitlab-org/container-registry/commit/a2401e0c7f448e08e89c1470db28b2564a4ff641))
+* **deps:** update module golang.org/x/crypto to v0.19.0 ([8c452a5](https://gitlab.com/gitlab-org/container-registry/commit/8c452a54a844ea461043c41460a3eabf05ae9964))
+* **deps:** update module golang.org/x/oauth2 to v0.17.0 ([3de9409](https://gitlab.com/gitlab-org/container-registry/commit/3de9409cdf5c3f5e62145411dc0d99277965ff8f))
+* **deps:** update module google.golang.org/api to v0.162.0 ([51d011f](https://gitlab.com/gitlab-org/container-registry/commit/51d011fd6b8982516303ce369a4825a02e4f3d79))
+* **deps:** update module google.golang.org/api to v0.167.0 ([1192583](https://gitlab.com/gitlab-org/container-registry/commit/1192583cce9e8d31bba538e6e48d7a9e22a3cfa5))
+
 ## [3.88.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.88.0-gitlab...v3.88.1-gitlab) (2024-01-30)
 
 
