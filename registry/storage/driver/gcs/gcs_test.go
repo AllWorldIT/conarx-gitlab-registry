@@ -532,12 +532,15 @@ func TestURLFor_AdditionalQueryParams(t *testing.T) {
 	require.Empty(t, u.Query().Get(customGitlabGoogleNamespaceParam))
 	require.Empty(t, u.Query().Get(customGitlabGoogleProjectParam))
 	require.Empty(t, u.Query().Get(customGitlabGoogleAuthTypeParam))
+	require.Empty(t, u.Query().Get(customGitlabGoogleObjectSizeParam))
 
 	// custom
 	opts := map[string]any{
 		"namespace":    "gitlab-org",
 		"project_path": "gitlab-org-container-registry",
-		"auth_type":    "pat"}
+		"auth_type":    "pat",
+		"size_bytes":   "123",
+	}
 	s, err = d.URLFor(ctx, fp, opts)
 	require.NoError(t, err)
 
@@ -546,6 +549,7 @@ func TestURLFor_AdditionalQueryParams(t *testing.T) {
 	require.Equal(t, opts["namespace"], u.Query().Get(customGitlabGoogleNamespaceParam))
 	require.Equal(t, opts["project_path"], u.Query().Get(customGitlabGoogleProjectParam))
 	require.Equal(t, opts["auth_type"], u.Query().Get(customGitlabGoogleAuthTypeParam))
+	require.Equal(t, opts["size_bytes"], u.Query().Get(customGitlabGoogleObjectSizeParam))
 }
 
 func TestCustomParams(t *testing.T) {
@@ -560,11 +564,13 @@ func TestCustomParams(t *testing.T) {
 				"namespace":    "gitlab-org",
 				"project_path": "gitlab-org-container-registry",
 				"auth_type":    "pat",
+				"size_bytes":   "123",
 			},
 			expectedURLValues: url.Values{
-				customGitlabGoogleAuthTypeParam:  []string{"pat"},
-				customGitlabGoogleProjectParam:   []string{"gitlab-org-container-registry"},
-				customGitlabGoogleNamespaceParam: []string{"gitlab-org"},
+				customGitlabGoogleAuthTypeParam:   []string{"pat"},
+				customGitlabGoogleProjectParam:    []string{"gitlab-org-container-registry"},
+				customGitlabGoogleNamespaceParam:  []string{"gitlab-org"},
+				customGitlabGoogleObjectSizeParam: []string{"123"},
 			},
 		},
 		{
@@ -591,6 +597,7 @@ func TestCustomParams(t *testing.T) {
 				"auth_type":    []string{"pat", "ldap"},
 				"namespace":    "gitlab-org",
 				"project_path": "gitlab-org-container-registry",
+				"size_bytes":   int64(123),
 			},
 			expectedURLValues: url.Values{
 				customGitlabGoogleProjectParam:   []string{"gitlab-org-container-registry"},

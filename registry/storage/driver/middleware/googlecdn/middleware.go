@@ -36,9 +36,10 @@ const defaultDuration = 20 * time.Minute
 
 // customGitlabGoogle... are the query params appended to googlecdn signed redirect url
 const (
-	customGitlabGoogleNamespaceParam = "gitlab-namespace"
-	customGitlabGoogleProjectParam   = "gitlab-project"
-	customGitlabGoogleAuthTypeParam  = "gitlab-auth-type"
+	customGitlabGoogleNamespaceParam  = "gitlab-namespace"
+	customGitlabGoogleProjectParam    = "gitlab-project"
+	customGitlabGoogleAuthTypeParam   = "gitlab-auth-type"
+	customGitlabGoogleObjectSizeParam = "gitlab-size-bytes"
 )
 
 // customParamKeys is the mappping between gitlab keys to googlecdn signed-redirect-url query parameter keys
@@ -46,6 +47,7 @@ var customParamKeys = map[string]string{
 	dstorage.NamespaceKey:   customGitlabGoogleNamespaceParam,
 	dstorage.ProjectPathKey: customGitlabGoogleProjectParam,
 	dstorage.AuthTypeKey:    customGitlabGoogleAuthTypeParam,
+	dstorage.SizeBytesKey:   customGitlabGoogleObjectSizeParam,
 }
 
 // newGoogleCDNStorageMiddleware constructs and returns a new Google CDN driver.StorageDriver implementation.

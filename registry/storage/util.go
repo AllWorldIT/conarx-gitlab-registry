@@ -16,6 +16,8 @@ const (
 	ProjectPathKey = "project_path"
 	// NamespaceKey is the key used to reference a request's GitLab project namespace in the options map passed to a driver's `URLFor` method.
 	NamespaceKey = "namespace"
+	// SizeBytesKey is the key used to reference the size of an object to be downloaded in the options map passed to a driver's `URLFor` method.
+	SizeBytesKey = "size_bytes"
 
 	// repositoryNameContextKey is the context key used to reference the targeted repository of a request.
 	// The key is set in the handlers when processing a request.
@@ -37,10 +39,16 @@ func exists(ctx context.Context, drv driver.StorageDriver, path string) (bool, e
 	return true, nil
 }
 
-// injectCustomKeyOpts injects the `namespace`, `project_path` and `auth_type` keys into the opts parameter
-func injectCustomKeyOpts(ctx context.Context, opts map[string]any) {
+// injectCustomKeyOpts injects the `namespace`, `project_path` and `auth_type` keys
+// as well as the key value pairs in the extraOpts into opts parameter.
+func injectCustomKeyOpts(ctx context.Context, opts map[string]any, extraOpts map[string]string) {
 	if opts == nil {
 		return
+	}
+
+	// add extraOpts
+	for k, v := range extraOpts {
+		opts[k] = v
 	}
 
 	authProjectPaths := dcontext.GetStringSliceValue(ctx, auth.ResourceProjectPathsKey)
