@@ -18,6 +18,7 @@ Related to <!-- add the issue URL here -->
 - [ ] For ~database changes including schema migrations:
    - [ ] Manually run up and down migrations in a [postgres.ai](https://console.postgres.ai/gitlab/joe-instances/68) production database clone and post a screenshot of the result here.
    - [ ] If adding new queries, extract a query plan from [postgres.ai](https://console.postgres.ai/gitlab/joe-instances/68) and post the link here. If changing existing queries, also extract a query plan for the current version for comparison.
+       - [ ] I do not have access to postgres.ai and have made a comment on this MR asking for these to be run on my behalf.
    - [ ] **Do not** include code that depends on the schema migrations in the same commit. Split the MR into two or more.
 - [ ] Ensured this change is safe to deploy to individual stages in the same environment (`cny` -> `prod`). State-related changes can be troublesome due to having parts of the fleet processing (possibly related) requests in different ways.
 
