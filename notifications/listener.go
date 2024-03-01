@@ -42,9 +42,8 @@ type Listener interface {
 
 type repositoryListener struct {
 	distribution.Repository
-	listener Listener
-	// TODO: remove and handle case properly https://gitlab.com/gitlab-org/container-registry/-/issues/622
-	fsMirroringDisabled bool
+	listener    Listener
+	useDatabase bool
 }
 
 type removerListener struct {
@@ -53,11 +52,11 @@ type removerListener struct {
 }
 
 // Listen dispatches events on the repository to the listener.
-func Listen(repo distribution.Repository, remover distribution.RepositoryRemover, listener Listener, fsMirroringDisabled bool) (distribution.Repository, distribution.RepositoryRemover) {
+func Listen(repo distribution.Repository, remover distribution.RepositoryRemover, listener Listener, useDatabase bool) (distribution.Repository, distribution.RepositoryRemover) {
 	return &repositoryListener{
-			Repository:          repo,
-			listener:            listener,
-			fsMirroringDisabled: fsMirroringDisabled,
+			Repository:  repo,
+			listener:    listener,
+			useDatabase: useDatabase,
 		}, &removerListener{
 			RepositoryRemover: remover,
 			listener:          listener,
@@ -85,9 +84,9 @@ func (rl *repositoryListener) Manifests(ctx context.Context, options ...distribu
 
 func (rl *repositoryListener) Blobs(ctx context.Context) distribution.BlobStore {
 	return &blobServiceListener{
-		BlobStore:           rl.Repository.Blobs(ctx),
-		parent:              rl,
-		fsMirroringDisabled: rl.fsMirroringDisabled,
+		BlobStore:   rl.Repository.Blobs(ctx),
+		parent:      rl,
+		useDatabase: rl.useDatabase,
 	}
 }
 
@@ -132,8 +131,8 @@ func (msl *manifestServiceListener) Put(ctx context.Context, sm distribution.Man
 
 type blobServiceListener struct {
 	distribution.BlobStore
-	parent              *repositoryListener
-	fsMirroringDisabled bool
+	parent      *repositoryListener
+	useDatabase bool
 }
 
 var _ distribution.BlobStore = &blobServiceListener{}
@@ -141,7 +140,9 @@ var _ distribution.BlobStore = &blobServiceListener{}
 func (bsl *blobServiceListener) Get(ctx context.Context, dgst digest.Digest) ([]byte, error) {
 	p, err := bsl.BlobStore.Get(ctx, dgst)
 	if err == nil {
-		if bsl.fsMirroringDisabled {
+		// Linked blobs are only present in the database, so there is no need to check
+		// blob existence in the storage backend.
+		if bsl.useDatabase {
 			return p, nil
 		}
 		if desc, err := bsl.Stat(ctx, dgst); err != nil {
@@ -160,7 +161,9 @@ func (bsl *blobServiceListener) Get(ctx context.Context, dgst digest.Digest) ([]
 func (bsl *blobServiceListener) Open(ctx context.Context, dgst digest.Digest) (distribution.ReadSeekCloser, error) {
 	rc, err := bsl.BlobStore.Open(ctx, dgst)
 	if err == nil {
-		if bsl.fsMirroringDisabled {
+		// Linked blobs are only present in the database, so there is no need to check
+		// blob existence in the storage backend.
+		if bsl.useDatabase {
 			return rc, nil
 		}
 		if desc, err := bsl.Stat(ctx, dgst); err != nil {
@@ -179,7 +182,9 @@ func (bsl *blobServiceListener) Open(ctx context.Context, dgst digest.Digest) (d
 func (bsl *blobServiceListener) ServeBlob(ctx context.Context, w http.ResponseWriter, r *http.Request, dgst digest.Digest) (*meta.Blob, error) {
 	eventMeta, err := bsl.BlobStore.ServeBlob(ctx, w, r, dgst)
 	if err == nil {
-		if bsl.fsMirroringDisabled {
+		// Linked blobs are only present in the database, so there is no need to check
+		// blob existence in the storage backend.
+		if bsl.useDatabase {
 			return eventMeta, nil
 		}
 		if desc, err := bsl.Stat(ctx, dgst); err != nil {

@@ -317,7 +317,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		log.Warn("the metadata database is a beta feature, please carefully review the documentation before enabling it in production")
 
 		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
-		options = append(options, storage.DisableMirrorFS)
+		options = append(options, storage.UseDatabase)
 
 		db, err := datastore.Open(&datastore.DSN{
 			Host:           config.Database.Host,
@@ -1079,7 +1079,6 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 				repository,
 				ctx.App.repoRemover,
 				app.eventBridge(ctx, r),
-				// mirroring is always disabled when the database is enabled
 				ctx.useDatabase)
 
 			ctx.Repository, err = applyRepoMiddleware(app, ctx.Repository, app.Config.Middleware["repository"])

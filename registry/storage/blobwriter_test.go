@@ -71,7 +71,7 @@ func TestDisabledBlobMetadataLinking(t *testing.T) {
 	env := newEnv(
 		t,
 		"layer/nometadata",
-		storage.DisableMirrorFS,
+		storage.UseDatabase,
 		// Registry needs a non-nil database to disable blob metadata linking
 		// even though we don't need an actual connection for this test.
 		storage.Database(&datastore.DB{}),
