@@ -34,8 +34,9 @@ type linkedBlobStore struct {
 	deleteEnabled          bool
 	resumableDigestEnabled bool
 
-	// do not write blob link paths to filesystem, but still allow blob puts to common blob store
-	disableMirrorFS bool
+	// when set to true, it will not write blob link paths to filesystem,
+	// but still allow blob puts to common blob store
+	useDatabase bool
 
 	// linkPath allows one to control the repository blob link set to which
 	// the blob store dispatches. This allows linked blobs stored at different
@@ -73,7 +74,10 @@ func (lbs *linkedBlobStore) Open(ctx context.Context, dgst digest.Digest) (distr
 func (lbs *linkedBlobStore) ServeBlob(ctx context.Context, w http.ResponseWriter, r *http.Request, dgst digest.Digest) (*meta.Blob, error) {
 	var d digest.Digest
 
-	if !lbs.disableMirrorFS {
+	// skip checking the storage backend when using the database
+	if lbs.useDatabase {
+		d = dgst
+	} else {
 		canonical, err := lbs.Stat(ctx, dgst) // access check
 		if err != nil {
 			return nil, err
@@ -84,8 +88,6 @@ func (lbs *linkedBlobStore) ServeBlob(ctx context.Context, w http.ResponseWriter
 			w.Header().Set("Content-Type", canonical.MediaType)
 		}
 		d = canonical.Digest
-	} else {
-		d = dgst
 	}
 
 	return lbs.blobServer.ServeBlob(ctx, w, r, d)
@@ -362,7 +364,7 @@ func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, uuid, path string
 // linkBlob links a valid, written blob into the registry under the named
 // repository for the upload controller.
 func (lbs *linkedBlobStore) linkBlob(ctx context.Context, canonical distribution.Descriptor, aliases ...digest.Digest) error {
-	if lbs.disableMirrorFS {
+	if lbs.useDatabase {
 		return nil
 	}
 
