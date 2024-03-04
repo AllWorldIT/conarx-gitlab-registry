@@ -71,3 +71,10 @@ func (d Digest) Parse() (digest.Digest, error) {
 
 	return dgst, nil
 }
+
+// HexDecode decodes binary data from a textual representation.
+// The output is equivalent to the PostgreSQL binary `decode` function with the hex textual format. See
+// https://www.postgresql.org/docs/14/functions-binarystring.html.
+func (d Digest) HexDecode() string {
+	return fmt.Sprintf("\\x%s", d.String())
+}

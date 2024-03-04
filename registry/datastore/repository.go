@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +52,7 @@ type FilterParams struct {
 	PublishedAt      string
 	MaxEntries       int
 	IncludeReferrers bool
+	ReferrerTypes    []string
 }
 
 // RepositoryReader is the interface that defines read operations for a repository store.
@@ -725,7 +726,7 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 // manifests which are referrers to those tags - i.e. `subject_id` points to
 // one of the tags. The method modifies the `tags` collection by populating
 // the `Referrers` field with the query results.
-func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *models.Repository, tags []*models.TagDetail) error {
+func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *models.Repository, tags []*models.TagDetail, artifactTypes []string) error {
 	if len(tags) == 0 {
 		return nil
 	}
@@ -736,11 +737,10 @@ func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *mode
 		if err != nil {
 			return err
 		}
-		sbjDigests = append(sbjDigests, fmt.Sprintf("'%s'", nd))
+		sbjDigests = append(sbjDigests, nd.HexDecode())
 	}
 
-	q := fmt.Sprintf(
-		`SELECT
+	q := `SELECT
 			encode(m.digest, 'hex') AS digest,
 			COALESCE(at.media_type, cmt.media_type) AS artifact_type,
 			encode(ms.digest, 'hex') AS subject_digest
@@ -761,14 +761,21 @@ func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *mode
 				WHERE
 					top_level_namespace_id = $1
 					AND repository_id = $2
-					AND digest IN (
-						SELECT
-							decode(n, 'hex')
-						FROM
-							unnest(ARRAY[%s]) AS n))`,
-		strings.Join(sbjDigests, ","))
+					AND digest = ANY ($3))`
 
-	rows, err := s.db.QueryContext(ctx, q, r.NamespaceID, r.ID)
+	var rows *sql.Rows
+	var err error
+
+	if len(artifactTypes) > 0 {
+		ats, err := s.mediaTypeIds(ctx, artifactTypes)
+		if err != nil {
+			return err
+		}
+		q += " AND (m.artifact_media_type_id = ANY ($4) OR m.configuration_media_type_id = ANY ($4))"
+		rows, err = s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sbjDigests, ats)
+	} else {
+		rows, err = s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sbjDigests)
+	}
 	if err != nil {
 		return err
 	}
@@ -813,12 +820,6 @@ func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *mode
 	return nil
 }
 
-func sortTagsDesc(tags []*models.TagDetail) {
-	sort.SliceStable(tags, func(i int, j int) bool {
-		return tags[i].Name < tags[j].Name
-	})
-}
-
 // sqlPartialMatch builds a string that can be passed as value for a SQL `LIKE` expression. Besides surrounding the
 // input value with `%` wildcard characters for a partial match, this function also escapes the `_` and `%`
 // metacharacters supported in Postgres `LIKE` expressions.
@@ -851,11 +852,36 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 	}
 
 	if filters.IncludeReferrers {
-		if err := s.appendTagsDetailReferrers(ctx, r, tags); err != nil {
+		if err := s.appendTagsDetailReferrers(ctx, r, tags, filters.ReferrerTypes); err != nil {
 			return nil, fmt.Errorf("populating referrers: %w", err)
 		}
 	}
 	return tags, nil
+}
+
+func (s *repositoryStore) mediaTypeIds(ctx context.Context, types []string) ([]string, error) {
+	if len(types) == 0 {
+		return nil, nil
+	}
+
+	q := "SELECT id FROM media_types WHERE media_type = ANY ($1)"
+	rows, err := s.db.QueryContext(ctx, q, types)
+	if err != nil {
+		return nil, fmt.Errorf("selecting media types by name: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scanning media type ids: %w", err)
+		}
+		ids = append(ids, strconv.FormatInt(id, 10))
+	}
+
+	return ids, nil
 }
 
 func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (string, []any) {
