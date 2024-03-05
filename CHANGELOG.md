@@ -1,3 +1,18 @@
+## [3.90.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.89.0-gitlab...v3.90.0-gitlab) (2024-3-5)
+
+
+### ✨ Features ✨
+
+* add artifactType filtering to referrers in tags API ([2ef6710](https://gitlab.com/gitlab-org/container-registry/commit/2ef6710c380fb5bac9cd2768941b16a6c7f66719))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/prometheus/client_golang to v1.19.0 ([067b497](https://gitlab.com/gitlab-org/container-registry/commit/067b49744ae80bb87b7a29143599837a194fe3be))
+* **deps:** update module github.com/shopify/toxiproxy/v2 to v2.8.0 ([edde091](https://gitlab.com/gitlab-org/container-registry/commit/edde0910d12b4b04cd8f6e35ba35e8cd381d0f4e))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.98.0 ([2f735b5](https://gitlab.com/gitlab-org/container-registry/commit/2f735b53a106d477f5a0d8863184ac429e5d39d8))
+* **deps:** update module golang.org/x/crypto to v0.20.0 ([428015c](https://gitlab.com/gitlab-org/container-registry/commit/428015cd387a63a81d030a9de0195e6e8830e3ff))
+
 ## [3.89.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.88.1-gitlab...v3.89.0-gitlab) (2024-02-27)
 
 
