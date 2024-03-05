@@ -316,6 +316,10 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	if config.Database.Enabled {
 		log.Warn("the metadata database is a beta feature, please carefully review the documentation before enabling it in production")
 
+		if config.GC.Disabled {
+			log.Warn("garbage collection is disabled")
+		}
+
 		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
 		options = append(options, storage.UseDatabase)
 
