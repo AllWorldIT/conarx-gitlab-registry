@@ -1,3 +1,34 @@
+## [3.88.1](https://gitlab.com/gitlab-org/container-registry/compare/v3.88.0-gitlab...v3.88.1-gitlab) (2024-01-30)
+
+
+### 🐛 Bug Fixes 🐛
+
+* **api/gitlab/v1:** fix timestamp validation in tag list api ([8ff0111](https://gitlab.com/gitlab-org/container-registry/commit/8ff0111a2ba2eaa96ba561f7ad91353311c37e26))
+* **api:** add debug/vars endpoint to debug server ([9e56f81](https://gitlab.com/gitlab-org/container-registry/commit/9e56f81ee65bd7ab6d7c34bed8db5ae382c6374f))
+
+
+### ⚡️ Performance Improvements ⚡️
+
+* **db:** override database.pool.maxopen to 1 when applying migrations ([7371b7d](https://gitlab.com/gitlab-org/container-registry/commit/7371b7d335c86192d37d8995f542c11b663349fa))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/alicebob/miniredis/v2 to v2.31.1 ([92b1c35](https://gitlab.com/gitlab-org/container-registry/commit/92b1c35f59f0b525055a14255708b32937fec3c1))
+* **deps:** update module github.com/data-dog/go-sqlmock to v1.5.2 ([241a6e0](https://gitlab.com/gitlab-org/container-registry/commit/241a6e03cb17659cc6798e3774ee8779718b8693))
+* **deps:** update module github.com/getsentry/sentry-go to v0.26.0 ([8302ed8](https://gitlab.com/gitlab-org/container-registry/commit/8302ed80e8e20d63207ed21cf019defcc54c4f98))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.5.2 ([e130740](https://gitlab.com/gitlab-org/container-registry/commit/e1307409f975de3f2b8f5aa57c7e7273e0a92574))
+* **deps:** update module github.com/prometheus/client_golang to v1.18.0 ([4fb2730](https://gitlab.com/gitlab-org/container-registry/commit/4fb2730356443b2d2d90b3a735453b19bd023dcb))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.3.1 ([3bb9ac2](https://gitlab.com/gitlab-org/container-registry/commit/3bb9ac241f3525fe4f14de8575c11e833443b555))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.4.0 ([90dbed5](https://gitlab.com/gitlab-org/container-registry/commit/90dbed5422f87c1b3fcc703d22f9fce75f3a5f8f))
+* **deps:** update module github.com/spf13/viper to v1.18.2 ([e166c94](https://gitlab.com/gitlab-org/container-registry/commit/e166c944538e1f93727bd2742fd056f8d083eac7))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.96.0 ([eb859e0](https://gitlab.com/gitlab-org/container-registry/commit/eb859e0899c7f46b6aefb236ec602d563a0ef19f))
+* **deps:** update module golang.org/x/crypto to v0.17.0 ([ed62613](https://gitlab.com/gitlab-org/container-registry/commit/ed626133ca468fc94ebd29d55e2d6fed03654640))
+* **deps:** update module golang.org/x/crypto to v0.18.0 ([012d79f](https://gitlab.com/gitlab-org/container-registry/commit/012d79fd29741ef45284490f2ed7c37873ee8e9e))
+* **deps:** update module golang.org/x/oauth2 to v0.16.0 ([05e6051](https://gitlab.com/gitlab-org/container-registry/commit/05e60510798d82c1947fe858e22f0bd16b78f003))
+* **deps:** update module golang.org/x/sync to v0.6.0 ([956be7b](https://gitlab.com/gitlab-org/container-registry/commit/956be7b76daffa41fc271a988ccd7604d8df765b))
+* **deps:** update module google.golang.org/api to v0.157.0 ([308508a](https://gitlab.com/gitlab-org/container-registry/commit/308508a0d01e06217c53882f7863a0e7e4cf8620))
+
 ## [3.88.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.87.0-gitlab...v3.88.0-gitlab) (2023-12-19)
 
 
