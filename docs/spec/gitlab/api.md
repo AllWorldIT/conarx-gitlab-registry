@@ -327,7 +327,7 @@ The tag objects are sorted lexicographically by tag name to enable marker-based 
     "config_digest": "sha256:66b1132a0173910b01ee3a15ef4e69583bbf2f7f1e4462c99efbe1b9ab5bf808",
     "media_type": "application/vnd.oci.image.manifest.v1+json",
     "size_bytes": 286734237,
-    "created_at": "2022-06-07T12:10:12.412+00:00"
+    "created_at": "2022-06-07T12:10:12.412Z"
   },
   {
     "name": "latest",
@@ -335,8 +335,8 @@ The tag objects are sorted lexicographically by tag name to enable marker-based 
     "config_digest": "sha256:0c4c8e302e7a074a8a1c2600cd1af07505843adb2c026ea822f46d3b5a98dd1f",
     "media_type": "application/vnd.oci.image.manifest.v1+json",
     "size_bytes": 286734237,
-    "created_at": "2022-06-07T12:11:13.633+00:00",
-    "updated_at": "2022-06-07T14:37:49.251+00:00"
+    "created_at": "2022-06-07T12:11:13.633Z",
+    "updated_at": "2022-06-07T14:37:49.251Z"
   }
 ]
 ```

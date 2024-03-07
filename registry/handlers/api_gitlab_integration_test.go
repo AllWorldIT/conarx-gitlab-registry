@@ -224,6 +224,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 	require.NoError(t, err)
 
 	sortedTags := []string{
+		"0062048be81e0cd57f4743158add8c589fcfdfa3",
 		"2j2ar",
 		"asj9e",
 		"dcsl6",
@@ -248,6 +249,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 		"dcsl6",
 		"asj9e",
 		"2j2ar",
+		"0062048be81e0cd57f4743158add8c589fcfdfa3",
 	}
 
 	// shuffle tags before creation to make sure results are consistent regardless of creation order
@@ -327,12 +329,24 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			queryParams:    url.Values{"n": []string{"4"}},
 			expectedStatus: http.StatusOK,
 			expectedOrderedTags: []string{
+				"0062048be81e0cd57f4743158add8c589fcfdfa3",
+				"2j2ar",
+				"asj9e",
+				"dcsl6",
+			},
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=dcsl6&n=4>; rel="next"`,
+		},
+		{
+			name:           "nth page with tagname that seems like base64 encoded",
+			queryParams:    url.Values{"last": []string{"0062048be81e0cd57f4743158add8c589fcfdfa3"}, "n": []string{"4"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
 				"2j2ar",
 				"asj9e",
 				"dcsl6",
 				"hpgkt",
 			},
-			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=hpgkt&n=4>; rel="next"`,
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=2j2ar&n=4>; rel="previous", </gitlab/v1/repositories/foo/bar/tags/list/?last=hpgkt&n=4>; rel="next"`,
 		},
 		{
 			name:           "nth page",
@@ -362,12 +376,12 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			queryParams:    url.Values{"n": []string{"4"}, "sort": []string{"name"}},
 			expectedStatus: http.StatusOK,
 			expectedOrderedTags: []string{
+				"0062048be81e0cd57f4743158add8c589fcfdfa3",
 				"2j2ar",
 				"asj9e",
 				"dcsl6",
-				"hpgkt",
 			},
-			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=hpgkt&n=4&sort=name>; rel="next"`,
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=dcsl6&n=4&sort=name>; rel="next"`,
 		},
 		{
 			name:           "nth page with sort",
@@ -418,14 +432,14 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 		},
 		{
 			name:           "last page sort desc",
-			queryParams:    url.Values{"last": []string{"hpgkt"}, "n": []string{"4"}, "sort": []string{"-name"}},
+			queryParams:    url.Values{"last": []string{"dcsl6"}, "n": []string{"4"}, "sort": []string{"-name"}},
 			expectedStatus: http.StatusOK,
 			expectedOrderedTags: []string{
-				"dcsl6",
 				"asj9e",
 				"2j2ar",
+				"0062048be81e0cd57f4743158add8c589fcfdfa3",
 			},
-			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=dcsl6&n=4&sort=-name>; rel="previous"`,
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?before=asj9e&n=4&sort=-name>; rel="previous"`,
 		},
 		{
 			name:           "zero page size",
@@ -486,13 +500,13 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 		},
 		{
 			name:           "before marker",
-			queryParams:    url.Values{"before": []string{"dcsl6"}},
+			queryParams:    url.Values{"before": []string{"asj9e"}},
 			expectedStatus: http.StatusOK,
 			expectedOrderedTags: []string{
+				"0062048be81e0cd57f4743158add8c589fcfdfa3",
 				"2j2ar",
-				"asj9e",
 			},
-			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=asj9e&n=100>; rel="next"`,
+			expectedLinkHeader: `</gitlab/v1/repositories/foo/bar/tags/list/?last=2j2ar&n=100>; rel="next"`,
 		},
 		{
 			name:           "before marker nth",
@@ -509,6 +523,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			queryParams:    url.Values{"before": []string{"x_y_z"}},
 			expectedStatus: http.StatusOK,
 			expectedOrderedTags: []string{
+				"0062048be81e0cd57f4743158add8c589fcfdfa3",
 				"2j2ar",
 				"asj9e",
 				"dcsl6",
@@ -527,6 +542,7 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			queryParams:    url.Values{"before": []string{"z"}},
 			expectedStatus: http.StatusOK,
 			expectedOrderedTags: []string{
+				"0062048be81e0cd57f4743158add8c589fcfdfa3",
 				"2j2ar",
 				"asj9e",
 				"dcsl6",
@@ -806,7 +822,7 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 			expectedBefore:      encodedTags["bbbb"],
 		},
 		"before entry asc last page size 2": {
-			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodeFilter("2023-06-29T00:00:01.000000+00", "z")}},
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodeFilter("2023-06-29T00:00:01.000000Z", "z")}},
 			expectedOrderedTags: []string{"latest", "ffff"},
 			expectedBefore:      encodedTags["latest"],
 			expectedLast:        encodedTags["ffff"],
@@ -829,7 +845,7 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 		},
 		"before entry desc first page size 2": {
 			descending:          true,
-			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodeFilter("2022-12-31T00:00:01.000000+00", "_")}},
+			queryParams:         url.Values{"n": []string{"2"}, "before": []string{encodeFilter("2022-12-31T00:00:01.000000Z", "_")}},
 			expectedOrderedTags: []string{"bbbb", "aaaa"},
 			expectedBefore:      encodedTags["bbbb"],
 		},

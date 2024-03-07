@@ -247,7 +247,7 @@ var MigrateUpCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		db, err := dbFromPrimary(config)
+		db, err := migrationDBFromConfig(config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
 			os.Exit(1)
@@ -295,7 +295,7 @@ var MigrateDownCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		db, err := dbFromPrimary(config)
+		db, err := migrationDBFromConfig(config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
 			os.Exit(1)
@@ -345,7 +345,7 @@ var MigrateVersionCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		db, err := dbFromPrimary(config)
+		db, err := migrationDBFromConfig(config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
 			os.Exit(1)
@@ -378,7 +378,7 @@ var MigrateStatusCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		db, err := dbFromPrimary(config)
+		db, err := migrationDBFromConfig(config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
 			os.Exit(1)

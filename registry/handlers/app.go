@@ -187,7 +187,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// we're unable to serve or find it in cache) we simply log and report a failure here and proceed to not prevent
 		// the app from starting.
 		log.WithError(err).Error("failed configuring Redis cache")
-		errortracking.Capture(err, errortracking.WithContext(ctx))
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
 
 	options := registrymiddleware.GetRegistryOptions()
@@ -369,7 +369,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// update online GC settings (if needed) in the background to avoid delaying the app start
 		go func() {
 			if err := updateOnlineGCSettings(app.Context, app.db, config); err != nil {
-				errortracking.Capture(err, errortracking.WithContext(app.Context))
+				errortracking.Capture(err, errortracking.WithContext(app.Context), errortracking.WithStackTrace())
 				log.WithError(err).Error("failed to update online GC settings")
 			}
 		}()
@@ -592,7 +592,7 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 					l.Warn("shutting down online GC agent due due to context cancellation")
 				} else {
 					// this should never happen, but leaving it here for future proofing against bugs within Agent.Start
-					errortracking.Capture(fmt.Errorf("online GC agent stopped with error: %w", err))
+					errortracking.Capture(fmt.Errorf("online GC agent stopped with error: %w", err), errortracking.WithStackTrace())
 					l.WithError(err).Error("online GC agent stopped")
 				}
 			}
@@ -1204,7 +1204,7 @@ func (app *App) logError(ctx context.Context, r *http.Request, errors errcode.Er
 				detailSuffix = fmt.Sprintf(": %s", detail)
 			}
 			err := errcode.ErrorCodeUnknown.WithMessage(fmt.Sprintf("%s%s", message, detailSuffix))
-			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithRequest(r))
+			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithRequest(r), errortracking.WithStackTrace())
 		}
 	}
 }
