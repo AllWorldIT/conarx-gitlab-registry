@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest/ocischema"
+	"github.com/docker/distribution/manifest/schema2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -65,8 +66,9 @@ func (v *OCIValidator) Validate(ctx context.Context, mnfst *ocischema.Deserializ
 				// If no URLs, require that the blob exists
 				_, err = v.blobStatter.Stat(ctx, descriptor.Digest)
 			}
-		case v1.MediaTypeImageManifest:
+		case v1.MediaTypeImageManifest, schema2.MediaTypeManifest:
 			var exists bool
+
 			exists, err = v.manifestExister.Exists(ctx, descriptor.Digest)
 			if err != nil || !exists {
 				err = distribution.ErrBlobUnknown // just coerce to unknown.

@@ -461,6 +461,11 @@ func (t *testEnv) Shutdown() {
 	}
 }
 
+type subjectManifest interface {
+	Config() distribution.Descriptor
+	Payload() (string, []byte, error)
+}
+
 type manifestOpts struct {
 	manifestURL        string
 	putManifest        bool
@@ -468,7 +473,7 @@ type manifestOpts struct {
 	withoutMediaType   bool
 	authToken          string
 	artifactType       string
-	subjectManifest    *ocischema.DeserializedManifest
+	subjectManifest
 	// Non-optional values which be passed through by the testing func for ease of use.
 	repoPath string
 }
@@ -504,7 +509,7 @@ func withArtifactType(at string) manifestOptsFunc {
 	}
 }
 
-func withSubject(subject *ocischema.DeserializedManifest) manifestOptsFunc {
+func withSubject(subject subjectManifest) manifestOptsFunc {
 	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
 		opts.subjectManifest = subject
 	}
