@@ -397,16 +397,19 @@ func (buh *blobUploadHandler) ResumeBlobUpload(ctx *Context, r *http.Request) ht
 	}
 	buh.Upload = upload
 
-	if size := upload.Size(); size != buh.State.Offset {
-		defer upload.Close()
-		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
-			"upload_size":  size,
-			"state_offset": buh.State.Offset,
-		}).Error("upload resumed at wrong offset")
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			buh.Errors = append(buh.Errors, v2.ErrorCodeBlobUploadInvalid.WithDetail(err))
-			upload.Cancel(buh)
-		})
+	// The offset specified in the request's `state` query parameter is not useful when only querying for
+	// the status of the current blob upload and hence does not need be validated against.
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if size := upload.Size(); size != buh.State.Offset {
+			defer upload.Close()
+			log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+				"upload_size":  size,
+				"state_offset": buh.State.Offset,
+			}).Error("upload resumed at wrong offset")
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				buh.Errors = append(buh.Errors, v2.ErrorCodeResumableBlobUploadInvalid.WithDetail(err))
+			})
+		}
 	}
 	return nil
 }
