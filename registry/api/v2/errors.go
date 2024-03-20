@@ -179,7 +179,7 @@ var (
 		Message:        "invalid content range",
 		Description:    "If a layer chunk is uploaded with the range out of order, this error will be returned",
 		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
-        })
+	})
 
 	// ErrorCodeInvalidLimitParam is returned when the value of the limit query parameter is invalid.
 	ErrorCodeInvalidLimitParam = errcode.Register(errGroup, errcode.ErrorDescriptor{
@@ -196,5 +196,14 @@ var (
 		Description: `Returned when the "n" parameter (number of results
 		to return) is not an integer, "n" is negative or "n" is bigger than the maximum allowed.`,
 		HTTPStatusCode: http.StatusBadRequest,
+	})
+
+	// ErrorCodeResumableBlobUploadInvalid is returned when a resumable upload is invalid.
+	ErrorCodeResumableBlobUploadInvalid = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:   "RESUMABLE_BLOB_UPLOAD_INVALID",
+		Message: "resumable blob upload invalid",
+		Description: `The blob upload encountered an error and can no
+		longer proceed.`,
+		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
 	})
 )
