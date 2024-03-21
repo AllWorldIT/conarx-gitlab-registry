@@ -5630,6 +5630,7 @@ CREATE TABLE public.repositories (
     name text NOT NULL,
     path text NOT NULL,
     deleted_at timestamp with time zone,
+    last_published_at timestamp with time zone,
     CONSTRAINT check_repositories_name_length CHECK ((char_length(name) <= 255)),
     CONSTRAINT check_repositories_path_length CHECK ((char_length(path) <= 255))
 );
