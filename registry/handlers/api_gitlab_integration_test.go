@@ -80,6 +80,7 @@ func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
 	require.NotEmpty(t, r.CreatedAt)
 	require.Regexp(t, iso8601MsFormat, r.CreatedAt)
 	require.Empty(t, r.UpdatedAt)
+	require.Empty(t, r.LastPublishedAt)
 
 	// repeat, but before that push another image, this time tagged
 	dm := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
@@ -104,7 +105,7 @@ func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
 	require.Equal(t, *r.Size, expectedSize)
 	require.NotEmpty(t, r.CreatedAt)
 	require.Regexp(t, iso8601MsFormat, r.CreatedAt)
-	require.Empty(t, r.UpdatedAt)
+	require.NotEmpty(t, r.LastPublishedAt)
 
 	// Now create a new sub repository and push a new tagged image. When called with size=self_with_descendants, the
 	// returned size should have been incremented when compared with size=self.

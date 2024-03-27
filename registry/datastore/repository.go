@@ -98,6 +98,7 @@ type RepositoryWriter interface {
 	DeleteManifest(ctx context.Context, r *models.Repository, d digest.Digest) (bool, error)
 	RenamePathForSubRepositories(ctx context.Context, topLevelNamespaceID int64, oldPath, newPath string) error
 	Rename(ctx context.Context, r *models.Repository, newPath, newName string) error
+	UpdateLastPublishedAt(ctx context.Context, r *models.Repository, t *models.Tag) error
 }
 
 type repositoryOption func(*models.Repository)
@@ -394,8 +395,8 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 func scanFullRepository(row *sql.Row) (*models.Repository, error) {
 	r := new(models.Repository)
 
-	if err := row.Scan(&r.ID, &r.NamespaceID, &r.Name, &r.Path, &r.ParentID, &r.CreatedAt, &r.UpdatedAt); err != nil {
-		if err != sql.ErrNoRows {
+	if err := row.Scan(&r.ID, &r.NamespaceID, &r.Name, &r.Path, &r.ParentID, &r.CreatedAt, &r.UpdatedAt, &r.LastPublishedAt); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("scanning repository: %w", err)
 		}
 		return nil, nil
@@ -436,7 +437,8 @@ func (s *repositoryStore) FindByPath(ctx context.Context, path string) (*models.
 			path,
 			parent_id,
 			created_at,
-			updated_at
+			updated_at,
+			last_published_at
 		FROM
 			repositories
 		WHERE
@@ -2012,6 +2014,38 @@ func (s *repositoryStore) Rename(ctx context.Context, r *models.Repository, newP
 			return fmt.Errorf("repository not found")
 		}
 		return fmt.Errorf("renaming repository: %w", err)
+	}
+
+	s.cache.Set(ctx, r)
+
+	return nil
+}
+
+// UpdateLastPublishedAt updates the timestamp of the last tag published to the repository. This is the greatest value
+// between the tag created at and published at timestamps.
+func (s *repositoryStore) UpdateLastPublishedAt(ctx context.Context, r *models.Repository, t *models.Tag) error {
+	defer metrics.InstrumentQuery("repository_update_last_published_at")()
+	q := `UPDATE
+			repositories
+		SET
+			last_published_at = $1
+		WHERE
+			top_level_namespace_id = $2
+			AND id = $3
+		RETURNING
+			last_published_at`
+
+	timestamp := t.CreatedAt
+	if t.UpdatedAt.Valid {
+		timestamp = t.UpdatedAt.Time
+	}
+
+	row := s.db.QueryRowContext(ctx, q, timestamp, r.NamespaceID, r.ID)
+	if err := row.Scan(&r.LastPublishedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("repository not found")
+		}
+		return fmt.Errorf("updating repository last published at: %w", err)
 	}
 
 	s.cache.Set(ctx, r)

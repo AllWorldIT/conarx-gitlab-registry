@@ -43,6 +43,9 @@ type Repository struct {
 	// (i.e the attribute was not cached or was invalidated).
 	// This value is not saved in the DB so we don't need to use a sql.NullInt64 type.
 	Size *int64
+	// LastPublishedAt is set to the timestamp of the latest published tag in the repository. This should equal to
+	// MAX(GREATEST(created_at, updated_at)) among all tags.
+	LastPublishedAt sql.NullTime
 }
 
 // IsTopLevel identifies whether a repository is a top-level repository or not.
