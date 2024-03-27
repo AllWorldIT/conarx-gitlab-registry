@@ -24,26 +24,29 @@ import (
 	"time"
 )
 
-// SignURL creates a signed URL for an endpoint on Cloud CDN.
+// signURLWithPrefix creates a signed URL with a URL prefix for an endpoint on Cloud CDN.
+// Prefixes allow access to any URL with the same prefix, and can be useful for
+// granting access broader content without signing multiple URLs.
 //
-// - url must start with "https://" and should not have the "Expires", "KeyName", or "Signature"
-// query parameters.
+// - url must start with "https://" and should not include query parameters.
 // - key should be in raw form (not base64url-encoded) which is 16-bytes long.
 // - keyName must match a key added to the backend service or bucket.
-func signURL(url, keyName string, key []byte, expiration time.Time) string {
-	sep := "?"
+func signURLWithPrefix(url, keyName string, key []byte, expiration time.Time) (string, error) {
 	if strings.Contains(url, "?") {
-		sep = "&"
+		return "", fmt.Errorf("url must not include query params: %s", url)
 	}
-	url += sep
-	url += fmt.Sprintf("Expires=%d", expiration.Unix())
-	url += fmt.Sprintf("&KeyName=%s", keyName)
+
+	encodedURLPrefix := base64.URLEncoding.EncodeToString([]byte(url))
+	input := fmt.Sprintf("URLPrefix=%s&Expires=%d&KeyName=%s",
+		encodedURLPrefix, expiration.Unix(), keyName)
 
 	mac := hmac.New(sha1.New, key)
-	mac.Write([]byte(url))
+	mac.Write([]byte(input))
 	sig := base64.URLEncoding.EncodeToString(mac.Sum(nil))
-	url += fmt.Sprintf("&Signature=%s", sig)
-	return url
+
+	signedValue := fmt.Sprintf("%s&Signature=%s", input, sig)
+
+	return url + "?" + signedValue, nil
 }
 
 // readKeyFile reads the base64url-encoded key file and decodes it.
@@ -69,6 +72,6 @@ func newURLSigner(keyName string, key []byte) *urlSigner {
 	return &urlSigner{keyName: keyName, key: key}
 }
 
-func (s *urlSigner) Sign(url string, expires time.Time) string {
-	return signURL(url, s.keyName, s.key, expires)
+func (s *urlSigner) Sign(url string, expires time.Time) (string, error) {
+	return signURLWithPrefix(url, s.keyName, s.key, expires)
 }

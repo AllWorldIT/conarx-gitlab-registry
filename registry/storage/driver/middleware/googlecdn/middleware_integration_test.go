@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/internal/testutil"
+	dstorage "github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/gcs"
 	"github.com/stretchr/testify/require"
@@ -107,13 +109,14 @@ func TestURLFor(t *testing.T) {
 	cdnURL, err := cdnDriver.URLFor(context.Background(), objectPath, nil)
 	require.NoError(t, err)
 
-	expectedURL := signURL(
+	expectedURL, err := signURLWithPrefix(
 		baseURL+root+objectPath,
 		keyName,
 		keyBytes,
 		systemClock.Now().Add(defaultDuration),
 	)
 
+	require.NoError(t, err)
 	require.Equal(t, expectedURL, cdnURL)
 
 	// custom duration
@@ -129,12 +132,13 @@ func TestURLFor(t *testing.T) {
 	cdnURL, err = cdnDriver.URLFor(context.Background(), objectPath, nil)
 	require.NoError(t, err)
 
-	expectedURL = signURL(
+	expectedURL, err = signURLWithPrefix(
 		baseURL+root+objectPath,
 		keyName,
 		keyBytes,
 		clockMock.Now().Add(d),
 	)
+	require.NoError(t, err)
 	require.Equal(t, expectedURL, cdnURL)
 
 	// IP filter ON - generate GCS URL on IP match
@@ -169,12 +173,13 @@ func TestURLFor(t *testing.T) {
 	cdnURL, err = cdnDriver.URLFor(ctx, objectPath, nil)
 	require.NoError(t, err)
 
-	expectedURL = signURL(
+	expectedURL, err = signURLWithPrefix(
 		baseURL+root+objectPath,
 		keyName,
 		keyBytes,
 		clockMock.Now().Add(defaultDuration),
 	)
+	require.NoError(t, err)
 	require.Equal(t, expectedURL, cdnURL)
 
 	// IP filter OFF - generate CDN URL even if IP matches
@@ -192,12 +197,13 @@ func TestURLFor(t *testing.T) {
 	cdnURL, err = cdnDriver.URLFor(ctx, objectPath, nil)
 	require.NoError(t, err)
 
-	expectedURL = signURL(
+	expectedURL, err = signURLWithPrefix(
 		baseURL+root+objectPath,
 		keyName,
 		keyBytes,
 		clockMock.Now().Add(defaultDuration),
 	)
+	require.NoError(t, err)
 	require.Equal(t, expectedURL, cdnURL)
 
 	// IP filter OFF - generate CDN URL if IP does not match
@@ -207,12 +213,13 @@ func TestURLFor(t *testing.T) {
 	cdnURL, err = cdnDriver.URLFor(ctx, objectPath, nil)
 	require.NoError(t, err)
 
-	expectedURL = signURL(
+	expectedURL, err = signURLWithPrefix(
 		baseURL+root+objectPath,
 		keyName,
 		keyBytes,
 		clockMock.Now().Add(defaultDuration),
 	)
+	require.NoError(t, err)
 	require.Equal(t, expectedURL, cdnURL)
 }
 
@@ -264,16 +271,57 @@ func TestURLFor_Download(t *testing.T) {
 	cdnDriver, err := newGoogleCDNStorageMiddleware(gcsDriver, opts)
 	require.NoError(t, err)
 
-	cdnURL, err := cdnDriver.URLFor(ctx, objPath, nil)
-	require.NoError(t, err)
-	require.Regexp(t, fmt.Sprintf("^%s.*", baseURL), cdnURL)
+	var tests = []struct {
+		name string
+		opts map[string]any
+	}{
+		{
+			name: "without custom params",
+			opts: nil,
+		},
+		{
+			name: "with custom params",
+			opts: map[string]any{
+				dstorage.AuthTypeKey:    "pat",
+				dstorage.ProjectPathKey: "gitlab-org/container-registry",
+				dstorage.NamespaceKey:   "gitlab-org",
+				dstorage.SizeBytesKey:   "123",
+			},
+		}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			test := test
+			t.Parallel()
+			cdnURL, err := cdnDriver.URLFor(ctx, objPath, test.opts)
+			require.NoError(t, err)
+			require.Regexp(t, fmt.Sprintf("^%s.*", baseURL), cdnURL)
+			verifyCustomURLParamsExist(t, cdnURL, test.opts)
 
-	resp, err = http.Get(cdnURL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+			resp, err = http.Get(cdnURL)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	body, err = io.ReadAll(resp.Body)
+			body, err = io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.Equal(t, objChecksum, sha256.Sum256(body))
+		})
+	}
+}
+
+// verifyCustomURLParamsExist asserts that all known and present `opts`
+// are mapped to thier equivalent custom query params value in the `urlString`.
+func verifyCustomURLParamsExist(t *testing.T, urlString string, opts map[string]any) {
+	if opts == nil {
+		return
+	}
+	urlValue, err := url.Parse(urlString)
 	require.NoError(t, err)
-	require.Equal(t, objChecksum, sha256.Sum256(body))
+	urlQueryParam := urlValue.Query()
+
+	for key, val := range opts {
+		if customGitlabKey, ok := customParamKeys[key]; ok {
+			require.Equal(t, urlQueryParam.Get(customGitlabKey), val)
+		}
+	}
 }

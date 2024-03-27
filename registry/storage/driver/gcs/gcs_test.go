@@ -475,8 +475,8 @@ func TestURLFor_Expiry(t *testing.T) {
 	err = d.PutContent(ctx, fp, []byte(`bar`))
 	require.NoError(t, err)
 
-	// https://cloud.google.com/storage/docs/access-control/signed-urls-v2
-	param := "Expires"
+	// https://cloud.google.com/storage/docs/access-control/signed-urls#example
+	param := "X-Goog-Expires"
 
 	mock := clock.NewMock()
 	mock.Set(time.Now())
@@ -489,8 +489,11 @@ func TestURLFor_Expiry(t *testing.T) {
 	require.NoError(t, err)
 
 	dt := mock.Now().Add(20 * time.Minute)
-	expected := fmt.Sprint(dt.Unix())
-	require.Equal(t, expected, u.Query().Get(param))
+	expected := int(dt.Sub(mock.Now()).Seconds())
+	actual, err := strconv.Atoi(u.Query().Get(param))
+	require.NoError(t, err)
+	require.LessOrEqual(t, expected-5, actual, "actual 'X-Goog-Expires' param is less than expected by more than 5 seconds")
+	require.GreaterOrEqual(t, expected, actual, "actual 'X-Goog-Expires' param is greater than expected")
 
 	// custom
 	dt = mock.Now().Add(1 * time.Hour)
@@ -499,6 +502,112 @@ func TestURLFor_Expiry(t *testing.T) {
 
 	u, err = url.Parse(s)
 	require.NoError(t, err)
-	expected = fmt.Sprint(dt.Unix())
-	require.Equal(t, expected, u.Query().Get(param))
+
+	expected = int(dt.Sub(mock.Now()).Seconds())
+	actual, err = strconv.Atoi(u.Query().Get(param))
+	require.NoError(t, err)
+	require.LessOrEqual(t, expected-5, actual, "actual 'X-Goog-Expires' param is less than expected by more than 5 seconds")
+	require.GreaterOrEqual(t, expected, actual, "actual 'X-Goog-Expires' param is greater than expected")
+}
+
+func TestURLFor_AdditionalQueryParams(t *testing.T) {
+	if skipGCS() != "" {
+		t.Skip(skipGCS())
+	}
+
+	ctx := context.Background()
+	validRoot := t.TempDir()
+	d, err := gcsDriverConstructor(validRoot)
+	require.NoError(t, err)
+
+	fp := "/foo"
+	err = d.PutContent(ctx, fp, []byte(`bar`))
+	require.NoError(t, err)
+
+	// default
+	s, err := d.URLFor(ctx, fp, nil)
+	require.NoError(t, err)
+	u, err := url.Parse(s)
+	require.NoError(t, err)
+	require.Empty(t, u.Query().Get(customGitlabGoogleNamespaceParam))
+	require.Empty(t, u.Query().Get(customGitlabGoogleProjectParam))
+	require.Empty(t, u.Query().Get(customGitlabGoogleAuthTypeParam))
+	require.Empty(t, u.Query().Get(customGitlabGoogleObjectSizeParam))
+
+	// custom
+	opts := map[string]any{
+		"namespace":    "gitlab-org",
+		"project_path": "gitlab-org-container-registry",
+		"auth_type":    "pat",
+		"size_bytes":   "123",
+	}
+	s, err = d.URLFor(ctx, fp, opts)
+	require.NoError(t, err)
+
+	u, err = url.Parse(s)
+	require.NoError(t, err)
+	require.Equal(t, opts["namespace"], u.Query().Get(customGitlabGoogleNamespaceParam))
+	require.Equal(t, opts["project_path"], u.Query().Get(customGitlabGoogleProjectParam))
+	require.Equal(t, opts["auth_type"], u.Query().Get(customGitlabGoogleAuthTypeParam))
+	require.Equal(t, opts["size_bytes"], u.Query().Get(customGitlabGoogleObjectSizeParam))
+}
+
+func TestCustomParams(t *testing.T) {
+	var tests = []struct {
+		name              string
+		opt               map[string]any
+		expectedURLValues url.Values
+	}{
+		{
+			name: "all params",
+			opt: map[string]any{
+				"namespace":    "gitlab-org",
+				"project_path": "gitlab-org-container-registry",
+				"auth_type":    "pat",
+				"size_bytes":   "123",
+			},
+			expectedURLValues: url.Values{
+				customGitlabGoogleAuthTypeParam:   []string{"pat"},
+				customGitlabGoogleProjectParam:    []string{"gitlab-org-container-registry"},
+				customGitlabGoogleNamespaceParam:  []string{"gitlab-org"},
+				customGitlabGoogleObjectSizeParam: []string{"123"},
+			},
+		},
+		{
+			name: "no known params",
+			opt: map[string]any{
+				"method": "GET",
+			},
+			expectedURLValues: nil,
+		},
+		{
+			name: "some params",
+			opt: map[string]any{
+				"namespace":    "gitlab-org",
+				"project_path": "gitlab-org-container-registry",
+			},
+			expectedURLValues: url.Values{
+				customGitlabGoogleProjectParam:   []string{"gitlab-org-container-registry"},
+				customGitlabGoogleNamespaceParam: []string{"gitlab-org"},
+			},
+		},
+		{
+			name: "unexpected type params",
+			opt: map[string]any{
+				"auth_type":    []string{"pat", "ldap"},
+				"namespace":    "gitlab-org",
+				"project_path": "gitlab-org-container-registry",
+				"size_bytes":   int64(123),
+			},
+			expectedURLValues: url.Values{
+				customGitlabGoogleProjectParam:   []string{"gitlab-org-container-registry"},
+				customGitlabGoogleNamespaceParam: []string{"gitlab-org"},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.expectedURLValues, storagedriver.CustomParams(test.opt, customParamKeys))
+		})
+	}
 }

@@ -129,3 +129,28 @@ func TestDigest_Parse(t *testing.T) {
 		})
 	}
 }
+
+func TestDigest_HexDecode(t *testing.T) {
+	tests := []struct {
+		name     string
+		digest   datastore.Digest
+		expected string
+	}{
+		{
+			name:     "Empty digest",
+			digest:   "",
+			expected: "\\x",
+		},
+		{
+			name:     "Non-empty digest",
+			digest:   "abc123",
+			expected: "\\xabc123",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, tt.digest.HexDecode())
+		})
+	}
+}

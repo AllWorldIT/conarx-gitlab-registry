@@ -76,6 +76,7 @@ const (
 	publishedAtQueryParamKey               = "published_at"
 	sortOrderDescPrefix                    = "-"
 	referrersQueryParamKey                 = "referrers"
+	referrerTypeQueryParamKey              = "referrer_type"
 	defaultDryRunRenameOperationTimeout    = 5 * time.Second
 	maxRepositoriesToRename                = 1000
 )
@@ -342,6 +343,19 @@ func sortQueryParamValue(q url.Values) string {
 	return strings.ToLower(strings.TrimSpace(q.Get(sortQueryParamKey)))
 }
 
+func referrerTypeQueryParamValue(q url.Values) []string {
+	if len(q[referrerTypeQueryParamKey]) == 0 {
+		return nil
+	}
+
+	types := make([]string, len(q[referrerTypeQueryParamKey]))
+	for _, t := range q[referrerTypeQueryParamKey] {
+		types = append(types, strings.Split(strings.ToLower(strings.TrimSpace(t)), ",")...)
+	}
+
+	return types
+}
+
 func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	var filters datastore.FilterParams
 
@@ -429,6 +443,8 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	if q.Has(referrersQueryParamKey) && q.Get(referrersQueryParamKey) == "true" {
 		filters.IncludeReferrers = true
 	}
+
+	filters.ReferrerTypes = referrerTypeQueryParamValue(q)
 
 	return filters, nil
 }

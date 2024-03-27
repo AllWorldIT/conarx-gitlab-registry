@@ -38,6 +38,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/registry/internal"
+	dstorage "github.com/docker/distribution/registry/storage"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/docker/distribution/registry/storage/driver/factory"
@@ -67,6 +68,22 @@ const (
 )
 
 var rangeHeader = regexp.MustCompile(`^bytes=([0-9])+-([0-9]+)$`)
+
+// customGitlabGoogle... are the query params appended to gcs signed redirect url
+const (
+	customGitlabGoogleNamespaceParam  = "x-goog-custom-audit-gitlab-namespace"
+	customGitlabGoogleProjectParam    = "x-goog-custom-audit-gitlab-project"
+	customGitlabGoogleAuthTypeParam   = "x-goog-custom-audit-gitlab-auth-type"
+	customGitlabGoogleObjectSizeParam = "x-goog-custom-audit-gitlab-size-bytes"
+)
+
+// customParamKeys is the mappping between gitlab keys to gcs signed-redirect-url query parameter keys
+var customParamKeys = map[string]string{
+	dstorage.NamespaceKey:   customGitlabGoogleNamespaceParam,
+	dstorage.ProjectPathKey: customGitlabGoogleProjectParam,
+	dstorage.AuthTypeKey:    customGitlabGoogleAuthTypeParam,
+	dstorage.SizeBytesKey:   customGitlabGoogleObjectSizeParam,
+}
 
 // driverParameters is a struct that encapsulates all of the driver parameters after all values have been set
 type driverParameters struct {
@@ -967,10 +984,12 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]int
 	}
 
 	opts := &storage.SignedURLOptions{
-		GoogleAccessID: d.email,
-		PrivateKey:     d.privateKey,
-		Method:         methodString,
-		Expires:        expiresTime,
+		GoogleAccessID:  d.email,
+		PrivateKey:      d.privateKey,
+		Method:          methodString,
+		Expires:         expiresTime,
+		QueryParameters: storagedriver.CustomParams(options, customParamKeys),
+		Scheme:          storage.SigningSchemeV4,
 	}
 	return storage.SignedURL(d.bucket, name, opts)
 }
