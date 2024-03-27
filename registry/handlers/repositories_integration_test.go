@@ -166,7 +166,8 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 				"parent_id",
 				"created_at",
 				"updated_at",
-			}).AddRow(want.ID, want.NamespaceID, want.Name, want.Path, want.ParentID, want.CreatedAt, want.UpdatedAt)
+				"last_published_at",
+			}).AddRow(want.ID, want.NamespaceID, want.Name, want.Path, want.ParentID, want.CreatedAt, want.UpdatedAt, want.LastPublishedAt)
 
 			// There are plenty `\n` and `\t` on the actual queries, and they are pretty long, so a full match is hard to digest
 			// and unnecessary because there is a limited known set of queries involved. So we simplify and use a partial match.

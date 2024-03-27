@@ -3451,3 +3451,58 @@ func TestRepositoryStore_RenameRepository_None(t *testing.T) {
 		"a-new-repository-path", "a-new-repository-name")
 	require.EqualError(t, err, "repository not found")
 }
+
+func TestRepositoryStore_UpdateLastPublishedAt(t *testing.T) {
+	reloadTagFixtures(t)
+
+	s := datastore.NewRepositoryStore(suite.db)
+	// see testdata/fixtures/repositories.sql
+	repoName := "gitlab-org/gitlab-test/backend"
+	r, err := s.FindByPath(suite.ctx, repoName)
+	require.NotNil(t, r)
+	require.NoError(t, err)
+	require.False(t, r.LastPublishedAt.Valid)
+	require.Zero(t, r.LastPublishedAt.Time)
+
+	//
+	// In this first test we use a tag with only created_at filled
+	//
+
+	// see testdata/fixtures/tags.sql
+	tag, err := s.FindTagByName(suite.ctx, r, "1.0.0")
+	require.NoError(t, err)
+	require.NotZero(t, tag.CreatedAt)
+	require.False(t, tag.UpdatedAt.Valid)
+
+	err = s.UpdateLastPublishedAt(suite.ctx, r, tag)
+	require.NoError(t, err)
+
+	// check the struct value
+	require.Equal(t, tag.CreatedAt, r.LastPublishedAt.Time)
+	// check the actual value on DB
+	r, err = s.FindByPath(suite.ctx, repoName)
+	require.Equal(t, tag.CreatedAt, r.LastPublishedAt.Time)
+
+	//
+	// Retest using a non-empty updated_at
+	//
+
+	tag.UpdatedAt.Time = tag.CreatedAt.Add(1 * time.Second)
+	tag.UpdatedAt.Valid = true
+	err = s.UpdateLastPublishedAt(suite.ctx, r, tag)
+	require.NoError(t, err)
+
+	// check the struct value
+	require.Equal(t, tag.UpdatedAt.Time, r.LastPublishedAt.Time)
+	// check the actual value on DB
+	r, err = s.FindByPath(suite.ctx, repoName)
+	require.Equal(t, tag.UpdatedAt.Time, r.LastPublishedAt.Time)
+}
+
+func TestRepositoryStore_UpdateLastPublishedAt_NotFound(t *testing.T) {
+	reloadRepositoryFixtures(t)
+
+	s := datastore.NewRepositoryStore(suite.db)
+	err := s.UpdateLastPublishedAt(suite.ctx, &models.Repository{NamespaceID: 101, ID: 202}, &models.Tag{})
+	require.EqualError(t, err, "repository not found")
+}

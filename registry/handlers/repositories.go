@@ -46,13 +46,15 @@ func repositoryDispatcher(ctx *Context, _ *http.Request) http.Handler {
 }
 
 type RepositoryAPIResponse struct {
-	Name          string `json:"name"`
-	Path          string `json:"path"`
-	Size          *int64 `json:"size_bytes,omitempty"`
-	SizePrecision string `json:"size_precision,omitempty"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at,omitempty"`
+	Name            string `json:"name"`
+	Path            string `json:"path"`
+	Size            *int64 `json:"size_bytes,omitempty"`
+	SizePrecision   string `json:"size_precision,omitempty"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at,omitempty"`
+	LastPublishedAt string `json:"last_published_at,omitempty"`
 }
+
 type RenameRepositoryAPIResponse struct {
 	TTL time.Time `json:"ttl"`
 }
@@ -253,6 +255,9 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 	}
 	if repo.UpdatedAt.Valid {
 		resp.UpdatedAt = timeToString(repo.UpdatedAt.Time)
+	}
+	if repo.LastPublishedAt.Valid {
+		resp.LastPublishedAt = timeToString(repo.LastPublishedAt.Time)
 	}
 
 	if withSize {
