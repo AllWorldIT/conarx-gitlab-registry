@@ -25,6 +25,7 @@ import (
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/internal/testutil"
+	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
@@ -2139,5 +2140,40 @@ func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
 			require.Equal(t, test.expectedRespStatus, resp.StatusCode)
 			checkBodyHasErrorCodes(t, "", resp, *test.expectedRespError)
 		})
+	}
+}
+
+func TestGitlabAPI_404WithDatabaseDisabled(t *testing.T) {
+	env := newTestEnv(t, withDBDisabled)
+	t.Cleanup(env.Shutdown)
+
+	var urls []string
+
+	baseURL, err := env.builder.BuildGitlabV1BaseURL()
+	require.NoError(t, err)
+	urls = append(urls, baseURL)
+
+	baseRepoRef, err := reference.WithName("test-repo")
+	require.NoError(t, err)
+	repoURL, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoRef)
+	require.NoError(t, err)
+	urls = append(urls, repoURL)
+
+	baseTagRef, err := reference.WithTag(baseRepoRef, "test-tag")
+	require.NoError(t, err)
+	tagURL, err := env.builder.BuildGitlabV1RepositoryTagsURL(baseTagRef)
+	require.NoError(t, err)
+	urls = append(urls, tagURL)
+
+	subRepoURL, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoRef)
+	require.NoError(t, err)
+	urls = append(urls, subRepoURL)
+
+	for _, u := range urls {
+		resp, err := http.Get(u)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusNotFound, resp.StatusCode)
+		require.Equal(t, strings.TrimPrefix(version.Version, "v"), resp.Header.Get("Gitlab-Container-Registry-Version"))
 	}
 }
