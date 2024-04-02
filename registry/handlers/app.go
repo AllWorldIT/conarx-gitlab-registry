@@ -946,13 +946,17 @@ func (app *App) initMetaRouter() error {
 	app.registerDistribution(v2.RouteNameBlobUploadChunk, blobUploadDispatcher)
 
 	// Register Gitlab handlers dispatchers.
-	app.registerGitlab(v1.Base, func(ctx *Context, r *http.Request) http.Handler {
-		h := &gitlabBaseHandler{app.Config.Database.Enabled}
-		return http.HandlerFunc(h.GetBase)
-	})
-	app.registerGitlab(v1.RepositoryTags, repositoryTagsDispatcher)
-	app.registerGitlab(v1.Repositories, repositoryDispatcher)
-	app.registerGitlab(v1.SubRepositories, subRepositoriesDispatcher)
+
+	h := dbAssertionhandler{dbEnabled: app.Config.Database.Enabled}
+
+	app.registerGitlab(v1.Base, h.wrap(func(ctx *Context, r *http.Request) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			apiBase(w, r)
+		})
+	}))
+	app.registerGitlab(v1.RepositoryTags, h.wrap(repositoryTagsDispatcher))
+	app.registerGitlab(v1.Repositories, h.wrap(repositoryDispatcher))
+	app.registerGitlab(v1.SubRepositories, h.wrap(subRepositoriesDispatcher))
 
 	var err error
 	v1PathWithPrefix := fmt.Sprintf("^%s%s.*", strings.TrimSuffix(app.Config.HTTP.Prefix, "/"), v1.Base.Path)
@@ -998,18 +1002,20 @@ func (app *App) gorillaLogMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-type gitlabBaseHandler struct{ dbEnabled bool }
+type dbAssertionhandler struct{ dbEnabled bool }
 
-func (h *gitlabBaseHandler) GetBase(w http.ResponseWriter, r *http.Request) {
+func (h dbAssertionhandler) wrap(child func(ctx *Context, r *http.Request) http.Handler) func(ctx *Context, r *http.Request) http.Handler {
 	// Return a 404, signaling that the database is disabled and GitLab v1 API features are not available.
 	if !h.dbEnabled {
-		w.Header().Set("Gitlab-Container-Registry-Version", strings.TrimPrefix(version.Version, "v"))
-		w.WriteHeader(http.StatusNotFound)
-
-		return
+		return func(ctx *Context, r *http.Request) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Gitlab-Container-Registry-Version", strings.TrimPrefix(version.Version, "v"))
+				w.WriteHeader(http.StatusNotFound)
+			})
+		}
 	}
 
-	apiBase(w, r)
+	return child
 }
 
 // distributionAPIVersionMiddleware sets a header with the Docker Distribution
