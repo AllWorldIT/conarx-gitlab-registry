@@ -1,3 +1,15 @@
+## [3.92.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.91.0-gitlab...v3.92.0-gitlab) (2024-04-04)
+
+
+### ✨ Features ✨
+
+* **api/gitlab/v1:** add last published timestamp to get repository details response ([801b7fc](https://gitlab.com/gitlab-org/container-registry/commit/801b7fc44fbc724f5eb4b17667beca508e494f61))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **api/gitlab/v1:** 404 on v1 endpoint if database disabled ([6f5afcb](https://gitlab.com/gitlab-org/container-registry/commit/6f5afcbb4b055759c42d1137bb317e30142046aa))
+
 ## [3.91.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.90.0-gitlab...v3.91.0-gitlab) (2024-03-25)
 
 
