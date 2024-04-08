@@ -283,11 +283,13 @@ func (ac *accessController) Authorized(ctx context.Context, accessItems ...auth.
 	}
 
 	ctx = auth.WithResources(ctx, token.resources())
+	ctx = WithEgressMetadata(ctx, token.Claims.Access)
+	ctx = auth.WithUser(ctx, auth.UserInfo{Name: token.Claims.Subject, Type: token.Claims.AuthType, JWT: token.Claims.User})
 
-	return auth.WithUser(ctx, auth.UserInfo{Name: token.Claims.Subject, Type: token.Claims.AuthType, JWT: token.Claims.User}), nil
+	return ctx, nil
 }
 
 // init handles registering the token auth backend.
 func init() {
-	auth.Register("token", auth.InitFunc(newAccessController))
+	auth.Register("token", newAccessController)
 }

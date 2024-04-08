@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/docker/distribution"
@@ -54,8 +53,7 @@ func (bs *blobServer) ServeBlob(ctx context.Context, w http.ResponseWriter, r *h
 			opts["expiry"] = time.Now().Add(bs.redirect.expiryDelay)
 		}
 
-		injectCustomKeyOpts(ctx, opts, map[string]string{
-			SizeBytesKey: strconv.FormatInt(desc.Size, 10)})
+		injectCustomKeyOpts(ctx, opts, map[string]any{SizeBytesKey: desc.Size})
 
 		// TODO: The `driver` needs to be able to infer the redirect url's provider name that is used to obtain a redirect url.
 		// This is required for notification purposes see: https://gitlab.com/gitlab-org/container-registry/-/issues/961.
