@@ -283,9 +283,9 @@ func TestURLFor_Download(t *testing.T) {
 			name: "with custom params",
 			opts: map[string]any{
 				dstorage.AuthTypeKey:    "pat",
-				dstorage.ProjectPathKey: "gitlab-org/container-registry",
-				dstorage.NamespaceKey:   "gitlab-org",
-				dstorage.SizeBytesKey:   "123",
+				dstorage.ProjectIdKey:   int64(123),
+				dstorage.NamespaceIdKey: int64(456),
+				dstorage.SizeBytesKey:   int64(123),
 			},
 		}}
 	for _, test := range tests {
@@ -310,7 +310,7 @@ func TestURLFor_Download(t *testing.T) {
 }
 
 // verifyCustomURLParamsExist asserts that all known and present `opts`
-// are mapped to thier equivalent custom query params value in the `urlString`.
+// are mapped to their equivalent custom query params value in the `urlString`.
 func verifyCustomURLParamsExist(t *testing.T, urlString string, opts map[string]any) {
 	if opts == nil {
 		return
@@ -321,7 +321,7 @@ func verifyCustomURLParamsExist(t *testing.T, urlString string, opts map[string]
 
 	for key, val := range opts {
 		if customGitlabKey, ok := customParamKeys[key]; ok {
-			require.Equal(t, urlQueryParam.Get(customGitlabKey), val)
+			require.Equal(t, urlQueryParam.Get(customGitlabKey), fmt.Sprintf("%v", val))
 		}
 	}
 }

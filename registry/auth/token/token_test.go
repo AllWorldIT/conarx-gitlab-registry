@@ -559,8 +559,8 @@ func TestAccessController_Meta(t *testing.T) {
 		expectedProjectPaths []string
 	}{
 		{"no meta object", []*Meta{nil}, nil},
-		{"one meta object with project", []*Meta{{"foo/bar"}}, []string{"foo/bar"}},
-		{"multiple meta objects with projects", []*Meta{{"foo/bar"}, {"bar/foo"}}, []string{"foo/bar", "bar/foo"}},
+		{"one meta object with project", []*Meta{{ProjectPath: "foo/bar", ProjectID: int64(123), NamespaceID: int64(456)}}, []string{"foo/bar"}},
+		{"multiple meta objects with projects", []*Meta{{ProjectPath: "foo/bar", ProjectID: int64(123), NamespaceID: int64(456)}, {ProjectPath: "bar/foo", ProjectID: int64(321), NamespaceID: int64(654)}}, []string{"foo/bar", "bar/foo"}},
 	}
 
 	for _, test := range tests {

@@ -63,6 +63,10 @@ type ClaimSet struct {
 type Meta struct {
 	// ProjectPath contains the full path of the GitLab project of a repository that a token was issued for.
 	ProjectPath string `json:"project_path"`
+	// ProjectID contains the GitLab project ID of a repository that a token was issued for.
+	ProjectID int64 `json:"project_id"`
+	// NamespaceID contains the GitLab root namespace ID of a repository that a token was issued for.
+	NamespaceID int64 `json:"root_namespace_id"`
 }
 
 // Header describes the header section of a JSON Web Token.

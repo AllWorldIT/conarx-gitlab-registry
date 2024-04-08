@@ -71,21 +71,21 @@ var rangeHeader = regexp.MustCompile(`^bytes=([0-9])+-([0-9]+)$`)
 
 // customGitlabGoogle... are the query params appended to gcs signed redirect url
 const (
-	customGitlabGoogleNamespaceParam  = "x-goog-custom-audit-gitlab-namespace"
-	customGitlabGoogleProjectParam    = "x-goog-custom-audit-gitlab-project"
-	customGitlabGoogleAuthTypeParam   = "x-goog-custom-audit-gitlab-auth-type"
-	customGitlabGoogleObjectSizeParam = "x-goog-custom-audit-gitlab-size-bytes"
+	customGitlabGoogleNamespaceIdParam = "x-goog-custom-audit-gitlab-namespace-id"
+	customGitlabGoogleProjectIdParam   = "x-goog-custom-audit-gitlab-project-id"
+	customGitlabGoogleAuthTypeParam    = "x-goog-custom-audit-gitlab-auth-type"
+	customGitlabGoogleObjectSizeParam  = "x-goog-custom-audit-gitlab-size-bytes"
 )
 
-// customParamKeys is the mappping between gitlab keys to gcs signed-redirect-url query parameter keys
+// customParamKeys is the mapping between gitlab keys to gcs signed-redirect-url query parameter keys
 var customParamKeys = map[string]string{
-	dstorage.NamespaceKey:   customGitlabGoogleNamespaceParam,
-	dstorage.ProjectPathKey: customGitlabGoogleProjectParam,
+	dstorage.NamespaceIdKey: customGitlabGoogleNamespaceIdParam,
+	dstorage.ProjectIdKey:   customGitlabGoogleProjectIdParam,
 	dstorage.AuthTypeKey:    customGitlabGoogleAuthTypeParam,
 	dstorage.SizeBytesKey:   customGitlabGoogleObjectSizeParam,
 }
 
-// driverParameters is a struct that encapsulates all of the driver parameters after all values have been set
+// driverParameters is a struct that encapsulates all the driver parameters after all values have been set
 type driverParameters struct {
 	bucket        string
 	config        *jwt.Config
