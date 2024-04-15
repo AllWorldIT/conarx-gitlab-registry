@@ -77,6 +77,10 @@ func TestAPIConformance(t *testing.T) {
 		manifest_Delete_Tag,
 		manifest_Delete_Tag_Unknown,
 		manifest_Delete_Tag_DeleteDisabled,
+		manifest_Delete_Tag_UnknownRepository,
+		manifest_Delete_Tag_Notification,
+		manifest_Delete_Tag_Notification_WithAuth,
+		manifest_Delete_Tag_WithSameImageID,
 
 		manifest_Put_Schema2_WithNonDistributableLayers,
 		manifest_Put_OCI_ByDigest,
@@ -111,14 +115,6 @@ func TestAPIConformance(t *testing.T) {
 		tags_Get,
 		tags_Get_EmptyRepository,
 		tags_Get_RepositoryNotFound,
-		tags_Delete,
-		tags_Delete_WithAuth,
-		tags_Delete_AllowedMethods,
-		tags_Delete_AllowedMethodsReadOnly,
-		tags_Delete_ReadOnly,
-		tags_Delete_Unknown,
-		tags_Delete_UnknownRepository,
-		tags_Delete_WithSameImageID,
 
 		catalog_Get,
 		catalog_Get_Empty,
@@ -1983,6 +1979,29 @@ func manifest_Delete_Tag_Unknown(t *testing.T, opts ...configOpt) {
 	checkBodyHasErrorCodes(t, "deleting unknown tag", resp, v2.ErrorCodeManifestUnknown)
 }
 
+func manifest_Delete_Tag_UnknownRepository(t *testing.T, opts ...configOpt) {
+	opts = append(opts, withDelete)
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	ref, err := reference.WithTag(imageName, "latest")
+	require.NoError(t, err)
+
+	manifestURL, err := env.builder.BuildManifestURL(ref)
+	require.NoError(t, err)
+
+	resp, err := httpDelete(manifestURL)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	checkBodyHasErrorCodes(t, "repository not found", resp, v2.ErrorCodeNameUnknown)
+}
+
 func manifest_Delete_Tag_DeleteDisabled(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -3118,7 +3137,7 @@ func tags_Get_RepositoryNotFound(t *testing.T, opts ...configOpt) {
 }
 
 func tags_Get_EmptyRepository(t *testing.T, opts ...configOpt) {
-	opts = append(opts)
+	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3134,10 +3153,10 @@ func tags_Get_EmptyRepository(t *testing.T, opts ...configOpt) {
 	ref, err := reference.WithTag(imageName, tag)
 	require.NoError(t, err)
 
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
 
-	res, err := httpDelete(tagURL)
+	res, err := httpDelete(manifestURL)
 	require.NoError(t, err)
 	defer res.Body.Close()
 
@@ -3162,50 +3181,8 @@ func tags_Get_EmptyRepository(t *testing.T, opts ...configOpt) {
 	require.Equal(t, tagsAPIResponse{Name: imageName.Name()}, body)
 }
 
-func tags_Delete_AllowedMethods(t *testing.T, opts ...configOpt) {
-	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
-
-	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
-
-	ref, err := reference.WithTag(imageName, "latest")
-	checkErr(t, err, "building tag reference")
-
-	tagURL, err := env.builder.BuildTagURL(ref)
-	checkErr(t, err, "building tag URL")
-
-	checkAllowedMethods(t, tagURL, []string{http.MethodDelete})
-}
-
-func tags_Delete_AllowedMethodsReadOnly(t *testing.T, opts ...configOpt) {
-	opts = append(opts, withReadOnly)
-	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
-
-	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
-
-	ref, err := reference.WithTag(imageName, "latest")
-	checkErr(t, err, "building tag reference")
-
-	tagURL, err := env.builder.BuildTagURL(ref)
-	checkErr(t, err, "building tag URL")
-
-	resp, err := httpOptions(tagURL)
-	msg := "checking allowed methods"
-	checkErr(t, err, msg)
-
-	defer resp.Body.Close()
-
-	checkResponse(t, msg, resp, http.StatusOK)
-	if resp.Header.Get("Allow") != "" {
-		t.Fatal("unexpected Allow header")
-	}
-}
-
-func tags_Delete(t *testing.T, opts ...configOpt) {
-	opts = append(opts)
+func manifest_Delete_Tag_Notification(t *testing.T, opts ...configOpt) {
+	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3218,10 +3195,10 @@ func tags_Delete(t *testing.T, opts ...configOpt) {
 	ref, err := reference.WithTag(imageName, tag)
 	checkErr(t, err, "building tag reference")
 
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	checkErr(t, err, "building tag URL")
 
-	resp, err := httpDelete(tagURL)
+	resp, err := httpDelete(manifestURL)
 	msg := "checking tag delete"
 	checkErr(t, err, msg)
 
@@ -3239,7 +3216,8 @@ func tags_Delete(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func tags_Delete_WithAuth(t *testing.T, opts ...configOpt) {
+func manifest_Delete_Tag_Notification_WithAuth(t *testing.T, opts ...configOpt) {
+	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3258,10 +3236,10 @@ func tags_Delete_WithAuth(t *testing.T, opts ...configOpt) {
 	// override registry config/setup to use token based authorization for all proceeding requests
 	env = newTestEnv(t, opts...)
 
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	checkErr(t, err, "building tag URL")
 
-	req, err := http.NewRequest(http.MethodDelete, tagURL, nil)
+	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
 
 	// attach authourization header to request
 	req = tokenProvider.RequestWithAuthActions(req, deleteAccessToken("foo/bar"))
@@ -3291,89 +3269,10 @@ func tags_Delete_WithAuth(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func tags_Delete_Unknown(t *testing.T, opts ...configOpt) {
-	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
-
-	// Push up a random manifest to ensure that the repository exists.
-	seedRandomSchema2Manifest(t, env, "foo/bar", putByDigest)
-
-	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
-
-	ref, err := reference.WithTag(imageName, "latest")
-	checkErr(t, err, "building tag reference")
-
-	tagURL, err := env.builder.BuildTagURL(ref)
-	checkErr(t, err, "building tag URL")
-
-	resp, err := httpDelete(tagURL)
-	msg := "checking unknown tag delete"
-	checkErr(t, err, msg)
-
-	defer resp.Body.Close()
-
-	checkResponse(t, msg, resp, http.StatusNotFound)
-	checkBodyHasErrorCodes(t, msg, resp, v2.ErrorCodeManifestUnknown)
-}
-
-func tags_Delete_UnknownRepository(t *testing.T, opts ...configOpt) {
-	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
-
-	imageName, err := reference.WithName("foo/bar")
-	require.NoError(t, err)
-
-	ref, err := reference.WithTag(imageName, "latest")
-	require.NoError(t, err)
-
-	tagURL, err := env.builder.BuildTagURL(ref)
-	require.NoError(t, err)
-
-	resp, err := httpDelete(tagURL)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-
-	require.Equal(t, http.StatusNotFound, resp.StatusCode)
-	checkBodyHasErrorCodes(t, "repository not found", resp, v2.ErrorCodeNameUnknown)
-}
-
-func tags_Delete_ReadOnly(t *testing.T, opts ...configOpt) {
-	setupEnv := newTestEnv(t, opts...)
-	defer setupEnv.Shutdown()
-
-	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
-
-	tag := "latest"
-	createRepository(t, setupEnv, imageName.Name(), tag)
-
-	// Reconfigure environment with withReadOnly enabled.
-	setupEnv.Shutdown()
-	opts = append(opts, withReadOnly)
-	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
-
-	ref, err := reference.WithTag(imageName, tag)
-	checkErr(t, err, "building tag reference")
-
-	tagURL, err := env.builder.BuildTagURL(ref)
-	checkErr(t, err, "building tag URL")
-
-	resp, err := httpDelete(tagURL)
-	msg := "checking tag delete"
-	checkErr(t, err, msg)
-
-	defer resp.Body.Close()
-
-	checkResponse(t, msg, resp, http.StatusMethodNotAllowed)
-}
-
-// TestTagsAPITagDeleteWithSameImageID tests that deleting a single image tag will not cause the deletion of other tags
+// manifest_Delete_Tag_WithSameImageID tests that deleting a single image tag will not cause the deletion of other tags
 // pointing to the same image ID.
-func tags_Delete_WithSameImageID(t *testing.T, opts ...configOpt) {
-	opts = append(opts)
+func manifest_Delete_Tag_WithSameImageID(t *testing.T, opts ...configOpt) {
+	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3389,10 +3288,10 @@ func tags_Delete_WithSameImageID(t *testing.T, opts ...configOpt) {
 	ref, err := reference.WithTag(imageName, tag1)
 	checkErr(t, err, "building tag reference")
 
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	checkErr(t, err, "building tag URL")
 
-	resp, err := httpDelete(tagURL)
+	resp, err := httpDelete(manifestURL)
 	msg := "checking tag delete"
 	checkErr(t, err, msg)
 

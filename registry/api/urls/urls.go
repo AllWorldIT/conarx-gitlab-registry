@@ -150,18 +150,6 @@ func (ub *Builder) BuildTagsURL(name reference.Named, values ...url.Values) (str
 	return appendValuesURL(tagsURL, values...).String(), nil
 }
 
-// BuildTagURL constructs an url for a tag.
-func (ub *Builder) BuildTagURL(ref reference.NamedTagged) (string, error) {
-	route := ub.cloneDistributionRoute(v2.RouteNameTag)
-
-	tagURL, err := route.URL("name", ref.Name(), "tag", ref.Tag())
-	if err != nil {
-		return "", err
-	}
-
-	return tagURL.String(), nil
-}
-
 // BuildManifestURL constructs a url for the manifest identified by name and
 // reference. The argument reference may be either a tag or digest.
 func (ub *Builder) BuildManifestURL(ref reference.Named) (string, error) {

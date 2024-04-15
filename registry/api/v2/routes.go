@@ -8,7 +8,6 @@ const (
 	RouteNameBase            = "base"
 	RouteNameManifest        = "manifest"
 	RouteNameTags            = "tags"
-	RouteNameTag             = "tag"
 	RouteNameBlob            = "blob"
 	RouteNameBlobUpload      = "blob-upload"
 	RouteNameBlobUploadChunk = "blob-upload-chunk"
@@ -17,7 +16,6 @@ const (
 	RoutePathBase            = "/v2/"
 	RoutePathManifest        = "/v2/{name}/manifests/{reference}"
 	RoutePathTags            = "/v2/{name}/tags/list"
-	RoutePathTag             = "/v2/{name}/tags/reference/{tag}"
 	RoutePathBlob            = "/v2/{name}/blobs/{digest}"
 	RoutePathBlobUpload      = "/v2/{name}/blobs/uploads/"
 	RoutePathBlobUploadChunk = "/v2/{name}/blobs/uploads/{uuid}"
@@ -32,8 +30,6 @@ func RoutePath(routeName string) string {
 		return RoutePathManifest
 	case RouteNameTags:
 		return RoutePathTags
-	case RouteNameTag:
-		return RoutePathTag
 	case RouteNameBlob:
 		return RoutePathBlob
 	case RouteNameBlobUpload:

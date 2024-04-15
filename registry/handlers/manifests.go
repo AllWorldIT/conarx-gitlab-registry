@@ -1551,3 +1551,71 @@ func getRepoCache(imh *manifestHandler) (repoCache datastore.RepositoryCache) {
 	}
 	return
 }
+
+const (
+	tagDeleteGCReviewWindow = 1 * time.Hour
+	tagDeleteGCLockTimeout  = 5 * time.Second
+)
+
+func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.RepositoryCache, repoPath string, tagName string) error {
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "tag_name": tagName})
+	l.Debug("deleting tag from repository in database")
+
+	rStore := datastore.NewRepositoryStore(db, datastore.WithRepositoryCache(cache))
+	r, err := rStore.FindByPath(ctx, repoPath)
+	if err != nil {
+		return err
+	}
+	if r == nil {
+		return distribution.ErrRepositoryUnknown{Name: repoPath}
+	}
+
+	// We first check if the tag exists and grab the corresponding manifest ID, then we find and lock a related online
+	// GC manifest review record (if any) to prevent conflicting online GC reviews, and only then delete the tag. See:
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-tag
+
+	t, err := rStore.FindTagByName(ctx, r, tagName)
+	if err != nil {
+		return err
+	}
+	if t == nil {
+		return distribution.ErrTagUnknown{Tag: tagName}
+	}
+
+	// Prevent long running transactions by setting an upper limit of tagDeleteGCLockTimeout. If the GC is holding
+	// the lock of a related review record, the processing there should be fast enough to avoid this. Regardless, we
+	// should not let transactions open (and clients waiting) for too long. If this sensible timeout is exceeded, abort
+	// the tag delete and let the client retry. This will bubble up and lead to a 503 Service Unavailable response.
+	txCtx, cancel := context.WithTimeout(ctx, tagDeleteGCLockTimeout)
+	defer cancel()
+
+	tx, err := db.BeginTx(txCtx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create database transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	mts := datastore.NewGCManifestTaskStore(tx)
+	if _, err := mts.FindAndLockBefore(txCtx, r.NamespaceID, r.ID, t.ManifestID, time.Now().Add(tagDeleteGCReviewWindow)); err != nil {
+		return err
+	}
+
+	// The `SELECT FOR UPDATE` on the review queue and the subsequent tag delete must be executed within the same
+	// transaction. The tag delete will trigger `gc_track_deleted_tags`, which will attempt to acquire the same row
+	// lock on the review queue in case of conflict. Not using the same transaction for both operations (i.e., using
+	// `tx` for `FindAndLockBefore` and `db` for `DeleteTagByName`) would therefore result in a deadlock.
+	rStore = datastore.NewRepositoryStore(tx, datastore.WithRepositoryCache(cache))
+	found, err := rStore.DeleteTagByName(txCtx, r, tagName)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return distribution.ErrTagUnknown{Tag: tagName}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit database transaction: %w", err)
+	}
+
+	return nil
+}
