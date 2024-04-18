@@ -2,11 +2,13 @@ package notifications
 
 import (
 	"container/list"
+	"errors"
 	"fmt"
+	"github.com/cenkalti/backoff/v4"
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // NOTE(stevvooe): This file contains definitions for several utility sinks.
@@ -57,7 +59,7 @@ func (b *Broadcaster) Write(event *Event) error {
 // Close the broadcaster, ensuring that all messages are flushed to the
 // underlying sink before returning.
 func (b *Broadcaster) Close() error {
-	logrus.Infof("broadcaster: closing")
+	log.Infof("broadcaster: closing")
 	select {
 	case <-b.closed:
 		// already closed
@@ -81,7 +83,7 @@ func (b *Broadcaster) run() {
 		case block := <-b.events:
 			for _, sink := range b.sinks {
 				if err := sink.Write(block); err != nil {
-					logrus.Errorf("broadcaster: error writing events to %v, these events will be lost: %v", sink, err)
+					log.Errorf("broadcaster: error writing events to %v, these events will be lost: %v", sink, err)
 				}
 			}
 		case closing := <-b.closed:
@@ -89,12 +91,12 @@ func (b *Broadcaster) run() {
 			// close all the underlying sinks
 			for _, sink := range b.sinks {
 				if err := sink.Close(); err != nil {
-					logrus.Errorf("broadcaster: error closing sink %v: %v", sink, err)
+					log.Errorf("broadcaster: error closing sink %v: %v", sink, err)
 				}
 			}
 			closing <- struct{}{}
 
-			logrus.Debugf("broadcaster: closed")
+			log.Debugf("broadcaster: closed")
 			return
 		}
 	}
@@ -178,7 +180,7 @@ func (eq *eventQueue) run() {
 		}
 
 		if err := eq.sink.Write(block); err != nil {
-			logrus.Warnf("eventqueue: error writing events to %v, these events will be lost: %v", eq.sink, err)
+			log.WithError(err).Warnf("eventqueue: event lost: %v", block)
 		}
 
 		for _, listener := range eq.listeners {
@@ -274,11 +276,6 @@ type retryingSink struct {
 	}
 }
 
-type retryingSinkListener interface {
-	active(events ...Event)
-	retry(events ...Event)
-}
-
 // newRetryingSink returns a sink that will retry writes to a sink, backing
 // off on failure. Parameters threshold and backoff adjust the behavior of the
 // circuit breaker.
@@ -305,18 +302,18 @@ retry:
 	}
 
 	if !rs.proceed() {
-		logrus.Warnf("%v encountered too many errors, backing off", rs.sink)
+		log.Warnf("%v encountered too many errors, backing off", rs.sink)
 		rs.wait(rs.failures.backoff)
 		goto retry
 	}
 
 	if err := rs.write(event); err != nil {
-		if err == ErrSinkClosed {
+		if errors.Is(err, ErrSinkClosed) {
 			// terminal!
 			return err
 		}
 
-		logrus.Errorf("retryingsink: error writing events: %v, retrying", err)
+		log.Errorf("retryingsink: error writing events: %v, retrying", err)
 		goto retry
 	}
 
@@ -375,4 +372,57 @@ func (rs *retryingSink) failure() {
 func (rs *retryingSink) proceed() bool {
 	return rs.failures.recent < rs.failures.threshold ||
 		time.Now().UTC().After(rs.failures.last.Add(rs.failures.backoff))
+}
+
+// backoffSink attempts to write an event to the given sink.
+// It will retry up to a number of maxretries as defined in the configuration
+// and will drop the event after it reaches the number of retries.
+type backoffSink struct {
+	mu      sync.Mutex
+	sink    Sink
+	closed  bool
+	backoff backoff.BackOff
+}
+
+func newBackoffSink(sink Sink, initialInterval time.Duration, maxRetries int) *backoffSink {
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = initialInterval
+
+	return &backoffSink{
+		sink:    sink,
+		backoff: backoff.WithMaxRetries(b, uint64(maxRetries)),
+	}
+}
+
+// Write attempts to flush the event to the downstream sink using an
+// exponential backoff strategy. If the max number of retries is
+// reached, an error is returned and the event is dropped.
+// It returns early if the sink is closed.
+func (bs *backoffSink) Write(event *Event) error {
+	op := func() error {
+		if bs.closed {
+			return backoff.Permanent(ErrSinkClosed)
+		}
+
+		if err := bs.sink.Write(event); err != nil {
+			log.WithError(err).Errorf("retryingsink: error writing event, retrying count")
+			return err
+		}
+
+		return nil
+	}
+
+	return backoff.Retry(op, bs.backoff)
+}
+
+// Close closes the sink and the underlying sink.
+func (bs *backoffSink) Close() error {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	if bs.closed {
+		return fmt.Errorf("retryingsink: already closed")
+	}
+	bs.closed = true
+	return bs.sink.Close()
 }

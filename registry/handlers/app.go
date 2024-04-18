@@ -745,6 +745,7 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 		endpoint := notifications.NewEndpoint(endpoint.Name, endpoint.URL, notifications.EndpointConfig{
 			Timeout:           endpoint.Timeout,
 			Threshold:         endpoint.Threshold,
+			MaxRetries:        endpoint.MaxRetries,
 			Backoff:           endpoint.Backoff,
 			Headers:           endpoint.Headers,
 			IgnoredMediaTypes: endpoint.IgnoredMediaTypes,
