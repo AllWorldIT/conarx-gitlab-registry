@@ -271,6 +271,7 @@ notifications:
       headers: <http.Header>
       timeout: 1s
       threshold: 10
+      maxretries: 5
       backoff: 1s
       ignoredmediatypes:
         - application/octet-stream
@@ -1095,17 +1096,18 @@ option, `endpoints`.
 The `endpoints` structure contains a list of named services (URLs) that can
 accept event notifications.
 
-| Parameter | Required | Description                                           |
-|-----------|----------|-------------------------------------------------------|
-| `name`    | yes      | A human-readable name for the service.                |
-| `disabled` | no      | If `true`, notifications are disabled for the service.|
-| `url`     | yes      | The URL to which events should be published.          |
-| `headers` | yes      | A list of static headers to add to each request. Each header's name is a key beneath `headers`, and each value is a list of payloads for that header name. Values must always be lists. |
-| `timeout` | yes      | A value for the HTTP timeout. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. |
-| `threshold` | yes    | An integer specifying how long to wait before backing off a failure. |
+| Parameter | Required | Description                                                                                                                                                                                                                        |
+|-----------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`    | yes      | A human-readable name for the service.                                                                                                                                                                                             |
+| `disabled` | no      | If `true`, notifications are disabled for the service.                                                                                                                                                                             |
+| `url`     | yes      | The URL to which events should be published.                                                                                                                                                                                       |
+| `headers` | yes      | A list of static headers to add to each request. Each header's name is a key beneath `headers`, and each value is a list of payloads for that header name. Values must always be lists.                                            |
+| `timeout` | yes      | A value for the HTTP timeout. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used.                                  |
+| `threshold` | yes    | DEPRECATED: use maxretries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243. An integer specifying how long to wait before backing off a failure.                                                            |
+| `maxretries` | no | An integer specifying the maximum number of times to retry sending a failed event. `threshold` is ignored when defining this field.                                                                                                |
 | `backoff` | yes      | How long the system backs off before retrying after a failure. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. |
-| `ignoredmediatypes`|no| A list of target media types to ignore. Events with these target media types are not published to the endpoint. |
-| `ignore`  |no| Events with these mediatypes or actions are not published to the endpoint. |
+| `ignoredmediatypes`|no| A list of target media types to ignore. Events with these target media types are not published to the endpoint.                                                                                                                    |
+| `ignore`  |no| Events with these mediatypes or actions are not published to the endpoint.                                                                                                                                                         |
 
 #### `ignore`
 | Parameter | Required | Description                                           |

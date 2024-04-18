@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
 
@@ -10,9 +11,11 @@ import (
 // EndpointConfig covers the optional configuration parameters for an active
 // endpoint.
 type EndpointConfig struct {
-	Headers           http.Header
-	Timeout           time.Duration
+	Headers http.Header
+	Timeout time.Duration
+	// DEPRECATED: use MaxRetries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243
 	Threshold         int
+	MaxRetries        int
 	Backoff           time.Duration
 	IgnoredMediaTypes []string
 	Transport         *http.Transport `json:"-"`
@@ -64,7 +67,16 @@ func NewEndpoint(name, url string, config EndpointConfig) *Endpoint {
 	endpoint.Sink = newHTTPSink(
 		endpoint.url, endpoint.Timeout, endpoint.Headers,
 		endpoint.Transport, endpoint.metrics.httpStatusListener())
-	endpoint.Sink = newRetryingSink(endpoint.Sink, endpoint.Threshold, endpoint.Backoff)
+
+	// TODO: threshold has been deprecated and we should use MaxRetries with backoffSink instead.
+	// Remove this check along with https://gitlab.com/gitlab-org/container-registry/-/issues/1244.
+	if endpoint.MaxRetries != 0 {
+		endpoint.Sink = newBackoffSink(endpoint.Sink, endpoint.Backoff, endpoint.MaxRetries)
+	} else {
+		log.Warn("notifications `threshold` is deprecated, use maxretries instead. See https://gitlab.com/gitlab-org/container-registry/-/issues/1243.")
+		endpoint.Sink = newRetryingSink(endpoint.Sink, endpoint.Threshold, endpoint.Backoff)
+	}
+
 	endpoint.Sink = newEventQueue(endpoint.Sink, endpoint.metrics.eventQueueListener())
 	mediaTypes := append(config.Ignore.MediaTypes, config.IgnoredMediaTypes...)
 	endpoint.Sink = newIgnoredSink(endpoint.Sink, mediaTypes, config.Ignore.Actions)
