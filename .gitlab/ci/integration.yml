@@ -40,12 +40,6 @@ inmemory:
     <<: *storage-driver-variables
     PACKAGE: 'github.com/docker/distribution/registry/storage/driver/inmemory'
 
-swift:
-  <<: *storage-driver-test
-  variables:
-    <<: *storage-driver-variables
-    PACKAGE: 'github.com/docker/distribution/registry/storage/driver/swift'
-
 s3-aws:
   <<: *storage-driver-test
   variables:
