@@ -1,3 +1,12 @@
+## [3.93.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.92.0-gitlab...v3.93.0-gitlab) (2024-04-23)
+
+
+### ✨ Features ✨
+
+* inject GitLab namespace and project IDs into CGS/CDN signed URLs ([ec9c72e](https://gitlab.com/gitlab-org/container-registry/commit/ec9c72e74bf8a1a78490c46abfe3f8f7188ac65d))
+* **notifications:** add backoff sink with maxretries ([fa1a985](https://gitlab.com/gitlab-org/container-registry/commit/fa1a985737fcfe18b64943a1018c3535fcfc448e))
+* **s3wrapper:** retry delete s3 objects operation if incomplete ([d911653](https://gitlab.com/gitlab-org/container-registry/commit/d91165374e8759bd0d05176ad705c3b8515c975a))
+
 ## [3.92.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.91.0-gitlab...v3.92.0-gitlab) (2024-04-04)
 
 
