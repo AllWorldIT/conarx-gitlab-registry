@@ -218,8 +218,10 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingTopLevel(t *tes
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
-	env := newTestEnv(t)
+func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
+	t.Helper()
+
+	env := newTestEnv(t, opts...)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
@@ -693,6 +695,15 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGitlabAPI_RepositoryTagsList_WithCentralRepositoryCache(t *testing.T) {
+	srv := testutil.RedisServer(t)
+	testGitlabApiRepositoryGet(t, withRedisCache(srv.Addr()))
+}
+
+func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
+	testGitlabApiRepositoryTagsList(t)
 }
 
 // TestGitlabAPI_RepositoryTagsList_PublishedAt is similar to TestGitlabAPI_RepositoryTagsList but
