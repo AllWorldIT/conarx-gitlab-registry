@@ -1,3 +1,17 @@
+## [4.0.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.93.0-gitlab...v4.0.0-gitlab) (2024-4-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **storage:** remove OSS and Swift storage drivers
+* **v2:** remove old tag delete api
+
+### ✨ Features ✨
+
+* **cache:** redis repository cache for list repository tags operation ([9ea6ebe](https://gitlab.com/gitlab-org/container-registry/commit/9ea6ebe2b4f6f0a7fdb85da6787e8d9b79bd6107))
+* **storage:** remove OSS and Swift storage drivers ([32f4118](https://gitlab.com/gitlab-org/container-registry/commit/32f4118056300b9afaa755dd1faf35b9c9d356d2))
+* **v2:** remove old tag delete api ([df7dbb0](https://gitlab.com/gitlab-org/container-registry/commit/df7dbb01d33ed705b0745153e42a6e8388e86112))
+
 ## [3.93.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.92.0-gitlab...v3.93.0-gitlab) (2024-04-23)
 
 
