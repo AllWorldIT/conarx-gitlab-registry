@@ -2334,9 +2334,9 @@ func TestExistingRenameLease_Prevents_Tag_Delete(t *testing.T) {
 	// Create and execute API request to delete tag (while project lease is in effect for "foo/bar")
 	ref, err := reference.WithTag(repository, "latest")
 	require.NoError(t, err)
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodDelete, tagURL, nil)
+	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
 	require.NoError(t, err)
 	req = newRequest(req, witAuthToken(token))
 	// Send request

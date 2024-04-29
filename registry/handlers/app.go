@@ -941,7 +941,6 @@ func (app *App) initMetaRouter() error {
 	app.registerDistribution(v2.RouteNameManifest, manifestDispatcher)
 	app.registerDistribution(v2.RouteNameCatalog, catalogDispatcher)
 	app.registerDistribution(v2.RouteNameTags, tagsDispatcher)
-	app.registerDistribution(v2.RouteNameTag, tagDispatcher)
 	app.registerDistribution(v2.RouteNameBlob, blobDispatcher)
 	app.registerDistribution(v2.RouteNameBlobUpload, blobUploadDispatcher)
 	app.registerDistribution(v2.RouteNameBlobUploadChunk, blobUploadDispatcher)

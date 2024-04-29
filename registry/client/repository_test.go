@@ -1043,7 +1043,7 @@ func TestTagDelete(t *testing.T) {
 	m = append(m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodDelete,
-			Route:  "/v2/" + repo.Name() + "/tags/reference/" + tag,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + tag,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusAccepted,

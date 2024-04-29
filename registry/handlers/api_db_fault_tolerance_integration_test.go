@@ -143,7 +143,7 @@ func TestDBFaultTolerance_ConnectionRefused_TagDelete(t *testing.T) {
 	dbProxy := newDBProxy(t)
 	defer dbProxy.Delete()
 
-	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
+	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDelete)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -447,7 +447,7 @@ func TestDBFaultTolerance_ConnectionTimeout_TagDelete(t *testing.T) {
 	dbProxy := newDBProxy(t)
 	defer dbProxy.Delete()
 
-	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
+	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second), withDelete)
 	defer env.Shutdown()
 
 	repoName := "foo"
@@ -790,7 +790,7 @@ func TestDBFaultTolerance_ConnectionLeak_TagList(t *testing.T) {
 }
 
 func TestDBFaultTolerance_ConnectionLeak_TagDelete(t *testing.T) {
-	env := newTestEnv(t)
+	env := newTestEnv(t, withDelete)
 	defer env.Shutdown()
 
 	repoName := "foo"

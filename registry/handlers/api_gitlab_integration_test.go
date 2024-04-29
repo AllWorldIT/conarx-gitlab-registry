@@ -1034,7 +1034,7 @@ func TestGitlabAPI_RepositoryTagsList_RepositoryNotFound(t *testing.T) {
 }
 
 func TestGitlabAPI_RepositoryTagsList_EmptyRepository(t *testing.T) {
-	env := newTestEnv(t)
+	env := newTestEnv(t, withDelete)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
@@ -1048,10 +1048,10 @@ func TestGitlabAPI_RepositoryTagsList_EmptyRepository(t *testing.T) {
 	ref, err := reference.WithTag(imageName, tag)
 	require.NoError(t, err)
 
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
 
-	res, err := httpDelete(tagURL)
+	res, err := httpDelete(manifestURL)
 	require.NoError(t, err)
 	defer res.Body.Close()
 
@@ -1486,7 +1486,7 @@ func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
 }
 
 func TestGitlabAPI_SubRepositoryList_EmptyTagRepository(t *testing.T) {
-	env := newTestEnv(t)
+	env := newTestEnv(t, withDelete)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
@@ -1500,10 +1500,10 @@ func TestGitlabAPI_SubRepositoryList_EmptyTagRepository(t *testing.T) {
 	ref, err := reference.WithTag(baseRepoName, tag)
 	require.NoError(t, err)
 
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
 
-	res, err := httpDelete(tagURL)
+	res, err := httpDelete(manifestURL)
 	require.NoError(t, err)
 	defer res.Body.Close()
 

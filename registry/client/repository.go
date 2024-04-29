@@ -360,7 +360,7 @@ func (t *tags) Untag(ctx context.Context, tag string) error {
 		return err
 	}
 
-	u, err := t.ub.BuildTagURL(ref)
+	u, err := t.ub.BuildManifestURL(ref)
 	if err != nil {
 		return err
 	}
