@@ -121,30 +121,6 @@ storage:
     loglevel: logdebug
     maxretries: 10
     objectownership: false
-  swift: # Deprecated see: https://docs.gitlab.com/ee/update/deprecations.html#container-registry-support-for-the-swift-and-oss-storage-drivers
-    username: username
-    password: password
-    authurl: https://storage.myprovider.com/auth/v1.0 or https://storage.myprovider.com/v2.0 or https://storage.myprovider.com/v3/auth
-    tenant: tenantname
-    tenantid: tenantid
-    domain: domain name for Openstack Identity v3 API
-    domainid: domain id for Openstack Identity v3 API
-    insecureskipverify: true
-    region: fr
-    container: containername
-    rootdirectory: /swift/object/name/prefix
-  oss: # Deprecated see: https://docs.gitlab.com/ee/update/deprecations.html#container-registry-support-for-the-swift-and-oss-storage-drivers
-    accesskeyid: accesskeyid
-    accesskeysecret: accesskeysecret
-    region: OSS region name
-    endpoint: optional endpoints
-    internal: optional internal endpoint
-    bucket: OSS bucket
-    encrypt: optional enable server-side encryption
-    encryptionkeyid: optional KMS key id for encryption
-    secure: optional ssl setting
-    chunksize: optional size valye
-    rootdirectory: optional root directory
   inmemory:  # This driver takes no parameters
   delete:
     enabled: false
@@ -456,30 +432,6 @@ storage:
     loglevel: logdebug
     maxretries: 10
     objectownership: false
-  swift: # Deprecated see: https://docs.gitlab.com/ee/update/deprecations.html#container-registry-support-for-the-swift-and-oss-storage-drivers
-    username: username
-    password: password
-    authurl: https://storage.myprovider.com/auth/v1.0 or https://storage.myprovider.com/v2.0 or https://storage.myprovider.com/v3/auth
-    tenant: tenantname
-    tenantid: tenantid
-    domain: domain name for Openstack Identity v3 API
-    domainid: domain id for Openstack Identity v3 API
-    insecureskipverify: true
-    region: fr
-    container: containername
-    rootdirectory: /swift/object/name/prefix
-  oss: # Deprecated see: https://docs.gitlab.com/ee/update/deprecations.html#container-registry-support-for-the-swift-and-oss-storage-drivers
-    accesskeyid: accesskeyid
-    accesskeysecret: accesskeysecret
-    region: OSS region name
-    endpoint: optional endpoints
-    internal: optional internal endpoint
-    bucket: OSS bucket
-    encrypt: optional enable server-side encryption
-    encryptionkeyid: optional KMS key id for encryption
-    secure: optional ssl setting
-    chunksize: optional size valye
-    rootdirectory: optional root directory
   inmemory:
   delete:
     enabled: false
@@ -508,8 +460,6 @@ returns an error. You can choose any of these backend storage drivers:
 | `azure`                | Uses Microsoft Azure Blob Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/azure.md).                                                                                                                 |
 | `gcs`                  | Uses Google Cloud Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/gcs.md).                                                                                                                           |
 | `s3`                   | Uses Amazon Simple Storage Service (S3) and compatible Storage Services. See the [driver's reference documentation](https://github.com/distribution/distribution/blob/main/docs/storage-drivers/s3.md), or the [extra parameters documentation](#s3)                                 |
-| `swift` **deprecated** | Uses Openstack Swift object storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/swift.md).                                                                                                               |
-| `oss`   **deprecated** | Uses Aliyun OSS for object storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/oss.md).                                                                                                                  |
 
 For testing only, you can use the [`inmemory` storage
 driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/inmemory.md).
@@ -602,8 +552,8 @@ layer metadata.
 ### `redirect`
 
 The `redirect` subsection provides configuration for managing redirects from
-content backends. This is supported and enabled by default for Azure, GCS, OSS,
-S3 and Swift backends. In certain deployment scenarios, you may decide to route
+content backends. This is supported and enabled by default for Azure, GCS, and
+S3 backends. In certain deployment scenarios, you may decide to route
 all data through the Registry, rather than redirecting to the backend. This may
 be more efficient when using a backend that is not co-located or when a
 registry instance is aggressively caching.
