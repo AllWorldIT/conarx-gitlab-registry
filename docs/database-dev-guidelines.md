@@ -33,6 +33,10 @@ Whenever a schema migration is added, you must regenerate the DDL script at `reg
 
 Make sure to run `make db-structure-dump` to update the DDL script whenever you change the database schema. This will dump the current schema from your local registry database with `pg_dump` and format it with [pgFormatter](https://github.com/darold/pgFormatter) for consistency.
 
+## Creating New Tables
+
+New tables introduced to the registry database, which may potentially undergo data migration in the future, must include an auto-incrementing integer `id` column. This requirement ensures compatibility with the registry's [Batched Background Migration](./spec/gitlab/database-background-migrations.md) process, which depend on the sequential ordering of the `id` column to determine migration batches.
+
 ## Testing
 
 ### Golden Files
