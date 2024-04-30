@@ -2154,6 +2154,93 @@ func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
 	}
 }
 
+func TestGitlabAPI_RenameRepositoryNamespace_Invalid(t *testing.T) {
+
+	baseRepoName, err := reference.WithName("foo/bar/project")
+	newNamespace := "foo/foo"
+	require.NoError(t, err)
+
+	tokenProvider := NewAuthTokenProvider(t)
+	srv := testutil.RedisServer(t)
+	env := newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	env.requireDB(t)
+	t.Cleanup(env.Shutdown)
+
+	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName)
+	require.NoError(t, err)
+
+	tt := []struct {
+		name               string
+		expectedRespStatus int
+		expectedRespError  *errcode.ErrorCode
+		tokenActions       []*token.ResourceActions
+		requestBody        []byte
+	}{
+		{
+			name:               "invalid json",
+			expectedRespError:  &v1.ErrorCodeInvalidJSONBody,
+			expectedRespStatus: http.StatusBadRequest,
+			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), newNamespace),
+			requestBody:        []byte(`invalid json`),
+		},
+		{
+			name:               "token does not contain required namespace reference",
+			expectedRespError:  &errcode.ErrorCodeUnauthorized,
+			expectedRespStatus: http.StatusUnauthorized,
+			tokenActions:       fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()),
+			requestBody:        []byte(`{ "namespace" : "` + newNamespace + `" }`),
+		},
+		{
+			name:               "change project name and namespace simutaneously",
+			expectedRespError:  &v1.ErrorCodeInvalidBodyParam,
+			expectedRespStatus: http.StatusBadRequest,
+			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), newNamespace),
+			requestBody:        []byte(`{ "name": "foo/bar/project", "namespace" : "` + newNamespace + `" }`),
+		},
+		{
+			name:               "new namespace does not satisfy regex",
+			expectedRespError:  &v1.ErrorCodeInvalidBodyParamType,
+			expectedRespStatus: http.StatusBadRequest,
+			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), "foo/foo.foo"),
+			requestBody:        []byte(`{ "namespace" : "foo/foo.foo" }`),
+		},
+		{
+			name:               "rename top level namespace",
+			expectedRespError:  &v1.ErrorCodeInvalidBodyParam,
+			expectedRespStatus: http.StatusBadRequest,
+			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), "foo"),
+			requestBody:        []byte(`{ "namespace" : "foo" }`),
+		},
+		{
+			name:               "namespace rename not implemented",
+			expectedRespError:  &v1.ErrorCodeNotImplemented,
+			expectedRespStatus: http.StatusNotFound,
+			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), newNamespace),
+			requestBody:        []byte(`{ "namespace" : "` + newNamespace + `" }`),
+		},
+	}
+
+	for _, test := range tt {
+		t.Run(test.name, func(t *testing.T) {
+			// create request
+			req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader(test.requestBody))
+			require.NoError(t, err)
+
+			// attach authourization header to request
+			req = tokenProvider.RequestWithAuthActions(req, test.tokenActions)
+
+			// make request
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// assert results
+			require.Equal(t, test.expectedRespStatus, resp.StatusCode)
+			checkBodyHasErrorCodes(t, "", resp, *test.expectedRespError)
+		})
+	}
+}
+
 func TestGitlabAPI_404WithDatabaseDisabled(t *testing.T) {
 	env := newTestEnv(t, withDBDisabled)
 	t.Cleanup(env.Shutdown)

@@ -1848,6 +1848,15 @@ func fullAccessTokenWithProjectMeta(projectPath, repositoryName string) []*token
 	}
 }
 
+// fullAccessNamespaceTokenWithProjectMeta grants a token used to rename a project's repositories namespace
+func fullAccessNamespaceTokenWithProjectMeta(projectPath, namespace string) []*token.ResourceActions {
+	return []*token.ResourceActions{
+		{Type: "repository", Name: projectPath, Actions: []string{"pull", "push"}, Meta: &token.Meta{ProjectPath: projectPath}},
+		{Type: "repository", Name: projectPath + "/*", Actions: []string{"pull"}, Meta: &token.Meta{ProjectPath: projectPath}},
+		{Type: "repository", Name: namespace + "/*", Actions: []string{"push"}, Meta: &token.Meta{ProjectPath: projectPath}},
+	}
+}
+
 // deleteAccessToken grants a delete action scope token for the specified repository
 func deleteAccessToken(repositoryName string) []*token.ResourceActions {
 	return []*token.ResourceActions{
