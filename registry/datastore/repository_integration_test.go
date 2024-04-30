@@ -2912,7 +2912,7 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 	}
 }
 
-func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
+func TestRepositoryStore_FindPaginatedRepositoriesForPath(t *testing.T) {
 	reloadTagFixtures(t)
 
 	tt := []struct {
@@ -3108,7 +3108,7 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 				LastEntry:  test.lastPath,
 			}
 
-			rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, test.baseRepo, filters)
+			rr, err := s.FindPaginatedRepositoriesForPath(suite.ctx, test.baseRepo, filters)
 
 			// reset created_at attributes for reproducible comparisons
 			for _, r := range rr {
@@ -3122,12 +3122,12 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 	}
 }
 
-func TestRepositoryStore_FindPagingatedRepositoriesForPath_None(t *testing.T) {
+func TestRepositoryStore_FindPaginatedRepositoriesForPath_None(t *testing.T) {
 	reloadTagFixtures(t)
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, &models.Repository{
+	rr, err := s.FindPaginatedRepositoriesForPath(suite.ctx, &models.Repository{
 		NamespaceID: 2,
 		Path:        "a-test-group",
 	}, datastore.FilterParams{MaxEntries: 100})

@@ -621,13 +621,13 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// path and namespace ID are the two required parameters for the queries in repositoryStore.FindPagingatedRepositoriesForPath,
+	// path and namespace ID are the two required parameters for the queries in repositoryStore.FindPaginatedRepositoriesForPath,
 	// so we must fill those. We also fill the name for consistency on the response.
 	repo.NamespaceID = namespace.ID
 	repo.Name = repo.Path[strings.LastIndex(repo.Path, "/")+1:]
 
 	rStore := datastore.NewRepositoryStore(h.db)
-	repoList, err := rStore.FindPagingatedRepositoriesForPath(h.Context, repo, filters)
+	repoList, err := rStore.FindPaginatedRepositoriesForPath(h.Context, repo, filters)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return

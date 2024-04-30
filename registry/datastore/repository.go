@@ -82,7 +82,7 @@ type RepositoryReader interface {
 	SizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
 	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
 	TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error)
-	FindPagingatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error)
+	FindPaginatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error)
 }
 
 // RepositoryWriter is the interface that defines write operations for a repository store.
@@ -1947,12 +1947,12 @@ func (s *repositoryStore) DeleteManifest(ctx context.Context, r *models.Reposito
 	return count == 1, nil
 }
 
-// FindPagingatedRepositoriesForPath finds all repositories (up to `filters.MaxEntries` repositories) that have the same base path as the requested repository.
+// FindPaginatedRepositoriesForPath finds all repositories (up to `filters.MaxEntries` repositories) that have the same base path as the requested repository.
 // The results are ordered lexicographically by repository path and only begin from `filters.LastEntry`.
 // Empty repositories (which do not have at least 1 tag) are ignored in the returned list.
 // Also, even if there is no repository with a path equivalent to `filters.LastEntry`, the returned
 // repositories will still be those with a base path of the requested repository and lexicographically after `filters.LastEntry`.
-func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error) {
+func (s *repositoryStore) FindPaginatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error) {
 	// start from a path lexicographically before r.Path when no last path is available.
 	// this improves the query performance as we will not need to filter from `r.path > ""` in the query below.
 	if filters.LastEntry == "" {
@@ -2056,7 +2056,7 @@ func (s *repositoryStore) UpdateLastPublishedAt(ctx context.Context, r *models.R
 // lexicographicallyNextPath takes a path string and returns the next lexicographical path string.
 // Empty paths (i.e a path of the form "") will result in an "a", paths with only "z" characters will append an a.
 // All other paths will result in their next logical lexicographical variation (e.g gitlab-com => gitlab-con , gitlab-com.  => gitlab-com/)
-// This function serves primarily as a helper for optimizing paginated db queries used in `FindPagingatedRepositoriesForPath.
+// This function serves primarily as a helper for optimizing paginated db queries used in `FindPaginatedRepositoriesForPath.
 func lexicographicallyNextPath(path string) string {
 	// Find first character from right
 	// which is not z.
@@ -2082,7 +2082,7 @@ func lexicographicallyNextPath(path string) string {
 // e.g gitlab-con => gitlab-com , gitlab-com/  => gitlab-com.
 // In the event that an empty string is provided as a path it returns 'z'.
 // In the event where only "a's" exist in the path; the last 'a' character of the path is converted to a "z".
-// This function serves primarily as a helper for optimizing paginated db queries used in `FindPagingatedRepositoriesForPath.
+// This function serves primarily as a helper for optimizing paginated db queries used in `FindPaginatedRepositoriesForPath.
 func lexicographicallyBeforePath(path string) string {
 	// this shouldn't be possible but to be safe we return a z on empty path
 	if path == "" {
