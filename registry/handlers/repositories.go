@@ -60,7 +60,8 @@ type RenameRepositoryAPIResponse struct {
 }
 
 type RenameRepositoryAPIRequest struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
 }
 
 const (
@@ -704,11 +705,9 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// validate the name suggested for the rename operation
-	newName := renameObject.Name
-	if !reference.GitLabProjectNameRegex.MatchString(newName) || !reference.NameComponentRegexp.MatchString(newName) {
-		detail := v1.InvalidPatchBodyTypeErrorDetail("name", reference.GitLabProjectNameRegex.String(), reference.NameComponentRegexp.String())
-		h.Errors = append(h.Errors, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail))
+	err = validateRenameRequest(renameObject)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
 
@@ -749,10 +748,10 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	newPath := replacePathName(repo.Path, newName)
+	newPath := replacePathName(repo.Path, renameObject.Name)
 
 	// check that no base repository or sub repository exists for the new target path
-	nameTaken, err := isRepositoryNameTaken(h.Context, rStore, repo.NamespaceID, newName, newPath)
+	nameTaken, err := isRepositoryNameTaken(h.Context, rStore, repo.NamespaceID, renameObject.Name, newPath)
 	if nameTaken {
 		l.WithError(err).WithFields(log.Fields{
 			"rename_path": newPath,
@@ -827,7 +826,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 	defer tx.Rollback()
 
 	// run the rename operation in a transaction
-	if err = executeRenameOperation(txCtx, tx, repo, renameBaseRepo, newPath, newName); err != nil {
+	if err = executeRenameOperation(txCtx, tx, repo, renameBaseRepo, newPath, renameObject.Name); err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
@@ -1085,4 +1084,49 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 
 		handler.ServeHTTP(w, r)
 	})
+}
+
+func validateRenameRequest(renameObject *RenameRepositoryAPIRequest) error {
+
+	var (
+		newName          = renameObject.Name
+		newNamespacePath = renameObject.Namespace
+
+		// isRenameProjectRequest signifies the current request is to rename a project's repositories to a new name
+		isRenameProjectRequest = newName != ""
+		// isRenameProjectNamespaceRequest signifies the current request is to move a project's repositories to a new namespace
+		isRenameProjectNamespaceRequest = newNamespacePath != ""
+	)
+
+	// We do not support moving the project to a new namespace and renaming the project at the same time.
+	if isRenameProjectRequest && isRenameProjectNamespaceRequest {
+		detail := v1.OnlyOneOfParamsErrorDetail("name", "namespace")
+		return v1.ErrorCodeInvalidBodyParam.WithDetail(detail)
+
+	}
+
+	if isRenameProjectNamespaceRequest {
+		// We only support moving to sub-namespaces (i.e groups) and not top-level-namespaces.
+		splitNewNamespace := strings.Split(newNamespacePath, "/")
+		if !reference.GitLabNamespacePathRegex.MatchString(newNamespacePath) {
+			detail := v1.InvalidPatchBodyTypeErrorDetail("namespace", reference.GitLabNamespacePathRegex.String())
+			return v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
+
+		}
+
+		if len(splitNewNamespace) < 2 {
+			return v1.ErrorCodeInvalidBodyParam.WithDetail("top level namespaces can not be changed")
+		}
+
+		// TODO: Implement the move repository functionality: https://gitlab.com/gitlab-org/container-registry/-/issues/1172
+		return v1.ErrorCodeNotImplemented.WithDetail("moving repositories to a new namespace is not implemented")
+	} else {
+		// validate the name suggested for the rename operation
+		if !reference.GitLabProjectNameRegex.MatchString(newName) || !reference.NameComponentRegexp.MatchString(newName) {
+			detail := v1.InvalidPatchBodyTypeErrorDetail("name", reference.GitLabProjectNameRegex.String(), reference.NameComponentRegexp.String())
+			return v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
+		}
+	}
+
+	return nil
 }

@@ -1,13 +1,16 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	cryptorand "crypto/rand"
 	"crypto/tls"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"expvar"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
@@ -1261,11 +1264,22 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 		return nil // access controller is not enabled.
 	}
 
-	var accessRecords []auth.Access
+	var (
+		accessRecords []auth.Access
+		err           error
+		errCode       error
+	)
 
 	if repo != "" {
 		accessRecords = appendAccessRecords(accessRecords, r.Method, repo)
 		accessRecords = appendRepositoryDetailsAccessRecords(accessRecords, r, repo)
+		accessRecords, err, errCode = appendRepositoryNamespaceAccessRecords(accessRecords, r)
+		if err != nil {
+			if err := errcode.ServeJSON(w, errCode); err != nil {
+				dcontext.GetLogger(context).Errorf("error serving error json: %v (from %v)", err, context.Errors)
+			}
+			return fmt.Errorf("error creating access records: %w", err)
+		}
 
 		if fromRepo := r.FormValue("from"); fromRepo != "" {
 			// mounting a blob from one repository to another requires pull (GET)
@@ -1458,6 +1472,49 @@ func appendRepositoryDetailsAccessRecords(accessRecords []auth.Access, r *http.R
 	}
 
 	return accessRecords
+}
+
+// appendRepositoryNamespaceAccessRecords adds the needed access records for moving a project's repositories
+// from one namespace to another as facilitated by the PATCH repository request.
+// Once it detects that the current request is a request to move repositories,
+// it adds the correct access records to the list of access records that must be present in the token.
+func appendRepositoryNamespaceAccessRecords(accessRecords []auth.Access, r *http.Request) ([]auth.Access, error, error) {
+	route := mux.CurrentRoute(r)
+	routeName := route.GetName()
+
+	if r.Method == http.MethodPatch && routeName == v1.Repositories.Name {
+		// Read the request body
+		buf := new(bytes.Buffer)
+
+		// Rread from r.Body and write to buf simultaneously
+		teeReader := io.TeeReader(r.Body, buf)
+
+		// Read the body from the TeeReader
+		body, err := io.ReadAll(teeReader)
+		if err != nil {
+			return accessRecords, err, v1.ErrorCodeInvalidJSONBody.WithDetail("invalid json")
+		}
+
+		// Rewind the request body reader to its original position to allow downstream handlers to read it if needed.
+		r.Body = io.NopCloser(buf)
+
+		// Parse the request body into a struct.
+		var data RenameRepositoryAPIRequest
+		if err := json.Unmarshal(body, &data); err != nil {
+			return accessRecords, err, v1.ErrorCodeInvalidJSONBody.WithDetail("invalid json")
+		}
+		if data.Namespace != "" {
+			accessRecords = append(accessRecords, auth.Access{
+				Resource: auth.Resource{
+					Type: "repository",
+					Name: fmt.Sprintf("%s/*", data.Namespace),
+				},
+				Action: "push",
+			})
+		}
+	}
+
+	return accessRecords, nil, nil
 }
 
 // applyRegistryMiddleware wraps a registry instance with the configured middlewares

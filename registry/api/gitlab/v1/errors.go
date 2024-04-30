@@ -53,6 +53,14 @@ var ErrorCodeInvalidBodyParamType = errcode.Register(errGroup, errcode.ErrorDesc
 	HTTPStatusCode: http.StatusBadRequest,
 })
 
+// ErrorCodeInvalidBodyParam is returned when the value of a body parameter is invalid.
+var ErrorCodeInvalidBodyParam = errcode.Register(errGroup, errcode.ErrorDescriptor{
+	Value:          "INVALID_BODY_PARAMETER",
+	Message:        "invalid body parameter value",
+	Description:    "The value of a request body parameter is invalid",
+	HTTPStatusCode: http.StatusBadRequest,
+})
+
 // ErrorCodeInvalidJSONBody is returned when the body of a request is an invalid json.
 var ErrorCodeInvalidJSONBody = errcode.Register(errGroup, errcode.ErrorDescriptor{
 	Value:          "INVALID_JSON_BODY",
@@ -95,6 +103,19 @@ func InvalidQueryParamTypeErrorDetail(key string, validTypes []reflect.Kind) str
 
 func InvalidPatchBodyTypeErrorDetail(key string, patterns ...string) string {
 	return fmt.Sprintf("the '%s' body parameter value must match the following pattern(s): %s", key, strings.Join(patterns, ", "))
+}
+
+// OnlyOneOfParamsErrorDetail is used to return a message when two keys can not be used at the same time.
+func OnlyOneOfParamsErrorDetail(keys ...string) string {
+	if len(keys) == 0 {
+		return "no parameters provided"
+	}
+	formattedKeys := make([]string, len(keys))
+	for i, key := range keys {
+		formattedKeys[i] = fmt.Sprintf("%q", key)
+	}
+
+	return fmt.Sprintf("only one of %s parameters is allowed at a time", strings.Join(formattedKeys, ", "))
 }
 
 func MissingServerDependencyTypeErrorDetail(key string) string {

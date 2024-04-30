@@ -79,6 +79,12 @@ var (
 	// https://gitlab.com/gitlab-org/gitlab/-/issues/349047
 	GitLabProjectNameRegex = regexp.MustCompile(`^[[a-z0-9]+([._-][a-z0-9]+)*([a-z0-9]+([._-][a-z0-9]+)*)*]*$`)
 
+	// GitLabNamespacePathRegex regex is used to check or match a
+	// namespace path to the gitlab namespace path pattern.
+	// This regex is a less involved derivative of the namespace path regex in rails:
+	// https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/path_regex.rb?ref_type=heads#L140
+	GitLabNamespacePathRegex = regexp.MustCompile(`^[a-zA-Z0-9_\-]+(?:/[a-zA-Z0-9_\-]+)*$`)
+
 	// anchoredIdentifierRegexp is used to check or match an
 	// identifier value, anchored at start and end of string.
 	anchoredIdentifierRegexp = anchored(IdentifierRegexp)
