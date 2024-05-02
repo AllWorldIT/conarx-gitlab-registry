@@ -1726,6 +1726,58 @@ func TestRepositoryStore_Size_WithCentralRepositoryCache(t *testing.T) {
 	require.Equal(t, expectedRepoSizeFromDB, *cache.Get(suite.ctx, path).Size)
 }
 
+func testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testing.T, estimate bool) {
+	t.Helper()
+	reloadManifestFixtures(t)
+
+	// see testdata/fixtures/repositories.sql
+	r := &models.Repository{NamespaceID: 3, ID: 8, Path: "usage-group"}
+
+	// Obtain size with no caching layer
+	s := datastore.NewRepositoryStore(suite.db)
+	var trueSize int64
+	var err error
+	if estimate {
+		trueSize, err = s.EstimatedSizeWithDescendants(suite.ctx, r)
+		require.NoError(t, err)
+		require.Equal(t, int64(8467925), trueSize)
+	} else {
+		trueSize, err = s.SizeWithDescendants(suite.ctx, r)
+		require.NoError(t, err)
+		require.Equal(t, int64(7543014), trueSize)
+	}
+
+	// Add a cache to the store and try fetching the size again
+	cache := datastore.NewCentralRepositoryCache(itestutil.RedisCache(t, 0))
+	s = datastore.NewRepositoryStore(suite.db, datastore.WithRepositoryCache(cache))
+	var preCacheSize int64
+	if estimate {
+		preCacheSize, err = s.EstimatedSizeWithDescendants(suite.ctx, r)
+	} else {
+		preCacheSize, err = s.SizeWithDescendants(suite.ctx, r)
+	}
+	require.NoError(t, err)
+	require.Equal(t, trueSize, preCacheSize)
+
+	// Verify cache entry
+	found, cachedSize := cache.GetSizeWithDescendants(suite.ctx, r)
+	require.True(t, found)
+	require.Equal(t, trueSize, cachedSize)
+
+	// Now fetch it again with the value already in cache
+	postCacheSize, err := s.SizeWithDescendants(suite.ctx, r)
+	require.NoError(t, err)
+	require.Equal(t, trueSize, postCacheSize)
+}
+
+func TestRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testing.T) {
+	testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t, false)
+}
+
+func TestRepositoryStore_EstimatedSizeWithDescendants_WithCentralRepositoryCache(t *testing.T) {
+	testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t, true)
+}
+
 // This comment describes the repository size calculation in detail, explaining the results of the
 // following calls to RepositoryStore.SizeWithDescendants.
 //
