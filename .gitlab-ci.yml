@@ -44,8 +44,8 @@ stages:
   parallel:
     matrix:
       - PG_VERSION: $PG_PREV_VERSION
-        GO_VERSION: [ "1.20", "1.21", "1.22" ]
+        GO_VERSION: [ "1.21", "1.22" ]
       - PG_VERSION: $PG_CURR_VERSION
-        GO_VERSION: [ "1.20", "1.21", "1.22" ]
+        GO_VERSION: [ "1.21", "1.22" ]
       - PG_VERSION: $PG_NEXT_VERSION
-        GO_VERSION: [ "1.20", "1.21", "1.22" ]
+        GO_VERSION: [ "1.21", "1.22" ]
