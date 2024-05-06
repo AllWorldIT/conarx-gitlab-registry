@@ -1,3 +1,11 @@
+## [4.1.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.0.0-gitlab...v4.1.0-gitlab) (2024-05-06)
+
+
+### ✨ Features ✨
+
+* **api/gitlab/v1:** add jwt validation for moving project repositories ([a292b19](https://gitlab.com/gitlab-org/container-registry/commit/a292b190a988d92aa6b972ced67aa14788bc1c15))
+* **api/gitlab/v1:** cache size with descendants of top-level namespaces ([9d1e730](https://gitlab.com/gitlab-org/container-registry/commit/9d1e7307f8e5756a1b7787bea84b3626ff10fe4c))
+
 ## [4.0.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.93.0-gitlab...v4.0.0-gitlab) (2024-4-29)
 
 
