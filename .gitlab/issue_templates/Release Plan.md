@@ -166,6 +166,6 @@ To see the version deployed in each environment, look at the [Grafana Container 
 
 ![image](/uploads/3fd5b4902472f6cdcc56b9c2d333472f/image.png)
 
-/label ~"devops::package" ~"group::container registry" ~"Category:Container Registry" ~golang ~"workflow::in dev" ~"type::maintenance" ~"maintenance::release"
-
 </details>
+
+/label ~"devops::package" ~"section::ci" ~"group::container registry" ~"Category:Container Registry" ~golang ~"workflow::in dev" ~"type::maintenance" ~"maintenance::release"
