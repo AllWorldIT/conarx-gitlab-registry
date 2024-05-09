@@ -329,6 +329,11 @@ type GC struct {
 	// Also applied when there are no tasks to be processed unless NoIdleBackoff is `true`. Please note that this is
 	// not the absolute maximum, as a randomized jitter factor of up to 33% is always added.
 	MaxBackoff time.Duration `yaml:"maxbackoff,omitempty"`
+	// ErrorCooldownPeriod is the period of time after an error occurs that the GC workers will continue to
+	// exponentially backoff. If the worker encounters an error while cooling down, the cool down period is extended
+	// again by the configured value. This is useful to ensure that GC workers in multiple registry deployments will
+	// slow down during periods of intermittent errors. Defaults to 0 (no cooldown) by default.
+	ErrorCooldownPeriod time.Duration `yaml:"errorcooldownperiod,ominitempty"`
 	// TransactionTimeout is the database transaction timeout for each worker run. Each worker starts a database transaction
 	// at the start. The worker run is canceled if this timeout is exceeded to avoid stalled or long-running
 	// transactions.
