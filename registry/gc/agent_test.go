@@ -275,7 +275,48 @@ func TestAgent_Start_NoTaskFoundWithoutIdleBackoff(t *testing.T) {
 		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		workerMock.EXPECT().Name().Times(1),
 		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{}).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		backoffMock.EXPECT().Reset().Times(1), // ensure backoff reset
+		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
+		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
+		workerMock.EXPECT().Name().Times(1),
+		clockMock.EXPECT().Sleep(backOff).Do(func(_ time.Duration) { cancel() }).Times(1),
+	)
+
+	err := agent.Start(ctx)
+	require.NotNil(t, err)
+	require.EqualError(t, context.Canceled, err.Error())
+}
+
+func TestAgent_Start_ErrorWithoutIdleBackoff(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	workerMock := wmocks.NewMockWorker(ctrl)
+
+	backoffMock := mocks.NewMockBackoff(ctrl)
+	stubBackoff(t, backoffMock)
+
+	clockMock := regmocks.NewMockClock(ctrl)
+	testutil.StubClock(t, &systemClock, clockMock)
+
+	agent := NewAgent(workerMock, WithLogger(log.GetLogger()), WithoutIdleBackoff())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wCtx := correlation.ContextWithCorrelation(ctx, stubCorrelationID(t))
+
+	seedTime := time.Time{}
+	startTime := seedTime.Add(1 * time.Millisecond)
+	backOff := defaultInitialInterval
+
+	gomock.InOrder(
+		workerMock.EXPECT().Name().Times(1),
+		clockMock.EXPECT().Now().Return(seedTime).Times(1),
+		clockMock.EXPECT().Sleep(gomock.Any()).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
+		workerMock.EXPECT().Name().Times(1),
+		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{Err: errors.New("fake error")}).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
+		backoffMock.EXPECT().Reset().Times(0), // ensure errors don't reset backoff even with no idle backoff
 		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
 		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
 		workerMock.EXPECT().Name().Times(1),
@@ -314,6 +355,7 @@ func TestAgent_Start_RunFound(t *testing.T) {
 		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		workerMock.EXPECT().Name().Times(1),
 		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{Found: true}).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		backoffMock.EXPECT().Reset().Times(1), // ensure backoff reset
 		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
 		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
@@ -354,6 +396,7 @@ func TestAgent_Start_RunError(t *testing.T) {
 		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		workerMock.EXPECT().Name().Times(1),
 		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{Err: errors.New("fake error")}).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
 		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
 		workerMock.EXPECT().Name().Times(1),
@@ -393,6 +436,7 @@ func TestAgent_Start_RunLoopSurvivesError(t *testing.T) {
 		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		workerMock.EXPECT().Name().Times(1),
 		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{Err: errors.New("fake error")}).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
 		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
 		workerMock.EXPECT().Name().Times(1),
@@ -401,12 +445,78 @@ func TestAgent_Start_RunLoopSurvivesError(t *testing.T) {
 		clockMock.EXPECT().Now().Return(startTime).Times(1),
 		workerMock.EXPECT().Name().Times(1),
 		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{Found: true}).Times(1),
+		clockMock.EXPECT().Now().Return(startTime.Add(1*time.Millisecond)).Times(1),
 		backoffMock.EXPECT().Reset().Times(1), // ensure backoff reset
-		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
+		clockMock.EXPECT().Since(startTime).Return(200*time.Millisecond).Times(1),
 		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
 		workerMock.EXPECT().Name().Times(1),
 		clockMock.EXPECT().Sleep(backOff).Do(func(_ time.Duration) {
 			// cancel context here to avoid a 3rd worker run
+			cancel()
+		}).Times(1),
+	)
+
+	err := agent.Start(ctx)
+	require.NotNil(t, err)
+	require.EqualError(t, context.Canceled, err.Error())
+}
+
+func TestAgent_Start_RunLoopSurvivesErrorWithErrorCooldown(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	workerMock := wmocks.NewMockWorker(ctrl)
+
+	backoffMock := mocks.NewMockBackoff(ctrl)
+	stubBackoff(t, backoffMock)
+
+	clockMock := regmocks.NewMockClock(ctrl)
+	testutil.StubClock(t, &systemClock, clockMock)
+
+	agent := NewAgent(workerMock, WithLogger(log.GetLogger()))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wCtx := correlation.ContextWithCorrelation(ctx, stubCorrelationID(t))
+
+	seedTime := time.Time{}
+	startTime := seedTime.Add(1 * time.Millisecond)
+	errorCooldownTime := seedTime.Add(2 * time.Millisecond)
+	backOff := defaultInitialInterval
+	agent.errorCooldown = 2 * time.Millisecond
+
+	gomock.InOrder(
+		// 1st loop iteration
+		workerMock.EXPECT().Name().Times(1),
+		clockMock.EXPECT().Now().Return(seedTime).Times(1),
+		clockMock.EXPECT().Sleep(gomock.Any()).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
+		workerMock.EXPECT().Name().Times(1),
+		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{Err: errors.New("fake error")}).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
+		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
+		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
+		workerMock.EXPECT().Name().Times(1),
+		clockMock.EXPECT().Sleep(backOff).Times(1),
+		// 2nd loop iteration
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
+		workerMock.EXPECT().Name().Times(1),
+		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{Found: true}).Times(1),
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
+		backoffMock.EXPECT().Reset().Times(0), // ensure backoff reset is on error cooldown
+		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
+		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
+		workerMock.EXPECT().Name().Times(1),
+		clockMock.EXPECT().Sleep(backOff).Times(1),
+		// 3rd loop iteration
+		clockMock.EXPECT().Now().Return(startTime).Times(1),
+		workerMock.EXPECT().Name().Times(1),
+		workerMock.EXPECT().Run(wCtx).Return(worker.RunResult{Found: true}).Times(1),
+		clockMock.EXPECT().Now().Return(errorCooldownTime.Add(100*time.Millisecond)).Times(1), // return time after error cooldown
+		backoffMock.EXPECT().Reset().Times(1),                                                 // ensure backoff reset
+		clockMock.EXPECT().Since(startTime).Return(100*time.Millisecond).Times(1),
+		backoffMock.EXPECT().NextBackOff().Return(backOff).Times(1),
+		workerMock.EXPECT().Name().Times(1),
+		clockMock.EXPECT().Sleep(backOff).Do(func(_ time.Duration) {
+			// cancel context here to avoid a 4th worker run
 			cancel()
 		}).Times(1),
 	)

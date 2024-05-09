@@ -20,13 +20,14 @@ import (
 const (
 	componentKey = "component"
 	agentName    = "registry.gc.Agent"
+
+	backoffJitterFactor   = 0.33
+	startJitterMaxSeconds = 60
 )
 
 var (
 	defaultInitialInterval = 5 * time.Second
 	defaultMaxBackoff      = 24 * time.Hour
-	backoffJitterFactor    = 0.33
-	startJitterMaxSeconds  = 60
 
 	// for testing purposes (mocks)
 	backoffConstructor                   = newBackoff
@@ -40,6 +41,7 @@ type Agent struct {
 	logger          log.Logger
 	initialInterval time.Duration
 	maxBackoff      time.Duration
+	errorCooldown   time.Duration
 	noIdleBackoff   bool
 }
 
@@ -66,6 +68,17 @@ func WithInitialInterval(d time.Duration) AgentOption {
 func WithMaxBackoff(d time.Duration) AgentOption {
 	return func(a *Agent) {
 		a.maxBackoff = d
+	}
+}
+
+// WithErrorCooldown sets the duration of the cooldown period after the agent encounters an error.
+// While in a cooldown period, the agent will start to back off even if there are later successful jobs. This
+// can be useful for slowing down the overall GC workload during periods of intermittent errors,
+// as it prevents successful jobs from resetting the backoff.
+// Defaults to 0, meaning no cooldown period.
+func WithErrorCooldown(d time.Duration) AgentOption {
+	return func(a *Agent) {
+		a.errorCooldown = d
 	}
 }
 
@@ -121,6 +134,8 @@ func (a *Agent) Start(ctx context.Context) error {
 	l.WithFields(log.Fields{"jitter_s": jitter.Seconds()}).Info("starting online GC agent")
 	systemClock.Sleep(jitter)
 
+	var errorCooldown time.Time
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -139,7 +154,9 @@ func (a *Agent) Start(ctx context.Context) error {
 			res := a.worker.Run(wCtx)
 			if res.Err != nil {
 				l.WithError(res.Err).Error("failed run")
-			} else if res.Found || a.noIdleBackoff {
+
+				errorCooldown = systemClock.Now().Add(a.errorCooldown)
+			} else if (res.Found || a.noIdleBackoff) && errorCooldown.Before(systemClock.Now()) {
 				b.Reset()
 			}
 			report(!res.Found, res.Dangling, res.Err, res.Event)

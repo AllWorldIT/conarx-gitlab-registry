@@ -540,6 +540,9 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 	if config.GC.MaxBackoff > 0 {
 		aOpts = append(aOpts, gc.WithMaxBackoff(config.GC.MaxBackoff))
 	}
+	if config.GC.ErrorCooldownPeriod > 0 {
+		aOpts = append(aOpts, gc.WithErrorCooldown(config.GC.ErrorCooldownPeriod))
+	}
 
 	var agents []*gc.Agent
 
