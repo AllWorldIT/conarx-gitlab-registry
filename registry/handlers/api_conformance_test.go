@@ -82,6 +82,7 @@ func TestAPIConformance(t *testing.T) {
 		manifest_Put_OCI_ByDigest,
 		manifest_Put_OCI_ByTag,
 		manifest_Put_OCI_WithSubject,
+		manifest_Put_OCI_WithV2Subject,
 		manifest_Put_OCI_WithNonMatchingSubject,
 		manifest_Put_OCI_WithArtifactType,
 		manifest_Get_OCI_MatchingEtag,
@@ -2030,6 +2031,41 @@ func manifest_Put_OCI_WithSubject(t *testing.T, opts ...configOpt) {
 	// create random manifest with seedRandomOCIManifest,
 	// use this manifest as the subject for the artifact manifest
 	mfst := seedRandomOCIManifest(t, env, repoPath, putByDigest)
+	artifactMfst := seedRandomOCIManifest(t, env, repoPath, putByDigest, withSubject(mfst))
+
+	// Fetch the artifact manifest just pushed and check subject is present
+	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, artifactMfst)
+
+	req, err := http.NewRequest(http.MethodGet, manifestDigestURL, nil)
+	require.NoError(t, err)
+	req.Header.Set("Accept", v1.MediaTypeImageManifest)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	var fetchedManifest *ocischema.DeserializedManifest
+	dec := json.NewDecoder(resp.Body)
+
+	err = dec.Decode(&fetchedManifest)
+	require.NoError(t, err)
+
+	_, subjPayload, err := mfst.Payload()
+	require.NoError(t, err)
+
+	require.Equal(t, digest.FromBytes(subjPayload), fetchedManifest.Subject().Digest)
+}
+
+func manifest_Put_OCI_WithV2Subject(t *testing.T, opts ...configOpt) {
+	env := newTestEnv(t, opts...)
+	defer env.Shutdown()
+
+	repoPath := "oci/happypath"
+
+	// create random manifest with seedRandomSchema2Manifest,
+	// use this manifest as the subject for the artifact manifest
+	mfst := seedRandomSchema2Manifest(t, env, repoPath, putByDigest)
 	artifactMfst := seedRandomOCIManifest(t, env, repoPath, putByDigest, withSubject(mfst))
 
 	// Fetch the artifact manifest just pushed and check subject is present

@@ -137,7 +137,8 @@ func (s *tagStore) Repository(ctx context.Context, t *models.Tag) (*models.Repos
 			path,
 			parent_id,
 			created_at,
-			updated_at
+			updated_at,
+			last_published_at
 		FROM
 			repositories
 		WHERE

@@ -26,11 +26,43 @@ coverage:
   script:
     - make coverage
 
+.oci-conformance-version-matrix:
+  parallel:
+    matrix:
+      - OCI_SPEC_VERSION: [ "v1.0.1", "latest" ]
+  rules:
+    # See https://gitlab.com/gitlab-org/container-registry/-/issues/1206 for why the latest OCI spec is allowed to fail
+    - if: $OCI_SPEC_VERSION == "latest"
+      allow_failure: true
+    - allow_failure: false
+  before_script:
+    # Start local registry instance to test against
+    - make binaries
+    - chmod +x ./bin/*
+    - ./bin/registry database migrate up config/database-filesystem.yml
+    - ./bin/registry serve config/database-filesystem.yml &>/dev/null &
+    # Test against specified versions of OCI Distribution Spec.
+    - |
+      if [ "$OCI_SPEC_VERSION" == "latest" ]; then 
+        VERSION=$(curl --silent "https://api.github.com/repos/opencontainers/distribution-spec/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")'); 
+      else 
+        VERSION=$OCI_SPEC_VERSION; 
+      fi
+    - echo "====== Testing against OCI Distribution Spec $VERSION ======"
+    - git clone --depth 1 --branch $VERSION https://github.com/opencontainers/distribution-spec.git
+    - cd distribution-spec/conformance
+    - go test -c
+  artifacts:
+    paths:
+      - distribution-spec/conformance/$OCI_SPEC_VERSION/report.html
+    reports:
+      junit: distribution-spec/conformance/$OCI_SPEC_VERSION/junit.xml
+
 # See https://github.com/opencontainers/distribution-spec/tree/main/conformance for documentation
 oci-conformance:
+  extends: .oci-conformance-version-matrix
   stage: test
   needs: ['modules:download']
-  allow_failure: true
   variables:
     OCI_ROOT_URL: http://localhost:5000
     OCI_NAMESPACE: oci-conformance/repo-a
@@ -56,23 +88,5 @@ oci-conformance:
   services:
     - name: postgres:${PG_CURR_VERSION}-alpine
       alias: "db"
-  before_script:
-    # Start local registry instance to test against
-    - make binaries
-    - chmod +x ./bin/*
-    - ./bin/registry database migrate up config/database-filesystem.yml
-    - ./bin/registry serve config/database-filesystem.yml &>/dev/null &
-    # Test against latest OCI Distribution Spec release (stable), not trunk (unstable)
-    - |
-      VERSION=$(curl --silent "https://api.github.com/repos/opencontainers/distribution-spec/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")')
-    - echo "====== Testing against OCI Distribution Spec $VERSION ======"
-    - git clone --depth 1 --branch $VERSION https://github.com/opencontainers/distribution-spec.git
-    - cd distribution-spec/conformance
-    - go test -c
   script:
     - ./conformance.test
-  artifacts:
-    paths:
-      - distribution-spec/conformance/report.html
-    reports:
-      junit: distribution-spec/conformance/junit.xml

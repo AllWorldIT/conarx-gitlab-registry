@@ -1,3 +1,38 @@
+## [3.92.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.91.0-gitlab...v3.92.0-gitlab) (2024-04-04)
+
+
+### ✨ Features ✨
+
+* **api/gitlab/v1:** add last published timestamp to get repository details response ([801b7fc](https://gitlab.com/gitlab-org/container-registry/commit/801b7fc44fbc724f5eb4b17667beca508e494f61))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **api/gitlab/v1:** 404 on v1 endpoint if database disabled ([6f5afcb](https://gitlab.com/gitlab-org/container-registry/commit/6f5afcbb4b055759c42d1137bb317e30142046aa))
+
+## [3.91.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.90.0-gitlab...v3.91.0-gitlab) (2024-03-25)
+
+
+### ✨ Features ✨
+
+* add support for Timoni image and config media types ([131b5e4](https://gitlab.com/gitlab-org/container-registry/commit/131b5e41d496ca1fcdc6e7b0109c494416010276))
+* **datastore:** add last_published_at timestamp to repositories table ([37437f0](https://gitlab.com/gitlab-org/container-registry/commit/37437f0c3f1dd0111b0f897ade2cac8cd88f731b))
+* **handlers:** warn when online garbage collection is disabled ([59dd355](https://gitlab.com/gitlab-org/container-registry/commit/59dd355f177a841d86d173254607367f33db0830))
+
+
+### 🐛 Bug Fixes 🐛
+
+* allow OCI manifest subjects to reference non-OCI manifests ([5bae10a](https://gitlab.com/gitlab-org/container-registry/commit/5bae10a08ba5748bb03dc7fa2ded7f001618c04f))
+* **v2:** oci conformance for blob upload ([3a4d00b](https://gitlab.com/gitlab-org/container-registry/commit/3a4d00be50c237ac62b056f63a038cebcba9e859))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update github.com/jackc/pgerrcode digest to 6e2875d ([46f0e31](https://gitlab.com/gitlab-org/container-registry/commit/46f0e318877d8d885f8d4222bd870d1a2ba7f0a4))
+* **deps:** update module cloud.google.com/go/storage to v1.39.0 ([5fa91c7](https://gitlab.com/gitlab-org/container-registry/commit/5fa91c7eae857a460cc793bce293bdc86e5c22c5))
+* **deps:** update module cloud.google.com/go/storage to v1.39.1 ([81587b0](https://gitlab.com/gitlab-org/container-registry/commit/81587b01e992fc974887eed74ec7024ef0c15a91))
+* **deps:** update module github.com/alicebob/miniredis/v2 to v2.32.1 ([40fd9e9](https://gitlab.com/gitlab-org/container-registry/commit/40fd9e932442f1ce24321a9d35956609d129c2b1))
+
 ## [3.90.0](https://gitlab.com/gitlab-org/container-registry/compare/v3.89.0-gitlab...v3.90.0-gitlab) (2024-3-5)
 
 

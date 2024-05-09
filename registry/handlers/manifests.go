@@ -833,12 +833,18 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 	}
 
 	tagStore := datastore.NewTagStore(tx)
-	if err := tagStore.CreateOrUpdate(ctx, &models.Tag{
+	tag := &models.Tag{
 		Name:         tagName,
 		NamespaceID:  dbRepo.NamespaceID,
 		RepositoryID: dbRepo.ID,
 		ManifestID:   dbManifest.ID,
-	}); err != nil {
+	}
+	if err := tagStore.CreateOrUpdate(ctx, tag); err != nil {
+		return err
+	}
+
+	repoStore := datastore.NewRepositoryStore(tx, datastore.WithRepositoryCache(cache))
+	if err := repoStore.UpdateLastPublishedAt(ctx, dbRepo, tag); err != nil {
 		return err
 	}
 
