@@ -262,7 +262,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 	}
 
 	if withSize {
-		var size int64
+		var size datastore.RepositorySize
 		precision := sizePrecisionDefault
 
 		t := time.Now()
@@ -283,7 +283,8 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 			}
 		}
 		l.WithError(err).WithFields(log.Fields{
-			"size_bytes":   size,
+			"size_bytes":   size.Bytes(),
+			"size_cached":  size.Cached(),
 			"size_type":    sizeVal,
 			"duration_ms":  time.Since(t).Milliseconds(),
 			"is_top_level": repo.IsTopLevel(),
@@ -294,7 +295,9 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
 		}
-		resp.Size = &size
+
+		b := size.Bytes()
+		resp.Size = &b
 		resp.SizePrecision = precision
 	}
 
