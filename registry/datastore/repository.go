@@ -81,9 +81,9 @@ type RepositoryReader interface {
 	Blobs(ctx context.Context, r *models.Repository) (models.Blobs, error)
 	FindBlob(ctx context.Context, r *models.Repository, d digest.Digest) (*models.Blob, error)
 	ExistsBlob(ctx context.Context, r *models.Repository, d digest.Digest) (bool, error)
-	Size(ctx context.Context, r *models.Repository) (int64, error)
-	SizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
-	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
+	Size(ctx context.Context, r *models.Repository) (RepositorySize, error)
+	SizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error)
+	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error)
 	TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error)
 	FindPaginatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error)
 }
@@ -481,6 +481,8 @@ func (c *centralRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *
 func (c *centralRepositoryCache) InvalidateRootSizeWithDescendants(ctx context.Context, r *models.Repository) {
 	invalCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
+
+	log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"root_repo": r.TopLevelPathSegment()}).Info("invalidating root repository size with descendants in cache")
 
 	if err := c.marshaler.Delete(invalCtx, c.sizeWithDescendantsKey(r.TopLevelPathSegment())); err != nil {
 		e := fmt.Errorf("failed to invalidate root repository size with descendants in cache: %w", err)
@@ -1544,10 +1546,10 @@ func (s *repositoryStore) FindTagByName(ctx context.Context, r *models.Repositor
 // Size returns the deduplicated size of a repository. This is the sum of the size of all unique layers referenced by
 // at least one tagged (directly or indirectly) manifest. No error is returned if the repository does not exist. It is
 // the caller's responsibility to ensure it exists before calling this method and proceed accordingly if that matters.
-func (s *repositoryStore) Size(ctx context.Context, r *models.Repository) (int64, error) {
+func (s *repositoryStore) Size(ctx context.Context, r *models.Repository) (RepositorySize, error) {
 	// Check the cached repository object for the size attribute first
 	if r.Size != nil {
-		return *r.Size, nil
+		return RepositorySize{bytes: *r.Size}, nil
 	}
 	defer metrics.InstrumentQuery("repository_size")()
 
@@ -1586,16 +1588,16 @@ func (s *repositoryStore) Size(ctx context.Context, r *models.Repository) (int64
 							AND l.repository_id = $2
 							AND l.manifest_id = cte.manifest_id) AS q`
 
-	var size int64
-	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID).Scan(&size); err != nil {
-		return 0, fmt.Errorf("calculating repository size: %w", err)
+	var b int64
+	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID).Scan(&b); err != nil {
+		return RepositorySize{}, fmt.Errorf("calculating repository size: %w", err)
 	}
 
 	// Update the size attribute for the cached repository object
-	r.Size = &size
+	r.Size = &b
 	s.cache.Set(ctx, r)
 
-	return size, nil
+	return RepositorySize{bytes: b}, nil
 }
 
 // topLevelSizeWithDescendants is an optimization for SizeWithDescendants when the target repository is a top-level
@@ -1731,6 +1733,22 @@ func (s *repositoryStore) nonTopLevelSizeWithDescendants(ctx context.Context, r 
 
 var ErrSizeHasTimedOut = errors.New("size query timed out previously")
 
+// RepositorySize represents the result of calculating the size of a repository.
+type RepositorySize struct {
+	bytes  int64
+	cached bool
+}
+
+// Bytes returns the size in bytes.
+func (s RepositorySize) Bytes() int64 {
+	return s.bytes
+}
+
+// Cached indicates whether the size of the repository was obtained from cache.
+func (s RepositorySize) Cached() bool {
+	return s.cached
+}
+
 // SizeWithDescendants returns the deduplicated size of a repository, including all descendants (if any). This is the
 // sum of the size of all unique layers referenced by at least one tagged (directly or indirectly) manifest. No error is
 // returned if the repository does not exist. It is the caller's responsibility to ensure it exists before calling this
@@ -1738,19 +1756,20 @@ var ErrSizeHasTimedOut = errors.New("size query timed out previously")
 // If this method, for this repository, failed with a statement timeout in the last 24h, then ErrSizeHasTimedOut is
 // returned to prevent consecutive failures. The caller can then fall back to EstimatedSizeWithDescendants. This is a
 // mitigation strategy for https://gitlab.com/gitlab-org/container-registry/-/issues/779.
-func (s *repositoryStore) SizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error) {
+func (s *repositoryStore) SizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error) {
 	if !r.IsTopLevel() {
-		return s.nonTopLevelSizeWithDescendants(ctx, r)
+		b, err := s.nonTopLevelSizeWithDescendants(ctx, r)
+		return RepositorySize{bytes: b}, err
 	}
 
 	if s.cache.HasSizeWithDescendantsTimedOut(ctx, r) {
-		return 0, ErrSizeHasTimedOut
+		return RepositorySize{}, ErrSizeHasTimedOut
 	}
 
-	if found, size := s.cache.GetSizeWithDescendants(ctx, r); found {
-		return size, nil
+	if found, b := s.cache.GetSizeWithDescendants(ctx, r); found {
+		return RepositorySize{b, true}, nil
 	}
-	size, err := s.topLevelSizeWithDescendants(ctx, r)
+	b, err := s.topLevelSizeWithDescendants(ctx, r)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.QueryCanceled {
@@ -1758,9 +1777,9 @@ func (s *repositoryStore) SizeWithDescendants(ctx context.Context, r *models.Rep
 			s.cache.SizeWithDescendantsTimedOut(ctx, r)
 		}
 	}
-	s.cache.SetSizeWithDescendants(ctx, r, size)
+	s.cache.SetSizeWithDescendants(ctx, r, b)
 
-	return size, err
+	return RepositorySize{bytes: b}, err
 }
 
 // estimateTopLevelSizeWithDescendants is a simplified alternative to topLevelSizeWithDescendants which does not exclude
@@ -1792,21 +1811,21 @@ var ErrOnlyRootEstimates = errors.New("only the size of root repositories can be
 // exclude unreferenced layers. Therefore, the measured size should be considered an estimate. This is a partial
 // mitigation for https://gitlab.com/gitlab-org/container-registry/-/issues/779. For now, only top-level namespaces are
 // supported. ErrOnlyRootEstimates is returned if attempting to estimate the size of a non-root repository.
-func (s *repositoryStore) EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error) {
+func (s *repositoryStore) EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error) {
 	if !r.IsTopLevel() {
-		return 0, ErrOnlyRootEstimates
+		return RepositorySize{}, ErrOnlyRootEstimates
 	}
 
-	if found, size := s.cache.GetSizeWithDescendants(ctx, r); found {
-		return size, nil
+	if found, b := s.cache.GetSizeWithDescendants(ctx, r); found {
+		return RepositorySize{b, true}, nil
 	}
-	size, err := s.estimateTopLevelSizeWithDescendants(ctx, r)
+	b, err := s.estimateTopLevelSizeWithDescendants(ctx, r)
 	if err != nil {
-		return 0, err
+		return RepositorySize{}, err
 	}
-	s.cache.SetSizeWithDescendants(ctx, r, size)
+	s.cache.SetSizeWithDescendants(ctx, r, b)
 
-	return size, nil
+	return RepositorySize{bytes: b}, err
 }
 
 // CreateOrFind attempts to create a repository. If the repository already exists (same path) that record is loaded from
