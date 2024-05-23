@@ -2,6 +2,8 @@ package datastore
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -11,6 +13,7 @@ import (
 // MediaTypeReader is the interface that defines read operations for a media type store.
 type MediaTypeReader interface {
 	Exists(ctx context.Context, mt string) (bool, error)
+	MapMediaType(ctx context.Context, mt string) (int, error)
 }
 
 // mediaTypeStore is a concrete implementation of a media type store.
@@ -44,4 +47,24 @@ func (s *mediaTypeStore) Exists(ctx context.Context, mt string) (bool, error) {
 	}
 
 	return strconv.ParseBool(exists)
+}
+
+func (s *mediaTypeStore) MapMediaType(ctx context.Context, mediaType string) (int, error) {
+	q := `SELECT
+			id
+		FROM
+			media_types
+		WHERE
+			media_type = $1`
+
+	var id int
+	row := s.db.QueryRowContext(ctx, q, mediaType)
+	if err := row.Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrUnknownMediaType{MediaType: mediaType}
+		}
+		return 0, fmt.Errorf("unable to map media type: %w", err)
+	}
+
+	return id, nil
 }
