@@ -25,7 +25,7 @@ default:
 variables:
   # default Go version
   GO_VERSION: "1.21"
-  BUILDTAGS: "include_gcs,include_oss,continuous_profiler_stackdriver"
+  BUILDTAGS: "include_gcs,continuous_profiler_stackdriver"
   CGO_ENABLED: "1"
   GOPATH: $CI_PROJECT_DIR/.GOPATH
   GOTESTSUM_VERSION: v1.8.1

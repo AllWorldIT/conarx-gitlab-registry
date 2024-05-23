@@ -1574,7 +1574,7 @@ func assertTagDeleteResponse(t *testing.T, env *testEnv, repoName, tagName strin
 	require.NoError(t, err)
 	named, err := reference.WithTag(tmp, tagName)
 	require.NoError(t, err)
-	u, err := env.builder.BuildTagURL(named)
+	u, err := env.builder.BuildManifestURL(named)
 	require.NoError(t, err)
 
 	assertDeleteResponse(t, u, expectedStatus)

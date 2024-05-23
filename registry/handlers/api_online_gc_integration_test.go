@@ -89,11 +89,11 @@ func TestTagsAPI_Delete_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 	// attempt to delete tag through the API, this should succeed after waiting for lockDuration
 	ref, err := reference.WithTag(repoName, tagName)
 	require.NoError(t, err)
-	tagDeleteURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
 
 	start := time.Now()
-	resp, err := httpDelete(tagDeleteURL)
+	resp, err := httpDelete(manifestURL)
 	end := time.Now()
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -129,11 +129,11 @@ func TestTagsAPI_Delete_OnlineGC_TimeoutOnProlongedReview(t *testing.T) {
 	ref, err := reference.WithTag(repoName, tagName)
 	require.NoError(t, err)
 
-	tagDeleteURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
 
 	start := time.Now()
-	resp, err := httpDelete(tagDeleteURL)
+	resp, err := httpDelete(manifestURL)
 	end := time.Now()
 	require.NoError(t, err)
 	defer resp.Body.Close()

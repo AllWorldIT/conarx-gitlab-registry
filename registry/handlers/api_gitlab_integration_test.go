@@ -218,8 +218,10 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingTopLevel(t *tes
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
-	env := newTestEnv(t)
+func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
+	t.Helper()
+
+	env := newTestEnv(t, opts...)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
@@ -695,6 +697,15 @@ func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
 	}
 }
 
+func TestGitlabAPI_RepositoryTagsList_WithCentralRepositoryCache(t *testing.T) {
+	srv := testutil.RedisServer(t)
+	testGitlabApiRepositoryGet(t, withRedisCache(srv.Addr()))
+}
+
+func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
+	testGitlabApiRepositoryTagsList(t)
+}
+
 // TestGitlabAPI_RepositoryTagsList_PublishedAt is similar to TestGitlabAPI_RepositoryTagsList but
 // we focus comparisons on sorting by published_at and updated_at.
 func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
@@ -1023,7 +1034,7 @@ func TestGitlabAPI_RepositoryTagsList_RepositoryNotFound(t *testing.T) {
 }
 
 func TestGitlabAPI_RepositoryTagsList_EmptyRepository(t *testing.T) {
-	env := newTestEnv(t)
+	env := newTestEnv(t, withDelete)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
@@ -1037,10 +1048,10 @@ func TestGitlabAPI_RepositoryTagsList_EmptyRepository(t *testing.T) {
 	ref, err := reference.WithTag(imageName, tag)
 	require.NoError(t, err)
 
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
 
-	res, err := httpDelete(tagURL)
+	res, err := httpDelete(manifestURL)
 	require.NoError(t, err)
 	defer res.Body.Close()
 
@@ -1475,7 +1486,7 @@ func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
 }
 
 func TestGitlabAPI_SubRepositoryList_EmptyTagRepository(t *testing.T) {
-	env := newTestEnv(t)
+	env := newTestEnv(t, withDelete)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
@@ -1489,10 +1500,10 @@ func TestGitlabAPI_SubRepositoryList_EmptyTagRepository(t *testing.T) {
 	ref, err := reference.WithTag(baseRepoName, tag)
 	require.NoError(t, err)
 
-	tagURL, err := env.builder.BuildTagURL(ref)
+	manifestURL, err := env.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
 
-	res, err := httpDelete(tagURL)
+	res, err := httpDelete(manifestURL)
 	require.NoError(t, err)
 	defer res.Body.Close()
 

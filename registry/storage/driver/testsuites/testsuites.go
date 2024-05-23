@@ -1274,7 +1274,7 @@ func (suite *DriverSuite) TestWalkParallelError(c *check.C) {
 func (suite *DriverSuite) TestWalkParallelStopsProcessingOnError(c *check.C) {
 	d := suite.StorageDriver.Name()
 	switch d {
-	case "oss", "swift", "filesystem", "azure":
+	case "filesystem", "azure":
 		c.Skip(fmt.Sprintf("%s driver does not support true WalkParallel", d))
 	case "gcs":
 		parallelWalk := os.Getenv("GCS_PARALLEL_WALK")

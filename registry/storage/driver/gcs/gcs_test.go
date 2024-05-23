@@ -529,27 +529,27 @@ func TestURLFor_AdditionalQueryParams(t *testing.T) {
 	require.NoError(t, err)
 	u, err := url.Parse(s)
 	require.NoError(t, err)
-	require.Empty(t, u.Query().Get(customGitlabGoogleNamespaceParam))
-	require.Empty(t, u.Query().Get(customGitlabGoogleProjectParam))
+	require.Empty(t, u.Query().Get(customGitlabGoogleNamespaceIdParam))
+	require.Empty(t, u.Query().Get(customGitlabGoogleProjectIdParam))
 	require.Empty(t, u.Query().Get(customGitlabGoogleAuthTypeParam))
 	require.Empty(t, u.Query().Get(customGitlabGoogleObjectSizeParam))
 
 	// custom
 	opts := map[string]any{
-		"namespace":    "gitlab-org",
-		"project_path": "gitlab-org-container-registry",
+		"namespace_id": int64(345),
+		"project_id":   int64(123),
 		"auth_type":    "pat",
-		"size_bytes":   "123",
+		"size_bytes":   int64(123),
 	}
 	s, err = d.URLFor(ctx, fp, opts)
 	require.NoError(t, err)
 
 	u, err = url.Parse(s)
 	require.NoError(t, err)
-	require.Equal(t, opts["namespace"], u.Query().Get(customGitlabGoogleNamespaceParam))
-	require.Equal(t, opts["project_path"], u.Query().Get(customGitlabGoogleProjectParam))
+	require.Equal(t, fmt.Sprintf("%v", opts["namespace_id"]), u.Query().Get(customGitlabGoogleNamespaceIdParam))
+	require.Equal(t, fmt.Sprintf("%v", opts["project_id"]), u.Query().Get(customGitlabGoogleProjectIdParam))
 	require.Equal(t, opts["auth_type"], u.Query().Get(customGitlabGoogleAuthTypeParam))
-	require.Equal(t, opts["size_bytes"], u.Query().Get(customGitlabGoogleObjectSizeParam))
+	require.EqualValues(t, fmt.Sprintf("%v", opts["size_bytes"]), u.Query().Get(customGitlabGoogleObjectSizeParam))
 }
 
 func TestCustomParams(t *testing.T) {
@@ -561,16 +561,16 @@ func TestCustomParams(t *testing.T) {
 		{
 			name: "all params",
 			opt: map[string]any{
-				"namespace":    "gitlab-org",
-				"project_path": "gitlab-org-container-registry",
+				"namespace_id": int64(345),
+				"project_id":   int64(123),
 				"auth_type":    "pat",
-				"size_bytes":   "123",
+				"size_bytes":   int64(123),
 			},
 			expectedURLValues: url.Values{
-				customGitlabGoogleAuthTypeParam:   []string{"pat"},
-				customGitlabGoogleProjectParam:    []string{"gitlab-org-container-registry"},
-				customGitlabGoogleNamespaceParam:  []string{"gitlab-org"},
-				customGitlabGoogleObjectSizeParam: []string{"123"},
+				customGitlabGoogleAuthTypeParam:    []string{"pat"},
+				customGitlabGoogleProjectIdParam:   []string{"123"},
+				customGitlabGoogleNamespaceIdParam: []string{"345"},
+				customGitlabGoogleObjectSizeParam:  []string{"123"},
 			},
 		},
 		{
@@ -583,25 +583,25 @@ func TestCustomParams(t *testing.T) {
 		{
 			name: "some params",
 			opt: map[string]any{
-				"namespace":    "gitlab-org",
-				"project_path": "gitlab-org-container-registry",
+				"namespace_id": int64(345),
+				"project_id":   int64(123),
 			},
 			expectedURLValues: url.Values{
-				customGitlabGoogleProjectParam:   []string{"gitlab-org-container-registry"},
-				customGitlabGoogleNamespaceParam: []string{"gitlab-org"},
+				customGitlabGoogleProjectIdParam:   []string{"123"},
+				customGitlabGoogleNamespaceIdParam: []string{"345"},
 			},
 		},
 		{
 			name: "unexpected type params",
 			opt: map[string]any{
 				"auth_type":    []string{"pat", "ldap"},
-				"namespace":    "gitlab-org",
-				"project_path": "gitlab-org-container-registry",
-				"size_bytes":   int64(123),
+				"namespace_id": int64(345),
+				"project_id":   int64(123),
+				"size_bytes":   time.Now(),
 			},
 			expectedURLValues: url.Values{
-				customGitlabGoogleProjectParam:   []string{"gitlab-org-container-registry"},
-				customGitlabGoogleNamespaceParam: []string{"gitlab-org"},
+				customGitlabGoogleProjectIdParam:   []string{"123"},
+				customGitlabGoogleNamespaceIdParam: []string{"345"},
 			},
 		},
 	}

@@ -164,6 +164,58 @@ func TestRetryingSink(t *testing.T) {
 	}
 }
 
+type flakySink struct {
+	Sink
+	rate float64
+}
+
+func (fs *flakySink) Write(event *Event) error {
+	if rand.Float64() < fs.rate {
+		return fmt.Errorf("error writing event")
+	}
+
+	return fs.Sink.Write(event)
+}
+
+func TestBackoffSink(t *testing.T) {
+	tcs := map[string]struct {
+		maxRetries    int
+		failCount     int
+		expectedError bool
+	}{
+		"fail count below max retries succeeds": {
+			maxRetries:    3,
+			failCount:     2,
+			expectedError: false,
+		},
+		"always fails": {
+			maxRetries:    1,
+			failCount:     2,
+			expectedError: true,
+		},
+	}
+
+	for tn, tc := range tcs {
+		t.Run(tn, func(t *testing.T) {
+			failing := &failingSink{
+				failBelowCount: tc.failCount,
+				Sink:           &testSink{},
+			}
+
+			s := newBackoffSink(failing, 10*time.Millisecond, tc.maxRetries)
+			event := createTestEvent("push", "library/test", "blob")
+			err := s.Write(&event)
+			if tc.expectedError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			checkClose(t, s)
+		})
+	}
+}
+
 type testSink struct {
 	events []*Event
 	mu     sync.Mutex
@@ -196,13 +248,15 @@ func (ds *delayedSink) Write(event *Event) error {
 	return ds.Sink.Write(event)
 }
 
-type flakySink struct {
+type failingSink struct {
 	Sink
-	rate float64
+	currentCount   int
+	failBelowCount int
 }
 
-func (fs *flakySink) Write(event *Event) error {
-	if rand.Float64() < fs.rate {
+func (fs *failingSink) Write(event *Event) error {
+	fs.currentCount++
+	if fs.currentCount <= fs.failBelowCount {
 		return fmt.Errorf("error writing event")
 	}
 

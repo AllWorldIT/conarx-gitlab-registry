@@ -2,20 +2,19 @@ package storage
 
 import (
 	"context"
-	"strings"
-
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
+	"github.com/docker/distribution/registry/auth/token"
 	"github.com/docker/distribution/registry/storage/driver"
 )
 
 const (
 	// AuthTypeKey is the key used to reference a request's authentication type in the options map passed to a driver's `URLFor` method
 	AuthTypeKey = "auth_type"
-	// ProjectPathKey is the key used to reference a request's GitLab project in the options map passed to a driver's `URLFor` method.
-	ProjectPathKey = "project_path"
-	// NamespaceKey is the key used to reference a request's GitLab project namespace in the options map passed to a driver's `URLFor` method.
-	NamespaceKey = "namespace"
+	// ProjectIdKey is the key used to reference a request's GitLab project ID in the options map passed to a driver's `URLFor` method.
+	ProjectIdKey = "project_id"
+	// NamespaceIdKey is the key used to reference a request's GitLab namespace ID in the options map passed to a driver's `URLFor` method.
+	NamespaceIdKey = "namespace_id"
 	// SizeBytesKey is the key used to reference the size of an object to be downloaded in the options map passed to a driver's `URLFor` method.
 	SizeBytesKey = "size_bytes"
 
@@ -24,7 +23,7 @@ const (
 	repositoryNameContextKey = "vars.name"
 )
 
-// Exists provides a utility method to test whether or not a path exists in
+// Exists provides a utility method to test whether a path exists in
 // the given driver.
 func exists(ctx context.Context, drv driver.StorageDriver, path string) (bool, error) {
 	if _, err := drv.Stat(ctx, path); err != nil {
@@ -39,9 +38,8 @@ func exists(ctx context.Context, drv driver.StorageDriver, path string) (bool, e
 	return true, nil
 }
 
-// injectCustomKeyOpts injects the `namespace`, `project_path` and `auth_type` keys
-// as well as the key value pairs in the extraOpts into opts parameter.
-func injectCustomKeyOpts(ctx context.Context, opts map[string]any, extraOpts map[string]string) {
+// injectCustomKeyOpts injects GitLab metadata in the extraOpts into opts parameter.
+func injectCustomKeyOpts(ctx context.Context, opts map[string]any, extraOpts map[string]any) {
 	if opts == nil {
 		return
 	}
@@ -51,15 +49,12 @@ func injectCustomKeyOpts(ctx context.Context, opts map[string]any, extraOpts map
 		opts[k] = v
 	}
 
-	authProjectPaths := dcontext.GetStringSliceValue(ctx, auth.ResourceProjectPathsKey)
-	repositoryPath := dcontext.GetStringValue(ctx, repositoryNameContextKey)
+	if nid := dcontext.GetInt64Value(ctx, token.EgressNamespaceIdKey); nid > 0 {
+		opts[NamespaceIdKey] = nid
+	}
 
-	// find the project path that corresponds to the repository path in the request
-	for _, authProjectPath := range authProjectPaths {
-		if strings.HasPrefix(repositoryPath, authProjectPath) {
-			opts[ProjectPathKey] = authProjectPath
-			opts[NamespaceKey] = strings.Split(repositoryPath, "/")[0]
-		}
+	if pid := dcontext.GetInt64Value(ctx, token.EgressProjectIdKey); pid > 0 {
+		opts[ProjectIdKey] = pid
 	}
 
 	if authType := dcontext.GetStringValue(ctx, auth.UserTypeKey); authType != "" {
