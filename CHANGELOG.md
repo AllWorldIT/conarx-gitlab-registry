@@ -1,3 +1,16 @@
+## [4.2.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.1.0-gitlab...v4.2.0-gitlab) (2024-05-24)
+
+
+### ✨ Features ✨
+
+* **api/gitlab/v1:** log if repository size was obtained from cache ([8365e46](https://gitlab.com/gitlab-org/container-registry/commit/8365e467ffdd3af2ee03837ce7a83cf212cdddec))
+* **gc:** allow gc to back off on intermittent failures ([c2a5be3](https://gitlab.com/gitlab-org/container-registry/commit/c2a5be36adef98904faf4451630fa9f9aab80b5f))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **configuration:** fix json tag typo causing runtime panic ([f749e83](https://gitlab.com/gitlab-org/container-registry/commit/f749e83e109ff783e8cf9c3f0ecf4c798f8cef82))
+
 ## [4.1.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.0.0-gitlab...v4.1.0-gitlab) (2024-05-06)
 
 
