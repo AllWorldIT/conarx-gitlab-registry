@@ -247,26 +247,6 @@ func (s *manifestStore) References(ctx context.Context, m *models.Manifest) (mod
 	return scanFullManifests(rows)
 }
 
-func mapMediaType(ctx context.Context, db Queryer, mediaType string) (int, error) {
-	q := `SELECT
-			id
-		FROM
-			media_types
-		WHERE
-			media_type = $1`
-
-	var id int
-	row := db.QueryRowContext(ctx, q, mediaType)
-	if err := row.Scan(&id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, ErrUnknownMediaType{MediaType: mediaType}
-		}
-		return 0, fmt.Errorf("unable to map media type: %w", err)
-	}
-
-	return id, nil
-}
-
 // Create saves a new Manifest.
 func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 	defer metrics.InstrumentQuery("manifest_create")()
@@ -281,14 +261,17 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 	if err != nil {
 		return err
 	}
-	mediaTypeID, err := mapMediaType(ctx, s.db, m.MediaType)
+
+	mtStore := NewMediaTypeStore(s.db)
+
+	mediaTypeID, err := mtStore.MapMediaType(ctx, m.MediaType)
 	if err != nil {
 		return fmt.Errorf("mapping manifest media type: %w", err)
 	}
 
 	var artifactTypeID sql.NullInt64
 	if m.ArtifactType.Valid {
-		aid, err := mapMediaType(ctx, s.db, m.ArtifactType.String)
+		aid, err := mtStore.MapMediaType(ctx, m.ArtifactType.String)
 		if err != nil {
 			return fmt.Errorf("mapping manifest artifact type: %w", err)
 		}
@@ -306,7 +289,7 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 		}
 		configDgst.Valid = true
 		configDgst.String = dgst.String()
-		id, err := mapMediaType(ctx, s.db, m.Configuration.MediaType)
+		id, err := mtStore.MapMediaType(ctx, m.Configuration.MediaType)
 		if err != nil {
 			return fmt.Errorf("mapping config media type: %w", err)
 		}
@@ -344,14 +327,17 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 	if err != nil {
 		return err
 	}
-	mediaTypeID, err := mapMediaType(ctx, s.db, m.MediaType)
+
+	mtStore := NewMediaTypeStore(s.db)
+
+	mediaTypeID, err := mtStore.MapMediaType(ctx, m.MediaType)
 	if err != nil {
 		return fmt.Errorf("mapping manifest media type: %w", err)
 	}
 
 	var artifactTypeID sql.NullInt64
 	if m.ArtifactType.Valid {
-		aid, err := mapMediaType(ctx, s.db, m.ArtifactType.String)
+		aid, err := mtStore.MapMediaType(ctx, m.ArtifactType.String)
 		if err != nil {
 			return fmt.Errorf("mapping manifest artifact type: %w", err)
 		}
@@ -369,7 +355,7 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 		}
 		configDgst.Valid = true
 		configDgst.String = dgst.String()
-		id, err := mapMediaType(ctx, s.db, m.Configuration.MediaType)
+		id, err := mtStore.MapMediaType(ctx, m.Configuration.MediaType)
 		if err != nil {
 			return fmt.Errorf("mapping config media type: %w", err)
 		}
@@ -452,7 +438,10 @@ func (s *manifestStore) AssociateLayerBlob(ctx context.Context, m *models.Manife
 	if err != nil {
 		return err
 	}
-	mediaTypeID, err := mapMediaType(ctx, s.db, b.MediaType)
+
+	mtStore := NewMediaTypeStore(s.db)
+
+	mediaTypeID, err := mtStore.MapMediaType(ctx, b.MediaType)
 	if err != nil {
 		return err
 	}
