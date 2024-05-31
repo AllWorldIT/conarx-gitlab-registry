@@ -5610,6 +5610,7 @@ CREATE TABLE public.media_types (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     id smallint NOT NULL,
     media_type text NOT NULL,
+    CONSTRAINT check_media_types_media_type_not_empty_string CHECK ((length(TRIM(BOTH FROM media_type)) > 0)),
     CONSTRAINT check_media_types_type_length CHECK ((char_length(media_type) <= 255))
 );
 
