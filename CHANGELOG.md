@@ -1,3 +1,15 @@
+## [4.3.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.2.0-gitlab...v4.3.0-gitlab) (2024-06-04)
+
+
+### ✨ Features ✨
+
+* **api/gitlab/v1:** prevent early invalidation of top-level namespace cached sizes ([1fc2d08](https://gitlab.com/gitlab-org/container-registry/commit/1fc2d0813c93c4bf3aa1f0b476f4ef83504f75bc))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **datastore:** add constraint to prevent inserts of empty media types ([b4ee29b](https://gitlab.com/gitlab-org/container-registry/commit/b4ee29bd3c9f15a5e490d4fac2bd42faa5864470))
+
 ## [4.2.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.1.0-gitlab...v4.2.0-gitlab) (2024-05-24)
 
 
