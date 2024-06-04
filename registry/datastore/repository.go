@@ -40,8 +40,8 @@ const (
 	lessThan    = "<"
 	greaterThan = ">"
 
-	// sizeWithDescendantsKeyTTL is the TTL for the computed value of the "size with descendants" for a given repository.
-	sizeWithDescendantsKeyTTL = 5 * time.Minute
+	// sizeWithDescendantsKeyTTL is the TTL for the cached value of the "size with descendants" for a given repository.
+	sizeWithDescendantsKeyTTL = 2 * time.Minute
 )
 
 // FilterParams contains the specific filters used to get
@@ -214,8 +214,6 @@ type RepositoryCache interface {
 	// GetSizeWithDescendants gets the computed "size with descendants" of a given repository. Returns whether the key
 	// was found and its value.
 	GetSizeWithDescendants(ctx context.Context, r *models.Repository) (bool, int64)
-	// InvalidateRootSizeWithDescendants invalidates the computed "size with descendants" for the root of a given repository.
-	InvalidateRootSizeWithDescendants(ctx context.Context, r *models.Repository)
 }
 
 // noOpRepositoryCache satisfies the RepositoryCache, but does not cache anything.
@@ -423,12 +421,6 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 		err := fmt.Errorf("%q: %q", detail, err)
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
-
-	// This is needed to address the performance concerns from repetitive storage usage calculations. We'll start by
-	// invalidating the cached "size with descendants" for the top-level namespace every time the cached size of a
-	// repository under it is invalidated. If this proves to be insufficient we can just let them expire (TTL).
-	// See https://gitlab.com/gitlab-org/container-registry/-/issues/1255 for more details.
-	c.InvalidateRootSizeWithDescendants(ctx, r)
 }
 
 // sizeWithDescendantsKey generates a valid Redis key string for the cached result of the last "size with descendants"
@@ -475,20 +467,6 @@ func (c *centralRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *
 	}
 
 	return true, *size
-}
-
-// InvalidateRootSizeWithDescendants implements RepositoryCache.
-func (c *centralRepositoryCache) InvalidateRootSizeWithDescendants(ctx context.Context, r *models.Repository) {
-	invalCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
-	defer cancel()
-
-	log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"root_repo": r.TopLevelPathSegment()}).Info("invalidating root repository size with descendants in cache")
-
-	if err := c.marshaler.Delete(invalCtx, c.sizeWithDescendantsKey(r.TopLevelPathSegment())); err != nil {
-		e := fmt.Errorf("failed to invalidate root repository size with descendants in cache: %w", err)
-		log.GetLogger(log.WithContext(ctx)).WithError(e).Warn()
-		errortracking.Capture(e, errortracking.WithContext(ctx), errortracking.WithStackTrace())
-	}
 }
 
 func scanFullRepository(row *sql.Row) (*models.Repository, error) {
