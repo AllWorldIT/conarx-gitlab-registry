@@ -39,6 +39,12 @@ var DynamicMediaTypes = Feature{
 	EnvVariable: "REGISTRY_FF_DYNAMIC_MEDIA_TYPES",
 }
 
+// BBMProcess is used to decide if the registry should (or should not) start the asynchronous batched backround migration process when serving traffic.
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-background-migrations.md?ref_type=heads#asynchronous-execution-when-serving-requests-on-the-registry
+var BBMProcess = Feature{
+	EnvVariable: "REGISTRY_FF_BBM",
+}
+
 // testFeature is used for testing purposes only
 var testFeature = Feature{
 	EnvVariable: "REGISTRY_FF_TEST",
@@ -47,6 +53,8 @@ var testFeature = Feature{
 var all = []Feature{
 	testFeature,
 	OngoingRenameCheck,
+	DynamicMediaTypes,
+	BBMProcess,
 }
 
 // KnownEnvVar evaluates whether the input string matches the name of one of the known feature flag env vars.
