@@ -2154,20 +2154,13 @@ func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
 	}
 }
 
-func TestGitlabAPI_RenameRepositoryNamespace_Invalid(t *testing.T) {
-
+func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
+	nestedRepos := []string{"foo/bar/project/a"}
 	baseRepoName, err := reference.WithName("foo/bar/project")
-	newNamespace := "foo/foo"
 	require.NoError(t, err)
+	newNamespace := "foo/foo"
 
 	tokenProvider := NewAuthTokenProvider(t)
-	srv := testutil.RedisServer(t)
-	env := newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
-
-	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName)
-	require.NoError(t, err)
 
 	tt := []struct {
 		name               string
@@ -2212,9 +2205,9 @@ func TestGitlabAPI_RenameRepositoryNamespace_Invalid(t *testing.T) {
 			requestBody:        []byte(`{ "namespace" : "foo" }`),
 		},
 		{
-			name:               "namespace rename not implemented",
-			expectedRespError:  &v1.ErrorCodeNotImplemented,
-			expectedRespStatus: http.StatusNotFound,
+			name:               "namespace rename implemented",
+			expectedRespError:  nil,
+			expectedRespStatus: http.StatusNoContent,
 			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), newNamespace),
 			requestBody:        []byte(`{ "namespace" : "` + newNamespace + `" }`),
 		},
@@ -2222,7 +2215,22 @@ func TestGitlabAPI_RenameRepositoryNamespace_Invalid(t *testing.T) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			// create request
+			// apply base app config/setup (without authorization) to allow seeding repository with test data
+			env := newTestEnv(t)
+			env.requireDB(t)
+			t.Cleanup(env.Shutdown)
+
+			// seed repos
+			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+
+			// override test config/setup to use token based authorization for all proceeding requests
+			srv := testutil.RedisServer(t)
+			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+			// create and execute test request
+			u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName)
+			require.NoError(t, err)
+
 			req, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader(test.requestBody))
 			require.NoError(t, err)
 
@@ -2236,7 +2244,9 @@ func TestGitlabAPI_RenameRepositoryNamespace_Invalid(t *testing.T) {
 
 			// assert results
 			require.Equal(t, test.expectedRespStatus, resp.StatusCode)
-			checkBodyHasErrorCodes(t, "", resp, *test.expectedRespError)
+			if test.expectedRespError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *test.expectedRespError)
+			}
 		})
 	}
 }
