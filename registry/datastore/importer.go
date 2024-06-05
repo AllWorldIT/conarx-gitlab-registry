@@ -1132,30 +1132,39 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 	l.Info("starting metadata import")
 
 	if pre {
+		start := time.Now()
 		imp.printBar(bar, "step one: import manifests")
 
 		if err := imp.preImportAllRepositories(ctx); err != nil {
 			return fmt.Errorf("pre importing all repositories: %w", err)
 		}
+
+		imp.printBar(bar, fmt.Sprintf("step one completed in %s", time.Since(start).Round(time.Second)))
 	}
 
 	if repos {
+		start := time.Now()
 		imp.printBar(bar, "step two: import tags")
 
 		if err := imp.importAllRepositories(ctx); err != nil {
 			return fmt.Errorf("importing all repositories: %w", err)
 		}
+
+		imp.printBar(bar, fmt.Sprintf("step two completed in %s", time.Since(start).Round(time.Second)))
 	}
 
 	if blobs {
+		start := time.Now()
 		imp.printBar(bar, "step three: import blobs")
 
 		if err := imp.importBlobs(ctx); err != nil {
 			return fmt.Errorf("importing blobs: %w", err)
 		}
+
+		imp.printBar(bar, fmt.Sprintf("step three completed in %s", time.Since(start).Round(time.Second)))
 	}
 
-	imp.printBar(bar, "registry import complete")
+	bar.Describe("registry import complete")
 
 	t := time.Since(start).Seconds()
 
