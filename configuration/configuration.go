@@ -291,6 +291,10 @@ type RedisCache struct {
 	TLS RedisTLS `yaml:"tls,omitempty"`
 	// Pool configures the behavior of the redis connection pool.
 	Pool RedisPool `yaml:"pool,omitempty"`
+	// SentinelUsername configures the username for Sentinel authentication.
+	SentinelUsername string `yaml:"sentinelusername,omitempty"`
+	// SentinelUsername configures the password for Sentinel authentication.
+	SentinelPassword string `yaml:"sentinelpassword,omitempty"`
 }
 
 // Redis configures the redis instance(s) available to the application. Separate Redis instances for different

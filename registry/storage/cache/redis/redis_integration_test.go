@@ -39,10 +39,12 @@ func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
 	}
 
 	return &redis.UniversalOptions{
-		Addrs:      strings.Split(os.Getenv("REDIS_ADDR"), ","),
-		DB:         db,
-		Password:   os.Getenv("REDIS_PASSWORD"),
-		MasterName: os.Getenv("REDIS_MAIN_NAME"),
+		Addrs:            strings.Split(os.Getenv("REDIS_ADDR"), ","),
+		DB:               db,
+		Password:         os.Getenv("REDIS_PASSWORD"),
+		MasterName:       os.Getenv("REDIS_MAIN_NAME"),
+		SentinelUsername: os.Getenv("REDIS_SENTINEL_USERNAME"),
+		SentinelPassword: os.Getenv("REDIS_SENTINEL_PASSWORD"),
 	}
 }
 
