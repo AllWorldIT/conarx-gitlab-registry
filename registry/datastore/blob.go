@@ -160,7 +160,7 @@ func (s *blobStore) Create(ctx context.Context, b *models.Blob) error {
 
 	mtStore := NewMediaTypeStore(s.db)
 
-	mediaTypeID, err := mtStore.MapMediaType(ctx, b.MediaType)
+	mediaTypeID, err := mtStore.FindID(ctx, b.MediaType)
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func (s *blobStore) CreateOrFind(ctx context.Context, b *models.Blob) error {
 
 	mtStore := NewMediaTypeStore(s.db)
 
-	mediaTypeID, err := mtStore.MapMediaType(ctx, b.MediaType)
+	mediaTypeID, err := mtStore.FindID(ctx, b.MediaType)
 	if err != nil {
 		return err
 	}
