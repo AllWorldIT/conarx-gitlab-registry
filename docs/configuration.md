@@ -264,6 +264,8 @@ redis:
   dialtimeout: 10ms
   readtimeout: 10ms
   writetimeout: 10ms
+  sentinelusername: my-sentinel-username
+  sentinelpassword: some-sentinel-password
   tls:
     enabled: true
     insecure: true
@@ -1117,15 +1119,17 @@ Redis with the `allkeys-lru` eviction policy, because the registry does not set 
 
 For other caching purposes/features, please see the new dedicated `redis.cache` subsection.
 
-| Parameter      | Required | Description                                                                                                           |
-|----------------|----------|-----------------------------------------------------------------------------------------------------------------------|
-| `addr`         | yes      | The address (host and port) of the Redis instance. For Sentinel it should be a list of addresses separated by commas. |
-| `mainname`     | no       | The main server name. Only applicable for Sentinel.                                                                   |
-| `password`     | no       | A password used to authenticate to the Redis instance.                                                                |
-| `db`           | no       | The name of the database to use for each connection.                                                                  |
-| `dialtimeout`  | no       | The timeout for connecting to the Redis instance. Defaults to no timeout.                                             |
-| `readtimeout`  | no       | The timeout for reading from the Redis instance. Defaults to no timeout.                                              |
-| `writetimeout` | no       | The timeout for writing to the Redis instance. Defaults to no timeout.                                                |
+| Parameter          | Required | Description                                                                                                           |
+|--------------------|----------|-----------------------------------------------------------------------------------------------------------------------|
+| `addr`             | yes      | The address (host and port) of the Redis instance. For Sentinel it should be a list of addresses separated by commas. |
+| `mainname`         | no       | The main server name. Only applicable for Sentinel.                                                                   |
+| `password`         | no       | A password used to authenticate to the Redis instance.                                                                |
+| `sentinelusername` | no       | A username used to authenticate to the Redis Sentinel instance.                                                       |
+| `sentinelpassword` | no       | A password used to authenticate to the Redis Sentinel instance.                                                       |
+| `db`               | no       | The name of the database to use for each connection.                                                                  |
+| `dialtimeout`      | no       | The timeout for connecting to the Redis instance. Defaults to no timeout.                                             |
+| `readtimeout`      | no       | The timeout for reading from the Redis instance. Defaults to no timeout.                                              |
+| `writetimeout`     | no       | The timeout for writing to the Redis instance. Defaults to no timeout.                                                |
 
 ### `tls`
 
@@ -1168,6 +1172,8 @@ redis:
     addr: localhost:16379,localhost:26379
     mainname: mainserver
     password: asecret
+    sentinelusername: my-sentinel-username
+    sentinelpassword: some-sentinel-password
     db: 0
     dialtimeout: 10ms
     readtimeout: 10ms

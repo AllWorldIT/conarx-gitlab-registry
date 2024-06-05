@@ -790,15 +790,17 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 	}
 
 	opts := &redis.UniversalOptions{
-		Addrs:           strings.Split(config.Redis.Cache.Addr, ","),
-		DB:              config.Redis.Cache.DB,
-		Password:        config.Redis.Cache.Password,
-		DialTimeout:     config.Redis.Cache.DialTimeout,
-		ReadTimeout:     config.Redis.Cache.ReadTimeout,
-		WriteTimeout:    config.Redis.Cache.WriteTimeout,
-		PoolSize:        config.Redis.Cache.Pool.Size,
-		ConnMaxLifetime: config.Redis.Cache.Pool.MaxLifetime,
-		MasterName:      config.Redis.Cache.MainName,
+		Addrs:            strings.Split(config.Redis.Cache.Addr, ","),
+		DB:               config.Redis.Cache.DB,
+		Password:         config.Redis.Cache.Password,
+		DialTimeout:      config.Redis.Cache.DialTimeout,
+		ReadTimeout:      config.Redis.Cache.ReadTimeout,
+		WriteTimeout:     config.Redis.Cache.WriteTimeout,
+		PoolSize:         config.Redis.Cache.Pool.Size,
+		ConnMaxLifetime:  config.Redis.Cache.Pool.MaxLifetime,
+		MasterName:       config.Redis.Cache.MainName,
+		SentinelUsername: config.Redis.Cache.SentinelUsername,
+		SentinelPassword: config.Redis.Cache.SentinelPassword,
 	}
 	if config.Redis.Cache.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{

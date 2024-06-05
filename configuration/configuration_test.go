@@ -1707,6 +1707,65 @@ redis:
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_MAINNAME", tt, validator)
 }
 
+func TestParseRedisCache_SentinelUsername(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  cache:
+    enabled: true
+    mainname: default
+    sentinelusername: %s
+    sentinelpassword: somepass
+`
+	tt := []parameterTest{
+		{
+			name:  "default",
+			value: "myuser",
+			want:  "myuser",
+		},
+		{
+			name: "empty",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.Cache.SentinelUsername)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_CACHE_SENTINELUSERNAME", tt, validator)
+}
+
+func TestParseRedisCache_SentinelPassword(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  cache:
+    enabled: true
+    mainname: default
+    sentinelpassword: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "default",
+			value: "mypassword",
+			want:  "mypassword",
+		},
+		{
+			name: "empty",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.Cache.SentinelPassword)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_CACHE_SENTINELPASSWORD", tt, validator)
+}
+
 func TestParseRedisCache_Pool_MaxOpen(t *testing.T) {
 	yml := `
 version: 0.1
