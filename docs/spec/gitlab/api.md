@@ -26,7 +26,7 @@ A list of methods and URIs are covered in the table below:
 |----------|---------------------------------------------------------|-------------------------------------------------------------------------------------------------|
 | `GET`    | `/gitlab/v1/`                                           | Check that the registry implements this API specification.                                      |
 | `GET`    | `/gitlab/v1/repositories/<path>/`                       | Obtain details about the repository identified by `path`.                                       |
-| `PATCH`  | `/gitlab/v1/repositories/<path>/`                       | Rename a repository base `path` (i.e a GitLab project path) and all sub repositories under it.  |
+| `PATCH`  | `/gitlab/v1/repositories/<path>/`                       | Rename a repository origin `path` and all sub repositories under it.  |
 | `GET`    | `/gitlab/v1/repositories/<path>/tags/list/`             | Obtain the list of tags for the repository identified by `path`.                                |
 | `GET`    | `/gitlab/v1/repository-paths/<path>/repositories/list/` | Obtain the list of repositories under a base repository path identified by `path`.              |
 
@@ -448,9 +448,9 @@ The error codes encountered via this API are enumerated in the following table.
 `INVALID_QUERY_PARAMETER_VALUE` | `the value of a query parameter is invalid` | The value of a request query parameter is invalid. The error detail identifies the concerning parameter and the list of possible values.
 `INVALID_QUERY_PARAMETER_TYPE` | `the value of a query parameter is of an invalid type` | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.
 
-## Rename Base Repository
+## Rename/Move Origin Repository
 
-Rename a repository's base path (i.e a path corresponding to a GitLab project path) and all sub repositories under it. 
+Rename/Move a repository's origin path and all sub repositories under it. 
 
 For more information, see the in-depth [flow diagram `rename operation`](../../rename-base-repository-request-flow.md).
 
@@ -462,24 +462,42 @@ PATCH /gitlab/v1/repositories/<path>/
 
 | Attribute | Type   | Required | Default | Description                                                                                                                             |
 |-----------|---------|----------|---------|----------------------------------------------------------------------------------------------------------------------------------------|
-| `path`    | String  | Yes      |         | This is the GitLab project path of the repository to be renamed (it is equivalent to the base repository of a project, if one exists). |
+| `path`    | String  | Yes      |         | This is the origin path of the repository to be renamed. |
 | `dry_run` | Boolean | No       | `false` | When set to `true` this option will only; validate that a rename is indeed possible and (if possible) will acquire a rename lease on the suggested `name` in the request body for a fixed amount of time (60 seconds) without blocking writes to the existing base repository path or executing the rename.<br>When set to `false` (default) this option will; acquire a rename lease on the suggested `name` in the request body, prevent further writes to the existing base repository path for the duration of the rename operation and execute the rename operation on the necessary repositories on the spot. |
 
 #### Body
 
 The request body is an object with the following attributes:
 
-| Key          | Value                                                                   | Type   | Format                                                    | Condition                                                                                                          |
-|--------------|-------------------------------------------------------------------------|--------|-----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `name`       | The new name of the base repository (i.e. the new GitLab project name). | String |  `[a-z0-9]+([.-][a-z0-9]+)*(/[a-z0-9]+([.-][a-z0-9]+)*)` & `[a-z0-9]+(?:(?:(?:[._]|__|[-]*)[a-z0-9]+)+)?` | Must match the [GitLab project name formatting requirements](https://docs.gitlab.com/ee/user/project/) as well as the registry [`v2` OCI distribution spec requirements for repository names](https://github.com/distribution/distribution/blob/main/docs/spec/api.md#overview). |
+| Key         | Value                                                                                                                                                                                          | Type   | Format                                                                                                   | Condition                                                                                                                                                                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`      | The new name of the origin repository.                                                                                                                        | String | `[a-z0-9]+([.-][a-z0-9]+)*(/[a-z0-9]+([.-][a-z0-9]+)*)` & `[a-z0-9]+(?:(?:(?:[._]|__|[-]*)[a-z0-9]+)+)?` | Must match the [OCI Distribution spec requirements for repository names](https://github.com/distribution/distribution/blob/main/docs/spec/api.md#overview). Cannot be used together with the `namespace` attribute. |
+| `namespace` | The new origin namespace path for the target repository. The origin namespace path must not include the origin repository name in the path segment. Must be within the same top-level namespace. | String | `[a-zA-Z0-9_\-]+(?:/[a-zA-Z0-9_\-]+)*`                                                                   | Must match the [OCI Distribution spec requirements for repository names](https://github.com/distribution/distribution/blob/main/docs/spec/api.md#overview). Cannot be used together with the `name` attribute.                                                   |
+
+**NOTE**: Only `name` or `namespace` can be used in a request but not both together.
 
 #### Authentication
 
-The authentication token must have `full-access` to the base-repository (project-path) that is referenced in the request `path` parameter. 
+**Request with `name` body attribute**
 
-For example, a rename request with `path` parameter `gitlab-org/build/cng` must have `pull` & `push` scopes on the project-path - `gitlab-org/build/cng` and `pull` scope on the project's sub-paths - `gitlab-org/build/cng/*`. 
+The authentication token must have `pull`/`push` access to the origin repository path **AND** `pull` access on all sub-repositories of the origin repository path.
 
-The request authentication token must also contain access claims with the following attributes:
+For example, the token of a rename request with the `path` parameter set to `gitlab-org/build/cng` must have:
+
+- `pull` and `push` scopes on `gitlab-org/build/cng`;
+- `pull` scope on `gitlab-org/build/cng/*`;
+
+**Request with `namespace` body attribute**
+
+The authentication token must have `pull`/`push` access to the origin repository path, `pull` access on all sub-repositories of the origin repository path **AND** `push` access to the destination path.
+
+For example, the token of a rename/move request with the `path` parameter set to `gitlab-org/build/omnibus-mirror/redis` and `namespace` set to `gitlab-org/build/omnibus` must have:
+
+- `pull` and `push` scopes on `gitlab-org/build/omnibus-mirror/redis`;
+- `pull` scope on `gitlab-org/build/omnibus-mirror/redis/*`;
+- `push` scope on `gitlab-org/build/omnibus/*`. 
+
+Both (`name` ad `namespace`) rename request authentication tokens must also contain access claims with the following attributes:
 
 | Key | Description| Format | Condition | Example |
 |-----|------------|--------|-----------|---------|
@@ -487,10 +505,24 @@ The request authentication token must also contain access claims with the follow
 
 #### Example
 
+**Request with `name` body attribute**
+
+The request below renames the `gitlab-org/build/cng` origin repository (and all its sub-repositories) to `gitlab-org/build/new-cng`:
+
 ```shell
 curl  --header "Authorization: Bearer <token>" -X PATCH https://registry.gitlab.com/gitlab/v1/repositories/gitlab-org/build/cng/ \
    -H 'Content-Type: application/json' \
    -d '{"name": "new-cng"}'  
+```
+
+**Request with `namespace` body attribute**
+
+The request below moves the `gitlab-org/build/omnibus-mirror/redis` origin repository (and all its sub-repositories) to a namespace under `gitlab-org/build/omnibus`, resulting in the origin repository at `gitlab-org/build/omnibus/redis`:
+
+```shell
+curl  --header "Authorization: Bearer <token>" -X PATCH https://registry.gitlab.com/gitlab/v1/repositories/gitlab-org/build/omnibus-mirror/redis/ \
+   -H 'Content-Type: application/json' \
+   -d '{"namespace": "gitlab-org/build/omnibus"}'  
 ```
 
 ### Response
@@ -499,12 +531,12 @@ curl  --header "Authorization: Bearer <token>" -X PATCH https://registry.gitlab.
 
 | Status Code                | Reason                                                                                                                                                                                                                                                                                                 |
 |----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `202 Accepted`             | The new name was successfully leased to the `path` in the request. The response body contains an object with the `ttl` indicating the time left before the lease is released. This is returned only for successful requests with query parameter `dry_run` set to `true`. |
-| `204 No Content`           | The requested `path` was successfully renamed to the suggested new name. This is returned only for successful requests with query parameter `dry_run` set to `false` (default).                                                                                                                              |
+| `202 Accepted`             | The new name/namespace was successfully leased to the `path` in the request. The response body contains an object with the `ttl` indicating the time left before the lease is released. This is returned only for successful requests with query parameter `dry_run` set to `true`. |
+| `204 No Content`           | The requested `path` was successfully renamed to the suggested new name/namespace. This is returned only for successful requests with query parameter `dry_run` set to `false` (default).                                                                                                                              |
 | `400 Bad Request`          | An invalid `path` parameter, request body or token claim was provided.                                                                                                                                                                                                                    |
 | `401 Unauthorized`         | The client should take action based on the contents of the `WWW-Authenticate` header and try the endpoint again.                                                                                                                                                                                       |
 | `404 Not Found`            | The namespace associated with the repository was not found or the rename operation is not implemented.                                                                                                                                                                                     |
-| `409 Conflict`             | The proposed base repository `name` in the body is already taken.                                                                                                                                                                                                                                      |
+| `409 Conflict`             | The proposed base repository `name` or `namespace` in the body is already taken.                                                                                                                                                                                                                                      |
 | `422 Unprocessable Entity` | The base repository `path` contains too many sub-repositories for the operation to be executed.                                                                                                                                                                                                        |
 
 #### Body

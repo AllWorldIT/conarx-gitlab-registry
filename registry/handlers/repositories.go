@@ -751,10 +751,23 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	newPath := replacePathName(repo.Path, renameObject.Name)
+	var (
+		newPath                  string
+		newName                  = renameObject.Name
+		isRenameNamespaceRequest = renameObject.Namespace != ""
+	)
+	if isRenameNamespaceRequest {
+		// bottomLevelPathSegment is the base repository name
+		pathSegments := strings.Split(h.Repository.Named().Name(), "/")
+		bottomLevelPathSegment := pathSegments[len(pathSegments)-1]
+		newPath = renameObject.Namespace + "/" + bottomLevelPathSegment
+		newName = bottomLevelPathSegment
+	} else {
+		newPath = replacePathName(repo.Path, newName)
+	}
 
 	// check that no base repository or sub repository exists for the new target path
-	nameTaken, err := isRepositoryNameTaken(h.Context, rStore, repo.NamespaceID, renameObject.Name, newPath)
+	nameTaken, err := isRepositoryNameTaken(h.Context, rStore, repo.NamespaceID, newName, newPath)
 	if nameTaken {
 		l.WithError(err).WithFields(log.Fields{
 			"rename_path": newPath,
@@ -829,7 +842,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 	defer tx.Rollback()
 
 	// run the rename operation in a transaction
-	if err = executeRenameOperation(txCtx, tx, repo, renameBaseRepo, newPath, renameObject.Name); err != nil {
+	if err = executeRenameOperation(txCtx, tx, repo, renameBaseRepo, newPath, newName); err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
@@ -1097,18 +1110,18 @@ func validateRenameRequest(renameObject *RenameRepositoryAPIRequest) error {
 
 		// isRenameProjectRequest signifies the current request is to rename a project's repositories to a new name
 		isRenameProjectRequest = newName != ""
-		// isRenameProjectNamespaceRequest signifies the current request is to move a project's repositories to a new namespace
-		isRenameProjectNamespaceRequest = newNamespacePath != ""
+		// isRenameNamespaceRequest signifies the current request is to move a project's repositories to a new namespace
+		isRenameNamespaceRequest = newNamespacePath != ""
 	)
 
 	// We do not support moving the project to a new namespace and renaming the project at the same time.
-	if isRenameProjectRequest && isRenameProjectNamespaceRequest {
+	if isRenameProjectRequest && isRenameNamespaceRequest {
 		detail := v1.OnlyOneOfParamsErrorDetail("name", "namespace")
 		return v1.ErrorCodeInvalidBodyParam.WithDetail(detail)
 
 	}
 
-	if isRenameProjectNamespaceRequest {
+	if isRenameNamespaceRequest {
 		// We only support moving to sub-namespaces (i.e groups) and not top-level-namespaces.
 		splitNewNamespace := strings.Split(newNamespacePath, "/")
 		if !reference.GitLabNamespacePathRegex.MatchString(newNamespacePath) {
@@ -1120,9 +1133,6 @@ func validateRenameRequest(renameObject *RenameRepositoryAPIRequest) error {
 		if len(splitNewNamespace) < 2 {
 			return v1.ErrorCodeInvalidBodyParam.WithDetail("top level namespaces can not be changed")
 		}
-
-		// TODO: Implement the move repository functionality: https://gitlab.com/gitlab-org/container-registry/-/issues/1172
-		return v1.ErrorCodeNotImplemented.WithDetail("moving repositories to a new namespace is not implemented")
 	} else {
 		// validate the name suggested for the rename operation
 		if !reference.GitLabProjectNameRegex.MatchString(newName) || !reference.NameComponentRegexp.MatchString(newName) {
