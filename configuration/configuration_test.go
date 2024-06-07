@@ -1852,3 +1852,206 @@ redis:
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_POOL_IDLETIMEOUT", tt, validator)
 }
+
+func TestParseRedisRateLimiter_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: %s
+`
+	tt := boolParameterTests(false)
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_ENABLED", tt, validator)
+}
+
+func TestParseRedisRateLimiter_TLS_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    tls:
+      enabled: %s
+`
+	tt := boolParameterTests(false)
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_TLS_ENABLED", tt, validator)
+}
+
+func TestParseRedisRateLimiter_TLS_Insecure(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    tls:
+      insecure: %s
+`
+	tt := boolParameterTests(false)
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Insecure))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_TLS_INSECURE", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Addr(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    addr: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "single",
+			value: "0.0.0.0:6379",
+			want:  "0.0.0.0:6379",
+		},
+		{
+			name:  "multiple",
+			value: "0.0.0.0:16379,0.0.0.0:26379",
+			want:  "0.0.0.0:16379,0.0.0.0:26379",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.Addr)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_ADDR", tt, validator)
+}
+
+func TestParseRedisRateLimiter_MainName(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    mainname: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "myredismainserver",
+			want:  "myredismainserver",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.MainName)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_MAINNAME", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Pool_MaxOpen(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    pool:
+      size: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "10",
+			want:  10,
+		},
+		{
+			name: "empty",
+			want: 0,
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.Pool.Size)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_SIZE", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Pool_MaxLifeTime(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    pool:
+      maxlifetime: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "1h",
+			want:  1 * time.Hour,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.Pool.MaxLifetime)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_MAXLIFETIME", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Pool_IdleTimeout(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    pool:
+      idletimeout: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "300s",
+			want:  300 * time.Second,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.Pool.IdleTimeout)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_IDLETIMEOUT", tt, validator)
+}

@@ -268,8 +268,7 @@ type RedisPool struct {
 	IdleTimeout time.Duration `yaml:"idletimeout,omitempty"`
 }
 
-// RedisCache specifies custom settings for a Redis instance to be used for caching features.
-type RedisCache struct {
+type RedisCommon struct {
 	// Enabled is a simple toggle for the Redis cache. Defaults to false.
 	Enabled bool `yaml:"enabled,omitempty"`
 	// Addr specifies the redis instance available to the application. For Sentinel, it should be a list of
@@ -277,6 +276,8 @@ type RedisCache struct {
 	Addr string `yaml:"addr,omitempty"`
 	// MainName specifies the main server name. Only for Sentinel connections.
 	MainName string `yaml:"mainname,omitempty"`
+	// Username string to connect as to the Redis instance or cluster.
+	Username string `yaml:"username,omitempty"`
 	// Password string to use when making a connection.
 	Password string `yaml:"password,omitempty"`
 	// DB specifies the database to connect to on the redis instance.
@@ -305,6 +306,8 @@ type Redis struct {
 	Addr string `yaml:"addr,omitempty"`
 	// MainName specifies the main server name. Only for Sentinel connections.
 	MainName string `yaml:"mainname,omitempty"`
+	// Username string to connect as to the Redis instance or cluster.
+	Username string `yaml:"username,omitempty"`
 	// Password string to use when making a connection.
 	Password string `yaml:"password,omitempty"`
 	// DB specifies the database to connect to on the redis instance.
@@ -319,8 +322,14 @@ type Redis struct {
 	TLS RedisTLS `yaml:"tls,omitempty"`
 	// Pool configures the behavior of the redis connection pool.
 	Pool RedisPool `yaml:"pool,omitempty"`
+	// SentinelUsername configures the username for Sentinel authentication.
+	SentinelUsername string `yaml:"sentinelusername,omitempty"`
+	// SentinelUsername configures the password for Sentinel authentication.
+	SentinelPassword string `yaml:"sentinelpassword,omitempty"`
 	// Cache specifies custom settings for a Redis instance to be used for caching features.
-	Cache RedisCache `yaml:"cache,omitempty"`
+	Cache RedisCommon `yaml:"cache,omitempty"`
+	// RateLimiter configures custom settings for Redis instance used for rate limiting.
+	RateLimiter RedisCommon `yaml:"ratelimiter,omitempty"`
 }
 
 // GC configures online Garbage Collection.

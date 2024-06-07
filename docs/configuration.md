@@ -282,6 +282,26 @@ redis:
     dialtimeout: 10ms
     readtimeout: 10ms
     writetimeout: 10ms
+    sentinelusername: my-sentinel-username
+    sentinelpassword: some-sentinel-password
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
+  ratelimiter:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
+    sentinelusername: my-sentinel-username
+    sentinelpassword: some-sentinel-password
     tls:
       enabled: true
       insecure: true
@@ -1079,8 +1099,8 @@ The `events` structure configures the information provided in event notification
 
 ```yaml
 redis:
-  addr: localhost:16379,localhost:26379
-  mainname: mainserver
+  addr: localhost:16379
+  username: registry
   password: asecret
   db: 0
   dialtimeout: 10ms
@@ -1102,6 +1122,24 @@ redis:
     dialtimeout: 10ms
     readtimeout: 10ms
     writetimeout: 10ms
+    sentinelusername: my-sentinel-username
+    sentinelpassword: some-sentinel-password
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
+  ratelimiter:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
     tls:
       enabled: true
       insecure: true
@@ -1111,18 +1149,19 @@ redis:
       idletimeout: 300s
 ```
 
-Declare parameters for constructing the `redis` connections. Single instances and Redis Sentinel are supported.
+Declare parameters for constructing the `redis` connections. Single instances, Redis Sentinel and Redis Cluster are supported.
 
-For backward compatibility reasons, registry instances use this Redis connection exclusively to cache information about
+For backward compatibility reasons, registry instances use the root Redis connection exclusively to cache information about
 immutable blobs when `storage.cache.blobdescriptor` is set to `redis`. When using this feature, you should configure
 Redis with the `allkeys-lru` eviction policy, because the registry does not set an expiration value on keys.
 
-For other caching purposes/features, please see the new dedicated `redis.cache` subsection.
+For other caching purposes/features, please see the new dedicated `redis.cache` and `redis.ratelimiter` subsections.
 
 | Parameter          | Required | Description                                                                                                           |
 |--------------------|----------|-----------------------------------------------------------------------------------------------------------------------|
-| `addr`             | yes      | The address (host and port) of the Redis instance. For Sentinel it should be a list of addresses separated by commas. |
+| `addr`             | yes      | The address (host and port) of the Redis instance. For Sentinel and Cluster it should be a list of addresses separated by commas. |
 | `mainname`         | no       | The main server name. Only applicable for Sentinel.                                                                   |
+| `username`         | no       | A username used to authenticate to the Redis instance.                                                                |
 | `password`         | no       | A password used to authenticate to the Redis instance.                                                                |
 | `sentinelusername` | no       | A username used to authenticate to the Redis Sentinel instance.                                                       |
 | `sentinelpassword` | no       | A password used to authenticate to the Redis Sentinel instance.                                                       |
@@ -1187,8 +1226,7 @@ redis:
       idletimeout: 300s
 ```
 
-The cache subsection allows configuring a Redis connection specifically for caching purposes. Single instances and
-Sentinel are supported.
+The cache subsection allows configuring a Redis connection specifically for caching purposes.
 
 The intent is to allow using separate instances for different purposes, achieving isolation and improved performance and
 availability. In case this is not a concern, it is also possible to use the same settings as those on the
@@ -1209,6 +1247,42 @@ refer to the documentation for the remaining connection parameters [`here`](#red
 | Parameter | Required | Description                                                                   |
 |-----------|----------|-------------------------------------------------------------------------------|
 | `enabled` | no       | If the Redis caching functionality is enabled (boolean). Defaults to `false`. |
+
+
+### `ratelimiter`
+
+```yaml
+redis:
+  ratelimiter:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
+```
+
+The `ratelimiter` subsection allows configuring a Redis connection specifically for rate-limiting purposes.
+
+This functionality is [currently in development](https://gitlab.com/groups/gitlab-org/-/epics/13237).
+More functionality details will be added to this section as they become available.
+
+All the Redis connection parameters in the parent section are also available here.
+There are two new parameters available specific to the rate-limiting functionality.
+Please refer to the documentation for the remaining connection parameters [`here`](#redis).
+
+| Parameter  | Required | Description                                                                            |
+|------------|----------|----------------------------------------------------------------------------------------|
+| `enabled`  | no       | If the Redis rate-limiting functionality is enabled (boolean). Defaults to `false`.    |
 
 ## `health`
 

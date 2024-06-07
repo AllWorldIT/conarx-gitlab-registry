@@ -193,6 +193,13 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
 
+	if err := app.configureRedisRateLimiter(ctx, config); err != nil {
+		// Redis rate-limiter is not a strictly required dependency, we simply log and report a failure here
+		// and proceed to not prevent the app from starting.
+		log.WithError(err).Error("failed configuring Redis rate-limiter")
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+	}
+
 	options := registrymiddleware.GetRegistryOptions()
 
 	// TODO: Once schema1 code is removed throughout the registry, we will not
@@ -782,6 +789,60 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 		Addr:       hostname,
 		InstanceID: dcontext.GetStringValue(app, "instance.id"),
 	}
+}
+
+func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
+	if !config.Redis.RateLimiter.Enabled {
+		return nil
+	}
+
+	opts := &redis.UniversalOptions{
+		Username:        config.Redis.RateLimiter.Username,
+		Addrs:           strings.Split(config.Redis.RateLimiter.Addr, ","),
+		DB:              config.Redis.RateLimiter.DB,
+		Password:        config.Redis.RateLimiter.Password,
+		DialTimeout:     config.Redis.RateLimiter.DialTimeout,
+		ReadTimeout:     config.Redis.RateLimiter.ReadTimeout,
+		WriteTimeout:    config.Redis.RateLimiter.WriteTimeout,
+		PoolSize:        config.Redis.RateLimiter.Pool.Size,
+		ConnMaxLifetime: config.Redis.RateLimiter.Pool.MaxLifetime,
+		MasterName:      config.Redis.RateLimiter.MainName,
+	}
+	if config.Redis.RateLimiter.TLS.Enabled {
+		opts.TLSConfig = &tls.Config{
+			InsecureSkipVerify: config.Redis.RateLimiter.TLS.Insecure,
+		}
+	}
+	if config.Redis.RateLimiter.Pool.IdleTimeout > 0 {
+		opts.ConnMaxIdleTime = config.Redis.RateLimiter.Pool.IdleTimeout
+	}
+
+	// redis.NewUniversalClient will take care of returning the appropriate client type (single, cluster or sentinel)
+	// depending on the configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
+	redisClient := redis.NewUniversalClient(opts)
+
+	if config.HTTP.Debug.Prometheus.Enabled {
+		redismetrics.InstrumentClient(
+			redisClient,
+			redismetrics.WithInstanceName("rate-limiter"),
+			redismetrics.WithMaxConns(opts.PoolSize),
+		)
+	}
+
+	// Ensure the client is correctly configured and the server is reachable. We use a new local context here with a
+	// tight timeout to avoid blocking the application start for too long.
+	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	if cmd := redisClient.Ping(pingCtx); cmd.Err() != nil {
+		return cmd.Err()
+	}
+
+	// TODO: add rate-limiter instance to the app
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/1225
+
+	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis rate-limiter configured successfully")
+
+	return nil
 }
 
 func (app *App) configureRedisCache(ctx context.Context, config *configuration.Configuration) error {
