@@ -1,3 +1,13 @@
+## [4.4.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.3.0-gitlab...v4.4.0-gitlab) (2024-6-10)
+
+
+### ✨ Features ✨
+
+* **api/gitlab/v1:** implement rename non top level namespace api ([7639d9a](https://gitlab.com/gitlab-org/container-registry/commit/7639d9af48af7e384cfb8f8884cc9261506a826c))
+* **cache:** add support for Sentinel authentication ([ee2ce0d](https://gitlab.com/gitlab-org/container-registry/commit/ee2ce0db5afb1fa18ae4639cb89408687fc16704))
+* **registry:** import-command: add step completion times to progress bar output ([ba74531](https://gitlab.com/gitlab-org/container-registry/commit/ba74531a34c3ce82f8d78abfbe13de7b3f91a546))
+* **registry:** support dynamic media types ([0622f41](https://gitlab.com/gitlab-org/container-registry/commit/0622f4142370b77c85cf732bb0da103c707d17f2))
+
 ## [4.3.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.2.0-gitlab...v4.3.0-gitlab) (2024-06-04)
 
 
