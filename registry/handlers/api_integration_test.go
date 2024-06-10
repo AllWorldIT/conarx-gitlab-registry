@@ -787,6 +787,7 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 	tt := []struct {
 		name                  string
 		unknownLayerMediaType bool
+		dynamicMediaTypesFF   bool
 	}{
 		{
 			name:                  "known layer media type",
@@ -796,10 +797,22 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 			name:                  "unknown layer media type",
 			unknownLayerMediaType: true,
 		},
+		{
+			name:                  "known layer media type with dynamic media types",
+			unknownLayerMediaType: false,
+			dynamicMediaTypesFF:   true,
+		},
+		{
+			name:                  "unknown layer media type with dynamic media types",
+			unknownLayerMediaType: true,
+			dynamicMediaTypesFF:   true,
+		},
 	}
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(test.dynamicMediaTypesFF))
+
 			repoRef, err := reference.WithName(repoPath)
 			require.NoError(t, err)
 
@@ -871,7 +884,7 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 
 			wantMT := layerMT
 
-			if test.unknownLayerMediaType {
+			if test.unknownLayerMediaType && !feature.DynamicMediaTypes.Enabled() {
 				wantMT = genericBlobMediaType
 			}
 
@@ -1337,6 +1350,13 @@ func TestManifestAPI_Put_DatabaseEnabled_InvalidConfigMediaType(t *testing.T) {
 	errc, ok := errs[0].(errcode.Error)
 	require.True(t, ok)
 	require.Equal(t, datastore.ErrUnknownMediaType{MediaType: unknownMediaType}.Error(), errc.Detail)
+
+	// Push index again with dynamic media types enabled.
+	t.Setenv(feature.DynamicMediaTypes.EnvVariable, "true")
+
+	resp = putManifest(t, "", u, v1.MediaTypeImageManifest, dm.Manifest)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
 }
 
 func TestManifestAPI_Put_OCIImageIndexByTagManifestsNotPresentInDatabase(t *testing.T) {
@@ -1390,12 +1410,13 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 	unknownMediaType := "application/vnd.foo.manifest.v1+json"
 
 	tt := []struct {
-		Name              string
-		PayloadMediaType  string
-		ContentTypeHeader string
-		ExpectedStatus    int
-		ExpectedErrCode   *errcode.ErrorCode
-		ExpectedErrDetail string
+		Name                string
+		PayloadMediaType    string
+		ContentTypeHeader   string
+		ExpectedStatus      int
+		ExpectedErrCode     *errcode.ErrorCode
+		ExpectedErrDetail   string
+		dynamicMediaTypesFF bool
 	}{
 		{
 			Name:              "schema 2 in payload and content type",
@@ -1464,12 +1485,30 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 			ExpectedErrDetail: fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, unknownMediaType),
 		},
 		{
+			Name:                "unknown in payload and schema 2 in content type with dynamic media types",
+			PayloadMediaType:    unknownMediaType,
+			ContentTypeHeader:   schema2.MediaTypeManifest,
+			ExpectedStatus:      http.StatusBadRequest,
+			ExpectedErrCode:     &v2.ErrorCodeManifestInvalid,
+			ExpectedErrDetail:   fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, unknownMediaType),
+			dynamicMediaTypesFF: true,
+		},
+		{
 			Name:              "unknown in payload and oci in content type",
 			PayloadMediaType:  unknownMediaType,
 			ContentTypeHeader: v1.MediaTypeImageManifest,
 			ExpectedStatus:    http.StatusBadRequest,
 			ExpectedErrCode:   &v2.ErrorCodeManifestInvalid,
 			ExpectedErrDetail: fmt.Sprintf("if present, mediaType in manifest should be '%s' not '%s'", v1.MediaTypeImageManifest, unknownMediaType),
+		},
+		{
+			Name:                "unknown in payload and oci in content type with dynamic media types",
+			PayloadMediaType:    unknownMediaType,
+			ContentTypeHeader:   v1.MediaTypeImageManifest,
+			ExpectedStatus:      http.StatusBadRequest,
+			ExpectedErrCode:     &v2.ErrorCodeManifestInvalid,
+			ExpectedErrDetail:   fmt.Sprintf("if present, mediaType in manifest should be '%s' not '%s'", v1.MediaTypeImageManifest, unknownMediaType),
+			dynamicMediaTypesFF: true,
 		},
 		{
 			Name:              "unknown in payload and content type",
@@ -1480,11 +1519,28 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 			ExpectedErrDetail: fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, unknownMediaType),
 		},
 		{
+			Name:                "unknown in payload and content type with dynamic media types",
+			PayloadMediaType:    unknownMediaType,
+			ContentTypeHeader:   unknownMediaType,
+			ExpectedStatus:      http.StatusBadRequest,
+			ExpectedErrCode:     &v2.ErrorCodeManifestInvalid,
+			ExpectedErrDetail:   fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, unknownMediaType),
+			dynamicMediaTypesFF: true,
+		},
+		{
 			Name:              "unknown in payload and no content type",
 			PayloadMediaType:  unknownMediaType,
 			ExpectedStatus:    http.StatusBadRequest,
 			ExpectedErrCode:   &v2.ErrorCodeManifestInvalid,
 			ExpectedErrDetail: fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, unknownMediaType),
+		},
+		{
+			Name:                "unknown in payload and no content type with dynamic media types",
+			PayloadMediaType:    unknownMediaType,
+			ExpectedStatus:      http.StatusBadRequest,
+			ExpectedErrCode:     &v2.ErrorCodeManifestInvalid,
+			ExpectedErrDetail:   fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, unknownMediaType),
+			dynamicMediaTypesFF: true,
 		},
 	}
 
@@ -1503,6 +1559,8 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 
 	for _, test := range tt {
 		t.Run(test.Name, func(t *testing.T) {
+			t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(test.dynamicMediaTypesFF))
+
 			// build and push manifest
 			m := &schema2.Manifest{
 				Versioned: manifest.Versioned{
@@ -1562,12 +1620,13 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 	unknownMediaType := "application/vnd.foo.manifest.list.v1+json"
 
 	tt := []struct {
-		Name              string
-		PayloadMediaType  string
-		ContentTypeHeader string
-		ExpectedStatus    int
-		ExpectedErrCode   *errcode.ErrorCode
-		ExpectedErrDetail string
+		Name                string
+		PayloadMediaType    string
+		ContentTypeHeader   string
+		ExpectedStatus      int
+		ExpectedErrCode     *errcode.ErrorCode
+		ExpectedErrDetail   string
+		dynamicMediaTypesFF bool
 	}{
 		{
 			Name:              "schema 2 in payload and content type",
@@ -1636,12 +1695,28 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 			ExpectedStatus:    http.StatusCreated,
 		},
 		{
+			Name:                "unknown in payload and schema 2 in content type with dynamic media types",
+			PayloadMediaType:    unknownMediaType,
+			ContentTypeHeader:   manifestlist.MediaTypeManifestList,
+			ExpectedStatus:      http.StatusCreated,
+			dynamicMediaTypesFF: true,
+		},
+		{
 			Name:              "unknown in payload and oci in content type",
 			PayloadMediaType:  unknownMediaType,
 			ContentTypeHeader: v1.MediaTypeImageIndex,
 			ExpectedStatus:    http.StatusBadRequest,
 			ExpectedErrCode:   &v2.ErrorCodeManifestInvalid,
 			ExpectedErrDetail: fmt.Sprintf("if present, mediaType in image index should be '%s' not '%s'", v1.MediaTypeImageIndex, manifestlist.MediaTypeManifestList),
+		},
+		{
+			Name:                "unknown in payload and oci in content type with dynamic media types",
+			PayloadMediaType:    unknownMediaType,
+			ContentTypeHeader:   v1.MediaTypeImageIndex,
+			ExpectedStatus:      http.StatusBadRequest,
+			ExpectedErrCode:     &v2.ErrorCodeManifestInvalid,
+			ExpectedErrDetail:   fmt.Sprintf("if present, mediaType in image index should be '%s' not '%s'", v1.MediaTypeImageIndex, manifestlist.MediaTypeManifestList),
+			dynamicMediaTypesFF: true,
 		},
 		{
 			Name:              "unknown in payload and content type",
@@ -1652,11 +1727,28 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 			ExpectedErrDetail: fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, manifestlist.MediaTypeManifestList),
 		},
 		{
+			Name:                "unknown in payload and content type with dynamic media types",
+			PayloadMediaType:    unknownMediaType,
+			ContentTypeHeader:   unknownMediaType,
+			ExpectedStatus:      http.StatusBadRequest,
+			ExpectedErrCode:     &v2.ErrorCodeManifestInvalid,
+			ExpectedErrDetail:   fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, manifestlist.MediaTypeManifestList),
+			dynamicMediaTypesFF: true,
+		},
+		{
 			Name:              "unknown in payload and no content type",
 			PayloadMediaType:  unknownMediaType,
 			ExpectedStatus:    http.StatusBadRequest,
 			ExpectedErrCode:   &v2.ErrorCodeManifestInvalid,
 			ExpectedErrDetail: fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, manifestlist.MediaTypeManifestList),
+		},
+		{
+			Name:                "unknown in payload and no content type with dynamic media types",
+			PayloadMediaType:    unknownMediaType,
+			ExpectedStatus:      http.StatusBadRequest,
+			ExpectedErrCode:     &v2.ErrorCodeManifestInvalid,
+			ExpectedErrDetail:   fmt.Sprintf("mediaType in manifest should be '%s' not '%s'", schema2.MediaTypeManifest, manifestlist.MediaTypeManifestList),
+			dynamicMediaTypesFF: true,
 		},
 	}
 
@@ -1672,6 +1764,8 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 
 	for _, test := range tt {
 		t.Run(test.Name, func(t *testing.T) {
+			t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(test.dynamicMediaTypesFF))
+
 			// build and push manifest list
 			ml := &manifestlist.ManifestList{
 				Versioned: manifest.Versioned{

@@ -17,6 +17,7 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/storage"
@@ -65,6 +66,7 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "common-blobs", "B", false, "import all blob metadata from common storage")
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "step-three", "3", false, "perform step three of a multi-step import: alias for `common-blobs`")
 	ImportCmd.Flags().BoolVarP(&logToSTDOUT, "log-to-stdout", "l", false, "write detailed log to std instead of showing progress bars")
+	ImportCmd.Flags().BoolVarP(&dynamicMediaTypes, "dynamic-media-types", "m", true, "record unknown media types during import")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
 
@@ -91,6 +93,7 @@ var (
 	importAllRepos       bool
 	tagConcurrency       *int
 	logToSTDOUT          bool
+	dynamicMediaTypes    bool
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -553,6 +556,8 @@ var ImportCmd = &cobra.Command{
 		if !logToSTDOUT {
 			opts = append(opts, datastore.WithProgressBar)
 		}
+
+		os.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(dynamicMediaTypes))
 
 		p := datastore.NewImporter(db, registry, opts...)
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/manifestlist"
@@ -1003,7 +1004,8 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 			// has a 1-1 relationship with with the manifest, so we want to reflect
 			// the manifest's description of the layer. Multiple manifest can reference
 			// the same blob, so the common blob storage should remain generic.
-			if ok := layerMediaTypeExists(imh, reqLayer.MediaType); ok {
+			ok := layerMediaTypeExists(imh, reqLayer.MediaType)
+			if ok || feature.DynamicMediaTypes.Enabled() {
 				dbBlob.MediaType = reqLayer.MediaType
 			}
 
