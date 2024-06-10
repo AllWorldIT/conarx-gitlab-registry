@@ -14,6 +14,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/manifest/manifestlist"
 	mlcompat "github.com/docker/distribution/manifest/manifestlist/compat"
@@ -240,29 +241,42 @@ func (imp *Importer) importLayers(ctx context.Context, dbRepo *models.Repository
 			return dbLayers, err
 		}
 
-		// Check that the layer media type is known to the registry before replacing
-		// the generic media type with the specific layer media type.
-		//
-		// This code should be removed once dynamic media types are implemented:
-		// https://gitlab.com/gitlab-org/container-registry/-/issues/973
-		mtStore := NewMediaTypeStore(imp.db)
-
-		exists, err := mtStore.Exists(ctx, fsLayer.MediaType)
-		if err != nil {
-			// Log and continue on this failure.
-			l.WithFields(log.Fields{"media_type": fsLayer.MediaType}).WithError(err).Warn("error checking for existence of layer media type")
-		}
-
-		// Slightly paranoid, but let's not trust the boolean value returned by the
-		// existence check if there is an error.
-		if err == nil && exists {
-			layer.MediaType = fsLayer.MediaType
-		}
+		layer.MediaType = imp.layerMediaType(ctx, fsLayer)
 
 		dbLayers = append(dbLayers, layer)
 	}
 
 	return dbLayers, nil
+}
+
+// Check that the layer media type is known to the registry or dynamic media
+// types are enabled before replacing the generic media type with the specific
+// layer media type.
+//
+// This code should be removed once dynamic media types are implemented:
+// https://gitlab.com/groups/gitlab-org/-/epics/13805
+func (imp *Importer) layerMediaType(ctx context.Context, fsLayer distribution.Descriptor) string {
+	if feature.DynamicMediaTypes.Enabled() {
+		return fsLayer.MediaType
+	}
+
+	mtStore := NewMediaTypeStore(imp.db)
+
+	exists, err := mtStore.Exists(ctx, fsLayer.MediaType)
+	if err != nil {
+		// Log and continue on this failure.
+		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"media_type": fsLayer.MediaType}).
+			WithError(err).Warn("error checking for existence of layer media type")
+	}
+
+	// Slightly paranoid, but let's not trust the boolean value returned by the
+	// existence check if there is an error.
+	if err == nil && exists {
+		return fsLayer.MediaType
+	}
+
+	// Fallback to generic media type.
+	return mtOctetStream
 }
 
 func (imp *Importer) importManifestV2(ctx context.Context, fsRepo distribution.Repository, dbRepo *models.Repository, m distribution.ManifestV2, dgst digest.Digest, payload []byte, nonConformant bool) (*models.Manifest, error) {

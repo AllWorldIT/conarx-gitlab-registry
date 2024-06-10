@@ -11,9 +11,11 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/storage"
@@ -497,8 +499,38 @@ func TestImporter_PreImportAll_UnknownLayerMediaType(t *testing.T) {
 	validateImport(t, suite.db)
 }
 
+func TestImporter_PreImportAll_UnknownLayerMediaTypeWithDynamicMediaTypes(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(true))
+	t.Cleanup(func() {
+		require.NoError(t, testutil.TruncateAllTables(suite.db))
+		deleteMediaType(t, "application/foo.bar.layer.v1.tar+gzip")
+	})
+
+	imp := newImporterWithRoot(t, suite.db, "unknown-layer-mediatype")
+	err := imp.PreImportAll(suite.ctx)
+	require.NoError(t, err)
+	validateImport(t, suite.db)
+}
+
 func TestImporter_FullImport_UnknownLayerMediaType(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "unknown-layer-mediatype")
+	err := imp.FullImport(suite.ctx)
+	require.NoError(t, err)
+	validateImport(t, suite.db)
+}
+
+func TestImporter_FullImport_UnknownLayerMediaTypeWithDynamicMediaTypes(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(true))
+	t.Cleanup(func() {
+		require.NoError(t, testutil.TruncateAllTables(suite.db))
+		deleteMediaType(t, "application/foo.bar.layer.v1.tar+gzip")
+	})
 
 	imp := newImporterWithRoot(t, suite.db, "unknown-layer-mediatype")
 	err := imp.FullImport(suite.ctx)
@@ -515,36 +547,96 @@ func TestImporter_ImportAllRepositories_UnknownLayerMediaType(t *testing.T) {
 	validateImport(t, suite.db)
 }
 
-func TestImporter_PreImport_UnknownManifestMediaType(t *testing.T) {
+func TestImporter_ImportAllRepositories_UnknownLayerMediaTypeWithDynamicMediaTypes(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(true))
+	t.Cleanup(func() {
+		require.NoError(t, testutil.TruncateAllTables(suite.db))
+		deleteMediaType(t, "application/foo.bar.layer.v1.tar+gzip")
+	})
+
+	imp := newImporterWithRoot(t, suite.db, "unknown-layer-mediatype")
+	err := imp.ImportAllRepositories(suite.ctx)
+	require.NoError(t, err)
+	validateImport(t, suite.db)
+}
+
+func TestImporter_PreImportAll_UnknownManifestMediaType(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
 	imp := newImporterWithRoot(t, suite.db, "unknown-manifest-mediatype")
-	err := imp.PreImport(suite.ctx, "a-simple")
-	require.EqualError(t, err, "pre importing tagged manifests: pre importing manifest: retrieving manifest \"sha256:3742a2977c3f5663dd12ddc406d45ed7cda2760842c9da514c35f9069581e7a2\" from filesystem: errors verifying manifest: unrecognized manifest content type application/foo.bar.manfiest.v1.tar+gzip")
+	err := imp.PreImportAll(suite.ctx)
+	require.EqualError(t, err, "pre importing all repositories: pre importing tagged manifests: pre importing manifest: retrieving manifest \"sha256:3742a2977c3f5663dd12ddc406d45ed7cda2760842c9da514c35f9069581e7a2\" from filesystem: errors verifying manifest: unrecognized manifest content type application/foo.bar.manfiest.v1.tar+gzip")
 }
 
-func TestImporter_Import_UnknownManifestMediaType(t *testing.T) {
+func TestImporter_PreImportAll_UnknownManifestMediaTypeWithDynamicMediaTypes(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(true))
+
+	imp := newImporterWithRoot(t, suite.db, "unknown-manifest-mediatype")
+	err := imp.PreImportAll(suite.ctx)
+	require.EqualError(t, err, "pre importing all repositories: pre importing tagged manifests: pre importing manifest: retrieving manifest \"sha256:3742a2977c3f5663dd12ddc406d45ed7cda2760842c9da514c35f9069581e7a2\" from filesystem: errors verifying manifest: unrecognized manifest content type application/foo.bar.manfiest.v1.tar+gzip")
+}
+
+func TestImporter_ImportAllRepositories_UnknownManifestMediaType(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
 	imp := newImporterWithRoot(t, suite.db, "unknown-manifest-mediatype")
-	err := imp.Import(suite.ctx, "a-simple")
-	require.EqualError(t, err, "importing tags: retrieving manifest \"sha256:3742a2977c3f5663dd12ddc406d45ed7cda2760842c9da514c35f9069581e7a2\" from filesystem: errors verifying manifest: unrecognized manifest content type application/foo.bar.manfiest.v1.tar+gzip")
+	err := imp.ImportAllRepositories(suite.ctx)
+	require.EqualError(t, err, "importing all repositories: importing tags: retrieving manifest \"sha256:3742a2977c3f5663dd12ddc406d45ed7cda2760842c9da514c35f9069581e7a2\" from filesystem: errors verifying manifest: unrecognized manifest content type application/foo.bar.manfiest.v1.tar+gzip")
 }
 
-func TestImporter_PreImport_UnknownManifestConfigMediaType(t *testing.T) {
+func TestImporter_ImportAllRepositories_UnknownManifestMediaTypeWithDynamicMediaTypes(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(true))
+
+	imp := newImporterWithRoot(t, suite.db, "unknown-manifest-mediatype")
+	err := imp.ImportAllRepositories(suite.ctx)
+	require.EqualError(t, err, "importing all repositories: importing tags: retrieving manifest \"sha256:3742a2977c3f5663dd12ddc406d45ed7cda2760842c9da514c35f9069581e7a2\" from filesystem: errors verifying manifest: unrecognized manifest content type application/foo.bar.manfiest.v1.tar+gzip")
+}
+
+func TestImporter_FullImport_UnknownManifestMediaType(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "unknown-manifest-mediatype")
+	err := imp.FullImport(suite.ctx)
+	require.EqualError(t, err, "pre importing all repositories: pre importing tagged manifests: pre importing manifest: retrieving manifest \"sha256:3742a2977c3f5663dd12ddc406d45ed7cda2760842c9da514c35f9069581e7a2\" from filesystem: errors verifying manifest: unrecognized manifest content type application/foo.bar.manfiest.v1.tar+gzip")
+}
+
+func TestImporter_FullImport_UnknownManifestMediaTypeWithDynamicMediaTypes(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(true))
+
+	imp := newImporterWithRoot(t, suite.db, "unknown-manifest-mediatype")
+	err := imp.FullImport(suite.ctx)
+	require.EqualError(t, err, "pre importing all repositories: pre importing tagged manifests: pre importing manifest: retrieving manifest \"sha256:3742a2977c3f5663dd12ddc406d45ed7cda2760842c9da514c35f9069581e7a2\" from filesystem: errors verifying manifest: unrecognized manifest content type application/foo.bar.manfiest.v1.tar+gzip")
+}
+
+func TestImporter_PreImportAll_UnknownManifestConfigMediaType(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
 	imp := newImporterWithRoot(t, suite.db, "unknown-manifestconfig-mediatype")
-	err := imp.PreImport(suite.ctx, "a-simple")
-	require.EqualError(t, err, "pre importing tagged manifests: pre importing manifest: creating manifest: mapping config media type: unknown media type: application/foo.bar.container.image.v1+json")
+	err := imp.PreImportAll(suite.ctx)
+	require.EqualError(t, err, "pre importing all repositories: pre importing tagged manifests: pre importing manifest: creating manifest: mapping config media type: unknown media type: application/foo.bar.container.image.v1+json")
 }
 
-func TestImporter_Import_UnknownManifestConfigMediaType(t *testing.T) {
+func TestImporter_PreImportAll_UnknownManifestConfigMediaTypeWithDynamicMediaTypes(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
+	t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(true))
+	t.Cleanup(func() {
+		require.NoError(t, testutil.TruncateAllTables(suite.db))
+		deleteMediaType(t, "application/foo.bar.container.image.v1+json")
+	})
+
 	imp := newImporterWithRoot(t, suite.db, "unknown-manifestconfig-mediatype")
-	err := imp.Import(suite.ctx, "a-simple")
-	require.EqualError(t, err, "importing tags: importing manifest: creating manifest: mapping config media type: unknown media type: application/foo.bar.container.image.v1+json")
+	err := imp.PreImportAll(suite.ctx)
+	require.NoError(t, err)
+	validateImport(t, suite.db)
 }
 
 func TestImporter_PreImport_NoTagsPrefix(t *testing.T) {

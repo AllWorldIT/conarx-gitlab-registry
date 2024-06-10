@@ -77,6 +77,11 @@ delay or garbage collection is not enabled until after the import step finishes.
 
 The `--row-count` option allows logging the row count of relevant database tables on (pre)import completion.
 
+####  Dynamic Media Types
+The `--dynamic-media-types` option allows unknown media types to be recorded to
+the database during import. This option prevents rare media types from stopping
+the import. Defaults to `true`.
+
 ## Prerequisites
 
 ### Create Database

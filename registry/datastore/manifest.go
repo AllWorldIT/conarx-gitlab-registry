@@ -264,14 +264,14 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 
 	mtStore := NewMediaTypeStore(s.db)
 
-	mediaTypeID, err := mtStore.FindID(ctx, m.MediaType)
+	mediaTypeID, err := mtStore.SafeFindOrCreateID(ctx, m.MediaType)
 	if err != nil {
 		return fmt.Errorf("mapping manifest media type: %w", err)
 	}
 
 	var artifactTypeID sql.NullInt64
 	if m.ArtifactType.Valid {
-		aid, err := mtStore.FindID(ctx, m.ArtifactType.String)
+		aid, err := mtStore.SafeFindOrCreateID(ctx, m.ArtifactType.String)
 		if err != nil {
 			return fmt.Errorf("mapping manifest artifact type: %w", err)
 		}
@@ -289,7 +289,7 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 		}
 		configDgst.Valid = true
 		configDgst.String = dgst.String()
-		id, err := mtStore.FindID(ctx, m.Configuration.MediaType)
+		id, err := mtStore.SafeFindOrCreateID(ctx, m.Configuration.MediaType)
 		if err != nil {
 			return fmt.Errorf("mapping config media type: %w", err)
 		}
@@ -330,14 +330,14 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 
 	mtStore := NewMediaTypeStore(s.db)
 
-	mediaTypeID, err := mtStore.FindID(ctx, m.MediaType)
+	mediaTypeID, err := mtStore.SafeFindOrCreateID(ctx, m.MediaType)
 	if err != nil {
 		return fmt.Errorf("mapping manifest media type: %w", err)
 	}
 
 	var artifactTypeID sql.NullInt64
 	if m.ArtifactType.Valid {
-		aid, err := mtStore.FindID(ctx, m.ArtifactType.String)
+		aid, err := mtStore.SafeFindOrCreateID(ctx, m.ArtifactType.String)
 		if err != nil {
 			return fmt.Errorf("mapping manifest artifact type: %w", err)
 		}
@@ -355,7 +355,7 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 		}
 		configDgst.Valid = true
 		configDgst.String = dgst.String()
-		id, err := mtStore.FindID(ctx, m.Configuration.MediaType)
+		id, err := mtStore.SafeFindOrCreateID(ctx, m.Configuration.MediaType)
 		if err != nil {
 			return fmt.Errorf("mapping config media type: %w", err)
 		}
@@ -441,7 +441,7 @@ func (s *manifestStore) AssociateLayerBlob(ctx context.Context, m *models.Manife
 
 	mtStore := NewMediaTypeStore(s.db)
 
-	mediaTypeID, err := mtStore.FindID(ctx, b.MediaType)
+	mediaTypeID, err := mtStore.SafeFindOrCreateID(ctx, b.MediaType)
 	if err != nil {
 		return err
 	}
