@@ -1,3 +1,11 @@
+## [4.5.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.4.0-gitlab...v4.5.0-gitlab) (2024-06-12)
+
+
+### ✨ Features ✨
+
+* bump root repository size cache TTL to 5m ([cd04225](https://gitlab.com/gitlab-org/container-registry/commit/cd04225dc3b2b4232cb826433ff4b1482d6e15de))
+* **datastore:** create bbm tables ([d5b1834](https://gitlab.com/gitlab-org/container-registry/commit/d5b18344b1cfd18fb6bdbd5959cf6aff78e01052))
+
 ## [4.4.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.3.0-gitlab...v4.4.0-gitlab) (2024-6-10)
 
 
