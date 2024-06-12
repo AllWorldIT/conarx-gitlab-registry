@@ -41,7 +41,7 @@ const (
 	greaterThan = ">"
 
 	// sizeWithDescendantsKeyTTL is the TTL for the cached value of the "size with descendants" for a given repository.
-	sizeWithDescendantsKeyTTL = 2 * time.Minute
+	sizeWithDescendantsKeyTTL = 5 * time.Minute
 )
 
 // FilterParams contains the specific filters used to get
@@ -1740,13 +1740,14 @@ func (s *repositoryStore) SizeWithDescendants(ctx context.Context, r *models.Rep
 		return RepositorySize{bytes: b}, err
 	}
 
+	if found, b := s.cache.GetSizeWithDescendants(ctx, r); found {
+		return RepositorySize{b, true}, nil
+	}
+
 	if s.cache.HasSizeWithDescendantsTimedOut(ctx, r) {
 		return RepositorySize{}, ErrSizeHasTimedOut
 	}
 
-	if found, b := s.cache.GetSizeWithDescendants(ctx, r); found {
-		return RepositorySize{b, true}, nil
-	}
 	b, err := s.topLevelSizeWithDescendants(ctx, r)
 	if err != nil {
 		var pgErr *pgconn.PgError

@@ -290,6 +290,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 			"is_top_level": repo.IsTopLevel(),
 			"root_repo":    repo.TopLevelPathSegment(),
 			"precision":    precision,
+			"failure":      err != nil,
 		}).Info("repository size measurement")
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
