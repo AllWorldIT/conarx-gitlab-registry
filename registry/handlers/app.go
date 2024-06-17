@@ -824,7 +824,7 @@ func (app *App) configureRedisRateLimiter(ctx context.Context, config *configura
 	if config.HTTP.Debug.Prometheus.Enabled {
 		redismetrics.InstrumentClient(
 			redisClient,
-			redismetrics.WithInstanceName("rate-limiter"),
+			redismetrics.WithInstanceName("ratelimiting"),
 			redismetrics.WithMaxConns(opts.PoolSize),
 		)
 	}
