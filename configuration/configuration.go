@@ -450,6 +450,8 @@ type Database struct {
 	// Primary is the primary database server's hostname
 	Primary              string               `yaml:"primary,omitempty"`
 	BackgroundMigrations BackgroundMigrations `yaml:"backgroundmigrations,omitempty"`
+	// LoadBalancing can be used to enable and configure database load balancing.
+	LoadBalancing DatabaseLoadBalancing `yaml:"loadbalancing,omitempty"`
 }
 
 // BackgroundMigrations represents the configuration for the asynchronous batched background migrations in the registry.
@@ -460,6 +462,31 @@ type BackgroundMigrations struct {
 	MaxJobRetries int `yaml:"maxjobretries,omitempty"`
 	// JobInterval is the duration to wait between checks for eligible BBM jobs and acquiring the BBM lock (defaults to `2s` - wait at least 2 second before checking for a job).
 	JobInterval time.Duration `yaml:"jobinterval,omitempty"`
+}
+
+// DatabaseLoadBalancing can be used to enable and configure database load balancing.
+type DatabaseLoadBalancing struct {
+	// Enabled can be used to enable or disable the database load balancing. Defaults to false.
+	Enabled bool `yaml:"enabled"`
+	// Hosts is a comma-separated list of static hosts to use for load balancing. Can be used as an alternative to
+	// service discovery. Ignored if `record` is set.
+	Hosts string `yaml:"hosts,omitempty"`
+	// Nameserver is the nameserver to use for looking up the DNS record.
+	Nameserver string `yaml:"nameserver"`
+	// Port is the port to use for looking up the DNS record.
+	Port int `yaml:"port"`
+	// Record is the SRV DNS record to look up. This option is required for service discovery to work.
+	Record string `yaml:"record"`
+	// RecordCheckInterval is the interval to check the DNS record.
+	RecordCheckInterval time.Duration `yaml:"recordcheckinterval"`
+	// DisconnectTimeout is the time after which an old connection is closed, after the list of hosts was updated.
+	DisconnectTimeout time.Duration `yaml:"disconnecttimeout"`
+	// MaxReplicaLagTime is the maximum time a replica can be behind the primary before being quarantined.
+	MaxReplicaLagTime time.Duration `yaml:"maxreplicalagtime"`
+	// MaxReplicaLagBytes is the maximum number of bytes a replica can be behind the primary before being quarantined.
+	MaxReplicaLagBytes int `yaml:"maxreplicalagbytes"`
+	// ReplicaCheckInterval is the minimum amount of time between checking the status of a replica.
+	ReplicaCheckInterval time.Duration `yaml:"replicacheckinterval"`
 }
 
 // Regexp wraps regexp.Regexp to implement the encoding.TextMarshaler interface.
@@ -1085,7 +1112,16 @@ func Parse(rd io.Reader, opts ...ParseOption) (*Configuration, error) {
 	return config, nil
 }
 
-const defaultBackgroundMigrationsJobInterval = 2 * time.Second
+const (
+	defaultBackgroundMigrationsJobInterval = 2 * time.Second
+	defaultDLBNameserver                   = "localhost"
+	defaultDLBPort                         = 8600
+	defaultDLBRecordCheckInterval          = 1 * time.Minute
+	defaultDLBDisconnectTimeout            = 2 * time.Minute
+	defaultDLBMaxReplicaLagBytes           = 8 * 1024 * 1024
+	defaultDLBMaxReplicaLagTime            = 1 * time.Minute
+	defaultDLBReplicaCheckInterval         = 1 * time.Minute
+)
 
 func ApplyDefaults(config *Configuration) {
 	if config.Log.Level == "" {
@@ -1124,5 +1160,30 @@ func ApplyDefaults(config *Configuration) {
 	}
 	if config.Database.BackgroundMigrations.Enabled && config.Database.BackgroundMigrations.JobInterval == 0 {
 		config.Database.BackgroundMigrations.JobInterval = defaultBackgroundMigrationsJobInterval
+	}
+
+	// Database Load Balancing
+	if config.Database.LoadBalancing.Enabled {
+		if config.Database.LoadBalancing.Nameserver == "" {
+			config.Database.LoadBalancing.Nameserver = defaultDLBNameserver
+		}
+		if config.Database.LoadBalancing.Port == 0 {
+			config.Database.LoadBalancing.Port = defaultDLBPort
+		}
+		if config.Database.LoadBalancing.RecordCheckInterval == 0 {
+			config.Database.LoadBalancing.RecordCheckInterval = defaultDLBRecordCheckInterval
+		}
+		if config.Database.LoadBalancing.DisconnectTimeout == 0 {
+			config.Database.LoadBalancing.DisconnectTimeout = defaultDLBDisconnectTimeout
+		}
+		if config.Database.LoadBalancing.MaxReplicaLagBytes == 0 {
+			config.Database.LoadBalancing.MaxReplicaLagBytes = defaultDLBMaxReplicaLagBytes
+		}
+		if config.Database.LoadBalancing.MaxReplicaLagTime == 0 {
+			config.Database.LoadBalancing.MaxReplicaLagTime = defaultDLBMaxReplicaLagTime
+		}
+		if config.Database.LoadBalancing.ReplicaCheckInterval == 0 {
+			config.Database.LoadBalancing.ReplicaCheckInterval = defaultDLBReplicaCheckInterval
+		}
 	}
 }
