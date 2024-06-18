@@ -448,7 +448,18 @@ type Database struct {
 	// PreparedStatements can be used to enable prepared statements. Defaults to false.
 	PreparedStatements bool `yaml:"preparedstatements,omitempty"`
 	// Primary is the primary database server's hostname
-	Primary string `yaml:"primary,omitempty"`
+	Primary              string               `yaml:"primary,omitempty"`
+	BackgroundMigrations BackgroundMigrations `yaml:"backgroundmigrations,omitempty"`
+}
+
+// BackgroundMigrations represents the configuration for the asynchronous batched background migrations in the registry.
+type BackgroundMigrations struct {
+	// Enabled can be used to enable or bypass the asynchronous batched background migration process
+	Enabled bool `yaml:"enabled"`
+	// MaxJobRetries is the maximum number of times a job is tried before it is marked as failed (defaults to 0 - no job retry allowed).
+	MaxJobRetries int `yaml:"maxjobretries,omitempty"`
+	// JobInterval is the duration to wait between checks for eligible BBM jobs and acquiring the BBM lock (defaults to `2s` - wait at least 2 second before checking for a job).
+	JobInterval time.Duration `yaml:"jobinterval,omitempty"`
 }
 
 // Regexp wraps regexp.Regexp to implement the encoding.TextMarshaler interface.
@@ -1074,6 +1085,8 @@ func Parse(rd io.Reader, opts ...ParseOption) (*Configuration, error) {
 	return config, nil
 }
 
+const defaultBackgroundMigrationsJobInterval = 2 * time.Second
+
 func ApplyDefaults(config *Configuration) {
 	if config.Log.Level == "" {
 		config.Log.Level = defaultLogLevel
@@ -1108,5 +1121,8 @@ func ApplyDefaults(config *Configuration) {
 		if config.HTTP.Debug.TLS.MinimumTLS == "" {
 			config.HTTP.Debug.TLS.MinimumTLS = config.HTTP.TLS.MinimumTLS
 		}
+	}
+	if config.Database.BackgroundMigrations.Enabled && config.Database.BackgroundMigrations.JobInterval == 0 {
+		config.Database.BackgroundMigrations.JobInterval = defaultBackgroundMigrationsJobInterval
 	}
 }

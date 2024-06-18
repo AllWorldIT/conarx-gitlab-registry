@@ -66,6 +66,11 @@ var configStruct = Configuration{
 		DBName:   "registry",
 		SSLMode:  "disable",
 		Primary:  "primary.record.fqdn",
+		BackgroundMigrations: BackgroundMigrations{
+			Enabled:       true,
+			MaxJobRetries: 1,
+			JobInterval:   5 * time.Second,
+		},
 	},
 	Auth: Auth{
 		"silly": Parameters{
@@ -162,6 +167,10 @@ database:
   schema: public
   sslmode: disable
   primary: primary.record.fqdn
+  backgroundmigrations:
+    enabled: true
+    maxjobretries: 1
+    jobinterval: 5s
 auth:
   silly:
     realm: silly
@@ -217,6 +226,12 @@ notifications:
 http:
   headers:
     X-Content-Type-Options: [nosniff]
+database:
+  enabled: true
+  backgroundmigrations:
+    enabled: true
+    maxjobretries: 1
+    jobinterval: 5s
 `
 
 type ConfigSuite struct {
@@ -253,7 +268,14 @@ func (suite *ConfigSuite) TestParseSimple(c *C) {
 // a string can be parsed into a Configuration struct with no storage parameters
 func (suite *ConfigSuite) TestParseInmemory(c *C) {
 	suite.expectedConfig.Storage = Storage{"inmemory": Parameters{}}
-	suite.expectedConfig.Database = Database{}
+	suite.expectedConfig.Database = Database{
+		Enabled: true,
+		BackgroundMigrations: BackgroundMigrations{
+			Enabled:       true,
+			MaxJobRetries: 1,
+			JobInterval:   5 * time.Second,
+		},
+	}
 	suite.expectedConfig.Reporting = Reporting{}
 	suite.expectedConfig.Log.Fields = nil
 
@@ -626,6 +648,11 @@ func (suite *ConfigSuite) TestParseWithDifferentEnvDatabase(c *C) {
 		DBName:   "foo",
 		SSLMode:  "allow",
 		Primary:  "primary.record.fqdn",
+		BackgroundMigrations: BackgroundMigrations{
+			Enabled:       true,
+			MaxJobRetries: 1,
+			JobInterval:   5 * time.Second,
+		},
 	}
 	suite.expectedConfig.Database = expected
 
@@ -2054,4 +2081,61 @@ redis:
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_IDLETIMEOUT", tt, validator)
+}
+
+// TestParseBBMConfig_EnabledDefaults validates that environment variables properly override backgroundmigrations parameters
+func TestParseBBMConfigEnabledDefaults(t *testing.T) {
+	var tests = []struct {
+		name     string
+		yml      string
+		expected BackgroundMigrations
+	}{
+		{
+			name: "Enabled with defaults",
+			expected: BackgroundMigrations{
+				Enabled: true,
+				// expected default job interval when backgroundmigrations is enabled and job interval is not provided
+				JobInterval: defaultBackgroundMigrationsJobInterval,
+			},
+			yml: `
+version: 0.1
+storage: inmemory
+database:
+  backgroundmigrations:
+    enabled: true
+`,
+		},
+		{
+			name:     "Disabled",
+			expected: BackgroundMigrations{},
+			yml: `
+version: 0.1
+storage: inmemory
+# backgroundmigrations section omitted, defaults to disabled
+`,
+		},
+		{
+			name: "Custom Config",
+			expected: BackgroundMigrations{
+				Enabled:     true,
+				JobInterval: 5 * time.Second, // Custom job interval specified
+			},
+			yml: `
+version: 0.1
+storage: inmemory
+database:
+  backgroundmigrations:
+    enabled: true
+    jobinterval: 5s
+`,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			config, err := Parse(bytes.NewReader([]byte(test.yml)))
+			require.NoError(t, err)
+			require.Equal(t, test.expected, config.Database.BackgroundMigrations)
+		})
+	}
 }
