@@ -615,6 +615,9 @@ database:
     maxidle: 25
     maxopen: 25
     maxlifetime: 5m
+  backgroundmigrations:
+    enabled: true
+    jobinterval: 5s
 ```
 
 | Parameter  | Required | Description                                                                                                                                                                                                                                          |
@@ -652,6 +655,25 @@ Use these settings to configure the behavior of the database connection pool.
 | `maxopen`| no      | The maximum number of open connections to the database. If `maxopen` is less than `maxidle`, then `maxidle` is reduced to match the `maxopen` limit. Defaults to 0 (unlimited). |
 | `maxlifetime`| no    | The maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. Defaults to 0 (unlimited). |
 | `maxidletime` | no | The maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. Defaults to 0 (unlimited). |
+
+### `backgroundmigrations`
+
+> **_NOTE:_** Batched Background Migrations (BBM) are an experimental feature, please do not enable it in production.
+
+The `backgroundmigrations` subsection configures Batched Background Migrations (BBM) in the registry. BBM are used for performing database data migration in batches, ensuring efficient and manageable data migrations without disrupting service availability. See the [specification](./spec/gitlab/database-background-migrations.md) for a detailed explanation of how it works.
+
+```yaml
+backgroundmigrations:
+  enabled: true
+  maxjobretries: 3
+  jobinterval: 5s
+```
+
+| Parameter       | Required | Description                                                                                                                                                |
+| --------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`       | no       | When set to `true`, enables asynchronous Batched Background Migrations (BBM). Defaults to `false`.                                                         |
+| `maxjobretries` | no       | The maximum number of times a job is retried before it is marked as failed in asynchronous BBM. Defaults to `0` - no retry.                                |
+| `jobinterval`   | no       | The periodic duration to wait before checking for eligible BBM jobs to run and acquiring a lock on the BBM process in asynchronous mode. Defaults to `2s`. |
 
 ## `auth`
 
