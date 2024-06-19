@@ -71,6 +71,17 @@ var configStruct = Configuration{
 			MaxJobRetries: 1,
 			JobInterval:   5 * time.Second,
 		},
+		LoadBalancing: DatabaseLoadBalancing{
+			Enabled:              true,
+			Nameserver:           "localhost",
+			Port:                 8600,
+			Record:               "db-replica-registry.service.consul",
+			RecordCheckInterval:  1 * time.Minute,
+			DisconnectTimeout:    2 * time.Minute,
+			MaxReplicaLagTime:    1 * time.Minute,
+			MaxReplicaLagBytes:   8388608,
+			ReplicaCheckInterval: 1 * time.Minute,
+		},
 	},
 	Auth: Auth{
 		"silly": Parameters{
@@ -171,6 +182,16 @@ database:
     enabled: true
     maxjobretries: 1
     jobinterval: 5s
+  loadbalancing:
+    enabled: true
+    nameserver: localhost
+    port: 8600
+    record: db-replica-registry.service.consul
+    recordcheckinterval: 1m
+    disconnecttimeout: 2m
+    maxreplicalagtime: 1m
+    maxreplicalagbytes: 8388608
+    replicacheckinterval: 1m
 auth:
   silly:
     realm: silly
@@ -652,6 +673,17 @@ func (suite *ConfigSuite) TestParseWithDifferentEnvDatabase(c *C) {
 			Enabled:       true,
 			MaxJobRetries: 1,
 			JobInterval:   5 * time.Second,
+		},
+		LoadBalancing: DatabaseLoadBalancing{
+			Enabled:              true,
+			Nameserver:           "localhost",
+			Port:                 8600,
+			Record:               "db-replica-registry.service.consul",
+			RecordCheckInterval:  1 * time.Minute,
+			DisconnectTimeout:    2 * time.Minute,
+			MaxReplicaLagTime:    1 * time.Minute,
+			MaxReplicaLagBytes:   8388608,
+			ReplicaCheckInterval: 1 * time.Minute,
 		},
 	}
 	suite.expectedConfig.Database = expected
@@ -1437,6 +1469,238 @@ database:
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_POOL_MAXLIFETIME", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: %s
+`
+	tt := boolParameterTests(false)
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Database.LoadBalancing.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_ENABLED", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Hosts(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    hosts: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "single",
+			value: "secondary1.example.com",
+			want:  "secondary1.example.com",
+		},
+		{
+			name:  "multiple",
+			value: "secondary1.example.com,secondary2.example.com",
+			want:  "secondary1.example.com,secondary2.example.com",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.Hosts)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_HOSTS", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Nameserver(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    nameserver: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBNameserver},
+		{name: "custom", value: "nameserver.example.com", want: "nameserver.example.com"},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.Nameserver)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_NAMESERVER", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Port(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    port: %s
+`
+	tt := []parameterTest{
+		{
+			name: "default",
+			want: defaultDLBPort,
+		},
+		{
+			name:  "custom",
+			value: "1234",
+			want:  1234,
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.Port)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_PORT", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Record(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    record: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: ""},
+		{name: "custom", value: "db-replica-registry.service.consul", want: "db-replica-registry.service.consul"},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.Record)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_RECORD", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_RecordCheckInterval(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    recordcheckinterval: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBRecordCheckInterval},
+		{name: "custom", value: "2m", want: 2 * time.Minute},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.RecordCheckInterval)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_RECORDCHECKINTERVAL", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_DisconnectTimeout(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    disconnecttimeout: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBDisconnectTimeout},
+		{name: "custom", value: "3m", want: 3 * time.Minute},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.DisconnectTimeout)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_DISCONNECTTIMEOUT", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_MaxReplicaLagBytes(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    maxreplicalagbytes: %s
+`
+	tt := []parameterTest{
+		{
+			name: "default",
+			want: defaultDLBMaxReplicaLagBytes,
+		},
+		{
+			name:  "custom",
+			value: "1234",
+			want:  1234,
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.MaxReplicaLagBytes)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_MAXREPLICALAGBYTES", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_MaxReplicaLagTime(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    maxreplicalagtime: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBMaxReplicaLagTime},
+		{name: "custom", value: "2m", want: 2 * time.Minute},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.MaxReplicaLagTime)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_MAXREPLICALAGTIME", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_ReplicaCheckInterval(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    replicacheckinterval: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBReplicaCheckInterval},
+		{name: "custom", value: "2m", want: 2 * time.Minute},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.ReplicaCheckInterval)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_REPLICACHECKINTERVAL", tt, validator)
 }
 
 func TestParseReportingSentry_Enabled(t *testing.T) {
