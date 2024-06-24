@@ -209,6 +209,22 @@ func TestImporter_Import_UnlinkedConfigBlob_SkipManifest(t *testing.T) {
 	validateImport(t, suite.db)
 }
 
+func TestImporter_PreImport_UnsupportedDigest_SkipManifest(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "unsupported-digest")
+	require.NoError(t, imp.PreImport(suite.ctx, "unsupported-digest"))
+	validateImport(t, suite.db)
+}
+
+func TestImporter_Import_UnsupportedDigest_SkipManifest(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "unsupported-digest")
+	require.NoError(t, imp.Import(suite.ctx, "unsupported-digest"))
+	validateImport(t, suite.db)
+}
+
 func TestImporter_ImportAll_DanglingBlobs_StopsOnError(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
