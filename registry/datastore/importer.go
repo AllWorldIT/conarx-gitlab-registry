@@ -225,7 +225,7 @@ func (imp *Importer) importLayers(ctx context.Context, dbRepo *models.Repository
 				l.Warn("blob is not linked to repository, skipping blob import")
 				continue
 			}
-			if errors.Is(err, digest.ErrDigestInvalidFormat) {
+			if errors.Is(err, digest.ErrDigestInvalidFormat) || errors.Is(err, digest.ErrDigestUnsupported) {
 				l.WithError(err).Warn("broken layer link, skipping manifest import")
 				return dbLayers, errManifestSkip
 			}
@@ -378,8 +378,8 @@ func getConfigPayload(ctx context.Context, m distribution.Descriptor, fsRepo dis
 			l.WithError(err).Warn("configuration blob not linked, skipping")
 			return nil, errManifestSkip
 		}
-		if errors.Is(err, digest.ErrDigestInvalidFormat) {
-			l.WithError(err).Warn("broken config link, skipping")
+		if errors.Is(err, digest.ErrDigestUnsupported) {
+			l.WithError(err).Warn("broken configuration link, skipping")
 			return nil, errManifestSkip
 		}
 		return nil, fmt.Errorf("obtaining configuration payload: %w", err)
@@ -578,6 +578,12 @@ func getFsManifest(ctx context.Context, manifestService distribution.ManifestSer
 			l.WithError(err).Warn("broken manifest link, skipping")
 			return nil, errManifestSkip
 		}
+		if errors.Is(err, digest.ErrDigestUnsupported) {
+			// this error is returned if the manifest's digest uses an unsupported algorithm
+			// per https://github.com/opencontainers/go-digest/blob/v1.0.0/algorithm.go#L50
+			l.WithError(err).Warn("unsupported manifest digest algorithm, skipping")
+			return nil, errManifestSkip
+		}
 		return nil, fmt.Errorf("retrieving manifest %q from filesystem: %w", dgst, err)
 	}
 
@@ -673,7 +679,7 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 				l.Warn("missing tag link, skipping")
 				continue
 			}
-			if errors.Is(err, digest.ErrDigestInvalidFormat) {
+			if errors.Is(err, digest.ErrDigestInvalidFormat) || errors.Is(err, digest.ErrDigestUnsupported) {
 				// The tag link is corrupted, log a warning and skip.
 				l.Warn("broken tag link, skipping")
 				continue
@@ -798,7 +804,7 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 				l.WithError(err).Warn("missing tag link, skipping")
 				continue
 			}
-			if errors.Is(err, digest.ErrDigestInvalidFormat) {
+			if errors.Is(err, digest.ErrDigestInvalidFormat) || errors.Is(err, digest.ErrDigestUnsupported) {
 				// the tag link is corrupted, just log a warning and skip
 				l.WithError(err).Warn("broken tag link, skipping")
 				continue
