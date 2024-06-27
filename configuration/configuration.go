@@ -460,7 +460,7 @@ type BackgroundMigrations struct {
 	Enabled bool `yaml:"enabled"`
 	// MaxJobRetries is the maximum number of times a job is tried before it is marked as failed (defaults to 0 - no job retry allowed).
 	MaxJobRetries int `yaml:"maxjobretries,omitempty"`
-	// JobInterval is the duration to wait between checks for eligible BBM jobs and acquiring the BBM lock (defaults to `2s` - wait at least 2 second before checking for a job).
+	// JobInterval is the duration to wait between checks for eligible BBM jobs and acquiring the BBM lock (defaults to `1m` - wait at least 1 minute before checking for a job).
 	JobInterval time.Duration `yaml:"jobinterval,omitempty"`
 }
 
@@ -1113,7 +1113,7 @@ func Parse(rd io.Reader, opts ...ParseOption) (*Configuration, error) {
 }
 
 const (
-	defaultBackgroundMigrationsJobInterval = 2 * time.Second
+	defaultBackgroundMigrationsJobInterval = 1 * time.Minute
 	defaultDLBNameserver                   = "localhost"
 	defaultDLBPort                         = 8600
 	defaultDLBRecordCheckInterval          = 1 * time.Minute

@@ -203,3 +203,29 @@ type RepositoryLease struct {
 	Path      string
 	Type      LeaseType
 }
+
+// BackgroundMigration is the representation of a BBM.
+type BackgroundMigration struct {
+	ID           int
+	Name         string
+	Status       int
+	StartID      int
+	EndID        int
+	BatchSize    int
+	JobName      string
+	TargetTable  string
+	TargetColumn string
+}
+
+// BackgroundMigrationJob is the representation of a BackgroundMigration Job.
+type BackgroundMigrationJob struct {
+	ID               int
+	BBMID            int
+	StartID          int
+	EndID            int
+	Status           int
+	Attempts         int
+	JobName          string
+	PaginationColumn string
+	BatchSize        int
+}
