@@ -617,7 +617,7 @@ database:
     maxlifetime: 5m
   backgroundmigrations:
     enabled: true
-    jobinterval: 5s
+    jobinterval: 1m
   loadbalancing:
     enabled: true
     nameserver: localhost
@@ -676,14 +676,14 @@ The `backgroundmigrations` subsection configures Batched Background Migrations (
 backgroundmigrations:
   enabled: true
   maxjobretries: 3
-  jobinterval: 5s
+  jobinterval: 1m
 ```
 
 | Parameter       | Required | Description                                                                                                                                                |
 | --------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `enabled`       | no       | When set to `true`, enables asynchronous Batched Background Migrations (BBM). Defaults to `false`.                                                         |
 | `maxjobretries` | no       | The maximum number of times a job is retried before it is marked as failed in asynchronous BBM. Defaults to `0` - no retry.                                |
-| `jobinterval`   | no       | The periodic duration to wait before checking for eligible BBM jobs to run and acquiring a lock on the BBM process in asynchronous mode. Defaults to `2s`. |
+| `jobinterval`   | no       | The periodic duration to wait before checking for eligible BBM jobs to run and acquiring a lock on the BBM process in asynchronous mode. Defaults to `1m`. |
 
 ### `loadbalancing`
 

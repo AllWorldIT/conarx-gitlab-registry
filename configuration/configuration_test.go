@@ -69,7 +69,7 @@ var configStruct = Configuration{
 		BackgroundMigrations: BackgroundMigrations{
 			Enabled:       true,
 			MaxJobRetries: 1,
-			JobInterval:   5 * time.Second,
+			JobInterval:   1 * time.Minute,
 		},
 		LoadBalancing: DatabaseLoadBalancing{
 			Enabled:              true,
@@ -181,7 +181,7 @@ database:
   backgroundmigrations:
     enabled: true
     maxjobretries: 1
-    jobinterval: 5s
+    jobinterval: 1m
   loadbalancing:
     enabled: true
     nameserver: localhost
@@ -252,7 +252,7 @@ database:
   backgroundmigrations:
     enabled: true
     maxjobretries: 1
-    jobinterval: 5s
+    jobinterval: 1m
 `
 
 type ConfigSuite struct {
@@ -294,7 +294,7 @@ func (suite *ConfigSuite) TestParseInmemory(c *C) {
 		BackgroundMigrations: BackgroundMigrations{
 			Enabled:       true,
 			MaxJobRetries: 1,
-			JobInterval:   5 * time.Second,
+			JobInterval:   1 * time.Minute,
 		},
 	}
 	suite.expectedConfig.Reporting = Reporting{}
@@ -672,7 +672,7 @@ func (suite *ConfigSuite) TestParseWithDifferentEnvDatabase(c *C) {
 		BackgroundMigrations: BackgroundMigrations{
 			Enabled:       true,
 			MaxJobRetries: 1,
-			JobInterval:   5 * time.Second,
+			JobInterval:   1 * time.Minute,
 		},
 		LoadBalancing: DatabaseLoadBalancing{
 			Enabled:              true,

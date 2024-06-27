@@ -16,9 +16,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/benbjohnson/clock"
@@ -27,6 +29,7 @@ import (
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/health"
 	"github.com/docker/distribution/health/checks"
+	"github.com/docker/distribution/internal/feature"
 	dlog "github.com/docker/distribution/log"
 	prometheus "github.com/docker/distribution/metrics"
 	"github.com/docker/distribution/notifications"
@@ -36,6 +39,7 @@ import (
 	"github.com/docker/distribution/registry/api/urls"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/auth"
+	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/gc"
@@ -398,6 +402,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			// garbage collector reads this file, so we are fee to log a warning
 			// and move on with spinning up the application.
 			log.WithError(err).Warn("failed to mark filesystem for database only usage, continuing")
+		}
+		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
+			startBackgroundMigrations(app.Context, app.db, config)
 		}
 	}
 
@@ -1763,4 +1770,44 @@ func repositoryFromContextWithRegistry(ctx *Context, w http.ResponseWriter, regi
 	}
 
 	return repository, nil
+}
+
+func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *configuration.Configuration) {
+	l := dlog.GetLogger(dlog.WithContext(ctx))
+
+	// register all work functions with worker
+	worker, err := bbm.RegisterWork(bbm.AllWork(),
+		bbm.WithDB(db),
+		bbm.WithLogger(dlog.GetLogger(dlog.WithContext(ctx))),
+		bbm.WithJobInterval(config.Database.BackgroundMigrations.JobInterval),
+		bbm.WithMaxJobAttempt(config.Database.BackgroundMigrations.MaxJobRetries),
+	)
+	if err != nil {
+		l.WithError(err).Error("background migration worker could not start")
+		return
+	}
+
+	doneCh := make(chan struct{})
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	// listen for registry process exit signal in the background.
+	go bbmListenForShutdown(ctx, sigChan, doneCh)
+
+	// start looking for background migrations
+	gracefulFinish, err := worker.ListenForBackgroundMigration(ctx, doneCh)
+	if err != nil {
+		l.WithError(err).Error("background migration worker exited abruptly")
+	}
+	l.Info("Background migration worker is running")
+
+	// wait for the worker to acknowledge that it is safe to exit.
+	<-gracefulFinish
+	l.Info("Background migration worker stopped")
+}
+
+func bbmListenForShutdown(ctx context.Context, c chan os.Signal, doneCh chan struct{}) {
+	<-c
+	// signal to worker that the program is exiting
+	dlog.GetLogger(dlog.WithContext(ctx)).Info("Background migration worker is shutting down")
+	close(doneCh)
 }
