@@ -89,7 +89,7 @@ type App struct {
 
 	router   *metaRouter                 // router dispatcher while we consolidate into the new router
 	driver   storagedriver.StorageDriver // driver maintains the app global storage driver instance.
-	db       *datastore.DB               // db is the global database handle used across the app.
+	db       datastore.LoadBalancer      // db is the global database handle used across the app.
 	registry distribution.Namespace      // registry is the primary registry backend for the app instance.
 
 	repoRemover      distribution.RepositoryRemover // repoRemover provides ability to delete repos
@@ -337,7 +337,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
 		options = append(options, storage.UseDatabase)
 
-		db, err := datastore.Open(&datastore.DSN{
+		primaryDSN := &datastore.DSN{
 			Host:           config.Database.Host,
 			Port:           config.Database.Port,
 			User:           config.Database.User,
@@ -348,7 +348,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			SSLKey:         config.Database.SSLKey,
 			SSLRootCert:    config.Database.SSLRootCert,
 			ConnectTimeout: config.Database.ConnectTimeout,
-		},
+		}
+		// TODO(dlb): setup replica DSNs
+		db, err := datastore.NewDBLoadBalancer(
+			primaryDSN,
+			nil,
 			datastore.WithLogger(log.WithFields(logrus.Fields{"database": config.Database.DBName})),
 			datastore.WithLogLevel(config.Log.Level),
 			datastore.WithPreparedStatements(config.Database.PreparedStatements),
@@ -365,7 +369,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
-		m := migrations.NewMigrator(db.DB, migrations.SkipPostDeployment)
+		m := migrations.NewMigrator(db.Primary().DB, migrations.SkipPostDeployment)
 		pending, err := m.HasPending()
 		if err != nil {
 			return nil, fmt.Errorf("failed to check database migrations status: %w", err)
@@ -380,19 +384,20 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		if config.HTTP.Debug.Prometheus.Enabled {
 			// Expose database metrics to prometheus.
-			collector := sqlmetrics.NewDBStatsCollector(config.Database.DBName, db)
+			// TODO(dlb): collect metrics for all hosts
+			collector := sqlmetrics.NewDBStatsCollector(config.Database.DBName, db.Primary())
 			promclient.MustRegister(collector)
 		}
 
 		// update online GC settings (if needed) in the background to avoid delaying the app start
 		go func() {
-			if err := updateOnlineGCSettings(app.Context, app.db, config); err != nil {
+			if err := updateOnlineGCSettings(app.Context, app.db.Primary(), config); err != nil {
 				errortracking.Capture(err, errortracking.WithContext(app.Context), errortracking.WithStackTrace())
 				log.WithError(err).Error("failed to update online GC settings")
 			}
 		}()
 
-		startOnlineGC(app.Context, app.db, app.driver, config)
+		startOnlineGC(app.Context, app.db.Primary(), app.driver, config)
 
 		// Now that we've started the database successfully, lock the filesystem
 		// to signal that this object storage needs to be managed by the database.
@@ -404,7 +409,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			log.WithError(err).Warn("failed to mark filesystem for database only usage, continuing")
 		}
 		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
-			startBackgroundMigrations(app.Context, app.db, config)
+			startBackgroundMigrations(app.Context, app.db.Primary(), config)
 		}
 	}
 
@@ -1729,7 +1734,8 @@ func (app *App) GracefulShutdown(ctx context.Context) error {
 
 // DBStats returns the sql.DBStats for the metadata database connection handle.
 func (app *App) DBStats() sql.DBStats {
-	return app.db.Stats()
+	// TODO(dlb): collect metrics for all hosts
+	return app.db.Primary().Stats()
 }
 
 func (app *App) repositoryFromContext(ctx *Context, w http.ResponseWriter) (distribution.Repository, error) {

@@ -93,7 +93,7 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	var repos []string
 
 	if ch.useDatabase {
-		repos, moreEntries, err = dbGetCatalog(ch.Context, ch.db, filters)
+		repos, moreEntries, err = dbGetCatalog(ch.Context, ch.db.Primary(), filters)
 		if err != nil {
 			ch.Errors = append(ch.Errors, errcode.FromUnknownError(err))
 			return
