@@ -93,7 +93,7 @@ func (bh *blobHandler) GetBlob(w http.ResponseWriter, r *http.Request) {
 	blobs := bh.Repository.Blobs(bh)
 
 	if bh.useDatabase {
-		if err := dbBlobLinkExists(bh.Context, bh.db, bh.Repository.Named().Name(), bh.Digest); err != nil {
+		if err := dbBlobLinkExists(bh.Context, bh.db.Primary(), bh.Repository.Named().Name(), bh.Digest); err != nil {
 			bh.Errors = append(bh.Errors, errcode.FromUnknownError(err))
 			return
 		}
@@ -207,5 +207,5 @@ func (bh *blobHandler) deleteBlob() error {
 	if bh.App.redisCache != nil {
 		repoCache = datastore.NewCentralRepositoryCache(bh.App.redisCache)
 	}
-	return dbDeleteBlob(bh.Context, bh.App.Config, bh.db, repoCache, bh.Repository.Named().Name(), bh.Digest)
+	return dbDeleteBlob(bh.Context, bh.App.Config, bh.db.Primary(), repoCache, bh.Repository.Named().Name(), bh.Digest)
 }

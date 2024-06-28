@@ -91,7 +91,7 @@ func (th *tagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	var moreEntries bool
 
 	if th.useDatabase {
-		tags, moreEntries, err = dbGetTags(th.Context, th.db, th.Repository.Named().Name(), filters)
+		tags, moreEntries, err = dbGetTags(th.Context, th.db.Primary(), th.Repository.Named().Name(), filters)
 		if err != nil {
 			th.Errors = append(th.Errors, errcode.FromUnknownError(err))
 			return

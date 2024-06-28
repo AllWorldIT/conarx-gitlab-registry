@@ -33,7 +33,7 @@ type registry struct {
 	manifestsRefLimit            int
 	manifestsPayloadSizeLimit    int
 	driver                       storagedriver.StorageDriver
-	db                           *datastore.DB
+	db                           datastore.LoadBalancer
 	redirectExceptions           []*regexp.Regexp
 }
 
@@ -162,7 +162,7 @@ func BlobDescriptorCacheProvider(blobDescriptorCacheProvider cache.BlobDescripto
 }
 
 // Database configures the registry to use the passed database.
-func Database(db *datastore.DB) RegistryOption {
+func Database(db datastore.LoadBalancer) RegistryOption {
 	return func(registry *registry) error {
 		registry.db = db
 		return nil

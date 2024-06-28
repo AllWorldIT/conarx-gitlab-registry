@@ -74,7 +74,7 @@ func TestDisabledBlobMetadataLinking(t *testing.T) {
 		storage.UseDatabase,
 		// Registry needs a non-nil database to disable blob metadata linking
 		// even though we don't need an actual connection for this test.
-		storage.Database(&datastore.DB{}),
+		storage.Database(&datastore.DBLoadBalancer{}),
 	)
 
 	layer, dgst, err := testutil.CreateRandomTarFile()

@@ -1,4 +1,4 @@
-//go:generate mockgen -package mocks -destination mocks/db.go . Handler,Transactor
+//go:generate mockgen -package mocks -destination mocks/db.go . Handler,Transactor,LoadBalancer
 
 package datastore
 
@@ -11,9 +11,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/distribution/configuration"
+	"github.com/hashicorp/go-multierror"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/tracelog"
@@ -314,4 +316,81 @@ func Open(dsn *DSN, opts ...OpenOption) (*DB, error) {
 	}
 
 	return &DB{db, dsn}, nil
+}
+
+// LoadBalancer represents a database load balancer.
+type LoadBalancer interface {
+	Primary() *DB
+	Replica() *DB
+	Close() error
+}
+
+// DBLoadBalancer manages connections to a primary database and multiple replicas.
+type DBLoadBalancer struct {
+	primary  *DB
+	replicas []*DB
+
+	// replicaIndex and replicaMutex are used to implement a round-robin selection of replicas.
+	replicaIndex int
+	replicaMutex sync.Mutex
+}
+
+// openFunc can be set to mock the Open function in tests.
+var openFunc = Open
+
+// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections.
+func NewDBLoadBalancer(primaryDSN *DSN, replicaDSNs []*DSN, opts ...OpenOption) (*DBLoadBalancer, error) {
+	primary, err := openFunc(primaryDSN, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open primary connection: %w", err)
+	}
+
+	var replicas []*DB
+	for _, dsn := range replicaDSNs {
+		replica, err := openFunc(dsn, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open replica %q connection: %w", dsn.Host, err)
+		}
+		replicas = append(replicas, replica)
+	}
+
+	return &DBLoadBalancer{primary: primary, replicas: replicas}, nil
+}
+
+// Primary returns the primary database handler.
+func (lb *DBLoadBalancer) Primary() *DB {
+	return lb.primary
+}
+
+// Replica returns a round-robin elected replica database handler. If no replicas are configured, then the primary
+// database handler is returned.
+func (lb *DBLoadBalancer) Replica() *DB {
+	if len(lb.replicas) == 0 {
+		return lb.primary
+	}
+
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
+	replica := lb.replicas[lb.replicaIndex]
+	lb.replicaIndex = (lb.replicaIndex + 1) % len(lb.replicas)
+
+	return replica
+}
+
+// Close closes all database connections managed by the DBLoadBalancer.
+func (lb *DBLoadBalancer) Close() error {
+	var result *multierror.Error
+
+	if err := lb.primary.Close(); err != nil {
+		result = multierror.Append(result, fmt.Errorf("failed closing primary connection: %w", err))
+	}
+
+	for _, replica := range lb.replicas {
+		if err := replica.Close(); err != nil {
+			result = multierror.Append(result, fmt.Errorf("failed closing replica %q connection: %w", replica.dsn.Host, err))
+		}
+	}
+
+	return result.ErrorOrNil()
 }

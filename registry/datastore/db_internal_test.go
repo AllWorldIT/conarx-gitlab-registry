@@ -1,10 +1,13 @@
 package datastore
 
 import (
+	"fmt"
 	"io"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/hashicorp/go-multierror"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -149,4 +152,214 @@ func TestLexicographicallyBeforePath(t *testing.T) {
 	for _, test := range tests {
 		require.Equal(t, test.expectedBeforePath, lexicographicallyBeforePath(test.path))
 	}
+}
+
+func TestNewDBLoadBalancer(t *testing.T) {
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { primaryMockDB.Close() })
+
+	replica1MockDB, replicaMock1, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { replica1MockDB.Close() })
+
+	replica2MockDB, replicaMock2, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { replica2MockDB.Close() })
+
+	primaryDSN := &DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	replica1DSN := &DSN{
+		Host:     "replica1",
+		Port:     primaryDSN.Port,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	replica2DSN := &DSN{
+		Host:     "replica2",
+		Port:     primaryDSN.Port,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	primary := &DB{DB: primaryMockDB}
+	replica1 := &DB{DB: replica1MockDB}
+	replica2 := &DB{DB: replica2MockDB}
+
+	// Mock Open function to return our sqlmock instances
+	originalOpen := openFunc
+	t.Cleanup(func() { openFunc = originalOpen })
+	openFunc = func(dsn *DSN, opts ...OpenOption) (*DB, error) {
+		switch dsn.Host {
+		case "primary":
+			return primary, nil
+		case "replica1":
+			return replica1, nil
+		case "replica2":
+			return replica2, nil
+		default:
+			return nil, nil
+		}
+	}
+
+	lb, err := NewDBLoadBalancer(primaryDSN, []*DSN{replica1DSN, replica2DSN})
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	// Verify primary
+	require.Equal(t, primaryMockDB, lb.primary.DB)
+
+	// Verify replicas
+	require.NotEmpty(t, lb.replicas)
+	require.Equal(t, []*DB{replica1, replica2}, lb.replicas)
+
+	// Verify mock expectations (no operations triggered)
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock1.ExpectationsWereMet())
+	require.NoError(t, replicaMock2.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_Close(t *testing.T) {
+	primaryDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	replicaDB1, replicaMock1, err := sqlmock.New()
+	require.NoError(t, err)
+
+	replicaDB2, replicaMock2, err := sqlmock.New()
+	require.NoError(t, err)
+
+	lb := &DBLoadBalancer{
+		primary:  &DB{DB: primaryDB},
+		replicas: []*DB{{DB: replicaDB1}, {DB: replicaDB2}},
+	}
+
+	// Ensure that all handlers are closed
+	primaryMock.ExpectClose()
+	replicaMock1.ExpectClose()
+	replicaMock2.ExpectClose()
+
+	require.NoError(t, lb.Close())
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock1.ExpectationsWereMet())
+	require.NoError(t, replicaMock2.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_Close_Error(t *testing.T) {
+	primaryDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	replicaDB1, replicaMock1, err := sqlmock.New()
+	require.NoError(t, err)
+
+	replicaDB2, replicaMock2, err := sqlmock.New()
+	require.NoError(t, err)
+
+	lb := &DBLoadBalancer{
+		primary: &DB{
+			DB:  primaryDB,
+			dsn: &DSN{Host: "primary"},
+		},
+		replicas: []*DB{
+			{
+				DB:  replicaDB1,
+				dsn: &DSN{Host: "replica1"},
+			},
+			{
+				DB:  replicaDB2,
+				dsn: &DSN{Host: "replica2"},
+			},
+		},
+	}
+
+	// Set expectations for close operations
+	primaryMock.ExpectClose().WillReturnError(fmt.Errorf("primary close error"))
+	replicaMock1.ExpectClose().WillReturnError(fmt.Errorf("replica1 close error"))
+	replicaMock2.ExpectClose()
+
+	err = lb.Close()
+	require.Error(t, err)
+
+	var ee *multierror.Error
+	require.ErrorAs(t, err, &ee)
+	require.Len(t, ee.Errors, 2)
+	require.Contains(t, ee.Errors[0].Error(), "primary close error")
+	require.Contains(t, ee.Errors[1].Error(), "replica1 close error")
+
+	// Ensure all expectations are met
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock1.ExpectationsWereMet())
+	require.NoError(t, replicaMock2.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_Primary(t *testing.T) {
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	lb := &DBLoadBalancer{
+		primary: &DB{DB: primaryDB},
+	}
+
+	db := lb.Primary()
+	require.NotNil(t, db)
+	require.Equal(t, primaryDB, db.DB)
+}
+
+func TestDBLoadBalancer_Replica(t *testing.T) {
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	replicaDB1, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaDB1.Close()
+
+	replicaDB2, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaDB2.Close()
+
+	lb := &DBLoadBalancer{
+		primary:  &DB{DB: primaryDB},
+		replicas: []*DB{{DB: replicaDB1}, {DB: replicaDB2}},
+	}
+
+	// Test round-robin selection of replicas
+	db1 := lb.Replica()
+	require.NotNil(t, db1)
+	require.Equal(t, replicaDB1, db1.DB)
+
+	db2 := lb.Replica()
+	require.NotNil(t, db2)
+	require.Equal(t, replicaDB2, db2.DB)
+
+	db3 := lb.Replica()
+	require.NotNil(t, db3)
+	require.Equal(t, replicaDB1, db3.DB)
+}
+
+func TestDBLoadBalancer_NoReplicas(t *testing.T) {
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	lb := &DBLoadBalancer{
+		primary: &DB{DB: primaryDB},
+	}
+
+	db := lb.Replica()
+	require.NotNil(t, db)
+	require.Equal(t, primaryDB, db.DB)
 }

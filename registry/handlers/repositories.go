@@ -219,7 +219,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 	if h.App.redisCache != nil {
 		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(h.App.redisCache)))
 	}
-	store := datastore.NewRepositoryStore(h.db, opts...)
+	store := datastore.NewRepositoryStore(h.db.Primary(), opts...)
 
 	repo, err := store.FindByPath(h.Context, h.Repository.Named().Name())
 	if err != nil {
@@ -238,7 +238,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 		// If this is the case, we need to find the corresponding top-level namespace. That must exist. If not we
 		// throw a 404 Not Found here.
 		repo = &models.Repository{Path: h.Repository.Named().Name()}
-		ns := datastore.NewNamespaceStore(h.db)
+		ns := datastore.NewNamespaceStore(h.db.Primary())
 		n, err := ns.FindByName(h.Context, repo.TopLevelPathSegment())
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -496,7 +496,7 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	if h.App.redisCache != nil {
 		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(h.App.redisCache)))
 	}
-	rStore := datastore.NewRepositoryStore(h.db, opts...)
+	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
 	path := h.Repository.Named().Name()
 	repo, err := rStore.FindByPath(h.Context, path)
 	if err != nil {
@@ -621,7 +621,7 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 
 	// try to find the namespaceid for the repo if it exists
 	topLevelPathSegment := repo.TopLevelPathSegment()
-	nStore := datastore.NewNamespaceStore(h.db)
+	nStore := datastore.NewNamespaceStore(h.db.Primary())
 	namespace, err := nStore.FindByName(h.Context, topLevelPathSegment)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -637,7 +637,7 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 	repo.NamespaceID = namespace.ID
 	repo.Name = repo.Path[strings.LastIndex(repo.Path, "/")+1:]
 
-	rStore := datastore.NewRepositoryStore(h.db)
+	rStore := datastore.NewRepositoryStore(h.db.Primary())
 	repoList, err := rStore.FindPaginatedRepositoriesForPath(h.Context, repo, filters)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -703,8 +703,8 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	rStore := datastore.NewRepositoryStore(h.db)
-	nStore := datastore.NewNamespaceStore(h.db)
+	rStore := datastore.NewRepositoryStore(h.db.Primary())
+	nStore := datastore.NewNamespaceStore(h.db.Primary())
 
 	// find the origin repository for the path to be renamed (if it exists), if the origin path does not exist
 	// we still need to check and rename the sub-repositories of the provided path (if they exist)
@@ -767,7 +767,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		isPathOriginRepo: renameOriginRepo,
 	}
 
-	err = handleRenameStoreOperation(h.Context, w, rsp, h.App.redisCache, h.db)
+	err = handleRenameStoreOperation(h.Context, w, rsp, h.App.redisCache, h.db.Primary())
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return

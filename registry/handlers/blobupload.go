@@ -102,7 +102,7 @@ func (buh *blobUploadHandler) StartBlobUpload(w http.ResponseWriter, r *http.Req
 			opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(buh.App.redisCache)))
 		}
 
-		rStore = datastore.NewRepositoryStore(buh.db, opts...)
+		rStore = datastore.NewRepositoryStore(buh.db.Primary(), opts...)
 	}
 
 	fromRepo := r.FormValue("from")
@@ -316,7 +316,7 @@ func (buh *blobUploadHandler) PutBlobUploadComplete(w http.ResponseWriter, r *ht
 		if buh.App.redisCache != nil {
 			opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(buh.App.redisCache)))
 		}
-		if err := dbPutBlobUploadComplete(buh.Context, buh.db, buh.Repository.Named().Name(), desc, opts); err != nil {
+		if err := dbPutBlobUploadComplete(buh.Context, buh.db.Primary(), buh.Repository.Named().Name(), desc, opts); err != nil {
 			e := fmt.Errorf("failed to create blob in database: %w", err)
 			buh.Errors = append(buh.Errors, errcode.FromUnknownError(e))
 			return
