@@ -1,3 +1,25 @@
+## [4.6.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.5.0-gitlab...v4.6.0-gitlab) (2024-06-28)
+
+
+### ✨ Features ✨
+
+* add configuration for database load balancing ([3ff52d2](https://gitlab.com/gitlab-org/container-registry/commit/3ff52d2447f427bc537f8313b86d89ecb40775cb))
+* add new bbm config ([2b9c7ae](https://gitlab.com/gitlab-org/container-registry/commit/2b9c7ae1ee46f8cbeb60f0907d004c876afedcb4))
+* **bbm:** add bbm first iteration ([d92cbca](https://gitlab.com/gitlab-org/container-registry/commit/d92cbca8b31bfb845b7636b3bce98b1a329c5eac))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **importer:** skip unsupported digests errors ([94ae374](https://gitlab.com/gitlab-org/container-registry/commit/94ae374558769ae1d833a7541abd45ec26d4d5f5))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.42.0 ([f04936f](https://gitlab.com/gitlab-org/container-registry/commit/f04936f951536cbfc7f1080920e4347598b40468))
+* **deps:** update module github.com/eko/gocache/lib/v4 to v4.1.6 ([ed7de4a](https://gitlab.com/gitlab-org/container-registry/commit/ed7de4a0d728d8bd87e616d145d8421b35acecc0))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.6.0 ([af182b4](https://gitlab.com/gitlab-org/container-registry/commit/af182b4d28fb1b559ba430d2cb0641e0d247a34c))
+* **deps:** update module github.com/opencontainers/image-spec to v1.1.0 ([60ce22f](https://gitlab.com/gitlab-org/container-registry/commit/60ce22f6d5ffc8885db606efe9274b4633e25964))
+
 ## [4.5.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.4.0-gitlab...v4.5.0-gitlab) (2024-06-12)
 
 
