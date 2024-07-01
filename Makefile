@@ -99,7 +99,7 @@ db-structure-dump:
 	@./script/dev/db-structure-dump
 
 dev-tools:
-	@npm install -g \
+	npm install -g \
 		@commitlint/cli@17 \
 		@commitlint/config-conventional@17 \
 		semantic-release@21 \
@@ -108,6 +108,7 @@ dev-tools:
 		@semantic-release/changelog@6 \
 		@semantic-release/git@10 \
 		conventional-changelog-conventionalcommits@6
+	go install go.uber.org/mock/mockgen@v0.4.0
 
 # https://github.com/semantic-release/git#environment-variables
 export GIT_AUTHOR_NAME="$(shell git config user.name)"

@@ -14,10 +14,10 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver"
 	drivermock "github.com/docker/distribution/registry/storage/driver/mocks"
-	"github.com/golang/mock/gomock"
 	"github.com/hashicorp/go-multierror"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 var (

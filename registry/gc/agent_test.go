@@ -17,10 +17,10 @@ import (
 	wmocks "github.com/docker/distribution/registry/gc/worker/mocks"
 	regmocks "github.com/docker/distribution/registry/internal/mocks"
 	"github.com/docker/distribution/registry/internal/testutil"
-	"github.com/golang/mock/gomock"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/gitlab-org/labkit/correlation"
+	"go.uber.org/mock/gomock"
 )
 
 func TestNewAgent(t *testing.T) {

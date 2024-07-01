@@ -10,8 +10,8 @@ import (
 	"github.com/benbjohnson/clock"
 	dbmock "github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/internal/testutil"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func stubClock(tb testing.TB, t time.Time) clock.Clock {
