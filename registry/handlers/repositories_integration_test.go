@@ -15,12 +15,12 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/golang/mock/gomock"
 	gorilla "github.com/gorilla/handlers"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/gitlab-org/labkit/correlation"
+	"go.uber.org/mock/gomock"
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/reference"

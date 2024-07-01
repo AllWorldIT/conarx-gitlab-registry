@@ -98,7 +98,7 @@ mocks:
   needs: ['modules:download']
   stage: validate
   before_script:
-    - go install github.com/golang/mock/mockgen@v1.6.0
+    - go install go.uber.org/mock/mockgen@v0.4.0
     - export PATH="$PATH:$GOPATH/bin"
   script:
     - go generate ./...
