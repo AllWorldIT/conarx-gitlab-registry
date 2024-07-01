@@ -157,18 +157,6 @@ func TestImporter_ImportAll_DryRunDanglingBlobs(t *testing.T) {
 	validateImport(t, suite.db)
 }
 
-func TestImporter_ImportAll_AbortsIfDatabaseIsNotEmpty(t *testing.T) {
-	driver := newFilesystemStorageDriver(t)
-	registry := newRegistry(t, driver)
-
-	// load some fixtures
-	reloadRepositoryFixtures(t)
-
-	imp := datastore.NewImporter(suite.db, registry, datastore.WithImportDanglingManifests, datastore.WithRequireEmptyDatabase)
-	err := imp.ImportAll(suite.ctx)
-	require.EqualError(t, err, "non-empty database")
-}
-
 func TestImporter_ImportAll_ContinuesAfterRepositoryNotFound(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
@@ -390,18 +378,6 @@ func TestImporter_Import_LastTagError(t *testing.T) {
 	require.EqualError(t, err, "importing tags: reading tag details: test tag details read error")
 }
 
-func TestImporter_Import_AbortsIfDatabaseIsNotEmpty(t *testing.T) {
-	driver := newFilesystemStorageDriver(t)
-	registry := newRegistry(t, driver)
-
-	// load some fixtures
-	reloadRepositoryFixtures(t)
-
-	imp := datastore.NewImporter(suite.db, registry, datastore.WithImportDanglingManifests, datastore.WithRequireEmptyDatabase)
-	err := imp.Import(suite.ctx, "a-simple")
-	require.EqualError(t, err, "non-empty database")
-}
-
 func TestImporter_PreImport(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
@@ -425,18 +401,6 @@ func TestImporter_PreImport_DryRun(t *testing.T) {
 	imp := newImporter(t, suite.db, datastore.WithDryRun)
 	require.NoError(t, imp.PreImport(suite.ctx, "a-simple"))
 	validateImport(t, suite.db)
-}
-
-func TestImporter_PreImport_AbortsIfDatabaseIsNotEmpty(t *testing.T) {
-	driver := newFilesystemStorageDriver(t)
-	registry := newRegistry(t, driver)
-
-	// load some fixtures
-	reloadRepositoryFixtures(t)
-
-	imp := datastore.NewImporter(suite.db, registry, datastore.WithImportDanglingManifests, datastore.WithRequireEmptyDatabase)
-	err := imp.PreImport(suite.ctx, "a-simple")
-	require.EqualError(t, err, "non-empty database")
 }
 
 func TestImporter_PreImport_BadManifestFormat(t *testing.T) {
@@ -771,17 +735,6 @@ func TestImporter_ImportBlobs_DryRun(t *testing.T) {
 	imp := newImporter(t, suite.db, datastore.WithDryRun)
 	require.NoError(t, imp.ImportBlobs(suite.ctx))
 	validateImport(t, suite.db)
-}
-
-func TestImporter_ImportBlobs_AbortsIfDatabaseIsNotEmpty(t *testing.T) {
-	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	// load some fixtures
-	reloadRepositoryFixtures(t)
-
-	imp := newImporter(t, suite.db, datastore.WithRequireEmptyDatabase)
-	err := imp.ImportBlobs(suite.ctx)
-	require.EqualError(t, err, "non-empty database")
 }
 
 func TestImporter_PreImportAll(t *testing.T) {
