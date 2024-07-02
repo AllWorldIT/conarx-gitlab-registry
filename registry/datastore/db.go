@@ -126,11 +126,12 @@ func (dsn *DSN) Address() string {
 	return net.JoinHostPort(dsn.Host, strconv.Itoa(dsn.Port))
 }
 
-type openOpts struct {
+type opts struct {
 	logger               *logrus.Entry
 	logLevel             tracelog.LogLevel
 	pool                 *PoolConfig
 	preferSimpleProtocol bool
+	loadBalancing        *LoadBalancingConfig
 }
 
 type PoolConfig struct {
@@ -140,18 +141,24 @@ type PoolConfig struct {
 	MaxIdleTime time.Duration
 }
 
-// OpenOption is used to pass options to Open.
-type OpenOption func(*openOpts)
+// LoadBalancingConfig represents the database load balancing configuration.
+type LoadBalancingConfig struct {
+	hosts []string
+	// TODO(dlb): service discovery opts
+}
+
+// Option is used to configure the database connections.
+type Option func(*opts)
 
 // WithLogger configures the logger for the database connection driver.
-func WithLogger(l *logrus.Entry) OpenOption {
-	return func(opts *openOpts) {
+func WithLogger(l *logrus.Entry) Option {
+	return func(opts *opts) {
 		opts.logger = l
 	}
 }
 
 // WithLogLevel configures the logger level for the database connection driver.
-func WithLogLevel(l configuration.Loglevel) OpenOption {
+func WithLogLevel(l configuration.Loglevel) Option {
 	var lvl tracelog.LogLevel
 	switch l {
 	case configuration.LogLevelTrace:
@@ -166,21 +173,21 @@ func WithLogLevel(l configuration.Loglevel) OpenOption {
 		lvl = tracelog.LogLevelError
 	}
 
-	return func(opts *openOpts) {
+	return func(opts *opts) {
 		opts.logLevel = lvl
 	}
 }
 
 // WithPoolConfig configures the settings for the database connection pool.
-func WithPoolConfig(c *PoolConfig) OpenOption {
-	return func(opts *openOpts) {
+func WithPoolConfig(c *PoolConfig) Option {
+	return func(opts *opts) {
 		opts.pool = c
 	}
 }
 
 // WithPoolMaxIdle configures the maximum number of idle pool connections.
-func WithPoolMaxIdle(c int) OpenOption {
-	return func(opts *openOpts) {
+func WithPoolMaxIdle(c int) Option {
+	return func(opts *opts) {
 		if opts.pool == nil {
 			opts.pool = &PoolConfig{}
 		}
@@ -190,8 +197,8 @@ func WithPoolMaxIdle(c int) OpenOption {
 }
 
 // WithPoolMaxOpen configures the maximum number of open pool connections.
-func WithPoolMaxOpen(c int) OpenOption {
-	return func(opts *openOpts) {
+func WithPoolMaxOpen(c int) Option {
+	return func(opts *opts) {
 		if opts.pool == nil {
 			opts.pool = &PoolConfig{}
 		}
@@ -202,23 +209,24 @@ func WithPoolMaxOpen(c int) OpenOption {
 
 // WithPreparedStatements configures the settings to allow the database
 // driver to use prepared statements.
-func WithPreparedStatements(b bool) OpenOption {
-	return func(opts *openOpts) {
+func WithPreparedStatements(b bool) Option {
+	return func(opts *opts) {
 		// Registry configuration uses opposite semantics as pgx for prepared statements.
 		opts.preferSimpleProtocol = !b
 	}
 }
 
-func applyOptions(opts []OpenOption) openOpts {
+func applyOptions(input []Option) opts {
 	log := logrus.New()
 	log.SetOutput(io.Discard)
 
-	config := openOpts{
-		logger: logrus.NewEntry(log),
-		pool:   &PoolConfig{},
+	config := opts{
+		logger:        logrus.NewEntry(log),
+		pool:          &PoolConfig{},
+		loadBalancing: &LoadBalancingConfig{},
 	}
 
-	for _, v := range opts {
+	for _, v := range input {
 		v(&config)
 	}
 
@@ -282,11 +290,11 @@ func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, dat
 }
 
 // Open creates a database connection handler.
-func Open(dsn *DSN, opts ...OpenOption) (*DB, error) {
+func Open(dsn *DSN, opts ...Option) (*DB, error) {
 	config := applyOptions(opts)
 	pgxConfig, err := pgx.ParseConfig(dsn.String())
 	if err != nil {
-		return nil, fmt.Errorf("datastore: parse config: %w", err)
+		return nil, fmt.Errorf("parsing connection string failed: %w", err)
 	}
 
 	pgxConfig.Tracer = &tracelog.TraceLog{
@@ -338,20 +346,37 @@ type DBLoadBalancer struct {
 // openFunc can be set to mock the Open function in tests.
 var openFunc = Open
 
+// WithLoadBalancingHosts configures the list of static hosts to use for read replicas during database load balancing.
+func WithLoadBalancingHosts(hosts []string) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.hosts = hosts
+	}
+}
+
 // NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections.
-func NewDBLoadBalancer(primaryDSN *DSN, replicaDSNs []*DSN, opts ...OpenOption) (*DBLoadBalancer, error) {
+func NewDBLoadBalancer(primaryDSN *DSN, opts ...Option) (*DBLoadBalancer, error) {
+	config := applyOptions(opts)
+	var result *multierror.Error
+
 	primary, err := openFunc(primaryDSN, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open primary connection: %w", err)
+		result = multierror.Append(result, fmt.Errorf("failed to open primary database connection: %w", err))
 	}
 
 	var replicas []*DB
-	for _, dsn := range replicaDSNs {
-		replica, err := openFunc(dsn, opts...)
+	for _, host := range config.loadBalancing.hosts {
+		dsn := *primaryDSN
+		dsn.Host = host
+		replica, err := openFunc(&dsn, opts...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open replica %q connection: %w", dsn.Host, err)
+			result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
+		} else {
+			replicas = append(replicas, replica)
 		}
-		replicas = append(replicas, replica)
+	}
+
+	if result.ErrorOrNil() != nil {
+		return nil, result
 	}
 
 	return &DBLoadBalancer{primary: primary, replicas: replicas}, nil
