@@ -18,14 +18,14 @@ func TestOpen(t *testing.T) {
 	tests := []struct {
 		name       string
 		dsnFactory func() (*datastore.DSN, error)
-		opts       []datastore.OpenOption
+		opts       []datastore.Option
 		wantErr    bool
 		wantErrMsg string
 	}{
 		{
 			name:       "success",
 			dsnFactory: testutil.NewDSNFromEnv,
-			opts: []datastore.OpenOption{
+			opts: []datastore.Option{
 				datastore.WithLogger(logrus.NewEntry(logrus.New())),
 				datastore.WithPoolConfig(&datastore.PoolConfig{
 					MaxIdle:     1,

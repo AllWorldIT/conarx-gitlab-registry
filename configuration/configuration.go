@@ -468,9 +468,9 @@ type BackgroundMigrations struct {
 type DatabaseLoadBalancing struct {
 	// Enabled can be used to enable or disable the database load balancing. Defaults to false.
 	Enabled bool `yaml:"enabled"`
-	// Hosts is a comma-separated list of static hosts to use for load balancing. Can be used as an alternative to
-	// service discovery. Ignored if `record` is set.
-	Hosts string `yaml:"hosts,omitempty"`
+	// Hosts is a list of static hosts to use for load balancing. Can be used as an alternative to service discovery.
+	// Ignored if `record` is set.
+	Hosts []string `yaml:"hosts,omitempty"`
 	// Nameserver is the nameserver to use for looking up the DNS record.
 	Nameserver string `yaml:"nameserver"`
 	// Port is the port to use for looking up the DNS record.

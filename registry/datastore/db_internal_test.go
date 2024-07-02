@@ -1,8 +1,10 @@
 package datastore
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"testing"
 	"time"
 
@@ -26,7 +28,7 @@ func TestApplyOptions(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		opts           []OpenOption
+		opts           []Option
 		wantLogger     *logrus.Entry
 		wantPoolConfig *PoolConfig
 	}{
@@ -38,19 +40,19 @@ func TestApplyOptions(t *testing.T) {
 		},
 		{
 			name:           "with logger",
-			opts:           []OpenOption{WithLogger(l)},
+			opts:           []Option{WithLogger(l)},
 			wantLogger:     l,
 			wantPoolConfig: &PoolConfig{},
 		},
 		{
 			name:           "with pool config",
-			opts:           []OpenOption{WithPoolConfig(poolConfig)},
+			opts:           []Option{WithPoolConfig(poolConfig)},
 			wantLogger:     logrus.NewEntry(defaultLogger),
 			wantPoolConfig: poolConfig,
 		},
 		{
 			name:           "combined",
-			opts:           []OpenOption{WithLogger(l), WithPoolConfig(poolConfig)},
+			opts:           []Option{WithLogger(l), WithPoolConfig(poolConfig)},
 			wantLogger:     l,
 			wantPoolConfig: poolConfig,
 		},
@@ -176,24 +178,6 @@ func TestNewDBLoadBalancer(t *testing.T) {
 		SSLMode:  "disable",
 	}
 
-	replica1DSN := &DSN{
-		Host:     "replica1",
-		Port:     primaryDSN.Port,
-		User:     primaryDSN.User,
-		Password: primaryDSN.Password,
-		DBName:   primaryDSN.DBName,
-		SSLMode:  primaryDSN.SSLMode,
-	}
-
-	replica2DSN := &DSN{
-		Host:     "replica2",
-		Port:     primaryDSN.Port,
-		User:     primaryDSN.User,
-		Password: primaryDSN.Password,
-		DBName:   primaryDSN.DBName,
-		SSLMode:  primaryDSN.SSLMode,
-	}
-
 	primary := &DB{DB: primaryMockDB}
 	replica1 := &DB{DB: replica1MockDB}
 	replica2 := &DB{DB: replica2MockDB}
@@ -201,7 +185,7 @@ func TestNewDBLoadBalancer(t *testing.T) {
 	// Mock Open function to return our sqlmock instances
 	originalOpen := openFunc
 	t.Cleanup(func() { openFunc = originalOpen })
-	openFunc = func(dsn *DSN, opts ...OpenOption) (*DB, error) {
+	openFunc = func(dsn *DSN, opts ...Option) (*DB, error) {
 		switch dsn.Host {
 		case "primary":
 			return primary, nil
@@ -214,7 +198,7 @@ func TestNewDBLoadBalancer(t *testing.T) {
 		}
 	}
 
-	lb, err := NewDBLoadBalancer(primaryDSN, []*DSN{replica1DSN, replica2DSN})
+	lb, err := NewDBLoadBalancer(primaryDSN, WithLoadBalancingHosts([]string{"replica1", "replica2"}))
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
@@ -229,6 +213,91 @@ func TestNewDBLoadBalancer(t *testing.T) {
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 	require.NoError(t, replicaMock1.ExpectationsWereMet())
 	require.NoError(t, replicaMock2.ExpectationsWereMet())
+}
+
+func TestNewDBLoadBalancer_Error(t *testing.T) {
+	primaryDSN := &DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	// Mock Open function to return errors based on host matching
+	originalOpen := openFunc
+	t.Cleanup(func() { openFunc = originalOpen })
+	openFunc = func(dsn *DSN, opts ...Option) (*DB, error) {
+		if dsn.Host == "fail_primary" {
+			return nil, errors.New("primary connection failed")
+		} else if match, _ := regexp.MatchString(`fail_replica\d*`, dsn.Host); match {
+			return nil, errors.New("replica connection failed")
+		}
+		return &DB{}, nil
+	}
+
+	tests := []struct {
+		name         string
+		primaryDSN   *DSN
+		replicaHosts []string
+		expectedErrs []string
+	}{
+		{
+			name:         "primary connection fails",
+			primaryDSN:   &DSN{Host: "fail_primary"},
+			replicaHosts: []string{"replica1"},
+			expectedErrs: []string{"failed to open primary database connection: primary connection failed"},
+		},
+		{
+			name:       "one replica connection fails",
+			primaryDSN: primaryDSN,
+			replicaHosts: []string{
+				"replica1",
+				"fail_replica2",
+			},
+			expectedErrs: []string{`failed to open replica "fail_replica2" database connection: replica connection failed`},
+		},
+		{
+			name:       "multiple replica connections fail",
+			primaryDSN: primaryDSN,
+			replicaHosts: []string{
+				"fail_replica1",
+				"fail_replica2",
+			},
+			expectedErrs: []string{
+				`failed to open replica "fail_replica1" database connection: replica connection failed`,
+				`failed to open replica "fail_replica2" database connection: replica connection failed`,
+			},
+		},
+		{
+			name:       "primary and replica connections fail",
+			primaryDSN: &DSN{Host: "fail_primary"},
+			replicaHosts: []string{
+				"fail_replica2",
+			},
+			expectedErrs: []string{
+				`failed to open primary database connection: primary connection failed`,
+				`failed to open replica "fail_replica2" database connection: replica connection failed`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lb, err := NewDBLoadBalancer(tt.primaryDSN, WithLoadBalancingHosts(tt.replicaHosts))
+			require.Nil(t, lb)
+
+			var errs *multierror.Error
+			require.ErrorAs(t, err, &errs)
+			require.NotNil(t, errs)
+			require.Len(t, errs.Errors, len(tt.expectedErrs))
+
+			for _, expectedErr := range tt.expectedErrs {
+				require.Contains(t, errs.Error(), expectedErr)
+			}
+		})
+	}
 }
 
 func TestDBLoadBalancer_Close(t *testing.T) {

@@ -337,7 +337,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
 		options = append(options, storage.UseDatabase)
 
-		primaryDSN := &datastore.DSN{
+		dsn := &datastore.DSN{
 			Host:           config.Database.Host,
 			Port:           config.Database.Port,
 			User:           config.Database.User,
@@ -349,10 +349,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			SSLRootCert:    config.Database.SSLRootCert,
 			ConnectTimeout: config.Database.ConnectTimeout,
 		}
-		// TODO(dlb): setup replica DSNs
-		db, err := datastore.NewDBLoadBalancer(
-			primaryDSN,
-			nil,
+
+		dbOpts := []datastore.Option{
 			datastore.WithLogger(log.WithFields(logrus.Fields{"database": config.Database.DBName})),
 			datastore.WithLogLevel(config.Log.Level),
 			datastore.WithPreparedStatements(config.Database.PreparedStatements),
@@ -362,9 +360,19 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				MaxLifetime: config.Database.Pool.MaxLifetime,
 				MaxIdleTime: config.Database.Pool.MaxIdleTime,
 			}),
-		)
+		}
+
+		if config.Database.LoadBalancing.Enabled {
+			if len(config.Database.LoadBalancing.Hosts) > 0 {
+				hosts := config.Database.LoadBalancing.Hosts
+				log.WithField("hosts", hosts).Info("enabling database load balancing")
+				dbOpts = append(dbOpts, datastore.WithLoadBalancingHosts(hosts))
+			}
+		}
+
+		db, err := datastore.NewDBLoadBalancer(dsn, dbOpts...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to construct database connection: %w", err)
+			return nil, fmt.Errorf("failed to initialize database connections: %w", err)
 		}
 
 		// Skip postdeployment migrations to prevent pending post deployment
