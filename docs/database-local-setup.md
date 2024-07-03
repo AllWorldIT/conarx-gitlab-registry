@@ -335,3 +335,75 @@ database:
 ```
 
 You should be able to [run the migrations](#migrations) and continue from there.
+
+## Load Balancing
+
+> This feature is a work in progress. See [epic 8591](https://gitlab.com/groups/gitlab-org/-/epics/8591).
+
+The easiest path to set up load balancing locally is to rely on GDK, which includes support for PostgreSQL replication,
+PgBouncer and Consul.
+
+You have two options, using a fixed hosts list or service discovery (not yet supported).
+
+### Fixed Hosts
+
+This option does not rely on service discovery to find the PostgreSQL hosts. Instead, you need to provide a fixed list
+of hosts that should be used as read replicas.
+
+1. Set up GDK following the setup guide [here](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/database_load_balancing.md); 
+
+1. Run `gdk psql` to get into a `psql` console and then create the registry database:
+   ```sql
+   CREATE DATABASE registry;
+   ```
+
+1. Configure the registry:
+   ```yaml
+   log:
+     level: debug
+     formatter: text
+   database:
+     enabled: true
+     host: /<full path to gdk root>/postgresql/
+     port: 5432
+     dbname: registry
+     sslmode: disable
+     loadbalancing:
+       enabled: true
+       hosts:
+         - /<full path to gdk root>/postgresql-replica/
+   ```
+   
+   You can optionally add the primary host to `loadbalancing.hosts` to make it part of the read-only pool.
+
+3. Tail PostgreSQL logs in a separate window:
+   ```shell
+   gdk tail postgresql*
+   ```
+
+4. Run the registry. You should see something like this:
+   ```
+   INFO[0000] Connect                                       database=registry duration_ms=3 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84101 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=5 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql-replica/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84102 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=2 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84104 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Query                                         args="[]" commandTag="CREATE TABLE" database=registry duration_ms=0 go_version=go1.21.5 instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84104 sql="create table if not exists \"schema_migrations\" (\"id\" text not null primary key, \"applied_at\" timestamp with time zone) ;" version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=4 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84105 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Query                                         args="[map[16:1 17:1 20:1 21:1 23:1 26:1 28:1 29:1 700:1 701:1 1082:1 1114:1 1184:1]]" commandTag="SELECT 162" database=registry duration_ms=5 go_version=go1.21.5 instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84105 sql="SELECT * FROM \"schema_migrations\" ORDER BY \"id\" ASC" version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=1 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84106 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Query                                         args="[]" commandTag="CREATE TABLE" database=registry duration_ms=0 go_version=go1.21.5 instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84106 sql="create table if not exists \"schema_migrations\" (\"id\" text not null primary key, \"applied_at\" timestamp with time zone) ;" version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=1 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84107 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Query                                         args="[map[16:1 17:1 20:1 21:1 23:1 26:1 28:1 29:1 700:1 701:1 1082:1 1114:1 1184:1]]" commandTag="SELECT 162" database=registry duration_ms=0 go_version=go1.21.5 instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84107 sql="SELECT * FROM \"schema_migrations\" ORDER BY \"id\" ASC" version=v4.5.0-gitlab-20-gbac9b1549.m
+   ```
+
+   Note that database log entries contain a `host` key/value pair that tells us the host that each operation is
+targeting. We can see that the registry connects to both primary and replica hosts.
+
+5. In the PostgreSQL logs you should see something like this:
+   ```sql
+   2024-06-27_13:56:57.69718 postgresql            : 2024-06-27 14:56:57.697 WEST [16895] LOG:  statement: -- ping
+   2024-06-27_13:56:57.71803 postgresql-replica    : 2024-06-27 14:56:57.716 WEST [16896] LOG:  statement: -- ping
+   2024-06-27_13:56:57.75166 postgresql            : 2024-06-27 14:56:57.751 WEST [16920] LOG:  statement: create table if not exists "schema_migrations" ("id" text not null primary key, "applied_at" timestamp with time zone) ;
+   2024-06-27_13:56:57.75564 postgresql            : 2024-06-27 14:56:57.755 WEST [16922] LOG:  statement: SELECT * FROM "schema_migrations" ORDER BY "id" ASC
+   2024-06-27_13:56:57.77475 postgresql            : 2024-06-27 14:56:57.773 WEST [16927] LOG:  statement: create table if not exists "schema_migrations" ("id" text not null primary key, "applied_at" timestamp with time zone) ;
+   2024-06-27_13:56:57.78049 postgresql            : 2024-06-27 14:56:57.779 WEST [16931] LOG:  statement: SELECT * FROM "schema_migrations" ORDER BY "id" ASC
+   ```
