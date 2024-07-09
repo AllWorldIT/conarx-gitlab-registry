@@ -128,19 +128,6 @@ func validateImport(t *testing.T, db *datastore.DB) {
 	}
 }
 
-func TestImporter_ImportAll_AllowIdempotent(t *testing.T) {
-	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	// First, import a single repository, only tagged manifests and referenced blobs.
-	imp1 := newImporter(t, suite.db)
-	require.NoError(t, imp1.Import(suite.ctx, "f-dangling-manifests"))
-
-	// Now try to import the entire contents of the registry including what was previously imported.
-	imp2 := newImporter(t, suite.db, datastore.WithImportDanglingManifests, datastore.WithImportDanglingBlobs)
-	require.NoError(t, imp2.ImportAll(suite.ctx))
-	validateImport(t, suite.db)
-}
-
 func TestImporter_ImportAll_DryRun(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
@@ -516,6 +503,19 @@ func TestImporter_FullImport_UnknownLayerMediaTypeWithDynamicMediaTypes(t *testi
 	err := imp.FullImport(suite.ctx)
 	require.NoError(t, err)
 	validateImport(t, suite.db)
+}
+
+func TestImporter_FullImport_ErrTagsTableNotEmpty(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	// First, import a single repository, only tagged manifests and referenced blobs.
+	imp1 := newImporter(t, suite.db)
+	require.NoError(t, imp1.Import(suite.ctx, "f-dangling-manifests"))
+
+	// Now try to import the entire contents of the registry including what was previously imported.
+	// Expect importer to fail because the tags table is not empty.
+	imp2 := newImporter(t, suite.db)
+	require.EqualError(t, imp2.FullImport(suite.ctx), "importing all repositories: tags table is not empty")
 }
 
 func TestImporter_ImportAllRepositories_UnknownLayerMediaType(t *testing.T) {

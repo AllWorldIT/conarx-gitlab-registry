@@ -32,6 +32,7 @@ import (
 var (
 	errNegativeTestingDelay = errors.New("negative testing delay")
 	errManifestSkip         = errors.New("the manifest is invalid and its (pre)import should be skipped")
+	errTagsTableNotEmpty    = errors.New("tags table is not empty")
 	commonBarOptions        = []progressbar.Option{
 		progressbar.OptionSetElapsedTime(true),
 		progressbar.OptionShowCount(),
@@ -965,6 +966,15 @@ func (imp *Importer) countRows(ctx context.Context) (map[string]int, error) {
 	return count, nil
 }
 
+func (imp *Importer) isTagsTableEmpty(ctx context.Context) (bool, error) {
+	count, err := imp.tagStore.Count(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return count == 0, nil
+}
+
 func (imp *Importer) isDatabaseEmpty(ctx context.Context) (bool, error) {
 	counters, err := imp.countRows(ctx)
 	if err != nil {
@@ -1292,6 +1302,15 @@ func (imp *Importer) importBlobs(ctx context.Context) error {
 func (imp *Importer) importAllRepositories(ctx context.Context) error {
 	var tx Transactor
 	var err error
+
+	isTagsTableEmpty, err := imp.isTagsTableEmpty(ctx)
+	if err != nil {
+		return fmt.Errorf("chechking if tags table is empty: %w", err)
+	}
+	if !isTagsTableEmpty {
+		log.GetLogger(log.WithContext(ctx)).WithError(errTagsTableNotEmpty).Error("cannot import all repositories while the tags table has entries, you must truncate the table manually before retrying, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#troubleshooting")
+		return errTagsTableNotEmpty
+	}
 
 	repositoryEnumerator, ok := imp.registry.(distribution.RepositoryEnumerator)
 	if !ok {
