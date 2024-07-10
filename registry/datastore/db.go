@@ -1,4 +1,4 @@
-//go:generate mockgen -package mocks -destination mocks/db.go . Handler,Transactor,LoadBalancer
+//go:generate mockgen -package mocks -destination mocks/db.go . Handler,Transactor,LoadBalancer,Connector,DNSResolver
 
 package datastore
 
@@ -22,7 +22,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const driverName = "pgx"
+const (
+	driverName = "pgx"
+	dnsTimeout = 2 * time.Second
+)
 
 // Queryer is the common interface to execute queries on a database.
 type Queryer interface {
@@ -143,8 +146,8 @@ type PoolConfig struct {
 
 // LoadBalancingConfig represents the database load balancing configuration.
 type LoadBalancingConfig struct {
-	hosts []string
-	// TODO(dlb): service discovery opts
+	hosts    []string
+	resolver DNSResolver
 }
 
 // Option is used to configure the database connections.
@@ -289,8 +292,22 @@ func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, dat
 	}
 }
 
-// Open creates a database connection handler.
-func Open(dsn *DSN, opts ...Option) (*DB, error) {
+// Connector is an interface for opening database connections. This enabled low-level testing for how connections are
+// established during load balancing.
+type Connector interface {
+	Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, error)
+}
+
+// sqlConnector is the default implementation of Connector using sql.Open.
+type sqlConnector struct{}
+
+// NewConnector creates a new sqlConnector.
+func NewConnector() Connector {
+	return &sqlConnector{}
+}
+
+// Open opens a new database connection with the given DSN and options.
+func (c *sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, error) {
 	config := applyOptions(opts)
 	pgxConfig, err := pgx.ParseConfig(dsn.String())
 	if err != nil {
@@ -319,7 +336,7 @@ func Open(dsn *DSN, opts ...Option) (*DB, error) {
 	db.SetConnMaxLifetime(config.pool.MaxLifetime)
 	db.SetConnMaxIdleTime(config.pool.MaxIdleTime)
 
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("verification failed: %w", err)
 	}
 
@@ -330,6 +347,7 @@ func Open(dsn *DSN, opts ...Option) (*DB, error) {
 type LoadBalancer interface {
 	Primary() *DB
 	Replica() *DB
+	Replicas() []*DB
 	Close() error
 }
 
@@ -343,35 +361,137 @@ type DBLoadBalancer struct {
 	replicaMutex sync.Mutex
 }
 
-// openFunc can be set to mock the Open function in tests.
-var openFunc = Open
-
-// WithLoadBalancingHosts configures the list of static hosts to use for read replicas during database load balancing.
-func WithLoadBalancingHosts(hosts []string) Option {
+// WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
+func WithFixedHosts(hosts []string) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.hosts = hosts
 	}
 }
 
-// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections.
-func NewDBLoadBalancer(primaryDSN *DSN, opts ...Option) (*DBLoadBalancer, error) {
+// WithServiceDiscovery enables and configures service discovery for read replicas during database load balancing.
+func WithServiceDiscovery(resolver DNSResolver) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.resolver = resolver
+	}
+}
+
+// DNSResolver is an interface for DNS resolution operations. This enabled low-level testing for how connections are
+// established during load balancing.
+type DNSResolver interface {
+	// LookupSRV looks up SRV records.
+	LookupSRV(ctx context.Context) ([]*net.SRV, error)
+	// LookupHost looks up IP addresses for a given host.
+	LookupHost(ctx context.Context, host string) ([]string, error)
+}
+
+// dnsResolver is the default implementation of DNSResolver using net.Resolver.
+type dnsResolver struct {
+	resolver *net.Resolver
+	record   string
+}
+
+// LookupSRV performs an SRV record lookup.
+func (r *dnsResolver) LookupSRV(ctx context.Context) ([]*net.SRV, error) {
+	_, addrs, err := r.resolver.LookupSRV(ctx, "", "", r.record)
+	return addrs, err
+}
+
+// LookupHost performs an IP address lookup for the given host.
+func (r *dnsResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
+	return r.resolver.LookupHost(ctx, host)
+}
+
+// NewDNSResolver creates a new dnsResolver for the specified nameserver, port, and record.
+func NewDNSResolver(nameserver string, port int, record string) DNSResolver {
+	return &dnsResolver{
+		resolver: &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return net.DialTimeout("tcp", fmt.Sprintf("%s:%d", nameserver, port), dnsTimeout)
+			},
+		},
+		record: record,
+	}
+}
+
+func resolveHosts(ctx context.Context, resolver DNSResolver) ([]*net.TCPAddr, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsTimeout)
+	defer cancel()
+
+	srvs, err := resolver.LookupSRV(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error resolving DNS SRV record: %w", err)
+	}
+
+	var result *multierror.Error
+	var addrs []*net.TCPAddr
+	for _, srv := range srvs {
+		// TODO: consider allowing partial successes where only a subset of replicas is reachable
+		ips, err := resolver.LookupHost(ctx, srv.Target)
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("error resolving host %q address: %v", srv.Target, err))
+			continue
+		}
+		for _, ip := range ips {
+			addr := &net.TCPAddr{
+				IP:   net.ParseIP(ip),
+				Port: int(srv.Port),
+			}
+			addrs = append(addrs, addr)
+		}
+	}
+
+	if result.ErrorOrNil() != nil {
+		return nil, result.ErrorOrNil()
+	}
+
+	return addrs, nil
+}
+
+// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections. A custom database Connector
+// implementation can be used to establish connections, otherwise sql.Open is used.
+func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, connector Connector, opts ...Option) (*DBLoadBalancer, error) {
 	config := applyOptions(opts)
 	var result *multierror.Error
 
-	primary, err := openFunc(primaryDSN, opts...)
+	if connector == nil {
+		connector = NewConnector()
+	}
+
+	primary, err := connector.Open(ctx, primaryDSN, opts...)
 	if err != nil {
 		result = multierror.Append(result, fmt.Errorf("failed to open primary database connection: %w", err))
 	}
 
 	var replicas []*DB
-	for _, host := range config.loadBalancing.hosts {
-		dsn := *primaryDSN
-		dsn.Host = host
-		replica, err := openFunc(&dsn, opts...)
+	if config.loadBalancing.resolver != nil {
+		addrs, err := resolveHosts(ctx, config.loadBalancing.resolver)
 		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
+			result = multierror.Append(result, fmt.Errorf("failed to fetch replica hosts: %w", err))
 		} else {
-			replicas = append(replicas, replica)
+			for _, addr := range addrs {
+				dsn := *primaryDSN
+				dsn.Host = addr.IP.String()
+				dsn.Port = addr.Port
+				replica, err := connector.Open(ctx, &dsn, opts...)
+				if err != nil {
+					// TODO: consider allowing partial successes where only a subset of replicas is reachable
+					result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
+				} else {
+					replicas = append(replicas, replica)
+				}
+			}
+		}
+	} else if len(config.loadBalancing.hosts) > 0 {
+		for _, host := range config.loadBalancing.hosts {
+			dsn := *primaryDSN
+			dsn.Host = host
+			replica, err := connector.Open(ctx, &dsn, opts...)
+			if err != nil {
+				result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
+			} else {
+				replicas = append(replicas, replica)
+			}
 		}
 	}
 
@@ -401,6 +521,11 @@ func (lb *DBLoadBalancer) Replica() *DB {
 	lb.replicaIndex = (lb.replicaIndex + 1) % len(lb.replicas)
 
 	return replica
+}
+
+// Replicas returns all replica database handlers currently in the pool.
+func (lb *DBLoadBalancer) Replicas() []*DB {
+	return lb.replicas
 }
 
 // Close closes all database connections managed by the DBLoadBalancer.

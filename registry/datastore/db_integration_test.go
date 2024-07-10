@@ -3,6 +3,7 @@
 package datastore_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -68,7 +69,7 @@ func TestOpen(t *testing.T) {
 			dsn, err := tt.dsnFactory()
 			require.NoError(t, err)
 
-			db, err := datastore.Open(dsn)
+			db, err := datastore.NewConnector().Open(context.Background(), dsn)
 			if tt.wantErr {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.wantErrMsg)
