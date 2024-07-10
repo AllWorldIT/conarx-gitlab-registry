@@ -363,14 +363,25 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		}
 
 		if config.Database.LoadBalancing.Enabled {
-			if len(config.Database.LoadBalancing.Hosts) > 0 {
+			// service discovery takes precedence over fixed hosts
+			if config.Database.LoadBalancing.Record != "" {
+				nameserver := config.Database.LoadBalancing.Nameserver
+				port := config.Database.LoadBalancing.Port
+				record := config.Database.LoadBalancing.Record
+
+				log.WithFields(dlog.Fields{"nameserver": nameserver, "port": port, "record": record}).
+					Info("enabling database load balancing with service discovery")
+
+				resolver := datastore.NewDNSResolver(nameserver, port, record)
+				dbOpts = append(dbOpts, datastore.WithServiceDiscovery(resolver))
+			} else if len(config.Database.LoadBalancing.Hosts) > 0 {
 				hosts := config.Database.LoadBalancing.Hosts
-				log.WithField("hosts", hosts).Info("enabling database load balancing")
-				dbOpts = append(dbOpts, datastore.WithLoadBalancingHosts(hosts))
+				log.WithField("hosts", hosts).Info("enabling database load balancing with static hosts list")
+				dbOpts = append(dbOpts, datastore.WithFixedHosts(hosts))
 			}
 		}
 
-		db, err := datastore.NewDBLoadBalancer(dsn, dbOpts...)
+		db, err := datastore.NewDBLoadBalancer(ctx, dsn, nil, dbOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize database connections: %w", err)
 		}

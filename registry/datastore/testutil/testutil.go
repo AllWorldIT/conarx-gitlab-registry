@@ -218,7 +218,7 @@ func newDB(dsn *datastore.DSN, logLevel logrus.Level, logOut io.Writer, poolConf
 	log.SetLevel(logLevel)
 	log.SetOutput(logOut)
 
-	db, err := datastore.Open(dsn, datastore.WithLogger(logrus.NewEntry(log)))
+	db, err := datastore.NewConnector().Open(context.Background(), dsn, datastore.WithLogger(logrus.NewEntry(log)))
 	if err != nil {
 		return nil, fmt.Errorf("opening database connection: %w", err)
 	}
