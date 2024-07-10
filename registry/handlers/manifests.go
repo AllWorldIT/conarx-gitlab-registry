@@ -814,7 +814,7 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 
 	// We need to find and lock a GC manifest task that is related with the manifest that we're about to tag. This
 	// is needed to ensure we lock any related online GC tasks to prevent race conditions around the tag creation. See:
-	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create database transaction: %w", err)
@@ -1145,7 +1145,7 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 
 	// We need to find and lock referenced manifests to ensure we lock any related online GC tasks to prevent race
 	// conditions around the manifest list insert. See:
-	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
 	mm := make([]*models.Manifest, 0, len(manifestList.Manifests))
 	ids := make([]int64, 0, len(mm))
 	for _, desc := range manifestList.Manifests {
@@ -1329,7 +1329,7 @@ func dbDeleteManifest(ctx context.Context, db datastore.Handler, cache datastore
 
 	// We need to find the manifest first and then lookup for any manifest it references (if it's a manifest list). This
 	// is needed to ensure we lock any related online GC tasks to prevent race conditions around the delete. See:
-	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-manifest-list
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#deleting-the-last-referencing-manifest-list
 	m, err := rStore.FindManifestByDigest(ctx, r, d)
 	if err != nil {
 		return err
@@ -1574,7 +1574,7 @@ func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.Repo
 
 	// We first check if the tag exists and grab the corresponding manifest ID, then we find and lock a related online
 	// GC manifest review record (if any) to prevent conflicting online GC reviews, and only then delete the tag. See:
-	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-tag
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#deleting-the-last-referencing-tag
 
 	t, err := rStore.FindTagByName(ctx, r, tagName)
 	if err != nil {

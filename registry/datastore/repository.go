@@ -313,7 +313,7 @@ func NewCentralRepositoryCache(cache *gocache.Cache[any]) *centralRepositoryCach
 }
 
 // key generates a valid Redis key string for a given repository object. The used key format is described in
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/redis-dev-guidelines.md#key-format.
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
 func (c *centralRepositoryCache) key(path string) string {
 	nsPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()

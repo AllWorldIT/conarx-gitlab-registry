@@ -47,7 +47,7 @@ The due date is set to 10 days before the targeted GitLab release date to create
 
 ### 2. Release
 
-1. Read the [release documentation](https://gitlab.com/gitlab-org/container-registry/-/tree/master/docs-gitlab#releases).
+1. Read the [release documentation](https://gitlab.com/gitlab-org/container-registry/-/blob/master/CONTRIBUTING.md#releases).
 1. Run the `make release-dry-run` command.
 1. Review each MR and check if the ~"cannot-rollback" or the ~"high-risk-change" label has been applied. If any MR contains the label:
    1. Ensure that _no_ code changes that rely on the ~"cannot-rollback" MRg are included in this release. These should be separated into two consecutive releases.

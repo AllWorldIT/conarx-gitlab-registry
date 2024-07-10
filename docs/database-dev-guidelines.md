@@ -14,12 +14,6 @@ types (like `sql.DB`), and their methods (only the ones we rely on) if they
 return anything but an `error`. This will guarantee a low effort in case we want
 to swap the client/driver at some point.
 
-## ER Model
-
-The database ER model should be updated when doing a schema change. We're using
-[pgModeler](https://github.com/pgmodeler/pgmodeler) for this (`.dbm` extension).
-The source files can be found at `docs-gitlab/db`.
-
 ## SQL Formatting
 
 Long, complex or multi-line SQL statements must be formatted with
