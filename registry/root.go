@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jszwec/csvutil"
-
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/internal/feature"
@@ -22,7 +19,6 @@ import (
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/driver/factory"
-	"github.com/docker/distribution/registry/storage/inventory"
 	"github.com/docker/distribution/version"
 	"github.com/docker/libtrust"
 	"github.com/olekukonko/tablewriter"
@@ -34,7 +30,6 @@ func init() {
 	RootCmd.AddCommand(ServeCmd)
 	RootCmd.AddCommand(GCCmd)
 	RootCmd.AddCommand(DBCmd)
-	RootCmd.AddCommand(InventoryCmd)
 	RootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "show the version and exit")
 
 	GCCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do everything except remove the blobs")
@@ -68,9 +63,6 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&dynamicMediaTypes, "dynamic-media-types", "m", true, "record unknown media types during import")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
-
-	InventoryCmd.Flags().StringVarP(&format, "format", "f", "text", "which format to write output to, text output produces an additional summary for convenience, options: text, json, csv")
-	InventoryCmd.Flags().BoolVarP(&countTags, "tag-count", "t", true, "count repository tags, set this to false to increase inventory speed")
 }
 
 // Command flag vars
@@ -450,7 +442,6 @@ var ImportCmd = &cobra.Command{
 		"Untagged manifests are not imported.\n " +
 		"This tool can not be used with the parallelwalk storage configuration enabled.",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		// Ensure no more than one step flag is set.
 		if preImport && (importAllRepos || importCommonBlobs) {
 			fmt.Fprint(os.Stderr, "steps two or three can't be used with step one\n")
@@ -569,110 +560,6 @@ var ImportCmd = &cobra.Command{
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to import metadata: %v", err)
-			os.Exit(1)
-		}
-	},
-}
-
-// InventoryCmd is a registry subcommand that collects registry data.
-var InventoryCmd = &cobra.Command{
-	Use:   "inventory <config>",
-	Short: "Inventory the registry",
-	Long:  "Inventory the registry, collecting information on repositories and (optionally) their tag totals",
-	Run: func(cmd *cobra.Command, args []string) {
-		config, err := resolveConfiguration(args)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
-			os.Exit(1)
-		}
-
-		parameters := config.Storage.Parameters()
-		driver, err := factory.Create(config.Storage.Type(), parameters)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct %s driver: %v", config.Storage.Type(), err)
-			os.Exit(1)
-		}
-
-		ctx := dcontext.Background()
-		ctx, err = configureLogging(ctx, config)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "unable to configure logging with config: %s", err)
-			os.Exit(1)
-		}
-
-		registry, err := storage.NewRegistry(ctx, driver)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct registry: %v", err)
-			os.Exit(1)
-		}
-
-		it := inventory.NewTaker(registry, countTags)
-		iv, err := it.Run(ctx)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to take inventory: %v", err)
-			os.Exit(1)
-		}
-
-		switch format {
-		case "csv":
-			b, err := csvutil.Marshal(iv.Repositories)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to marshal inventory: %v", err)
-				os.Exit(1)
-			}
-
-			fmt.Fprintf(os.Stdout, "%s", b)
-		case "json":
-			b, err := json.Marshal(iv)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to marshal inventory: %v", err)
-				os.Exit(1)
-			}
-
-			fmt.Fprintf(os.Stdout, "%s", b)
-		case "text":
-			table := tablewriter.NewWriter(os.Stdout)
-			table.SetHeader([]string{"Repository", "Tag Count"})
-			table.SetColWidth(80)
-
-			// Display table rows sorted by repository path.
-			sort.Slice(iv.Repositories, func(i, j int) bool {
-				return iv.Repositories[i].Path < iv.Repositories[j].Path
-			})
-
-			for _, repo := range iv.Repositories {
-				tc := fmt.Sprintf("%d", repo.TagCount)
-				if repo.TagCount == 0 {
-					tc = ""
-				}
-				table.Append([]string{repo.Path, tc})
-			}
-
-			table.Render()
-
-			table = tablewriter.NewWriter(os.Stdout)
-			table.SetHeader([]string{"Group", "Repository Count", "Tag Count"})
-			table.SetColWidth(80)
-
-			groups := iv.Summary().Groups
-
-			// Display table rows sorted by group.
-			sort.Slice(groups, func(i, j int) bool {
-				return groups[i].Name < groups[j].Name
-			})
-
-			for _, g := range groups {
-				tc := fmt.Sprintf("%d", g.TagCount)
-				if g.TagCount == 0 {
-					tc = ""
-				}
-				table.Append([]string{g.Name, fmt.Sprintf("%d", g.RepositoryCount), tc})
-			}
-
-			table.Render()
-		default:
-			fmt.Fprintf(os.Stderr, "output option must be one of text, json, csv")
 			os.Exit(1)
 		}
 	},
