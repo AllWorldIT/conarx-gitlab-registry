@@ -48,7 +48,7 @@ func NewCentralProjectLeaseCache(cache *gocache.Cache[any]) *centralProjectLease
 }
 
 // key generates a valid Redis key string for a given project lease object. The used key format is described in
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/redis-dev-guidelines.md#key-format.
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
 func (c *centralProjectLeaseCache) key(path string) string {
 	groupPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()

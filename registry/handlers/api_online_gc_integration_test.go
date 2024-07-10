@@ -57,7 +57,7 @@ func withoutOnlineGCReviewDelay(config *configuration.Configuration) {
 
 // TestTagsAPI_Delete_OnlineGC_BlocksAndResumesAfterGCReview tests that when we try to delete a tag that points to a
 // manifest that is being reviewed by the online GC, the API is not able to delete the tag until GC completes.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-tag
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#deleting-the-last-referencing-tag
 func TestTagsAPI_Delete_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -105,7 +105,7 @@ func TestTagsAPI_Delete_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 // TestTagsAPI_Delete_OnlineGC_TimeoutOnProlongedReview tests that when we try to delete a tag that points to a
 // manifest that is being reviewed by the online GC, and for some reason the review does not end within
 // tagDeleteGCLockTimeout, the API request is aborted and a 503 Service Unavailable response is returned to clients.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-tag
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#deleting-the-last-referencing-tag
 func TestTagsAPI_Delete_OnlineGC_TimeoutOnProlongedReview(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -144,7 +144,7 @@ func TestTagsAPI_Delete_OnlineGC_TimeoutOnProlongedReview(t *testing.T) {
 
 // TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview tests that when we try to delete a manifest list
 // that points to a manifest that is being reviewed by the online GC, the API is not able to delete until GC completes.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-manifest-list
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#deleting-the-last-referencing-manifest-list
 func TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -189,7 +189,7 @@ func TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 // TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview tests that when we try to delete a manifest list
 // that points to a manifest that is being reviewed by the online GC, and for some reason the review does not end within
 // manifestDeleteGCLockTimeout, the API request is aborted and a 503 Service Unavailable response is returned.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-manifest-list
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#deleting-the-last-referencing-manifest-list
 func TestManifestsAPI_DeleteList_OnlineGC_TimeoutOnProlongedReview(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -224,7 +224,7 @@ func TestManifestsAPI_DeleteList_OnlineGC_TimeoutOnProlongedReview(t *testing.T)
 
 // TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview tests that when we try to tag a manifest that is being
 // reviewed by the online GC, the API is not able to tag until GC completes.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
 func TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -274,7 +274,7 @@ func TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 // that is being reviewed by the online GC, and it ends up being deleted because it was dangling, the API is not able to
 // tag until GC completes. Once unblocked, the API should handle the "manifest not found" error gracefully and create
 // and tag the manifest.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
 func TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview_DanglingManifest(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -325,7 +325,7 @@ func TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview_DanglingManifes
 // TestManifestsAPI_Tag_OnlineGC_TimeoutOnProlongedReview tests that when we try to tag a manifest that is being
 // reviewed by the online GC, and for some reason the review does not end within manifestTagGCLockTimeout, the API
 // request is aborted and a 503 Service Unavailable response is returned.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
 func TestManifestsAPI_Tag_OnlineGC_TimeoutOnProlongedReview(t *testing.T) {
 	env := newTestEnv(t, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -364,7 +364,7 @@ func TestManifestsAPI_Tag_OnlineGC_TimeoutOnProlongedReview(t *testing.T) {
 
 // TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview tests that when we try to create a manifest list
 // that points to a manifest that is being reviewed by the online GC, the API is not able to proceed until GC completes.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
 func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -444,7 +444,7 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 // TestManifestsAPI_CreateList_OnlineGC_TimeoutOnProlongedReview tests that when we try to create a manifest list
 // that points to a manifest that is being reviewed by the online GC, and for some reason the review does not end within
 // manifestListCreateGCLockTimeout, the API request is aborted and a 503 Service Unavailable response is returned.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
 func TestManifestsAPI_CreateList_OnlineGC_TimeoutOnProlongedReview(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
@@ -516,7 +516,7 @@ func TestManifestsAPI_CreateList_OnlineGC_TimeoutOnProlongedReview(t *testing.T)
 // a manifest list that references a manifest that is being reviewed by the online GC, and it ends up being deleted
 // because it was dangling, the API is not able to proceed until GC completes. Once unblocked, the API should return a
 // 400 Bad Request error, as one of the required manifests no longer exist.
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
 func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview_DanglingManifest(t *testing.T) {
 	env := newTestEnv(t, withDelete, withoutOnlineGCReviewDelay)
 	defer env.Shutdown()
