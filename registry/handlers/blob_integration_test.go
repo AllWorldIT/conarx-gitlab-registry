@@ -4,8 +4,10 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/registry/datastore"
@@ -15,6 +17,7 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	gocache "github.com/eko/gocache/lib/v4/cache"
 	"github.com/stretchr/testify/require"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 type env struct {
@@ -110,6 +113,23 @@ func TestDeleteBlobDB(t *testing.T) {
 	defer env.shutdown(t)
 
 	// Setup
+	ttl := 30 * time.Minute
+	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
+	cache := datastore.NewCentralRepositoryCache(redisCache)
+
+	key := "registry:db:{repository:bar:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}"
+	redisMock.ExpectGet(key).RedisNil()
+	redisMock.CustomMatch(func(expected, actual []interface{}) error {
+		var actDecoded models.Repository
+		err := msgpack.Unmarshal((actual[2]).([]byte), &actDecoded)
+		if err != nil {
+			return err
+		}
+		if actDecoded.Name != "bar" || actDecoded.Path != "bar" {
+			return fmt.Errorf("Bad data was set: %+v", actDecoded)
+		}
+		return nil
+	}).ExpectSet(key, nil, ttl).SetVal("OK")
 
 	// build test repository
 	rStore := datastore.NewRepositoryStore(env.db)
@@ -137,7 +157,7 @@ func TestDeleteBlobDB(t *testing.T) {
 
 	// Test
 
-	err = dbDeleteBlob(env.ctx, env.config, env.db, datastore.NewNoOpRepositoryCache(), r.Path, b.Digest)
+	err = dbDeleteBlob(env.ctx, env.config, env.db, cache, r.Path, b.Digest)
 	require.NoError(t, err)
 
 	// the layer blob should still be there
@@ -147,12 +167,22 @@ func TestDeleteBlobDB(t *testing.T) {
 
 	// but not the link for the repository
 	require.False(t, isBlobLinked(t, env, r, b.Digest))
+
+	require.NoError(t, redisMock.ExpectationsWereMet())
 }
 
 func TestDeleteBlobDB_RepositoryNotFound(t *testing.T) {
 	env := newEnv(t)
 	defer env.shutdown(t)
 
-	err := dbDeleteBlob(env.ctx, env.config, env.db, datastore.NewNoOpRepositoryCache(), "foo", "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9")
+	ttl := 30 * time.Minute
+	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
+	cache := datastore.NewCentralRepositoryCache(redisCache)
+
+	key := "registry:db:{repository:foo:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae}"
+	redisMock.ExpectGet(key).RedisNil()
+	err := dbDeleteBlob(env.ctx, env.config, env.db, cache, "foo", "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9")
 	require.Error(t, err)
+
+	require.NoError(t, redisMock.ExpectationsWereMet())
 }
