@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/distribution"
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
@@ -108,7 +109,39 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	return env
 }
 
+func setupBlob(t *testing.T, path string, e *env) (*models.Blob, *models.Repository, datastore.BlobStore) {
+	t.Helper()
+
+	// build test repository
+	rStore := datastore.NewRepositoryStore(e.db)
+	r, err := rStore.CreateByPath(e.ctx, "bar")
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	// add layer blob
+	bStore := datastore.NewBlobStore(e.db)
+	b := &models.Blob{
+		MediaType: "application/vnd.docker.image.rootfs.diff.tar.gzip",
+		Digest:    "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9",
+		Size:      2802957,
+	}
+	err = bStore.Create(e.ctx, b)
+	require.NoError(t, err)
+	require.NotEmpty(t, r.ID)
+
+	// link blob to repository
+	err = rStore.LinkBlob(e.ctx, r, b.Digest)
+	require.NoError(t, err)
+
+	// make sure it's linked
+	require.True(t, isBlobLinked(t, e, r, b.Digest))
+
+	return b, r, bStore
+}
+
 func TestDeleteBlobDB(t *testing.T) {
+	repoName := "bar"
+
 	env := newEnv(t)
 	defer env.shutdown(t)
 
@@ -117,7 +150,7 @@ func TestDeleteBlobDB(t *testing.T) {
 	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
 	cache := datastore.NewCentralRepositoryCache(redisCache)
 
-	key := "registry:db:{repository:bar:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}"
+	key := "registry:db:{repository:" + repoName + ":fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}"
 	redisMock.ExpectGet(key).RedisNil()
 	redisMock.CustomMatch(func(expected, actual []interface{}) error {
 		var actDecoded models.Repository
@@ -125,39 +158,16 @@ func TestDeleteBlobDB(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if actDecoded.Name != "bar" || actDecoded.Path != "bar" {
+		if actDecoded.Name != repoName || actDecoded.Path != repoName {
 			return fmt.Errorf("Bad data was set: %+v", actDecoded)
 		}
 		return nil
 	}).ExpectSet(key, nil, ttl).SetVal("OK")
 
-	// build test repository
-	rStore := datastore.NewRepositoryStore(env.db)
-	r, err := rStore.CreateByPath(env.ctx, "bar")
-	require.NoError(t, err)
-	require.NotNil(t, r)
-
-	// add layer blob
-	bStore := datastore.NewBlobStore(env.db)
-	b := &models.Blob{
-		MediaType: "application/vnd.docker.image.rootfs.diff.tar.gzip",
-		Digest:    "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9",
-		Size:      2802957,
-	}
-	err = bStore.Create(env.ctx, b)
-	require.NoError(t, err)
-	require.NotEmpty(t, r.ID)
-
-	// link blob to repository
-	err = rStore.LinkBlob(env.ctx, r, b.Digest)
-	require.NoError(t, err)
-
-	// make sure it's linked
-	require.True(t, isBlobLinked(t, env, r, b.Digest))
+	b, r, bStore := setupBlob(t, repoName, env)
 
 	// Test
-
-	err = dbDeleteBlob(env.ctx, env.config, env.db, cache, r.Path, b.Digest)
+	err := dbDeleteBlob(env.ctx, env.config, env.db, cache, r.Path, b.Digest)
 	require.NoError(t, err)
 
 	// the layer blob should still be there
