@@ -181,8 +181,9 @@ func TestDeleteBlobDB_RepositoryNotFound(t *testing.T) {
 
 	key := "registry:db:{repository:foo:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae}"
 	redisMock.ExpectGet(key).RedisNil()
+
 	err := dbDeleteBlob(env.ctx, env.config, env.db, cache, "foo", "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9")
-	require.Error(t, err)
+	require.ErrorIs(t, err, distribution.ErrRepositoryUnknown{Name: "foo"})
 
 	require.NoError(t, redisMock.ExpectationsWereMet())
 }
