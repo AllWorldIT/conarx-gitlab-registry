@@ -197,3 +197,69 @@ func TestDeleteBlobDB_RepositoryNotFound(t *testing.T) {
 
 	require.NoError(t, redisMock.ExpectationsWereMet())
 }
+
+func TestExistsBlobDB_Exists(t *testing.T) {
+	repoName := "bar"
+
+	env := newEnv(t)
+	defer env.shutdown(t)
+
+	// Setup
+	ttl := 30 * time.Minute
+	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
+
+	key := "registry:db:{repository:" + repoName + ":fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}"
+	redisMock.ExpectGet(key).RedisNil()
+	redisMock.CustomMatch(func(expected, actual []interface{}) error {
+		var actDecoded models.Repository
+		err := msgpack.Unmarshal((actual[2]).([]byte), &actDecoded)
+		if err != nil {
+			return err
+		}
+		if actDecoded.Name != repoName || actDecoded.Path != repoName {
+			return fmt.Errorf("Bad data was set: %+v", actDecoded)
+		}
+		return nil
+	}).ExpectSet(key, nil, ttl).SetVal("OK")
+
+	b, r, _ := setupBlob(t, repoName, env)
+
+	// Test
+	err := dbBlobLinkExists(env.ctx, env.db, r.Path, b.Digest, redisCache)
+	require.NoError(t, err)
+
+	require.NoError(t, redisMock.ExpectationsWereMet())
+}
+
+func TestExistsBlobDB_NotExists(t *testing.T) {
+	repoName := "bar"
+
+	env := newEnv(t)
+	defer env.shutdown(t)
+
+	// Setup
+	ttl := 30 * time.Minute
+	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
+
+	key := "registry:db:{repository:" + repoName + ":fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}"
+	redisMock.ExpectGet(key).RedisNil()
+	redisMock.CustomMatch(func(expected, actual []interface{}) error {
+		var actDecoded models.Repository
+		err := msgpack.Unmarshal((actual[2]).([]byte), &actDecoded)
+		if err != nil {
+			return err
+		}
+		if actDecoded.Name != repoName || actDecoded.Path != repoName {
+			return fmt.Errorf("Bad data was set: %+v", actDecoded)
+		}
+		return nil
+	}).ExpectSet(key, nil, ttl).SetVal("OK")
+
+	_, r, _ := setupBlob(t, repoName, env)
+
+	// Test
+	err := dbBlobLinkExists(env.ctx, env.db, r.Path, "sha256:297e345743c4708ac4c9c68f9a9f0ead1fcfccc660718b5ebcd3452e202bc2c2", redisCache)
+	require.ErrorContains(t, err, "blob unknown to registry")
+
+	require.NoError(t, redisMock.ExpectationsWereMet())
+}
