@@ -150,7 +150,9 @@ func TestDeleteBlobDB(t *testing.T) {
 	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
 	cache := datastore.NewCentralRepositoryCache(redisCache)
 
-	key := "registry:db:{repository:" + repoName + ":fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}"
+	b, r, bStore := setupBlob(t, repoName, env)
+
+	key := fmt.Sprintf("registry:db:{repository:%s:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}", r.Path)
 	redisMock.ExpectGet(key).RedisNil()
 	redisMock.CustomMatch(func(expected, actual []interface{}) error {
 		var actDecoded models.Repository
@@ -163,8 +165,6 @@ func TestDeleteBlobDB(t *testing.T) {
 		}
 		return nil
 	}).ExpectSet(key, nil, ttl).SetVal("OK")
-
-	b, r, bStore := setupBlob(t, repoName, env)
 
 	// Test
 	err := dbDeleteBlob(env.ctx, env.config, env.db, cache, r.Path, b.Digest)
@@ -208,7 +208,9 @@ func TestExistsBlobDB_Exists(t *testing.T) {
 	ttl := 30 * time.Minute
 	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
 
-	key := "registry:db:{repository:" + repoName + ":fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}"
+	b, r, _ := setupBlob(t, repoName, env)
+
+	key := fmt.Sprintf("registry:db:{repository:%s:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}", r.Path)
 	redisMock.ExpectGet(key).RedisNil()
 	redisMock.CustomMatch(func(expected, actual []interface{}) error {
 		var actDecoded models.Repository
@@ -221,8 +223,6 @@ func TestExistsBlobDB_Exists(t *testing.T) {
 		}
 		return nil
 	}).ExpectSet(key, nil, ttl).SetVal("OK")
-
-	b, r, _ := setupBlob(t, repoName, env)
 
 	// Test
 	err := dbBlobLinkExists(env.ctx, env.db, r.Path, b.Digest, redisCache)
@@ -241,7 +241,9 @@ func TestExistsBlobDB_NotExists(t *testing.T) {
 	ttl := 30 * time.Minute
 	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
 
-	key := "registry:db:{repository:" + repoName + ":fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}"
+	_, r, _ := setupBlob(t, repoName, env)
+
+	key := fmt.Sprintf("registry:db:{repository:%s:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9}", r.Path)
 	redisMock.ExpectGet(key).RedisNil()
 	redisMock.CustomMatch(func(expected, actual []interface{}) error {
 		var actDecoded models.Repository
@@ -254,8 +256,6 @@ func TestExistsBlobDB_NotExists(t *testing.T) {
 		}
 		return nil
 	}).ExpectSet(key, nil, ttl).SetVal("OK")
-
-	_, r, _ := setupBlob(t, repoName, env)
 
 	// Test
 	err := dbBlobLinkExists(env.ctx, env.db, r.Path, "sha256:297e345743c4708ac4c9c68f9a9f0ead1fcfccc660718b5ebcd3452e202bc2c2", redisCache)
