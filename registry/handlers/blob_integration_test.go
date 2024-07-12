@@ -109,32 +109,32 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	return env
 }
 
-func setupBlob(t *testing.T, path string, e *env) (*models.Blob, *models.Repository, datastore.BlobStore) {
+func setupBlob(t *testing.T, path string, env *env) (*models.Blob, *models.Repository, datastore.BlobStore) {
 	t.Helper()
 
 	// build test repository
-	rStore := datastore.NewRepositoryStore(e.db)
-	r, err := rStore.CreateByPath(e.ctx, "bar")
+	rStore := datastore.NewRepositoryStore(env.db)
+	r, err := rStore.CreateByPath(env.ctx, "bar")
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
 	// add layer blob
-	bStore := datastore.NewBlobStore(e.db)
+	bStore := datastore.NewBlobStore(env.db)
 	b := &models.Blob{
 		MediaType: "application/vnd.docker.image.rootfs.diff.tar.gzip",
 		Digest:    "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9",
 		Size:      2802957,
 	}
-	err = bStore.Create(e.ctx, b)
+	err = bStore.Create(env.ctx, b)
 	require.NoError(t, err)
 	require.NotEmpty(t, r.ID)
 
 	// link blob to repository
-	err = rStore.LinkBlob(e.ctx, r, b.Digest)
+	err = rStore.LinkBlob(env.ctx, r, b.Digest)
 	require.NoError(t, err)
 
 	// make sure it's linked
-	require.True(t, isBlobLinked(t, e, r, b.Digest))
+	require.True(t, isBlobLinked(t, env, r, b.Digest))
 
 	return b, r, bStore
 }
