@@ -114,7 +114,7 @@ func setupBlob(t *testing.T, path string, env *env) (*models.Blob, *models.Repos
 
 	// build test repository
 	rStore := datastore.NewRepositoryStore(env.db)
-	r, err := rStore.CreateByPath(env.ctx, "bar")
+	r, err := rStore.CreateByPath(env.ctx, path)
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
