@@ -713,11 +713,11 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
-	dbtestutil.ReloadFixtures(t, env.db, "../datastore/",
+	dbtestutil.ReloadFixtures(t, env.db.Primary(), "../datastore/",
 		// A Tag has a foreign key for a Manifest, which in turn references a Repository (insert order matters)
 		dbtestutil.NamespacesTable, dbtestutil.RepositoriesTable, dbtestutil.BlobsTable, dbtestutil.ManifestsTable, dbtestutil.TagsTable)
 	t.Cleanup(func() {
-		require.NoError(t, dbtestutil.TruncateAllTables(env.db))
+		require.NoError(t, dbtestutil.TruncateAllTables(env.db.Primary()))
 	})
 
 	// see ../datastore/testdata/fixtures/tags.sql

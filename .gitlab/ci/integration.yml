@@ -218,7 +218,7 @@ database:api-load-balancing-hosts:
   <<: *database-load-balancing
   variables:
     <<: *database-load-balancing-variables
-    REGISTRY_DATABASE_LOADBALANCING_HOSTS: "[replica1,replica2]"
+    REGISTRY_DATABASE_LOADBALANCING_HOSTS: "replica1,replica2"
 
 database:api-load-balancing-discovery:
   <<: *database-load-balancing

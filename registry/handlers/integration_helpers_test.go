@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -54,10 +55,8 @@ import (
 	gorillahandlers "github.com/gorilla/handlers"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/gitlab-org/labkit/correlation"
-	"gitlab.com/gitlab-org/labkit/metrics/sqlmetrics"
 )
 
 func init() {
@@ -243,6 +242,37 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 			SSLKey:      dsn.SSLKey,
 			SSLRootCert: dsn.SSLRootCert,
 		}
+
+		if os.Getenv("REGISTRY_DATABASE_LOADBALANCING_ENABLED") == "true" {
+			// service discovery takes precedence over fixed hosts
+			if os.Getenv("REGISTRY_DATABASE_LOADBALANCING_RECORD") != "" {
+				nameserver := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_NAMESERVER")
+				tmpPort := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_PORT")
+				record := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_RECORD")
+
+				if nameserver == "" || tmpPort == "" || record == "" {
+					panic("REGISTRY_DATABASE_LOADBALANCING_NAMESERVER, " +
+						"REGISTRY_DATABASE_LOADBALANCING_PORT and REGISTRY_DATABASE_LOADBALANCING_RECORD required for " +
+						"enabling DB load balancing with service discovery")
+				}
+				port, err := strconv.Atoi(tmpPort)
+				if err != nil {
+					panic(fmt.Sprintf("invalid REGISTRY_DATABASE_LOADBALANCING_PORT: %q", tmpPort))
+				}
+
+				config.Database.LoadBalancing = configuration.DatabaseLoadBalancing{
+					Enabled:    true,
+					Nameserver: nameserver,
+					Port:       port,
+					Record:     record,
+				}
+			} else if hosts := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_HOSTS"); hosts != "" {
+				config.Database.LoadBalancing = configuration.DatabaseLoadBalancing{
+					Enabled: true,
+					Hosts:   strings.Split(hosts, ","),
+				}
+			}
+		}
 	}
 
 	for _, o := range opts {
@@ -323,7 +353,7 @@ type testEnv struct {
 	app         *registryhandlers.App
 	server      *httptest.Server
 	builder     *urls.Builder
-	db          *datastore.DB
+	db          datastore.LoadBalancer
 	ns          *rtestutil.NotificationServer
 	cacheClient cacheClient
 }
@@ -345,14 +375,14 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 
 	// The API test needs access to the database only to clean it up during
 	// shutdown so that environments come up with a fresh copy of the database.
-	var db *datastore.DB
+	var db datastore.LoadBalancer
 	var err error
 	if config.Database.Enabled {
 		db, err = datastoretestutil.NewDBFromConfig(config)
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db.Primary().DB)
 		if _, err = m.Up(); err != nil {
 			t.Fatal(err)
 		}
@@ -366,7 +396,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 			if d == -1 {
 				d = 0
 			}
-			s := datastore.NewGCSettingsStore(db)
+			s := datastore.NewGCSettingsStore(db.Primary())
 			if _, err := s.UpdateAllReviewAfterDefaults(ctx, d); err != nil {
 				t.Fatal(err)
 			}
@@ -431,7 +461,7 @@ func (t *testEnv) Shutdown() {
 			panic(err)
 		}
 
-		if err := datastoretestutil.TruncateAllTables(t.db); err != nil {
+		if err := datastoretestutil.TruncateAllTables(t.db.Primary()); err != nil {
 			panic(err)
 		}
 
@@ -450,14 +480,6 @@ func (t *testEnv) Shutdown() {
 
 		// Needed for idempotency, so that shutdowns may be defer'd without worry.
 		t.config.Redis.Cache.Enabled = false
-	}
-
-	// The Prometheus DBStatsCollector is registered within handlers.NewApp (it is the only place we can do so).
-	// Therefore, if metrics are enabled, we must unregister this collector it when the env is shutdown. Otherwise,
-	// prometheus.MustRegister will panic on a subsequent test with metrics enabled.
-	if t.config.HTTP.Debug.Prometheus.Enabled {
-		collector := sqlmetrics.NewDBStatsCollector(t.config.Database.DBName, t.db)
-		prometheus.Unregister(collector)
 	}
 }
 
