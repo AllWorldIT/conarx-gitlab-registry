@@ -1,3 +1,5 @@
+//go:generate mockgen -package mocks -destination mocks/repository_cache.go . RepositoryCache
+
 package datastore
 
 import (
@@ -237,6 +239,7 @@ func (n *noOpRepositoryCache) SetSizeWithDescendants(context.Context, *models.Re
 func (n *noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
 	return false, 0
 }
+
 func (n *noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
@@ -1073,6 +1076,7 @@ func getLastEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
 
 	return q, args
 }
+
 func getBeforeEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
 	var (
 		comparisonOperator     string

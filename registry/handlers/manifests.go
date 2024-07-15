@@ -264,7 +264,8 @@ func (imh *manifestHandler) rewriteManifestList(manifestList *manifestlist.Deser
 	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{
 		"manifest_list_digest": imh.Digest.String(),
 		"default_arch":         defaultArch,
-		"default_os":           defaultOS})
+		"default_os":           defaultOS,
+	})
 	l.Info("client does not advertise support for manifest lists, selecting a manifest image for the default arch and os")
 
 	// Find the image manifest corresponding to the default platform.
@@ -632,7 +633,6 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 
 	mediaType := r.Header.Get("Content-Type")
 	manifest, desc, err := distribution.UnmarshalManifest(mediaType, jsonBuf.Bytes())
-
 	if err != nil {
 		imh.Errors = append(imh.Errors, v2.ErrorCodeManifestInvalid.WithDetail(err.Error()))
 		return
@@ -1064,7 +1064,8 @@ func dbFindManifestListManifest(
 	rStore datastore.RepositoryStore,
 	dbRepo *models.Repository,
 	dgst digest.Digest,
-	repoPath string) (*models.Manifest, error) {
+	repoPath string,
+) (*models.Manifest, error) {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "manifest_digest": dgst})
 	l.Debug("finding manifest list manifest")
 
@@ -1523,7 +1524,7 @@ func logIfManifestListInvalid(ctx context.Context, ml *manifestlist.Deserialized
 		return
 	}
 
-	var seenUnknownReferenceMediaTypes = make(map[string]struct{}, 0)
+	seenUnknownReferenceMediaTypes := make(map[string]struct{}, 0)
 	var unknownReferenceMediaTypes []string
 
 	for _, desc := range mlcompat.References(ml).Blobs {

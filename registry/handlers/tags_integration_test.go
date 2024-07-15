@@ -6,12 +6,77 @@ import (
 	"testing"
 
 	"github.com/docker/distribution/manifest/schema2"
+	"go.uber.org/mock/gomock"
 
 	"github.com/docker/distribution/registry/datastore"
+	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
+
+func TestListTagDB(t *testing.T) {
+	env := newEnv(t)
+	defer env.shutdown(t)
+
+	repoPath := "babajaga"
+
+	ctrl := gomock.NewController(t)
+	repositoryMockCache := mocks.NewMockRepositoryCache(ctrl)
+	matchFn := func(x any) bool {
+		repoArg := x.(*models.Repository)
+		return repoArg.Path == repoPath
+	}
+	gomock.InOrder(
+		repositoryMockCache.EXPECT().Get(env.ctx, repoPath).Return(nil).Times(1),
+		repositoryMockCache.EXPECT().Set(env.ctx, gomock.Cond(matchFn)).Times(1),
+	)
+
+	// build test repository
+	rStore := datastore.NewRepositoryStore(env.db)
+	r, err := rStore.CreateByPath(env.ctx, repoPath)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	// add a manifest
+	mStore := datastore.NewManifestStore(env.db)
+	m := &models.Manifest{
+		NamespaceID:   r.NamespaceID,
+		RepositoryID:  r.ID,
+		SchemaVersion: 2,
+		MediaType:     schema2.MediaTypeManifest,
+		Digest:        "sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6",
+		Payload:       models.Payload{},
+	}
+	err = mStore.Create(env.ctx, m)
+	require.NoError(t, err)
+
+	expectedTags := []string{"gruz-1", "gruz-2", "gruz-3"}
+
+	for _, tag := range expectedTags {
+		// tag manifest
+		tStore := datastore.NewTagStore(env.db)
+		tag := &models.Tag{
+			Name:         tag,
+			NamespaceID:  r.NamespaceID,
+			RepositoryID: r.ID,
+			ManifestID:   m.ID,
+		}
+		err = tStore.CreateOrUpdate(env.ctx, tag)
+		require.NoError(t, err)
+	}
+
+	// Test
+
+	filters := datastore.FilterParams{
+		LastEntry:  "",
+		MaxEntries: 10,
+	}
+	resultTags, moreEntries, err := dbGetTags(env.ctx, env.db, repositoryMockCache, r.Path, filters)
+	require.NoError(t, err)
+	require.ElementsMatch(t, resultTags, expectedTags)
+	require.False(t, moreEntries)
+}
 
 func TestDeleteTagDB(t *testing.T) {
 	env := newEnv(t)

@@ -35,11 +35,20 @@ type tagsAPIResponse struct {
 	Tags []string `json:"tags"`
 }
 
-func dbGetTags(ctx context.Context, db datastore.Queryer, repoPath string, filters datastore.FilterParams) ([]string, bool, error) {
+func dbGetTags(
+	ctx context.Context,
+	db datastore.Queryer,
+	rcache datastore.RepositoryCache,
+	repoPath string,
+	filters datastore.FilterParams,
+) ([]string, bool, error) {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "limit": filters.MaxEntries, "marker": filters.LastEntry})
 	l.Debug("finding tags in database")
 
-	rStore := datastore.NewRepositoryStore(db)
+	rStore := datastore.NewRepositoryStore(
+		db,
+		datastore.WithRepositoryCache(rcache),
+	)
 	r, err := rStore.FindByPath(ctx, repoPath)
 	if err != nil {
 		return nil, false, err
@@ -91,7 +100,7 @@ func (th *tagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	var moreEntries bool
 
 	if th.useDatabase {
-		tags, moreEntries, err = dbGetTags(th.Context, th.db.Primary(), th.Repository.Named().Name(), filters)
+		tags, moreEntries, err = dbGetTags(th.Context, th.db.Primary(), th.GetRepoCache(), th.Repository.Named().Name(), filters)
 		if err != nil {
 			th.Errors = append(th.Errors, errcode.FromUnknownError(err))
 			return
