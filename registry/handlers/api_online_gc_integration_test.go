@@ -31,7 +31,7 @@ import (
 const maxReviewAfterJitter = 61 * time.Second
 
 func findAndLockGCManifestTask(t *testing.T, env *testEnv, repoName reference.Named, dgst digest.Digest) (*models.GCManifestTask, datastore.Transactor) {
-	tx, err := env.db.BeginTx(env.ctx, nil)
+	tx, err := env.db.Primary().BeginTx(env.ctx, nil)
 	require.NoError(t, err)
 
 	rStore := datastore.NewRepositoryStore(tx)

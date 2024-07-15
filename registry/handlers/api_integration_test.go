@@ -865,9 +865,9 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 
 			// Check layer media type
 			ctx := context.Background()
-			rStore := datastore.NewRepositoryStore(env.db)
-			mStore := datastore.NewManifestStore(env.db)
-			bStore := datastore.NewBlobStore(env.db)
+			rStore := datastore.NewRepositoryStore(env.db.Primary())
+			mStore := datastore.NewManifestStore(env.db.Primary())
+			bStore := datastore.NewBlobStore(env.db.Primary())
 
 			r, err := rStore.FindByPath(ctx, repoPath)
 			require.NoError(t, err)
@@ -1165,10 +1165,10 @@ func TestManifestAPI_Get_Schema1(t *testing.T) {
 
 	// Seed manifest in database directly since schema1 manifests are unpushable.
 	if env.config.Database.Enabled {
-		repositoryStore := datastore.NewRepositoryStore(env.db)
+		repositoryStore := datastore.NewRepositoryStore(env.db.Primary())
 		dbRepo, err := repositoryStore.CreateByPath(env.ctx, preseededSchema1RepoPath)
 
-		mStore := datastore.NewManifestStore(env.db)
+		mStore := datastore.NewManifestStore(env.db.Primary())
 
 		dbManifest := &models.Manifest{
 			NamespaceID:   dbRepo.NamespaceID,
@@ -1182,7 +1182,7 @@ func TestManifestAPI_Get_Schema1(t *testing.T) {
 		err = mStore.Create(env.ctx, dbManifest)
 		require.NoError(t, err)
 
-		tagStore := datastore.NewTagStore(env.db)
+		tagStore := datastore.NewTagStore(env.db.Primary())
 
 		dbTag := &models.Tag{
 			Name:         preseededSchema1TagName,
