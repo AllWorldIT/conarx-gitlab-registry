@@ -60,7 +60,7 @@ func scanFullManifest(row *sql.Row) (*models.Manifest, error) {
 		&m.MediaType, &m.ArtifactType, &dgst, &m.Payload, &cfgMediaType, &cfgDigest, &cfgPayload,
 		&m.NonConformant, &m.NonDistributableLayers, &m.SubjectID, &m.CreatedAt)
 	if err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("scanning manifest: %w", err)
 		}
 		return nil, nil

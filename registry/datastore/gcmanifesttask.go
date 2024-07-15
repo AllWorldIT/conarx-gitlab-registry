@@ -59,7 +59,7 @@ func scanFullGCManifestTask(row *sql.Row) (*models.GCManifestTask, error) {
 	r := new(models.GCManifestTask)
 
 	if err := row.Scan(&r.NamespaceID, &r.RepositoryID, &r.ManifestID, &r.ReviewAfter, &r.ReviewCount, &r.CreatedAt, &r.Event); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("scanning GC manifest task: %w", err)
 		}
 		return nil, nil
