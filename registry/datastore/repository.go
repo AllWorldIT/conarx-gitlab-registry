@@ -1,4 +1,4 @@
-//go:generate mockgen -package mocks -destination mocks/repository_cache.go . RepositoryCache
+//go:generate mockgen -package mocks -destination mocks/repository.go . RepositoryCache
 
 package datastore
 
