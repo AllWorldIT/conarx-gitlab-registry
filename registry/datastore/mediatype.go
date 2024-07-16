@@ -113,7 +113,7 @@ func (s *mediaTypeStore) SafeFindOrCreateID(ctx context.Context, mediaType strin
 
 	row := s.db.QueryRowContext(ctx, q, mediaType)
 	if err := row.Scan(&id); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return 0, fmt.Errorf("creating media type: %w", err)
 		}
 		// If the result set has no rows, then the media type already exists.

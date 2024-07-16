@@ -3,6 +3,7 @@ package datastore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/docker/distribution/registry/datastore/metrics"
@@ -40,7 +41,7 @@ func scanFullNamespace(row *sql.Row) (*models.Namespace, error) {
 	n := new(models.Namespace)
 
 	if err := row.Scan(&n.ID, &n.Name, &n.CreatedAt, &n.UpdatedAt); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("scanning namespace: %w", err)
 		}
 		return nil, nil
@@ -99,7 +100,7 @@ func (s *namespaceStore) createOrFind(ctx context.Context, n *models.Namespace) 
 
 	row := s.db.QueryRowContext(ctx, q, n.Name)
 	if err := row.Scan(&n.ID, &n.CreatedAt); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("creating namespace: %w", err)
 		}
 		// if the result set has no rows, then the namespace already exists

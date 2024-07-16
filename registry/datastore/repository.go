@@ -1853,7 +1853,7 @@ func (s *repositoryStore) CreateOrFind(ctx context.Context, r *models.Repository
 
 	row := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.Name, r.Path, r.ParentID)
 	if err := row.Scan(&r.ID, &r.CreatedAt, &r.DeletedAt); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("creating repository: %w", err)
 		}
 		// if the result set has no rows, then the repository already exists
