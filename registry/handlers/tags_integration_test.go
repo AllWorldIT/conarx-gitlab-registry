@@ -59,6 +59,7 @@ func TestDeleteTagDB(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, tag)
 }
+
 func TestDeleteTagDB_SizeInvalidated_WithCentralRepositoryCache(t *testing.T) {
 	env := newEnv(t)
 	defer env.shutdown(t)
@@ -107,7 +108,6 @@ func TestDeleteTagDB_SizeInvalidated_WithCentralRepositoryCache(t *testing.T) {
 
 	// the size attribute of the cached repository object is also removed
 	require.Nil(t, cache.Get(env.ctx, r.Path).Size)
-
 }
 
 func TestDeleteTagDB_SizeInvalidated_WithSingleRepositoryCache(t *testing.T) {
@@ -158,7 +158,6 @@ func TestDeleteTagDB_SizeInvalidated_WithSingleRepositoryCache(t *testing.T) {
 
 	// the size attribute of the cached repository object is also removed
 	require.Nil(t, cache.Get(env.ctx, r.Path).Size)
-
 }
 
 func TestDeleteTagDB_RepositoryNotFound(t *testing.T) {
@@ -167,7 +166,6 @@ func TestDeleteTagDB_RepositoryNotFound(t *testing.T) {
 
 	err := dbDeleteTag(env.ctx, env.db, datastore.NewNoOpRepositoryCache(), "foo", "bar")
 	require.Error(t, err, "repository not found in database")
-
 }
 
 func TestDeleteTagDB_TagNotFound(t *testing.T) {
