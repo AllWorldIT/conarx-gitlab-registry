@@ -304,10 +304,19 @@ var errETagMatches = errors.New("etag matches")
 
 func (imh *manifestHandler) newManifestGetter(req *http.Request) (manifestGetter, error) {
 	if imh.useDatabase {
-		return newDBManifestGetter(imh, req)
+		return newDBManifestGetter(
+			imh.App.db.Primary(),
+			imh.GetRepoCache(),
+			imh.Repository.Named().Name(),
+			req,
+		)
 	}
 
-	return newFSManifestGetter(imh, req)
+	manifestService, err := imh.Repository.Manifests(imh)
+	if err != nil {
+		return nil, err
+	}
+	return newFSManifestGetter(manifestService, imh.Repository.Tags(imh), req)
 }
 
 func (imh *manifestHandler) newManifestWriter() (manifestWriter, error) {
@@ -329,10 +338,15 @@ type dbManifestGetter struct {
 	req      *http.Request
 }
 
-func newDBManifestGetter(imh *manifestHandler, req *http.Request) (*dbManifestGetter, error) {
+func newDBManifestGetter(
+	db datastore.Queryer,
+	rcache datastore.RepositoryCache,
+	repoPath string,
+	req *http.Request,
+) (*dbManifestGetter, error) {
 	return &dbManifestGetter{
-		RepositoryStore: datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(imh.repoCache)),
-		repoPath:        imh.Repository.Named().Name(),
+		RepositoryStore: datastore.NewRepositoryStore(db, datastore.WithRepositoryCache(rcache)),
+		repoPath:        repoPath,
 		req:             req,
 	}, nil
 }
@@ -414,14 +428,13 @@ type fsManifestGetter struct {
 	req *http.Request
 }
 
-func newFSManifestGetter(imh *manifestHandler, r *http.Request) (*fsManifestGetter, error) {
-	manifestService, err := imh.Repository.Manifests(imh)
-	if err != nil {
-		return nil, err
-	}
-
+func newFSManifestGetter(
+	manifestService distribution.ManifestService,
+	tagsService distribution.TagService,
+	r *http.Request,
+) (*fsManifestGetter, error) {
 	return &fsManifestGetter{
-		ts:  imh.Repository.Tags(imh),
+		ts:  tagsService,
 		ms:  manifestService,
 		req: r,
 	}, nil
