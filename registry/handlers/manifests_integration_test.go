@@ -23,6 +23,8 @@ func TestGetManifest(t *testing.T) {
 	repoPath := "ilikecats"
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	repositoryMockCache := mocks.NewMockRepositoryCache(ctrl)
 	matchFn := func(x any) bool {
 		repoArg := x.(*models.Repository)
