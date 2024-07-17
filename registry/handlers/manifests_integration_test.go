@@ -73,6 +73,6 @@ func TestGetManifest(t *testing.T) {
 	require.EqualValues(t, g_digest.FromString(manifestJson), digest)
 	mediaType, payload, err := manifest.Payload()
 	require.NoError(t, err)
-	require.EqualValues(t, "application/vnd.docker.distribution.manifest.v2+json", mediaType)
+	require.EqualValues(t, schema2.MediaTypeManifest, mediaType)
 	require.JSONEq(t, manifestJson, string(payload))
 }
