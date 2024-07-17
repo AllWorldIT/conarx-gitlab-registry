@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/docker/distribution/manifest/schema2"
+	g_digest "github.com/opencontainers/go-digest"
 	"go.uber.org/mock/gomock"
 
 	"github.com/docker/distribution/registry/datastore"
@@ -46,7 +47,7 @@ func TestGetManifest(t *testing.T) {
 		RepositoryID:  r.ID,
 		SchemaVersion: 2,
 		MediaType:     schema2.MediaTypeManifest,
-		Digest:        "sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6",
+		Digest:        g_digest.FromString(manifestJson),
 		Payload:       models.Payload(manifestJson),
 	}
 	err = mStore.Create(env.ctx, m)
@@ -69,7 +70,7 @@ func TestGetManifest(t *testing.T) {
 	require.NoError(t, err)
 	manifest, digest, err := manifestsGetter.GetByTag(env.ctx, tagName)
 	require.NoError(t, err)
-	require.EqualValues(t, "sha256:bca3c0bf2ca0cde987ad9cab2dac986047a0ccff282f1b23df282ef05e3a10a6", digest)
+	require.EqualValues(t, g_digest.FromString(manifestJson), digest)
 	mediaType, payload, err := manifest.Payload()
 	require.NoError(t, err)
 	require.EqualValues(t, "application/vnd.docker.distribution.manifest.v2+json", mediaType)
