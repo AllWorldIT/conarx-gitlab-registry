@@ -19,7 +19,6 @@ import (
 func randomDigest(t testing.TB) digest.Digest {
 	t.Helper()
 
-	rand.Seed(time.Now().UnixNano())
 	data := make([]byte, 100)
 	_, err := rand.Read(data)
 	require.NoError(t, err)
@@ -30,7 +29,6 @@ func randomDigest(t testing.TB) digest.Digest {
 func randomBlob(t testing.TB) *models.Blob {
 	t.Helper()
 
-	rand.Seed(time.Now().UnixNano())
 	return &models.Blob{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
@@ -41,7 +39,6 @@ func randomBlob(t testing.TB) *models.Blob {
 func randomRepository(t testing.TB) *models.Repository {
 	t.Helper()
 
-	rand.Seed(time.Now().UnixNano())
 	n := strconv.Itoa(rand.Int())
 	return &models.Repository{
 		Name: n,

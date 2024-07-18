@@ -190,8 +190,8 @@ func TestAgent_Start_Jitter(t *testing.T) {
 
 	// use fixed time for reproducible rand seeds (used to generate jitter durations)
 	now := time.Time{}
-	rand.Seed(now.UnixNano())
-	expectedJitter := time.Duration(rand.Intn(startJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewSource(now.UnixNano()))
+	expectedJitter := time.Duration(r.Intn(startJitterMaxSeconds)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

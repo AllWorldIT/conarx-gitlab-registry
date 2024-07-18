@@ -827,7 +827,6 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 // randomPlatformSpec generates a random platfromSpec. Arch and OS combinations
 // may not strictly be valid for the Go runtime.
 func randomPlatformSpec() manifestlist.PlatformSpec {
-	rand.Seed(time.Now().Unix())
 
 	architectures := []string{"amd64", "arm64", "ppc64le", "mips64", "386"}
 	oses := []string{"aix", "darwin", "linux", "freebsd", "plan9"}
@@ -1018,7 +1017,6 @@ func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, manifes
 func shuffledCopy(s []string) []string {
 	shuffled := make([]string, len(s))
 	copy(shuffled, s)
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
