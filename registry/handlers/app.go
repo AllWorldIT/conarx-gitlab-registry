@@ -368,12 +368,20 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				nameserver := config.Database.LoadBalancing.Nameserver
 				port := config.Database.LoadBalancing.Port
 				record := config.Database.LoadBalancing.Record
+				replicaCheckInterval := config.Database.LoadBalancing.ReplicaCheckInterval
 
-				log.WithFields(dlog.Fields{"nameserver": nameserver, "port": port, "record": record}).
-					Info("enabling database load balancing with service discovery")
+				log.WithFields(dlog.Fields{
+					"nameserver":               nameserver,
+					"port":                     port,
+					"record":                   record,
+					"replica_check_interval_s": replicaCheckInterval.Seconds(),
+				}).Info("enabling database load balancing with service discovery")
 
 				resolver := datastore.NewDNSResolver(nameserver, port, record)
-				dbOpts = append(dbOpts, datastore.WithServiceDiscovery(resolver))
+				dbOpts = append(dbOpts,
+					datastore.WithServiceDiscovery(resolver),
+					datastore.WithReplicaCheckInterval(replicaCheckInterval),
+				)
 			} else if len(config.Database.LoadBalancing.Hosts) > 0 {
 				hosts := config.Database.LoadBalancing.Hosts
 				log.WithField("hosts", hosts).Info("enabling database load balancing with static hosts list")
@@ -381,10 +389,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			}
 		}
 
-		db, err := datastore.NewDBLoadBalancer(ctx, dsn, nil, dbOpts...)
+		db, err := datastore.NewDBLoadBalancer(ctx, dsn, dbOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize database connections: %w", err)
 		}
+		startDBReplicaChecking(ctx, db)
 
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
@@ -646,6 +655,37 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 			}
 		}(a)
 	}
+}
+
+func startDBReplicaChecking(ctx context.Context, lb *datastore.DBLoadBalancer) {
+	l := dlog.GetLogger(dlog.WithContext(ctx))
+
+	// TODO(dlb): add startup jitter
+	go func() {
+		// This function can only end in three situations: 1) service discovery is disabled and therefore there is
+		// nothing left to do (no error) 2) context cancellation 3) panic. If a panic occurs we should log, report to
+		// Sentry and then re-panic, as the instance would be in an inconsistent/unknown state. In case of context
+		// cancellation, the app is shutting down, so there is nothing to worry about.
+		defer func() {
+			if err := recover(); err != nil {
+				l.WithFields(dlog.Fields{"error": err}).Error("database load balancing replica checking stopped with panic")
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(5 * time.Second)
+				panic(err)
+			}
+		}()
+		if err := lb.StartReplicaChecking(ctx); err != nil {
+			if errors.Is(err, context.Canceled) {
+				// leaving this here for now for additional confidence and improved observability
+				l.Warn("database load balancing replica checking stopped due to context cancellation")
+			} else {
+				// this should never happen, but leaving it here for future proofing against bugs
+				e := fmt.Errorf("database load balancing replica checking stopped with error: %w", err)
+				errortracking.Capture(e, errortracking.WithStackTrace())
+				l.WithError(err).Error("database load balancing replica checking stopped with error")
+			}
+		}
+	}()
 }
 
 // RegisterHealthChecks is an awful hack to defer health check registration
