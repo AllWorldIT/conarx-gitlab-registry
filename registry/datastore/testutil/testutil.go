@@ -220,7 +220,7 @@ func newDB(dsn *datastore.DSN, logLevel logrus.Level, logOut io.Writer, opts []d
 
 	opts = append(opts, datastore.WithLogger(logrus.NewEntry(log)))
 
-	db, err := datastore.NewDBLoadBalancer(context.Background(), dsn, nil, opts...)
+	db, err := datastore.NewDBLoadBalancer(context.Background(), dsn, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("opening database connection: %w", err)
 	}

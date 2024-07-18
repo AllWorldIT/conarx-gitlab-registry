@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/log"
 	"github.com/hashicorp/go-multierror"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -23,8 +24,9 @@ import (
 )
 
 const (
-	driverName = "pgx"
-	dnsTimeout = 2 * time.Second
+	driverName                  = "pgx"
+	dnsTimeout                  = 2 * time.Second
+	defaultReplicaCheckInterval = 1 * time.Minute
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -146,8 +148,10 @@ type PoolConfig struct {
 
 // LoadBalancingConfig represents the database load balancing configuration.
 type LoadBalancingConfig struct {
-	hosts    []string
-	resolver DNSResolver
+	hosts                []string
+	resolver             DNSResolver
+	connector            Connector
+	replicaCheckInterval time.Duration
 }
 
 // Option is used to configure the database connections.
@@ -224,9 +228,12 @@ func applyOptions(input []Option) opts {
 	log.SetOutput(io.Discard)
 
 	config := opts{
-		logger:        logrus.NewEntry(log),
-		pool:          &PoolConfig{},
-		loadBalancing: &LoadBalancingConfig{},
+		logger: logrus.NewEntry(log),
+		pool:   &PoolConfig{},
+		loadBalancing: &LoadBalancingConfig{
+			connector:            NewConnector(),
+			replicaCheckInterval: defaultReplicaCheckInterval,
+		},
 	}
 
 	for _, v := range input {
@@ -356,9 +363,21 @@ type DBLoadBalancer struct {
 	primary  *DB
 	replicas []*DB
 
+	connector  Connector
+	resolver   DNSResolver
+	fixedHosts []string
+
 	// replicaIndex and replicaMutex are used to implement a round-robin selection of replicas.
 	replicaIndex int
 	replicaMutex sync.Mutex
+
+	replicaOpenOpts      []Option
+	replicaCheckInterval time.Duration
+
+	// TODO(dlb): try to remove the need for these. The DB type already has a DSN built-in, but setting them during
+	// tests using mocks is currently not possible as the DSN is unexported. So we have these here to unblock progress.
+	primaryDSN  *DSN
+	replicaDSNs []*DSN
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
@@ -372,6 +391,22 @@ func WithFixedHosts(hosts []string) Option {
 func WithServiceDiscovery(resolver DNSResolver) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.resolver = resolver
+	}
+}
+
+// WithConnector allows specifying a custom database Connector implementation to be used to establish connections,
+// otherwise sql.Open is used.
+func WithConnector(connector Connector) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.connector = connector
+	}
+}
+
+// WithReplicaCheckInterval configures a custom refresh interval for the replica list when using service discovery.
+// Defaults to 1 minute.
+func WithReplicaCheckInterval(interval time.Duration) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.replicaCheckInterval = interval
 	}
 }
 
@@ -442,64 +477,119 @@ func resolveHosts(ctx context.Context, resolver DNSResolver) ([]*net.TCPAddr, er
 	}
 
 	if result.ErrorOrNil() != nil {
-		return nil, result.ErrorOrNil()
+		return nil, result
 	}
 
 	return addrs, nil
 }
 
-// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections. A custom database Connector
-// implementation can be used to establish connections, otherwise sql.Open is used.
-func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, connector Connector, opts ...Option) (*DBLoadBalancer, error) {
-	config := applyOptions(opts)
+// ResolveReplicas initializes or updates the list of available replicas atomically by resolving the provided hosts
+// either through service discovery or using a fixed hosts list. As result, the load balancer replica pool will be
+// up-to-date. Replicas for which we failed to establish a connection to are not included in the pool.
+func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error {
+	var replicas []*DB
+	var replicaDSNs []*DSN
 	var result *multierror.Error
 
-	if connector == nil {
-		connector = NewConnector()
-	}
-
-	primary, err := connector.Open(ctx, primaryDSN, opts...)
-	if err != nil {
-		result = multierror.Append(result, fmt.Errorf("failed to open primary database connection: %w", err))
-	}
-
-	var replicas []*DB
-	if config.loadBalancing.resolver != nil {
-		addrs, err := resolveHosts(ctx, config.loadBalancing.resolver)
+	dsn := *lb.primaryDSN
+	if lb.resolver != nil {
+		addrs, err := resolveHosts(ctx, lb.resolver)
 		if err != nil {
 			result = multierror.Append(result, fmt.Errorf("failed to fetch replica hosts: %w", err))
 		} else {
 			for _, addr := range addrs {
-				dsn := *primaryDSN
 				dsn.Host = addr.IP.String()
 				dsn.Port = addr.Port
-				replica, err := connector.Open(ctx, &dsn, opts...)
+				replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
 				if err != nil {
-					// TODO: consider allowing partial successes where only a subset of replicas is reachable
 					result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
 				} else {
 					replicas = append(replicas, replica)
+					replicaDSNs = append(replicaDSNs, &dsn)
 				}
 			}
 		}
-	} else if len(config.loadBalancing.hosts) > 0 {
-		for _, host := range config.loadBalancing.hosts {
-			dsn := *primaryDSN
+	} else if len(lb.fixedHosts) > 0 {
+		for _, host := range lb.fixedHosts {
 			dsn.Host = host
-			replica, err := connector.Open(ctx, &dsn, opts...)
+			replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
 			if err != nil {
 				result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
 			} else {
 				replicas = append(replicas, replica)
+				replicaDSNs = append(replicaDSNs, &dsn)
 			}
 		}
 	}
 
-	if result.ErrorOrNil() != nil {
-		return nil, result
+	// TODO(dlb): use disconnecttimeout to close handlers from retired replicas
+	lb.replicaMutex.Lock()
+	lb.replicas = replicas
+	lb.replicaDSNs = replicaDSNs
+	lb.replicaMutex.Unlock()
+
+	return result
+}
+
+// StartReplicaChecking synchronously refreshes the list of replicas in the configured interval.
+func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
+	// If the check interval was set to zero (no recurring checks) or the resolver is not set (service discovery
+	// was not enabled), then exit early as there is nothing to do
+	if lb.replicaCheckInterval == 0 || lb.resolver == nil {
+		return nil
 	}
 
-	return &DBLoadBalancer{primary: primary, replicas: replicas}, nil
+	l := log.GetLogger(log.WithContext(ctx))
+	t := time.NewTicker(lb.replicaCheckInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+			l.Info("updating database replicas list")
+			if err := lb.ResolveReplicas(ctx); err != nil {
+				l.WithError(err).Error("failed to refresh database replicas list")
+			}
+			var hosts []string
+			for _, dsn := range lb.replicaDSNs {
+				hosts = append(hosts, fmt.Sprintf("%s:%d", dsn.Host, dsn.Port))
+			}
+			l.WithFields(log.Fields{"hosts": hosts}).Info("database replicas list updated")
+		}
+	}
+}
+
+// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections.
+func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*DBLoadBalancer, error) {
+	config := applyOptions(opts)
+	var result *multierror.Error
+
+	lb := &DBLoadBalancer{
+		primaryDSN:           primaryDSN,
+		connector:            config.loadBalancing.connector,
+		resolver:             config.loadBalancing.resolver,
+		fixedHosts:           config.loadBalancing.hosts,
+		replicaOpenOpts:      opts,
+		replicaCheckInterval: config.loadBalancing.replicaCheckInterval,
+	}
+
+	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
+	if err != nil {
+		result = multierror.Append(result, fmt.Errorf("failed to open primary database connection: %w", err))
+	}
+	lb.primary = primary
+
+	if err := lb.ResolveReplicas(ctx); err.ErrorOrNil() != nil {
+		result = multierror.Append(result, err)
+	}
+
+	if result.ErrorOrNil() != nil {
+		return nil, result.ErrorOrNil()
+	}
+
+	return lb, nil
 }
 
 // Primary returns the primary database handler.
