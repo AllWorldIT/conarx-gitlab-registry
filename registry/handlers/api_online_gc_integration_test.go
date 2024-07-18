@@ -159,7 +159,6 @@ func TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 	ml := seedRandomOCIImageIndex(t, env, repoName.String(), putByTag("1.0.0"))
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list
-	rand.Seed(time.Now().Unix())
 	refs := ml.References()
 	ref := refs[rand.Intn(len(refs))]
 	mt, tx := findAndLockGCManifestTask(t, env, repoName, ref.Digest)
@@ -204,7 +203,6 @@ func TestManifestsAPI_DeleteList_OnlineGC_TimeoutOnProlongedReview(t *testing.T)
 	ml := seedRandomOCIImageIndex(t, env, repoName.String(), putByTag("1.0.0"))
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list
-	rand.Seed(time.Now().Unix())
 	refs := ml.References()
 	ref := refs[rand.Intn(len(refs))]
 	_, tx := findAndLockGCManifestTask(t, env, repoName, ref.Digest)
@@ -388,7 +386,6 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 	dgst2 := digest.FromBytes(payload2)
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list
-	rand.Seed(time.Now().Unix())
 	dgsts := []digest.Digest{dgst1, dgst2}
 	dgst := dgsts[rand.Intn(len(dgsts))]
 	mt, tx := findAndLockGCManifestTask(t, env, repoName, dgst)
@@ -468,7 +465,6 @@ func TestManifestsAPI_CreateList_OnlineGC_TimeoutOnProlongedReview(t *testing.T)
 	dgst2 := digest.FromBytes(payload2)
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list (indefinitely)
-	rand.Seed(time.Now().Unix())
 	dgsts := []digest.Digest{dgst1, dgst2}
 	dgst := dgsts[rand.Intn(len(dgsts))]
 	_, tx := findAndLockGCManifestTask(t, env, repoName, dgst)
@@ -540,7 +536,6 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview_Dangling
 	dgst2 := digest.FromBytes(payload2)
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list
-	rand.Seed(time.Now().Unix())
 	dgsts := []digest.Digest{dgst1, dgst2}
 	dgst := dgsts[rand.Intn(len(dgsts))]
 	mt, tx := findAndLockGCManifestTask(t, env, repoName, dgst)

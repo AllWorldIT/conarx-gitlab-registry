@@ -457,8 +457,8 @@ func Test_updateOnlineGCSettings(t *testing.T) {
 
 	// use fixed time for reproducible rand seeds (used to generate jitter durations)
 	now := time.Time{}
-	rand.Seed(now.UnixNano())
-	expectedJitter := time.Duration(rand.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewSource(now.UnixNano()))
+	expectedJitter := time.Duration(r.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
 
 	startTime := now.Add(1 * time.Millisecond)
 
