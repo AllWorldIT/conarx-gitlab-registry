@@ -10,6 +10,8 @@ import (
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
+	"gitlab.com/gitlab-org/labkit/correlation"
+	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
 const (
@@ -18,6 +20,8 @@ const (
 	defaultMaxJobAttempt     = 5
 	defaultJobInterval       = 1 * time.Minute
 	jobIntervalJitterSeconds = 5
+	// maxRunTimeout caps the duration of each background migration run to 3 mins.
+	maxRunTimeout = 3 * time.Minute
 
 	// Background Migration job log keys
 	jobIDKey        = "job_id"
@@ -28,6 +32,8 @@ const (
 	jobEndIDKey     = "job_end_id"
 	jobBatchSizeKey = "job_batch_size"
 	jobStatusKey    = "job_status"
+	jobColumnKey    = "job_pagination_column"
+	jobTableKey     = "job_pagination_table"
 
 	// Background Migration log keys
 	bbmIDKey           = "bbm_id"
@@ -35,49 +41,20 @@ const (
 	bbmBatchSizeKey    = "bbm_batch_size"
 	bbmStatusKey       = "bbm_status"
 	bbmJobSignatureKey = "bbm_job_signature_key"
+	bbmTargetColumnKey = "bbm_target_column"
+	bbmTargetTableKey  = "bbm_target_table"
 )
 
 var (
-	// ErrLockInUse is returned when a  migration job worker can not obtain the Background Migration distributed lock.
-	// This is most likely to occur when the lock has not been released by another job worker.
-	ErrLockInUse = errors.New("background migration lock is already taken")
 	// ErrJobEndpointNotFound is returned when a job's endpoint can not be calculated.
 	ErrJobEndpointNotFound = errors.New("job endpoint could not be calculated")
 	// ErrMaxJobAttemptsReached is returned when the maximum attempt to try a job has elapsed.
 	ErrMaxJobAttemptsReached = errors.New("maximum job attempt reached")
-	// ErrWorkFunctionNotFound is returned when a refrenced job has no corresponding work function.
-	ErrWorkFunctionNotFound = errors.New("work function not found for")
+	// ErrWorkFunctionNotFound is returned when a referenced job has no corresponding work function.
+	ErrWorkFunctionNotFound = errors.New("work function not found")
 )
 
-// status are the Background Migration and Background Migration job statuses as defined in:
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-background-migrations.md#batch-background-migration-bbm-creation
-type status int
-
-const (
-	paused status = iota
-	active
-	finished
-	failed
-	running
-)
-
-func (s status) String() string {
-	switch s {
-	case paused:
-		return "paused"
-	case active:
-		return "active"
-	case finished:
-		return "finished"
-	case failed:
-		return "failed"
-	case running:
-		return "running"
-	}
-	return "unknown"
-}
-
-type WorkFunc func(ctx context.Context, db *datastore.DB, paginationColumn string, paginationAfter, paginationBefore, limit int) error
+type WorkFunc func(ctx context.Context, db *datastore.DB, paginationTable, paginationColumn string, paginationAfter, paginationBefore, limit int) error
 
 // Work represents the underlying functions that a Background Migration job is capable of executing.
 type Work struct {
@@ -194,7 +171,7 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 				//cleanup
 				jw.logger.Info("received shutdown signal: Shutting down...")
 				close(gracefullFinish)
-			// A period has elapsed, time to try to find and execute any availaible jobs.
+			// A period has elapsed, time to try to find and execute any available jobs.
 			case <-ticker.C:
 				jw.logger.Info("starting worker run...")
 				jw.run(ctx)
@@ -205,36 +182,55 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 	return gracefullFinish, nil
 }
 
-// run attempts to obtain the Background Migration distributed lock, before proceeding to find and execute any applicable Background Migration jobs.
+// run is responsible for orchestrating and executing Background Migrations when found.
+// it does this by attempting to obtain the Background Migration distributed lock,
+// before proceeding to find and execute any applicable Background Migration jobs.
 func (jw *Worker) run(ctx context.Context) {
-	// Cancel the job worker context when the `jobInterval` duration elapses
-	ctx, cancel := context.WithTimeout(ctx, jw.jobInterval)
+
+	// inject correlation id to logs
+	jw.logger = jw.logger.WithFields(log.Fields{correlation.FieldName: correlation.ExtractFromContextOrGenerate(ctx)})
+
+	// Cancel the job worker context when the `maxRunTimeout` duration elapses
+	ctx, cancel := context.WithTimeout(ctx, maxRunTimeout)
 	defer cancel()
 
-	// Grab distributed lock
-	jw.logger.Info("obtaining Lock...")
-	releaseFunc, err := jw.GrabLock(ctx)
-	defer releaseFunc()
+	// start a transaction to run the background migration process
+	tx, err := jw.db.BeginTx(ctx, nil)
 	if err != nil {
-		if errors.Is(err, ErrLockInUse) {
-			jw.logger.WithError(err).Info("failed to obtain lock")
-		} else {
-			// TODO: Surface any other errors in sentry
-			jw.logger.WithError(err).Error("failed to obtain lock")
+		jw.logger.WithError(err).Error("failed to create database transaction")
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		return
+
+	}
+	defer tx.Rollback()
+
+	bbmStore := datastore.NewBackgroundMigrationStore(tx)
+
+	// Grab distributed lock
+	jw.logger.Info("obtaining lock...")
+	if err = jw.GrabLock(ctx, bbmStore); err != nil {
+		if !errors.Is(err, datastore.ErrBackgroundMigrationLockInUse) {
+			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		}
+		jw.logger.WithError(err).Info("failed to obtain lock")
+
 		return
 	}
 
-	// Search for availaible jobs
+	// Search for available jobs
 	jw.logger.Info("searching for job...")
-	job, err := jw.FindJob(ctx, jw.maxJobAttempt)
+	job, err := jw.FindJob(ctx, bbmStore)
 	if err != nil {
-		// TODO: Surface any other errors in sentry
 		jw.logger.WithError(err).Error("failed to find job")
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		return
 	}
 	if job == nil {
 		jw.logger.Info("no jobs to run...")
+		if err = tx.Commit(); err != nil {
+			jw.logger.WithError(err).Error("failed to commit database transaction")
+			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		}
 		return
 	}
 
@@ -246,49 +242,48 @@ func (jw *Worker) run(ctx context.Context) {
 		jobStartIDKey:   job.StartID,
 		jobEndIDKey:     job.EndID,
 		jobBatchSizeKey: job.BatchSize,
-		jobStatusKey:    status(job.Status).String(),
+		jobStatusKey:    job.Status.String(),
+		jobColumnKey:    job.PaginationColumn,
+		jobTableKey:     job.PaginationTable,
 	})
 
 	// A job was found, lets execute it
-	jw.logger.Info("job found! executing Job")
-	err = jw.ExecuteJob(ctx, job, jw.Work)
+	jw.logger.Info("job found, executing")
+	err = jw.ExecuteJob(ctx, bbmStore, job)
 	if err != nil {
-		// TODO: Surface other error in sentry
 		l.WithError(err).Error("failed to execute job")
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		return
 	}
+
+	if err = tx.Commit(); err != nil {
+		jw.logger.WithError(err).Error("failed to commit database transaction")
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		return
+
+	}
+
 	l.Info("executed background migration job")
 
 }
 
 // GrabLock attempts to grab the distributed lock used for co-ordination between all Background Migration processes.
-func (jw *Worker) GrabLock(ctx context.Context) (releaseFunc func(), err error) {
-	releaseFunc = func() {}
+func (jw *Worker) GrabLock(ctx context.Context, bbmStore datastore.BackgroundMigrationStore) (err error) {
 
-	bbmStore := datastore.NewBackgroundMigrationStore(jw.db)
 	// Acquire a lock so no other Background Migration process can run.
 	err = bbmStore.Lock(ctx)
 	if err != nil {
-		return releaseFunc, err
+		return err
 	}
 	jw.logger.Info("obtained lock")
 
-	return func() {
-		if err := bbmStore.Unlock(ctx); err != nil {
-			// TODO: Surface error in sentry
-			jw.logger.WithError(err).Error("failed to release background migration lock")
-			return
-		}
-		jw.logger.Info("released lock")
-	}, nil
+	return nil
 }
 
 // FindJob checks for any Background Migration job that needs to be executed.
 // If a job needs to be executed it either fetches the job or creates the job
 // associated with the chosen Background Migration.
-func (jw *Worker) FindJob(ctx context.Context, maxJobAttempts int) (*models.BackgroundMigrationJob, error) {
-
-	bbmStore := datastore.NewBackgroundMigrationStore(jw.db)
+func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore) (*models.BackgroundMigrationJob, error) {
 
 	// Find a Background Migration that needs to be run.
 	bbm, err := bbmStore.FindNext(ctx)
@@ -303,11 +298,34 @@ func (jw *Worker) FindJob(ctx context.Context, maxJobAttempts int) (*models.Back
 		bbmNameKey:         bbm.Name,
 		bbmIDKey:           bbm.ID,
 		bbmJobSignatureKey: bbm.JobName,
-		bbmStatusKey:       status(bbm.Status).String(),
+		bbmStatusKey:       bbm.Status.String(),
 		bbmBatchSizeKey:    bbm.BatchSize,
+		bbmTargetColumnKey: bbm.TargetColumn,
+		bbm.TargetTable:    bbm.TargetTable,
 	})
 
 	l.Info("a background migration was found that needs to be executed")
+
+	err = bbmStore.ValidateMigrationTableAndColumn(ctx, bbm.TargetTable, bbm.TargetColumn)
+	if err != nil {
+		l.WithError(err).Error("background migration failed validation")
+
+		if errors.Is(err, datastore.ErrUnknownColumn) || errors.Is(err, datastore.ErrUnknownTable) {
+			// Mark migration as failed and surface the error to sentry if we don't know the column or the table referenced in the migration
+			var errCode models.BBMErrorCode
+			switch {
+			case errors.Is(err, datastore.ErrUnknownColumn):
+				errCode = models.InvalidColumnBBMErrCode
+			case errors.Is(err, datastore.ErrUnknownTable):
+				errCode = models.InvalidTableBBMErrCode
+			}
+			errortracking.Capture(err, errortracking.WithContext(ctx))
+			bbm.Status = models.BackgroundMigrationFailed
+			bbm.ErrorCode = errCode
+			return nil, bbmStore.UpdateStatus(ctx, bbm)
+		}
+		return nil, err
+	}
 
 	var job *models.BackgroundMigrationJob
 
@@ -324,31 +342,35 @@ func (jw *Worker) FindJob(ctx context.Context, maxJobAttempts int) (*models.Back
 		if err != nil {
 			return nil, err
 		}
+		if job != nil {
 
-		l := l.WithFields(log.Fields{
-			jobIDKey:        job.ID,
-			jobBBMIDKey:     job.BBMID,
-			jobNameKey:      job.JobName,
-			jobAttemptsKey:  job.Attempts,
-			jobStartIDKey:   job.StartID,
-			jobEndIDKey:     job.EndID,
-			jobBatchSizeKey: job.BatchSize,
-			jobStatusKey:    status(job.Status).String(),
-		})
+			l := l.WithFields(log.Fields{
+				jobIDKey:        job.ID,
+				jobBBMIDKey:     job.BBMID,
+				jobNameKey:      job.JobName,
+				jobAttemptsKey:  job.Attempts,
+				jobStartIDKey:   job.StartID,
+				jobEndIDKey:     job.EndID,
+				jobBatchSizeKey: job.BatchSize,
+				jobStatusKey:    job.Status.String(),
+				jobColumnKey:    job.PaginationColumn,
+				jobTableKey:     job.PaginationTable,
+			})
 
-		// check that the selected job does not exceed the configured `MaxJobAttempt`
-		if job.Attempts >= maxJobAttempts {
-			l.WithError(ErrMaxJobAttemptsReached).Error("marking background migration as failed due to job failure")
-			return nil, bbmStore.UpdateStatus(ctx, bbm.ID, int(failed))
+			// check that the selected job does not exceed the configured `MaxJobAttempt`
+			if job.Attempts >= jw.maxJobAttempt {
+				l.WithError(ErrMaxJobAttemptsReached).Error("marking background migration as failed due to job failure")
+				bbm.ErrorCode = models.JobExceedsMaxAttemptBBMErrCode
+				bbm.Status = models.BackgroundMigrationFailed
+				return nil, bbmStore.UpdateStatus(ctx, bbm)
+			}
 		}
 		return job, nil
 	}
 }
 
 // ExecuteJob attempts to execute the function associated with a Background Migration job from the job's start-end range.
-func (jw *Worker) ExecuteJob(ctx context.Context, job *models.BackgroundMigrationJob, registeredWork map[string]Work) error {
-
-	bbmStore := datastore.NewBackgroundMigrationStore(jw.db)
+func (jw *Worker) ExecuteJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, job *models.BackgroundMigrationJob) error {
 
 	// update the job attempts
 	err := bbmStore.IncrementJobAttempts(ctx, job.ID)
@@ -357,22 +379,21 @@ func (jw *Worker) ExecuteJob(ctx context.Context, job *models.BackgroundMigratio
 	}
 
 	// find the job function from the registered work map and execute it.
-	if work, found := registeredWork[job.JobName]; found {
-		err := work.Do(ctx, jw.db, job.PaginationColumn, job.StartID, job.EndID, job.BatchSize)
+	if work, found := jw.Work[job.JobName]; found {
+		err := work.Do(ctx, jw.db, job.PaginationTable, job.PaginationColumn, job.StartID, job.EndID, job.BatchSize)
 		if err != nil {
-			// mark job as failed
-			err = bbmStore.UpdateJobStatus(ctx, job.ID, int(failed))
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("failed executing job for id %d: %w", job.ID, err)
+			jw.logger.WithError(err).Error("failed executing job")
+			job.Status = models.BackgroundMigrationFailed
+			job.ErrorCode = models.UnknownBBMErrorCode
+			return bbmStore.UpdateJobStatus(ctx, job)
 		} else {
-			// mark job as finished
-			return bbmStore.UpdateJobStatus(ctx, job.ID, int(finished))
+			job.Status = models.BackgroundMigrationFinished
 		}
+		return bbmStore.UpdateJobStatus(ctx, job)
 	} else {
-		// mark job as failed
-		err := bbmStore.UpdateJobStatus(ctx, job.ID, int(failed))
+		job.Status = models.BackgroundMigrationFailed
+		job.ErrorCode = models.InvalidJobSignatureBBMErrCode
+		err := bbmStore.UpdateJobStatus(ctx, job)
 		if err != nil {
 			return err
 		}
@@ -384,16 +405,18 @@ func (jw *Worker) ExecuteJob(ctx context.Context, job *models.BackgroundMigratio
 // if no failed jobs are found in the Background Migration it sets the status of the Background Migration to finished.
 func findRetryableJobs(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, bbm *models.BackgroundMigration) (*models.BackgroundMigrationJob, error) {
 
-	job, err := bbmStore.FindJobWithStatus(ctx, bbm.ID, int(failed))
+	job, err := bbmStore.FindJobWithStatus(ctx, bbm.ID, models.BackgroundMigrationFailed)
 	if err != nil {
 		return nil, err
 	}
 	// if there are no jobs that failed update the migration to finished state
 	if job == nil {
-		return nil, bbmStore.UpdateStatus(ctx, bbm.ID, int(finished))
+		bbm.Status = models.BackgroundMigrationFinished
+		return nil, bbmStore.UpdateStatus(ctx, bbm)
 	}
 	// Otherwise, decorate any found job with the parent (Background Migration) attributes.
 	job.JobName = bbm.JobName
+	job.PaginationTable = bbm.TargetTable
 	job.PaginationColumn = bbm.TargetColumn
 	job.BatchSize = bbm.BatchSize
 
@@ -416,7 +439,8 @@ func findNewJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore
 	// if the Background Migration does not have any job, this implies it was never been run/started, so start it!
 	if lastCreatedJob == nil {
 		start = bbm.StartID
-		err = bbmStore.UpdateStatus(ctx, bbm.ID, int(running))
+		bbm.Status = models.BackgroundMigrationRunning
+		err = bbmStore.UpdateStatus(ctx, bbm)
 		if err != nil {
 			return nil, err
 		}
@@ -431,31 +455,26 @@ func findNewJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore
 
 	// Based on the Background Migration batch size and the start point of the job, find the job's end point.
 	// TODO: we could off-load some of this logic to the store layer where we can potentially craft a query that will give us both start and end job IDs.
-	foundEnd, err := bbmStore.FindJobEndFromJobStart(ctx, bbm.TargetTable, bbm.TargetColumn, start, last, bbm.BatchSize)
+	end, err := bbmStore.FindJobEndFromJobStart(ctx, bbm.TargetTable, bbm.TargetColumn, start, last, bbm.BatchSize)
 	if err != nil {
 		return nil, err
 	}
-	if foundEnd == nil {
-		return nil, ErrJobEndpointNotFound
-	}
-	end := *foundEnd
 
-	// create the job representation
-	newJob := &models.BackgroundMigrationJob{
-		BBMID:     bbm.ID,
-		StartID:   start,
-		EndID:     end,
-		BatchSize: bbm.BatchSize,
-		Status:    int(active),
+	// create the job representation and decorate the job with some of the parent (Background Migration) attributes
+	job := &models.BackgroundMigrationJob{
+		BBMID:            bbm.ID,
+		StartID:          start,
+		EndID:            end,
+		BatchSize:        bbm.BatchSize,
+		JobName:          bbm.JobName,
+		PaginationColumn: bbm.TargetColumn,
+		PaginationTable:  bbm.TargetTable,
 	}
-	job, err := bbmStore.CreateNewJob(ctx, newJob)
+
+	err = bbmStore.CreateNewJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
-	// decorate job with some of the parent (Background Migration) attributes
-	job.JobName = bbm.JobName
-	job.PaginationColumn = bbm.TargetColumn
-	job.BatchSize = bbm.BatchSize
 
 	return job, nil
 }

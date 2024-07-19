@@ -30,7 +30,7 @@ CREATE TABLE batched_background_migrations (
 - `max_value`: Stopping row `id` eligible for migration. To exclude newly introduced records after a given point.
 - `batch_size`: Number of rows that should be migrated per batch.
 - `job_signature_name`: The key that corresponds to a registry function that will be executed for each batch of the migration.
-- `table_name`: The table the migration is run on.
+- `table_name`: The table the migration is run on. Must follow the format `<schema>.<table>`.
 - `column_name`: The column used to determine the next batch.
 - `status`: The current state of the migration:
 
@@ -91,9 +91,13 @@ CREATE TABLE batched_background_migration_jobs (
 
 - `failure_error_code`: The last error code associated with a `failed` job state. This corresponds to error codes emitted by the registry when a job fails:
 
-| error code | value | description                               |
-| ---------- | ----- | ----------------------------------------- |
-| `unknown`  | 0     | The job failed with an unknown error code |
+| error code              | value | description                                                     |
+| ----------------------- | ----- | --------------------------------------------------------------- |
+| `unknown`               | 0     | The job/migration failed with an unknown error code             |
+| `invalid_bbm_table`     | 1     | Invalid migration table reference                               |
+| `invalid_bbm_column`    | 2     | Invalid background migration column reference                   |
+| `invalid_job_signature` | 3     | Invalid job signature reference                                 |
+| `max_job_retry`         | 4     | A migration's job exceeded the maximum configured retry attempt |
 
 The registry will be aware of new migrations or ongoing/unfinished migrations by monitoring/ querying the BBM table (periodically) on a separate go-routine, if an unfinished migration exists the registry will attempt to acquire the BBM lock and then proceed to either:
 - **A** create the next BBM job batch for an unfinished migration.
