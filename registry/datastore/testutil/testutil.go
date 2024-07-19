@@ -28,21 +28,23 @@ type trigger struct {
 }
 
 const (
-	NamespacesTable            table = "top_level_namespaces"
-	RepositoriesTable          table = "repositories"
-	MediaTypesTable            table = "media_types"
-	ManifestsTable             table = "manifests"
-	ManifestReferencesTable    table = "manifest_references"
-	BlobsTable                 table = "blobs"
-	RepositoryBlobsTable       table = "repository_blobs"
-	LayersTable                table = "layers"
-	TagsTable                  table = "tags"
-	GCBlobReviewQueueTable     table = "gc_blob_review_queue"
-	GCBlobsConfigurationsTable table = "gc_blobs_configurations"
-	GCBlobsLayersTable         table = "gc_blobs_layers"
-	GCManifestReviewQueueTable table = "gc_manifest_review_queue"
-	GCTmpBlobsManifestsTable   table = "gc_tmp_blobs_manifests"
-	GCReviewAfterDefaultsTable table = "gc_review_after_defaults"
+	NamespacesTable              table = "top_level_namespaces"
+	RepositoriesTable            table = "repositories"
+	MediaTypesTable              table = "media_types"
+	ManifestsTable               table = "manifests"
+	ManifestReferencesTable      table = "manifest_references"
+	BlobsTable                   table = "blobs"
+	RepositoryBlobsTable         table = "repository_blobs"
+	LayersTable                  table = "layers"
+	TagsTable                    table = "tags"
+	GCBlobReviewQueueTable       table = "gc_blob_review_queue"
+	GCBlobsConfigurationsTable   table = "gc_blobs_configurations"
+	GCBlobsLayersTable           table = "gc_blobs_layers"
+	GCManifestReviewQueueTable   table = "gc_manifest_review_queue"
+	GCTmpBlobsManifestsTable     table = "gc_tmp_blobs_manifests"
+	GCReviewAfterDefaultsTable   table = "gc_review_after_defaults"
+	BackgroundMigrationTable     table = "batched_background_migrations"
+	BackgroundMigrationJobsTable table = "batched_background_migration_jobs"
 )
 
 // AllTables represents all tables in the test database.

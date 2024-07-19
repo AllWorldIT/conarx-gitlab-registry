@@ -208,13 +208,14 @@ type RepositoryLease struct {
 type BackgroundMigration struct {
 	ID           int
 	Name         string
-	Status       int
+	Status       BackgroundMigrationStatus
 	StartID      int
 	EndID        int
 	BatchSize    int
 	JobName      string
 	TargetTable  string
 	TargetColumn string
+	ErrorCode    BBMErrorCode
 }
 
 // BackgroundMigrationJob is the representation of a BackgroundMigration Job.
@@ -223,9 +224,68 @@ type BackgroundMigrationJob struct {
 	BBMID            int
 	StartID          int
 	EndID            int
-	Status           int
+	Status           BackgroundMigrationStatus
 	Attempts         int
 	JobName          string
 	PaginationColumn string
+	PaginationTable  string
 	BatchSize        int
+	ErrorCode        BBMErrorCode
+}
+
+// BackgroundMigrationStatus are the Background Migration and Background Migration job statuses as defined in:
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-background-migrations.md#batch-background-migration-bbm-creation
+type BackgroundMigrationStatus int
+
+const (
+	BackgroundMigrationPaused BackgroundMigrationStatus = iota
+	BackgroundMigrationActive
+	BackgroundMigrationFinished
+	BackgroundMigrationFailed
+	BackgroundMigrationRunning
+)
+
+func (s BackgroundMigrationStatus) String() string {
+	switch s {
+	case BackgroundMigrationPaused:
+		return "paused"
+	case BackgroundMigrationActive:
+		return "active"
+	case BackgroundMigrationFinished:
+		return "finished"
+	case BackgroundMigrationFailed:
+		return "failed"
+	case BackgroundMigrationRunning:
+		return "running"
+	}
+	return "unknown"
+}
+
+// BBMErrorCode represent the failure codes for Background Migration and Background Migration jobs as defined in:
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-background-migrations.md#asynchronous-execution-when-serving-requests-on-the-registry
+type BBMErrorCode struct {
+	sql.NullInt16
+}
+
+var (
+	UnknownBBMErrorCode            = BBMErrorCode{sql.NullInt16{Int16: 0, Valid: true}}
+	InvalidTableBBMErrCode         = BBMErrorCode{sql.NullInt16{Int16: 1, Valid: true}}
+	InvalidColumnBBMErrCode        = BBMErrorCode{sql.NullInt16{Int16: 2, Valid: true}}
+	InvalidJobSignatureBBMErrCode  = BBMErrorCode{sql.NullInt16{Int16: 3, Valid: true}}
+	JobExceedsMaxAttemptBBMErrCode = BBMErrorCode{sql.NullInt16{Int16: 4, Valid: true}}
+)
+
+func (s BBMErrorCode) String() string {
+	switch s.Int16 {
+	default:
+		return "unknown"
+	case InvalidTableBBMErrCode.Int16:
+		return "invalid_bbm_table"
+	case InvalidColumnBBMErrCode.Int16:
+		return "invalid_bbm_column"
+	case InvalidJobSignatureBBMErrCode.Int16:
+		return "invalid_job_signature"
+	case JobExceedsMaxAttemptBBMErrCode.Int16:
+		return "max_job_retry"
+	}
 }
