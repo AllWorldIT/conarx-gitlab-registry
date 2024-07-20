@@ -208,3 +208,35 @@ cache:redis-sentinel:
       alias: "redis"
     - name: bitnami/redis-sentinel
       alias: "redis-sentinel"
+
+cache:redis-sentinel-auth:
+  <<: *cache-redis
+  variables:
+    <<: *cache-redis-variables
+    # create a Docker network per build so that services can talk with each other
+    FF_NETWORK_PER_BUILD: 1
+    # config for redis-sentinel
+    REDIS_MASTER_HOST: "redis"
+    REDIS_MASTER_SET: "main-redis"
+    # config for app
+    REDIS_ADDR: "redis-sentinel:26379"
+    REDIS_MAIN_NAME: "main-redis"
+    REDIS_SENTINEL_USERNAME: "my-sentinel-user"
+    REDIS_SENTINEL_PASSWORD: "my-sentinel-pass"
+  services:
+    - name: redis:alpine
+      alias: "redis"
+    - name: bitnami/redis-sentinel
+      alias: "redis-sentinel"
+      command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Starting Redis Sentinel..."
+          cat <<EOF > /opt/bitnami/redis-sentinel/etc/sentinel.conf
+          user default off
+          user ${REDIS_SENTINEL_USERNAME} on >${REDIS_SENTINEL_PASSWORD} +@all
+          sentinel monitor ${REDIS_MAIN_NAME} ${REDIS_MASTER_HOST} 6379 2
+          sentinel resolve-hostnames yes
+          EOF
+          redis-sentinel /opt/bitnami/redis-sentinel/etc/sentinel.conf

@@ -1628,7 +1628,7 @@ func TestRepositoryStore_Size(t *testing.T) {
 
 	size, err := s.Size(suite.ctx, &models.Repository{NamespaceID: 3, ID: 10})
 	require.NoError(t, err)
-	require.Equal(t, int64(1659463), size)
+	require.Equal(t, int64(1659463), size.Bytes())
 }
 
 func TestRepositoryStore_Size_Empty(t *testing.T) {
@@ -1676,7 +1676,7 @@ func TestRepositoryStore_Size_SingleRepositoryCache(t *testing.T) {
 	// the size attribute of an existing repo is calculated from the db
 	// on the very first call to `Size`,  once calculated the size
 	// attribute is pegged to the cache as well for future calls to utilize
-	require.Equal(t, expectedSize, *c.Get(ctx, path).Size)
+	require.Equal(t, expectedSize.Bytes(), *c.Get(ctx, path).Size)
 }
 
 func TestRepositoryStore_Size_WithCentralRepositoryCache(t *testing.T) {
@@ -1723,7 +1723,64 @@ func TestRepositoryStore_Size_WithCentralRepositoryCache(t *testing.T) {
 	// pegged to the repo object in the cache, which can respond to subsequent `Size` calls without accessing the db.
 	_, err = s.Size(suite.ctx, expectedRepoFromDB)
 	require.NoError(t, err)
-	require.Equal(t, expectedRepoSizeFromDB, *cache.Get(suite.ctx, path).Size)
+	require.Equal(t, expectedRepoSizeFromDB.Bytes(), *cache.Get(suite.ctx, path).Size)
+	require.False(t, expectedRepoSizeFromDB.Cached())
+}
+
+func testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testing.T, estimate bool) {
+	t.Helper()
+	reloadManifestFixtures(t)
+
+	// see testdata/fixtures/repositories.sql
+	r := &models.Repository{NamespaceID: 3, ID: 8, Path: "usage-group"}
+
+	// Obtain size with no caching layer
+	s := datastore.NewRepositoryStore(suite.db)
+	var trueSize datastore.RepositorySize
+	var err error
+	if estimate {
+		trueSize, err = s.EstimatedSizeWithDescendants(suite.ctx, r)
+		require.NoError(t, err)
+		require.Equal(t, int64(8467925), trueSize.Bytes())
+		require.False(t, trueSize.Cached())
+	} else {
+		trueSize, err = s.SizeWithDescendants(suite.ctx, r)
+		require.NoError(t, err)
+		require.Equal(t, int64(7543014), trueSize.Bytes())
+		require.False(t, trueSize.Cached())
+	}
+
+	// Add a cache to the store and try fetching the size again
+	cache := datastore.NewCentralRepositoryCache(itestutil.RedisCache(t, 0))
+	s = datastore.NewRepositoryStore(suite.db, datastore.WithRepositoryCache(cache))
+	var preCacheSize datastore.RepositorySize
+	if estimate {
+		preCacheSize, err = s.EstimatedSizeWithDescendants(suite.ctx, r)
+	} else {
+		preCacheSize, err = s.SizeWithDescendants(suite.ctx, r)
+	}
+	require.NoError(t, err)
+	require.Equal(t, trueSize, preCacheSize)
+	require.False(t, preCacheSize.Cached())
+
+	// Verify cache entry
+	found, cachedSize := cache.GetSizeWithDescendants(suite.ctx, r)
+	require.True(t, found)
+	require.Equal(t, trueSize.Bytes(), cachedSize)
+
+	// Now fetch it again with the value already in cache
+	postCacheSize, err := s.SizeWithDescendants(suite.ctx, r)
+	require.NoError(t, err)
+	require.Equal(t, trueSize.Bytes(), postCacheSize.Bytes())
+	require.True(t, postCacheSize.Cached())
+}
+
+func TestRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testing.T) {
+	testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t, false)
+}
+
+func TestRepositoryStore_EstimatedSizeWithDescendants_WithCentralRepositoryCache(t *testing.T) {
+	testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t, true)
 }
 
 // This comment describes the repository size calculation in detail, explaining the results of the
@@ -1819,7 +1876,7 @@ func TestRepositoryStore_SizeWithDescendants_TopLevel(t *testing.T) {
 
 	size, err := s.SizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 3, ID: 8, Path: "usage-group"})
 	require.NoError(t, err)
-	require.Equal(t, int64(7543014), size)
+	require.Equal(t, int64(7543014), size.Bytes())
 }
 
 // Here we use the test fixtures for the `usage-group/sub-group-1` repository (see testdata/fixtures/*.sql). See the
@@ -1835,7 +1892,7 @@ func TestRepositoryStore_SizeWithDescendants_NonTopLevel(t *testing.T) {
 
 	size, err := s.SizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 3, ID: 9, Path: "usage-group/sub-group-1"})
 	require.NoError(t, err)
-	require.Equal(t, int64(1659463), size)
+	require.Equal(t, int64(1659463), size.Bytes())
 }
 
 func TestRepositoryStore_SizeWithDescendants_TopLevelEmpty(t *testing.T) {
@@ -1845,7 +1902,7 @@ func TestRepositoryStore_SizeWithDescendants_TopLevelEmpty(t *testing.T) {
 
 	size, err := s.SizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 4, ID: 15, Path: "usage-group-2"})
 	require.NoError(t, err)
-	require.Zero(t, size)
+	require.Zero(t, size.Bytes())
 }
 
 func TestRepositoryStore_SizeWithDescendants_NonTopLevelEmpty(t *testing.T) {
@@ -1894,14 +1951,14 @@ func TestRepositoryStore_SizeWithDescendants_TopLevel_ChecksCacheForPreviousTime
 
 	size, err := s.SizeWithDescendants(suite.ctx, repo)
 	require.NoError(t, err)
-	require.Equal(t, int64(7543014), size)
+	require.Equal(t, int64(7543014), size.Bytes())
 
 	// Checks Redis to see if the latest invocation has failed. Halts if so.
 	redisMock.ExpectGet(redisKey).SetVal("value does not matter")
 
 	size, err = s.SizeWithDescendants(suite.ctx, repo)
 	require.ErrorIs(t, err, datastore.ErrSizeHasTimedOut)
-	require.Zero(t, size)
+	require.Zero(t, size.Bytes())
 }
 
 func TestRepositoryStore_SizeWithDescendants_TopLevel_SetsCacheOnTimeout(t *testing.T) {
@@ -1951,7 +2008,7 @@ func TestRepositoryStore_SizeWithDescendants_NonTopLevel_DoesNotTouchCacheTimeou
 	s := datastore.NewRepositoryStore(suite.db, datastore.WithRepositoryCache(cache))
 	size, err := s.SizeWithDescendants(suite.ctx, repo)
 	require.NoError(t, err)
-	require.Equal(t, int64(1659463), size)
+	require.Equal(t, int64(1659463), size.Bytes())
 
 	// Test that the cache is not set after a failed query. Use transaction with a statement timeout of 1ms, so that all
 	// queries within time out.
@@ -1970,7 +2027,7 @@ func TestRepositoryStore_SizeWithDescendants_NonTopLevel_DoesNotTouchCacheTimeou
 	var pgErr *pgconn.PgError
 	require.ErrorAs(t, err, &pgErr)
 	require.Equal(t, pgErr.Code, pgerrcode.QueryCanceled)
-	require.Zero(t, size)
+	require.Zero(t, size.Bytes())
 }
 
 // TestRepositoryStore_EstimatedSizeWithDescendants_TopLevel is similar to
@@ -1984,7 +2041,7 @@ func TestRepositoryStore_EstimatedSizeWithDescendants_TopLevel(t *testing.T) {
 
 	size, err := s.EstimatedSizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 3, ID: 8, Path: "usage-group"})
 	require.NoError(t, err)
-	require.Equal(t, int64(8467925), size)
+	require.Equal(t, int64(8467925), size.Bytes())
 }
 
 func TestRepositoryStore_EstimatedSizeWithDescendants_TopLevelNotFound(t *testing.T) {
@@ -1994,7 +2051,7 @@ func TestRepositoryStore_EstimatedSizeWithDescendants_TopLevelNotFound(t *testin
 
 	size, err := s.EstimatedSizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 100, ID: 1000, Path: "foo"})
 	require.NoError(t, err)
-	require.Zero(t, size)
+	require.Zero(t, size.Bytes())
 }
 
 func TestRepositoryStore_EstimatedSizeWithDescendants_TopLevelEmpty(t *testing.T) {
@@ -2004,7 +2061,7 @@ func TestRepositoryStore_EstimatedSizeWithDescendants_TopLevelEmpty(t *testing.T
 
 	size, err := s.EstimatedSizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 4, ID: 15, Path: "usage-group-2"})
 	require.NoError(t, err)
-	require.Zero(t, size)
+	require.Zero(t, size.Bytes())
 }
 
 func TestRepositoryStore_EstimatedSizeWithDescendants_NonTopLevel(t *testing.T) {
@@ -2014,7 +2071,7 @@ func TestRepositoryStore_EstimatedSizeWithDescendants_NonTopLevel(t *testing.T) 
 
 	size, err := s.EstimatedSizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 3, ID: 9, Path: "usage-group/sub-group-1"})
 	require.ErrorIs(t, err, datastore.ErrOnlyRootEstimates)
-	require.Zero(t, size)
+	require.Zero(t, size.Bytes())
 }
 
 func TestRepositoryBlobService_Stat(t *testing.T) {
@@ -2912,7 +2969,7 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 	}
 }
 
-func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
+func TestRepositoryStore_FindPaginatedRepositoriesForPath(t *testing.T) {
 	reloadTagFixtures(t)
 
 	tt := []struct {
@@ -3108,7 +3165,7 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 				LastEntry:  test.lastPath,
 			}
 
-			rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, test.baseRepo, filters)
+			rr, err := s.FindPaginatedRepositoriesForPath(suite.ctx, test.baseRepo, filters)
 
 			// reset created_at attributes for reproducible comparisons
 			for _, r := range rr {
@@ -3122,12 +3179,12 @@ func TestRepositoryStore_FindPagingatedRepositoriesForPath(t *testing.T) {
 	}
 }
 
-func TestRepositoryStore_FindPagingatedRepositoriesForPath_None(t *testing.T) {
+func TestRepositoryStore_FindPaginatedRepositoriesForPath_None(t *testing.T) {
 	reloadTagFixtures(t)
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	rr, err := s.FindPagingatedRepositoriesForPath(suite.ctx, &models.Repository{
+	rr, err := s.FindPaginatedRepositoriesForPath(suite.ctx, &models.Repository{
 		NamespaceID: 2,
 		Path:        "a-test-group",
 	}, datastore.FilterParams{MaxEntries: 100})

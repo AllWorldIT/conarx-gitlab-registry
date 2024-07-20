@@ -264,6 +264,8 @@ redis:
   dialtimeout: 10ms
   readtimeout: 10ms
   writetimeout: 10ms
+  sentinelusername: my-sentinel-username
+  sentinelpassword: some-sentinel-password
   tls:
     enabled: true
     insecure: true
@@ -280,6 +282,26 @@ redis:
     dialtimeout: 10ms
     readtimeout: 10ms
     writetimeout: 10ms
+    sentinelusername: my-sentinel-username
+    sentinelpassword: some-sentinel-password
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
+  ratelimiter:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
+    sentinelusername: my-sentinel-username
+    sentinelpassword: some-sentinel-password
     tls:
       enabled: true
       insecure: true
@@ -593,6 +615,19 @@ database:
     maxidle: 25
     maxopen: 25
     maxlifetime: 5m
+  backgroundmigrations:
+    enabled: true
+    jobinterval: 1m
+  loadbalancing:
+    enabled: true
+    nameserver: localhost
+    port: 8600
+    record: db-replica-registry.service.consul
+    recordcheckinterval: 1m
+    disconnecttimeout: 2m
+    maxreplicalagtime: 1m
+    maxreplicalagbytes: 8388608
+    replicacheckinterval: 1m  
 ```
 
 | Parameter  | Required | Description                                                                                                                                                                                                                                          |
@@ -630,6 +665,57 @@ Use these settings to configure the behavior of the database connection pool.
 | `maxopen`| no      | The maximum number of open connections to the database. If `maxopen` is less than `maxidle`, then `maxidle` is reduced to match the `maxopen` limit. Defaults to 0 (unlimited). |
 | `maxlifetime`| no    | The maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. Defaults to 0 (unlimited). |
 | `maxidletime` | no | The maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. Defaults to 0 (unlimited). |
+
+### `backgroundmigrations`
+
+> **_NOTE:_** Batched Background Migrations (BBM) are an experimental feature, please do not enable it in production.
+
+The `backgroundmigrations` subsection configures Batched Background Migrations (BBM) in the registry. BBM are used for performing database data migration in batches, ensuring efficient and manageable data migrations without disrupting service availability. See the [specification](./spec/gitlab/database-background-migrations.md) for a detailed explanation of how it works.
+
+```yaml
+backgroundmigrations:
+  enabled: true
+  maxjobretries: 3
+  jobinterval: 1m
+```
+
+| Parameter       | Required | Description                                                                                                                                                |
+| --------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`       | no       | When set to `true`, enables asynchronous Batched Background Migrations (BBM). Defaults to `false`.                                                         |
+| `maxjobretries` | no       | The maximum number of times a job is retried before it is marked as failed in asynchronous BBM. Defaults to `0` - no retry.                                |
+| `jobinterval`   | no       | The periodic duration to wait before checking for eligible BBM jobs to run and acquiring a lock on the BBM process in asynchronous mode. Defaults to `1m`. |
+
+### `loadbalancing`
+
+> **Note**: This is an experimental feature and should _not_ be used in production.
+
+This subsection allows enabling and configuring Database Load Balancing (DLB). See the corresponding [specification](./spec/gitlab/database-load-balancing.md)
+for more details on how it works.
+
+```none
+loadbalancing:
+  enabled: true
+  nameserver: localhost
+  port: 8600
+  record: db-replica-registry.service.consul
+  recordcheckinterval: 1m
+  disconnecttimeout: 2m
+  maxreplicalagtime: 1m
+  maxreplicalagbytes: 8388608
+  replicacheckinterval: 1m
+```
+
+| Parameter              | Required | Description                                                                                                                                                                               | Default          |
+| ---------------------- | -------- |-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| ---------------- |
+| `hosts`                | No       | A static, comma-separated list of hostnames to use for load balancing. Can be used as an alternative to service discovery. Ignored if `record` is set. `port` will be used for all hosts. |                  |
+| `nameserver`           | No       | The nameserver to use for looking up the DNS record.                                                                                                                                      | `localhost`      |
+| `port`                 | No       | The port of the nameserver.                                                                                                                                                               | `8600`           |
+| `record`               | Yes      | The `SRV` record to look up. This option is required for service discovery to work.                                                                                                       |                  |
+| `recordcheckinterval`  | No       | The minimum amount of time between checking the DNS record.                                                                                                                               | `1m`             |
+| `disconnecttimeout`    | No       | The amount of time after which an old connection is closed, after the list of hosts was updated.                                                                                          | `2m`             |
+| `maxreplicalagbytes`   | No       | The amount of data (in bytes) a replica is allowed to lag behind before being quarantined.                                                                                                | `8388608` (8MiB) |
+| `maxreplicalagtime`    | No       | The maximum amount of time a replica is allowed to lag behind before being quarantined.                                                                                                   | `1m`             |
+| `replicacheckinterval` | No       | The minimum amount of time between checking the status of a replica.                                                                              | `1m`             |
 
 ## `auth`
 
@@ -1077,8 +1163,8 @@ The `events` structure configures the information provided in event notification
 
 ```yaml
 redis:
-  addr: localhost:16379,localhost:26379
-  mainname: mainserver
+  addr: localhost:16379
+  username: registry
   password: asecret
   db: 0
   dialtimeout: 10ms
@@ -1100,6 +1186,24 @@ redis:
     dialtimeout: 10ms
     readtimeout: 10ms
     writetimeout: 10ms
+    sentinelusername: my-sentinel-username
+    sentinelpassword: some-sentinel-password
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
+  ratelimiter:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
     tls:
       enabled: true
       insecure: true
@@ -1109,23 +1213,26 @@ redis:
       idletimeout: 300s
 ```
 
-Declare parameters for constructing the `redis` connections. Single instances and Redis Sentinel are supported.
+Declare parameters for constructing the `redis` connections. Single instances, Redis Sentinel and Redis Cluster are supported.
 
-For backward compatibility reasons, registry instances use this Redis connection exclusively to cache information about
+For backward compatibility reasons, registry instances use the root Redis connection exclusively to cache information about
 immutable blobs when `storage.cache.blobdescriptor` is set to `redis`. When using this feature, you should configure
 Redis with the `allkeys-lru` eviction policy, because the registry does not set an expiration value on keys.
 
-For other caching purposes/features, please see the new dedicated `redis.cache` subsection.
+For other caching purposes/features, please see the new dedicated `redis.cache` and `redis.ratelimiter` subsections.
 
-| Parameter      | Required | Description                                                                                                           |
-|----------------|----------|-----------------------------------------------------------------------------------------------------------------------|
-| `addr`         | yes      | The address (host and port) of the Redis instance. For Sentinel it should be a list of addresses separated by commas. |
-| `mainname`     | no       | The main server name. Only applicable for Sentinel.                                                                   |
-| `password`     | no       | A password used to authenticate to the Redis instance.                                                                |
-| `db`           | no       | The name of the database to use for each connection.                                                                  |
-| `dialtimeout`  | no       | The timeout for connecting to the Redis instance. Defaults to no timeout.                                             |
-| `readtimeout`  | no       | The timeout for reading from the Redis instance. Defaults to no timeout.                                              |
-| `writetimeout` | no       | The timeout for writing to the Redis instance. Defaults to no timeout.                                                |
+| Parameter          | Required | Description                                                                                                           |
+|--------------------|----------|-----------------------------------------------------------------------------------------------------------------------|
+| `addr`             | yes      | The address (host and port) of the Redis instance. For Sentinel and Cluster it should be a list of addresses separated by commas. |
+| `mainname`         | no       | The main server name. Only applicable for Sentinel.                                                                   |
+| `username`         | no       | A username used to authenticate to the Redis instance.                                                                |
+| `password`         | no       | A password used to authenticate to the Redis instance.                                                                |
+| `sentinelusername` | no       | A username used to authenticate to the Redis Sentinel instance.                                                       |
+| `sentinelpassword` | no       | A password used to authenticate to the Redis Sentinel instance.                                                       |
+| `db`               | no       | The name of the database to use for each connection.                                                                  |
+| `dialtimeout`      | no       | The timeout for connecting to the Redis instance. Defaults to no timeout.                                             |
+| `readtimeout`      | no       | The timeout for reading from the Redis instance. Defaults to no timeout.                                              |
+| `writetimeout`     | no       | The timeout for writing to the Redis instance. Defaults to no timeout.                                                |
 
 ### `tls`
 
@@ -1168,6 +1275,8 @@ redis:
     addr: localhost:16379,localhost:26379
     mainname: mainserver
     password: asecret
+    sentinelusername: my-sentinel-username
+    sentinelpassword: some-sentinel-password
     db: 0
     dialtimeout: 10ms
     readtimeout: 10ms
@@ -1181,8 +1290,7 @@ redis:
       idletimeout: 300s
 ```
 
-The cache subsection allows configuring a Redis connection specifically for caching purposes. Single instances and
-Sentinel are supported.
+The cache subsection allows configuring a Redis connection specifically for caching purposes.
 
 The intent is to allow using separate instances for different purposes, achieving isolation and improved performance and
 availability. In case this is not a concern, it is also possible to use the same settings as those on the
@@ -1203,6 +1311,42 @@ refer to the documentation for the remaining connection parameters [`here`](#red
 | Parameter | Required | Description                                                                   |
 |-----------|----------|-------------------------------------------------------------------------------|
 | `enabled` | no       | If the Redis caching functionality is enabled (boolean). Defaults to `false`. |
+
+
+### `ratelimiter`
+
+```yaml
+redis:
+  ratelimiter:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
+```
+
+The `ratelimiter` subsection allows configuring a Redis connection specifically for rate-limiting purposes.
+
+This functionality is [currently in development](https://gitlab.com/groups/gitlab-org/-/epics/13237).
+More functionality details will be added to this section as they become available.
+
+All the Redis connection parameters in the parent section are also available here.
+There are two new parameters available specific to the rate-limiting functionality.
+Please refer to the documentation for the remaining connection parameters [`here`](#redis).
+
+| Parameter  | Required | Description                                                                            |
+|------------|----------|----------------------------------------------------------------------------------------|
+| `enabled`  | no       | If the Redis rate-limiting functionality is enabled (boolean). Defaults to `false`.    |
 
 ## `health`
 
@@ -1345,6 +1489,7 @@ The `gc` subsection configures online Garbage Collection (GC). See the [specific
 gc:
   disabled: false
   maxbackoff: 24h
+  errorcooldownperiod: 30m
   noidlebackoff: false
   transactiontimeout: 10s
   reviewafter: 24h
@@ -1356,7 +1501,6 @@ gc:
     interval: 5s
     storagetimeout: 5s
 ```
-
 | Parameter       | Required | Description                                                                                                                                                                                                                                                                                                               |
 | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `disabled`      | no       | When set to `true`, the online GC workers are disabled. Defaults to `false`.                                                                                                                                                                                                                                                           |
@@ -1364,6 +1508,8 @@ gc:
 | `maxbackoff`    | no       | The maximum exponential backoff duration used to sleep between worker runs when an error occurs. Also applied when there are no tasks to be processed unless `noidlebackoff` is `true`. Please note that this is not the absolute maximum, as a randomized jitter factor of up to 33% is always added. Defaults to `24h`. |
 | `transactiontimeout`   | no       | The database transaction timeout for each worker run. Each worker starts a database transaction at the start. The worker run is canceled if this timeout is exceeded to avoid stalled or long-running transactions. Defaults to `10s`.                                                                                    |
 | `reviewafter`   | no       | The minimum amount of time after which the garbage collector should pick up a record for review. `-1` means no wait. Defaults to `24h`. |
+| `errorcooldownperiod` | no | The period of time after an error occurs that the GC workers will continue to exponentially backoff. If the worker encounters an error while cooling down, the cool down period is extended again by the configured value. This is useful to ensure that GC workers in multiple registry deployments will slow down during periods of intermittent errors. Defaults to 0 (no cooldown) by default. |
+
 
 ### `blobs`
 

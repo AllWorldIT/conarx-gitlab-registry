@@ -1,21 +1,26 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	cryptorand "crypto/rand"
 	"crypto/tls"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"expvar"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/benbjohnson/clock"
@@ -24,6 +29,7 @@ import (
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/health"
 	"github.com/docker/distribution/health/checks"
+	"github.com/docker/distribution/internal/feature"
 	dlog "github.com/docker/distribution/log"
 	prometheus "github.com/docker/distribution/metrics"
 	"github.com/docker/distribution/notifications"
@@ -33,6 +39,7 @@ import (
 	"github.com/docker/distribution/registry/api/urls"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/auth"
+	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/gc"
@@ -187,6 +194,13 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// we're unable to serve or find it in cache) we simply log and report a failure here and proceed to not prevent
 		// the app from starting.
 		log.WithError(err).Error("failed configuring Redis cache")
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+	}
+
+	if err := app.configureRedisRateLimiter(ctx, config); err != nil {
+		// Redis rate-limiter is not a strictly required dependency, we simply log and report a failure here
+		// and proceed to not prevent the app from starting.
+		log.WithError(err).Error("failed configuring Redis rate-limiter")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
 
@@ -389,6 +403,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			// and move on with spinning up the application.
 			log.WithError(err).Warn("failed to mark filesystem for database only usage, continuing")
 		}
+		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
+			startBackgroundMigrations(app.Context, app.db, config)
+		}
 	}
 
 	// configure storage caches
@@ -536,6 +553,9 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 	}
 	if config.GC.MaxBackoff > 0 {
 		aOpts = append(aOpts, gc.WithMaxBackoff(config.GC.MaxBackoff))
+	}
+	if config.GC.ErrorCooldownPeriod > 0 {
+		aOpts = append(aOpts, gc.WithErrorCooldown(config.GC.ErrorCooldownPeriod))
 	}
 
 	var agents []*gc.Agent
@@ -778,21 +798,77 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 	}
 }
 
+func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
+	if !config.Redis.RateLimiter.Enabled {
+		return nil
+	}
+
+	opts := &redis.UniversalOptions{
+		Username:        config.Redis.RateLimiter.Username,
+		Addrs:           strings.Split(config.Redis.RateLimiter.Addr, ","),
+		DB:              config.Redis.RateLimiter.DB,
+		Password:        config.Redis.RateLimiter.Password,
+		DialTimeout:     config.Redis.RateLimiter.DialTimeout,
+		ReadTimeout:     config.Redis.RateLimiter.ReadTimeout,
+		WriteTimeout:    config.Redis.RateLimiter.WriteTimeout,
+		PoolSize:        config.Redis.RateLimiter.Pool.Size,
+		ConnMaxLifetime: config.Redis.RateLimiter.Pool.MaxLifetime,
+		MasterName:      config.Redis.RateLimiter.MainName,
+	}
+	if config.Redis.RateLimiter.TLS.Enabled {
+		opts.TLSConfig = &tls.Config{
+			InsecureSkipVerify: config.Redis.RateLimiter.TLS.Insecure,
+		}
+	}
+	if config.Redis.RateLimiter.Pool.IdleTimeout > 0 {
+		opts.ConnMaxIdleTime = config.Redis.RateLimiter.Pool.IdleTimeout
+	}
+
+	// redis.NewUniversalClient will take care of returning the appropriate client type (single, cluster or sentinel)
+	// depending on the configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
+	redisClient := redis.NewUniversalClient(opts)
+
+	if config.HTTP.Debug.Prometheus.Enabled {
+		redismetrics.InstrumentClient(
+			redisClient,
+			redismetrics.WithInstanceName("ratelimiting"),
+			redismetrics.WithMaxConns(opts.PoolSize),
+		)
+	}
+
+	// Ensure the client is correctly configured and the server is reachable. We use a new local context here with a
+	// tight timeout to avoid blocking the application start for too long.
+	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	if cmd := redisClient.Ping(pingCtx); cmd.Err() != nil {
+		return cmd.Err()
+	}
+
+	// TODO: add rate-limiter instance to the app
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/1225
+
+	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis rate-limiter configured successfully")
+
+	return nil
+}
+
 func (app *App) configureRedisCache(ctx context.Context, config *configuration.Configuration) error {
 	if !config.Redis.Cache.Enabled {
 		return nil
 	}
 
 	opts := &redis.UniversalOptions{
-		Addrs:           strings.Split(config.Redis.Cache.Addr, ","),
-		DB:              config.Redis.Cache.DB,
-		Password:        config.Redis.Cache.Password,
-		DialTimeout:     config.Redis.Cache.DialTimeout,
-		ReadTimeout:     config.Redis.Cache.ReadTimeout,
-		WriteTimeout:    config.Redis.Cache.WriteTimeout,
-		PoolSize:        config.Redis.Cache.Pool.Size,
-		ConnMaxLifetime: config.Redis.Cache.Pool.MaxLifetime,
-		MasterName:      config.Redis.Cache.MainName,
+		Addrs:            strings.Split(config.Redis.Cache.Addr, ","),
+		DB:               config.Redis.Cache.DB,
+		Password:         config.Redis.Cache.Password,
+		DialTimeout:      config.Redis.Cache.DialTimeout,
+		ReadTimeout:      config.Redis.Cache.ReadTimeout,
+		WriteTimeout:     config.Redis.Cache.WriteTimeout,
+		PoolSize:         config.Redis.Cache.Pool.Size,
+		ConnMaxLifetime:  config.Redis.Cache.Pool.MaxLifetime,
+		MasterName:       config.Redis.Cache.MainName,
+		SentinelUsername: config.Redis.Cache.SentinelUsername,
+		SentinelPassword: config.Redis.Cache.SentinelPassword,
 	}
 	if config.Redis.Cache.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
@@ -1260,11 +1336,22 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 		return nil // access controller is not enabled.
 	}
 
-	var accessRecords []auth.Access
+	var (
+		accessRecords []auth.Access
+		err           error
+		errCode       error
+	)
 
 	if repo != "" {
 		accessRecords = appendAccessRecords(accessRecords, r.Method, repo)
 		accessRecords = appendRepositoryDetailsAccessRecords(accessRecords, r, repo)
+		accessRecords, err, errCode = appendRepositoryNamespaceAccessRecords(accessRecords, r)
+		if err != nil {
+			if err := errcode.ServeJSON(w, errCode); err != nil {
+				dcontext.GetLogger(context).Errorf("error serving error json: %v (from %v)", err, context.Errors)
+			}
+			return fmt.Errorf("error creating access records: %w", err)
+		}
 
 		if fromRepo := r.FormValue("from"); fromRepo != "" {
 			// mounting a blob from one repository to another requires pull (GET)
@@ -1459,6 +1546,49 @@ func appendRepositoryDetailsAccessRecords(accessRecords []auth.Access, r *http.R
 	return accessRecords
 }
 
+// appendRepositoryNamespaceAccessRecords adds the needed access records for moving a project's repositories
+// from one namespace to another as facilitated by the PATCH repository request.
+// Once it detects that the current request is a request to move repositories,
+// it adds the correct access records to the list of access records that must be present in the token.
+func appendRepositoryNamespaceAccessRecords(accessRecords []auth.Access, r *http.Request) ([]auth.Access, error, error) {
+	route := mux.CurrentRoute(r)
+	routeName := route.GetName()
+
+	if r.Method == http.MethodPatch && routeName == v1.Repositories.Name {
+		// Read the request body
+		buf := new(bytes.Buffer)
+
+		// Rread from r.Body and write to buf simultaneously
+		teeReader := io.TeeReader(r.Body, buf)
+
+		// Read the body from the TeeReader
+		body, err := io.ReadAll(teeReader)
+		if err != nil {
+			return accessRecords, err, v1.ErrorCodeInvalidJSONBody.WithDetail("invalid json")
+		}
+
+		// Rewind the request body reader to its original position to allow downstream handlers to read it if needed.
+		r.Body = io.NopCloser(buf)
+
+		// Parse the request body into a struct.
+		var data RenameRepositoryAPIRequest
+		if err := json.Unmarshal(body, &data); err != nil {
+			return accessRecords, err, v1.ErrorCodeInvalidJSONBody.WithDetail("invalid json")
+		}
+		if data.Namespace != "" {
+			accessRecords = append(accessRecords, auth.Access{
+				Resource: auth.Resource{
+					Type: "repository",
+					Name: fmt.Sprintf("%s/*", data.Namespace),
+				},
+				Action: "push",
+			})
+		}
+	}
+
+	return accessRecords, nil, nil
+}
+
 // applyRegistryMiddleware wraps a registry instance with the configured middlewares
 func applyRegistryMiddleware(ctx context.Context, registry distribution.Namespace, middlewares []configuration.Middleware) (distribution.Namespace, error) {
 	for _, mw := range middlewares {
@@ -1640,4 +1770,44 @@ func repositoryFromContextWithRegistry(ctx *Context, w http.ResponseWriter, regi
 	}
 
 	return repository, nil
+}
+
+func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *configuration.Configuration) {
+	l := dlog.GetLogger(dlog.WithContext(ctx))
+
+	// register all work functions with worker
+	worker, err := bbm.RegisterWork(bbm.AllWork(),
+		bbm.WithDB(db),
+		bbm.WithLogger(dlog.GetLogger(dlog.WithContext(ctx))),
+		bbm.WithJobInterval(config.Database.BackgroundMigrations.JobInterval),
+		bbm.WithMaxJobAttempt(config.Database.BackgroundMigrations.MaxJobRetries),
+	)
+	if err != nil {
+		l.WithError(err).Error("background migration worker could not start")
+		return
+	}
+
+	doneCh := make(chan struct{})
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	// listen for registry process exit signal in the background.
+	go bbmListenForShutdown(ctx, sigChan, doneCh)
+
+	// start looking for background migrations
+	gracefulFinish, err := worker.ListenForBackgroundMigration(ctx, doneCh)
+	if err != nil {
+		l.WithError(err).Error("background migration worker exited abruptly")
+	}
+	l.Info("Background migration worker is running")
+
+	// wait for the worker to acknowledge that it is safe to exit.
+	<-gracefulFinish
+	l.Info("Background migration worker stopped")
+}
+
+func bbmListenForShutdown(ctx context.Context, c chan os.Signal, doneCh chan struct{}) {
+	<-c
+	// signal to worker that the program is exiting
+	dlog.GetLogger(dlog.WithContext(ctx)).Info("Background migration worker is shutting down")
+	close(doneCh)
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/docker/distribution"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/manifest/manifestlist"
 	mlcompat "github.com/docker/distribution/manifest/manifestlist/compat"
@@ -224,7 +225,7 @@ func (imp *Importer) importLayers(ctx context.Context, dbRepo *models.Repository
 				l.Warn("blob is not linked to repository, skipping blob import")
 				continue
 			}
-			if errors.Is(err, digest.ErrDigestInvalidFormat) {
+			if errors.Is(err, digest.ErrDigestInvalidFormat) || errors.Is(err, digest.ErrDigestUnsupported) {
 				l.WithError(err).Warn("broken layer link, skipping manifest import")
 				return dbLayers, errManifestSkip
 			}
@@ -240,29 +241,42 @@ func (imp *Importer) importLayers(ctx context.Context, dbRepo *models.Repository
 			return dbLayers, err
 		}
 
-		// Check that the layer media type is known to the registry before replacing
-		// the generic media type with the specific layer media type.
-		//
-		// This code should be removed once dynamic media types are implemented:
-		// https://gitlab.com/gitlab-org/container-registry/-/issues/973
-		mtStore := NewMediaTypeStore(imp.db)
-
-		exists, err := mtStore.Exists(ctx, fsLayer.MediaType)
-		if err != nil {
-			// Log and continue on this failure.
-			l.WithFields(log.Fields{"media_type": fsLayer.MediaType}).WithError(err).Warn("error checking for existence of layer media type")
-		}
-
-		// Slightly paranoid, but let's not trust the boolean value returned by the
-		// existence check if there is an error.
-		if err == nil && exists {
-			layer.MediaType = fsLayer.MediaType
-		}
+		layer.MediaType = imp.layerMediaType(ctx, fsLayer)
 
 		dbLayers = append(dbLayers, layer)
 	}
 
 	return dbLayers, nil
+}
+
+// Check that the layer media type is known to the registry or dynamic media
+// types are enabled before replacing the generic media type with the specific
+// layer media type.
+//
+// This code should be removed once dynamic media types are implemented:
+// https://gitlab.com/groups/gitlab-org/-/epics/13805
+func (imp *Importer) layerMediaType(ctx context.Context, fsLayer distribution.Descriptor) string {
+	if feature.DynamicMediaTypes.Enabled() {
+		return fsLayer.MediaType
+	}
+
+	mtStore := NewMediaTypeStore(imp.db)
+
+	exists, err := mtStore.Exists(ctx, fsLayer.MediaType)
+	if err != nil {
+		// Log and continue on this failure.
+		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"media_type": fsLayer.MediaType}).
+			WithError(err).Warn("error checking for existence of layer media type")
+	}
+
+	// Slightly paranoid, but let's not trust the boolean value returned by the
+	// existence check if there is an error.
+	if err == nil && exists {
+		return fsLayer.MediaType
+	}
+
+	// Fallback to generic media type.
+	return mtOctetStream
 }
 
 func (imp *Importer) importManifestV2(ctx context.Context, fsRepo distribution.Repository, dbRepo *models.Repository, m distribution.ManifestV2, dgst digest.Digest, payload []byte, nonConformant bool) (*models.Manifest, error) {
@@ -364,8 +378,8 @@ func getConfigPayload(ctx context.Context, m distribution.Descriptor, fsRepo dis
 			l.WithError(err).Warn("configuration blob not linked, skipping")
 			return nil, errManifestSkip
 		}
-		if errors.Is(err, digest.ErrDigestInvalidFormat) {
-			l.WithError(err).Warn("broken config link, skipping")
+		if errors.Is(err, digest.ErrDigestUnsupported) {
+			l.WithError(err).Warn("broken configuration link, skipping")
 			return nil, errManifestSkip
 		}
 		return nil, fmt.Errorf("obtaining configuration payload: %w", err)
@@ -564,6 +578,12 @@ func getFsManifest(ctx context.Context, manifestService distribution.ManifestSer
 			l.WithError(err).Warn("broken manifest link, skipping")
 			return nil, errManifestSkip
 		}
+		if errors.Is(err, digest.ErrDigestUnsupported) {
+			// this error is returned if the manifest's digest uses an unsupported algorithm
+			// per https://github.com/opencontainers/go-digest/blob/v1.0.0/algorithm.go#L50
+			l.WithError(err).Warn("unsupported manifest digest algorithm, skipping")
+			return nil, errManifestSkip
+		}
 		return nil, fmt.Errorf("retrieving manifest %q from filesystem: %w", dgst, err)
 	}
 
@@ -659,7 +679,7 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 				l.Warn("missing tag link, skipping")
 				continue
 			}
-			if errors.Is(err, digest.ErrDigestInvalidFormat) {
+			if errors.Is(err, digest.ErrDigestInvalidFormat) || errors.Is(err, digest.ErrDigestUnsupported) {
 				// The tag link is corrupted, log a warning and skip.
 				l.Warn("broken tag link, skipping")
 				continue
@@ -784,7 +804,7 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 				l.WithError(err).Warn("missing tag link, skipping")
 				continue
 			}
-			if errors.Is(err, digest.ErrDigestInvalidFormat) {
+			if errors.Is(err, digest.ErrDigestInvalidFormat) || errors.Is(err, digest.ErrDigestUnsupported) {
 				// the tag link is corrupted, just log a warning and skip
 				l.WithError(err).Warn("broken tag link, skipping")
 				continue
@@ -1132,30 +1152,39 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 	l.Info("starting metadata import")
 
 	if pre {
+		start := time.Now()
 		imp.printBar(bar, "step one: import manifests")
 
 		if err := imp.preImportAllRepositories(ctx); err != nil {
 			return fmt.Errorf("pre importing all repositories: %w", err)
 		}
+
+		imp.printBar(bar, fmt.Sprintf("step one completed in %s", time.Since(start).Round(time.Second)))
 	}
 
 	if repos {
+		start := time.Now()
 		imp.printBar(bar, "step two: import tags")
 
 		if err := imp.importAllRepositories(ctx); err != nil {
 			return fmt.Errorf("importing all repositories: %w", err)
 		}
+
+		imp.printBar(bar, fmt.Sprintf("step two completed in %s", time.Since(start).Round(time.Second)))
 	}
 
 	if blobs {
+		start := time.Now()
 		imp.printBar(bar, "step three: import blobs")
 
 		if err := imp.importBlobs(ctx); err != nil {
 			return fmt.Errorf("importing blobs: %w", err)
 		}
+
+		imp.printBar(bar, fmt.Sprintf("step three completed in %s", time.Since(start).Round(time.Second)))
 	}
 
-	imp.printBar(bar, "registry import complete")
+	bar.Describe("registry import complete")
 
 	t := time.Since(start).Seconds()
 

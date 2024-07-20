@@ -39,6 +39,9 @@ const (
 
 	lessThan    = "<"
 	greaterThan = ">"
+
+	// sizeWithDescendantsKeyTTL is the TTL for the cached value of the "size with descendants" for a given repository.
+	sizeWithDescendantsKeyTTL = 5 * time.Minute
 )
 
 // FilterParams contains the specific filters used to get
@@ -78,11 +81,11 @@ type RepositoryReader interface {
 	Blobs(ctx context.Context, r *models.Repository) (models.Blobs, error)
 	FindBlob(ctx context.Context, r *models.Repository, d digest.Digest) (*models.Blob, error)
 	ExistsBlob(ctx context.Context, r *models.Repository, d digest.Digest) (bool, error)
-	Size(ctx context.Context, r *models.Repository) (int64, error)
-	SizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
-	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error)
+	Size(ctx context.Context, r *models.Repository) (RepositorySize, error)
+	SizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error)
+	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error)
 	TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error)
-	FindPagingatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error)
+	FindPaginatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error)
 }
 
 // RepositoryWriter is the interface that defines write operations for a repository store.
@@ -204,6 +207,13 @@ type RepositoryCache interface {
 
 	SizeWithDescendantsTimedOut(ctx context.Context, r *models.Repository)
 	HasSizeWithDescendantsTimedOut(ctx context.Context, r *models.Repository) bool
+
+	// SetSizeWithDescendants sets the computed "size with descendants" of a given repository with a TTL of
+	// sizeWithDescendantsKeyTTL.
+	SetSizeWithDescendants(ctx context.Context, r *models.Repository, size int64)
+	// GetSizeWithDescendants gets the computed "size with descendants" of a given repository. Returns whether the key
+	// was found and its value.
+	GetSizeWithDescendants(ctx context.Context, r *models.Repository) (bool, int64)
 }
 
 // noOpRepositoryCache satisfies the RepositoryCache, but does not cache anything.
@@ -222,6 +232,12 @@ func (n *noOpRepositoryCache) InvalidateSize(context.Context, *models.Repository
 func (n *noOpRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
 func (n *noOpRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
 	return false
+}
+func (n *noOpRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
+func (n *noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
+	return false, 0
+}
+func (n *noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
 // singleRepositoryCache caches a single repository in-memory. This implementation is not thread-safe. Deprecated in
@@ -266,6 +282,21 @@ func (c *singleRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *mo
 // (estimated size), the GitLab V1 API repositories handler, is explicitly making use of the latter.
 func (c *singleRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
 	return false
+}
+
+// SetSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor of
+// the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
+func (c *singleRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
+
+// GetSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor of
+// the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
+func (c *singleRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
+	return false, 0
+}
+
+// InvalidateRootSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor
+// of the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
+func (c *singleRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
 // centralRepositoryCache is the interface for the centralized repository object cache backed by Redis.
@@ -390,6 +421,52 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 		err := fmt.Errorf("%q: %q", detail, err)
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
+}
+
+// sizeWithDescendantsKey generates a valid Redis key string for the cached result of the last "size with descendants"
+// query for a given repository.
+// This flag is stored as a separate key instead of being embedded in the repository struct because we need it to
+// expire after a specific TTL, independently of the repository object key TTL.
+func (c *centralRepositoryCache) sizeWithDescendantsKey(path string) string {
+	// "swd" stands for "size with descendants" for the sake of compactness
+	return fmt.Sprintf("%s:swd", c.key(path))
+}
+
+// SetSizeWithDescendants implements RepositoryCache.
+func (c *centralRepositoryCache) SetSizeWithDescendants(ctx context.Context, r *models.Repository, size int64) {
+	if r == nil {
+		return
+	}
+	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
+	defer cancel()
+
+	if err := c.marshaler.Set(setCtx, c.sizeWithDescendantsKey(r.Path), size, libstore.WithExpiration(sizeWithDescendantsKeyTTL)); err != nil {
+		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to create size with descendants key in cache")
+	}
+}
+
+// GetSizeWithDescendants implements RepositoryCache.
+func (c *centralRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *models.Repository) (bool, int64) {
+	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
+	defer cancel()
+
+	v, err := c.marshaler.Get(getCtx, c.sizeWithDescendantsKey(r.Path), new(int64))
+	if err != nil {
+		// a wrapped redis.Nil is returned when the key is not found in Redis
+		if !errors.Is(err, redis.Nil) {
+			log.GetLogger(log.WithContext(ctx)).WithError(err).Error("failed to read size with descendants key from cache")
+		}
+		return false, 0
+	}
+
+	size, ok := v.(*int64)
+	if !ok {
+		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"type": fmt.Sprintf("%T", v)}).
+			Error("size with descendants cache key has invalid value type")
+		return false, 0
+	}
+
+	return true, *size
 }
 
 func scanFullRepository(row *sql.Row) (*models.Repository, error) {
@@ -1447,10 +1524,10 @@ func (s *repositoryStore) FindTagByName(ctx context.Context, r *models.Repositor
 // Size returns the deduplicated size of a repository. This is the sum of the size of all unique layers referenced by
 // at least one tagged (directly or indirectly) manifest. No error is returned if the repository does not exist. It is
 // the caller's responsibility to ensure it exists before calling this method and proceed accordingly if that matters.
-func (s *repositoryStore) Size(ctx context.Context, r *models.Repository) (int64, error) {
+func (s *repositoryStore) Size(ctx context.Context, r *models.Repository) (RepositorySize, error) {
 	// Check the cached repository object for the size attribute first
 	if r.Size != nil {
-		return *r.Size, nil
+		return RepositorySize{bytes: *r.Size}, nil
 	}
 	defer metrics.InstrumentQuery("repository_size")()
 
@@ -1489,16 +1566,16 @@ func (s *repositoryStore) Size(ctx context.Context, r *models.Repository) (int64
 							AND l.repository_id = $2
 							AND l.manifest_id = cte.manifest_id) AS q`
 
-	var size int64
-	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID).Scan(&size); err != nil {
-		return 0, fmt.Errorf("calculating repository size: %w", err)
+	var b int64
+	if err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID).Scan(&b); err != nil {
+		return RepositorySize{}, fmt.Errorf("calculating repository size: %w", err)
 	}
 
 	// Update the size attribute for the cached repository object
-	r.Size = &size
+	r.Size = &b
 	s.cache.Set(ctx, r)
 
-	return size, nil
+	return RepositorySize{bytes: b}, nil
 }
 
 // topLevelSizeWithDescendants is an optimization for SizeWithDescendants when the target repository is a top-level
@@ -1634,6 +1711,22 @@ func (s *repositoryStore) nonTopLevelSizeWithDescendants(ctx context.Context, r 
 
 var ErrSizeHasTimedOut = errors.New("size query timed out previously")
 
+// RepositorySize represents the result of calculating the size of a repository.
+type RepositorySize struct {
+	bytes  int64
+	cached bool
+}
+
+// Bytes returns the size in bytes.
+func (s RepositorySize) Bytes() int64 {
+	return s.bytes
+}
+
+// Cached indicates whether the size of the repository was obtained from cache.
+func (s RepositorySize) Cached() bool {
+	return s.cached
+}
+
 // SizeWithDescendants returns the deduplicated size of a repository, including all descendants (if any). This is the
 // sum of the size of all unique layers referenced by at least one tagged (directly or indirectly) manifest. No error is
 // returned if the repository does not exist. It is the caller's responsibility to ensure it exists before calling this
@@ -1641,16 +1734,21 @@ var ErrSizeHasTimedOut = errors.New("size query timed out previously")
 // If this method, for this repository, failed with a statement timeout in the last 24h, then ErrSizeHasTimedOut is
 // returned to prevent consecutive failures. The caller can then fall back to EstimatedSizeWithDescendants. This is a
 // mitigation strategy for https://gitlab.com/gitlab-org/container-registry/-/issues/779.
-func (s *repositoryStore) SizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error) {
+func (s *repositoryStore) SizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error) {
 	if !r.IsTopLevel() {
-		return s.nonTopLevelSizeWithDescendants(ctx, r)
+		b, err := s.nonTopLevelSizeWithDescendants(ctx, r)
+		return RepositorySize{bytes: b}, err
+	}
+
+	if found, b := s.cache.GetSizeWithDescendants(ctx, r); found {
+		return RepositorySize{b, true}, nil
 	}
 
 	if s.cache.HasSizeWithDescendantsTimedOut(ctx, r) {
-		return 0, ErrSizeHasTimedOut
+		return RepositorySize{}, ErrSizeHasTimedOut
 	}
 
-	size, err := s.topLevelSizeWithDescendants(ctx, r)
+	b, err := s.topLevelSizeWithDescendants(ctx, r)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.QueryCanceled {
@@ -1658,8 +1756,9 @@ func (s *repositoryStore) SizeWithDescendants(ctx context.Context, r *models.Rep
 			s.cache.SizeWithDescendantsTimedOut(ctx, r)
 		}
 	}
+	s.cache.SetSizeWithDescendants(ctx, r, b)
 
-	return size, err
+	return RepositorySize{bytes: b}, err
 }
 
 // estimateTopLevelSizeWithDescendants is a simplified alternative to topLevelSizeWithDescendants which does not exclude
@@ -1691,12 +1790,21 @@ var ErrOnlyRootEstimates = errors.New("only the size of root repositories can be
 // exclude unreferenced layers. Therefore, the measured size should be considered an estimate. This is a partial
 // mitigation for https://gitlab.com/gitlab-org/container-registry/-/issues/779. For now, only top-level namespaces are
 // supported. ErrOnlyRootEstimates is returned if attempting to estimate the size of a non-root repository.
-func (s *repositoryStore) EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (size int64, err error) {
+func (s *repositoryStore) EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error) {
 	if !r.IsTopLevel() {
-		return 0, ErrOnlyRootEstimates
+		return RepositorySize{}, ErrOnlyRootEstimates
 	}
 
-	return s.estimateTopLevelSizeWithDescendants(ctx, r)
+	if found, b := s.cache.GetSizeWithDescendants(ctx, r); found {
+		return RepositorySize{b, true}, nil
+	}
+	b, err := s.estimateTopLevelSizeWithDescendants(ctx, r)
+	if err != nil {
+		return RepositorySize{}, err
+	}
+	s.cache.SetSizeWithDescendants(ctx, r, b)
+
+	return RepositorySize{bytes: b}, err
 }
 
 // CreateOrFind attempts to create a repository. If the repository already exists (same path) that record is loaded from
@@ -1947,12 +2055,12 @@ func (s *repositoryStore) DeleteManifest(ctx context.Context, r *models.Reposito
 	return count == 1, nil
 }
 
-// FindPagingatedRepositoriesForPath finds all repositories (up to `filters.MaxEntries` repositories) that have the same base path as the requested repository.
+// FindPaginatedRepositoriesForPath finds all repositories (up to `filters.MaxEntries` repositories) that have the same base path as the requested repository.
 // The results are ordered lexicographically by repository path and only begin from `filters.LastEntry`.
 // Empty repositories (which do not have at least 1 tag) are ignored in the returned list.
 // Also, even if there is no repository with a path equivalent to `filters.LastEntry`, the returned
 // repositories will still be those with a base path of the requested repository and lexicographically after `filters.LastEntry`.
-func (s *repositoryStore) FindPagingatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error) {
+func (s *repositoryStore) FindPaginatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error) {
 	// start from a path lexicographically before r.Path when no last path is available.
 	// this improves the query performance as we will not need to filter from `r.path > ""` in the query below.
 	if filters.LastEntry == "" {
@@ -2056,7 +2164,7 @@ func (s *repositoryStore) UpdateLastPublishedAt(ctx context.Context, r *models.R
 // lexicographicallyNextPath takes a path string and returns the next lexicographical path string.
 // Empty paths (i.e a path of the form "") will result in an "a", paths with only "z" characters will append an a.
 // All other paths will result in their next logical lexicographical variation (e.g gitlab-com => gitlab-con , gitlab-com.  => gitlab-com/)
-// This function serves primarily as a helper for optimizing paginated db queries used in `FindPagingatedRepositoriesForPath.
+// This function serves primarily as a helper for optimizing paginated db queries used in `FindPaginatedRepositoriesForPath.
 func lexicographicallyNextPath(path string) string {
 	// Find first character from right
 	// which is not z.
@@ -2082,7 +2190,7 @@ func lexicographicallyNextPath(path string) string {
 // e.g gitlab-con => gitlab-com , gitlab-com/  => gitlab-com.
 // In the event that an empty string is provided as a path it returns 'z'.
 // In the event where only "a's" exist in the path; the last 'a' character of the path is converted to a "z".
-// This function serves primarily as a helper for optimizing paginated db queries used in `FindPagingatedRepositoriesForPath.
+// This function serves primarily as a helper for optimizing paginated db queries used in `FindPaginatedRepositoriesForPath.
 func lexicographicallyBeforePath(path string) string {
 	// this shouldn't be possible but to be safe we return a z on empty path
 	if path == "" {

@@ -4,9 +4,9 @@ include:
   - local: .gitlab/ci/integration.yml
   - local: .gitlab/ci/release.yml
   - local: .gitlab/ci/document.yml
-  - project: 'gitlab-org/quality/pipeline-common'
-    file:
-      - '/ci/danger-review.yml'
+  - component: ${CI_SERVER_FQDN}/gitlab-org/components/danger-review/danger-review@1.4.0
+    inputs:
+      job_allow_failure: true
 
 default:
   image: golang:$GO_VERSION
@@ -44,8 +44,8 @@ stages:
   parallel:
     matrix:
       - PG_VERSION: $PG_PREV_VERSION
-        GO_VERSION: [ "1.20", "1.21", "1.22" ]
+        GO_VERSION: [ "1.21", "1.22" ]
       - PG_VERSION: $PG_CURR_VERSION
-        GO_VERSION: [ "1.20", "1.21", "1.22" ]
+        GO_VERSION: [ "1.21", "1.22" ]
       - PG_VERSION: $PG_NEXT_VERSION
-        GO_VERSION: [ "1.20", "1.21", "1.22" ]
+        GO_VERSION: [ "1.21", "1.22" ]

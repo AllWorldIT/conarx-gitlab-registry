@@ -75,7 +75,7 @@ func TestDeleteTagDB_SizeInvalidated_WithCentralRepositoryCache(t *testing.T) {
 	// add the size attribute to the already cached repository object
 	expectedRepoSizeFromDB, err := rStore.Size(env.ctx, r)
 	require.NoError(t, err)
-	require.Equal(t, expectedRepoSizeFromDB, *cache.Get(env.ctx, r.Path).Size)
+	require.Equal(t, expectedRepoSizeFromDB.Bytes(), *cache.Get(env.ctx, r.Path).Size)
 
 	// add a manifest
 	mStore := datastore.NewManifestStore(env.db)
@@ -126,7 +126,7 @@ func TestDeleteTagDB_SizeInvalidated_WithSingleRepositoryCache(t *testing.T) {
 	// add the size attribute to the already cached repository object
 	expectedRepoSizeFromDB, err := rStore.Size(env.ctx, r)
 	require.NoError(t, err)
-	require.Equal(t, expectedRepoSizeFromDB, *cache.Get(env.ctx, r.Path).Size)
+	require.Equal(t, expectedRepoSizeFromDB.Bytes(), *cache.Get(env.ctx, r.Path).Size)
 
 	// add a manifest
 	mStore := datastore.NewManifestStore(env.db)

@@ -10,11 +10,7 @@
   extends: .go-test
   parallel:
     matrix:
-      - GO_VERSION: [ "1.20", "1.21", "1.22" ]
-
-# merged job with https://gitlab.com/gitlab-org/quality/pipeline-common/-/blob/master/ci/danger-review.yml
-danger-review:
-  allow_failure: true
+      - GO_VERSION: [ "1.21", "1.22" ]
 
 coverage:
   extends: .go-version-matrix

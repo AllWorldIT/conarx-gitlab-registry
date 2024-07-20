@@ -66,6 +66,22 @@ var configStruct = Configuration{
 		DBName:   "registry",
 		SSLMode:  "disable",
 		Primary:  "primary.record.fqdn",
+		BackgroundMigrations: BackgroundMigrations{
+			Enabled:       true,
+			MaxJobRetries: 1,
+			JobInterval:   1 * time.Minute,
+		},
+		LoadBalancing: DatabaseLoadBalancing{
+			Enabled:              true,
+			Nameserver:           "localhost",
+			Port:                 8600,
+			Record:               "db-replica-registry.service.consul",
+			RecordCheckInterval:  1 * time.Minute,
+			DisconnectTimeout:    2 * time.Minute,
+			MaxReplicaLagTime:    1 * time.Minute,
+			MaxReplicaLagBytes:   8388608,
+			ReplicaCheckInterval: 1 * time.Minute,
+		},
 	},
 	Auth: Auth{
 		"silly": Parameters{
@@ -162,6 +178,20 @@ database:
   schema: public
   sslmode: disable
   primary: primary.record.fqdn
+  backgroundmigrations:
+    enabled: true
+    maxjobretries: 1
+    jobinterval: 1m
+  loadbalancing:
+    enabled: true
+    nameserver: localhost
+    port: 8600
+    record: db-replica-registry.service.consul
+    recordcheckinterval: 1m
+    disconnecttimeout: 2m
+    maxreplicalagtime: 1m
+    maxreplicalagbytes: 8388608
+    replicacheckinterval: 1m
 auth:
   silly:
     realm: silly
@@ -217,6 +247,12 @@ notifications:
 http:
   headers:
     X-Content-Type-Options: [nosniff]
+database:
+  enabled: true
+  backgroundmigrations:
+    enabled: true
+    maxjobretries: 1
+    jobinterval: 1m
 `
 
 type ConfigSuite struct {
@@ -253,7 +289,14 @@ func (suite *ConfigSuite) TestParseSimple(c *C) {
 // a string can be parsed into a Configuration struct with no storage parameters
 func (suite *ConfigSuite) TestParseInmemory(c *C) {
 	suite.expectedConfig.Storage = Storage{"inmemory": Parameters{}}
-	suite.expectedConfig.Database = Database{}
+	suite.expectedConfig.Database = Database{
+		Enabled: true,
+		BackgroundMigrations: BackgroundMigrations{
+			Enabled:       true,
+			MaxJobRetries: 1,
+			JobInterval:   1 * time.Minute,
+		},
+	}
 	suite.expectedConfig.Reporting = Reporting{}
 	suite.expectedConfig.Log.Fields = nil
 
@@ -626,6 +669,22 @@ func (suite *ConfigSuite) TestParseWithDifferentEnvDatabase(c *C) {
 		DBName:   "foo",
 		SSLMode:  "allow",
 		Primary:  "primary.record.fqdn",
+		BackgroundMigrations: BackgroundMigrations{
+			Enabled:       true,
+			MaxJobRetries: 1,
+			JobInterval:   1 * time.Minute,
+		},
+		LoadBalancing: DatabaseLoadBalancing{
+			Enabled:              true,
+			Nameserver:           "localhost",
+			Port:                 8600,
+			Record:               "db-replica-registry.service.consul",
+			RecordCheckInterval:  1 * time.Minute,
+			DisconnectTimeout:    2 * time.Minute,
+			MaxReplicaLagTime:    1 * time.Minute,
+			MaxReplicaLagBytes:   8388608,
+			ReplicaCheckInterval: 1 * time.Minute,
+		},
 	}
 	suite.expectedConfig.Database = expected
 
@@ -1412,6 +1471,238 @@ database:
 	testParameter(t, yml, "REGISTRY_DATABASE_POOL_MAXLIFETIME", tt, validator)
 }
 
+func TestParseDatabaseLoadBalancing_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: %s
+`
+	tt := boolParameterTests(false)
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Database.LoadBalancing.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_ENABLED", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Hosts(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    hosts: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "single",
+			value: "secondary1.example.com",
+			want:  "secondary1.example.com",
+		},
+		{
+			name:  "multiple",
+			value: "secondary1.example.com,secondary2.example.com",
+			want:  "secondary1.example.com,secondary2.example.com",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.Hosts)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_HOSTS", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Nameserver(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    nameserver: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBNameserver},
+		{name: "custom", value: "nameserver.example.com", want: "nameserver.example.com"},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.Nameserver)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_NAMESERVER", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Port(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    port: %s
+`
+	tt := []parameterTest{
+		{
+			name: "default",
+			want: defaultDLBPort,
+		},
+		{
+			name:  "custom",
+			value: "1234",
+			want:  1234,
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.Port)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_PORT", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_Record(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    record: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: ""},
+		{name: "custom", value: "db-replica-registry.service.consul", want: "db-replica-registry.service.consul"},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.Record)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_RECORD", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_RecordCheckInterval(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    recordcheckinterval: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBRecordCheckInterval},
+		{name: "custom", value: "2m", want: 2 * time.Minute},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.RecordCheckInterval)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_RECORDCHECKINTERVAL", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_DisconnectTimeout(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    disconnecttimeout: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBDisconnectTimeout},
+		{name: "custom", value: "3m", want: 3 * time.Minute},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.DisconnectTimeout)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_DISCONNECTTIMEOUT", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_MaxReplicaLagBytes(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    maxreplicalagbytes: %s
+`
+	tt := []parameterTest{
+		{
+			name: "default",
+			want: defaultDLBMaxReplicaLagBytes,
+		},
+		{
+			name:  "custom",
+			value: "1234",
+			want:  1234,
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.MaxReplicaLagBytes)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_MAXREPLICALAGBYTES", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_MaxReplicaLagTime(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    maxreplicalagtime: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBMaxReplicaLagTime},
+		{name: "custom", value: "2m", want: 2 * time.Minute},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.MaxReplicaLagTime)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_MAXREPLICALAGTIME", tt, validator)
+}
+
+func TestParseDatabaseLoadBalancing_ReplicaCheckInterval(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  loadbalancing:
+    enabled: true
+    replicacheckinterval: %s
+`
+	tt := []parameterTest{
+		{name: "default", want: defaultDLBReplicaCheckInterval},
+		{name: "custom", value: "2m", want: 2 * time.Minute},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Database.LoadBalancing.ReplicaCheckInterval)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_REPLICACHECKINTERVAL", tt, validator)
+}
+
 func TestParseReportingSentry_Enabled(t *testing.T) {
 	yml := `
 version: 0.1
@@ -1707,6 +1998,65 @@ redis:
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_MAINNAME", tt, validator)
 }
 
+func TestParseRedisCache_SentinelUsername(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  cache:
+    enabled: true
+    mainname: default
+    sentinelusername: %s
+    sentinelpassword: somepass
+`
+	tt := []parameterTest{
+		{
+			name:  "default",
+			value: "myuser",
+			want:  "myuser",
+		},
+		{
+			name: "empty",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.Cache.SentinelUsername)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_CACHE_SENTINELUSERNAME", tt, validator)
+}
+
+func TestParseRedisCache_SentinelPassword(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  cache:
+    enabled: true
+    mainname: default
+    sentinelpassword: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "default",
+			value: "mypassword",
+			want:  "mypassword",
+		},
+		{
+			name: "empty",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.Cache.SentinelPassword)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_CACHE_SENTINELPASSWORD", tt, validator)
+}
+
 func TestParseRedisCache_Pool_MaxOpen(t *testing.T) {
 	yml := `
 version: 0.1
@@ -1792,4 +2142,264 @@ redis:
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_POOL_IDLETIMEOUT", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: %s
+`
+	tt := boolParameterTests(false)
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_ENABLED", tt, validator)
+}
+
+func TestParseRedisRateLimiter_TLS_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    tls:
+      enabled: %s
+`
+	tt := boolParameterTests(false)
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_TLS_ENABLED", tt, validator)
+}
+
+func TestParseRedisRateLimiter_TLS_Insecure(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    tls:
+      insecure: %s
+`
+	tt := boolParameterTests(false)
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Insecure))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_TLS_INSECURE", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Addr(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    addr: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "single",
+			value: "0.0.0.0:6379",
+			want:  "0.0.0.0:6379",
+		},
+		{
+			name:  "multiple",
+			value: "0.0.0.0:16379,0.0.0.0:26379",
+			want:  "0.0.0.0:16379,0.0.0.0:26379",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.Addr)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_ADDR", tt, validator)
+}
+
+func TestParseRedisRateLimiter_MainName(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    mainname: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "myredismainserver",
+			want:  "myredismainserver",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.MainName)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_MAINNAME", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Pool_MaxOpen(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    pool:
+      size: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "10",
+			want:  10,
+		},
+		{
+			name: "empty",
+			want: 0,
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.Pool.Size)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_SIZE", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Pool_MaxLifeTime(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    pool:
+      maxlifetime: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "1h",
+			want:  1 * time.Hour,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.Pool.MaxLifetime)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_MAXLIFETIME", tt, validator)
+}
+
+func TestParseRedisRateLimiter_Pool_IdleTimeout(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  ratelimiter:
+    enabled: true
+    pool:
+      idletimeout: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "300s",
+			want:  300 * time.Second,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want interface{}, got *Configuration) {
+		require.Equal(t, want, got.Redis.RateLimiter.Pool.IdleTimeout)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_IDLETIMEOUT", tt, validator)
+}
+
+// TestParseBBMConfig_EnabledDefaults validates that environment variables properly override backgroundmigrations parameters
+func TestParseBBMConfigEnabledDefaults(t *testing.T) {
+	var tests = []struct {
+		name     string
+		yml      string
+		expected BackgroundMigrations
+	}{
+		{
+			name: "Enabled with defaults",
+			expected: BackgroundMigrations{
+				Enabled: true,
+				// expected default job interval when backgroundmigrations is enabled and job interval is not provided
+				JobInterval: defaultBackgroundMigrationsJobInterval,
+			},
+			yml: `
+version: 0.1
+storage: inmemory
+database:
+  backgroundmigrations:
+    enabled: true
+`,
+		},
+		{
+			name:     "Disabled",
+			expected: BackgroundMigrations{},
+			yml: `
+version: 0.1
+storage: inmemory
+# backgroundmigrations section omitted, defaults to disabled
+`,
+		},
+		{
+			name: "Custom Config",
+			expected: BackgroundMigrations{
+				Enabled:     true,
+				JobInterval: 5 * time.Second, // Custom job interval specified
+			},
+			yml: `
+version: 0.1
+storage: inmemory
+database:
+  backgroundmigrations:
+    enabled: true
+    jobinterval: 5s
+`,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			config, err := Parse(bytes.NewReader([]byte(test.yml)))
+			require.NoError(t, err)
+			require.Equal(t, test.expected, config.Database.BackgroundMigrations)
+		})
+	}
 }

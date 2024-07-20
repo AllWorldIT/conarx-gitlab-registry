@@ -268,8 +268,7 @@ type RedisPool struct {
 	IdleTimeout time.Duration `yaml:"idletimeout,omitempty"`
 }
 
-// RedisCache specifies custom settings for a Redis instance to be used for caching features.
-type RedisCache struct {
+type RedisCommon struct {
 	// Enabled is a simple toggle for the Redis cache. Defaults to false.
 	Enabled bool `yaml:"enabled,omitempty"`
 	// Addr specifies the redis instance available to the application. For Sentinel, it should be a list of
@@ -277,6 +276,8 @@ type RedisCache struct {
 	Addr string `yaml:"addr,omitempty"`
 	// MainName specifies the main server name. Only for Sentinel connections.
 	MainName string `yaml:"mainname,omitempty"`
+	// Username string to connect as to the Redis instance or cluster.
+	Username string `yaml:"username,omitempty"`
 	// Password string to use when making a connection.
 	Password string `yaml:"password,omitempty"`
 	// DB specifies the database to connect to on the redis instance.
@@ -291,6 +292,10 @@ type RedisCache struct {
 	TLS RedisTLS `yaml:"tls,omitempty"`
 	// Pool configures the behavior of the redis connection pool.
 	Pool RedisPool `yaml:"pool,omitempty"`
+	// SentinelUsername configures the username for Sentinel authentication.
+	SentinelUsername string `yaml:"sentinelusername,omitempty"`
+	// SentinelUsername configures the password for Sentinel authentication.
+	SentinelPassword string `yaml:"sentinelpassword,omitempty"`
 }
 
 // Redis configures the redis instance(s) available to the application. Separate Redis instances for different
@@ -301,6 +306,8 @@ type Redis struct {
 	Addr string `yaml:"addr,omitempty"`
 	// MainName specifies the main server name. Only for Sentinel connections.
 	MainName string `yaml:"mainname,omitempty"`
+	// Username string to connect as to the Redis instance or cluster.
+	Username string `yaml:"username,omitempty"`
 	// Password string to use when making a connection.
 	Password string `yaml:"password,omitempty"`
 	// DB specifies the database to connect to on the redis instance.
@@ -315,8 +322,14 @@ type Redis struct {
 	TLS RedisTLS `yaml:"tls,omitempty"`
 	// Pool configures the behavior of the redis connection pool.
 	Pool RedisPool `yaml:"pool,omitempty"`
+	// SentinelUsername configures the username for Sentinel authentication.
+	SentinelUsername string `yaml:"sentinelusername,omitempty"`
+	// SentinelUsername configures the password for Sentinel authentication.
+	SentinelPassword string `yaml:"sentinelpassword,omitempty"`
 	// Cache specifies custom settings for a Redis instance to be used for caching features.
-	Cache RedisCache `yaml:"cache,omitempty"`
+	Cache RedisCommon `yaml:"cache,omitempty"`
+	// RateLimiter configures custom settings for Redis instance used for rate limiting.
+	RateLimiter RedisCommon `yaml:"ratelimiter,omitempty"`
 }
 
 // GC configures online Garbage Collection.
@@ -329,6 +342,11 @@ type GC struct {
 	// Also applied when there are no tasks to be processed unless NoIdleBackoff is `true`. Please note that this is
 	// not the absolute maximum, as a randomized jitter factor of up to 33% is always added.
 	MaxBackoff time.Duration `yaml:"maxbackoff,omitempty"`
+	// ErrorCooldownPeriod is the period of time after an error occurs that the GC workers will continue to
+	// exponentially backoff. If the worker encounters an error while cooling down, the cool down period is extended
+	// again by the configured value. This is useful to ensure that GC workers in multiple registry deployments will
+	// slow down during periods of intermittent errors. Defaults to 0 (no cooldown) by default.
+	ErrorCooldownPeriod time.Duration `yaml:"errorcooldownperiod,omitempty"`
 	// TransactionTimeout is the database transaction timeout for each worker run. Each worker starts a database transaction
 	// at the start. The worker run is canceled if this timeout is exceeded to avoid stalled or long-running
 	// transactions.
@@ -430,7 +448,45 @@ type Database struct {
 	// PreparedStatements can be used to enable prepared statements. Defaults to false.
 	PreparedStatements bool `yaml:"preparedstatements,omitempty"`
 	// Primary is the primary database server's hostname
-	Primary string `yaml:"primary,omitempty"`
+	Primary              string               `yaml:"primary,omitempty"`
+	BackgroundMigrations BackgroundMigrations `yaml:"backgroundmigrations,omitempty"`
+	// LoadBalancing can be used to enable and configure database load balancing.
+	LoadBalancing DatabaseLoadBalancing `yaml:"loadbalancing,omitempty"`
+}
+
+// BackgroundMigrations represents the configuration for the asynchronous batched background migrations in the registry.
+type BackgroundMigrations struct {
+	// Enabled can be used to enable or bypass the asynchronous batched background migration process
+	Enabled bool `yaml:"enabled"`
+	// MaxJobRetries is the maximum number of times a job is tried before it is marked as failed (defaults to 0 - no job retry allowed).
+	MaxJobRetries int `yaml:"maxjobretries,omitempty"`
+	// JobInterval is the duration to wait between checks for eligible BBM jobs and acquiring the BBM lock (defaults to `1m` - wait at least 1 minute before checking for a job).
+	JobInterval time.Duration `yaml:"jobinterval,omitempty"`
+}
+
+// DatabaseLoadBalancing can be used to enable and configure database load balancing.
+type DatabaseLoadBalancing struct {
+	// Enabled can be used to enable or disable the database load balancing. Defaults to false.
+	Enabled bool `yaml:"enabled"`
+	// Hosts is a comma-separated list of static hosts to use for load balancing. Can be used as an alternative to
+	// service discovery. Ignored if `record` is set.
+	Hosts string `yaml:"hosts,omitempty"`
+	// Nameserver is the nameserver to use for looking up the DNS record.
+	Nameserver string `yaml:"nameserver"`
+	// Port is the port to use for looking up the DNS record.
+	Port int `yaml:"port"`
+	// Record is the SRV DNS record to look up. This option is required for service discovery to work.
+	Record string `yaml:"record"`
+	// RecordCheckInterval is the interval to check the DNS record.
+	RecordCheckInterval time.Duration `yaml:"recordcheckinterval"`
+	// DisconnectTimeout is the time after which an old connection is closed, after the list of hosts was updated.
+	DisconnectTimeout time.Duration `yaml:"disconnecttimeout"`
+	// MaxReplicaLagTime is the maximum time a replica can be behind the primary before being quarantined.
+	MaxReplicaLagTime time.Duration `yaml:"maxreplicalagtime"`
+	// MaxReplicaLagBytes is the maximum number of bytes a replica can be behind the primary before being quarantined.
+	MaxReplicaLagBytes int `yaml:"maxreplicalagbytes"`
+	// ReplicaCheckInterval is the minimum amount of time between checking the status of a replica.
+	ReplicaCheckInterval time.Duration `yaml:"replicacheckinterval"`
 }
 
 // Regexp wraps regexp.Regexp to implement the encoding.TextMarshaler interface.
@@ -1056,6 +1112,17 @@ func Parse(rd io.Reader, opts ...ParseOption) (*Configuration, error) {
 	return config, nil
 }
 
+const (
+	defaultBackgroundMigrationsJobInterval = 1 * time.Minute
+	defaultDLBNameserver                   = "localhost"
+	defaultDLBPort                         = 8600
+	defaultDLBRecordCheckInterval          = 1 * time.Minute
+	defaultDLBDisconnectTimeout            = 2 * time.Minute
+	defaultDLBMaxReplicaLagBytes           = 8 * 1024 * 1024
+	defaultDLBMaxReplicaLagTime            = 1 * time.Minute
+	defaultDLBReplicaCheckInterval         = 1 * time.Minute
+)
+
 func ApplyDefaults(config *Configuration) {
 	if config.Log.Level == "" {
 		config.Log.Level = defaultLogLevel
@@ -1089,6 +1156,34 @@ func ApplyDefaults(config *Configuration) {
 		}
 		if config.HTTP.Debug.TLS.MinimumTLS == "" {
 			config.HTTP.Debug.TLS.MinimumTLS = config.HTTP.TLS.MinimumTLS
+		}
+	}
+	if config.Database.BackgroundMigrations.Enabled && config.Database.BackgroundMigrations.JobInterval == 0 {
+		config.Database.BackgroundMigrations.JobInterval = defaultBackgroundMigrationsJobInterval
+	}
+
+	// Database Load Balancing
+	if config.Database.LoadBalancing.Enabled {
+		if config.Database.LoadBalancing.Nameserver == "" {
+			config.Database.LoadBalancing.Nameserver = defaultDLBNameserver
+		}
+		if config.Database.LoadBalancing.Port == 0 {
+			config.Database.LoadBalancing.Port = defaultDLBPort
+		}
+		if config.Database.LoadBalancing.RecordCheckInterval == 0 {
+			config.Database.LoadBalancing.RecordCheckInterval = defaultDLBRecordCheckInterval
+		}
+		if config.Database.LoadBalancing.DisconnectTimeout == 0 {
+			config.Database.LoadBalancing.DisconnectTimeout = defaultDLBDisconnectTimeout
+		}
+		if config.Database.LoadBalancing.MaxReplicaLagBytes == 0 {
+			config.Database.LoadBalancing.MaxReplicaLagBytes = defaultDLBMaxReplicaLagBytes
+		}
+		if config.Database.LoadBalancing.MaxReplicaLagTime == 0 {
+			config.Database.LoadBalancing.MaxReplicaLagTime = defaultDLBMaxReplicaLagTime
+		}
+		if config.Database.LoadBalancing.ReplicaCheckInterval == 0 {
+			config.Database.LoadBalancing.ReplicaCheckInterval = defaultDLBReplicaCheckInterval
 		}
 	}
 }
