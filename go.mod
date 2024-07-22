@@ -10,7 +10,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/aws/aws-sdk-go v1.46.7
 	github.com/benbjohnson/clock v1.3.5
-	github.com/cenkalti/backoff/v4 v4.2.1
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/docker/go-metrics v0.0.1
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
 	github.com/eko/gocache/lib/v4 v4.1.6
