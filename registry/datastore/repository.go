@@ -44,6 +44,9 @@ const (
 
 	// sizeWithDescendantsKeyTTL is the TTL for the cached value of the "size with descendants" for a given repository.
 	sizeWithDescendantsKeyTTL = 5 * time.Minute
+
+	// lsnKeyTTL is the TTL for the cached primary database Log Sequence Number (LSN) for a given repository.
+	lsnKeyTTL = 1 * time.Hour
 )
 
 // FilterParams contains the specific filters used to get
@@ -216,6 +219,14 @@ type RepositoryCache interface {
 	// GetSizeWithDescendants gets the computed "size with descendants" of a given repository. Returns whether the key
 	// was found and its value.
 	GetSizeWithDescendants(ctx context.Context, r *models.Repository) (bool, int64)
+
+	// SetLSN records the primary database Log Sequence Number (LSN) associated with a given repository.
+	// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md?ref_type=heads#primary-sticking
+	SetLSN(ctx context.Context, r *models.Repository, lsn string)
+
+	// GetLSN gets the primary database Log Sequence Number (LSN) associated with a given repository.
+	// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md?ref_type=heads#primary-sticking
+	GetLSN(ctx context.Context, r *models.Repository) string
 }
 
 // noOpRepositoryCache satisfies the RepositoryCache, but does not cache anything.
@@ -242,6 +253,9 @@ func (n *noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Re
 
 func (n *noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
+
+func (n *noOpRepositoryCache) SetLSN(context.Context, *models.Repository, string) {}
+func (n *noOpRepositoryCache) GetLSN(context.Context, *models.Repository) string  { return "" }
 
 // singleRepositoryCache caches a single repository in-memory. This implementation is not thread-safe. Deprecated in
 // favor of centralRepositoryCache.
@@ -301,6 +315,12 @@ func (c *singleRepositoryCache) GetSizeWithDescendants(context.Context, *models.
 // of the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
 func (c *singleRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
+
+// SetLSN is a noop as this functionality depends on Redis.
+func (c *singleRepositoryCache) SetLSN(context.Context, *models.Repository, string) {}
+
+// GetLSN is a noop as this functionality depends on Redis.
+func (c *singleRepositoryCache) GetLSN(context.Context, *models.Repository) string { return "" }
 
 // centralRepositoryCache is the interface for the centralized repository object cache backed by Redis.
 type centralRepositoryCache struct {
@@ -470,6 +490,48 @@ func (c *centralRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *
 	}
 
 	return true, *size
+}
+
+// lsnKey generates a valid Redis key string for the cached primary database Log Sequence Number (LSN) for a
+// given repository.
+func (c *centralRepositoryCache) lsnKey(path string) string {
+	return fmt.Sprintf("%s:lsn", c.key(path))
+}
+
+// SetLSN implements RepositoryCache.
+func (c *centralRepositoryCache) SetLSN(ctx context.Context, r *models.Repository, lsn string) {
+	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
+	defer cancel()
+
+	if err := c.cache.Set(setCtx, c.lsnKey(r.Path), lsn, libstore.WithExpiration(lsnKeyTTL)); err != nil {
+		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to create LSN key in cache")
+	}
+}
+
+// GetLSN implements RepositoryCache.
+func (c *centralRepositoryCache) GetLSN(ctx context.Context, r *models.Repository) string {
+	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
+	defer cancel()
+
+	l := log.GetLogger(log.WithContext(ctx))
+
+	v, err := c.cache.Get(getCtx, c.lsnKey(r.Path))
+	if err != nil {
+		// a wrapped redis.Nil is returned when the key is not found in Redis
+		if !errors.Is(err, redis.Nil) {
+			l.WithError(err).Error("failed to read LSN key from cache")
+		}
+		return ""
+	}
+
+	lsn, ok := v.(string)
+	if !ok {
+		l.WithFields(log.Fields{"type": fmt.Sprintf("%T", v)}).
+			Error("LSN cache key has invalid value type")
+		return ""
+	}
+
+	return lsn
 }
 
 func scanFullRepository(row *sql.Row) (*models.Repository, error) {
