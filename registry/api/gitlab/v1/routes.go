@@ -29,12 +29,7 @@ var (
 		Path: Base.Path + "repositories/{name:" + reference.NameRegexp.String() + "}/",
 		ID:   Base.Path + "repositories/{name}",
 	}
-	// RepositoryImport is the API route that triggers a repository import.
-	RepositoryImport = Route{
-		Name: "import-repository",
-		Path: Base.Path + "import/{name:" + reference.NameRegexp.String() + "}/",
-		ID:   Base.Path + "import/{name}",
-	}
+
 	// RepositoryTags is the API route for the repository tags list endpoint.
 	RepositoryTags = Route{
 		Name: "repository-tags",
@@ -66,7 +61,6 @@ func RouterWithPrefix(prefix string) *mux.Router {
 	router.StrictSlash(true)
 
 	router.Path(Base.Path).Name(Base.Name)
-	router.Path(RepositoryImport.Path).Name(RepositoryImport.Name)
 	router.Path(RepositoryTags.Path).Name(RepositoryTags.Name)
 	router.Path(Repositories.Path).Name(Repositories.Name)
 	router.Path(SubRepositories.Path).Name(SubRepositories.Name)
