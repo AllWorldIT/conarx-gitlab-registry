@@ -54,6 +54,20 @@ func (mr *MockRepositoryCacheMockRecorder) Get(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockRepositoryCache)(nil).Get), arg0, arg1)
 }
 
+// GetLSN mocks base method.
+func (m *MockRepositoryCache) GetLSN(arg0 context.Context, arg1 *models.Repository) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLSN", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetLSN indicates an expected call of GetLSN.
+func (mr *MockRepositoryCacheMockRecorder) GetLSN(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLSN", reflect.TypeOf((*MockRepositoryCache)(nil).GetLSN), arg0, arg1)
+}
+
 // GetSizeWithDescendants mocks base method.
 func (m *MockRepositoryCache) GetSizeWithDescendants(arg0 context.Context, arg1 *models.Repository) (bool, int64) {
 	m.ctrl.T.Helper()
@@ -105,6 +119,18 @@ func (m *MockRepositoryCache) Set(arg0 context.Context, arg1 *models.Repository)
 func (mr *MockRepositoryCacheMockRecorder) Set(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockRepositoryCache)(nil).Set), arg0, arg1)
+}
+
+// SetLSN mocks base method.
+func (m *MockRepositoryCache) SetLSN(arg0 context.Context, arg1 *models.Repository, arg2 string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetLSN", arg0, arg1, arg2)
+}
+
+// SetLSN indicates an expected call of SetLSN.
+func (mr *MockRepositoryCacheMockRecorder) SetLSN(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLSN", reflect.TypeOf((*MockRepositoryCache)(nil).SetLSN), arg0, arg1, arg2)
 }
 
 // SetSizeWithDescendants mocks base method.
