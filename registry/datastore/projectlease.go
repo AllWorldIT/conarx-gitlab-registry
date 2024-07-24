@@ -16,9 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var (
-	errLeasePathIsEmpty = errors.New("project lease path can not be empty")
-)
+var errLeasePathIsEmpty = errors.New("project lease path can not be empty")
 
 // ProjectLeaseStore is used to manage access to a project lease resource in the cache
 type projectLeaseStore struct {

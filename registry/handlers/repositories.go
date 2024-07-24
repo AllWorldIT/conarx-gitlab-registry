@@ -759,7 +759,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 	// with existing repositories/sub-repositories within the registry. we proceed
 	// with procuring a lease for the rename operation and/or executing the rename in the datastore.
 
-	var rsp = renameStoreParams{
+	rsp := renameStoreParams{
 		source:           repo,
 		newPath:          newPath,
 		newName:          newName,
@@ -895,7 +895,6 @@ func inferRepository(context context.Context, path string, rStore datastore.Repo
 // isRepositoryNameTaken checks if the `name` and `path` provided in the arguments are used by
 // any base repositories or sub-repositories within a given namespace with `namespaceId`
 func isRepositoryNameTaken(ctx context.Context, rStore datastore.RepositoryStore, namespaceId int64, newName, newPath string) (bool, error) {
-
 	newRepo, err := rStore.FindByPath(ctx, newPath)
 	if err != nil {
 		return false, err
@@ -1002,7 +1001,6 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 // validateRenameRequestAttributes verifies the attributes of the rename request are correct and also decides if the request
 // is for renaming the repository name of an origin repository or moving the namespace of an origin repository.
 func validateRenameRequestAttributes(renameObject *RenameRepositoryAPIRequest) (bool, error) {
-
 	var (
 		newName          = renameObject.Name
 		newNamespacePath = renameObject.Namespace
@@ -1155,7 +1153,6 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return errcode.FromUnknownError(fmt.Errorf("failed to create database transaction: %w", err))
-
 	}
 	defer tx.Rollback()
 
@@ -1167,7 +1164,6 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 	// only commit the transaction if the request was not a dry-run
 	if !repo.isDryRun {
 		if err := tx.Commit(); err != nil {
-
 			return errcode.FromUnknownError(fmt.Errorf("failed to commit database transaction: %w", err))
 		}
 		w.WriteHeader(http.StatusNoContent)

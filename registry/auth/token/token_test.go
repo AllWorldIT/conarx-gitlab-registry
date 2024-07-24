@@ -499,7 +499,7 @@ func TestNewAccessControllerPemBlock(t *testing.T) {
 	defer os.Remove(rootCertBundleFilename)
 
 	// Add something other than a certificate to the rootcertbundle
-	file, err := os.OpenFile(rootCertBundleFilename, os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(rootCertBundleFilename, os.O_WRONLY|os.O_APPEND, 0o666)
 	if err != nil {
 		t.Fatal(err)
 	}

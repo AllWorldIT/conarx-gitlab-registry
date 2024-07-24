@@ -295,7 +295,7 @@ func parseParameters(parameters map[string]interface{}) (*DriverParameters, erro
 		err := errors.New("no bucket parameter provided")
 		result = multierror.Append(result, err)
 	}
-	//encryptBool := false
+	// encryptBool := false
 	encryptBool, err := parse.Bool(parameters, "encrypt", false)
 	if err != nil {
 		result = multierror.Append(result, err)
@@ -647,7 +647,6 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 			Key:    aws.String(d.s3Path(path)),
 			Range:  aws.String("bytes=" + strconv.FormatInt(offset, 10) + "-"),
 		})
-
 	if err != nil {
 		if s3Err, ok := err.(awserr.Error); ok && s3Err.Code() == "InvalidRange" {
 			return io.NopCloser(bytes.NewReader(nil)), nil

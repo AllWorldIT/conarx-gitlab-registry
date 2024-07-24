@@ -182,6 +182,7 @@ func defaultIssuerProps() issuerProps {
 		ExpireFunc: func() int64 { return time.Now().Add(time.Hour).Unix() },
 	}
 }
+
 func withTokenAuth(rootCertPath string, issProps issuerProps) configOpt {
 	return func(config *configuration.Configuration) {
 		config.Auth = configuration.Auth{
@@ -827,7 +828,6 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 // randomPlatformSpec generates a random platfromSpec. Arch and OS combinations
 // may not strictly be valid for the Go runtime.
 func randomPlatformSpec() manifestlist.PlatformSpec {
-
 	architectures := []string{"amd64", "arm64", "ppc64le", "mips64", "386"}
 	oses := []string{"aix", "darwin", "linux", "freebsd", "plan9"}
 
@@ -1918,7 +1918,6 @@ func acquireProjectLease(t *testing.T, redisCache *gocache.Cache[any], projectPa
 	// create a lease that expires in less than TTL duration .
 	err = plStore.Set(context.Background(), projectPath, TTL)
 	require.NoError(t, err)
-
 }
 
 // releaseProjectLease releases an existing project lease for `projectPath` in the `redisCache`

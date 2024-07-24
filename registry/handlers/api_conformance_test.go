@@ -39,7 +39,7 @@ import (
 // testapiconformance runs a variety of tests against different environments
 // where the external behavior of the api is expected to be equivalent.
 func TestAPIConformance(t *testing.T) {
-	var testFuncs = []func(*testing.T, ...configOpt){
+	testFuncs := []func(*testing.T, ...configOpt){
 		baseURLAuth,
 		baseURLPrefix,
 
@@ -127,7 +127,7 @@ func TestAPIConformance(t *testing.T) {
 		webhookNotifications bool
 	}
 
-	var envOpts = []envOpt{
+	envOpts := []envOpt{
 		{
 			name: "all",
 			opts: []configOpt{},
@@ -156,7 +156,6 @@ func TestAPIConformance(t *testing.T) {
 
 		for _, o := range envOpts {
 			t.Run(funcName(f)+" "+o.name, func(t *testing.T) {
-
 				// Use filesystem driver here. This way, we're able to test conformance
 				// with migration mode enabled as the inmemory driver does not support
 				// root directories.
@@ -409,7 +408,6 @@ func manifest_Put_Schema2_ByTag(t *testing.T, opts ...configOpt) {
 	// seedRandomSchema2Manifest with putByTag tests that the manifest put
 	// happened without issue.
 	seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
-
 }
 
 func manifest_Put_Schema2_ByDigest(t *testing.T, opts ...configOpt) {
@@ -597,7 +595,7 @@ func baseURLAuth(t *testing.T, opts ...configOpt) {
 		wantDistributionVersion bool
 	}
 
-	var tests = []test{
+	tests := []test{
 		{
 			name:                    "v2 base route",
 			url:                     v2base,
@@ -877,7 +875,6 @@ func manifest_Put_Schema2_MissingConfig(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-
 			// Push up the manifest with only the layer blobs pushed up.
 			resp := putManifest(t, "putting missing config manifest", test.manifestURL, schema2.MediaTypeManifest, manifest)
 			defer resp.Body.Close()
@@ -953,7 +950,6 @@ func manifest_Put_Schema2_MissingLayers(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-
 			// Push up the manifest with only the config blob pushed up.
 			resp := putManifest(t, "putting missing layers", test.manifestURL, schema2.MediaTypeManifest, manifest)
 			defer resp.Body.Close()
@@ -1034,7 +1030,6 @@ func manifest_Put_Schema2_MissingConfigAndLayers(t *testing.T, opts ...configOpt
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-
 			// Push up the manifest with only the config blob pushed up.
 			resp := putManifest(t, "putting missing layers", test.manifestURL, schema2.MediaTypeManifest, manifest)
 			defer resp.Body.Close()
@@ -1114,7 +1109,6 @@ func manifest_Put_Schema2_ReferencesExceedLimit(t *testing.T, opts ...configOpt)
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-
 			// Push up the manifest.
 			resp := putManifest(t, "putting manifest with too many layers", test.manifestURL, schema2.MediaTypeManifest, manifest)
 			defer resp.Body.Close()
@@ -1184,7 +1178,6 @@ func manifest_Put_Schema2_PayloadSizeExceedsLimit(t *testing.T, opts ...configOp
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-
 			// Push up the manifest.
 			resp := putManifest(t, "putting oversized manifest", test.manifestURL, schema2.MediaTypeManifest, manifest)
 			defer resp.Body.Close()
@@ -1587,7 +1580,6 @@ func manifest_Head_Schema2_MissingManifest(t *testing.T, opts ...configOpt) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-
 			req, err := http.NewRequest(http.MethodHead, test.manifestURL, nil)
 			require.NoError(t, err)
 			req.Header.Set("Accept", schema2.MediaTypeManifest)

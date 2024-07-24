@@ -48,10 +48,8 @@ import (
 	"github.com/docker/go-metrics"
 )
 
-var (
-	// storageAction is the metrics of blob related operations
-	storageAction = prometheus.StorageNamespace.NewLabeledTimer("action", "The number of seconds that the storage action takes", "driver", "action")
-)
+// storageAction is the metrics of blob related operations
+var storageAction = prometheus.StorageNamespace.NewLabeledTimer("action", "The number of seconds that the storage action takes", "driver", "action")
 
 func init() {
 	metrics.Register(prometheus.StorageNamespace)

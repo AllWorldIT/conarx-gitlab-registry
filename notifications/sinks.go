@@ -4,9 +4,10 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"github.com/cenkalti/backoff/v4"
 	"sync"
 	"time"
+
+	"github.com/cenkalti/backoff/v4"
 
 	log "github.com/sirupsen/logrus"
 )

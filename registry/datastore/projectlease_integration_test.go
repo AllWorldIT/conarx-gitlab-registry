@@ -58,7 +58,6 @@ func TestCentralProjectLeaseCache(t *testing.T) {
 }
 
 func TestProjectLeaseStore_Exists_Empty(t *testing.T) {
-
 	path := "a-test-group/foo"
 
 	// create a store and try checking the existence of the project lease
@@ -140,7 +139,6 @@ func TestProjectLeaseStore_Set(t *testing.T) {
 }
 
 func TestProjectLeaseStore_Set_Empty(t *testing.T) {
-
 	ttl := 60 * time.Minute
 
 	// create a store
@@ -206,7 +204,6 @@ func TestProjectLeaseStore_InvalidateLease(t *testing.T) {
 	isExist, err = s.Exists(suite.ctx, path)
 	require.NoError(t, err)
 	require.False(t, isExist)
-
 }
 
 func TestProjectLeaseStore_InvalidateLease_Idempotent(t *testing.T) {

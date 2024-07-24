@@ -133,7 +133,6 @@ func getOutstandingUploads(ctx context.Context, driver storageDriver.StorageDriv
 		uploads.set(uuid, ud)
 		return nil
 	})
-
 	if err != nil {
 		errCh <- fmt.Errorf("%s: %s", root, err)
 	}

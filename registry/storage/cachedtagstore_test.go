@@ -2,13 +2,12 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"reflect"
 	"sort"
 	"strconv"
 	"testing"
-
-	"crypto/sha256"
-	"encoding/hex"
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/registry/storage/driver"

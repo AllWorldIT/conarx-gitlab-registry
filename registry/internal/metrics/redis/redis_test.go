@@ -82,7 +82,6 @@ func TestNewPoolStatsCollector(t *testing.T) {
 			validateMetric(t, c, maxConnsName, maxConnsDesc, "gauge", float64(tt.expectedMaxConns), tt.expectedLabels)
 		})
 	}
-
 }
 
 type labelsIter struct {

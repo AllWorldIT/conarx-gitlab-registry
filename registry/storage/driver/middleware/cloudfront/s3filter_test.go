@@ -213,7 +213,7 @@ func TestInvalidNetworkType(t *testing.T) {
 }
 
 func TestParsing(t *testing.T) {
-	var data = `{
+	data := `{
       "prefixes": [{
         "ip_prefix": "192.168.0.0",
         "region": "someregion",

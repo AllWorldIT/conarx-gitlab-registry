@@ -2964,7 +2964,6 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 				require.Equal(t, test.expectedTags[i].Name, receivedTag.Name)
 				require.Equal(t, test.expectedTags[i].PublishedAt.UTC(), receivedTag.PublishedAt.UTC(), "for tag: %s", receivedTag.Name)
 			}
-
 		})
 	}
 }
@@ -3207,7 +3206,6 @@ func TestRepositoryStore_RenamePathForSubRepositories(t *testing.T) {
 		// 		gitlab-org/gitlab-test/backend 							(4 tag(s))
 		// 		gitlab-org/gitlab-test/frontend 						(4 tag(s))
 	}{
-
 		name: "update all sub-repository paths starting with path `gitlab-org`",
 		baseRepo: &models.Repository{
 			ID:          1,
@@ -3454,7 +3452,6 @@ func TestRepositoryStore_RenameRepository(t *testing.T) {
 		// 		gitlab-org/gitlab-test 									(0 tag(s))
 	}{
 		{
-
 			name:        "update repository name and path for path `gitlab-org`",
 			oldPath:     "gitlab-org",
 			namespaceID: 1,
@@ -3469,7 +3466,6 @@ func TestRepositoryStore_RenameRepository(t *testing.T) {
 			},
 		},
 		{
-
 			name:        "update repository name and path for nested repo `gitlab-org/gitlab-test`",
 			oldPath:     "gitlab-org/gitlab-test",
 			namespaceID: 1,
@@ -3496,7 +3492,6 @@ func TestRepositoryStore_RenameRepository(t *testing.T) {
 			require.NotEmpty(t, repo.CreatedAt)
 			repo.CreatedAt = time.Time{}
 			require.Equal(t, test.expectedUpdatedRepo, repo)
-
 		})
 	}
 }

@@ -124,7 +124,6 @@ func (bms *backgroundMigrationStore) ExistsColumn(ctx context.Context, schema, t
 
 // FindJobEndFromJobStart finds the end cursor for a job based on the start of the job and the batch size of the Background Migration the job is associated with.
 func (bms *backgroundMigrationStore) FindJobEndFromJobStart(ctx context.Context, table string, column string, start, last, batchSize int) (int, error) {
-
 	err := bms.ValidateMigrationTableAndColumn(ctx, table, column)
 	if err != nil {
 		return 0, err
@@ -327,7 +326,6 @@ func (bms *backgroundMigrationStore) CreateNewJob(ctx context.Context, newJob *m
 
 // UpdateStatus updates the `status` and `failure_error_code` (if necessary) of a Background Migration.
 func (bms *backgroundMigrationStore) UpdateStatus(ctx context.Context, bbm *models.BackgroundMigration) error {
-
 	defer metrics.InstrumentQuery("bbm_update_status")()
 
 	// Update both status and failure_error_code
@@ -371,7 +369,6 @@ func (bms *backgroundMigrationStore) IncrementJobAttempts(ctx context.Context, j
 
 // UpdateJobStatus updates the `status` and `failure_error_code` (if necessary) of a Background Migration job.
 func (bms *backgroundMigrationStore) UpdateJobStatus(ctx context.Context, job *models.BackgroundMigrationJob) error {
-
 	defer metrics.InstrumentQuery("bbm_update_job_status")()
 
 	// Update both status and failure_error_code
@@ -400,7 +397,6 @@ func (bms *backgroundMigrationStore) UpdateJobStatus(ctx context.Context, job *m
 // This implementation uses PostgreSQL's Transaction Advisory Locks via `pg_try_advisory_xact_lock()` and should be used within a transaction context.
 // For details on Advisory Locks, see: https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS
 func (bms *backgroundMigrationStore) Lock(ctx context.Context) error {
-
 	var result bool
 	defer metrics.InstrumentQuery("bbm_lock")()
 
@@ -417,7 +413,6 @@ func (bms *backgroundMigrationStore) Lock(ctx context.Context) error {
 
 // ValidateMigrationTableAndColumn asserts that the column and table exists in the database.
 func (bms *backgroundMigrationStore) ValidateMigrationTableAndColumn(ctx context.Context, tableWithSchema, column string) error {
-
 	// TODO: Consider improving the validation here by using a type system such that we're taking some kind of ValidatedTable and ValidatedColumn types
 	// that need to be constructed from the raw strings and have unexported fields with Getters.
 	// https://gitlab.com/gitlab-org/container-registry/-/merge_requests/1669#note_2000736259
@@ -452,7 +447,6 @@ func (bms *backgroundMigrationStore) ValidateMigrationTableAndColumn(ctx context
 	}
 
 	return err
-
 }
 
 func scanBackgroundMigrationJob(row *sql.Row) (*models.BackgroundMigrationJob, error) {

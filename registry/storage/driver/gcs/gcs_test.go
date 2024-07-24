@@ -34,8 +34,10 @@ import (
 // Hook up gocheck into the "go test" runner.
 func Test(t *testing.T) { check.TestingT(t) }
 
-var gcsDriverConstructor func(rootDirectory string) (storagedriver.StorageDriver, error)
-var skipGCS func() string
+var (
+	gcsDriverConstructor func(rootDirectory string) (storagedriver.StorageDriver, error)
+	skipGCS              func() string
+)
 
 const maxConcurrency = 10
 
@@ -91,7 +93,6 @@ func init() {
 
 	if parallelWalk != "" {
 		parallelWalkBool, err = strconv.ParseBool(parallelWalk)
-
 		if err != nil {
 			panic(fmt.Sprintf("Error parsing parallelwalk: %v", err))
 		}
@@ -305,7 +306,8 @@ func TestSubpathList(t *testing.T) {
 		"/test/test2.txt",
 		"/test/subpath/test3.txt",
 		"/test/subpath/test4.txt",
-		"/test/subpath/path/test5.txt"}
+		"/test/subpath/path/test5.txt",
+	}
 	contents := []byte("contents")
 	ctx := dcontext.Background()
 
@@ -553,7 +555,7 @@ func TestURLFor_AdditionalQueryParams(t *testing.T) {
 }
 
 func TestCustomParams(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name              string
 		opt               map[string]any
 		expectedURLValues url.Values

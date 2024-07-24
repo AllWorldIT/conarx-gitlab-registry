@@ -515,7 +515,6 @@ func putContentsClose(wc *storage.Writer, contents []byte) error {
 // available for future calls to StorageDriver.GetContent and
 // StorageDriver.Reader.
 func (w *writer) Commit() error {
-
 	if err := w.checkClosed(); err != nil {
 		return err
 	}
@@ -678,7 +677,7 @@ func retry(req request) error {
 // size in bytes and the creation time.
 func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
 	var fi storagedriver.FileInfoFields
-	//try to get as file
+	// try to get as file
 	obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
 	if err == nil {
 		if obj.ContentType == uploadSessionContentType {
@@ -692,7 +691,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 		}
 		return storagedriver.FileInfoInternal{FileInfoFields: fi}, nil
 	}
-	//try to get as folder
+	// try to get as folder
 	dirpath := d.pathToDirKey(path)
 
 	var query *storage.Query

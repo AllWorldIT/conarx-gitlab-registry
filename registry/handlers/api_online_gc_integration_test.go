@@ -391,7 +391,7 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 	mt, tx := findAndLockGCManifestTask(t, env, repoName, dgst)
 	defer tx.Rollback()
 
-	//simulate GC manifest review happening in the background while we make the API request
+	// simulate GC manifest review happening in the background while we make the API request
 	lockDuration := 2 * time.Second
 	time.AfterFunc(lockDuration, func() {
 		// the manifest is not dangling, so we delete the GC tasks and commit transaction, as the GC would do
@@ -541,7 +541,7 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview_Dangling
 	mt, tx := findAndLockGCManifestTask(t, env, repoName, dgst)
 	defer tx.Rollback()
 
-	//simulate GC manifest review happening in the background while we make the API request
+	// simulate GC manifest review happening in the background while we make the API request
 	lockDuration := 2 * time.Second
 	time.AfterFunc(lockDuration, func() {
 		// the manifest is dangling, so we delete it and commit transaction, as the GC would do

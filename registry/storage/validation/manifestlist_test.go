@@ -138,7 +138,7 @@ func TestVerifyManifest_ManifestList_ReferenceLimits(t *testing.T) {
 	registry := createRegistry(t)
 	repo := makeRepository(t, registry, "test")
 
-	var tests = []struct {
+	tests := []struct {
 		name      string
 		manifests int
 		refLimit  int

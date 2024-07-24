@@ -265,7 +265,6 @@ func checkTestRouter(t *testing.T, testCases []routeTestCase, prefix string, dee
 		u := server.URL + testcase.RequestURI
 
 		resp, err := http.Get(u)
-
 		if err != nil {
 			t.Fatalf("error issuing get request: %v", err)
 		}

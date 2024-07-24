@@ -222,7 +222,6 @@ func MarkAndSweep(ctx context.Context, storageDriver driver.StorageDriver, regis
 			referencedManifests.add(dgst)
 			return nil
 		})
-
 		if err != nil {
 			// In certain situations such as unfinished uploads, deleting all
 			// tags in S3 or removing the _manifests folder manually, this
@@ -411,7 +410,6 @@ func MarkAndSweep(ctx context.Context, storageDriver driver.StorageDriver, regis
 
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("marking blobs: %w", err)
 	}

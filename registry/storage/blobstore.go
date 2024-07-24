@@ -126,7 +126,6 @@ func (bs *blobStore) path(dgst digest.Digest) (string, error) {
 	bp, err := pathFor(blobDataPathSpec{
 		digest: dgst,
 	})
-
 	if err != nil {
 		return "", err
 	}
@@ -180,7 +179,6 @@ func (bs *blobStatter) Stat(ctx context.Context, dgst digest.Digest) (distributi
 	path, err := pathFor(blobDataPathSpec{
 		digest: dgst,
 	})
-
 	if err != nil {
 		return distribution.Descriptor{}, err
 	}

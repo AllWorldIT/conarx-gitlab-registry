@@ -146,7 +146,7 @@ func (r *Regulator) Stat(ctx context.Context, path string) (storagedriver.FileIn
 }
 
 // List returns a list of the objects that are direct descendants of the
-//given path.
+// given path.
 func (r *Regulator) List(ctx context.Context, path string) ([]string, error) {
 	r.enter()
 	defer r.exit()

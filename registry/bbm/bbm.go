@@ -168,7 +168,7 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 			select {
 			// The upstream process is terminating, this worker should exit.
 			case <-doneChan:
-				//cleanup
+				// cleanup
 				jw.logger.Info("received shutdown signal: Shutting down...")
 				close(gracefullFinish)
 			// A period has elapsed, time to try to find and execute any available jobs.
@@ -186,7 +186,6 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 // it does this by attempting to obtain the Background Migration distributed lock,
 // before proceeding to find and execute any applicable Background Migration jobs.
 func (jw *Worker) run(ctx context.Context) {
-
 	// inject correlation id to logs
 	jw.logger = jw.logger.WithFields(log.Fields{correlation.FieldName: correlation.ExtractFromContextOrGenerate(ctx)})
 
@@ -264,12 +263,10 @@ func (jw *Worker) run(ctx context.Context) {
 	}
 
 	l.Info("executed background migration job")
-
 }
 
 // GrabLock attempts to grab the distributed lock used for co-ordination between all Background Migration processes.
 func (jw *Worker) GrabLock(ctx context.Context, bbmStore datastore.BackgroundMigrationStore) (err error) {
-
 	// Acquire a lock so no other Background Migration process can run.
 	err = bbmStore.Lock(ctx)
 	if err != nil {
@@ -284,7 +281,6 @@ func (jw *Worker) GrabLock(ctx context.Context, bbmStore datastore.BackgroundMig
 // If a job needs to be executed it either fetches the job or creates the job
 // associated with the chosen Background Migration.
 func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore) (*models.BackgroundMigrationJob, error) {
-
 	// Find a Background Migration that needs to be run.
 	bbm, err := bbmStore.FindNext(ctx)
 	if err != nil {
@@ -371,7 +367,6 @@ func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigr
 
 // ExecuteJob attempts to execute the function associated with a Background Migration job from the job's start-end range.
 func (jw *Worker) ExecuteJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, job *models.BackgroundMigrationJob) error {
-
 	// update the job attempts
 	err := bbmStore.IncrementJobAttempts(ctx, job.ID)
 	if err != nil {
@@ -404,7 +399,6 @@ func (jw *Worker) ExecuteJob(ctx context.Context, bbmStore datastore.BackgroundM
 // findRetryableJobs looks for jobs that failed prior in the scope of a specific Background Migration.
 // if no failed jobs are found in the Background Migration it sets the status of the Background Migration to finished.
 func findRetryableJobs(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, bbm *models.BackgroundMigration) (*models.BackgroundMigrationJob, error) {
-
 	job, err := bbmStore.FindJobWithStatus(ctx, bbm.ID, models.BackgroundMigrationFailed)
 	if err != nil {
 		return nil, err
@@ -425,7 +419,6 @@ func findRetryableJobs(ctx context.Context, bbmStore datastore.BackgroundMigrati
 
 // findNewJob creates the next job in the batch sequence to be run for a Background Migration.
 func findNewJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, bbm *models.BackgroundMigration) (*models.BackgroundMigrationJob, error) {
-
 	var (
 		start int
 		last  = bbm.EndID

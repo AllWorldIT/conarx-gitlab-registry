@@ -177,7 +177,6 @@ func (lbs *linkedBlobStore) Create(ctx context.Context, options ...distribution.
 		name: lbs.repository.Named().Name(),
 		id:   uuid,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +185,6 @@ func (lbs *linkedBlobStore) Create(ctx context.Context, options ...distribution.
 		name: lbs.repository.Named().Name(),
 		id:   uuid,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +204,6 @@ func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution
 		name: lbs.repository.Named().Name(),
 		id:   id,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +227,6 @@ func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution
 		name: lbs.repository.Named().Name(),
 		id:   id,
 	})
-
 	if err != nil {
 		return nil, err
 	}

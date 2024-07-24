@@ -379,7 +379,7 @@ func updateGoldenFile(tb testing.TB, path string, content []byte) {
 	tb.Helper()
 
 	tb.Log("updating .golden file")
-	err := os.WriteFile(path, content, 0644)
+	err := os.WriteFile(path, content, 0o644)
 	require.NoError(tb, err, "error updating .golden file")
 }
 

@@ -508,8 +508,10 @@ func TestBuilderFromRequest(t *testing.T) {
 
 // Prevent Compiler optimizations from altering benchmark results
 // https://dave.cheney.net/2013/06/30/how-to-write-benchmarks-in-go
-var result string
-var builder *Builder
+var (
+	result  string
+	builder *Builder
+)
 
 func BenchmarkBuilderFromRequest(b *testing.B) {
 	doTest := func(relative bool) {

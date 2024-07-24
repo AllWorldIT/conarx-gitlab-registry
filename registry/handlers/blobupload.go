@@ -116,7 +116,6 @@ func (buh *blobUploadHandler) StartBlobUpload(w http.ResponseWriter, r *http.Req
 
 	blobs := buh.Repository.Blobs(buh)
 	upload, err := blobs.Create(buh, options...)
-
 	if err != nil {
 		var ebm distribution.ErrBlobMounted
 		if errors.As(err, &ebm) {

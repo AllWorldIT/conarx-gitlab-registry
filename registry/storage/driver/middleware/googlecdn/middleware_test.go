@@ -21,7 +21,7 @@ func createTmpKeyFile(t *testing.T) *os.File {
 	t.Cleanup(func() { os.Remove(f.Name()) })
 
 	key := `c29tZS1zZWNyZXQ=`
-	err = os.WriteFile(f.Name(), []byte(key), 0600)
+	err = os.WriteFile(f.Name(), []byte(key), 0o600)
 	require.NoError(t, err)
 
 	return f

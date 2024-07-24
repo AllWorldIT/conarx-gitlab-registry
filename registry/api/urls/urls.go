@@ -330,7 +330,6 @@ func appendValuesURL(u *url.URL, values ...url.Values) *url.URL {
 // a url.
 func appendValues(u string, values ...url.Values) string {
 	up, err := url.Parse(u)
-
 	if err != nil {
 		panic(err) // should never happen
 	}

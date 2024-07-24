@@ -56,7 +56,6 @@ func (ts *tagStore) exists(ctx context.Context, tag string) (bool, error) {
 		name: ts.repository.Named().Name(),
 		tag:  tag,
 	})
-
 	if err != nil {
 		return false, err
 	}
@@ -76,7 +75,6 @@ func (ts *tagStore) Tag(ctx context.Context, tag string, desc distribution.Descr
 		name: ts.repository.Named().Name(),
 		tag:  tag,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -98,7 +96,6 @@ func (ts *tagStore) Get(ctx context.Context, tag string) (distribution.Descripto
 		name: ts.repository.Named().Name(),
 		tag:  tag,
 	})
-
 	if err != nil {
 		return distribution.Descriptor{}, err
 	}

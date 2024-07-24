@@ -84,7 +84,6 @@ func (bw *blobWriter) getStoredHashStates(ctx context.Context) ([]hashStateEntry
 		alg:  bw.digester.Digest().Algorithm(),
 		list: true,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +134,6 @@ func (bw *blobWriter) storeHashState(ctx context.Context) error {
 		alg:    bw.digester.Digest().Algorithm(),
 		offset: bw.written,
 	})
-
 	if err != nil {
 		return err
 	}
