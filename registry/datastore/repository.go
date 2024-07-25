@@ -55,6 +55,7 @@ type FilterParams struct {
 	SortOrder        SortOrder
 	OrderBy          string
 	Name             string
+	ExactName        string
 	BeforeEntry      string
 	LastEntry        string
 	PublishedAt      string
@@ -977,8 +978,8 @@ func sqlPartialMatch(value string) string {
 // used exclusively for the GET /gitlab/v1/<name>/tags/list API, where pagination is done with a marker (`filters.LastEntry`).
 // Even if there is no tag with a name of `filters.LastEntry`, the returned tags will always be those with a path lexicographically
 // after `filters.LastEntry`. Tags are lexicographically sorted.
-// Optionally, it is possible to pass a string to be used as a  partial match filter for tag names using `filters.Name`.
-// The search is not filtered if this value is an empty string.
+// Optionally, it is possible to pass a string to be used as a partial match filter for tag names using `filters.Name` and exact match using
+// `filters.ExactName`. The search is not filtered if both of these values are empty.
 func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error) {
 	defer metrics.InstrumentQuery("repository_tags_detail_paginated")()
 
@@ -1044,16 +1045,31 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 		WHERE
 			t.top_level_namespace_id = $1
-			AND t.repository_id = $2
+			AND t.repository_id = $2`
+
+	args := []any{r.NamespaceID, r.ID}
+
+	if filters.ExactName != "" {
+		// NOTE(prozlach): In case when there is exact match requested, there
+		// is going to be only single entry in the response, or none. So there
+		// is no point in adding pagination.
+		args = append(args, filters.ExactName)
+		baseQuery += `
+		  	AND t.name = $3`
+		return baseQuery, args
+	}
+
+	// NOTE(prozlach): We handle both cases in this path - empty and not
+	// empty `Name` filter
+	// FIXME(prozlach): the code relies on a strict number of parameters,
+	// so we need to have $3 here even when adding this condition is not
+	// necessary. The proper way to handle it is a query builder that would
+	// automatically adjusts the numbering of arguments in the query text
+	// depending on the number of parameters passed.
+	args = append(args, sqlPartialMatch(filters.Name))
+	baseQuery += `
 		  	AND t.name LIKE $3
 			%s`
-
-	var (
-		q       string
-		subArgs []any
-	)
-
-	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
 
 	// default to ascending order to keep backwards compatibility
 	if filters.SortOrder == "" {
@@ -1062,6 +1078,11 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 	if filters.OrderBy == "" {
 		filters.OrderBy = orderByName
 	}
+
+	var (
+		q       string
+		subArgs []any
+	)
 
 	switch {
 	case filters.LastEntry == "" && filters.BeforeEntry == "" && filters.PublishedAt == "":

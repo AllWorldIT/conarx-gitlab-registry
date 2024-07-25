@@ -50,7 +50,7 @@ func Test_sqlPartialMatch(t *testing.T) {
 
 func Test_tagsDetailPaginatedQuery(t *testing.T) {
 	r := &models.Repository{ID: 123, NamespaceID: 456}
-	baseArgs := []any{r.NamespaceID, r.ID, sqlPartialMatch("")}
+	baseArgs := []any{r.NamespaceID, r.ID}
 
 	baseQuery := `SELECT
 			t.name,
@@ -69,8 +69,7 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 		WHERE
 			t.top_level_namespace_id = $1
-			AND t.repository_id = $2
-		  	AND t.name LIKE $3`
+			AND t.repository_id = $2`
 
 	tcs := map[string]struct {
 		filters       FilterParams
@@ -80,57 +79,64 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 		"no filters": {
 			filters: FilterParams{MaxEntries: 5},
 			expectedQuery: baseQuery + `
+		  	AND t.name LIKE $3
 			ORDER BY name asc LIMIT $4`,
-			expectedArgs: append(baseArgs, 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), 5),
 		},
 		"no filters order by published_at": {
 			filters: FilterParams{MaxEntries: 5, OrderBy: "published_at"},
 			expectedQuery: baseQuery + `
+		  	AND t.name LIKE $3
 			ORDER BY published_at asc, name asc LIMIT $4`,
-			expectedArgs: append(baseArgs, 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), 5),
 		},
 		"last entry asc": {
 			filters: FilterParams{MaxEntries: 5, LastEntry: "abc"},
 			expectedQuery: baseQuery + `
+		  	AND t.name LIKE $3
 			AND t.name > $4
 		ORDER BY
 			name asc
 		LIMIT $5`,
-			expectedArgs: append(baseArgs, "abc", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "abc", 5),
 		},
 		"last entry desc": {
 			filters: FilterParams{MaxEntries: 5, LastEntry: "abc", SortOrder: OrderDesc},
 			expectedQuery: baseQuery + `
+		  	AND t.name LIKE $3
 			AND t.name < $4
 		ORDER BY
 			name desc
 		LIMIT $5`,
-			expectedArgs: append(baseArgs, "abc", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "abc", 5),
 		},
 		"last entry order by published_at asc": {
 			filters: FilterParams{MaxEntries: 5, LastEntry: "abc", PublishedAt: "TIMESTAMP"},
 			expectedQuery: baseQuery + `
+		  	AND t.name LIKE $3
 			AND (GREATEST(t.created_at, t.updated_at), t.name) > ($4, $5)
 		ORDER BY
 			published_at asc,
 			t.name asc
 		LIMIT $6`,
-			expectedArgs: append(baseArgs, "TIMESTAMP", "abc", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "TIMESTAMP", "abc", 5),
 		},
 		"last entry order by published_at desc": {
 			filters: FilterParams{MaxEntries: 5, LastEntry: "abc", PublishedAt: "TIMESTAMP", SortOrder: OrderDesc},
 			expectedQuery: baseQuery + `
+		  	AND t.name LIKE $3
 			AND (GREATEST(t.created_at, t.updated_at), t.name) < ($4, $5)
 		ORDER BY
 			published_at desc,
 			t.name desc
 		LIMIT $6`,
-			expectedArgs: append(baseArgs, "TIMESTAMP", "abc", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "TIMESTAMP", "abc", 5),
 		},
 		"before entry asc": {
 			filters: FilterParams{MaxEntries: 5, BeforeEntry: "abc"},
 			expectedQuery: func() string {
 				q := baseQuery + `
+		  	AND t.name LIKE $3
 			AND t.name < $4
 		ORDER BY
 			name desc
@@ -138,12 +144,13 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 
 				return fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name ASC`, q)
 			}(),
-			expectedArgs: append(baseArgs, "abc", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "abc", 5),
 		},
 		"before entry desc": {
 			filters: FilterParams{MaxEntries: 5, BeforeEntry: "abc", SortOrder: OrderDesc},
 			expectedQuery: func() string {
 				q := baseQuery + `
+		  	AND t.name LIKE $3
 			AND t.name > $4
 		ORDER BY
 			name asc
@@ -151,12 +158,13 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 
 				return fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name DESC`, q)
 			}(),
-			expectedArgs: append(baseArgs, "abc", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "abc", 5),
 		},
 		"before entry order by published_at asc": {
 			filters: FilterParams{MaxEntries: 5, BeforeEntry: "abc", PublishedAt: "TIMESTAMP"},
 			expectedQuery: func() string {
 				q := baseQuery + `
+		  	AND t.name LIKE $3
 			AND (GREATEST(t.created_at, t.updated_at), t.name) < ($4, $5)
 		ORDER BY
 			published_at desc,
@@ -165,12 +173,13 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 
 				return fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name ASC`, q)
 			}(),
-			expectedArgs: append(baseArgs, "TIMESTAMP", "abc", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "TIMESTAMP", "abc", 5),
 		},
 		"before entry order by published_at desc": {
 			filters: FilterParams{MaxEntries: 5, BeforeEntry: "abc", PublishedAt: "TIMESTAMP", SortOrder: OrderDesc},
 			expectedQuery: func() string {
 				q := baseQuery + `
+		  	AND t.name LIKE $3
 			AND (GREATEST(t.created_at, t.updated_at), t.name) > ($4, $5)
 		ORDER BY
 			published_at asc,
@@ -179,22 +188,24 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 
 				return fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.name DESC`, q)
 			}(),
-			expectedArgs: append(baseArgs, "TIMESTAMP", "abc", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "TIMESTAMP", "abc", 5),
 		},
 		"publised_at asc": {
 			filters: FilterParams{MaxEntries: 5, PublishedAt: "TIMESTAMP"},
 			expectedQuery: baseQuery + `
+		  	AND t.name LIKE $3
 			AND GREATEST(t.created_at,t.updated_at) >= $4
 		ORDER BY
 			published_at asc,
 			t.name asc
 		LIMIT $5`,
-			expectedArgs: append(baseArgs, "TIMESTAMP", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "TIMESTAMP", 5),
 		},
 		"publised_at desc": {
 			filters: FilterParams{MaxEntries: 5, PublishedAt: "TIMESTAMP", SortOrder: OrderDesc},
 			expectedQuery: func() string {
 				q := baseQuery + `
+		  	AND t.name LIKE $3
 			AND GREATEST(t.created_at,t.updated_at) <= $4
 		ORDER BY
 			published_at asc,
@@ -203,7 +214,13 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 
 				return fmt.Sprintf(`SELECT * FROM (%s) AS tags ORDER BY tags.name DESC`, q)
 			}(),
-			expectedArgs: append(baseArgs, "TIMESTAMP", 5),
+			expectedArgs: append(baseArgs, sqlPartialMatch(""), "TIMESTAMP", 5),
+		},
+		"exact match, sorting args are ignored": {
+			filters: FilterParams{ExactName: "Gromoslaw", MaxEntries: 5, PublishedAt: "TIMESTAMP", SortOrder: OrderDesc},
+			expectedQuery: baseQuery + `
+		  	AND t.name = $3`,
+			expectedArgs: append(baseArgs, "Gromoslaw"),
 		},
 	}
 

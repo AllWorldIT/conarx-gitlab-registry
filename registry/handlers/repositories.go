@@ -82,6 +82,7 @@ const (
 	lastQueryParamKey                      = "last"
 	dryRunParamKey                         = "dry_run"
 	tagNameQueryParamKey                   = "name"
+	tagExactNameQueryParamKey              = "name_exact"
 	sortQueryParamKey                      = "sort"
 	publishedAtQueryParamKey               = "published_at"
 	sortOrderDescPrefix                    = "-"
@@ -356,6 +357,10 @@ func tagNameQueryParamValue(r *http.Request) string {
 	return r.URL.Query().Get(tagNameQueryParamKey)
 }
 
+func tagExactNameQueryParamValue(r *http.Request) string {
+	return r.URL.Query().Get(tagExactNameQueryParamKey)
+}
+
 func sortQueryParamValue(q url.Values) string {
 	return strings.ToLower(strings.TrimSpace(q.Get(sortQueryParamKey)))
 }
@@ -438,6 +443,12 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	}
 	filters.LastEntry = lastEntry
 
+	// `name` and `name_exact` are mutually exclusive
+	if q.Has(tagNameQueryParamKey) && q.Has(tagExactNameQueryParamKey) {
+		detail := v1.MutuallyExclusiveParametersErrorDetail(tagNameQueryParamKey, tagExactNameQueryParamKey)
+		return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
+	}
+
 	nameFilter := tagNameQueryParamValue(r)
 	if nameFilter != "" {
 		if !queryParamValueMatchesPattern(nameFilter, tagNameQueryParamPattern) {
@@ -446,6 +457,15 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 		}
 	}
 	filters.Name = nameFilter
+
+	exactNameFilter := tagExactNameQueryParamValue(r)
+	if exactNameFilter != "" {
+		if !queryParamValueMatchesPattern(exactNameFilter, tagQueryParamPattern) {
+			detail := v1.InvalidQueryParamValuePatternErrorDetail(tagExactNameQueryParamKey, tagQueryParamPattern)
+			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
+		}
+	}
+	filters.ExactName = exactNameFilter
 
 	sort := sortQueryParamValue(q)
 	if sort != "" {
