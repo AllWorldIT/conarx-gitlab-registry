@@ -91,7 +91,7 @@ func MarkAndSweep(ctx context.Context, storageDriver driver.StorageDriver, regis
 	})
 
 	// Always log this info message at the end of MarkAndSweep, even if there was an error or the process was interrupted.
-	defer l.Info("zero-downtime continuous garbage collection is now available as part of a beta feature. Please see the feedback issue for more information: https://gitlab.com/gitlab-org/gitlab/-/issues/423459")
+	defer l.Info("zero-downtime continuous garbage collection is now available. See the administration documentation for more information: https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
 
 	// Check that the database does **not** manage this filesystem.
 	// We should both log and exit during the failure cases becase we send the

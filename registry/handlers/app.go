@@ -328,7 +328,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 	// Connect to the metadata database, if enabled.
 	if config.Database.Enabled {
-		log.Warn("the metadata database is a beta feature, please carefully review the documentation before enabling it in production")
+		log.Info("using the metadata database")
 
 		if config.GC.Disabled {
 			log.Warn("garbage collection is disabled")
