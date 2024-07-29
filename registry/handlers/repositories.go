@@ -535,7 +535,9 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Add a link header if there are more entries to retrieve
-	if len(tagsList) > 0 {
+	// NOTE(prozlach): with exact-match filter we get only one or no entries,
+	// so pagination is not needed.
+	if len(tagsList) > 0 && filters.ExactName == "" {
 		filters.LastEntry = tagsList[len(tagsList)-1].Name
 		filters.PublishedAt = timeToStringMicroPrecision(tagsList[len(tagsList)-1].PublishedAt)
 		publishedLast := filters.PublishedAt
