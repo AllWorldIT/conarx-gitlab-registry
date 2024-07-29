@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/docker/distribution/manifest/schema2"
+	"github.com/docker/distribution/testutil"
 	g_digest "github.com/opencontainers/go-digest"
 	"go.uber.org/mock/gomock"
 
@@ -42,15 +43,14 @@ func TestGetManifest(t *testing.T) {
 	require.NotNil(t, r)
 
 	// add a manifest
-	manifestJson := `{"schemaVersion":2,"mediaType":"application/vnd.docker.distribution.manifest.v2+json","config":{"mediaType":"application/vnd.docker.container.image.v1+json","size":1640,"digest":"sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9"},"layers":[{"mediaType":"application/vnd.docker.image.rootfs.diff.tar.gzip","size":2802957,"digest":"sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9"},{"mediaType":"application/vnd.docker.image.rootfs.diff.tar.gzip","size":108,"digest":"sha256:6b0937e234ce911b75630b744fb12836fe01bda5f7db203927edbb1390bc7e21"}]}`
 	mStore := datastore.NewManifestStore(env.db)
 	m := &models.Manifest{
 		NamespaceID:   r.NamespaceID,
 		RepositoryID:  r.ID,
 		SchemaVersion: 2,
 		MediaType:     schema2.MediaTypeManifest,
-		Digest:        g_digest.FromString(manifestJson),
-		Payload:       models.Payload(manifestJson),
+		Digest:        g_digest.FromString(testutil.SampleManifestJSON),
+		Payload:       models.Payload(testutil.SampleManifestJSON),
 	}
 	err = mStore.Create(env.ctx, m)
 	require.NoError(t, err)
@@ -72,9 +72,9 @@ func TestGetManifest(t *testing.T) {
 	require.NoError(t, err)
 	manifest, digest, err := manifestsGetter.GetByTag(env.ctx, tagName)
 	require.NoError(t, err)
-	require.EqualValues(t, g_digest.FromString(manifestJson), digest)
+	require.EqualValues(t, g_digest.FromString(testutil.SampleManifestJSON), digest)
 	mediaType, payload, err := manifest.Payload()
 	require.NoError(t, err)
 	require.EqualValues(t, schema2.MediaTypeManifest, mediaType)
-	require.JSONEq(t, manifestJson, string(payload))
+	require.JSONEq(t, testutil.SampleManifestJSON, string(payload))
 }
