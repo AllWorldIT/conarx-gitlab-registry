@@ -218,10 +218,8 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingTopLevel(t *tes
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
-	t.Helper()
-
-	env := newTestEnv(t, opts...)
+func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
+	env := newTestEnv(t)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
@@ -585,6 +583,26 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 			},
 		},
 		{
+			name:           "filtered by the exact name - found",
+			queryParams:    url.Values{"name_exact": []string{"jyi7b"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"jyi7b",
+			},
+		},
+		{
+			name:                "filtered by the exact name - not found",
+			queryParams:         url.Values{"name_exact": []string{"bogumil"}},
+			expectedStatus:      http.StatusOK,
+			expectedOrderedTags: []string{},
+		},
+		{
+			name:           "filtered both by the exact name and partial name",
+			queryParams:    url.Values{"name": []string{"jyi7b"}, "name_exact": []string{"jyi7b"}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
 			name:           "filtered by name with literal underscore",
 			queryParams:    url.Values{"name": []string{"_y_"}},
 			expectedStatus: http.StatusOK,
@@ -700,10 +718,6 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 func TestGitlabAPI_RepositoryTagsList_WithCentralRepositoryCache(t *testing.T) {
 	srv := testutil.RedisServer(t)
 	testGitlabApiRepositoryGet(t, withRedisCache(srv.Addr()))
-}
-
-func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
-	testGitlabApiRepositoryTagsList(t)
 }
 
 // TestGitlabAPI_RepositoryTagsList_PublishedAt is similar to TestGitlabAPI_RepositoryTagsList but

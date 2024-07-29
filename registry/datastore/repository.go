@@ -1050,9 +1050,9 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 	args := []any{r.NamespaceID, r.ID}
 
 	if filters.ExactName != "" {
-		// NOTE(prozlach): In case when there is exact match requested, there
-		// is going to be only single entry in the response, or none. So there
-		// is no point in adding pagination.
+		// NOTE(prozlach): In the case when there is exact match requested,
+		// there is going to be only single entry in the response, or none. So
+		// there is no point in adding pagination and sorting keywords here.
 		args = append(args, filters.ExactName)
 		baseQuery += `
 		  	AND t.name = $3`
