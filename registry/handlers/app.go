@@ -129,7 +129,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	}
 
 	if err := app.initMetaRouter(); err != nil {
-		return nil, fmt.Errorf("initializing metaRouter: %w", err)
+		return nil, fmt.Errorf("initing metaRouter: %w", err)
 	}
 
 	storageParams := config.Storage.Parameters()
@@ -780,7 +780,7 @@ var routeMetricsMiddleware = metricskit.NewHandlerFactory(
 	// Keeping the same buckets used before LabKit, as defined in
 	// https://github.com/docker/go-metrics/blob/b619b3592b65de4f087d9f16863a7e6ff905973c/handler.go#L31:L32
 	metricskit.WithRequestDurationBuckets([]float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 60}),
-	metricskit.WithByteSizeBuckets(promclient.ExponentialBuckets(1024, 2, 22)), // 1K to 4G
+	metricskit.WithByteSizeBuckets(promclient.ExponentialBuckets(1024, 2, 22)), //1K to 4G
 )
 
 // register a handler with the application, by route name. The handler will be
@@ -1074,7 +1074,7 @@ func (app *App) initMetaRouter() error {
 	app.router.gitlab.Use(app.gorillaLogMiddleware)
 
 	// Register the handler dispatchers.
-	app.registerDistribution(v2.RouteNameBase, func(_ *Context, _ *http.Request) http.Handler {
+	app.registerDistribution(v2.RouteNameBase, func(ctx *Context, r *http.Request) http.Handler {
 		return distributionAPIBase(app.Config.Database.Enabled)
 	})
 	app.registerDistribution(v2.RouteNameManifest, manifestDispatcher)
@@ -1621,7 +1621,7 @@ func appendRepositoryNamespaceAccessRecords(accessRecords []auth.Access, r *http
 		// Read the request body
 		buf := new(bytes.Buffer)
 
-		// Read from r.Body and write to buf simultaneously
+		// Rread from r.Body and write to buf simultaneously
 		teeReader := io.TeeReader(r.Body, buf)
 
 		// Read the body from the TeeReader
