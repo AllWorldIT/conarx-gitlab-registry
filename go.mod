@@ -26,7 +26,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/prometheus/client_golang v1.19.1
-	github.com/redis/go-redis/v9 v9.6.0
+	github.com/redis/go-redis/v9 v9.6.1
 	github.com/rubenv/sql-migrate v1.5.2
 	github.com/schollz/progressbar/v3 v3.14.4
 	github.com/sirupsen/logrus v1.9.3
