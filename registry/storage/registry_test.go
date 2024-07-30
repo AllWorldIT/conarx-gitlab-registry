@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewRegistry_RedirectException(t *testing.T) {
-	var redirectTests = []struct {
+	redirectTests := []struct {
 		exceptions                  []string
 		wantMatchingRepositories    []string
 		wantNonMatchingRepositories []string

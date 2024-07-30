@@ -521,7 +521,6 @@ func (ms *manifests) Get(ctx context.Context, dgst digest.Digest, options ...dis
 		}
 		mt := resp.Header.Get("Content-Type")
 		body, err := io.ReadAll(resp.Body)
-
 		if err != nil {
 			return nil, err
 		}

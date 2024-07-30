@@ -10,8 +10,7 @@ import (
 )
 
 func TestInjectCustomKeyOpts(t *testing.T) {
-
-	var tests = []struct {
+	tests := []struct {
 		name        string
 		extraOptMap map[string]any
 		opt         map[string]any

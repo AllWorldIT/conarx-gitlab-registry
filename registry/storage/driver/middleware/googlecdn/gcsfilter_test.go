@@ -134,7 +134,7 @@ func TestInvalidNetworkType(t *testing.T) {
 func TestParsing(t *testing.T) {
 	t.Parallel()
 
-	var data = `{
+	data := `{
 	   "syncToken": "1640628111578",
 	   "creationTime": "2021-12-27T10:01:51.578099",
 	   "prefixes": [{

@@ -967,7 +967,6 @@ func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expec
 	} else {
 		require.Empty(t, gotNextLink)
 	}
-
 }
 
 // TestGitlabAPI_RepositoryTagsList_DefaultPageSize asserts that the API enforces a default page size of 100. We do it
@@ -1443,7 +1442,6 @@ func TestGitlabAPI_SubRepositoryList(t *testing.T) {
 // w/tags to test this. Doing it in the former test would mean more complicated table test definitions,
 // instead of the current small set of repositories w/tags that make it easy to follow/understand the expected results.
 func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
-
 	env := newTestEnv(t)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
@@ -1826,7 +1824,6 @@ func TestGitlabAPI_RenameRepository_Namespace_Empty(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
-
 	// apply base app config/setup (without authorization) to allow seeding repository with test data
 	env := newTestEnv(t)
 	env.requireDB(t)
@@ -1871,7 +1868,6 @@ func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
-
 	// apply base app config/setup (without authorization) to allow seeding repository with test data
 	env := newTestEnv(t)
 	env.requireDB(t)
@@ -2089,7 +2085,6 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
-
 	baseRepoName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
 

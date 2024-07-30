@@ -2,8 +2,10 @@ package cmd
 
 import "github.com/spf13/cobra"
 
-var RegistryToken string
-var SlackWebhookURL string
+var (
+	RegistryToken   string
+	SlackWebhookURL string
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "release",

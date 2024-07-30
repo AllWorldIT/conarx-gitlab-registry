@@ -186,7 +186,6 @@ func WithCFRayID(ctx context.Context, r *http.Request) context.Context {
 		ctx = context.WithValue(ctx, CFRayIDLogKey, r.Header.Get(CFRayIDHeader))
 	}
 	return ctx
-
 }
 
 // GetMappedRequestLogger returns a logger that contains specific keyed fields from the request in the current context.

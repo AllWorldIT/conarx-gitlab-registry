@@ -13,7 +13,7 @@ import (
 // envelope has changed. If this code fails, the revision of the protocol may
 // need to be incremented.
 func TestEventEnvelopeJSONFormat(t *testing.T) {
-	var expected = strings.TrimSpace(`
+	expected := strings.TrimSpace(`
 {
    "events": [
       {

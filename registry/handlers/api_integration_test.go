@@ -585,7 +585,7 @@ const (
 
 func (factory *storageManifestErrDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
 	// Initialize the mock driver
-	var errGenericStorage = errors.New("generic storage error")
+	errGenericStorage := errors.New("generic storage error")
 	return &mockErrorDriver{
 		returnErrs: []mockErrorMapping{
 			{
@@ -2363,7 +2363,6 @@ func TestExistingRenameLeaseExpires_Eventually_Allows_Manifest_Push(t *testing.T
 }
 
 func TestExistingRenameLease_Prevents_Manifest_Delete(t *testing.T) {
-
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
 	env := newTestEnv(t)
 	env.requireDB(t)
@@ -2401,7 +2400,6 @@ func TestExistingRenameLease_Prevents_Manifest_Delete(t *testing.T) {
 }
 
 func TestExistingRenameLease_Prevents_Tag_Delete(t *testing.T) {
-
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
 	env := newTestEnv(t)
 	env.requireDB(t)

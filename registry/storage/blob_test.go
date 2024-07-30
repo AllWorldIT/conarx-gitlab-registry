@@ -35,7 +35,6 @@ func TestWriteSeek(t *testing.T) {
 	bs := repository.Blobs(ctx)
 
 	blobUpload, err := bs.Create(ctx)
-
 	if err != nil {
 		t.Fatalf("unexpected error starting layer upload: %s", err)
 	}
@@ -73,7 +72,6 @@ func TestSimpleBlobUpload(t *testing.T) {
 	rd := io.TeeReader(randomDataReader, h)
 
 	blobUpload, err := bs.Create(ctx)
-
 	if err != nil {
 		t.Fatalf("unexpected error starting layer upload: %s", err)
 	}
@@ -384,7 +382,6 @@ func TestBlobMount(t *testing.T) {
 	sbs := sourceRepository.Blobs(ctx)
 
 	blobUpload, err := sbs.Create(ctx)
-
 	if err != nil {
 		t.Fatalf("unexpected error starting layer upload: %s", err)
 	}

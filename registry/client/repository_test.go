@@ -1144,6 +1144,7 @@ func TestObtainsManifestForTagWithoutHeaders(t *testing.T) {
 		t.Fatalf("Unexpected digest")
 	}
 }
+
 func TestManifestTagsPaginated(t *testing.T) {
 	s := httptest.NewServer(http.NotFoundHandler())
 	defer s.Close()

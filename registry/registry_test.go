@@ -58,7 +58,7 @@ func setupRegistry() (*Registry, error) {
 }
 
 func TestGracefulShutdown(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name                string
 		cleanServerShutdown bool
 		httpDrainTimeout    time.Duration
@@ -222,7 +222,6 @@ func TestConfigureStackDriver_WithParams(t *testing.T) {
 	defer os.Unsetenv("GITLAB_CONTINUOUS_PROFILING")
 
 	requireEnvSet(t, "GITLAB_CONTINUOUS_PROFILING", "stackdriver?project_id=internal&service=registry&service_version=2.9.1")
-
 }
 
 func TestConfigureStackDriver_WithKeyFile(t *testing.T) {
@@ -273,6 +272,7 @@ func freeLnAddr(t *testing.T) net.Addr {
 
 	return addr
 }
+
 func assertMonitoringResponse(t *testing.T, scheme, addr, path string, expectedStatus int) {
 	t.Helper()
 

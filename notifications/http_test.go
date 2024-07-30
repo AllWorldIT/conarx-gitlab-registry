@@ -130,7 +130,8 @@ func TestHTTPSink(t *testing.T) {
 			name:       "single_200",
 			statusCode: http.StatusOK,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest)},
+				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+			},
 		},
 		{
 			name:       "multiple_200",

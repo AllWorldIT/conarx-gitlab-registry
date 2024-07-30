@@ -121,7 +121,8 @@ func deleteObjectsWithContext(failedRequests int, maxRetries int) (*s3.DeleteObj
 			Objects: []*s3.ObjectIdentifier{
 				{Key: aws.String("testobject")},
 			},
-		}})
+		},
+	})
 
 	return out, mock.counter.Load(), err
 }

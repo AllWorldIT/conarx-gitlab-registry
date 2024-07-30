@@ -14,7 +14,7 @@ import (
 )
 
 func TestReferences(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name              string
 		descriptors       []manifestlist.ManifestDescriptor
 		expectedManifests []distribution.Descriptor
@@ -146,7 +146,7 @@ func TestReferences(t *testing.T) {
 }
 
 func TestIsLikeyBuildxCache(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name        string
 		descriptors []manifestlist.ManifestDescriptor
 		expected    bool
@@ -229,7 +229,7 @@ func TestIsLikeyBuildxCache(t *testing.T) {
 }
 
 func TestContainsBlobs(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name        string
 		descriptors []manifestlist.ManifestDescriptor
 		expected    bool

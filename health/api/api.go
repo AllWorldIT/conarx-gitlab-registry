@@ -7,9 +7,7 @@ import (
 	"github.com/docker/distribution/health"
 )
 
-var (
-	updater = health.NewStatusUpdater()
-)
+var updater = health.NewStatusUpdater()
 
 // DownHandler registers a manual_http_status that always returns an Error
 func DownHandler(w http.ResponseWriter, r *http.Request) {

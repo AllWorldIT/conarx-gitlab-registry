@@ -1,8 +1,9 @@
 package testutil
 
 import (
-	"github.com/docker/distribution/registry/internal"
 	"testing"
+
+	"github.com/docker/distribution/registry/internal"
 )
 
 // StubClock stubs a given clock.Clock with a mock clock.Clock. The original clock.Clock value is automatically

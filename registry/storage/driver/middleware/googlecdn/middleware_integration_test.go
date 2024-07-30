@@ -271,7 +271,7 @@ func TestURLFor_Download(t *testing.T) {
 	cdnDriver, err := newGoogleCDNStorageMiddleware(gcsDriver, opts)
 	require.NoError(t, err)
 
-	var tests = []struct {
+	tests := []struct {
 		name string
 		opts map[string]any
 	}{
@@ -287,7 +287,8 @@ func TestURLFor_Download(t *testing.T) {
 				dstorage.NamespaceIdKey: int64(456),
 				dstorage.SizeBytesKey:   int64(123),
 			},
-		}}
+		},
+	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			test := test

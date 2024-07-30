@@ -104,7 +104,6 @@ func TestErrorsManagement(t *testing.T) {
 	errs = append(errs, ErrorCodeTest3.WithArgs("BOOGIE").WithDetail("data"))
 
 	p, err := json.Marshal(errs)
-
 	if err != nil {
 		t.Fatalf("error marashaling errors: %v", err)
 	}
@@ -146,7 +145,6 @@ func TestErrorsManagement(t *testing.T) {
 	errs = Errors{ErrorCodeUnknown}
 	expectedJSON = "{\"errors\":[{\"code\":\"UNKNOWN\",\"message\":\"unknown error\"}]}"
 	p, err = json.Marshal(errs)
-
 	if err != nil {
 		t.Fatalf("error marashaling errors: %v", err)
 	}
@@ -189,7 +187,7 @@ func TestErrorsManagement(t *testing.T) {
 }
 
 func TestFromUnknownError(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name     string
 		err      error
 		expected int

@@ -453,7 +453,6 @@ func TestBackgroundMigrationStore_IncrementJobAttempts_NotFound(t *testing.T) {
 }
 
 func TestBackgroundMigrationStore_Lock(t *testing.T) {
-
 	// use transactions for obtaining pg transaction-level advisory locks.
 
 	// obtain the lock in the first transaction

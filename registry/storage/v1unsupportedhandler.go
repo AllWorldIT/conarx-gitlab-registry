@@ -23,6 +23,7 @@ func (v *v1UnsupportedHandler) Unmarshal(ctx context.Context, dgst digest.Digest
 
 	return v.innerHandler.Unmarshal(ctx, dgst, content)
 }
+
 func (v *v1UnsupportedHandler) Put(ctx context.Context, manifest distribution.Manifest) (digest.Digest, error) {
 	return digest.Digest(""), distribution.ErrSchemaV1Unsupported
 }

@@ -2349,7 +2349,7 @@ redis:
 
 // TestParseBBMConfig_EnabledDefaults validates that environment variables properly override backgroundmigrations parameters
 func TestParseBBMConfigEnabledDefaults(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name     string
 		yml      string
 		expected BackgroundMigrations

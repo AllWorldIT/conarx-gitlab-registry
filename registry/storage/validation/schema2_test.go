@@ -250,7 +250,7 @@ func TestVerifyManifest_Schema2_ReferenceLimits(t *testing.T) {
 	manifestService, err := testutil.MakeManifestService(repo)
 	require.NoError(t, err)
 
-	var tests = []struct {
+	tests := []struct {
 		name           string
 		manifestLayers int
 		refLimit       int

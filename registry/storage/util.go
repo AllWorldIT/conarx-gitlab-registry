@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/auth/token"

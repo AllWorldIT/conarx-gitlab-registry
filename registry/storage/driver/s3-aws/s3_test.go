@@ -33,8 +33,10 @@ import (
 // Hook up gocheck into the "go test" runner.
 func Test(t *testing.T) { check.TestingT(t) }
 
-var s3DriverConstructor func(rootDirectory, storageClass string) (*Driver, error)
-var skipS3 func() string
+var (
+	s3DriverConstructor func(rootDirectory, storageClass string) (*Driver, error)
+	skipS3              func() string
+)
 
 func init() {
 	accessKey := os.Getenv("AWS_ACCESS_KEY")
@@ -890,6 +892,7 @@ type mockPutObjectWithContextPermanentError struct {
 func (m *mockPutObjectWithContextPermanentError) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error) {
 	return nil, awserr.New(request.ErrCodeInvalidPresignExpire, "expected test failure", nil)
 }
+
 func (m *mockPutObjectWithContextPermanentError) ListObjectsV2WithContext(ctx aws.Context, input *s3.ListObjectsV2Input, opts ...request.Option) (*s3.ListObjectsV2Output, error) {
 	return nil, awserr.NewRequestFailure(nil, http.StatusForbidden, "expected test failure")
 }

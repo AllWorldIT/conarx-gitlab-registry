@@ -790,7 +790,6 @@ func TestGC_TrackDeletedManifestLists_PostponeReviewOnConflict(t *testing.T) {
 	// [minReviewAfterJitter, maxReviewAfterJitter] ahead of the manifest list delete time.
 	require.NotEqual(t, rr2[0].ReviewAfter, rr[0].ReviewAfter)
 	assertGCReviewDelayInMinMaxRange(t, rr2[0].ReviewAfter, deletedAt)
-
 }
 
 func TestGC_TrackDeletedManifestLists_DoesNothingIfTriggerDisabled(t *testing.T) {

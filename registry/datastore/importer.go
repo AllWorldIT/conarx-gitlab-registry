@@ -1094,7 +1094,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 
 	if imp.showProgressBar {
 		fn := fmt.Sprintf("%s-registry-import.log", time.Now().Format(time.RFC3339))
-		f, err = os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		f, err = os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
 		if err != nil {
 			return fmt.Errorf("opening log file: %w", err)
 		}

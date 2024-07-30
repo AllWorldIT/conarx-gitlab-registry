@@ -67,7 +67,7 @@ func TestApplyOptions(t *testing.T) {
 }
 
 func TestLexicographicallyNextPath(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		path             string
 		expectedNextPath string
 	}{
@@ -107,7 +107,7 @@ func TestLexicographicallyNextPath(t *testing.T) {
 }
 
 func TestLexicographicallyBeforePath(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		path               string
 		expectedBeforePath string
 	}{

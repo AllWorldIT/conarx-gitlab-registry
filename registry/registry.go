@@ -50,7 +50,6 @@ var ServeCmd = &cobra.Command{
 	Short: "`serve` stores and distributes Docker images",
 	Long:  "`serve` stores and distributes Docker images.",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		// setup context
 		ctx := dcontext.WithVersion(dcontext.Background(), version.Version)
 

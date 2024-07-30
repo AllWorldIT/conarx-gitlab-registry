@@ -119,7 +119,6 @@ func TestStringValue(t *testing.T, opts Opts) {
 	} else {
 		require.Error(t, err, "non string type")
 	}
-
 }
 
 func AssertParam(t *testing.T, params interface{}, fieldName string, expected interface{}, msgs ...interface{}) {

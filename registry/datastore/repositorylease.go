@@ -94,6 +94,7 @@ func NewNoOpRepositoryLeaseCache() *noOpRepositoryLeaseCache {
 func (n *noOpRepositoryLeaseCache) Get(ctx context.Context, path string, leaseType models.LeaseType) (*models.RepositoryLease, error) {
 	return nil, nil
 }
+
 func (n *noOpRepositoryLeaseCache) Set(ctx context.Context, lease *models.RepositoryLease, ttl time.Duration) error {
 	return nil
 }
@@ -101,6 +102,7 @@ func (n *noOpRepositoryLeaseCache) Set(ctx context.Context, lease *models.Reposi
 func (n *noOpRepositoryLeaseCache) TTL(ctx context.Context, lease *models.RepositoryLease) (time.Duration, error) {
 	return 0, nil
 }
+
 func (n *noOpRepositoryLeaseCache) Invalidate(ctx context.Context, path string) error {
 	return nil
 }
