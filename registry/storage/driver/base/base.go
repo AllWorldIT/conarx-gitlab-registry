@@ -179,7 +179,7 @@ func (base *Base) List(ctx context.Context, path string) ([]string, error) {
 }
 
 // Move wraps Move of underlying storage driver.
-func (base *Base) Move(ctx context.Context, sourcePath string, destPath string) error {
+func (base *Base) Move(ctx context.Context, sourcePath, destPath string) error {
 	ctx, done := dcontext.WithTrace(ctx)
 	defer done("%s.Move(%q, %q", base.Name(), sourcePath, destPath)
 

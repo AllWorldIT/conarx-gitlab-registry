@@ -27,8 +27,8 @@ type ManifestReader interface {
 type ManifestWriter interface {
 	Create(ctx context.Context, m *models.Manifest) error
 	CreateOrFind(ctx context.Context, m *models.Manifest) error
-	AssociateManifest(ctx context.Context, ml *models.Manifest, m *models.Manifest) error
-	DissociateManifest(ctx context.Context, ml *models.Manifest, m *models.Manifest) error
+	AssociateManifest(ctx context.Context, ml, m *models.Manifest) error
+	DissociateManifest(ctx context.Context, ml, m *models.Manifest) error
 	AssociateLayerBlob(ctx context.Context, m *models.Manifest, b *models.Blob) error
 	DissociateLayerBlob(ctx context.Context, m *models.Manifest, b *models.Blob) error
 	Delete(ctx context.Context, namespaceID, repositoryID, id int64) (*digest.Digest, error)
@@ -382,7 +382,7 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 }
 
 // AssociateManifest associates a manifest with a manifest list. It does nothing if already associated.
-func (s *manifestStore) AssociateManifest(ctx context.Context, ml *models.Manifest, m *models.Manifest) error {
+func (s *manifestStore) AssociateManifest(ctx context.Context, ml, m *models.Manifest) error {
 	defer metrics.InstrumentQuery("manifest_associate_manifest")()
 	if ml.ID == m.ID {
 		return fmt.Errorf("cannot associate a manifest with itself")
@@ -406,7 +406,7 @@ func (s *manifestStore) AssociateManifest(ctx context.Context, ml *models.Manife
 }
 
 // DissociateManifest dissociates a manifest and a manifest list. It does nothing if not associated.
-func (s *manifestStore) DissociateManifest(ctx context.Context, ml *models.Manifest, m *models.Manifest) error {
+func (s *manifestStore) DissociateManifest(ctx context.Context, ml, m *models.Manifest) error {
 	defer metrics.InstrumentQuery("manifest_dissociate_manifest")()
 	q := `DELETE FROM manifest_references
 		WHERE top_level_namespace_id = $1

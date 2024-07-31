@@ -376,7 +376,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 	return res.Body, nil
 }
 
-func getObject(client *http.Client, bucket string, name string, offset int64) (*http.Response, error) {
+func getObject(client *http.Client, bucket, name string, offset int64) (*http.Response, error) {
 	// copied from google.golang.org/cloud/storage#NewReader :
 	// to set the additional "Range" header
 	u := &url.URL{
@@ -770,7 +770,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 
 // Move moves an object stored at sourcePath to destPath, removing the
 // original object.
-func (d *driver) Move(ctx context.Context, sourcePath string, destPath string) error {
+func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	_, err := storageCopyObject(ctx, d.storageClient, d.bucket, d.pathToKey(sourcePath), d.bucket, d.pathToKey(destPath), nil)
 	if err != nil {
 		var gerr *googleapi.Error
@@ -914,13 +914,13 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 	return count, errs
 }
 
-func storageDeleteObject(ctx context.Context, client *storage.Client, bucket string, name string) error {
+func storageDeleteObject(ctx context.Context, client *storage.Client, bucket, name string) error {
 	return retry(func() error {
 		return client.Bucket(bucket).Object(name).Delete(ctx)
 	})
 }
 
-func storageStatObject(ctx context.Context, client *storage.Client, bucket string, name string) (*storage.ObjectAttrs, error) {
+func storageStatObject(ctx context.Context, client *storage.Client, bucket, name string) (*storage.ObjectAttrs, error) {
 	var obj *storage.ObjectAttrs
 	err := retry(func() error {
 		var err error
@@ -940,7 +940,7 @@ func storageListObjects(ctx context.Context, client *storage.Client, bucket stri
 	return objs, err
 }
 
-func storageCopyObject(ctx context.Context, client *storage.Client, srcBucket, srcName string, destBucket, destName string, attrs *storage.ObjectAttrs) (*storage.ObjectAttrs, error) {
+func storageCopyObject(ctx context.Context, client *storage.Client, srcBucket, srcName, destBucket, destName string, attrs *storage.ObjectAttrs) (*storage.ObjectAttrs, error) {
 	var obj *storage.ObjectAttrs
 	err := retry(func() error {
 		var err error
@@ -1042,7 +1042,7 @@ func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
 	return true, nil
 }
 
-func startSession(client *http.Client, bucket string, name string) (uri string, err error) {
+func startSession(client *http.Client, bucket, name string) (uri string, err error) {
 	u := &url.URL{
 		Scheme:   "https",
 		Host:     "www.googleapis.com",
@@ -1071,7 +1071,7 @@ func startSession(client *http.Client, bucket string, name string) (uri string, 
 	return uri, err
 }
 
-func putChunk(client *http.Client, sessionURI string, chunk []byte, from int64, totalSize int64) (int64, error) {
+func putChunk(client *http.Client, sessionURI string, chunk []byte, from, totalSize int64) (int64, error) {
 	bytesPut := int64(0)
 	err := retry(func() error {
 		req, err := http.NewRequest(http.MethodPut, sessionURI, bytes.NewReader(chunk))

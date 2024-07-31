@@ -614,7 +614,7 @@ func contentDigestString(mediatype string, content []byte) string {
 	return digest.Canonical.FromBytes(content).String()
 }
 
-func addTestManifest(repo reference.Named, reference string, mediatype string, content []byte, m *testutil.RequestResponseMap) {
+func addTestManifest(repo reference.Named, reference, mediatype string, content []byte, m *testutil.RequestResponseMap) {
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodGet,
@@ -648,7 +648,7 @@ func addTestManifest(repo reference.Named, reference string, mediatype string, c
 	})
 }
 
-func addTestManifestWithoutDigestHeader(repo reference.Named, reference string, mediatype string, content []byte, m *testutil.RequestResponseMap) {
+func addTestManifestWithoutDigestHeader(repo reference.Named, reference, mediatype string, content []byte, m *testutil.RequestResponseMap) {
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodGet,

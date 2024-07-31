@@ -104,7 +104,7 @@ func TestHMACValidation(t *testing.T) {
 	}
 }
 
-func assertBlobUploadStateEquals(t *testing.T, expected blobUploadState, received blobUploadState) {
+func assertBlobUploadStateEquals(t *testing.T, expected, received blobUploadState) {
 	if expected.Name != received.Name {
 		t.Fatalf("Expected Name=%q, Received Name=%q", expected.Name, received.Name)
 	}

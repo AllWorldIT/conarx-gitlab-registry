@@ -1100,7 +1100,7 @@ func startPushLayerRequest(t *testing.T, env *testEnv, name reference.Named) *ht
 	return req
 }
 
-func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopts ...requestOpt) (location string, uuid string) {
+func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopts ...requestOpt) (location, uuid string) {
 	t.Helper()
 
 	req := startPushLayerRequest(t, env, name)
@@ -1392,7 +1392,7 @@ func checkErr(t *testing.T, err error, msg string) {
 	}
 }
 
-func createRepository(t *testing.T, env *testEnv, repoPath string, tag string) digest.Digest {
+func createRepository(t *testing.T, env *testEnv, repoPath, tag string) digest.Digest {
 	deserializedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tag))
 
 	_, payload, err := deserializedManifest.Payload()

@@ -46,7 +46,7 @@ func makeTestManifestWithSubject(mediaType string) Manifest {
 	return m
 }
 
-func makeTestManifestWithArtifactType(mediaType string, artifactType string) Manifest {
+func makeTestManifestWithArtifactType(mediaType, artifactType string) Manifest {
 	m := makeTestManifest(mediaType)
 	m.ArtifactType = artifactType
 	return m

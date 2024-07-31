@@ -733,7 +733,7 @@ func (suite *DriverSuite) testDeleteDir(c *check.C, numFiles int) {
 
 // buildFiles builds a num amount of test files with a size of size under parentDir. Returns a slice with the path of
 // the created files.
-func (suite *DriverSuite) buildFiles(c *check.C, parentDir string, num int64, size int64) []string {
+func (suite *DriverSuite) buildFiles(c *check.C, parentDir string, num, size int64) []string {
 	paths := make([]string, 0, num)
 
 	for i := int64(0); i < num; i++ {

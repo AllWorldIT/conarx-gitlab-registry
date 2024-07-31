@@ -93,7 +93,7 @@ func (tcs *testCredentialStore) RefreshToken(u *url.URL, service string) string 
 	return tcs.refreshTokens[service]
 }
 
-func (tcs *testCredentialStore) SetRefreshToken(u *url.URL, service string, token string) {
+func (tcs *testCredentialStore) SetRefreshToken(u *url.URL, service, token string) {
 	if tcs.refreshTokens != nil {
 		tcs.refreshTokens[service] = token
 	}

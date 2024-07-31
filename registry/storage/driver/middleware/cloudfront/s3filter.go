@@ -91,7 +91,7 @@ func (s *awsIPs) tryUpdate() error {
 	var ipv4 []net.IPNet
 	var ipv6 []net.IPNet
 
-	processAddress := func(output *[]net.IPNet, prefix string, region string) {
+	processAddress := func(output *[]net.IPNet, prefix, region string) {
 		regionAllowed := false
 		if len(s.awsRegion) > 0 {
 			for _, ar := range s.awsRegion {

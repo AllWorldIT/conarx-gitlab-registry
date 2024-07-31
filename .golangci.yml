@@ -45,9 +45,9 @@ linters-settings:
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
-  gofmt:
-    # simplify code: gofmt with `-s` option, true by default
-    simplify: true
+  gofumpt:
+      module-path: github.com/docker/distribution
+      extra-rules: true
   gocyclo:
     # minimal code complexity to report, 30 by default (but we recommend 10-20)
     min-complexity: 30
@@ -143,7 +143,7 @@ linters:
     - goconst
     - gocritic
     - godox
-    - gofmt
+    - gofumpt
     - goimports
     - gosec
     - gosimple

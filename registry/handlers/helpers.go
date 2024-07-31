@@ -77,7 +77,7 @@ func copyFullPayload(ctx context.Context, responseWriter http.ResponseWriter, r 
 
 // parseContentRange parses the value of a Content-Range header (contentRange) of assumed format: "<start of range>-<end of range>"
 // into startRange and endRange. It returns an error (err) whenever the contentRange argument can not be parsed.
-func parseContentRange(contentRange string) (startRange int64, endRange int64, err error) {
+func parseContentRange(contentRange string) (startRange, endRange int64, err error) {
 	ranges := strings.Split(contentRange, "-")
 	if len(ranges) != 2 {
 		err = fmt.Errorf("invalid content range format, %s", contentRange)

@@ -33,7 +33,7 @@ type BackgroundMigrationStore interface {
 	// FindNext finds the first active or running Background Migration by ascending order on the Background Migration `id“ column.
 	FindNext(ctx context.Context) (*models.BackgroundMigration, error)
 	// FindJobEndFromJobStart finds the end cursor for a job based on the start of the job and the batch size of the Background Migration the job is associated with.
-	FindJobEndFromJobStart(ctx context.Context, table string, column string, start, last, batchSize int) (int, error)
+	FindJobEndFromJobStart(ctx context.Context, table, column string, start, last, batchSize int) (int, error)
 	// FindLastJob returns the last job created for a Background Migration.
 	FindLastJob(ctx context.Context, backgroundMigration *models.BackgroundMigration) (*models.BackgroundMigrationJob, error)
 	// FindJobWithEndID returns any jobs with the end id `endID`.
@@ -123,7 +123,7 @@ func (bms *backgroundMigrationStore) ExistsColumn(ctx context.Context, schema, t
 }
 
 // FindJobEndFromJobStart finds the end cursor for a job based on the start of the job and the batch size of the Background Migration the job is associated with.
-func (bms *backgroundMigrationStore) FindJobEndFromJobStart(ctx context.Context, table string, column string, start, last, batchSize int) (int, error) {
+func (bms *backgroundMigrationStore) FindJobEndFromJobStart(ctx context.Context, table, column string, start, last, batchSize int) (int, error) {
 	err := bms.ValidateMigrationTableAndColumn(ctx, table, column)
 	if err != nil {
 		return 0, err

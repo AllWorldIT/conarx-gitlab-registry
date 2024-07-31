@@ -118,7 +118,6 @@ func TestDBMountBlob_NonExistentSourceRepo(t *testing.T) {
 	err := dbMountBlob(env.ctx, env.rStore, "from", "to", b.Digest)
 	require.Error(t, err)
 	require.Equal(t, "source repository not found in database", err.Error())
-
 }
 
 func TestDBMountBlob_NonExistentBlob(t *testing.T) {

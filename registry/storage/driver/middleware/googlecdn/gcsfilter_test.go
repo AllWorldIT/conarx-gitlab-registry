@@ -272,7 +272,7 @@ func TestResponseNotOK(t *testing.T) {
 // populate ips with a number of different ipv4 and ipv6 networks, for the purposes
 // of benchmarking contains() performance.
 func populateRandomNetworks(b *testing.B, ips *googleIPs, ipv4Count, ipv6Count int) {
-	generateNetworks := func(dest *[]net.IPNet, bytes int, count int) {
+	generateNetworks := func(dest *[]net.IPNet, bytes, count int) {
 		for i := 0; i < count; i++ {
 			ip := make([]byte, bytes)
 			_, err := rand.Read(ip)
