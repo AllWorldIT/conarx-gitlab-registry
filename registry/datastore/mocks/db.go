@@ -16,6 +16,7 @@ import (
 	reflect "reflect"
 
 	datastore "github.com/docker/distribution/registry/datastore"
+	models "github.com/docker/distribution/registry/datastore/models"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -303,6 +304,20 @@ func (m *MockLoadBalancer) Primary() *datastore.DB {
 func (mr *MockLoadBalancerMockRecorder) Primary() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Primary", reflect.TypeOf((*MockLoadBalancer)(nil).Primary))
+}
+
+// RecordLSN mocks base method.
+func (m *MockLoadBalancer) RecordLSN(arg0 context.Context, arg1 *models.Repository) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordLSN", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RecordLSN indicates an expected call of RecordLSN.
+func (mr *MockLoadBalancerMockRecorder) RecordLSN(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordLSN", reflect.TypeOf((*MockLoadBalancer)(nil).RecordLSN), arg0, arg1)
 }
 
 // Replica mocks base method.

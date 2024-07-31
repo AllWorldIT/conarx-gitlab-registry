@@ -222,11 +222,11 @@ type RepositoryCache interface {
 
 	// SetLSN records the primary database Log Sequence Number (LSN) associated with a given repository.
 	// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md?ref_type=heads#primary-sticking
-	SetLSN(ctx context.Context, r *models.Repository, lsn string)
+	SetLSN(ctx context.Context, r *models.Repository, lsn string) error
 
 	// GetLSN gets the primary database Log Sequence Number (LSN) associated with a given repository.
 	// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md?ref_type=heads#primary-sticking
-	GetLSN(ctx context.Context, r *models.Repository) string
+	GetLSN(ctx context.Context, r *models.Repository) (string, error)
 }
 
 // noOpRepositoryCache satisfies the RepositoryCache, but does not cache anything.
@@ -254,8 +254,10 @@ func (n *noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Re
 func (n *noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
-func (n *noOpRepositoryCache) SetLSN(context.Context, *models.Repository, string) {}
-func (n *noOpRepositoryCache) GetLSN(context.Context, *models.Repository) string  { return "" }
+func (n *noOpRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
+func (n *noOpRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
+	return "", nil
+}
 
 // singleRepositoryCache caches a single repository in-memory. This implementation is not thread-safe. Deprecated in
 // favor of centralRepositoryCache.
@@ -317,10 +319,12 @@ func (c *singleRepositoryCache) InvalidateRootSizeWithDescendants(context.Contex
 }
 
 // SetLSN is a noop as this functionality depends on Redis.
-func (c *singleRepositoryCache) SetLSN(context.Context, *models.Repository, string) {}
+func (c *singleRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
 
 // GetLSN is a noop as this functionality depends on Redis.
-func (c *singleRepositoryCache) GetLSN(context.Context, *models.Repository) string { return "" }
+func (c *singleRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
+	return "", nil
+}
 
 // centralRepositoryCache is the interface for the centralized repository object cache backed by Redis.
 type centralRepositoryCache struct {
@@ -499,39 +503,33 @@ func (c *centralRepositoryCache) lsnKey(path string) string {
 }
 
 // SetLSN implements RepositoryCache.
-func (c *centralRepositoryCache) SetLSN(ctx context.Context, r *models.Repository, lsn string) {
+func (c *centralRepositoryCache) SetLSN(ctx context.Context, r *models.Repository, lsn string) error {
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	if err := c.cache.Set(setCtx, c.lsnKey(r.Path), lsn, libstore.WithExpiration(lsnKeyTTL)); err != nil {
-		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to create LSN key in cache")
-	}
+	return c.cache.Set(setCtx, c.lsnKey(r.Path), lsn, libstore.WithExpiration(lsnKeyTTL))
 }
 
 // GetLSN implements RepositoryCache.
-func (c *centralRepositoryCache) GetLSN(ctx context.Context, r *models.Repository) string {
+func (c *centralRepositoryCache) GetLSN(ctx context.Context, r *models.Repository) (string, error) {
 	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
-
-	l := log.GetLogger(log.WithContext(ctx))
 
 	v, err := c.cache.Get(getCtx, c.lsnKey(r.Path))
 	if err != nil {
 		// a wrapped redis.Nil is returned when the key is not found in Redis
 		if !errors.Is(err, redis.Nil) {
-			l.WithError(err).Error("failed to read LSN key from cache")
+			return "", fmt.Errorf("failed to read LSN key from cache: %w", err)
 		}
-		return ""
+		return "", nil
 	}
 
 	lsn, ok := v.(string)
 	if !ok {
-		l.WithFields(log.Fields{"type": fmt.Sprintf("%T", v)}).
-			Error("LSN cache key has invalid value type")
-		return ""
+		return "", fmt.Errorf("LSN cache key has invalid value type: %T", v)
 	}
 
-	return lsn
+	return lsn, nil
 }
 
 func scanFullRepository(row *sql.Row) (*models.Repository, error) {
