@@ -585,6 +585,26 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 			},
 		},
 		{
+			name:           "filtered by the exact name - found",
+			queryParams:    url.Values{"name_exact": []string{"jyi7b"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"jyi7b",
+			},
+		},
+		{
+			name:                "filtered by the exact name - not found",
+			queryParams:         url.Values{"name_exact": []string{"bogumil"}},
+			expectedStatus:      http.StatusOK,
+			expectedOrderedTags: []string{},
+		},
+		{
+			name:           "filtered both by the exact name and partial name",
+			queryParams:    url.Values{"name": []string{"jyi7b"}, "name_exact": []string{"jyi7b"}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
 			name:           "filtered by name with literal underscore",
 			queryParams:    url.Values{"name": []string{"_y_"}},
 			expectedStatus: http.StatusOK,
@@ -699,7 +719,7 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 
 func TestGitlabAPI_RepositoryTagsList_WithCentralRepositoryCache(t *testing.T) {
 	srv := testutil.RedisServer(t)
-	testGitlabApiRepositoryGet(t, withRedisCache(srv.Addr()))
+	testGitlabApiRepositoryTagsList(t, withRedisCache(srv.Addr()))
 }
 
 func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
