@@ -92,7 +92,7 @@ func makeTrustedKeyMap(rootKeys []libtrust.PrivateKey) map[string]libtrust.Publi
 	return trustedKeys
 }
 
-func makeTestToken(issuer, audience string, access []*ResourceActions, rootKey libtrust.PrivateKey, depth int, now time.Time, exp time.Time) (*Token, error) {
+func makeTestToken(issuer, audience string, access []*ResourceActions, rootKey libtrust.PrivateKey, depth int, now, exp time.Time) (*Token, error) {
 	signingKey, err := makeSigningKeyWithChain(rootKey, depth)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make signing key with chain: %s", err)

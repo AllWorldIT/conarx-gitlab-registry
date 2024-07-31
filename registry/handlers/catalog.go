@@ -220,7 +220,7 @@ func EncodeFilter(publishedAt, tagName string) (v string) {
 }
 
 // DecodeFilter base64 filter using encodingSeparator to obtain the values for published_at and tag name
-func DecodeFilter(encodedStr string) (a string, b string, e error) {
+func DecodeFilter(encodedStr string) (a, b string, e error) {
 	urlUnescaped, err := url.QueryUnescape(encodedStr)
 	if err != nil {
 		return "", "", err

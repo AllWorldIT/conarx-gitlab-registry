@@ -175,7 +175,7 @@ func timeToStringMicroPrecision(t time.Time) string {
 }
 
 // replacePathName removes the last part (i.e the name) of `originPath` and replaces it with `newName`
-func replacePathName(originPath string, newName string) string {
+func replacePathName(originPath, newName string) string {
 	dir := path.Dir(originPath)
 	return path.Join(dir, newName)
 }

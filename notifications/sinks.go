@@ -220,7 +220,7 @@ type ignoredSink struct {
 	ignoreActions    map[string]bool
 }
 
-func newIgnoredSink(sink Sink, ignored []string, ignoreActions []string) Sink {
+func newIgnoredSink(sink Sink, ignored, ignoreActions []string) Sink {
 	if len(ignored) == 0 {
 		return sink
 	}

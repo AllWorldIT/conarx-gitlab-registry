@@ -352,7 +352,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 
 // Move moves an object stored at sourcePath to destPath, removing the original
 // object.
-func (d *driver) Move(ctx context.Context, sourcePath string, destPath string) error {
+func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	srcBlobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(sourcePath))
 	sourceBlobURL := srcBlobRef.GetURL()
 	destBlobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(destPath))

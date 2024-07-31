@@ -1560,7 +1560,7 @@ const (
 	tagDeleteGCLockTimeout  = 5 * time.Second
 )
 
-func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.RepositoryCache, repoPath string, tagName string) error {
+func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.RepositoryCache, repoPath, tagName string) error {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "tag_name": tagName})
 	l.Debug("deleting tag from repository in database")
 

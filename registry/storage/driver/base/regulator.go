@@ -158,7 +158,7 @@ func (r *Regulator) List(ctx context.Context, path string) ([]string, error) {
 // original object.
 // Note: This may be no more efficient than a copy followed by a delete for
 // many implementations.
-func (r *Regulator) Move(ctx context.Context, sourcePath string, destPath string) error {
+func (r *Regulator) Move(ctx context.Context, sourcePath, destPath string) error {
 	r.enter()
 	defer r.exit()
 

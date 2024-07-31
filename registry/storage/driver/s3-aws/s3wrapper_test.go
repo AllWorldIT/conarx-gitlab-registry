@@ -104,7 +104,7 @@ func (m *mockDeleteObjectsWithContext) DeleteObjectsWithContext(ctx aws.Context,
 	return out, nil
 }
 
-func deleteObjectsWithContext(failedRequests int, maxRetries int) (*s3.DeleteObjectsOutput, int32, error) {
+func deleteObjectsWithContext(failedRequests, maxRetries int) (*s3.DeleteObjectsOutput, int32, error) {
 	mock := &mockDeleteObjectsWithContext{failedRequests: int32(failedRequests)}
 
 	w := newS3Wrapper(

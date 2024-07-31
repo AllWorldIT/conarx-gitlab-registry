@@ -45,7 +45,7 @@ var cacheCount = prometheus.StorageNamespace.NewLabeledCounter("cache", "The num
 
 // NewCachedBlobStatter creates a new statter which prefers a cache and
 // falls back to a backend.
-func NewCachedBlobStatter(cache distribution.BlobDescriptorService, backend distribution.BlobDescriptorService) distribution.BlobDescriptorService {
+func NewCachedBlobStatter(cache, backend distribution.BlobDescriptorService) distribution.BlobDescriptorService {
 	return &cachedBlobStatter{
 		cache:   cache,
 		backend: backend,

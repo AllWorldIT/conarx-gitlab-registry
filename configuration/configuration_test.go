@@ -449,7 +449,7 @@ type parameterTest struct {
 
 type parameterValidator func(t *testing.T, want interface{}, got *Configuration)
 
-func testParameter(t *testing.T, yml string, envVar string, tests []parameterTest, fn parameterValidator) {
+func testParameter(t *testing.T, yml, envVar string, tests []parameterTest, fn parameterValidator) {
 	t.Helper()
 
 	testCases := []string{"yaml", "env"}
