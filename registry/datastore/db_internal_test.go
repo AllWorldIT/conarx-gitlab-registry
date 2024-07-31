@@ -1,12 +1,14 @@
 package datastore
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -285,4 +287,10 @@ func TestDBLoadBalancer_NoReplicas(t *testing.T) {
 	db := lb.Replica()
 	require.NotNil(t, db)
 	require.Equal(t, primaryDB, db.DB)
+}
+
+func TestDBLoadBalancer_RecordLSN_NoStoreError(t *testing.T) {
+	lb := &DBLoadBalancer{}
+	err := lb.RecordLSN(context.Background(), &models.Repository{})
+	require.EqualError(t, err, "LSN cache is not configured")
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/mocks"
+	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -1330,4 +1331,158 @@ func TestDBLoadBalancer_StartReplicaChecking_NoServiceDiscovery(t *testing.T) {
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 	require.NoError(t, replicaMock1.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_RecordLSN(t *testing.T) {
+	// Setup primary and replica DB mocks
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+	replicaMockDB, replicaMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	// Define expected DB connections. The connections' open logic is heavily tested elsewhere, here we only care about
+	// the bare minimum setup for testing the record LSN logic, thus the use of gomock.Any()
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+	gomock.InOrder(
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1),
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: replicaMockDB}, nil).Times(1),
+	)
+
+	// Setup load balancer
+	lsnCacheMock := mocks.NewMockRepositoryCache(ctrl)
+	lb, err := datastore.NewDBLoadBalancer(
+		ctx,
+		&datastore.DSN{},
+		datastore.WithFixedHosts([]string{"replica"}),
+		datastore.WithConnector(mockConnector),
+		datastore.WithLSNCache(lsnCacheMock),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+	require.Equal(t, primaryMockDB, lb.Primary().DB)
+
+	// Test LSN recording, ensuring that the LSN is queried on primary and then stored in cache
+	lsn := "0/16B3748"
+	repo := &models.Repository{Path: "gitlab-org/gitlab"}
+
+	primaryMock.ExpectQuery("SELECT pg_current_wal_insert_lsn()").
+		WillReturnRows(sqlmock.NewRows([]string{"pg_current_wal_insert_lsn"}).AddRow(lsn))
+	lsnCacheMock.EXPECT().SetLSN(ctx, repo, lsn).Return(nil).Times(1)
+
+	err = lb.RecordLSN(ctx, repo)
+	require.NoError(t, err)
+
+	// Verify DB mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_RecordLSN_QueryError(t *testing.T) {
+	// Setup primary and replica DB mocks
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+	replicaMockDB, replicaMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	// Define expected DB connections. The connections' open logic is heavily tested elsewhere, here we only care about
+	// the bare minimum setup for testing the record LSN logic, thus the use of gomock.Any()
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+	gomock.InOrder(
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1),
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: replicaMockDB}, nil).Times(1),
+	)
+
+	// Setup load balancer
+	lsnCacheMock := mocks.NewMockRepositoryCache(ctrl)
+	lb, err := datastore.NewDBLoadBalancer(
+		ctx,
+		&datastore.DSN{},
+		datastore.WithFixedHosts([]string{"replica"}),
+		datastore.WithConnector(mockConnector),
+		datastore.WithLSNCache(lsnCacheMock),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+	require.Equal(t, primaryMockDB, lb.Primary().DB)
+
+	// Test LSN recording, ensuring that the LSN is queried on primary and results in an error, with no subsequent calls
+	// against the LSN store.
+	repo := &models.Repository{Path: "gitlab-org/gitlab"}
+	primaryMock.ExpectQuery("SELECT pg_current_wal_insert_lsn()").
+		WillReturnError(errors.New("some error"))
+
+	err = lb.RecordLSN(ctx, repo)
+	require.EqualError(t, err, "failed to query current WAL insert LSN: some error")
+
+	// Verify DB mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_RecordLSN_StoreSetError(t *testing.T) {
+	// Setup primary and replica DB mocks
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+	replicaMockDB, replicaMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	// Define expected DB connections. The connections' open logic is heavily tested elsewhere, here we only care about
+	// the bare minimum setup for testing the record LSN logic, thus the use of gomock.Any()
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+	gomock.InOrder(
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1),
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: replicaMockDB}, nil).Times(1),
+	)
+
+	// Setup load balancer
+	lsnCacheMock := mocks.NewMockRepositoryCache(ctrl)
+	lb, err := datastore.NewDBLoadBalancer(
+		ctx,
+		&datastore.DSN{},
+		datastore.WithFixedHosts([]string{"replica"}),
+		datastore.WithConnector(mockConnector),
+		datastore.WithLSNCache(lsnCacheMock),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+	require.Equal(t, primaryMockDB, lb.Primary().DB)
+
+	// Test LSN recording, ensuring that the LSN is queried on primary and then stored in cache, which yields an error
+	lsn := "0/16B3748"
+	repo := &models.Repository{Path: "gitlab-org/gitlab"}
+
+	primaryMock.ExpectQuery("SELECT pg_current_wal_insert_lsn()").
+		WillReturnRows(sqlmock.NewRows([]string{"pg_current_wal_insert_lsn"}).AddRow(lsn))
+	lsnCacheMock.EXPECT().SetLSN(ctx, repo, lsn).Return(errors.New("some error")).Times(1)
+
+	err = lb.RecordLSN(ctx, repo)
+	require.EqualError(t, err, "failed to cache WAL insert LSN: some error")
+
+	// Verify DB mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock.ExpectationsWereMet())
 }

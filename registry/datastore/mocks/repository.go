@@ -55,11 +55,12 @@ func (mr *MockRepositoryCacheMockRecorder) Get(arg0, arg1 any) *gomock.Call {
 }
 
 // GetLSN mocks base method.
-func (m *MockRepositoryCache) GetLSN(arg0 context.Context, arg1 *models.Repository) string {
+func (m *MockRepositoryCache) GetLSN(arg0 context.Context, arg1 *models.Repository) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLSN", arg0, arg1)
 	ret0, _ := ret[0].(string)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetLSN indicates an expected call of GetLSN.
@@ -122,9 +123,11 @@ func (mr *MockRepositoryCacheMockRecorder) Set(arg0, arg1 any) *gomock.Call {
 }
 
 // SetLSN mocks base method.
-func (m *MockRepositoryCache) SetLSN(arg0 context.Context, arg1 *models.Repository, arg2 string) {
+func (m *MockRepositoryCache) SetLSN(arg0 context.Context, arg1 *models.Repository, arg2 string) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetLSN", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SetLSN", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // SetLSN indicates an expected call of SetLSN.

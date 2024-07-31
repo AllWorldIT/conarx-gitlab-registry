@@ -16,6 +16,7 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/hashicorp/go-multierror"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -152,6 +153,7 @@ type LoadBalancingConfig struct {
 	resolver             DNSResolver
 	connector            Connector
 	replicaCheckInterval time.Duration
+	lsnStore             RepositoryCache
 }
 
 // Option is used to configure the database connections.
@@ -356,12 +358,15 @@ type LoadBalancer interface {
 	Replica() *DB
 	Replicas() []*DB
 	Close() error
+	RecordLSN(ctx context.Context, r *models.Repository) error
 }
 
 // DBLoadBalancer manages connections to a primary database and multiple replicas.
 type DBLoadBalancer struct {
 	primary  *DB
 	replicas []*DB
+
+	lsnCache RepositoryCache
 
 	connector  Connector
 	resolver   DNSResolver
@@ -407,6 +412,14 @@ func WithConnector(connector Connector) Option {
 func WithReplicaCheckInterval(interval time.Duration) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.replicaCheckInterval = interval
+	}
+}
+
+// WithLSNCache allows providing a RepositoryCache implementation to be used for recording WAL insert Log Sequence
+// Numbers (LSNs) that are used to enable primary sticking during database load balancing.
+func WithLSNCache(cache RepositoryCache) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.lsnStore = cache
 	}
 }
 
@@ -573,6 +586,7 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 		fixedHosts:           config.loadBalancing.hosts,
 		replicaOpenOpts:      opts,
 		replicaCheckInterval: config.loadBalancing.replicaCheckInterval,
+		lsnCache:             config.loadBalancing.lsnStore,
 	}
 
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
@@ -633,4 +647,24 @@ func (lb *DBLoadBalancer) Close() error {
 	}
 
 	return result.ErrorOrNil()
+}
+
+// RecordLSN queries the current primary database WAL insert Log Sequence Number (LSN) and records it in the LSN cache
+// in association with a given models.Repository.
+// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md?ref_type=heads#primary-sticking
+func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) error {
+	if lb.lsnCache == nil {
+		return fmt.Errorf("LSN cache is not configured")
+	}
+
+	var lsn string
+	if err := lb.Primary().QueryRowContext(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&lsn); err != nil {
+		return fmt.Errorf("failed to query current WAL insert LSN: %w", err)
+	}
+
+	if err := lb.lsnCache.SetLSN(ctx, r, lsn); err != nil {
+		return fmt.Errorf("failed to cache WAL insert LSN: %w", err)
+	}
+
+	return nil
 }

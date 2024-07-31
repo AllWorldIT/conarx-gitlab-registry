@@ -76,14 +76,17 @@ func TestCentralRepositoryCache_LSN(t *testing.T) {
 	key := fmt.Sprintf("registry:db:{repository:%s:%s}:lsn", repo.TopLevelPathSegment(), hex)
 
 	redisMock.ExpectGet(key).RedisNil()
-	lsn := cache.GetLSN(ctx, repo)
+	lsn, err := cache.GetLSN(ctx, repo)
+	require.NoError(t, err)
 	require.Empty(t, lsn)
 
 	redisMock.ExpectSet(key, actualLSN, ttl).SetVal("OK")
-	cache.SetLSN(ctx, repo, actualLSN)
+	err = cache.SetLSN(ctx, repo, actualLSN)
+	require.NoError(t, err)
 
 	redisMock.ExpectGet(key).SetVal(actualLSN)
-	lsn = cache.GetLSN(ctx, repo)
+	lsn, err = cache.GetLSN(ctx, repo)
+	require.NoError(t, err)
 	require.Equal(t, actualLSN, lsn)
 
 	require.NoError(t, redisMock.ExpectationsWereMet())
@@ -92,7 +95,6 @@ func TestCentralRepositoryCache_LSN(t *testing.T) {
 func TestCentralRepositoryCache_LSN_Error(t *testing.T) {
 	lsn := "0/16B3748"
 	ttl := 1 * time.Hour
-	err := errors.New("foo")
 	repo := &models.Repository{
 		Path: "gitlab-org/gitlab",
 	}
@@ -104,11 +106,14 @@ func TestCentralRepositoryCache_LSN_Error(t *testing.T) {
 	hex := digest.FromString(repo.Path).Hex()
 	key := fmt.Sprintf("registry:db:{repository:%s:%s}:lsn", repo.TopLevelPathSegment(), hex)
 
-	redisMock.ExpectGet(key).SetErr(err)
-	require.Empty(t, cache.GetLSN(ctx, repo))
+	redisMock.ExpectGet(key).SetErr(errors.New("foo"))
+	lsn, err := cache.GetLSN(ctx, repo)
+	require.EqualError(t, err, "failed to read LSN key from cache: foo")
+	require.Empty(t, lsn)
 
-	redisMock.ExpectSet(key, lsn, ttl).SetErr(err)
-	cache.SetLSN(ctx, repo, lsn)
+	redisMock.ExpectSet(key, lsn, ttl).SetErr(errors.New("bar"))
+	err = cache.SetLSN(ctx, repo, lsn)
+	require.EqualError(t, err, "bar")
 
 	require.NoError(t, redisMock.ExpectationsWereMet())
 }
