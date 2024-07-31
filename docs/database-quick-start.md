@@ -1,16 +1,6 @@
 Follow this guide to start using the metadata database with the container registry.
 
 
-**Warning:** The metadata database is a
-[beta](https://docs.gitlab.com/ee/policy/experiment-beta-support.html#beta)
-feature available starting at GitLab version 16.4.
-**Carefully review the documentation before enabling the registry database in production!**
-If you encounter a problem with either the import or normal operation of the
-registry, please open an issue [here](https://gitlab.com/gitlab-org/container-registry/-/issues).
-
-Please review the [feedback issue](https://gitlab.com/gitlab-org/gitlab/-/issues/423459)
-before using this feature.
-
 The metadata database enables you make use of many new features, such as
 [online garbage collection](spec/gitlab/online-garbage-collection.md) and increases the
 efficiency of many registry operations.
@@ -28,7 +18,7 @@ the database was active.
 [import step](#import-exisiting-data) has been completed. That command is not compatible with registries using
 the database and it will delete good data. 
    - Check that you have not used a service, such as cron, to automate offline garbage collection!
-- You are running GitLab Verison 16.4 or higher
+- You are running GitLab Verison 17.3 or higher
 - Geo replication is not enabled
 - Be aware that all untagged images will be removed automatically by online garbage collection
 
