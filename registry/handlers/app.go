@@ -1701,7 +1701,7 @@ func uploadPurgeDefaultConfig() map[interface{}]interface{} {
 }
 
 func badPurgeUploadConfig(reason string) error {
-	return fmt.Errorf("Unable to parse upload purge configuration: %s", reason)
+	return fmt.Errorf("unable to parse upload purge configuration: %s", reason)
 }
 
 // startUploadPurger schedules a goroutine which will periodically
