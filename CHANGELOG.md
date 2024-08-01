@@ -1,3 +1,53 @@
+## [4.7.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.6.0-gitlab...v4.7.0-gitlab) (2024-8-1)
+
+
+### ✨ Features ✨
+
+* add option to filter by exact string to the /gitlab/v1/../tags/list/ endpoint ([70b873a](https://gitlab.com/gitlab-org/container-registry/commit/70b873ade0d29415b43681cebdb828161d0ebefb))
+* **cache:** use Redis repository cache for the check blob operation ([5df1e7c](https://gitlab.com/gitlab-org/container-registry/commit/5df1e7c7a55ec57a7f5a6c3f9fe0d94c506e574b))
+* **datastore:** add database load balancing service discovery ([4e47073](https://gitlab.com/gitlab-org/container-registry/commit/4e47073e87a949eb63bf4dfa3ff663a399282189))
+* **datastore:** introduce database load balancer entity ([b070146](https://gitlab.com/gitlab-org/container-registry/commit/b0701465b4f1fe478aa42d808db9c8e85c75190a))
+* **datastore:** periodically refresh DB replica list during load balancing ([8dc9a5a](https://gitlab.com/gitlab-org/container-registry/commit/8dc9a5a93433cb55d5d6b1d5238d82bf6fe89856))
+* **db:** add db queries for bbm ([2709a2c](https://gitlab.com/gitlab-org/container-registry/commit/2709a2cf5143a5aec194bd01e2515b41fd6d3597))
+* **importer:** stop importing all repositories if tags table is not empty ([0e78c82](https://gitlab.com/gitlab-org/container-registry/commit/0e78c82a9d4b546cbd15e243dd1d09f0e8e4a783))
+* **registry:** remove inventory tool ([d662c6a](https://gitlab.com/gitlab-org/container-registry/commit/d662c6a47515d46cdc50a525959a185c92e56f57))
+* **registry:** remove require empty database option ([45ef380](https://gitlab.com/gitlab-org/container-registry/commit/45ef3803716a6db4c7575ccf47e953d42d5697ec))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **handlers:** remove traces of v1/import route ([37636fa](https://gitlab.com/gitlab-org/container-registry/commit/37636fa065a346129a4b8abf93d1dd64d29d3b19))
+
+
+### ⚡️ Performance Improvements ⚡️
+
+* **redis:**  Temporary revert of !1683 ([9d179a1](https://gitlab.com/gitlab-org/container-registry/commit/9d179a1e440a3be34c20b88842087be96652f90e))
+* **redis:** add Redis caching to get manifest endpoint ([96cffcc](https://gitlab.com/gitlab-org/container-registry/commit/96cffcc8854d4b18117749d83eb1f533e558b5c3))
+* **redis:** add support for caching repository data in tags list API endpoint ([10fa925](https://gitlab.com/gitlab-org/container-registry/commit/10fa925b07bb34aecd7fc44fb3b146e72dbe57e7))
+* **redis:** Temporary revert of !1679 ([ca00a18](https://gitlab.com/gitlab-org/container-registry/commit/ca00a18a5998c5893a8a2d3130d6ca9c3abb3830))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** switch from github.com/golang/mock to go.uber.org/mock ([cd46439](https://gitlab.com/gitlab-org/container-registry/commit/cd46439f232a08b8b207d981dcb5d15ca796f356))
+* **deps:** update dependency danger-review to v1.4.1 ([44e71d3](https://gitlab.com/gitlab-org/container-registry/commit/44e71d329022b536c85cd3f69490408998086b4e))
+* **deps:** update module cloud.google.com/go/storage to v1.43.0 ([82f22fc](https://gitlab.com/gitlab-org/container-registry/commit/82f22fce51bc98f6222abb0cffccdb7fc1b58d64))
+* **deps:** update module github.com/alicebob/miniredis/v2 to v2.33.0 ([e8cef95](https://gitlab.com/gitlab-org/container-registry/commit/e8cef9502772294f53f2e48ccb23fd07b3d87004))
+* **deps:** update module github.com/cenkalti/backoff/v4 to v4.3.0 ([467b9e5](https://gitlab.com/gitlab-org/container-registry/commit/467b9e564efc5ba623ece1b50051b84f26be6c67))
+* **deps:** update module github.com/getsentry/sentry-go to v0.28.1 ([82b334a](https://gitlab.com/gitlab-org/container-registry/commit/82b334a38706785868b2cbd6ab12a6ed02c0eef5))
+* **deps:** update module github.com/prometheus/client_golang to v1.19.1 ([d1c9170](https://gitlab.com/gitlab-org/container-registry/commit/d1c9170d2f93c691b3275dc9b3cbc128c53e772e))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.5.3 ([7504003](https://gitlab.com/gitlab-org/container-registry/commit/75040039b6ef2292efa6afb7bc0bb12e4e745004))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.5.4 ([25b1c01](https://gitlab.com/gitlab-org/container-registry/commit/25b1c01b9127aa8bf55de970d463cbb7d4bad04c))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.6.0 ([615cfbf](https://gitlab.com/gitlab-org/container-registry/commit/615cfbfd3d33868e84a213c0adcc06270ee71511))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.6.1 ([f6477e3](https://gitlab.com/gitlab-org/container-registry/commit/f6477e3689747e78b49e5cd7303c9a995e62afd5))
+* **deps:** update module github.com/rubenv/sql-migrate to v1.7.0 ([c4ede5b](https://gitlab.com/gitlab-org/container-registry/commit/c4ede5bb47596ca4b7f48f60498a09bd91116246))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.14.4 ([2108236](https://gitlab.com/gitlab-org/container-registry/commit/2108236f9ceba855169c22854d37b0312ce7f696))
+* **deps:** update module github.com/spf13/cobra to v1.8.1 ([d066f8d](https://gitlab.com/gitlab-org/container-registry/commit/d066f8d457c9cbfbdebaebe5cbd7dd72dfa27589))
+* **deps:** update module github.com/spf13/viper to v1.19.0 ([71ae4b1](https://gitlab.com/gitlab-org/container-registry/commit/71ae4b13b8f1b3c9387325b2aa632934d33713ea))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.107.0 ([56552ed](https://gitlab.com/gitlab-org/container-registry/commit/56552ed5d7c7e9fa4b48d9446cfed95fc73b29a8))
+* **deps:** update module golang.org/x/crypto to v0.25.0 ([1742972](https://gitlab.com/gitlab-org/container-registry/commit/1742972f64ad06f926ec5ef5e3a45bdb63b1d39e))
+* **deps:** update module google.golang.org/api to v0.189.0 ([302327b](https://gitlab.com/gitlab-org/container-registry/commit/302327bc1986711094534e21096fd9aa51b6c1a3))
+
 ## [4.6.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.5.0-gitlab...v4.6.0-gitlab) (2024-06-28)
 
 
