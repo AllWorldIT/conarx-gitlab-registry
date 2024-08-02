@@ -43,8 +43,8 @@ func (m isDuration) String() string {
 }
 
 var (
-	fakeErrorA = errors.New("error A")
-	fakeErrorB = errors.New("error B")
+	fakeErrorA = errors.New("error A") //nolint: stylecheck
+	fakeErrorB = errors.New("error B") //nolint: stylecheck
 )
 
 func Test_baseWorker_Name(t *testing.T) {
