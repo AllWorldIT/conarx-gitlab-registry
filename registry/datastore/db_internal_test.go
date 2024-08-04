@@ -294,3 +294,37 @@ func TestDBLoadBalancer_RecordLSN_NoStoreError(t *testing.T) {
 	err := lb.RecordLSN(context.Background(), &models.Repository{})
 	require.EqualError(t, err, "LSN cache is not configured")
 }
+
+func TestDBLoadBalancer_UpToDateReplica_NoReplicas(t *testing.T) {
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	lb := &DBLoadBalancer{
+		primary:  &DB{DB: primaryDB},
+		lsnCache: NewNoOpRepositoryCache(),
+	}
+
+	db := lb.UpToDateReplica(context.Background(), &models.Repository{})
+	require.NotNil(t, db)
+	require.Equal(t, primaryDB, db.DB)
+}
+
+func TestDBLoadBalancer_UpToDateReplica_NoStore(t *testing.T) {
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	replicaDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaDB.Close()
+
+	lb := &DBLoadBalancer{
+		primary:  &DB{DB: primaryDB},
+		replicas: []*DB{{DB: replicaDB}},
+	}
+
+	db := lb.UpToDateReplica(context.Background(), &models.Repository{})
+	require.NotNil(t, db)
+	require.Equal(t, primaryDB, db.DB)
+}

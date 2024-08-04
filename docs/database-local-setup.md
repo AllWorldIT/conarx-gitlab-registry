@@ -341,7 +341,7 @@ You should be able to [run the migrations](#migrations) and continue from there.
 > This feature is a work in progress. See [epic 8591](https://gitlab.com/groups/gitlab-org/-/epics/8591).
 
 The easiest path to set up load balancing locally is to rely on GDK, which includes support for PostgreSQL replication,
-PgBouncer and Consul.
+PgBouncer, Consul and Redis.
 
 You have two options, using a fixed hosts list or service discovery.
 
@@ -374,6 +374,10 @@ of hosts that should be used as read replicas.
        enabled: true
        hosts:
          - /<full path to gdk root>/postgresql-replica/
+   redis:
+     cache:
+       enabled: true
+       addr: /<full path to gdk root>/redis/redis.socket
    ```
    
    You can optionally add the primary host to `loadbalancing.hosts` to make it part of the read-only pool.
@@ -469,6 +473,10 @@ entry for the registry database under the `[databases]` section:
        nameserver: localhost
        port: 8600
        record: replica.pgbouncer.service.consul
+   redis:
+     cache:
+       enabled: true
+       addr: /<full path to gdk root>/redis/redis.socket
    ```
 
 3. Tail PostgreSQL logs in a separate window:
