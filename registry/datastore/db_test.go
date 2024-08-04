@@ -2,6 +2,8 @@ package datastore_test
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"net"
@@ -1483,6 +1485,119 @@ func TestDBLoadBalancer_RecordLSN_StoreSetError(t *testing.T) {
 	require.EqualError(t, err, "failed to cache WAL insert LSN: some error")
 
 	// Verify DB mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock.ExpectationsWereMet())
+}
+
+// expectSingleRowQuery asserts that a query on the mock database returns a single row with the specified value for the
+// given column, or returns an error if specified. It takes the mock database, the query string, the response row column
+// name, the expected response row column value, an error (if any), and the query arguments as input.
+func expectSingleRowQuery(db sqlmock.Sqlmock, query string, column string, value driver.Value, err error, args ...driver.Value) {
+	if err != nil {
+		db.ExpectQuery(query).
+			WithArgs(args...).
+			WillReturnError(err)
+	} else {
+		db.ExpectQuery(query).
+			WithArgs(args...).
+			WillReturnRows(sqlmock.NewRows([]string{column}).AddRow(value))
+	}
+}
+
+func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replicaMockDB, replicaMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+	lsnCacheMock := mocks.NewMockRepositoryCache(ctrl)
+
+	// Define expected DB connections. The connections' open logic is heavily tested elsewhere, here we only care about
+	// the bare minimum setup for testing the LSN logic, thus the use of gomock.Any()
+	gomock.InOrder(
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1),
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: replicaMockDB}, nil).Times(1),
+	)
+
+	// Setup load balancer
+	lb, err := datastore.NewDBLoadBalancer(
+		ctx,
+		&datastore.DSN{},
+		datastore.WithFixedHosts([]string{"replica"}),
+		datastore.WithConnector(mockConnector),
+		datastore.WithLSNCache(lsnCacheMock),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+	require.Equal(t, primaryMockDB, lb.Primary().DB)
+	require.Len(t, lb.Replicas(), 1)
+	require.Equal(t, replicaMockDB, lb.Replica().DB)
+
+	repo := &models.Repository{Path: "test/repo"}
+	primaryLSN := "0/16B3748"
+	query := "SELECT pg_last_wal_replay_lsn (.+) SELECT pg_wal_lsn_diff"
+	column := "pg_wal_lsn_diff"
+
+	tests := []struct {
+		name         string
+		getLSNReturn string
+		getLSNError  error
+		queryResult  driver.Value
+		queryError   error
+		expectedDB   *sql.DB
+	}{
+		{
+			name:         "LSN record exists and replica candidate is up-to-date",
+			getLSNReturn: primaryLSN,
+			queryResult:  true,
+			expectedDB:   replicaMockDB,
+		},
+		{
+			name:         "LSN record exists and replica candidate is not up-to-date",
+			getLSNReturn: primaryLSN,
+			queryResult:  false,
+			expectedDB:   primaryMockDB,
+		},
+		{
+			name:         "LSN record does not exist",
+			getLSNReturn: "",
+			expectedDB:   replicaMockDB,
+		},
+		{
+			name:         "Query fails",
+			getLSNReturn: primaryLSN,
+			queryError:   errors.New("database error"),
+			expectedDB:   primaryMockDB,
+		},
+		{
+			name:        "LSN cache retrieval fails",
+			getLSNError: errors.New("cache error"),
+			expectedDB:  primaryMockDB,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lsnCacheMock.EXPECT().GetLSN(ctx, repo).Return(tt.getLSNReturn, tt.getLSNError).Times(1)
+			if tt.getLSNError == nil && tt.getLSNReturn != "" {
+				expectSingleRowQuery(replicaMock, query, column, tt.queryResult, tt.queryError, primaryLSN)
+			}
+			db := lb.UpToDateReplica(ctx, repo)
+			require.Equal(t, tt.expectedDB, db.DB)
+		})
+	}
+
+	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 	require.NoError(t, replicaMock.ExpectationsWereMet())
 }

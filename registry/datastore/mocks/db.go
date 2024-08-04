@@ -348,6 +348,20 @@ func (mr *MockLoadBalancerMockRecorder) Replicas() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Replicas", reflect.TypeOf((*MockLoadBalancer)(nil).Replicas))
 }
 
+// UpToDateReplica mocks base method.
+func (m *MockLoadBalancer) UpToDateReplica(arg0 context.Context, arg1 *models.Repository) *datastore.DB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpToDateReplica", arg0, arg1)
+	ret0, _ := ret[0].(*datastore.DB)
+	return ret0
+}
+
+// UpToDateReplica indicates an expected call of UpToDateReplica.
+func (mr *MockLoadBalancerMockRecorder) UpToDateReplica(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpToDateReplica", reflect.TypeOf((*MockLoadBalancer)(nil).UpToDateReplica), arg0, arg1)
+}
+
 // MockConnector is a mock of Connector interface.
 type MockConnector struct {
 	ctrl     *gomock.Controller

@@ -356,9 +356,10 @@ func (c *sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB,
 type LoadBalancer interface {
 	Primary() *DB
 	Replica() *DB
+	UpToDateReplica(context.Context, *models.Repository) *DB
 	Replicas() []*DB
 	Close() error
-	RecordLSN(ctx context.Context, r *models.Repository) error
+	RecordLSN(context.Context, *models.Repository) error
 }
 
 // DBLoadBalancer manages connections to a primary database and multiple replicas.
@@ -667,4 +668,56 @@ func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) e
 	}
 
 	return nil
+}
+
+// UpToDateReplica returns the most suitable database connection handle for serving a read request for a given
+// models.Repository based on the last recorded primary Log Sequence Number (LSN) for that same repository. All errors
+// are handled gracefully with a fallback to the primary connection handle.
+func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Repository) *DB {
+	// TODO(dlb): add log entries for all error/fallback scenarios
+	if len(lb.replicas) == 0 {
+		return lb.primary
+	}
+	if lb.lsnCache == nil {
+		return lb.primary
+	}
+
+	// Get the next replica using round-robin. For simplicity, on the first iteration of DLB, we simply check against
+	// the first returned replica candidate, not against (potentially) all replicas in the pool. If the elected replica
+	// candidate is behind the previously recorded primary LSN, then we simply fall back to the connection handle for
+	// the primary database.
+	replica := lb.Replica()
+	if replica == lb.primary {
+		return lb.primary
+	}
+
+	// Fetch the primary LSN from cache
+	primaryLSN, err := lb.lsnCache.GetLSN(ctx, r)
+	if err != nil {
+		return lb.primary
+	}
+	// If the record does not exist in cache, the replica is considered suitable
+	if primaryLSN == "" {
+		return replica
+	}
+
+	// Query to check if the candidate replica is up-to-date with the primary LSN
+	query := `
+        WITH replica_lsn AS (
+			SELECT pg_last_wal_replay_lsn () AS lsn
+		)
+		SELECT
+			pg_wal_lsn_diff ($1::pg_lsn, lsn) <= 0
+		FROM
+			replica_lsn`
+
+	var upToDate bool
+	if err := replica.QueryRowContext(ctx, query, primaryLSN).Scan(&upToDate); err != nil {
+		return lb.primary
+	}
+	if upToDate {
+		return replica
+	}
+
+	return lb.primary
 }
