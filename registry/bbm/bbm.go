@@ -169,8 +169,9 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 			// The upstream process is terminating, this worker should exit.
 			case <-doneChan:
 				// cleanup
-				jw.logger.Info("received shutdown signal: Shutting down...")
+				jw.logger.Info("received shutdown signal: shutting down...")
 				close(gracefullFinish)
+				return
 			// A period has elapsed, time to try to find and execute any available jobs.
 			case <-ticker.C:
 				jw.logger.Info("starting worker run...")
@@ -262,7 +263,8 @@ func (jw *Worker) run(ctx context.Context) {
 
 	}
 
-	l.Info("executed background migration job")
+	l.Info("finished background migration job run")
+
 }
 
 // GrabLock attempts to grab the distributed lock used for co-ordination between all Background Migration processes.
@@ -302,11 +304,11 @@ func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigr
 
 	l.Info("a background migration was found that needs to be executed")
 
-	err = bbmStore.ValidateMigrationTableAndColumn(ctx, bbm.TargetTable, bbm.TargetColumn)
+	err = validateMigration(ctx, bbmStore, jw.Work, bbm)
 	if err != nil {
 		l.WithError(err).Error("background migration failed validation")
 
-		if errors.Is(err, datastore.ErrUnknownColumn) || errors.Is(err, datastore.ErrUnknownTable) {
+		if errors.Is(err, datastore.ErrUnknownColumn) || errors.Is(err, datastore.ErrUnknownTable) || errors.Is(err, ErrWorkFunctionNotFound) {
 			// Mark migration as failed and surface the error to sentry if we don't know the column or the table referenced in the migration
 			var errCode models.BBMErrorCode
 			switch {
@@ -314,6 +316,8 @@ func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigr
 				errCode = models.InvalidColumnBBMErrCode
 			case errors.Is(err, datastore.ErrUnknownTable):
 				errCode = models.InvalidTableBBMErrCode
+			case errors.Is(err, ErrWorkFunctionNotFound):
+				errCode = models.InvalidJobSignatureBBMErrCode
 			}
 			errortracking.Capture(err, errortracking.WithContext(ctx))
 			bbm.Status = models.BackgroundMigrationFailed
@@ -481,4 +485,16 @@ func hasRunAllBBMJobsAtLeastOnce(ctx context.Context, bbmStore datastore.Backgro
 		return true, err
 	}
 	return false, err
+}
+
+func validateMigration(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, workFuncs map[string]Work, bbm *models.BackgroundMigration) error {
+
+	if _, ok := workFuncs[bbm.JobName]; !ok {
+		return ErrWorkFunctionNotFound
+	}
+
+	if err := bbmStore.ValidateMigrationTableAndColumn(ctx, bbm.TargetTable, bbm.TargetColumn); err != nil {
+		return err
+	}
+	return nil
 }

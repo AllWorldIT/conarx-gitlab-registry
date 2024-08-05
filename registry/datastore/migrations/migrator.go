@@ -1,3 +1,5 @@
+//go:generate mockgen -package mocks -destination mocks/migration.go . Migrator
+
 package migrations
 
 import (
@@ -14,6 +16,11 @@ const (
 
 func init() {
 	migrate.SetTable(migrationTableName)
+}
+
+type Migrator interface {
+	Up() (int, error)
+	Down() (int, error)
 }
 
 type migrator struct {
@@ -145,7 +152,7 @@ func (m *migrator) Status() (map[string]*migrationStatus, error) {
 	for _, k := range known {
 		statuses[k.Id] = &migrationStatus{}
 
-		if mig := m.findMigrationByID(k.Id); mig != nil && mig.PostDeployment {
+		if mig := m.FindMigrationByID(k.Id); mig != nil && mig.PostDeployment {
 			statuses[k.Id].PostDeployment = true
 		}
 	}
@@ -257,7 +264,7 @@ func migrationApplied(records []*migrate.MigrationRecord, id string) bool {
 	return false
 }
 
-func (m *migrator) findMigrationByID(id string) *Migration {
+func (m *migrator) FindMigrationByID(id string) *Migration {
 	for _, mig := range m.migrations {
 		if mig.Id == id {
 			return mig
