@@ -55,7 +55,7 @@ type Transactor interface {
 // DB implements Handler.
 type DB struct {
 	*sql.DB
-	dsn *DSN
+	DSN *DSN
 }
 
 // BeginTx wraps sql.Tx from the innner sql.DB within a datastore.Tx.
@@ -379,10 +379,9 @@ type DBLoadBalancer struct {
 	replicaOpenOpts      []Option
 	replicaCheckInterval time.Duration
 
-	// TODO(dlb): try to remove the need for these. The DB type already has a DSN built-in, but setting them during
-	// tests using mocks is currently not possible as the DSN is unexported. So we have these here to unblock progress.
-	primaryDSN  *DSN
-	replicaDSNs []*DSN
+	// primaryDSN is stored separately to ensure we can derive replicas DSNs, even if the initial connection to the
+	// primary database fails. This is necessary as DB.DSN is only set after successfully establishing a connection.
+	primaryDSN *DSN
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
@@ -501,7 +500,6 @@ func resolveHosts(ctx context.Context, resolver DNSResolver) ([]*net.TCPAddr, er
 // up-to-date. Replicas for which we failed to establish a connection to are not included in the pool.
 func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error {
 	var replicas []*DB
-	var replicaDSNs []*DSN
 	var result *multierror.Error
 
 	dsn := *lb.primaryDSN
@@ -518,7 +516,6 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error
 					result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
 				} else {
 					replicas = append(replicas, replica)
-					replicaDSNs = append(replicaDSNs, &dsn)
 				}
 			}
 		}
@@ -530,7 +527,6 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error
 				result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
 			} else {
 				replicas = append(replicas, replica)
-				replicaDSNs = append(replicaDSNs, &dsn)
 			}
 		}
 	}
@@ -538,7 +534,6 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error
 	// TODO(dlb): use disconnecttimeout to close handlers from retired replicas
 	lb.replicaMutex.Lock()
 	lb.replicas = replicas
-	lb.replicaDSNs = replicaDSNs
 	lb.replicaMutex.Unlock()
 
 	return result
@@ -566,8 +561,8 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 				l.WithError(err).Error("failed to refresh database replicas list")
 			}
 			var hosts []string
-			for _, dsn := range lb.replicaDSNs {
-				hosts = append(hosts, fmt.Sprintf("%s:%d", dsn.Host, dsn.Port))
+			for _, replica := range lb.replicas {
+				hosts = append(hosts, replica.DSN.Address())
 			}
 			l.WithFields(log.Fields{"hosts": hosts}).Info("database replicas list updated")
 		}
@@ -642,7 +637,7 @@ func (lb *DBLoadBalancer) Close() error {
 
 	for _, replica := range lb.replicas {
 		if err := replica.Close(); err != nil {
-			result = multierror.Append(result, fmt.Errorf("failed closing replica %q connection: %w", replica.dsn.Host, err))
+			result = multierror.Append(result, fmt.Errorf("failed closing replica %q connection: %w", replica.DSN.Address(), err))
 		}
 	}
 

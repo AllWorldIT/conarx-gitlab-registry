@@ -195,16 +195,16 @@ func TestDBLoadBalancer_Close_Error(t *testing.T) {
 	lb := &DBLoadBalancer{
 		primary: &DB{
 			DB:  primaryDB,
-			dsn: &DSN{Host: "primary"},
+			DSN: &DSN{Host: "primary"},
 		},
 		replicas: []*DB{
 			{
 				DB:  replicaDB1,
-				dsn: &DSN{Host: "replica1"},
+				DSN: &DSN{Host: "replica1"},
 			},
 			{
 				DB:  replicaDB2,
-				dsn: &DSN{Host: "replica2"},
+				DSN: &DSN{Host: "replica2"},
 			},
 		},
 	}
