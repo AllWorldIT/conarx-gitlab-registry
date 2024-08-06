@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/docker/distribution/registry/datastore/models"
@@ -46,6 +47,14 @@ func Test_sqlPartialMatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func normalizeWhitespace(input string) string {
+	lines := strings.Split(input, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func Test_tagsDetailPaginatedQuery(t *testing.T) {
@@ -227,7 +236,7 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 	for tn, tc := range tcs {
 		t.Run(tn, func(t *testing.T) {
 			q, args := tagsDetailPaginatedQuery(r, tc.filters)
-			require.Equal(t, tc.expectedQuery, q)
+			require.Equal(t, normalizeWhitespace(tc.expectedQuery), normalizeWhitespace(q))
 			require.ElementsMatch(t, tc.expectedArgs, args)
 		})
 	}
