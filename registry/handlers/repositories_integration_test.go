@@ -61,7 +61,7 @@ func (e testEnv) mockDB() sqlmock.Sqlmock {
 	primary := &datastore.DB{DB: db}
 	replica := &datastore.DB{DB: db}
 	mockBalancer.EXPECT().Primary().Return(primary).AnyTimes()
-	mockBalancer.EXPECT().Replica().Return(replica).AnyTimes()
+	mockBalancer.EXPECT().Replica(context.Background()).Return(replica).AnyTimes()
 
 	e.app.db = mockBalancer
 

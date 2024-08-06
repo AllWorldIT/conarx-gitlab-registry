@@ -321,17 +321,17 @@ func (mr *MockLoadBalancerMockRecorder) RecordLSN(arg0, arg1 any) *gomock.Call {
 }
 
 // Replica mocks base method.
-func (m *MockLoadBalancer) Replica() *datastore.DB {
+func (m *MockLoadBalancer) Replica(arg0 context.Context) *datastore.DB {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Replica")
+	ret := m.ctrl.Call(m, "Replica", arg0)
 	ret0, _ := ret[0].(*datastore.DB)
 	return ret0
 }
 
 // Replica indicates an expected call of Replica.
-func (mr *MockLoadBalancerMockRecorder) Replica() *gomock.Call {
+func (mr *MockLoadBalancerMockRecorder) Replica(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Replica", reflect.TypeOf((*MockLoadBalancer)(nil).Replica))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Replica", reflect.TypeOf((*MockLoadBalancer)(nil).Replica), arg0)
 }
 
 // Replicas mocks base method.
