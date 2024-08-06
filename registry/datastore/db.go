@@ -70,6 +70,14 @@ func (db *DB) Begin() (Transactor, error) {
 	return db.BeginTx(context.Background(), nil)
 }
 
+// Address returns the database host network address.
+func (db *DB) Address() string {
+	if db.DSN == nil {
+		return ""
+	}
+	return db.DSN.Address()
+}
+
 // Tx implements Transactor.
 type Tx struct {
 	*sql.Tx
@@ -355,7 +363,7 @@ func (c *sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB,
 // LoadBalancer represents a database load balancer.
 type LoadBalancer interface {
 	Primary() *DB
-	Replica() *DB
+	Replica(context.Context) *DB
 	UpToDateReplica(context.Context, *models.Repository) *DB
 	Replicas() []*DB
 	Close() error
@@ -367,8 +375,7 @@ type DBLoadBalancer struct {
 	primary  *DB
 	replicas []*DB
 
-	lsnCache RepositoryCache
-
+	lsnCache   RepositoryCache
 	connector  Connector
 	resolver   DNSResolver
 	fixedHosts []string
@@ -496,6 +503,16 @@ func resolveHosts(ctx context.Context, resolver DNSResolver) ([]*net.TCPAddr, er
 	return addrs, nil
 }
 
+// logger returns a log.Logger decorated with a key/value pair that uniquely identifies all entries as being emitted
+// by the database load balancer component. Instead of relying on a fixed log.Logger instance, this method allows
+// retrieving and extending a base logger embedded in the input context (if any) to preserve relevant key/value
+// pairs introduced upstream (such as a correlation ID, present when calling from the API handlers).
+func (lb *DBLoadBalancer) logger(ctx context.Context) log.Logger {
+	return log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"component": "registry.datastore.DBLoadBalancer",
+	})
+}
+
 // ResolveReplicas initializes or updates the list of available replicas atomically by resolving the provided hosts
 // either through service discovery or using a fixed hosts list. As result, the load balancer replica pool will be
 // up-to-date. Replicas for which we failed to establish a connection to are not included in the pool.
@@ -503,37 +520,56 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error
 	var replicas []*DB
 	var result *multierror.Error
 
-	dsn := *lb.primaryDSN
+	l := lb.logger(ctx)
+	tmpDSN := *lb.primaryDSN
+	var replicaDSNs []DSN
+
 	if lb.resolver != nil {
+		l.Info("resolving replicas with service discovery")
 		addrs, err := resolveHosts(ctx, lb.resolver)
 		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("failed to fetch replica hosts: %w", err))
+			result = multierror.Append(result, fmt.Errorf("failed to resolve replica hosts: %w", err))
 		} else {
 			for _, addr := range addrs {
-				dsn.Host = addr.IP.String()
-				dsn.Port = addr.Port
-				replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
-				if err != nil {
-					result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
-				} else {
-					replicas = append(replicas, replica)
-				}
+
+				tmpDSN.Host = addr.IP.String()
+				tmpDSN.Port = addr.Port
+				replicaDSNs = append(replicaDSNs, tmpDSN)
 			}
 		}
 	} else if len(lb.fixedHosts) > 0 {
+		l.Info("resolving replicas with fixed hosts list")
 		for _, host := range lb.fixedHosts {
-			dsn.Host = host
-			replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
-			if err != nil {
-				result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
-			} else {
-				replicas = append(replicas, replica)
-			}
+			tmpDSN.Host = host
+			replicaDSNs = append(replicaDSNs, tmpDSN)
+		}
+	}
+
+	for i, dsn := range replicaDSNs {
+		l := l.WithFields(logrus.Fields{
+			"index":   i,
+			"total":   len(replicaDSNs),
+			"address": dsn.Address(),
+		})
+		l.Info("opening replica connection")
+		replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Address(), err))
+		} else {
+			replicas = append(replicas, replica)
 		}
 	}
 
 	// TODO(dlb): use disconnecttimeout to close handlers from retired replicas
 	lb.replicaMutex.Lock()
+	var before, after []string
+	for _, r := range lb.replicas {
+		before = append(before, r.Address())
+	}
+	for _, r := range replicas {
+		after = append(after, r.Address())
+	}
+	l.WithFields(logrus.Fields{"before": before, "after": after}).Info("updating replicas list")
 	lb.replicas = replicas
 	lb.replicaMutex.Unlock()
 
@@ -548,7 +584,7 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 		return nil
 	}
 
-	l := log.GetLogger(log.WithContext(ctx))
+	l := lb.logger(ctx)
 	t := time.NewTicker(lb.replicaCheckInterval)
 	defer t.Stop()
 
@@ -557,15 +593,11 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-t.C:
-			l.Info("updating database replicas list")
+			l.WithFields(log.Fields{"interval_ms": lb.replicaCheckInterval.Milliseconds()}).
+				Info("refreshing replicas list")
 			if err := lb.ResolveReplicas(ctx); err != nil {
-				l.WithError(err).Error("failed to refresh database replicas list")
+				l.WithError(err).Error("failed to refresh replicas list")
 			}
-			var hosts []string
-			for _, replica := range lb.replicas {
-				hosts = append(hosts, replica.DSN.Address())
-			}
-			l.WithFields(log.Fields{"hosts": hosts}).Info("database replicas list updated")
 		}
 	}
 }
@@ -609,8 +641,9 @@ func (lb *DBLoadBalancer) Primary() *DB {
 
 // Replica returns a round-robin elected replica database handler. If no replicas are configured, then the primary
 // database handler is returned.
-func (lb *DBLoadBalancer) Replica() *DB {
+func (lb *DBLoadBalancer) Replica(ctx context.Context) *DB {
 	if len(lb.replicas) == 0 {
+		lb.logger(ctx).Info("no replicas available, falling back to primary")
 		return lb.primary
 	}
 
@@ -638,7 +671,7 @@ func (lb *DBLoadBalancer) Close() error {
 
 	for _, replica := range lb.replicas {
 		if err := replica.Close(); err != nil {
-			result = multierror.Append(result, fmt.Errorf("failed closing replica %q connection: %w", replica.DSN.Address(), err))
+			result = multierror.Append(result, fmt.Errorf("failed closing replica %q connection: %w", replica.Address(), err))
 		}
 	}
 
@@ -662,6 +695,8 @@ func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) e
 		return fmt.Errorf("failed to cache WAL insert LSN: %w", err)
 	}
 
+	lb.logger(ctx).WithFields(log.Fields{"repository": r.Path, "lsn": lsn}).Info("current WAL insert LSN recorded")
+
 	return nil
 }
 
@@ -669,11 +704,10 @@ func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) e
 // models.Repository based on the last recorded primary Log Sequence Number (LSN) for that same repository. All errors
 // are handled gracefully with a fallback to the primary connection handle.
 func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Repository) *DB {
-	// TODO(dlb): add log entries for all error/fallback scenarios
-	if len(lb.replicas) == 0 {
-		return lb.primary
-	}
+	l := lb.logger(ctx).WithFields(log.Fields{"repository": r.Path})
+
 	if lb.lsnCache == nil {
+		l.Info("no LSN cache configured, falling back to primary")
 		return lb.primary
 	}
 
@@ -681,20 +715,24 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	// the first returned replica candidate, not against (potentially) all replicas in the pool. If the elected replica
 	// candidate is behind the previously recorded primary LSN, then we simply fall back to the connection handle for
 	// the primary database.
-	replica := lb.Replica()
+	replica := lb.Replica(ctx)
 	if replica == lb.primary {
 		return lb.primary
 	}
+	l = l.WithFields(log.Fields{"replica": replica.Address()})
 
 	// Fetch the primary LSN from cache
 	primaryLSN, err := lb.lsnCache.GetLSN(ctx, r)
 	if err != nil {
+		l.WithError(err).Error("failed to fetch primary LSN from cache, falling back to primary")
 		return lb.primary
 	}
 	// If the record does not exist in cache, the replica is considered suitable
 	if primaryLSN == "" {
+		l.Info("no primary LSN found in cache, replica is eligible")
 		return replica
 	}
+	l = l.WithFields(log.Fields{"primary_lsn": primaryLSN})
 
 	// Query to check if the candidate replica is up-to-date with the primary LSN
 	query := `
@@ -708,11 +746,14 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 
 	var upToDate bool
 	if err := replica.QueryRowContext(ctx, query, primaryLSN).Scan(&upToDate); err != nil {
+		l.WithError(err).Error("failed to calculate LSN diff, falling back to primary")
 		return lb.primary
 	}
 	if upToDate {
+		l.Info("replica is up-to-date")
 		return replica
 	}
 
+	l.Info("replica is not up-to-date, falling back to primary")
 	return lb.primary
 }

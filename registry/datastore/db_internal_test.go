@@ -262,15 +262,16 @@ func TestDBLoadBalancer_Replica(t *testing.T) {
 	}
 
 	// Test round-robin selection of replicas
-	db1 := lb.Replica()
+	ctx := context.Background()
+	db1 := lb.Replica(ctx)
 	require.NotNil(t, db1)
 	require.Equal(t, replicaDB1, db1.DB)
 
-	db2 := lb.Replica()
+	db2 := lb.Replica(ctx)
 	require.NotNil(t, db2)
 	require.Equal(t, replicaDB2, db2.DB)
 
-	db3 := lb.Replica()
+	db3 := lb.Replica(ctx)
 	require.NotNil(t, db3)
 	require.Equal(t, replicaDB1, db3.DB)
 }
@@ -284,7 +285,7 @@ func TestDBLoadBalancer_NoReplicas(t *testing.T) {
 		primary: &DB{DB: primaryDB},
 	}
 
-	db := lb.Replica()
+	db := lb.Replica(context.Background())
 	require.NotNil(t, db)
 	require.Equal(t, primaryDB, db.DB)
 }

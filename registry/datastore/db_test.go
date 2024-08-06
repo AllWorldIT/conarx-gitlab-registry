@@ -228,7 +228,7 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 				"replica1",
 				"fail_replica2",
 			},
-			expectedErrs: []string{`failed to open replica "fail_replica2" database connection: replica connection failed`},
+			expectedErrs: []string{`failed to open replica "fail_replica2:5432" database connection: replica connection failed`},
 		},
 		{
 			name:       "multiple replica connections fail",
@@ -238,19 +238,19 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 				"fail_replica2",
 			},
 			expectedErrs: []string{
-				`failed to open replica "fail_replica1" database connection: replica connection failed`,
-				`failed to open replica "fail_replica2" database connection: replica connection failed`,
+				`failed to open replica "fail_replica1:5432" database connection: replica connection failed`,
+				`failed to open replica "fail_replica2:5432" database connection: replica connection failed`,
 			},
 		},
 		{
 			name:       "primary and replica connections fail",
-			primaryDSN: &datastore.DSN{Host: "fail_primary"},
+			primaryDSN: &datastore.DSN{Host: "fail_primary", Port: 1234},
 			replicaHosts: []string{
 				"fail_replica2",
 			},
 			expectedErrs: []string{
 				`failed to open primary database connection: primary connection failed`,
-				`failed to open replica "fail_replica2" database connection: replica connection failed`,
+				`failed to open replica "fail_replica2:1234" database connection: replica connection failed`,
 			},
 		},
 	}
@@ -354,13 +354,15 @@ func TestNewDBLoadBalancer_WithServiceDiscovery(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
+	ctx := context.Background()
+
 	// Verify primary
 	require.Equal(t, primaryMockDB, lb.Primary().DB)
 
 	// Verify replicas round-robin rotation
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
-	require.Equal(t, replica2MockDB, lb.Replica().DB)
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -553,7 +555,7 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 				defer replica2MockDB.Close()
 				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB}, nil)
 			},
-			expectedErrors: []string{`failed to open replica "192.168.1.1" database connection: failed to open replica 1`},
+			expectedErrors: []string{`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`},
 		},
 		{
 			name:       "multiple replica connections fail",
@@ -567,8 +569,8 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(nil, fmt.Errorf("failed to open replica 2"))
 			},
 			expectedErrors: []string{
-				`failed to open replica "192.168.1.1" database connection: failed to open replica 1`,
-				`failed to open replica "192.168.1.2" database connection: failed to open replica 2`,
+				`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`,
+				`failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`,
 			},
 		},
 		{
@@ -581,8 +583,8 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 			},
 			expectedErrors: []string{
 				`failed to open primary database connection: primary connection failed`,
-				`failed to open replica "192.168.1.1" database connection: failed to open replica 1`,
-				`failed to open replica "192.168.1.2" database connection: failed to open replica 2`,
+				`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`,
+				`failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`,
 			},
 		},
 	}
@@ -724,13 +726,15 @@ func TestNewDBLoadBalancer_WithBothHostsAndDiscoveryOptions(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
+	ctx := context.Background()
+
 	// Verify primary
 	require.Equal(t, primaryMockDB, lb.Primary().DB)
 
 	// Verify replicas round-robin rotation
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
-	require.Equal(t, replica2MockDB, lb.Replica().DB)
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -955,7 +959,7 @@ func TestDBLoadBalancer_ResolveReplicas_PartialFail(t *testing.T) {
 	var errs *multierror.Error
 	require.ErrorAs(t, err, &errs)
 	require.Len(t, errs.Errors, 1)
-	require.EqualError(t, errs.Errors[0], `failed to open replica "192.168.1.2" database connection: failed to open replica 2`)
+	require.EqualError(t, errs.Errors[0], `failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`)
 
 	// Ensure that there is only one replica in the pool, and that's replica 1
 	replicas := lb.Replicas()
@@ -1054,8 +1058,8 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 	var errs *multierror.Error
 	require.ErrorAs(t, err, &errs)
 	require.Len(t, errs.Errors, 2)
-	require.EqualError(t, errs.Errors[0], `failed to open replica "192.168.1.1" database connection: failed to open replica 1`)
-	require.EqualError(t, errs.Errors[1], `failed to open replica "192.168.1.2" database connection: failed to open replica 2`)
+	require.EqualError(t, errs.Errors[0], `failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`)
+	require.EqualError(t, errs.Errors[1], `failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`)
 
 	// Ensure that there are no replicas in the pool
 	require.Empty(t, lb.Replicas())
@@ -1170,9 +1174,11 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
+	ctx := context.Background()
+
 	// Verify initial replicas
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
-	require.Equal(t, replica2MockDB, lb.Replica().DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go lb.StartReplicaChecking(ctx)
@@ -1184,8 +1190,8 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	cancel()
 
 	// Verify new replicas
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
-	require.Equal(t, replica3MockDB, lb.Replica().DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica3MockDB, lb.Replica(ctx).DB)
 
 	// Wait just enough time to confirm that context cancellation stopped the refresh process. We've set expectations
 	// for the amount of times that connections can be established, so any reattempt to do so would lead to a failure.
@@ -1541,7 +1547,7 @@ func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
 	require.NotNil(t, lb)
 	require.Equal(t, primaryMockDB, lb.Primary().DB)
 	require.Len(t, lb.Replicas(), 1)
-	require.Equal(t, replicaMockDB, lb.Replica().DB)
+	require.Equal(t, replicaMockDB, lb.Replica(ctx).DB)
 
 	repo := &models.Repository{Path: "test/repo"}
 	primaryLSN := "0/16B3748"
@@ -1600,4 +1606,24 @@ func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 	require.NoError(t, replicaMock.ExpectationsWereMet())
+}
+
+func TestDB_Address(t *testing.T) {
+	tests := []struct {
+		name string
+		arg  datastore.DB
+		out  string
+	}{
+		{name: "nil DSN", arg: datastore.DB{}, out: ""},
+		{name: "empty DSN", arg: datastore.DB{DSN: &datastore.DSN{}}, out: ":0"},
+		{name: "DSN with no port", arg: datastore.DB{DSN: &datastore.DSN{Host: "127.0.0.1"}}, out: "127.0.0.1:0"},
+		{name: "DSN with no host", arg: datastore.DB{DSN: &datastore.DSN{Port: 5432}}, out: ":5432"},
+		{name: "full DSN", arg: datastore.DB{DSN: &datastore.DSN{Host: "127.0.0.1", Port: 5432}}, out: "127.0.0.1:5432"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.out, tt.arg.Address())
+		})
+	}
 }
