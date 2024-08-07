@@ -1,3 +1,5 @@
+//go:generate mockgen -package mocks -destination mocks/bbm.go . Handler
+
 package bbm
 
 import (
@@ -54,7 +56,7 @@ var (
 	ErrWorkFunctionNotFound = errors.New("work function not found")
 )
 
-type WorkFunc func(ctx context.Context, db *datastore.DB, paginationTable, paginationColumn string, paginationAfter, paginationBefore, limit int) error
+type WorkFunc func(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, limit int) error
 
 // Work represents the underlying functions that a Background Migration job is capable of executing.
 type Work struct {
@@ -90,9 +92,18 @@ func RegisterWork(work []Work, opts ...WorkerOption) (*Worker, error) {
 type Worker struct {
 	Work          map[string]Work
 	logger        log.Logger
-	db            *datastore.DB
+	db            datastore.Handler
 	jobInterval   time.Duration
 	maxJobAttempt int
+	wh            Handler
+}
+
+// Handler defines the methods required for handling background migration jobs. It provides flexibility to use different implementations for job management.
+// This is currently leveraged in tests to facilitate mocking worker functions.
+type Handler interface {
+	FindJob(context.Context, datastore.BackgroundMigrationStore) (*models.BackgroundMigrationJob, error)
+	GrabLock(context.Context, datastore.BackgroundMigrationStore) error
+	ExecuteJob(context.Context, datastore.BackgroundMigrationStore, *models.BackgroundMigrationJob) error
 }
 
 // WorkerOption provides functional options for NewWorker.
@@ -120,9 +131,16 @@ func WithLogger(l log.Logger) WorkerOption {
 }
 
 // WithDB sets the DB.
-func WithDB(db *datastore.DB) WorkerOption {
+func WithDB(db datastore.Handler) WorkerOption {
 	return func(jw *Worker) {
 		jw.db = db
+	}
+}
+
+// WithHandler sets the worker handle.
+func WithHandler(wh Handler) WorkerOption {
+	return func(jw *Worker) {
+		jw.wh = wh
 	}
 }
 
@@ -135,6 +153,9 @@ func (jw *Worker) applyDefaults() {
 	}
 	if jw.maxJobAttempt == 0 {
 		jw.maxJobAttempt = defaultMaxJobAttempt
+	}
+	if jw.wh == nil {
+		jw.wh = jw
 	}
 }
 
@@ -208,7 +229,7 @@ func (jw *Worker) run(ctx context.Context) {
 
 	// Grab distributed lock
 	jw.logger.Info("obtaining lock...")
-	if err = jw.GrabLock(ctx, bbmStore); err != nil {
+	if err = jw.wh.GrabLock(ctx, bbmStore); err != nil {
 		if !errors.Is(err, datastore.ErrBackgroundMigrationLockInUse) {
 			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		}
@@ -219,7 +240,7 @@ func (jw *Worker) run(ctx context.Context) {
 
 	// Search for available jobs
 	jw.logger.Info("searching for job...")
-	job, err := jw.FindJob(ctx, bbmStore)
+	job, err := jw.wh.FindJob(ctx, bbmStore)
 	if err != nil {
 		jw.logger.WithError(err).Error("failed to find job")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
@@ -249,7 +270,7 @@ func (jw *Worker) run(ctx context.Context) {
 
 	// A job was found, lets execute it
 	jw.logger.Info("job found, executing")
-	err = jw.ExecuteJob(ctx, bbmStore, job)
+	err = jw.wh.ExecuteJob(ctx, bbmStore, job)
 	if err != nil {
 		l.WithError(err).Error("failed to execute job")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
@@ -264,7 +285,6 @@ func (jw *Worker) run(ctx context.Context) {
 	}
 
 	l.Info("finished background migration job run")
-
 }
 
 // GrabLock attempts to grab the distributed lock used for co-ordination between all Background Migration processes.
@@ -488,7 +508,6 @@ func hasRunAllBBMJobsAtLeastOnce(ctx context.Context, bbmStore datastore.Backgro
 }
 
 func validateMigration(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, workFuncs map[string]Work, bbm *models.BackgroundMigration) error {
-
 	if _, ok := workFuncs[bbm.JobName]; !ok {
 		return ErrWorkFunctionNotFound
 	}

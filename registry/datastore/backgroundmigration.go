@@ -1,3 +1,5 @@
+//go:generate mockgen -package mocks -destination mocks/backgroundmigration.go . BackgroundMigrationStore
+
 package datastore
 
 import (
