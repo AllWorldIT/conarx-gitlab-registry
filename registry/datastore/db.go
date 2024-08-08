@@ -786,8 +786,8 @@ func (qb *QueryBuilder) Build(q string, qArgs ...any) *QueryBuilder {
 
 	if placeholderCount != len(qArgs) {
 		panic(fmt.Sprintf(
-			"number of placeholders in query %q does not match the number of arguments %d passed",
-			q, len(qArgs),
+			"number of placeholders (%d) in query %q does not match the number of arguments (%d) passed",
+			placeholderCount, q, len(qArgs),
 		))
 	}
 
