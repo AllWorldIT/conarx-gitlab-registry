@@ -1626,6 +1626,7 @@ func TestDB_Address(t *testing.T) {
 			require.Equal(t, tt.out, tt.arg.Address())
 		})
 	}
+}
 
 func TestQueryBuilder_Build(t *testing.T) {
 	t.Run("empty query", func(t *testing.T) {
