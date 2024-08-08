@@ -760,6 +760,7 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	return lb.primary
 }
 
+// QueryBuilder helps in building SQL queries with parameters.
 type QueryBuilder struct {
 	sql     strings.Builder
 	params  []any
