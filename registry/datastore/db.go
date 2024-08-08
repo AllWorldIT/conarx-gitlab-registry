@@ -775,6 +775,26 @@ func NewQueryBuilder() *QueryBuilder {
 // Build takes the given sql string replaces any ? with the equivalent indexed
 // parameter and appends elems to the args slice.
 func (qb *QueryBuilder) Build(q string, elems ...any) *QueryBuilder {
+	placeholderCount := 0
+
+	for _, ch := range q {
+		if ch == '?' {
+			placeholderCount += 1
+		}
+	}
+
+	if placeholderCount != len(elems) {
+		panic(
+			fmt.Sprintf(
+				"number of placeholders in query %q does not match the number of arguments %d passed",
+				q, len(elems),
+			))
+	}
+
+	if q == "" {
+		return qb
+	}
+
 	for _, elem := range elems {
 		qb.params = append(qb.params, elem)
 		paramName := fmt.Sprintf("$%d", len(qb.params))
