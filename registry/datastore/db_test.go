@@ -1626,4 +1626,76 @@ func TestDB_Address(t *testing.T) {
 			require.Equal(t, tt.out, tt.arg.Address())
 		})
 	}
+
+func TestQueryBuilder_Build(t *testing.T) {
+	t.Run("empty query", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("")
+		assertSQL(t, qb, "", []any{})
+	})
+
+	t.Run("single placeholder", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("SELECT * FROM users WHERE id = ?", 1)
+		assertSQL(t, qb, "SELECT * FROM users WHERE id = $1", []any{1})
+	})
+
+	t.Run("multiple placeholders", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("SELECT * FROM users WHERE id = ? AND name = ?", 1, "John Doe")
+		assertSQL(t, qb, "SELECT * FROM users WHERE id = $1 AND name = $2", []any{1, "John Doe"})
+	})
+
+	t.Run("placeholders with spaces", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("SELECT * FROM users WHERE id = ? AND name = ?", 1, "John Doe")
+		assertSQL(t, qb, "SELECT * FROM users WHERE id = $1 AND name = $2", []any{1, "John Doe"})
+	})
+
+	t.Run("query with newline", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("SELECT * FROM users WHERE id = ?\n", 1)
+		assertSQL(t, qb, "SELECT * FROM users WHERE id = $1", []any{1})
+	})
+
+	t.Run("query with multiple newlines", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("SELECT * FROM users\nWHERE id = ?\n", 1)
+		assertSQL(t, qb, "SELECT * FROM users\nWHERE id = $1", []any{1})
+	})
+
+	t.Run("panic on mismatch placeholder count", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		require.Panics(t, func() {
+			qb.Build("SELECT * FROM users WHERE id = ? AND name = ?", 1)
+		}, "Expected panic, but none occurred")
+	})
+
+	t.Run("multiple build calls", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("SELECT * FROM users WHERE id = ?", 1)
+		qb.Build("AND name = ?", "John Doe")
+		assertSQL(t, qb, "SELECT * FROM users WHERE id = $1 AND name = $2", []any{1, "John Doe"})
+	})
+}
+
+func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
+	t.Run("basic subquery", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("SELECT * FROM users WHERE id = ?", 1)
+		qb.WrapIntoSubqueryOf("SELECT * FROM orders WHERE user_id IN (%s)")
+		assertSQL(t, qb, "SELECT * FROM orders WHERE user_id IN (SELECT * FROM users WHERE id = $1)", []any{1})
+	})
+
+	t.Run("subquery with multiple placeholders", func(t *testing.T) {
+		qb := datastore.NewQueryBuilder()
+		qb.Build("SELECT * FROM users WHERE id = ? AND name = ?", 1, "John Doe")
+		qb.WrapIntoSubqueryOf("SELECT * FROM orders WHERE user_id IN (%s)")
+		assertSQL(t, qb, "SELECT * FROM orders WHERE user_id IN (SELECT * FROM users WHERE id = $1 AND name = $2)", []any{1, "John Doe"})
+	})
+}
+
+func assertSQL(t *testing.T, qb *datastore.QueryBuilder, expectedSQL string, expectedParams []any) {
+	require.Equal(t, expectedSQL, qb.SQL(), "Expected SQL: %q, got: %q", expectedSQL, qb.SQL())
+	require.Equal(t, expectedParams, qb.Params(), "Expected params: %v, got: %v", expectedParams, qb.Params())
 }

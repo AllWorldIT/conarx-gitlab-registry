@@ -829,6 +829,9 @@ func (qb *QueryBuilder) WrapIntoSubqueryOf(outerQuery string) {
 
 // SQL returns the rendered SQL query.
 func (qb *QueryBuilder) SQL() string {
+	if qb.newLine {
+		return strings.TrimRight(qb.sql.String(), "\n")
+	}
 	return qb.sql.String()
 }
 
