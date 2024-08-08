@@ -1022,7 +1022,7 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 
 // validateRenameRequestAttributes verifies the attributes of the rename request are correct and also decides if the request
 // is for renaming the repository name of an origin repository or moving the namespace of an origin repository.
-func validateRenameRequestAttributes(renameObject *RenameRepositoryAPIRequest) (bool, error) {
+func validateRenameRequestAttributes(renameObject *RenameRepositoryAPIRequest, repoName string) (bool, error) {
 	var (
 		newName          = renameObject.Name
 		newNamespacePath = renameObject.Namespace
@@ -1041,15 +1041,14 @@ func validateRenameRequestAttributes(renameObject *RenameRepositoryAPIRequest) (
 	}
 
 	if isRenameNamespaceRequest {
-		// We only support moving/renaming of sub-namespaces and not top-level-namespaces
-		splitNewNamespace := strings.Split(newNamespacePath, "/")
 		if !reference.GitLabNamespacePathRegex.MatchString(newNamespacePath) {
 			detail := v1.InvalidPatchBodyTypeErrorDetail("namespace", reference.GitLabNamespacePathRegex.String())
 			return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
 
 		}
 
-		if len(splitNewNamespace) < 2 {
+		// requests that attempt to move repositories to a different top-level namespace are not allowed
+		if strings.Split(newNamespacePath, "/")[0] != strings.Split(repoName, "/")[0] {
 			return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParam.WithDetail("top level namespaces can not be changed")
 		}
 	} else {
@@ -1082,7 +1081,7 @@ func validateRenameRequest(ctx context.Context, r *http.Request, repoName string
 		return nil, err
 	}
 
-	isRenameNamespaceRequest, err := validateRenameRequestAttributes(renameObject)
+	isRenameNamespaceRequest, err := validateRenameRequestAttributes(renameObject, repoName)
 	if err != nil {
 		return nil, err
 	}
