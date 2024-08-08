@@ -815,6 +815,10 @@ func (qb *QueryBuilder) Build(q string, qArgs ...any) *QueryBuilder {
 // The outerQuery param needs to have a single %s where the current query will
 // be copied into.
 func (qb *QueryBuilder) WrapIntoSubqueryOf(outerQuery string) {
+	if !strings.Contains(outerQuery, "%s") || strings.Count(outerQuery, "%s") != 1 {
+		panic(fmt.Sprintf("outerQuery must contain exactly one %%s placeholder. Query: %v", outerQuery))
+	}
+
 	newSql := strings.Builder{}
 	_, _ = fmt.Fprintf(&newSql, outerQuery, qb.sql.String())
 	qb.sql = newSql
