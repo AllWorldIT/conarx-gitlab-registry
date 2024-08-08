@@ -782,7 +782,7 @@ func (qb *QueryBuilder) Build(q string, elems ...any) *QueryBuilder {
 		q = strings.Replace(q, "?", paramName, 1)
 	}
 
-	q = strings.Trim(q, " ")
+	q = strings.Trim(q, " \t")
 	newLine := q[len(q)-1] == '\n'
 
 	// If the query ends in a newline, don't add a space before it. Adding a
