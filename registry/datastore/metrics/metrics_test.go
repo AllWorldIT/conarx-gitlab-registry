@@ -8,7 +8,7 @@ import (
 
 	"github.com/docker/distribution/metrics"
 	"github.com/prometheus/client_golang/prometheus"
-	testutil "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,5 +54,19 @@ registry_database_query_duration_seconds_count{name="foo_find_by_id"} 2
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, queryTotalName)
 
 	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName, totalFullName)
+	require.NoError(t, err)
+}
+
+func TestReplicaPoolSize(t *testing.T) {
+	ReplicaPoolSize(10)
+
+	var expected bytes.Buffer
+	expected.WriteString(`
+# HELP registry_database_lb_pool_size A gauge for the current number of replicas in the load balancer pool.
+# TYPE registry_database_lb_pool_size gauge
+registry_database_lb_pool_size 10
+`)
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbPoolSizeName)
+	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, fullName)
 	require.NoError(t, err)
 }

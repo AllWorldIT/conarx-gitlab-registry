@@ -16,6 +16,7 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/hashicorp/go-multierror"
 	"github.com/jackc/pgx/v5"
@@ -570,6 +571,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error
 		after = append(after, r.Address())
 	}
 	l.WithFields(logrus.Fields{"before": before, "after": after}).Info("updating replicas list")
+	metrics.ReplicaPoolSize(len(replicas))
 	lb.replicas = replicas
 	lb.replicaMutex.Unlock()
 

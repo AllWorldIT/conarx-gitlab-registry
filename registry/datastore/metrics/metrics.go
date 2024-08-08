@@ -11,6 +11,7 @@ var (
 	queryDurationHist *prometheus.HistogramVec
 	queryTotal        *prometheus.CounterVec
 	timeSince         = time.Since // for test purposes only
+	lbPoolSize        prometheus.Gauge
 )
 
 const (
@@ -22,6 +23,9 @@ const (
 
 	queryTotalName = "queries_total"
 	queryTotalDesc = "A counter for database queries."
+
+	lbPoolSizeName = "lb_pool_size"
+	lbPoolSizeDesc = "A gauge for the current number of replicas in the load balancer pool."
 )
 
 func init() {
@@ -46,8 +50,17 @@ func init() {
 		[]string{queryNameLabel},
 	)
 
+	lbPoolSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbPoolSizeName,
+			Help:      lbPoolSizeDesc,
+		})
+
 	prometheus.MustRegister(queryDurationHist)
 	prometheus.MustRegister(queryTotal)
+	prometheus.MustRegister(lbPoolSize)
 }
 
 func InstrumentQuery(name string) func() {
@@ -56,4 +69,9 @@ func InstrumentQuery(name string) func() {
 		queryTotal.WithLabelValues(name).Inc()
 		queryDurationHist.WithLabelValues(name).Observe(timeSince(start).Seconds())
 	}
+}
+
+// ReplicaPoolSize captures the current number of replicas in the load balancer pool.
+func ReplicaPoolSize(size int) {
+	lbPoolSize.Set(float64(size))
 }
