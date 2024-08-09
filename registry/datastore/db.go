@@ -731,9 +731,12 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	}
 	// If the record does not exist in cache, the replica is considered suitable
 	if primaryLSN == "" {
+		metrics.LSNCacheMiss()
 		l.Info("no primary LSN found in cache, replica is eligible")
 		return replica
 	}
+
+	metrics.LSNCacheHit()
 	l = l.WithFields(log.Fields{"primary_lsn": primaryLSN})
 
 	// Query to check if the candidate replica is up-to-date with the primary LSN

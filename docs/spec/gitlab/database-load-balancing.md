@@ -391,16 +391,18 @@ The Container Registry will generate log entries for each of the following event
 
 The Container Registry will export the following Prometheus metrics:
 
-| Metric Name                                  | Type      | Description                                                  |
-| -------------------------------------------- | --------- | ------------------------------------------------------------ |
-| `registry_database_lb_lookups_total`         | Counter   | Total number of DNS lookup attempts. `error=<true/false>`, `record` and `record_type=<SRV/A>` labels. |
-| `registry_database_lb_pool_size`             | Gauge     | Current number of replicas in the pool.                      |
-| `registry_database_lb_pool_status`           | Gauge     | Status of each replica in the pool. `replica` and `status=<online/quarantined>` labels. |
-| `registry_database_lb_pool_operations_total` | Counter   | Number of replicas added (`action=added`) to the pool or removed (`action=removed`) based on DNS lookup and probing results. <br />Number of replicas quarantined (`action=quarantined`) or reintegrated (`action=reintegrated`) due to lag thresholds. |
-| `registry_database_lb_lag_bytes`             | Gauge     | Replication lag in bytes for each replica (identified by a `replica` label). |
-| `registry_database_lb_lag_seconds`           | Histogram | Replication lag in seconds for each replica (identified by a `replica` label). |
-| `registry_database_lb_reads_total`           | Counter   | Total number of read-only queries routed. `target_type=<primary/replica>` and `target=<address>` labels. |
-| `registry_database_lb_expired_total`         | Counter   | Number of expired connections due to changes in the replica list. |
+| Metric Name                                                 | Type      | Description                                                                                                                                                                                                                                             |
+|-------------------------------------------------------------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `registry_database_lb_lookups_total`                        | Counter   | Total number of DNS lookup attempts. `error=<true/false>`, `record` and `record_type=<SRV/A>` labels.                                                                                                                                                   |
+| `registry_database_lb_pool_size`                            | Gauge     | Current number of replicas in the pool.                                                                                                                                                                                                                 |
+| `registry_database_lb_pool_status`                          | Gauge     | Status of each replica in the pool. `replica` and `status=<online/quarantined>` labels.                                                                                                                                                                 |
+| `registry_database_lb_pool_operations_total`                | Counter   | Number of replicas added (`action=added`) to the pool or removed (`action=removed`) based on DNS lookup and probing results. <br />Number of replicas quarantined (`action=quarantined`) or reintegrated (`action=reintegrated`) due to lag thresholds. |
+| `registry_database_lb_lag_bytes`                            | Gauge     | Replication lag in bytes for each replica (identified by a `replica` label).                                                                                                                                                                            |
+| `registry_database_lb_lag_seconds`                          | Histogram | Replication lag in seconds for each replica (identified by a `replica` label).                                                                                                                                                                          |
+| `registry_database_lb_reads_total`                          | Counter   | Total number of read-only queries routed. `target_type=<primary/replica>` and `target=<address>` labels.                                                                                                                                                |
+| `registry_database_lb_expired_total`                        | Counter   | Number of expired connections due to changes in the replica list.                                                                                                                                                                                       |
+| `registry_database_lb_lsn_cache_operation_duration_seconds` | Histogram | Duration of LSN cache set/get operations. `operation=<set/get>`, `error=<true/false>` labels.                                                                                                                                                           |
+| `registry_database_lb_lsn_cache_hits_total`                 | Counter   | Total number of LSN cache hits and misses. `result=<hit/miss>` label.                                                                                                                                                                                   |
 
 #### Health Check
 
