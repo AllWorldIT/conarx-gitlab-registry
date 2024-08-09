@@ -1712,8 +1712,8 @@ func TestQueryBuilder_Build(t *testing.T) {
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
-				require.Equal(t, tc.expectedSQL, qb.SQL(), "Expected SQL: %q, got: %q", tc.expectedSQL, qb.SQL())
-				require.Equal(t, tc.expectedParams, qb.Params(), "Expected params: %v, got: %v", tc.expectedParams, qb.Params())
+				require.Equal(t, tc.expectedSQL, qb.SQL())
+				require.Equal(t, tc.expectedParams, qb.Params())
 			}
 		})
 	}
@@ -1777,8 +1777,8 @@ func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
-				require.Equal(t, tc.expectedSQL, qb.SQL(), "Expected SQL: %q, got: %q", tc.expectedSQL, qb.SQL())
-				require.Equal(t, tc.expectedParams, qb.Params(), "Expected params: %v, got: %v", tc.expectedParams, qb.Params())
+				require.Equal(t, tc.expectedSQL, qb.SQL())
+				require.Equal(t, tc.expectedParams, qb.Params())
 			}
 		})
 	}
