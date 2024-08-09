@@ -508,7 +508,11 @@ func (c *centralRepositoryCache) SetLSN(ctx context.Context, r *models.Repositor
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	return c.cache.Set(setCtx, c.lsnKey(r.Path), lsn, libstore.WithExpiration(lsnKeyTTL))
+	report := metrics.LSNCacheSet()
+	err := c.cache.Set(setCtx, c.lsnKey(r.Path), lsn, libstore.WithExpiration(lsnKeyTTL))
+	report(err)
+
+	return err
 }
 
 // GetLSN implements RepositoryCache.
@@ -516,7 +520,9 @@ func (c *centralRepositoryCache) GetLSN(ctx context.Context, r *models.Repositor
 	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
+	report := metrics.LSNCacheGet()
 	v, err := c.cache.Get(getCtx, c.lsnKey(r.Path))
+	report(err)
 	if err != nil {
 		// a wrapped redis.Nil is returned when the key is not found in Redis
 		if !errors.Is(err, redis.Nil) {
