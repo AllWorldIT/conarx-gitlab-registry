@@ -1677,11 +1677,10 @@ func TestQueryBuilder_Build(t *testing.T) {
 		assertSQL(t, qb, "SELECT * FROM users\nWHERE id = $1", []any{1})
 	})
 
-	t.Run("panic on mismatch placeholder count", func(t *testing.T) {
+	t.Run("errors on mismatched placeholder count", func(t *testing.T) {
 		qb := datastore.NewQueryBuilder()
-		require.Panics(t, func() {
-			qb.Build("SELECT * FROM users WHERE id = ? AND name = ?", 1)
-		}, "Expected panic, but none occurred")
+		_, err := qb.Build("SELECT * FROM users WHERE id = ? AND name = ?", 1)
+		require.Error(t, err)
 	})
 
 	t.Run("multiple build calls", func(t *testing.T) {
@@ -1710,9 +1709,8 @@ func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
 	t.Run("subquery without placeholder", func(t *testing.T) {
 		qb := datastore.NewQueryBuilder()
 		qb.Build("SELECT * FROM users WHERE id = ? AND name = ?", 1, "John Doe")
-		require.Panics(t, func() {
-			qb.WrapIntoSubqueryOf("SELECT * FROM orders WHERE user_id IN ?")
-		}, "Expected panic, but none occurred")
+		err := qb.WrapIntoSubqueryOf("SELECT * FROM orders WHERE user_id IN ?")
+		require.Error(t, err)
 	})
 }
 

@@ -235,7 +235,8 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 
 	for tn, tc := range tcs {
 		t.Run(tn, func(t *testing.T) {
-			q, args := tagsDetailPaginatedQuery(r, tc.filters)
+			q, args, err := tagsDetailPaginatedQuery(r, tc.filters)
+			require.NoError(t, err)
 			require.Equal(t, normalizeWhitespace(tc.expectedQuery), normalizeWhitespace(q))
 			require.ElementsMatch(t, tc.expectedArgs, args)
 		})

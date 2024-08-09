@@ -983,7 +983,10 @@ func sqlPartialMatch(value string) string {
 func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error) {
 	defer metrics.InstrumentQuery("repository_tags_detail_paginated")()
 
-	q, args := tagsDetailPaginatedQuery(r, filters)
+	q, args, err := tagsDetailPaginatedQuery(r, filters)
+	if err != nil {
+		return nil, fmt.Errorf("constructing tags detail paginated query: %w", err)
+	}
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("finding tags detail with pagination: %w", err)
@@ -1027,10 +1030,10 @@ func (s *repositoryStore) mediaTypeIds(ctx context.Context, types []string) ([]s
 	return ids, nil
 }
 
-func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (string, []any) {
+func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (string, []any, error) {
 	qb := NewQueryBuilder()
 
-	qb.Build(
+	err := qb.Build(
 		`SELECT
 			t.name,
 			encode(m.digest, 'hex') AS digest,
@@ -1052,18 +1055,27 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 		`,
 		r.NamespaceID, r.ID,
 	)
+	if err != nil {
+		return "", nil, err
+	}
 
 	if filters.ExactName != "" {
 		// NOTE(prozlach): In the case when there is exact match requested,
 		// there is going to be only single entry in the response, or none. So
 		// there is no point in adding pagination and sorting keywords here.
-		qb.Build("AND t.name = ?", filters.ExactName)
-		return qb.SQL(), qb.Params()
+		err := qb.Build("AND t.name = ?", filters.ExactName)
+		if err != nil {
+			return "", nil, err
+		}
+		return qb.SQL(), qb.Params(), nil
 	}
 
 	// NOTE(prozlach): We handle both cases in this path - empty and not
 	// empty `Name` filter
-	qb.Build("AND t.name LIKE ?\n", sqlPartialMatch(filters.Name))
+	err = qb.Build("AND t.name LIKE ?\n", sqlPartialMatch(filters.Name))
+	if err != nil {
+		return "", nil, err
+	}
 
 	// default to ascending order to keep backwards compatibility
 	if filters.SortOrder == "" {
@@ -1077,28 +1089,43 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 	case filters.LastEntry == "" && filters.BeforeEntry == "" && filters.PublishedAt == "":
 		// this should always return the first page up to filters.MaxEntries
 		if filters.OrderBy == "published_at" {
-			qb.Build(
+			err = qb.Build(
 				fmt.Sprintf(`ORDER BY published_at %s, name %s LIMIT ?`, filters.SortOrder, filters.SortOrder),
 				filters.MaxEntries,
 			)
+			if err != nil {
+				return "", nil, err
+			}
 		} else {
-			qb.Build(
+			err = qb.Build(
 				fmt.Sprintf(`ORDER BY name %s LIMIT ?`, filters.SortOrder),
 				filters.MaxEntries,
 			)
+			if err != nil {
+				return "", nil, err
+			}
 		}
 	case filters.LastEntry != "":
-		getLastEntryQuery(qb, filters)
+		err := getLastEntryQuery(qb, filters)
+		if err != nil {
+			return "", nil, err
+		}
 	case filters.BeforeEntry != "":
-		getBeforeEntryQuery(qb, filters)
+		err := getBeforeEntryQuery(qb, filters)
+		if err != nil {
+			return "", nil, err
+		}
 	case filters.PublishedAt != "":
-		getPublishedAtQuery(qb, filters)
+		err := getPublishedAtQuery(qb, filters)
+		if err != nil {
+			return "", nil, err
+		}
 	}
 
-	return qb.SQL(), qb.Params()
+	return qb.SQL(), qb.Params(), nil
 }
 
-func getPublishedAtQuery(qb *QueryBuilder, filters FilterParams) {
+func getPublishedAtQuery(qb *QueryBuilder, filters FilterParams) error {
 	f := func(comparisonSign, sortOrder SortOrder) string {
 		filterFmt := `AND GREATEST(t.created_at,t.updated_at) %s= ?
 		ORDER BY
@@ -1110,18 +1137,21 @@ func getPublishedAtQuery(qb *QueryBuilder, filters FilterParams) {
 	}
 
 	if filters.SortOrder == OrderDesc {
-		qb.Build(f(lessThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
+		err := qb.Build(f(lessThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
+		if err != nil {
+			return err
+		}
 		// The results will be reversed, so we need to wrap the query in a
 		// SELECT statement that sorts the tags in the correct order
-		qb.WrapIntoSubqueryOf(
+		return qb.WrapIntoSubqueryOf(
 			fmt.Sprintf(`SELECT * FROM (%%s) AS tags ORDER BY tags.%s DESC`, filters.OrderBy),
 		)
 	} else {
-		qb.Build(f(greaterThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
+		return qb.Build(f(greaterThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
 	}
 }
 
-func getLastEntryQuery(qb *QueryBuilder, filters FilterParams) {
+func getLastEntryQuery(qb *QueryBuilder, filters FilterParams) error {
 	var (
 		comparisonOperator string
 		orderDirection     SortOrder
@@ -1137,19 +1167,19 @@ func getLastEntryQuery(qb *QueryBuilder, filters FilterParams) {
 	}
 
 	if filters.PublishedAt != "" {
-		qb.Build(
+		return qb.Build(
 			formatTagFilterWithPublishedAt(comparisonOperator, orderDirection),
 			filters.PublishedAt, filters.LastEntry, filters.MaxEntries,
 		)
 	} else {
-		qb.Build(
+		return qb.Build(
 			formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection),
 			filters.LastEntry, filters.MaxEntries,
 		)
 	}
 }
 
-func getBeforeEntryQuery(qb *QueryBuilder, filters FilterParams) {
+func getBeforeEntryQuery(qb *QueryBuilder, filters FilterParams) error {
 	var (
 		comparisonOperator     string
 		rootQueryOderDirection string
@@ -1168,21 +1198,27 @@ func getBeforeEntryQuery(qb *QueryBuilder, filters FilterParams) {
 	}
 
 	if filters.PublishedAt != "" {
-		qb.Build(
+		err := qb.Build(
 			formatTagFilterWithPublishedAt(comparisonOperator, orderDirection),
 			filters.PublishedAt, filters.BeforeEntry, filters.MaxEntries,
 		)
+		if err != nil {
+			return err
+		}
 	} else {
-		qb.Build(
+		err := qb.Build(
 			formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection),
 			filters.BeforeEntry, filters.MaxEntries,
 		)
+		if err != nil {
+			return err
+		}
 	}
 
 	// The results will be reversed, so we need to wrap the query in a
 	// SELECT statement that sorts the tags in the correct order
 	// if we are fetching by filters.BeforeEntry we need to sort in DESC order
-	qb.WrapIntoSubqueryOf(
+	return qb.WrapIntoSubqueryOf(
 		fmt.Sprintf(`SElECT * FROM (%%s) AS tags ORDER BY tags.%s %s`, filters.OrderBy, rootQueryOderDirection),
 	)
 }

@@ -775,17 +775,17 @@ func NewQueryBuilder() *QueryBuilder {
 
 // Build takes the given sql string replaces any ? with the equivalent indexed
 // parameter and appends elems to the args slice.
-func (qb *QueryBuilder) Build(q string, qArgs ...any) *QueryBuilder {
+func (qb *QueryBuilder) Build(q string, qArgs ...any) error {
 	placeholderCount := strings.Count(q, "?")
 	if placeholderCount != len(qArgs) {
-		panic(fmt.Sprintf(
+		return fmt.Errorf(
 			"number of placeholders (%d) in query %q does not match the number of arguments (%d) passed",
 			placeholderCount, q, len(qArgs),
-		))
+		)
 	}
 
 	if q == "" {
-		return qb
+		return nil
 	}
 
 	for _, elem := range qArgs {
@@ -808,20 +808,22 @@ func (qb *QueryBuilder) Build(q string, qArgs ...any) *QueryBuilder {
 	}
 
 	qb.newLine = newLine
-	return qb
+	return nil
 }
 
 // WrapIntoSubqueryOf wraps existing query as a subquery of the given query.
 // The outerQuery param needs to have a single %s where the current query will
 // be copied into.
-func (qb *QueryBuilder) WrapIntoSubqueryOf(outerQuery string) {
+func (qb *QueryBuilder) WrapIntoSubqueryOf(outerQuery string) error {
 	if !strings.Contains(outerQuery, "%s") || strings.Count(outerQuery, "%s") != 1 {
-		panic(fmt.Sprintf("outerQuery must contain exactly one %%s placeholder. Query: %v", outerQuery))
+		return fmt.Errorf("outerQuery must contain exactly one %%s placeholder. Query: %v", outerQuery)
 	}
 
 	newSql := strings.Builder{}
 	_, _ = fmt.Fprintf(&newSql, outerQuery, qb.sql.String())
 	qb.sql = newSql
+
+	return nil
 }
 
 // SQL returns the rendered SQL query.
