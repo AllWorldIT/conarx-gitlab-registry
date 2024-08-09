@@ -277,6 +277,7 @@ redis:
     enabled: true
     addr: localhost:16379,localhost:26379
     mainname: mainserver
+    username: default
     password: asecret
     db: 0
     dialtimeout: 10ms
@@ -1274,6 +1275,7 @@ redis:
     enabled: true
     addr: localhost:16379,localhost:26379
     mainname: mainserver
+    username: default
     password: asecret
     sentinelusername: my-sentinel-username
     sentinelpassword: some-sentinel-password
