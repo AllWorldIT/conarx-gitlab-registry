@@ -16,6 +16,7 @@ var (
 	lbLSNCacheOpDuration    *prometheus.HistogramVec
 	lbLSNCacheHits          *prometheus.CounterVec
 	lbDNSLookupDurationHist *prometheus.HistogramVec
+	lbPoolEvents            *prometheus.CounterVec
 )
 
 const (
@@ -49,6 +50,12 @@ const (
 	lookupTypeLabel         = "lookup_type"
 	srvLookupType           = "srv"
 	hostLookupType          = "host"
+
+	lbPoolEventsName           = "lb_pool_events_total"
+	lbPoolEventsDesc           = "A counter of replicas added or removed from the database load balancer pool."
+	lbPoolEventsEventLabel     = "event"
+	lbPoolEventsReplicaAdded   = "replica_added"
+	lbPoolEventsReplicaRemoved = "replica_removed"
 )
 
 func init() {
@@ -113,12 +120,23 @@ func init() {
 		[]string{lookupTypeLabel, errorLabel},
 	)
 
+	lbPoolEvents = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbPoolEventsName,
+			Help:      lbPoolEventsDesc,
+		},
+		[]string{lbPoolEventsEventLabel},
+	)
+
 	prometheus.MustRegister(queryDurationHist)
 	prometheus.MustRegister(queryTotal)
 	prometheus.MustRegister(lbPoolSize)
 	prometheus.MustRegister(lbLSNCacheOpDuration)
 	prometheus.MustRegister(lbLSNCacheHits)
 	prometheus.MustRegister(lbDNSLookupDurationHist)
+	prometheus.MustRegister(lbPoolEvents)
 }
 
 func InstrumentQuery(name string) func() {
@@ -180,4 +198,14 @@ func SRVLookup() func(error) {
 // database load balancing.
 func HostLookup() func(error) {
 	return dnsLookup(hostLookupType)
+}
+
+// ReplicaAdded increments the counter for load balancing replicas added to the pool.
+func ReplicaAdded() {
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaAdded).Inc()
+}
+
+// ReplicaRemoved increments the counter for load balancing replicas removed from the pool.
+func ReplicaRemoved() {
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaRemoved).Inc()
 }

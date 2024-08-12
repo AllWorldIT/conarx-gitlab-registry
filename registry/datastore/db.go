@@ -568,19 +568,36 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error
 
 	// TODO(dlb): use disconnecttimeout to close handlers from retired replicas
 	lb.replicaMutex.Lock()
-	var before, after []string
+	defer lb.replicaMutex.Unlock()
+
+	var added, removed []string
 	for _, r := range lb.replicas {
-		before = append(before, r.Address())
+		if !containsReplica(replicas, r.Address()) {
+			removed = append(removed, r.Address())
+			metrics.ReplicaRemoved()
+		}
 	}
 	for _, r := range replicas {
-		after = append(after, r.Address())
+		if !containsReplica(lb.replicas, r.Address()) {
+			added = append(added, r.Address())
+			metrics.ReplicaAdded()
+		}
 	}
-	l.WithFields(logrus.Fields{"before": before, "after": after}).Info("updating replicas list")
+
+	l.WithFields(logrus.Fields{"added": added, "removed": removed}).Info("updating replicas list")
 	metrics.ReplicaPoolSize(len(replicas))
 	lb.replicas = replicas
-	lb.replicaMutex.Unlock()
 
 	return result
+}
+
+func containsReplica(replicas []*DB, addr string) bool {
+	for _, r := range replicas {
+		if r.Address() == addr {
+			return true
+		}
+	}
+	return false
 }
 
 // StartReplicaChecking synchronously refreshes the list of replicas in the configured interval.
