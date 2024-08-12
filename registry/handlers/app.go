@@ -923,6 +923,7 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 	opts := &redis.UniversalOptions{
 		Addrs:            strings.Split(config.Redis.Cache.Addr, ","),
 		DB:               config.Redis.Cache.DB,
+		Username:         config.Redis.Cache.Username,
 		Password:         config.Redis.Cache.Password,
 		DialTimeout:      config.Redis.Cache.DialTimeout,
 		ReadTimeout:      config.Redis.Cache.ReadTimeout,
@@ -978,6 +979,7 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 	opts := &redis.UniversalOptions{
 		Addrs:           strings.Split(configuration.Redis.Addr, ","),
 		DB:              configuration.Redis.DB,
+		Username:        configuration.Redis.Username,
 		Password:        configuration.Redis.Password,
 		DialTimeout:     configuration.Redis.DialTimeout,
 		ReadTimeout:     configuration.Redis.ReadTimeout,

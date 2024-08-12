@@ -250,6 +250,28 @@ database:api-load-balancing-discovery:
 cache:redis:
   extends: .cache:redis
 
+cache:redis-auth:
+  <<: *cache-redis
+  variables:
+    <<: *cache-redis-variables
+    # create a Docker network per build so that services can talk with each other
+    FF_NETWORK_PER_BUILD: 1
+    REDIS_USERNAME: "my-redis-user"
+    REDIS_PASSWORD: "my-redis-pass"
+  services:
+    - name: redis:alpine
+      alias: "redis"
+      command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Starting Redis..."
+          cat <<EOF > /etc/redis.conf
+          user default off
+          user ${REDIS_USERNAME} on >${REDIS_PASSWORD} allcommands allkeys
+          EOF
+          redis-server /etc/redis.conf
+
 cache:redis-sentinel:
   <<: *cache-redis
   variables:
