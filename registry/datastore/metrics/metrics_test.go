@@ -174,3 +174,79 @@ func TestLSNCacheHit(t *testing.T) {
 func TestLSNCacheMiss(t *testing.T) {
 	testLSNCacheHitMiss(t, lbLSNCacheResultMiss, LSNCacheMiss)
 }
+
+func testDNSLookup(t *testing.T, lookupFunc func() func(error), lookupType string) {
+	restore := mockTimeSince(10 * time.Millisecond)
+	defer func() {
+		restore()
+		lbDNSLookupDurationHist.Reset()
+	}()
+
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbDNSLookupDurationHist)
+
+	report := lookupFunc()
+	report(errors.New("foo"))
+	report(errors.New("foo")) // to see the aggregated counter increase to 2
+	report(nil)
+
+	mockTimeSince(20 * time.Millisecond)
+	report = lookupFunc()
+	report(nil)
+
+	tmplFormat := `
+# HELP registry_database_lb_lookup_seconds A histogram of latencies for database load balancing DNS lookups.
+# TYPE registry_database_lb_lookup_seconds histogram
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.005"} 0
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.01"} 1
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.025"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.05"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.1"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.25"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.5"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="1"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="2.5"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="5"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="10"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="Inf"} 2
+registry_database_lb_lookup_seconds_sum{error="false",lookup_type="{{.LookupType}}"} 0.03
+registry_database_lb_lookup_seconds_count{error="false",lookup_type="{{.LookupType}}"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.005"} 0
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.01"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.025"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.05"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.1"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.25"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.5"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="1"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="2.5"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="5"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="10"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="Inf"} 2
+registry_database_lb_lookup_seconds_sum{error="true",lookup_type="{{.LookupType}}"} 0.02
+registry_database_lb_lookup_seconds_count{error="true",lookup_type="{{.LookupType}}"} 2
+# HELP registry_database_lb_lookups_total A counter for database load balancing DNS lookups.
+# TYPE registry_database_lb_lookups_total counter
+registry_database_lb_lookups_total{error="false",lookup_type="{{.LookupType}}"} 2
+registry_database_lb_lookups_total{error="true",lookup_type="{{.LookupType}}"} 2
+`
+
+	tmplData := struct{ LookupType string }{lookupType}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbDNSLookupDurationName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestSRVLookup(t *testing.T) {
+	testDNSLookup(t, SRVLookup, srvLookupType)
+}
+
+func TestHostLookup(t *testing.T) {
+	testDNSLookup(t, HostLookup, hostLookupType)
+}

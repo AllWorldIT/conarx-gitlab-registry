@@ -9,12 +9,13 @@ import (
 )
 
 var (
-	queryDurationHist    *prometheus.HistogramVec
-	queryTotal           *prometheus.CounterVec
-	timeSince            = time.Since // for test purposes only
-	lbPoolSize           prometheus.Gauge
-	lbLSNCacheOpDuration *prometheus.HistogramVec
-	lbLSNCacheHits       *prometheus.CounterVec
+	queryDurationHist       *prometheus.HistogramVec
+	queryTotal              *prometheus.CounterVec
+	timeSince               = time.Since // for test purposes only
+	lbPoolSize              prometheus.Gauge
+	lbLSNCacheOpDuration    *prometheus.HistogramVec
+	lbLSNCacheHits          *prometheus.CounterVec
+	lbDNSLookupDurationHist *prometheus.HistogramVec
 )
 
 const (
@@ -42,6 +43,12 @@ const (
 	lbLSNCacheResultLabel = "result"
 	lbLSNCacheResultHit   = "hit"
 	lbLSNCacheResultMiss  = "miss"
+
+	lbDNSLookupDurationName = "lb_lookup_seconds"
+	lbDNSLookupDurationDesc = "A histogram of latencies for database load balancing DNS lookups."
+	lookupTypeLabel         = "lookup_type"
+	srvLookupType           = "srv"
+	hostLookupType          = "host"
 )
 
 func init() {
@@ -95,11 +102,23 @@ func init() {
 		[]string{lbLSNCacheResultLabel},
 	)
 
+	lbDNSLookupDurationHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbDNSLookupDurationName,
+			Help:      lbDNSLookupDurationDesc,
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{lookupTypeLabel, errorLabel},
+	)
+
 	prometheus.MustRegister(queryDurationHist)
 	prometheus.MustRegister(queryTotal)
 	prometheus.MustRegister(lbPoolSize)
 	prometheus.MustRegister(lbLSNCacheOpDuration)
 	prometheus.MustRegister(lbLSNCacheHits)
+	prometheus.MustRegister(lbDNSLookupDurationHist)
 }
 
 func InstrumentQuery(name string) func() {
@@ -141,4 +160,24 @@ func LSNCacheHit() {
 // LSNCacheMiss increments the load balancing LSN cache miss counter.
 func LSNCacheMiss() {
 	lbLSNCacheHits.WithLabelValues(lbLSNCacheResultMiss).Inc()
+}
+
+func dnsLookup(lookupType string) func(error) {
+	start := time.Now()
+	return func(err error) {
+		failed := strconv.FormatBool(err != nil)
+		lbDNSLookupDurationHist.WithLabelValues(lookupType, failed).Observe(timeSince(start).Seconds())
+	}
+}
+
+// SRVLookup returns a function that can be used to instrument the count and duration of DNS SRV record lookups during
+// database load balancing.
+func SRVLookup() func(error) {
+	return dnsLookup(srvLookupType)
+}
+
+// HostLookup returns a function that can be used to instrument the count and duration of DNS host lookups during
+// database load balancing.
+func HostLookup() func(error) {
+	return dnsLookup(hostLookupType)
 }

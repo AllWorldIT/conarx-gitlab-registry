@@ -448,13 +448,18 @@ type dnsResolver struct {
 
 // LookupSRV performs an SRV record lookup.
 func (r *dnsResolver) LookupSRV(ctx context.Context) ([]*net.SRV, error) {
+	report := metrics.SRVLookup()
 	_, addrs, err := r.resolver.LookupSRV(ctx, "", "", r.record)
+	report(err)
 	return addrs, err
 }
 
 // LookupHost performs an IP address lookup for the given host.
 func (r *dnsResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
-	return r.resolver.LookupHost(ctx, host)
+	report := metrics.HostLookup()
+	addrs, err := r.resolver.LookupHost(ctx, host)
+	report(err)
+	return addrs, err
 }
 
 // NewDNSResolver creates a new dnsResolver for the specified nameserver, port, and record.
