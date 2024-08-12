@@ -762,3 +762,84 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	l.Info("replica is not up-to-date, falling back to primary")
 	return lb.primary
 }
+
+// QueryBuilder helps in building SQL queries with parameters.
+type QueryBuilder struct {
+	sql     strings.Builder
+	params  []any
+	newLine bool
+}
+
+func NewQueryBuilder() *QueryBuilder {
+	return &QueryBuilder{
+		params: make([]any, 0),
+	}
+}
+
+// Build takes the given sql string replaces any ? with the equivalent indexed
+// parameter and appends elems to the args slice.
+func (qb *QueryBuilder) Build(q string, qArgs ...any) error {
+	placeholderCount := strings.Count(q, "?")
+	if placeholderCount != len(qArgs) {
+		return fmt.Errorf(
+			"number of placeholders (%d) in query %q does not match the number of arguments (%d) passed",
+			placeholderCount, q, len(qArgs),
+		)
+	}
+
+	if q == "" {
+		return nil
+	}
+
+	for _, elem := range qArgs {
+		qb.params = append(qb.params, elem)
+		paramName := fmt.Sprintf("$%d", len(qb.params))
+
+		q = strings.Replace(q, "?", paramName, 1)
+	}
+
+	q = strings.Trim(q, " \t")
+	newLine := q[len(q)-1] == '\n'
+
+	// If the query ends in a newline, don't add a space before it. Adding a
+	// space is a convenience for chaining expressions.
+	switch {
+	case qb.newLine, qb.sql.Len() == 0, q == "\n":
+		_, _ = qb.sql.WriteString(q)
+	default:
+		_, _ = fmt.Fprintf(&qb.sql, " %s", q)
+	}
+
+	qb.newLine = newLine
+	return nil
+}
+
+// WrapIntoSubqueryOf wraps existing query as a subquery of the given query.
+// The outerQuery param needs to have a single %s where the current query will
+// be copied into.
+func (qb *QueryBuilder) WrapIntoSubqueryOf(outerQuery string) error {
+	if !strings.Contains(outerQuery, "%s") || strings.Count(outerQuery, "%s") != 1 {
+		return fmt.Errorf("outerQuery must contain exactly one %%s placeholder. Query: %v", outerQuery)
+	}
+
+	newSql := strings.Builder{}
+	_, _ = fmt.Fprintf(&newSql, outerQuery, qb.sql.String())
+	qb.sql = newSql
+
+	return nil
+}
+
+// SQL returns the rendered SQL query.
+func (qb *QueryBuilder) SQL() string {
+	if qb.newLine {
+		return strings.TrimRight(qb.sql.String(), "\n")
+	}
+	return qb.sql.String()
+}
+
+// Params returns the slice of query literals to be used in the SQL query.
+func (qb *QueryBuilder) Params() []any {
+	ret := make([]any, len(qb.params))
+	copy(ret, qb.params)
+	return ret
+}

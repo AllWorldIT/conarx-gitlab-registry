@@ -989,7 +989,10 @@ func sqlPartialMatch(value string) string {
 func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error) {
 	defer metrics.InstrumentQuery("repository_tags_detail_paginated")()
 
-	q, args := tagsDetailPaginatedQuery(r, filters)
+	q, args, err := tagsDetailPaginatedQuery(r, filters)
+	if err != nil {
+		return nil, fmt.Errorf("constructing tags detail paginated query: %w", err)
+	}
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("finding tags detail with pagination: %w", err)
@@ -1033,8 +1036,11 @@ func (s *repositoryStore) mediaTypeIds(ctx context.Context, types []string) ([]s
 	return ids, nil
 }
 
-func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (string, []any) {
-	baseQuery := `SELECT
+func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (string, []any, error) {
+	qb := NewQueryBuilder()
+
+	err := qb.Build(
+		`SELECT
 			t.name,
 			encode(m.digest, 'hex') AS digest,
 			encode(m.configuration_blob_digest, 'hex') AS config_digest,
@@ -1050,32 +1056,32 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 				AND m.id = t.manifest_id
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 		WHERE
-			t.top_level_namespace_id = $1
-			AND t.repository_id = $2`
-
-	args := []any{r.NamespaceID, r.ID}
+			t.top_level_namespace_id = ?
+			AND t.repository_id = ?
+		`,
+		r.NamespaceID, r.ID,
+	)
+	if err != nil {
+		return "", nil, err
+	}
 
 	if filters.ExactName != "" {
 		// NOTE(prozlach): In the case when there is exact match requested,
 		// there is going to be only single entry in the response, or none. So
 		// there is no point in adding pagination and sorting keywords here.
-		args = append(args, filters.ExactName)
-		baseQuery += `
-		  	AND t.name = $3`
-		return baseQuery, args
+		err := qb.Build("AND t.name = ?", filters.ExactName)
+		if err != nil {
+			return "", nil, err
+		}
+		return qb.SQL(), qb.Params(), nil
 	}
 
 	// NOTE(prozlach): We handle both cases in this path - empty and not
 	// empty `Name` filter
-	// FIXME(prozlach): the code relies on a strict number of parameters,
-	// so we need to have $3 here even when adding this condition is not
-	// necessary. The proper way to handle it is a query builder that would
-	// automatically adjusts the numbering of arguments in the query text
-	// depending on the number of parameters passed.
-	args = append(args, sqlPartialMatch(filters.Name))
-	baseQuery += `
-		  	AND t.name LIKE $3
-			%s`
+	err = qb.Build("AND t.name LIKE ?\n", sqlPartialMatch(filters.Name))
+	if err != nil {
+		return "", nil, err
+	}
 
 	// default to ascending order to keep backwards compatibility
 	if filters.SortOrder == "" {
@@ -1085,61 +1091,76 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 		filters.OrderBy = orderByName
 	}
 
-	var (
-		q       string
-		subArgs []any
-	)
-
 	switch {
 	case filters.LastEntry == "" && filters.BeforeEntry == "" && filters.PublishedAt == "":
 		// this should always return the first page up to filters.MaxEntries
-		tagFilter := fmt.Sprintf(`ORDER BY name %s LIMIT $4`, filters.SortOrder)
 		if filters.OrderBy == "published_at" {
-			tagFilter = fmt.Sprintf(`ORDER BY published_at %s, name %s LIMIT $4`, filters.SortOrder, filters.SortOrder)
+			err = qb.Build(
+				fmt.Sprintf(`ORDER BY published_at %s, name %s LIMIT ?`, filters.SortOrder, filters.SortOrder),
+				filters.MaxEntries,
+			)
+			if err != nil {
+				return "", nil, err
+			}
+		} else {
+			err = qb.Build(
+				fmt.Sprintf(`ORDER BY name %s LIMIT ?`, filters.SortOrder),
+				filters.MaxEntries,
+			)
+			if err != nil {
+				return "", nil, err
+			}
 		}
-
-		q = fmt.Sprintf(baseQuery, tagFilter)
-		subArgs = []any{filters.MaxEntries}
 	case filters.LastEntry != "":
-		q, subArgs = getLastEntryQuery(baseQuery, filters)
+		err := getLastEntryQuery(qb, filters)
+		if err != nil {
+			return "", nil, err
+		}
 	case filters.BeforeEntry != "":
-		q, subArgs = getBeforeEntryQuery(baseQuery, filters)
+		err := getBeforeEntryQuery(qb, filters)
+		if err != nil {
+			return "", nil, err
+		}
 	case filters.PublishedAt != "":
-		q, subArgs = getPublishedAtQuery(baseQuery, filters)
+		err := getPublishedAtQuery(qb, filters)
+		if err != nil {
+			return "", nil, err
+		}
 	}
 
-	args = append(args, subArgs...)
-
-	return q, args
+	return qb.SQL(), qb.Params(), nil
 }
 
-func getPublishedAtQuery(baseQuery string, filters FilterParams) (string, []any) {
-	var q string
-	var args []any
+func getPublishedAtQuery(qb *QueryBuilder, filters FilterParams) error {
+	f := func(comparisonSign, sortOrder SortOrder) string {
+		filterFmt := `AND GREATEST(t.created_at,t.updated_at) %s= ?
+		ORDER BY
+			published_at %s,
+			t.name %s
+		LIMIT ?`
 
-	var tagFilter string
+		return fmt.Sprintf(filterFmt, comparisonSign, sortOrder, sortOrder)
+	}
+
 	if filters.SortOrder == OrderDesc {
-		tagFilter = formatTagFilterWithPublishedAtWithoutName(lessThan, OrderAsc)
+		err := qb.Build(f(lessThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
+		if err != nil {
+			return err
+		}
 		// The results will be reversed, so we need to wrap the query in a
 		// SELECT statement that sorts the tags in the correct order
-		subQuery := fmt.Sprintf(baseQuery, tagFilter)
-		q = fmt.Sprintf(`SELECT * FROM (%s) AS tags ORDER BY tags.%s DESC`, subQuery, filters.OrderBy)
+		return qb.WrapIntoSubqueryOf(
+			fmt.Sprintf(`SELECT * FROM (%%s) AS tags ORDER BY tags.%s DESC`, filters.OrderBy),
+		)
 	} else {
-		tagFilter = formatTagFilterWithPublishedAtWithoutName(greaterThan, OrderAsc)
-		q = fmt.Sprintf(baseQuery, tagFilter)
+		return qb.Build(f(greaterThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
 	}
-
-	args = []any{filters.PublishedAt, filters.MaxEntries}
-
-	return q, args
 }
 
-func getLastEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
+func getLastEntryQuery(qb *QueryBuilder, filters FilterParams) error {
 	var (
 		comparisonOperator string
-		q                  string
 		orderDirection     SortOrder
-		args               []any
 	)
 
 	switch filters.SortOrder {
@@ -1151,26 +1172,24 @@ func getLastEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
 		comparisonOperator = greaterThan
 	}
 
-	tagFilter := formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection)
-	q = fmt.Sprintf(baseQuery, tagFilter)
 	if filters.PublishedAt != "" {
-		tagFilter := formatTagFilterWithPublishedAt(comparisonOperator, orderDirection)
-		q = fmt.Sprintf(baseQuery, tagFilter)
-		args = []any{filters.PublishedAt, filters.LastEntry, filters.MaxEntries}
+		return qb.Build(
+			formatTagFilterWithPublishedAt(comparisonOperator, orderDirection),
+			filters.PublishedAt, filters.LastEntry, filters.MaxEntries,
+		)
 	} else {
-		args = []any{filters.LastEntry, filters.MaxEntries}
+		return qb.Build(
+			formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection),
+			filters.LastEntry, filters.MaxEntries,
+		)
 	}
-
-	return q, args
 }
 
-func getBeforeEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
+func getBeforeEntryQuery(qb *QueryBuilder, filters FilterParams) error {
 	var (
 		comparisonOperator     string
-		q                      string
 		rootQueryOderDirection string
 		orderDirection         SortOrder
-		args                   []any
 	)
 
 	switch filters.SortOrder {
@@ -1184,51 +1203,49 @@ func getBeforeEntryQuery(baseQuery string, filters FilterParams) (string, []any)
 		rootQueryOderDirection = "ASC"
 	}
 
-	tagFilter := formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection)
 	if filters.PublishedAt != "" {
-		tagFilter = formatTagFilterWithPublishedAt(comparisonOperator, orderDirection)
-		args = append(args, filters.PublishedAt, filters.BeforeEntry, filters.MaxEntries)
+		err := qb.Build(
+			formatTagFilterWithPublishedAt(comparisonOperator, orderDirection),
+			filters.PublishedAt, filters.BeforeEntry, filters.MaxEntries,
+		)
+		if err != nil {
+			return err
+		}
 	} else {
-		args = append(args, filters.BeforeEntry, filters.MaxEntries)
+		err := qb.Build(
+			formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection),
+			filters.BeforeEntry, filters.MaxEntries,
+		)
+		if err != nil {
+			return err
+		}
 	}
 
 	// The results will be reversed, so we need to wrap the query in a
 	// SELECT statement that sorts the tags in the correct order
-	subQuery := fmt.Sprintf(baseQuery, tagFilter)
 	// if we are fetching by filters.BeforeEntry we need to sort in DESC order
-	q = fmt.Sprintf(`SElECT * FROM (%s) AS tags ORDER BY tags.%s %s`, subQuery, filters.OrderBy, rootQueryOderDirection)
-
-	return q, args
+	return qb.WrapIntoSubqueryOf(
+		fmt.Sprintf(`SElECT * FROM (%%s) AS tags ORDER BY tags.%s %s`, filters.OrderBy, rootQueryOderDirection),
+	)
 }
 
 // formatTagFilter using the base query from tagsDetailPaginatedQuery as reference
 func formatTagFilter(comparisonSign, orderBy string, sortOrder SortOrder) string {
-	filter := `AND t.name %s $4
+	filter := `AND t.name %s ?
 		ORDER BY
 			%s %s
-		LIMIT $5`
+		LIMIT ?`
 
 	return fmt.Sprintf(filter, comparisonSign, orderBy, sortOrder)
 }
 
 // formatTagFilterWithPublishedAt using the base query from tagsDetailPaginatedQuery as reference
 func formatTagFilterWithPublishedAt(comparisonSign string, sortOrder SortOrder) string {
-	filter := `AND (GREATEST(t.created_at, t.updated_at), t.name) %s ($4, $5)
+	filter := `AND (GREATEST(t.created_at, t.updated_at), t.name) %s (?, ?)
 		ORDER BY
 			published_at %s,
 			t.name %s
-		LIMIT $6`
-
-	return fmt.Sprintf(filter, comparisonSign, sortOrder, sortOrder)
-}
-
-// formatTagFilterWithPublishedAtWithoutName using the base query from tagsDetailPaginatedQuery as reference
-func formatTagFilterWithPublishedAtWithoutName(comparisonSign, sortOrder SortOrder) string {
-	filter := `AND GREATEST(t.created_at,t.updated_at) %s= $4
-		ORDER BY
-			published_at %s,
-			t.name %s
-		LIMIT $5`
+		LIMIT ?`
 
 	return fmt.Sprintf(filter, comparisonSign, sortOrder, sortOrder)
 }
