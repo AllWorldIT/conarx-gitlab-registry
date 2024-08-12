@@ -250,3 +250,36 @@ func TestSRVLookup(t *testing.T) {
 func TestHostLookup(t *testing.T) {
 	testDNSLookup(t, HostLookup, hostLookupType)
 }
+
+func testPoolOperation(t *testing.T, event string, eventFunc func()) {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbPoolEvents)
+	defer func() { lbPoolEvents.Reset() }()
+
+	eventFunc()
+	eventFunc()
+
+	tmplFormat := `
+# HELP registry_database_lb_pool_events_total A counter of replicas added or removed from the database load balancer pool.
+# TYPE registry_database_lb_pool_events_total counter
+registry_database_lb_pool_events_total{event="{{.Event}}"} 2
+`
+	tmplData := struct{ Event string }{event}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbPoolEventsName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestReplicaAdded(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaAdded, ReplicaAdded)
+}
+
+func TestReplicaRemoved(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaRemoved, ReplicaRemoved)
+}
