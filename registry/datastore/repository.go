@@ -1258,34 +1258,44 @@ func formatTagFilterWithPublishedAt(comparisonSign string, sortOrder SortOrder) 
 // The search is not filtered if this value is an empty string.
 func (s *repositoryStore) HasTagsAfterName(ctx context.Context, r *models.Repository, filters FilterParams) (bool, error) {
 	defer metrics.InstrumentQuery("repository_tags_count_after_name")()
-	q := `SELECT
+
+	qb := NewQueryBuilder()
+	err := qb.Build(`SELECT
 			1
 		FROM
 			tags
 		WHERE
-			top_level_namespace_id = $1
-			AND repository_id = $2
-			AND name LIKE $3`
+			top_level_namespace_id = ?
+			AND repository_id = ?
+			AND name LIKE ?`,
+		r.NamespaceID, r.ID, sqlPartialMatch(filters.Name),
+	)
+	if err != nil {
+		return false, err
+	}
 
 	comparison := greaterThan
 	if filters.SortOrder == OrderDesc {
 		comparison = lessThan
 	}
 
-	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
-
 	if filters.OrderBy != "published_at" {
-		q += fmt.Sprintf(`
-		AND name %s $4`, comparison)
-		args = append(args, filters.LastEntry)
+		err = qb.Build(fmt.Sprintf(`AND name %s ?`, comparison), filters.LastEntry)
+		if err != nil {
+			return false, err
+		}
 	} else {
-		q += fmt.Sprintf(`
-		AND (GREATEST(created_at, updated_at), name) %s ($4, $5)`, comparison)
-		args = append(args, filters.PublishedAt, filters.LastEntry)
+		err = qb.Build(
+			fmt.Sprintf(`AND (GREATEST(created_at, updated_at), name) %s (?, ?)`, comparison),
+			filters.PublishedAt, filters.LastEntry,
+		)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	var count int
-	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := s.db.QueryRowContext(ctx, qb.SQL(), qb.Params()...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("checking if there are more tags after name: %w", err)
 	}
 
@@ -1306,34 +1316,43 @@ func (s *repositoryStore) HasTagsBeforeName(ctx context.Context, r *models.Repos
 
 	defer metrics.InstrumentQuery("repository_tags_count_before_name")()
 
-	q := `SELECT
+	qb := NewQueryBuilder()
+	err := qb.Build(`SELECT
 			1
 		FROM
 			tags
 		WHERE
-			top_level_namespace_id = $1
-			AND repository_id = $2
-			AND name LIKE $3`
+			top_level_namespace_id = ?
+			AND repository_id = ?
+			AND name LIKE ?`,
+		r.NamespaceID, r.ID, sqlPartialMatch(filters.Name),
+	)
+	if err != nil {
+		return false, err
+	}
 
 	comparison := lessThan
 	if filters.SortOrder == OrderDesc {
 		comparison = greaterThan
 	}
 
-	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
-
 	if filters.OrderBy != "published_at" {
-		q += fmt.Sprintf(`
-		AND name %s $4`, comparison)
-		args = append(args, filters.BeforeEntry)
+		err = qb.Build(fmt.Sprintf(`AND name %s ?`, comparison), filters.BeforeEntry)
+		if err != nil {
+			return false, err
+		}
 	} else {
-		q += fmt.Sprintf(`
-		AND (GREATEST(created_at, updated_at), name) %s ($4, $5)`, comparison)
-		args = append(args, filters.PublishedAt, filters.BeforeEntry)
+		err = qb.Build(
+			fmt.Sprintf(`AND (GREATEST(created_at, updated_at), name) %s (?, ?)`, comparison),
+			filters.PublishedAt, filters.BeforeEntry,
+		)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	var count int
-	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := s.db.QueryRowContext(ctx, qb.SQL(), qb.Params()...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("checking if there are more tags before name: %w", err)
 	}
 
