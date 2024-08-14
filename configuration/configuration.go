@@ -601,6 +601,18 @@ type Health struct {
 		// unhealthy state
 		Threshold int `yaml:"threshold,omitempty"`
 	} `yaml:"storagedriver,omitempty"`
+	Database struct {
+		// Enabled turns on the health check for the storage driver
+		Enabled bool `yaml:"enabled,omitempty"`
+		// Interval is the duration in between checks
+		Interval time.Duration `yaml:"interval,omitempty"`
+		// Threshold is the number of times a check must fail to trigger an
+		// unhealthy state
+		Threshold int `yaml:"threshold,omitempty"`
+		// Timeout is the duration to wait before timing out the db query.
+		// Applies to primary/replicas individually - it is not cumultative!
+		Timeout time.Duration `yaml:"timeout,omitempty"`
+	}
 }
 
 // v0_1Configuration is a Version 0.1 Configuration struct

@@ -76,6 +76,10 @@ const randomSecretSize = 32
 // defaultCheckInterval is the default time in between health checks
 const defaultCheckInterval = 10 * time.Second
 
+// defaultDBCheckTimeout is the default timeout for DB connection checks. Chosen
+// arbitrarly
+const defaultDBCheckTimeout = 5 * time.Second
+
 // redisCacheTTL is the global expiry duration for objects cached in Redis.
 const redisCacheTTL = 6 * time.Hour
 
@@ -717,10 +721,35 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			return err
 		}
 
+		dcontext.GetLogger(app).Infof("configuring storage health check threshold=%d, interval=%s", app.Config.Health.StorageDriver.Threshold, interval.String())
 		if app.Config.Health.StorageDriver.Threshold != 0 {
 			healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
 		} else {
 			healthRegistry.RegisterPeriodicFunc("storagedriver_"+app.Config.Storage.Type(), interval, storageDriverCheck)
+		}
+	}
+
+	if app.Config.Health.Database.Enabled {
+		if !app.Config.Database.Enabled {
+			dcontext.GetLogger(app).Warn("ignoring database health checks settings as metadata database is not enabled ")
+		} else {
+			interval := app.Config.Health.Database.Interval
+			if interval == 0 {
+				interval = defaultCheckInterval
+			}
+			timeout := app.Config.Health.Database.Timeout
+			if timeout == 0 {
+				timeout = defaultDBCheckTimeout
+			}
+
+			check := checks.DBChecker(timeout, app.db)
+
+			dcontext.GetLogger(app).Infof("configuring database health checks timeout=%s, interval=%s", timeout.String(), interval.String())
+			if app.Config.Health.Database.Threshold != 0 {
+				healthRegistry.RegisterPeriodicThresholdFunc("database_connection", interval, app.Config.Health.Database.Threshold, check)
+			} else {
+				healthRegistry.RegisterPeriodicFunc("database_connection", interval, check)
+			}
 		}
 	}
 
