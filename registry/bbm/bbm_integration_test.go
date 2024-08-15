@@ -186,7 +186,6 @@ func (s *BackgroundMigrationTestSuite) TearDownSuite() {
 }
 
 func (s *BackgroundMigrationTestSuite) SetupTest() {
-
 	// wipe the database and start from a clean slate
 	_, err := s.dbMigrator.Down()
 	s.Require().NoError(err)
@@ -213,7 +212,6 @@ func (s *BackgroundMigrationTestSuite) startAsyncBBMWorker(worker *bbm.Worker) {
 }
 
 func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigration(workerCount int) {
-
 	// Expectations:
 	expectedBBM := models.BackgroundMigration{
 		ID:           1,
@@ -289,7 +287,6 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_Concurrent(
 
 // Test_AsyncBackgroundMigration_UnknownTable tests that if a background migration is introduced with an unknown table it will be marked as failed.
 func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_UnknownTable() {
-
 	// Expectations:
 	expectedBBM := models.BackgroundMigration{
 		ID:           1,
@@ -310,7 +307,6 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_UnknownTabl
 
 // Test_AsyncBackgroundMigration_UnknownColumn tests that if a background migration is introduced with an unknown column it will be marked as failed.
 func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_UnknownColumn() {
-
 	// Expectations:
 	expectedBBM := models.BackgroundMigration{
 		ID:           1,
@@ -331,7 +327,6 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_UnknownColu
 
 // Test_AsyncBackgroundMigration_JobSignatureNotFound tests that if a background migration is introduced and the job signature is not registered in the registry it will be marked as failed.
 func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobSignatureNotFound() {
-
 	// Expectations:
 	expectedBBM := models.BackgroundMigration{
 		ID:           1,
@@ -353,7 +348,6 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobSignatur
 // Test_AsyncBackgroundMigration_JobExceedsRetryAttempt_Failed tests that if a background migration is introduced and its
 // job exceeds the maximum retry-able attempts it will be marked as failed.
 func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobExceedsRetryAttempt_Failed() {
-
 	// Expectations:
 	expectedBBM := models.BackgroundMigration{
 		ID:           1,
@@ -424,7 +418,6 @@ func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigrationExpected(expe
 	// assert the background migration runs to the expected state
 	s.requireBBMEventually(expectedBBM, 30*time.Second, 100*time.Millisecond)
 	s.requireBBMJobsFinally(expectedBBM.Name, expectedBBMJobs)
-
 }
 
 // requireBBMEventually checks on every `tick` that a BBM in the database with name `bbmName` eventually matches `expectedBBM` in `waitFor` duration.
@@ -458,7 +451,6 @@ func (s *BackgroundMigrationTestSuite) requireBBMEventually(expectedBBM models.B
 				return false
 			}
 			return true
-
 		}, waitFor, tick)
 }
 
