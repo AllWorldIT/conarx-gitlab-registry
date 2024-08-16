@@ -129,7 +129,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	}
 
 	if err := app.initMetaRouter(); err != nil {
-		return nil, fmt.Errorf("initing metaRouter: %w", err)
+		return nil, fmt.Errorf("initializing metaRouter: %w", err)
 	}
 
 	storageParams := config.Storage.Parameters()
@@ -1076,7 +1076,7 @@ func (app *App) initMetaRouter() error {
 	app.router.gitlab.Use(app.gorillaLogMiddleware)
 
 	// Register the handler dispatchers.
-	app.registerDistribution(v2.RouteNameBase, func(ctx *Context, r *http.Request) http.Handler {
+	app.registerDistribution(v2.RouteNameBase, func(_ *Context, _ *http.Request) http.Handler {
 		return distributionAPIBase(app.Config.Database.Enabled)
 	})
 	app.registerDistribution(v2.RouteNameManifest, manifestDispatcher)
@@ -1623,7 +1623,7 @@ func appendRepositoryNamespaceAccessRecords(accessRecords []auth.Access, r *http
 		// Read the request body
 		buf := new(bytes.Buffer)
 
-		// Rread from r.Body and write to buf simultaneously
+		// Read from r.Body and write to buf simultaneously
 		teeReader := io.TeeReader(r.Body, buf)
 
 		// Read the body from the TeeReader
