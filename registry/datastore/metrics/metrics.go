@@ -17,6 +17,7 @@ var (
 	lbLSNCacheHits          *prometheus.CounterVec
 	lbDNSLookupDurationHist *prometheus.HistogramVec
 	lbPoolEvents            *prometheus.CounterVec
+	lbTargets               *prometheus.CounterVec
 )
 
 const (
@@ -56,6 +57,19 @@ const (
 	lbPoolEventsEventLabel     = "event"
 	lbPoolEventsReplicaAdded   = "replica_added"
 	lbPoolEventsReplicaRemoved = "replica_removed"
+
+	lbTargetsName         = "lb_targets_total"
+	lbTargetsDesc         = "A counter for primary and replica target elections during database load balancing."
+	lbTargetTypeLabel     = "target_type"
+	lbFallbackLabel       = "fallback"
+	lbPrimaryType         = "primary"
+	lbReplicaType         = "replica"
+	lbReasonLabel         = "reason"
+	lbFallbackNoCache     = "no_cache"
+	lbFallbackNoReplica   = "no_replica"
+	lbFallbackError       = "error"
+	lbFallbackNotUpToDate = "not_up_to_date"
+	lbReasonSelected      = "selected"
 )
 
 func init() {
@@ -130,6 +144,16 @@ func init() {
 		[]string{lbPoolEventsEventLabel},
 	)
 
+	lbTargets = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbTargetsName,
+			Help:      lbTargetsDesc,
+		},
+		[]string{lbTargetTypeLabel, lbFallbackLabel, lbReasonLabel},
+	)
+
 	prometheus.MustRegister(queryDurationHist)
 	prometheus.MustRegister(queryTotal)
 	prometheus.MustRegister(lbPoolSize)
@@ -137,6 +161,7 @@ func init() {
 	prometheus.MustRegister(lbLSNCacheHits)
 	prometheus.MustRegister(lbDNSLookupDurationHist)
 	prometheus.MustRegister(lbPoolEvents)
+	prometheus.MustRegister(lbTargets)
 }
 
 func InstrumentQuery(name string) func() {
@@ -208,4 +233,39 @@ func ReplicaAdded() {
 // ReplicaRemoved increments the counter for load balancing replicas removed from the pool.
 func ReplicaRemoved() {
 	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaRemoved).Inc()
+}
+
+// PrimaryTarget increments the counter for primary targets selected during load balancing.
+// This method is used when the primary is selected as the intended target, not as a fallback.
+func PrimaryTarget() {
+	lbTargets.WithLabelValues(lbPrimaryType, "false", lbReasonSelected).Inc()
+}
+
+// PrimaryFallbackNoCache increments the counter for primary targets selected during load balancing
+// as a fallback due to the absence of an LSN cache.
+func PrimaryFallbackNoCache() {
+	lbTargets.WithLabelValues(lbPrimaryType, "true", lbFallbackNoCache).Inc()
+}
+
+// PrimaryFallbackNoReplica increments the counter for primary targets selected during load balancing
+// as a fallback due to no replicas being available.
+func PrimaryFallbackNoReplica() {
+	lbTargets.WithLabelValues(lbPrimaryType, "true", lbFallbackNoReplica).Inc()
+}
+
+// PrimaryFallbackError increments the counter for primary targets selected during load balancing
+// as a fallback due to an error.
+func PrimaryFallbackError() {
+	lbTargets.WithLabelValues(lbPrimaryType, "true", lbFallbackError).Inc()
+}
+
+// PrimaryFallbackNotUpToDate increments the counter for primary targets selected during load balancing
+// as a fallback because the selected replica is not up-to-date with the primary.
+func PrimaryFallbackNotUpToDate() {
+	lbTargets.WithLabelValues(lbPrimaryType, "true", lbFallbackNotUpToDate).Inc()
+}
+
+// ReplicaTarget increments the counter for replica targets successfully selected during load balancing.
+func ReplicaTarget() {
+	lbTargets.WithLabelValues(lbReplicaType, "false", lbReasonSelected).Inc()
 }

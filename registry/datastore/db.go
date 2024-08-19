@@ -732,6 +732,7 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 
 	if lb.lsnCache == nil {
 		l.Info("no LSN cache configured, falling back to primary")
+		metrics.PrimaryFallbackNoCache()
 		return lb.primary
 	}
 
@@ -741,20 +742,22 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	// the primary database.
 	replica := lb.Replica(ctx)
 	if replica == lb.primary {
+		metrics.PrimaryFallbackNoReplica()
 		return lb.primary
 	}
-	l = l.WithFields(log.Fields{"replica": replica.Address()})
 
 	// Fetch the primary LSN from cache
 	primaryLSN, err := lb.lsnCache.GetLSN(ctx, r)
 	if err != nil {
 		l.WithError(err).Error("failed to fetch primary LSN from cache, falling back to primary")
+		metrics.PrimaryFallbackError()
 		return lb.primary
 	}
 	// If the record does not exist in cache, the replica is considered suitable
 	if primaryLSN == "" {
 		metrics.LSNCacheMiss()
 		l.Info("no primary LSN found in cache, replica is eligible")
+		metrics.ReplicaTarget()
 		return replica
 	}
 
@@ -774,14 +777,18 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	var upToDate bool
 	if err := replica.QueryRowContext(ctx, query, primaryLSN).Scan(&upToDate); err != nil {
 		l.WithError(err).Error("failed to calculate LSN diff, falling back to primary")
+		metrics.PrimaryFallbackError()
 		return lb.primary
 	}
+
 	if upToDate {
 		l.Info("replica is up-to-date")
+		metrics.ReplicaTarget()
 		return replica
 	}
 
 	l.Info("replica is not up-to-date, falling back to primary")
+	metrics.PrimaryFallbackNotUpToDate()
 	return lb.primary
 }
 
