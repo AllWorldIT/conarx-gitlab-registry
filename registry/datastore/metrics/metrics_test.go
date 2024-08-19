@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 	"text/template"
 	"time"
@@ -282,4 +283,61 @@ func TestReplicaAdded(t *testing.T) {
 
 func TestReplicaRemoved(t *testing.T) {
 	testPoolOperation(t, lbPoolEventsReplicaRemoved, ReplicaRemoved)
+}
+
+func testTarget(t *testing.T, targetType string, fallback bool, reason string, targetFunc func()) {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbTargets)
+	defer func() { lbTargets.Reset() }()
+
+	targetFunc()
+	targetFunc()
+
+	tmplFormat := `
+# HELP registry_database_lb_targets_total A counter for primary and replica target elections during database load balancing.
+# TYPE registry_database_lb_targets_total counter
+registry_database_lb_targets_total{fallback="{{.Fallback}}",reason="{{.Reason}}",target_type="{{.Type}}"} 2
+`
+	tmplData := struct {
+		Type     string
+		Fallback string
+		Reason   string
+	}{
+		Type:     targetType,
+		Fallback: strconv.FormatBool(fallback),
+		Reason:   reason,
+	}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbTargetsName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestPrimaryTarget(t *testing.T) {
+	testTarget(t, lbPrimaryType, false, lbReasonSelected, PrimaryTarget)
+}
+
+func TestPrimaryFallbackNoCache(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackNoCache, PrimaryFallbackNoCache)
+}
+
+func TestPrimaryFallbackNoReplica(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackNoReplica, PrimaryFallbackNoReplica)
+}
+
+func TestPrimaryFallbackError(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackError, PrimaryFallbackError)
+}
+
+func TestPrimaryFallbackNotUpToDate(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackNotUpToDate, PrimaryFallbackNotUpToDate)
+}
+
+func TestReplicaTarget(t *testing.T) {
+	testTarget(t, lbReplicaType, false, lbReasonSelected, ReplicaTarget)
 }
