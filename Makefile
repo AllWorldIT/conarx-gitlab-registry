@@ -52,6 +52,10 @@ lint: ## run golangci-lint, with defaults
 	@echo "$(WHALE) $@"
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_VERSION} run
 
+lint-docs: ## run golangci-lint, with defaults
+	@echo "$(WHALE) $@"
+	@script/lint-docs.sh
+
 test: ## run tests, except integration test with test.short
 	@echo "$(WHALE) $@"
 	@go test ${GO_TAGS} -test.short ${TESTFLAGS} $(filter-out ${INTEGRATION_PACKAGE},${PACKAGES})

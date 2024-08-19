@@ -30,6 +30,17 @@ semgrep-sast:
   before_script:
     - echo ".GOPATH/" > .semgrepignore
 
+# Perform documentation linting and link checking on Markdown files
+docslint:
+  image: registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.20-vale-3.6.1-markdownlint2-0.13.0-lychee-0.15.1
+  stage: validate
+  needs: []
+  script:
+    # Lint content and Markdown, and check links
+    - make lint-docs
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+
 commitlint:
   cache: {}
   image: node:lts-alpine
