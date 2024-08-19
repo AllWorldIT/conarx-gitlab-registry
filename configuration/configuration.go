@@ -602,7 +602,7 @@ type Health struct {
 		Threshold int `yaml:"threshold,omitempty"`
 	} `yaml:"storagedriver,omitempty"`
 	Database struct {
-		// Enabled turns on the health check for the storage driver
+		// Enabled turns on the health check for the database
 		Enabled bool `yaml:"enabled,omitempty"`
 		// Interval is the duration in between checks
 		Interval time.Duration `yaml:"interval,omitempty"`
