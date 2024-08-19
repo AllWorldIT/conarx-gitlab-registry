@@ -76,14 +76,16 @@ func TCPChecker(addr string, timeout time.Duration) health.Checker {
 	})
 }
 
-func DBChecker(timeout time.Duration, db datastore.LoadBalancer) health.CheckFunc {
-	q := `SELECT EXISTS (
+func DBChecker(timeout time.Duration, db datastore.LoadBalancer, dbName string) health.CheckFunc {
+	q := fmt.Sprintf(`SELECT EXISTS (
 				SELECT
 					1
 				FROM
 					pg_stat_database
+				WHERE
+					datname = '%s'
 				LIMIT 1
-			)`
+			)`, dbName)
 
 	// NOTE(prozlach): We cant register replicas and the primary individually,
 	// as they may change in time and we would need to be able to de-register

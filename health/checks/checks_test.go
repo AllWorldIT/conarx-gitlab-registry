@@ -2,6 +2,7 @@ package checks
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,6 +34,8 @@ func TestHTTPChecker(t *testing.T) {
 }
 
 func TestDBChecker(t *testing.T) {
+	dbName := "cr_db"
+
 	setupMocks := func(
 		t *testing.T,
 		primaryQueryMatcherF func(*sqlmock.ExpectedQuery),
@@ -40,7 +43,7 @@ func TestDBChecker(t *testing.T) {
 	) (
 		*mocks.MockLoadBalancer, sqlmock.Sqlmock, []sqlmock.Sqlmock, func(),
 	) {
-		query := `SELECT(.+)EXISTS(.+)\((.+)SELECT(.+)1(.+)FROM(.+)pg_stat_database(.+)LIMIT(.+)1(.+)\)`
+		query := fmt.Sprintf(`SELECT(.+)EXISTS(.+)\((.+)SELECT(.+)1(.+)FROM(.+)pg_stat_database(.+)WHERE(.+)datname(.+)=(.+)'%s'(.+)LIMIT(.+)1(.+)\)`, dbName)
 
 		ctrl := gomock.NewController(t)
 
@@ -98,7 +101,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer)
+		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message
@@ -133,7 +136,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer)
+		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message
@@ -168,7 +171,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer)
+		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message
@@ -204,7 +207,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer)
+		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message
@@ -240,7 +243,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer)
+		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message

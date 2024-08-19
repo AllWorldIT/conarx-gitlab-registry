@@ -742,7 +742,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 				timeout = defaultDBCheckTimeout
 			}
 
-			check := checks.DBChecker(timeout, app.db)
+			check := checks.DBChecker(timeout, app.db, app.Config.Database.DBName)
 
 			dcontext.GetLogger(app).Infof("configuring database health checks timeout=%s, interval=%s", timeout.String(), interval.String())
 			if app.Config.Health.Database.Threshold != 0 {
