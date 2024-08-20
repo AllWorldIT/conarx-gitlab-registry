@@ -30,7 +30,6 @@ import (
 	"github.com/docker/distribution/health"
 	"github.com/docker/distribution/health/checks"
 	"github.com/docker/distribution/internal/feature"
-	"github.com/docker/distribution/log"
 	dlog "github.com/docker/distribution/log"
 	prometheus "github.com/docker/distribution/metrics"
 	"github.com/docker/distribution/notifications"
@@ -725,7 +724,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 		}
 
 		logger.WithFields(
-			log.Fields{
+			dlog.Fields{
 				"threshold":  app.Config.Health.StorageDriver.Threshold,
 				"interval_s": interval.Seconds(),
 			},
@@ -753,7 +752,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			check := checks.DBChecker(app.Context, timeout, app.db)
 
 			logger.WithFields(
-				log.Fields{
+				dlog.Fields{
 					"timeout":    timeout.String(),
 					"interval_s": interval.Seconds(),
 				},
