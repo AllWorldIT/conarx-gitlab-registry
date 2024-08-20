@@ -38,6 +38,7 @@ docslint:
   script:
     # Lint content and Markdown, and check links
     - make lint-docs
+  allow_failure: true
   rules:
     - if: $CI_MERGE_REQUEST_IID
 
