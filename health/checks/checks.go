@@ -94,8 +94,6 @@ func DBChecker(ctx context.Context, timeout time.Duration, db datastore.LoadBala
 		}
 
 		dbs := []*datastore.DB{db.Primary()}
-		// NOTE(prozlach): Should we keep checking replicas status in the
-		// healthchecks?
 		dbs = append(dbs, db.Replicas()...)
 
 		var errs *multierror.Error

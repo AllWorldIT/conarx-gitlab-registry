@@ -722,12 +722,12 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			return err
 		}
 
-		dcontext.GetLogger(app).WithFields(
+		log.WithFields(
 			log.Fields{
 				"threshold": app.Config.Health.StorageDriver.Threshold,
-				"interval":  interval.String(),
+				"interval_s":  interval.Seconds(),
 			},
-		).Infof("configuring storage health check")
+		).Info("configuring storage health check")
 		if app.Config.Health.StorageDriver.Threshold != 0 {
 			healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
 		} else {
@@ -737,7 +737,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 	if app.Config.Health.Database.Enabled {
 		if !app.Config.Database.Enabled {
-			dcontext.GetLogger(app).Warn("ignoring database health checks settings as metadata database is not enabled ")
+			log.Warn("ignoring database health checks settings as metadata database is not enabled")
 		} else {
 			interval := app.Config.Health.Database.Interval
 			if interval == 0 {
@@ -750,12 +750,12 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 			check := checks.DBChecker(app.Context, timeout, app.db)
 
-			dcontext.GetLogger(app).WithFields(
+			log.WithFields(
 				log.Fields{
 					"timeout":  timeout.String(),
-					"interval": interval.String(),
+					"interval_s": interval.Seconds(),
 				},
-			).Infof("configuring database health check")
+			).Info("configuring database health check")
 			if app.Config.Health.Database.Threshold != 0 {
 				healthRegistry.RegisterPeriodicThresholdFunc("database_connection", interval, app.Config.Health.Database.Threshold, check)
 			} else {

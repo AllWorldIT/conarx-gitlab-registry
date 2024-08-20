@@ -148,7 +148,7 @@ func TestDBChecker(t *testing.T) {
 		}
 	})
 
-	t.Run("primary succeds replica fails", func(t *testing.T) {
+	t.Run("primary succeeds replica fails", func(t *testing.T) {
 		t.Parallel()
 
 		ctx, cancelF := context.WithCancel(context.Background())
@@ -184,7 +184,7 @@ func TestDBChecker(t *testing.T) {
 		}
 	})
 
-	t.Run("primary fails due to timeout, replicas succed", func(t *testing.T) {
+	t.Run("primary fails due to timeout, replicas succeed", func(t *testing.T) {
 		t.Parallel()
 
 		ctx, cancelF := context.WithCancel(context.Background())
