@@ -700,6 +700,8 @@ func startDBReplicaChecking(ctx context.Context, lb *datastore.DBLoadBalancer) {
 // implementing this properly will require a refactor. This method may panic
 // if called twice in the same process.
 func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error {
+	logger := dcontext.GetLogger(app)
+
 	if len(healthRegistries) > 1 {
 		return fmt.Errorf("RegisterHealthChecks called with more than one registry")
 	}
@@ -722,10 +724,10 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			return err
 		}
 
-		log.WithFields(
+		logger.WithFields(
 			log.Fields{
-				"threshold": app.Config.Health.StorageDriver.Threshold,
-				"interval_s":  interval.Seconds(),
+				"threshold":  app.Config.Health.StorageDriver.Threshold,
+				"interval_s": interval.Seconds(),
 			},
 		).Info("configuring storage health check")
 		if app.Config.Health.StorageDriver.Threshold != 0 {
@@ -737,7 +739,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 	if app.Config.Health.Database.Enabled {
 		if !app.Config.Database.Enabled {
-			log.Warn("ignoring database health checks settings as metadata database is not enabled")
+			logger.Warn("ignoring database health checks settings as metadata database is not enabled")
 		} else {
 			interval := app.Config.Health.Database.Interval
 			if interval == 0 {
@@ -750,9 +752,9 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 			check := checks.DBChecker(app.Context, timeout, app.db)
 
-			log.WithFields(
+			logger.WithFields(
 				log.Fields{
-					"timeout":  timeout.String(),
+					"timeout":    timeout.String(),
 					"interval_s": interval.Seconds(),
 				},
 			).Info("configuring database health check")
