@@ -748,7 +748,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 				timeout = defaultDBCheckTimeout
 			}
 
-			check := checks.DBChecker(app.Context, timeout, app.db, app.Config.Database.DBName)
+			check := checks.DBChecker(app.Context, timeout, app.db)
 
 			dcontext.GetLogger(app).WithFields(
 				log.Fields{
