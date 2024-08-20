@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -81,6 +82,9 @@ func TestDBChecker(t *testing.T) {
 	t.Run("both primary and replicas succeed", func(t *testing.T) {
 		t.Parallel()
 
+		ctx, cancelF := context.WithCancel(context.Background())
+		defer cancelF()
+
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
 			func(eq *sqlmock.ExpectedQuery) {
@@ -101,7 +105,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message
@@ -116,6 +120,9 @@ func TestDBChecker(t *testing.T) {
 
 	t.Run("primary fails replicas succeed", func(t *testing.T) {
 		t.Parallel()
+
+		ctx, cancelF := context.WithCancel(context.Background())
+		defer cancelF()
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
@@ -136,7 +143,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message
@@ -151,6 +158,9 @@ func TestDBChecker(t *testing.T) {
 
 	t.Run("primary succeds replica fails", func(t *testing.T) {
 		t.Parallel()
+
+		ctx, cancelF := context.WithCancel(context.Background())
+		defer cancelF()
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
@@ -171,7 +181,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message
@@ -186,6 +196,9 @@ func TestDBChecker(t *testing.T) {
 
 	t.Run("primary fails due to no access to schema replicas succeed", func(t *testing.T) {
 		t.Parallel()
+
+		ctx, cancelF := context.WithCancel(context.Background())
+		defer cancelF()
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
@@ -207,7 +220,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message
@@ -222,6 +235,9 @@ func TestDBChecker(t *testing.T) {
 
 	t.Run("replica fails due to no access to schema replicas succeed", func(t *testing.T) {
 		t.Parallel()
+
+		ctx, cancelF := context.WithCancel(context.Background())
+		defer cancelF()
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
@@ -243,7 +259,7 @@ func TestDBChecker(t *testing.T) {
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
 		err := checkFunc()
 
 		// Verify error message

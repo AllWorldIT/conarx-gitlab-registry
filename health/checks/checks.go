@@ -76,7 +76,7 @@ func TCPChecker(addr string, timeout time.Duration) health.Checker {
 	})
 }
 
-func DBChecker(timeout time.Duration, db datastore.LoadBalancer, dbName string) health.CheckFunc {
+func DBChecker(ctx context.Context, timeout time.Duration, db datastore.LoadBalancer, dbName string) health.CheckFunc {
 	q := fmt.Sprintf(`SELECT EXISTS (
 				SELECT
 					1
@@ -95,7 +95,7 @@ func DBChecker(timeout time.Duration, db datastore.LoadBalancer, dbName string) 
 		f := func(db *datastore.DB) error {
 			var ok bool
 
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			ctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 
 			err := db.QueryRowContext(ctx, q).Scan(&ok)
