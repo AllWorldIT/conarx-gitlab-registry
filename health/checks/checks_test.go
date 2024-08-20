@@ -34,7 +34,7 @@ func TestHTTPChecker(t *testing.T) {
 }
 
 func TestDBChecker(t *testing.T) {
-	checkTimeout := 500 * time.Millisecond
+	checkTimeout := 200 * time.Millisecond
 
 	setupMocks := func(
 		t *testing.T,
@@ -193,7 +193,7 @@ func TestDBChecker(t *testing.T) {
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
 			func(eq *sqlmock.ExpectedPing) {
-				eq.WillDelayFor(checkTimeout + 500*time.Millisecond).WillReturnError(nil)
+				eq.WillDelayFor(checkTimeout + 100*time.Millisecond).WillReturnError(nil)
 			},
 			[]func(*sqlmock.ExpectedPing){
 				func(eq *sqlmock.ExpectedPing) {
@@ -233,7 +233,7 @@ func TestDBChecker(t *testing.T) {
 			},
 			[]func(*sqlmock.ExpectedPing){
 				func(eq *sqlmock.ExpectedPing) {
-					eq.WillDelayFor(checkTimeout + 500*time.Millisecond).WillReturnError(nil)
+					eq.WillDelayFor(checkTimeout + 100*time.Millisecond).WillReturnError(nil)
 				},
 				func(eq *sqlmock.ExpectedPing) {
 					eq.WillReturnError(nil)
