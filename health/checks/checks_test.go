@@ -3,7 +3,6 @@ package checks
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -35,37 +34,35 @@ func TestHTTPChecker(t *testing.T) {
 }
 
 func TestDBChecker(t *testing.T) {
-	dbName := "cr_db"
+	checkTimeout := 500 * time.Millisecond
 
 	setupMocks := func(
 		t *testing.T,
-		primaryQueryMatcherF func(*sqlmock.ExpectedQuery),
-		replicaQueryMatcherFs []func(*sqlmock.ExpectedQuery),
+		primaryQueryMatcherF func(*sqlmock.ExpectedPing),
+		replicaQueryMatcherFs []func(*sqlmock.ExpectedPing),
 	) (
 		*mocks.MockLoadBalancer, sqlmock.Sqlmock, []sqlmock.Sqlmock, func(),
 	) {
-		query := fmt.Sprintf(`SELECT(.+)EXISTS(.+)\((.+)SELECT(.+)1(.+)FROM(.+)pg_stat_database(.+)WHERE(.+)datname(.+)=(.+)'%s'(.+)LIMIT(.+)1(.+)\)`, dbName)
-
 		ctrl := gomock.NewController(t)
 
 		// Mock LoadBalancer
 		loadBalancer := mocks.NewMockLoadBalancer(ctrl)
 
 		// Mock primary
-		primaryMockDB, primaryMock, err := sqlmock.New()
+		primaryMockDB, primaryMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 		require.NoError(t, err)
 		loadBalancer.EXPECT().Primary().Return(&datastore.DB{DB: primaryMockDB})
-		primaryQueryMatcherF(primaryMock.ExpectQuery(query))
+		primaryQueryMatcherF(primaryMock.ExpectPing())
 
 		// Mock replicas
 		replicaMocks := make([]sqlmock.Sqlmock, len(replicaQueryMatcherFs))
 		replicaMockDBs := make([]*datastore.DB, len(replicaQueryMatcherFs))
 		for i := range replicaQueryMatcherFs {
-			replicaMockDB, replicaMock, err := sqlmock.New()
+			replicaMockDB, replicaMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 			require.NoError(t, err)
 
 			replicaMocks[i] = replicaMock
-			replicaQueryMatcherFs[i](replicaMock.ExpectQuery(query))
+			replicaQueryMatcherFs[i](replicaMock.ExpectPing())
 			replicaMockDBs[i] = &datastore.DB{DB: replicaMockDB}
 		}
 		loadBalancer.EXPECT().Replicas().Return(replicaMockDBs)
@@ -87,25 +84,22 @@ func TestDBChecker(t *testing.T) {
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
-			func(eq *sqlmock.ExpectedQuery) {
-				rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-				eq.WillReturnRows(rows)
+			func(eq *sqlmock.ExpectedPing) {
+				eq.WillReturnError(nil)
 			},
-			[]func(*sqlmock.ExpectedQuery){
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-					eq.WillReturnRows(rows)
+			[]func(*sqlmock.ExpectedPing){
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillReturnError(nil)
 				},
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-					eq.WillReturnRows(rows)
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillReturnError(nil)
 				},
 			},
 		)
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, checkTimeout, loadBalancer)
 		err := checkFunc()
 
 		// Verify error message
@@ -126,24 +120,22 @@ func TestDBChecker(t *testing.T) {
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
-			func(eq *sqlmock.ExpectedQuery) {
+			func(eq *sqlmock.ExpectedPing) {
 				eq.WillReturnError(errors.New("Maryna is Boryna"))
 			},
-			[]func(*sqlmock.ExpectedQuery){
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-					eq.WillReturnRows(rows)
+			[]func(*sqlmock.ExpectedPing){
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillReturnError(nil)
 				},
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-					eq.WillReturnRows(rows)
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillReturnError(nil)
 				},
 			},
 		)
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, checkTimeout, loadBalancer)
 		err := checkFunc()
 
 		// Verify error message
@@ -164,24 +156,22 @@ func TestDBChecker(t *testing.T) {
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
-			func(eq *sqlmock.ExpectedQuery) {
-				rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-				eq.WillReturnRows(rows)
+			func(eq *sqlmock.ExpectedPing) {
+				eq.WillReturnError(nil)
 			},
-			[]func(*sqlmock.ExpectedQuery){
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-					eq.WillReturnRows(rows)
-				},
-				func(eq *sqlmock.ExpectedQuery) {
+			[]func(*sqlmock.ExpectedPing){
+				func(eq *sqlmock.ExpectedPing) {
 					eq.WillReturnError(errors.New("Maryna is Boryna"))
+				},
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillReturnError(nil)
 				},
 			},
 		)
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, checkTimeout, loadBalancer)
 		err := checkFunc()
 
 		// Verify error message
@@ -194,7 +184,7 @@ func TestDBChecker(t *testing.T) {
 		}
 	})
 
-	t.Run("primary fails due to no access to schema replicas succeed", func(t *testing.T) {
+	t.Run("primary fails due to timeout, replicas succed", func(t *testing.T) {
 		t.Parallel()
 
 		ctx, cancelF := context.WithCancel(context.Background())
@@ -202,29 +192,26 @@ func TestDBChecker(t *testing.T) {
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
-			func(eq *sqlmock.ExpectedQuery) {
-				rows := sqlmock.NewRows([]string{"exists"}).AddRow(false)
-				eq.WillReturnRows(rows)
+			func(eq *sqlmock.ExpectedPing) {
+				eq.WillDelayFor(checkTimeout + 500*time.Millisecond).WillReturnError(nil)
 			},
-			[]func(*sqlmock.ExpectedQuery){
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-					eq.WillReturnRows(rows)
+			[]func(*sqlmock.ExpectedPing){
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillReturnError(nil)
 				},
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-					eq.WillReturnRows(rows)
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillReturnError(nil)
 				},
 			},
 		)
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, checkTimeout, loadBalancer)
 		err := checkFunc()
 
 		// Verify error message
-		require.ErrorContains(t, err, "cannot access database schema")
+		require.ErrorContains(t, err, "canceling query due to user request")
 
 		// Verify DB mock expectations
 		require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -233,7 +220,7 @@ func TestDBChecker(t *testing.T) {
 		}
 	})
 
-	t.Run("replica fails due to no access to schema replicas succeed", func(t *testing.T) {
+	t.Run("replica fails due to timeout, primary succeeds", func(t *testing.T) {
 		t.Parallel()
 
 		ctx, cancelF := context.WithCancel(context.Background())
@@ -241,29 +228,26 @@ func TestDBChecker(t *testing.T) {
 
 		loadBalancer, primaryMock, replicaMocks, doneF := setupMocks(
 			t,
-			func(eq *sqlmock.ExpectedQuery) {
-				rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-				eq.WillReturnRows(rows)
+			func(eq *sqlmock.ExpectedPing) {
+				eq.WillReturnError(nil)
 			},
-			[]func(*sqlmock.ExpectedQuery){
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(false)
-					eq.WillReturnRows(rows)
+			[]func(*sqlmock.ExpectedPing){
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillDelayFor(checkTimeout + 500*time.Millisecond).WillReturnError(nil)
 				},
-				func(eq *sqlmock.ExpectedQuery) {
-					rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-					eq.WillReturnRows(rows)
+				func(eq *sqlmock.ExpectedPing) {
+					eq.WillReturnError(nil)
 				},
 			},
 		)
 		defer doneF()
 
 		// Run the DBChecker
-		checkFunc := DBChecker(ctx, 2*time.Second, loadBalancer, dbName)
+		checkFunc := DBChecker(ctx, checkTimeout, loadBalancer)
 		err := checkFunc()
 
 		// Verify error message
-		require.ErrorContains(t, err, "cannot access database schema")
+		require.ErrorContains(t, err, "canceling query due to user request")
 
 		// Verify DB mock expectations
 		require.NoError(t, primaryMock.ExpectationsWereMet())
