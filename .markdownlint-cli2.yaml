@@ -163,7 +163,4 @@ config:
       "YouTrack"
     ]
 customRules:
-  - "./docs/.markdownlint/rules/tabs_blank_lines.js"
-  - "./docs/.markdownlint/rules/tabs_title_markup.js"
-  - "./docs/.markdownlint/rules/tabs_title_text.js"
   - "./docs/.markdownlint/rules/tabs_wrapper_tags.js"
