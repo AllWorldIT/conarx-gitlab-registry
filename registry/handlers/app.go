@@ -30,6 +30,7 @@ import (
 	"github.com/docker/distribution/health"
 	"github.com/docker/distribution/health/checks"
 	"github.com/docker/distribution/internal/feature"
+	"github.com/docker/distribution/log"
 	dlog "github.com/docker/distribution/log"
 	prometheus "github.com/docker/distribution/metrics"
 	"github.com/docker/distribution/notifications"
@@ -721,7 +722,12 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			return err
 		}
 
-		dcontext.GetLogger(app).Infof("configuring storage health check threshold=%d, interval=%s", app.Config.Health.StorageDriver.Threshold, interval.String())
+		dcontext.GetLogger(app).WithFields(
+			log.Fields{
+				"threshold": app.Config.Health.StorageDriver.Threshold,
+				"interval":  interval.String(),
+			},
+		).Infof("configuring storage health check")
 		if app.Config.Health.StorageDriver.Threshold != 0 {
 			healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
 		} else {
@@ -744,7 +750,12 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 			check := checks.DBChecker(timeout, app.db, app.Config.Database.DBName)
 
-			dcontext.GetLogger(app).Infof("configuring database health checks timeout=%s, interval=%s", timeout.String(), interval.String())
+			dcontext.GetLogger(app).WithFields(
+				log.Fields{
+					"timeout":  timeout.String(),
+					"interval": interval.String(),
+				},
+			).Infof("configuring database health check")
 			if app.Config.Health.Database.Threshold != 0 {
 				healthRegistry.RegisterPeriodicThresholdFunc("database_connection", interval, app.Config.Health.Database.Threshold, check)
 			} else {
