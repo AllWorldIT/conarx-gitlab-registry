@@ -110,7 +110,6 @@ func TestDSN_Address(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithFixedHosts(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -185,7 +184,6 @@ func TestNewDBLoadBalancer_WithFixedHosts(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -279,7 +277,6 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithServiceDiscovery(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -372,7 +369,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithServiceDiscovery_SRVLookupError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -414,7 +410,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_SRVLookupError(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithServiceDiscovery_HostLookupError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -463,7 +458,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_HostLookupError(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -616,7 +610,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithoutOptions(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -648,7 +641,6 @@ func TestNewDBLoadBalancer_WithoutOptions(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithBothHostsAndDiscoveryOptions(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -744,7 +736,6 @@ func TestNewDBLoadBalancer_WithBothHostsAndDiscoveryOptions(t *testing.T) {
 
 func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -873,7 +864,6 @@ func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 
 func TestDBLoadBalancer_ResolveReplicas_PartialFail(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -972,7 +962,6 @@ func TestDBLoadBalancer_ResolveReplicas_PartialFail(t *testing.T) {
 
 func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -1070,7 +1059,6 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 
 func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -1206,7 +1194,6 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 
 func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -1285,7 +1272,6 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 
 func TestDBLoadBalancer_StartReplicaChecking_NoServiceDiscovery(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -1344,7 +1330,6 @@ func TestDBLoadBalancer_StartReplicaChecking_NoServiceDiscovery(t *testing.T) {
 func TestDBLoadBalancer_RecordLSN(t *testing.T) {
 	// Setup primary and replica DB mocks
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -1396,7 +1381,6 @@ func TestDBLoadBalancer_RecordLSN(t *testing.T) {
 func TestDBLoadBalancer_RecordLSN_QueryError(t *testing.T) {
 	// Setup primary and replica DB mocks
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -1446,7 +1430,6 @@ func TestDBLoadBalancer_RecordLSN_QueryError(t *testing.T) {
 func TestDBLoadBalancer_RecordLSN_StoreSetError(t *testing.T) {
 	// Setup primary and replica DB mocks
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -1512,7 +1495,6 @@ func expectSingleRowQuery(db sqlmock.Sqlmock, query string, column string, value
 
 func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
