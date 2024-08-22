@@ -41,7 +41,7 @@ BINARIES=$(addprefix bin/,$(COMMANDS))
 TESTFLAGS ?= -v $(TESTFLAGS_RACE)
 TESTFLAGS_PARALLEL ?= 8
 
-.PHONY: all build binaries check clean test test-race test-full integration coverage dev-tools release-dry-run release
+.PHONY: all build binaries check clean test test-race test-full integration coverage dev-tools release-tools release-dry-run release
 .DEFAULT: all
 
 all: binaries
@@ -100,16 +100,17 @@ db-new-migration:
 db-structure-dump:
 	@./script/dev/db-structure-dump
 
-dev-tools:
+release-tools:
 	npm install -g \
-		@commitlint/cli@17 \
-		@commitlint/config-conventional@17 \
-		semantic-release@21 \
-		@semantic-release/commit-analyzer@10 \
-		@semantic-release/release-notes-generator@11 \
-		@semantic-release/changelog@6 \
-		@semantic-release/git@10 \
-		conventional-changelog-conventionalcommits@6
+			@commitlint/cli@17 \
+			@commitlint/config-conventional@17 \
+			semantic-release@21 \
+			@semantic-release/commit-analyzer@10 \
+			@semantic-release/release-notes-generator@11 \
+			@semantic-release/changelog@6 \
+			@semantic-release/git@10 \
+			conventional-changelog-conventionalcommits@6
+dev-tools: release-tools
 	go install go.uber.org/mock/mockgen@v0.4.0
 
 # https://github.com/semantic-release/git#environment-variables
