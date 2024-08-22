@@ -76,6 +76,10 @@ const randomSecretSize = 32
 // defaultCheckInterval is the default time in between health checks
 const defaultCheckInterval = 10 * time.Second
 
+// defaultDBCheckTimeout is the default timeout for DB connection checks. Chosen
+// arbitrarly
+const defaultDBCheckTimeout = 5 * time.Second
+
 // redisCacheTTL is the global expiry duration for objects cached in Redis.
 const redisCacheTTL = 6 * time.Hour
 
@@ -695,6 +699,8 @@ func startDBReplicaChecking(ctx context.Context, lb *datastore.DBLoadBalancer) {
 // implementing this properly will require a refactor. This method may panic
 // if called twice in the same process.
 func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error {
+	logger := dcontext.GetLogger(app)
+
 	if len(healthRegistries) > 1 {
 		return fmt.Errorf("RegisterHealthChecks called with more than one registry")
 	}
@@ -717,10 +723,45 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			return err
 		}
 
+		logger.WithFields(
+			dlog.Fields{
+				"threshold":  app.Config.Health.StorageDriver.Threshold,
+				"interval_s": interval.Seconds(),
+			},
+		).Info("configuring storage health check")
 		if app.Config.Health.StorageDriver.Threshold != 0 {
 			healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
 		} else {
 			healthRegistry.RegisterPeriodicFunc("storagedriver_"+app.Config.Storage.Type(), interval, storageDriverCheck)
+		}
+	}
+
+	if app.Config.Health.Database.Enabled {
+		if !app.Config.Database.Enabled {
+			logger.Warn("ignoring database health checks settings as metadata database is not enabled")
+		} else {
+			interval := app.Config.Health.Database.Interval
+			if interval == 0 {
+				interval = defaultCheckInterval
+			}
+			timeout := app.Config.Health.Database.Timeout
+			if timeout == 0 {
+				timeout = defaultDBCheckTimeout
+			}
+
+			check := checks.DBChecker(app.Context, timeout, app.db)
+
+			logger.WithFields(
+				dlog.Fields{
+					"timeout":    timeout.String(),
+					"interval_s": interval.Seconds(),
+				},
+			).Info("configuring database health check")
+			if app.Config.Health.Database.Threshold != 0 {
+				healthRegistry.RegisterPeriodicThresholdFunc("database_connection", interval, app.Config.Health.Database.Threshold, check)
+			} else {
+				healthRegistry.RegisterPeriodicFunc("database_connection", interval, check)
+			}
 		}
 	}
 
