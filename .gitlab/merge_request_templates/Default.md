@@ -8,7 +8,7 @@ Related to <!-- add the issue URL here -->
 
 ## Author checklist
 
-- [Feature flags](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/feature-flags.md)
+- [Feature flags](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/feature-flags.md)
     - [ ] Added feature flag: <!-- Add the Feature flag tracking issue link here -->
     - [ ] This feature does not require a feature flag
 - [ ] I added unit tests or they are not required

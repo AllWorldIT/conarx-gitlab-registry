@@ -177,6 +177,57 @@ database:api-fault-tolerance:
       alias: "toxiproxy"
   script: $GO_TEST -v -coverprofile=coverage.out -tags=$TAGS -run ^TestDBFaultTolerance
 
+.database-load-balancing: &database-load-balancing
+  <<: *database
+  variables: &database-load-balancing-variables
+    <<: *database-variables
+    POSTGRESQL_PASSWORD: "secret"
+    POSTGRESQL_DATABASE: "registry_test"
+    POSTGRESQL_REPLICATION_USER: "repluser"
+    POSTGRESQL_REPLICATION_PASSWORD: "replpassword"
+    REGISTRY_DATABASE_HOST: "primary"
+    REGISTRY_DATABASE_LOADBALANCING_ENABLED: "true"
+    PACKAGE: "github.com/docker/distribution/registry/handlers"
+    TAGS: "integration,handlers_test,api_gitlab_test,api_conformance_test"
+  services:
+    - name: bitnami/postgresql:${PG_VERSION}
+      alias: "primary"
+      variables:
+        POSTGRESQL_REPLICATION_MODE: "master"
+    - name: bitnami/postgresql:${PG_VERSION}
+      alias: "replica1"
+      variables:
+        POSTGRESQL_REPLICATION_MODE: "slave"
+        POSTGRESQL_MASTER_HOST: "primary"
+    - name: bitnami/postgresql:${PG_VERSION}
+      alias: "replica2"
+      variables:
+        POSTGRESQL_REPLICATION_MODE: "slave"
+        POSTGRESQL_MASTER_HOST: "primary"
+    # not needed for all scenarios but avoids having to declare all services in each as `services` can't be extended
+    - name: registry.gitlab.com/gitlab-org/container-registry/test-dns-server:28d4a455
+      alias: "test-dns-server"
+      variables:
+        DNS_SERVER_SRV_RECORD: "replica.registry-db.service.consul"
+        DNS_SERVER_REPLY_HOSTS: "replica1,replica2"
+        DNS_SERVER_REPLY_PORT: "5432"
+        DNS_SERVER_LISTEN_PORT: "8600"
+  script: $GO_TEST -v -timeout=25m -coverprofile=coverage.out -tags=$TAGS
+
+database:api-load-balancing-hosts:
+  <<: *database-load-balancing
+  variables:
+    <<: *database-load-balancing-variables
+    REGISTRY_DATABASE_LOADBALANCING_HOSTS: "replica1,replica2"
+
+database:api-load-balancing-discovery:
+  <<: *database-load-balancing
+  variables:
+    <<: *database-load-balancing-variables
+    REGISTRY_DATABASE_LOADBALANCING_RECORD: "replica.registry-db.service.consul"
+    REGISTRY_DATABASE_LOADBALANCING_NAMESERVER: "test-dns-server"
+    REGISTRY_DATABASE_LOADBALANCING_PORT: "8600"
+
 .cache:redis: &cache-redis
   extends: .go-version-matrix
   stage: integration

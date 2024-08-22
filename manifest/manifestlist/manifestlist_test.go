@@ -253,7 +253,7 @@ func TestOCIImageIndex(t *testing.T) {
 	}
 }
 
-func mediaTypeTest(t *testing.T, contentType string, mediaType string, shouldError bool) {
+func mediaTypeTest(t *testing.T, contentType, mediaType string, shouldError bool) {
 	var m *DeserializedManifestList
 	if contentType == MediaTypeManifestList {
 		_, m = makeTestManifestList(t, mediaType)

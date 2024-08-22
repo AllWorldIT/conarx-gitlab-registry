@@ -143,7 +143,6 @@ func pathFor(spec pathSpec) (string, error) {
 			name:     v.name,
 			revision: v.revision,
 		})
-
 		if err != nil {
 			return "", err
 		}
@@ -155,7 +154,6 @@ func pathFor(spec pathSpec) (string, error) {
 		root, err := pathFor(manifestTagsPathSpec{
 			name: v.name,
 		})
-
 		if err != nil {
 			return "", err
 		}
@@ -166,7 +164,6 @@ func pathFor(spec pathSpec) (string, error) {
 			name: v.name,
 			tag:  v.tag,
 		})
-
 		if err != nil {
 			return "", err
 		}
@@ -177,7 +174,6 @@ func pathFor(spec pathSpec) (string, error) {
 			name: v.name,
 			tag:  v.tag,
 		})
-
 		if err != nil {
 			return "", err
 		}
@@ -189,7 +185,6 @@ func pathFor(spec pathSpec) (string, error) {
 			tag:      v.tag,
 			revision: v.revision,
 		})
-
 		if err != nil {
 			return "", err
 		}
@@ -200,7 +195,6 @@ func pathFor(spec pathSpec) (string, error) {
 			name: v.name,
 			tag:  v.tag,
 		})
-
 		if err != nil {
 			return "", err
 		}
@@ -438,8 +432,7 @@ type uploadHashStatePathSpec struct {
 func (uploadHashStatePathSpec) pathSpec() {}
 
 // repositoriesRootPathSpec returns the root of repositories
-type repositoriesRootPathSpec struct {
-}
+type repositoriesRootPathSpec struct{}
 
 func (repositoriesRootPathSpec) pathSpec() {}
 

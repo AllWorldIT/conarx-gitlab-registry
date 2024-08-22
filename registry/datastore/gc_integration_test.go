@@ -19,7 +19,6 @@ import (
 func randomDigest(t testing.TB) digest.Digest {
 	t.Helper()
 
-	rand.Seed(time.Now().UnixNano())
 	data := make([]byte, 100)
 	_, err := rand.Read(data)
 	require.NoError(t, err)
@@ -30,7 +29,6 @@ func randomDigest(t testing.TB) digest.Digest {
 func randomBlob(t testing.TB) *models.Blob {
 	t.Helper()
 
-	rand.Seed(time.Now().UnixNano())
 	return &models.Blob{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
@@ -41,7 +39,6 @@ func randomBlob(t testing.TB) *models.Blob {
 func randomRepository(t testing.TB) *models.Repository {
 	t.Helper()
 
-	rand.Seed(time.Now().UnixNano())
 	n := strconv.Itoa(rand.Int())
 	return &models.Repository{
 		Name: n,
@@ -793,7 +790,6 @@ func TestGC_TrackDeletedManifestLists_PostponeReviewOnConflict(t *testing.T) {
 	// [minReviewAfterJitter, maxReviewAfterJitter] ahead of the manifest list delete time.
 	require.NotEqual(t, rr2[0].ReviewAfter, rr[0].ReviewAfter)
 	assertGCReviewDelayInMinMaxRange(t, rr2[0].ReviewAfter, deletedAt)
-
 }
 
 func TestGC_TrackDeletedManifestLists_DoesNothingIfTriggerDisabled(t *testing.T) {
@@ -1287,7 +1283,7 @@ func TestGC_TrackDeletedTags_DoesNothingIfTriggerDisabled(t *testing.T) {
 // trigerOperationTime + x, defaultReviewAfterWithMinJitterDelay  < x < defaultReviewAfterWithMaxJitterDelay
 // where trigerOperationTime is the time the operation that triggered the review task to be qeued was executed
 // and actualReviewAfterTime is the actual time the review is set to be carried out.
-func assertGCReviewDelayInMinMaxRange(t *testing.T, actualReviewAfterTime time.Time, trigerOperationTime time.Time) {
+func assertGCReviewDelayInMinMaxRange(t *testing.T, actualReviewAfterTime, trigerOperationTime time.Time) {
 	t.Helper()
 
 	lowerBound := trigerOperationTime.Add(defaultReviewAfterWithMinJitterDelay)

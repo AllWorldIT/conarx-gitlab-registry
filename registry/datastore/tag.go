@@ -46,7 +46,7 @@ func scanFullTag(row *sql.Row) (*models.Tag, error) {
 	t := new(models.Tag)
 
 	if err := row.Scan(&t.ID, &t.NamespaceID, &t.Name, &t.RepositoryID, &t.ManifestID, &t.CreatedAt, &t.UpdatedAt); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("scanning tag: %w", err)
 		}
 		return nil, nil
@@ -199,7 +199,7 @@ func (s *tagStore) CreateOrUpdate(ctx context.Context, t *models.Tag) error {
 		   id, created_at, updated_at`
 
 	row := s.db.QueryRowContext(ctx, q, t.NamespaceID, t.RepositoryID, t.ManifestID, t.Name)
-	if err := row.Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt); err != nil && err != sql.ErrNoRows {
+	if err := row.Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		var pgErr *pgconn.PgError
 		// this can happen if the manifest is deleted by the online GC while attempting to tag an untagged manifest
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation {

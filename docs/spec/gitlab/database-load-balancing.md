@@ -108,7 +108,9 @@ We'll need to add new configuration settings to support DLB. These should be loc
 ```yaml
 database:
   loadbalancing:
-    hosts: secondary1.example.com,secondary2.example.com
+    hosts:
+      - secondary1.example.com
+      - secondary2.example.com
     nameserver: localhost
     port: 8600
     record: db-replica-registry.service.consul
@@ -121,7 +123,7 @@ database:
 
 | Parameter              | Required | Description                                                                                                                                       | Default          |
 | ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `hosts`                | No       | A static, comma-separated list of hosts to use for load balancing. Can be used as an alternative to service discovery. Ignored if `record` is set. |                  |
+| `hosts`                | No       | A static list of hosts to use for load balancing. Can be used as an alternative to service discovery. Ignored if `record` is set. |                  |
 | `nameserver`           | No       | The nameserver to use for looking up the DNS record.                                                                                              | `localhost`      |
 | `port`                 | No       | The port of the nameserver.                                                                                                                       | `8600`           |
 | `record`               | Yes      | The `SRV` record to look up. This option is required for service discovery to work.                                                               |                  |

@@ -57,15 +57,17 @@ func init() {
 	factory.Register(driverName, &azureDriverFactory{})
 }
 
-type azureDriverFactory struct{}
-type driverParameters struct {
-	accountName          string
-	accountKey           string
-	container            string
-	realm                string
-	root                 string
-	trimLegacyRootPrefix bool
-}
+type (
+	azureDriverFactory struct{}
+	driverParameters   struct {
+		accountName          string
+		accountKey           string
+		container            string
+		realm                string
+		root                 string
+		trimLegacyRootPrefix bool
+	}
+)
 
 func (factory *azureDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
@@ -350,7 +352,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 
 // Move moves an object stored at sourcePath to destPath, removing the original
 // object.
-func (d *driver) Move(ctx context.Context, sourcePath string, destPath string) error {
+func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	srcBlobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(sourcePath))
 	sourceBlobURL := srcBlobRef.GetURL()
 	destBlobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(destPath))
@@ -476,7 +478,6 @@ func (d *driver) listWithDelimter(prefix, delimiter string) ([]string, error) {
 			Prefix:    prefix,
 			Delimiter: delimiter,
 		})
-
 		if err != nil {
 			return out, err
 		}

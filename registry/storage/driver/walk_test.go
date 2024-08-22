@@ -15,6 +15,7 @@ type changingFileSystem struct {
 func (cfs *changingFileSystem) List(ctx context.Context, path string) ([]string, error) {
 	return cfs.fileset, nil
 }
+
 func (cfs *changingFileSystem) Stat(ctx context.Context, path string) (FileInfo, error) {
 	kept, ok := cfs.keptFiles[path]
 	if ok && kept {
@@ -53,8 +54,10 @@ type errorFileSystem struct {
 	errorFiles map[string]error
 }
 
-var errTopLevelDir = errors.New("test error: this directory is bad")
-var errDeeplyNestedFile = errors.New("test error: this file is bad")
+var (
+	errTopLevelDir      = errors.New("test error: this directory is bad")
+	errDeeplyNestedFile = errors.New("test error: this file is bad")
+)
 
 func (efs *errorFileSystem) List(ctx context.Context, path string) ([]string, error) {
 	return efs.fileSet, nil

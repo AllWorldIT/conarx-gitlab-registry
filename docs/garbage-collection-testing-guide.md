@@ -61,7 +61,7 @@ order to build images and push them to the registry. If you are not running the
 container registry locally, you will need to replace `localhost:5000` with the
 IP address of your container registry.
 
-From inside the [docs-gitlab/scripts/](scripts/) directory, you can run the
+From inside the [script/dev/seed](../script/dev/seed) directory, you can run the
 script with `./seed.sh`. By default, the script will seed three repositories
 with three tags each. You can customize this by passing the number of
 repositories and tags via the command line. For example, this command will seed

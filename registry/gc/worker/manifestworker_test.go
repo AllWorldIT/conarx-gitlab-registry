@@ -12,10 +12,10 @@ import (
 	storemock "github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/internal/testutil"
-	"github.com/golang/mock/gomock"
 	"github.com/hashicorp/go-multierror"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 var (

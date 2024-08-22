@@ -92,7 +92,7 @@ func makeTrustedKeyMap(rootKeys []libtrust.PrivateKey) map[string]libtrust.Publi
 	return trustedKeys
 }
 
-func makeTestToken(issuer, audience string, access []*ResourceActions, rootKey libtrust.PrivateKey, depth int, now time.Time, exp time.Time) (*Token, error) {
+func makeTestToken(issuer, audience string, access []*ResourceActions, rootKey libtrust.PrivateKey, depth int, now, exp time.Time) (*Token, error) {
 	signingKey, err := makeSigningKeyWithChain(rootKey, depth)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make signing key with chain: %s", err)
@@ -499,7 +499,7 @@ func TestNewAccessControllerPemBlock(t *testing.T) {
 	defer os.Remove(rootCertBundleFilename)
 
 	// Add something other than a certificate to the rootcertbundle
-	file, err := os.OpenFile(rootCertBundleFilename, os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(rootCertBundleFilename, os.O_WRONLY|os.O_APPEND, 0o666)
 	if err != nil {
 		t.Fatal(err)
 	}

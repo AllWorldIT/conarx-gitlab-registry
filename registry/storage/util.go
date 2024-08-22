@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/auth/token"
@@ -39,7 +40,7 @@ func exists(ctx context.Context, drv driver.StorageDriver, path string) (bool, e
 }
 
 // injectCustomKeyOpts injects GitLab metadata in the extraOpts into opts parameter.
-func injectCustomKeyOpts(ctx context.Context, opts map[string]any, extraOpts map[string]any) {
+func injectCustomKeyOpts(ctx context.Context, opts, extraOpts map[string]any) {
 	if opts == nil {
 		return
 	}

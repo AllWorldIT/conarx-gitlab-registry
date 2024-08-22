@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -54,10 +55,8 @@ import (
 	gorillahandlers "github.com/gorilla/handlers"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/gitlab-org/labkit/correlation"
-	"gitlab.com/gitlab-org/labkit/metrics/sqlmetrics"
 )
 
 func init() {
@@ -183,6 +182,7 @@ func defaultIssuerProps() issuerProps {
 		ExpireFunc: func() int64 { return time.Now().Add(time.Hour).Unix() },
 	}
 }
+
 func withTokenAuth(rootCertPath string, issProps issuerProps) configOpt {
 	return func(config *configuration.Configuration) {
 		config.Auth = configuration.Auth{
@@ -242,6 +242,37 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 			SSLCert:     dsn.SSLCert,
 			SSLKey:      dsn.SSLKey,
 			SSLRootCert: dsn.SSLRootCert,
+		}
+
+		if os.Getenv("REGISTRY_DATABASE_LOADBALANCING_ENABLED") == "true" {
+			// service discovery takes precedence over fixed hosts
+			if os.Getenv("REGISTRY_DATABASE_LOADBALANCING_RECORD") != "" {
+				nameserver := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_NAMESERVER")
+				tmpPort := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_PORT")
+				record := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_RECORD")
+
+				if nameserver == "" || tmpPort == "" || record == "" {
+					panic("REGISTRY_DATABASE_LOADBALANCING_NAMESERVER, " +
+						"REGISTRY_DATABASE_LOADBALANCING_PORT and REGISTRY_DATABASE_LOADBALANCING_RECORD required for " +
+						"enabling DB load balancing with service discovery")
+				}
+				port, err := strconv.Atoi(tmpPort)
+				if err != nil {
+					panic(fmt.Sprintf("invalid REGISTRY_DATABASE_LOADBALANCING_PORT: %q", tmpPort))
+				}
+
+				config.Database.LoadBalancing = configuration.DatabaseLoadBalancing{
+					Enabled:    true,
+					Nameserver: nameserver,
+					Port:       port,
+					Record:     record,
+				}
+			} else if hosts := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_HOSTS"); hosts != "" {
+				config.Database.LoadBalancing = configuration.DatabaseLoadBalancing{
+					Enabled: true,
+					Hosts:   strings.Split(hosts, ","),
+				}
+			}
 		}
 	}
 
@@ -323,7 +354,7 @@ type testEnv struct {
 	app         *registryhandlers.App
 	server      *httptest.Server
 	builder     *urls.Builder
-	db          *datastore.DB
+	db          datastore.LoadBalancer
 	ns          *rtestutil.NotificationServer
 	cacheClient cacheClient
 }
@@ -345,14 +376,14 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 
 	// The API test needs access to the database only to clean it up during
 	// shutdown so that environments come up with a fresh copy of the database.
-	var db *datastore.DB
+	var db datastore.LoadBalancer
 	var err error
 	if config.Database.Enabled {
 		db, err = datastoretestutil.NewDBFromConfig(config)
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db.Primary().DB)
 		if _, err = m.Up(); err != nil {
 			t.Fatal(err)
 		}
@@ -366,7 +397,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 			if d == -1 {
 				d = 0
 			}
-			s := datastore.NewGCSettingsStore(db)
+			s := datastore.NewGCSettingsStore(db.Primary())
 			if _, err := s.UpdateAllReviewAfterDefaults(ctx, d); err != nil {
 				t.Fatal(err)
 			}
@@ -431,7 +462,7 @@ func (t *testEnv) Shutdown() {
 			panic(err)
 		}
 
-		if err := datastoretestutil.TruncateAllTables(t.db); err != nil {
+		if err := datastoretestutil.TruncateAllTables(t.db.Primary()); err != nil {
 			panic(err)
 		}
 
@@ -450,14 +481,6 @@ func (t *testEnv) Shutdown() {
 
 		// Needed for idempotency, so that shutdowns may be defer'd without worry.
 		t.config.Redis.Cache.Enabled = false
-	}
-
-	// The Prometheus DBStatsCollector is registered within handlers.NewApp (it is the only place we can do so).
-	// Therefore, if metrics are enabled, we must unregister this collector it when the env is shutdown. Otherwise,
-	// prometheus.MustRegister will panic on a subsequent test with metrics enabled.
-	if t.config.HTTP.Debug.Prometheus.Enabled {
-		collector := sqlmetrics.NewDBStatsCollector(t.config.Database.DBName, t.db)
-		prometheus.Unregister(collector)
 	}
 }
 
@@ -805,8 +828,6 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 // randomPlatformSpec generates a random platfromSpec. Arch and OS combinations
 // may not strictly be valid for the Go runtime.
 func randomPlatformSpec() manifestlist.PlatformSpec {
-	rand.Seed(time.Now().Unix())
-
 	architectures := []string{"amd64", "arm64", "ppc64le", "mips64", "386"}
 	oses := []string{"aix", "darwin", "linux", "freebsd", "plan9"}
 
@@ -996,7 +1017,6 @@ func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, manifes
 func shuffledCopy(s []string) []string {
 	shuffled := make([]string, len(s))
 	copy(shuffled, s)
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
@@ -1080,7 +1100,7 @@ func startPushLayerRequest(t *testing.T, env *testEnv, name reference.Named) *ht
 	return req
 }
 
-func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopts ...requestOpt) (location string, uuid string) {
+func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopts ...requestOpt) (location, uuid string) {
 	t.Helper()
 
 	req := startPushLayerRequest(t, env, name)
@@ -1372,7 +1392,7 @@ func checkErr(t *testing.T, err error, msg string) {
 	}
 }
 
-func createRepository(t *testing.T, env *testEnv, repoPath string, tag string) digest.Digest {
+func createRepository(t *testing.T, env *testEnv, repoPath, tag string) digest.Digest {
 	deserializedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tag))
 
 	_, payload, err := deserializedManifest.Payload()
@@ -1898,7 +1918,6 @@ func acquireProjectLease(t *testing.T, redisCache *gocache.Cache[any], projectPa
 	// create a lease that expires in less than TTL duration .
 	err = plStore.Set(context.Background(), projectPath, TTL)
 	require.NoError(t, err)
-
 }
 
 // releaseProjectLease releases an existing project lease for `projectPath` in the `redisCache`

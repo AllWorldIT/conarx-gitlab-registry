@@ -449,7 +449,7 @@ type parameterTest struct {
 
 type parameterValidator func(t *testing.T, want interface{}, got *Configuration)
 
-func testParameter(t *testing.T, yml string, envVar string, tests []parameterTest, fn parameterValidator) {
+func testParameter(t *testing.T, yml, envVar string, tests []parameterTest, fn parameterValidator) {
 	t.Helper()
 
 	testCases := []string{"yaml", "env"}
@@ -1500,22 +1500,22 @@ database:
 	tt := []parameterTest{
 		{
 			name:  "single",
-			value: "secondary1.example.com",
-			want:  "secondary1.example.com",
+			value: `["secondary1.example.com"]`,
+			want:  []string{"secondary1.example.com"},
 		},
 		{
 			name:  "multiple",
-			value: "secondary1.example.com,secondary2.example.com",
-			want:  "secondary1.example.com,secondary2.example.com",
+			value: `["secondary1.example.com" ,"secondary2.example.com"]`,
+			want:  []string{"secondary1.example.com", "secondary2.example.com"},
 		},
 		{
 			name: "default",
-			want: "",
+			want: []string{},
 		},
 	}
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
-		require.Equal(t, want, got.Database.LoadBalancing.Hosts)
+		require.ElementsMatch(t, want, got.Database.LoadBalancing.Hosts)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_HOSTS", tt, validator)
@@ -2349,7 +2349,7 @@ redis:
 
 // TestParseBBMConfig_EnabledDefaults validates that environment variables properly override backgroundmigrations parameters
 func TestParseBBMConfigEnabledDefaults(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name     string
 		yml      string
 		expected BackgroundMigrations

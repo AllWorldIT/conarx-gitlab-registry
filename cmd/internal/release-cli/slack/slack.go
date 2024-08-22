@@ -16,7 +16,7 @@ type SlackRequestBody struct {
 	Text string `json:"text"`
 }
 
-func SendSlackNotification(webhookUrl string, msg string) error {
+func SendSlackNotification(webhookUrl, msg string) error {
 	slackBody, err := json.Marshal(SlackRequestBody{Text: msg})
 	if err != nil {
 		return err

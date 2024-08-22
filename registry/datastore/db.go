@@ -1,4 +1,4 @@
-//go:generate mockgen -package mocks -destination mocks/db.go . Handler,Transactor
+//go:generate mockgen -package mocks -destination mocks/db.go . Handler,Transactor,LoadBalancer,Connector,DNSResolver
 
 package datastore
 
@@ -11,16 +11,24 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/hashicorp/go-multierror"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/sirupsen/logrus"
 )
 
-const driverName = "pgx"
+const (
+	driverName                  = "pgx"
+	dnsTimeout                  = 2 * time.Second
+	defaultReplicaCheckInterval = 1 * time.Minute
+)
 
 // Queryer is the common interface to execute queries on a database.
 type Queryer interface {
@@ -124,11 +132,12 @@ func (dsn *DSN) Address() string {
 	return net.JoinHostPort(dsn.Host, strconv.Itoa(dsn.Port))
 }
 
-type openOpts struct {
+type opts struct {
 	logger               *logrus.Entry
 	logLevel             tracelog.LogLevel
 	pool                 *PoolConfig
 	preferSimpleProtocol bool
+	loadBalancing        *LoadBalancingConfig
 }
 
 type PoolConfig struct {
@@ -138,18 +147,27 @@ type PoolConfig struct {
 	MaxIdleTime time.Duration
 }
 
-// OpenOption is used to pass options to Open.
-type OpenOption func(*openOpts)
+// LoadBalancingConfig represents the database load balancing configuration.
+type LoadBalancingConfig struct {
+	hosts                []string
+	resolver             DNSResolver
+	connector            Connector
+	replicaCheckInterval time.Duration
+	lsnStore             RepositoryCache
+}
+
+// Option is used to configure the database connections.
+type Option func(*opts)
 
 // WithLogger configures the logger for the database connection driver.
-func WithLogger(l *logrus.Entry) OpenOption {
-	return func(opts *openOpts) {
+func WithLogger(l *logrus.Entry) Option {
+	return func(opts *opts) {
 		opts.logger = l
 	}
 }
 
 // WithLogLevel configures the logger level for the database connection driver.
-func WithLogLevel(l configuration.Loglevel) OpenOption {
+func WithLogLevel(l configuration.Loglevel) Option {
 	var lvl tracelog.LogLevel
 	switch l {
 	case configuration.LogLevelTrace:
@@ -164,21 +182,21 @@ func WithLogLevel(l configuration.Loglevel) OpenOption {
 		lvl = tracelog.LogLevelError
 	}
 
-	return func(opts *openOpts) {
+	return func(opts *opts) {
 		opts.logLevel = lvl
 	}
 }
 
 // WithPoolConfig configures the settings for the database connection pool.
-func WithPoolConfig(c *PoolConfig) OpenOption {
-	return func(opts *openOpts) {
+func WithPoolConfig(c *PoolConfig) Option {
+	return func(opts *opts) {
 		opts.pool = c
 	}
 }
 
 // WithPoolMaxIdle configures the maximum number of idle pool connections.
-func WithPoolMaxIdle(c int) OpenOption {
-	return func(opts *openOpts) {
+func WithPoolMaxIdle(c int) Option {
+	return func(opts *opts) {
 		if opts.pool == nil {
 			opts.pool = &PoolConfig{}
 		}
@@ -188,8 +206,8 @@ func WithPoolMaxIdle(c int) OpenOption {
 }
 
 // WithPoolMaxOpen configures the maximum number of open pool connections.
-func WithPoolMaxOpen(c int) OpenOption {
-	return func(opts *openOpts) {
+func WithPoolMaxOpen(c int) Option {
+	return func(opts *opts) {
 		if opts.pool == nil {
 			opts.pool = &PoolConfig{}
 		}
@@ -200,23 +218,27 @@ func WithPoolMaxOpen(c int) OpenOption {
 
 // WithPreparedStatements configures the settings to allow the database
 // driver to use prepared statements.
-func WithPreparedStatements(b bool) OpenOption {
-	return func(opts *openOpts) {
+func WithPreparedStatements(b bool) Option {
+	return func(opts *opts) {
 		// Registry configuration uses opposite semantics as pgx for prepared statements.
 		opts.preferSimpleProtocol = !b
 	}
 }
 
-func applyOptions(opts []OpenOption) openOpts {
+func applyOptions(input []Option) opts {
 	log := logrus.New()
 	log.SetOutput(io.Discard)
 
-	config := openOpts{
+	config := opts{
 		logger: logrus.NewEntry(log),
 		pool:   &PoolConfig{},
+		loadBalancing: &LoadBalancingConfig{
+			connector:            NewConnector(),
+			replicaCheckInterval: defaultReplicaCheckInterval,
+		},
 	}
 
-	for _, v := range opts {
+	for _, v := range input {
 		v(&config)
 	}
 
@@ -279,12 +301,26 @@ func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, dat
 	}
 }
 
-// Open creates a database connection handler.
-func Open(dsn *DSN, opts ...OpenOption) (*DB, error) {
+// Connector is an interface for opening database connections. This enabled low-level testing for how connections are
+// established during load balancing.
+type Connector interface {
+	Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, error)
+}
+
+// sqlConnector is the default implementation of Connector using sql.Open.
+type sqlConnector struct{}
+
+// NewConnector creates a new sqlConnector.
+func NewConnector() Connector {
+	return &sqlConnector{}
+}
+
+// Open opens a new database connection with the given DSN and options.
+func (c *sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, error) {
 	config := applyOptions(opts)
 	pgxConfig, err := pgx.ParseConfig(dsn.String())
 	if err != nil {
-		return nil, fmt.Errorf("datastore: parse config: %w", err)
+		return nil, fmt.Errorf("parsing connection string failed: %w", err)
 	}
 
 	pgxConfig.Tracer = &tracelog.TraceLog{
@@ -309,9 +345,326 @@ func Open(dsn *DSN, opts ...OpenOption) (*DB, error) {
 	db.SetConnMaxLifetime(config.pool.MaxLifetime)
 	db.SetConnMaxIdleTime(config.pool.MaxIdleTime)
 
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("verification failed: %w", err)
 	}
 
 	return &DB{db, dsn}, nil
+}
+
+// LoadBalancer represents a database load balancer.
+type LoadBalancer interface {
+	Primary() *DB
+	Replica() *DB
+	Replicas() []*DB
+	Close() error
+	RecordLSN(ctx context.Context, r *models.Repository) error
+}
+
+// DBLoadBalancer manages connections to a primary database and multiple replicas.
+type DBLoadBalancer struct {
+	primary  *DB
+	replicas []*DB
+
+	lsnCache RepositoryCache
+
+	connector  Connector
+	resolver   DNSResolver
+	fixedHosts []string
+
+	// replicaIndex and replicaMutex are used to implement a round-robin selection of replicas.
+	replicaIndex int
+	replicaMutex sync.Mutex
+
+	replicaOpenOpts      []Option
+	replicaCheckInterval time.Duration
+
+	// TODO(dlb): try to remove the need for these. The DB type already has a DSN built-in, but setting them during
+	// tests using mocks is currently not possible as the DSN is unexported. So we have these here to unblock progress.
+	primaryDSN  *DSN
+	replicaDSNs []*DSN
+}
+
+// WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
+func WithFixedHosts(hosts []string) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.hosts = hosts
+	}
+}
+
+// WithServiceDiscovery enables and configures service discovery for read replicas during database load balancing.
+func WithServiceDiscovery(resolver DNSResolver) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.resolver = resolver
+	}
+}
+
+// WithConnector allows specifying a custom database Connector implementation to be used to establish connections,
+// otherwise sql.Open is used.
+func WithConnector(connector Connector) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.connector = connector
+	}
+}
+
+// WithReplicaCheckInterval configures a custom refresh interval for the replica list when using service discovery.
+// Defaults to 1 minute.
+func WithReplicaCheckInterval(interval time.Duration) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.replicaCheckInterval = interval
+	}
+}
+
+// WithLSNCache allows providing a RepositoryCache implementation to be used for recording WAL insert Log Sequence
+// Numbers (LSNs) that are used to enable primary sticking during database load balancing.
+func WithLSNCache(cache RepositoryCache) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.lsnStore = cache
+	}
+}
+
+// DNSResolver is an interface for DNS resolution operations. This enabled low-level testing for how connections are
+// established during load balancing.
+type DNSResolver interface {
+	// LookupSRV looks up SRV records.
+	LookupSRV(ctx context.Context) ([]*net.SRV, error)
+	// LookupHost looks up IP addresses for a given host.
+	LookupHost(ctx context.Context, host string) ([]string, error)
+}
+
+// dnsResolver is the default implementation of DNSResolver using net.Resolver.
+type dnsResolver struct {
+	resolver *net.Resolver
+	record   string
+}
+
+// LookupSRV performs an SRV record lookup.
+func (r *dnsResolver) LookupSRV(ctx context.Context) ([]*net.SRV, error) {
+	_, addrs, err := r.resolver.LookupSRV(ctx, "", "", r.record)
+	return addrs, err
+}
+
+// LookupHost performs an IP address lookup for the given host.
+func (r *dnsResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
+	return r.resolver.LookupHost(ctx, host)
+}
+
+// NewDNSResolver creates a new dnsResolver for the specified nameserver, port, and record.
+func NewDNSResolver(nameserver string, port int, record string) DNSResolver {
+	return &dnsResolver{
+		resolver: &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return net.DialTimeout("tcp", fmt.Sprintf("%s:%d", nameserver, port), dnsTimeout)
+			},
+		},
+		record: record,
+	}
+}
+
+func resolveHosts(ctx context.Context, resolver DNSResolver) ([]*net.TCPAddr, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsTimeout)
+	defer cancel()
+
+	srvs, err := resolver.LookupSRV(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error resolving DNS SRV record: %w", err)
+	}
+
+	var result *multierror.Error
+	var addrs []*net.TCPAddr
+	for _, srv := range srvs {
+		// TODO: consider allowing partial successes where only a subset of replicas is reachable
+		ips, err := resolver.LookupHost(ctx, srv.Target)
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("error resolving host %q address: %v", srv.Target, err))
+			continue
+		}
+		for _, ip := range ips {
+			addr := &net.TCPAddr{
+				IP:   net.ParseIP(ip),
+				Port: int(srv.Port),
+			}
+			addrs = append(addrs, addr)
+		}
+	}
+
+	if result.ErrorOrNil() != nil {
+		return nil, result
+	}
+
+	return addrs, nil
+}
+
+// ResolveReplicas initializes or updates the list of available replicas atomically by resolving the provided hosts
+// either through service discovery or using a fixed hosts list. As result, the load balancer replica pool will be
+// up-to-date. Replicas for which we failed to establish a connection to are not included in the pool.
+func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error {
+	var replicas []*DB
+	var replicaDSNs []*DSN
+	var result *multierror.Error
+
+	dsn := *lb.primaryDSN
+	if lb.resolver != nil {
+		addrs, err := resolveHosts(ctx, lb.resolver)
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("failed to fetch replica hosts: %w", err))
+		} else {
+			for _, addr := range addrs {
+				dsn.Host = addr.IP.String()
+				dsn.Port = addr.Port
+				replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
+				if err != nil {
+					result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
+				} else {
+					replicas = append(replicas, replica)
+					replicaDSNs = append(replicaDSNs, &dsn)
+				}
+			}
+		}
+	} else if len(lb.fixedHosts) > 0 {
+		for _, host := range lb.fixedHosts {
+			dsn.Host = host
+			replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
+			if err != nil {
+				result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Host, err))
+			} else {
+				replicas = append(replicas, replica)
+				replicaDSNs = append(replicaDSNs, &dsn)
+			}
+		}
+	}
+
+	// TODO(dlb): use disconnecttimeout to close handlers from retired replicas
+	lb.replicaMutex.Lock()
+	lb.replicas = replicas
+	lb.replicaDSNs = replicaDSNs
+	lb.replicaMutex.Unlock()
+
+	return result
+}
+
+// StartReplicaChecking synchronously refreshes the list of replicas in the configured interval.
+func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
+	// If the check interval was set to zero (no recurring checks) or the resolver is not set (service discovery
+	// was not enabled), then exit early as there is nothing to do
+	if lb.replicaCheckInterval == 0 || lb.resolver == nil {
+		return nil
+	}
+
+	l := log.GetLogger(log.WithContext(ctx))
+	t := time.NewTicker(lb.replicaCheckInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+			l.Info("updating database replicas list")
+			if err := lb.ResolveReplicas(ctx); err != nil {
+				l.WithError(err).Error("failed to refresh database replicas list")
+			}
+			var hosts []string
+			for _, dsn := range lb.replicaDSNs {
+				hosts = append(hosts, fmt.Sprintf("%s:%d", dsn.Host, dsn.Port))
+			}
+			l.WithFields(log.Fields{"hosts": hosts}).Info("database replicas list updated")
+		}
+	}
+}
+
+// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections.
+func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*DBLoadBalancer, error) {
+	config := applyOptions(opts)
+	var result *multierror.Error
+
+	lb := &DBLoadBalancer{
+		primaryDSN:           primaryDSN,
+		connector:            config.loadBalancing.connector,
+		resolver:             config.loadBalancing.resolver,
+		fixedHosts:           config.loadBalancing.hosts,
+		replicaOpenOpts:      opts,
+		replicaCheckInterval: config.loadBalancing.replicaCheckInterval,
+		lsnCache:             config.loadBalancing.lsnStore,
+	}
+
+	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
+	if err != nil {
+		result = multierror.Append(result, fmt.Errorf("failed to open primary database connection: %w", err))
+	}
+	lb.primary = primary
+
+	if err := lb.ResolveReplicas(ctx); err.ErrorOrNil() != nil {
+		result = multierror.Append(result, err)
+	}
+
+	if result.ErrorOrNil() != nil {
+		return nil, result.ErrorOrNil()
+	}
+
+	return lb, nil
+}
+
+// Primary returns the primary database handler.
+func (lb *DBLoadBalancer) Primary() *DB {
+	return lb.primary
+}
+
+// Replica returns a round-robin elected replica database handler. If no replicas are configured, then the primary
+// database handler is returned.
+func (lb *DBLoadBalancer) Replica() *DB {
+	if len(lb.replicas) == 0 {
+		return lb.primary
+	}
+
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
+	replica := lb.replicas[lb.replicaIndex]
+	lb.replicaIndex = (lb.replicaIndex + 1) % len(lb.replicas)
+
+	return replica
+}
+
+// Replicas returns all replica database handlers currently in the pool.
+func (lb *DBLoadBalancer) Replicas() []*DB {
+	return lb.replicas
+}
+
+// Close closes all database connections managed by the DBLoadBalancer.
+func (lb *DBLoadBalancer) Close() error {
+	var result *multierror.Error
+
+	if err := lb.primary.Close(); err != nil {
+		result = multierror.Append(result, fmt.Errorf("failed closing primary connection: %w", err))
+	}
+
+	for _, replica := range lb.replicas {
+		if err := replica.Close(); err != nil {
+			result = multierror.Append(result, fmt.Errorf("failed closing replica %q connection: %w", replica.dsn.Host, err))
+		}
+	}
+
+	return result.ErrorOrNil()
+}
+
+// RecordLSN queries the current primary database WAL insert Log Sequence Number (LSN) and records it in the LSN cache
+// in association with a given models.Repository.
+// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md?ref_type=heads#primary-sticking
+func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) error {
+	if lb.lsnCache == nil {
+		return fmt.Errorf("LSN cache is not configured")
+	}
+
+	var lsn string
+	if err := lb.Primary().QueryRowContext(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&lsn); err != nil {
+		return fmt.Errorf("failed to query current WAL insert LSN: %w", err)
+	}
+
+	if err := lb.lsnCache.SetLSN(ctx, r, lsn); err != nil {
+		return fmt.Errorf("failed to cache WAL insert LSN: %w", err)
+	}
+
+	return nil
 }

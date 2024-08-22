@@ -1,7 +1,7 @@
 # Root directory of the project (absolute path).
 ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-GOLANGCI_VERSION ?= v1.45.0
+GOLANGCI_VERSION ?= v1.59.1
 
 # Used to populate version variable in main package.
 VERSION?=$(shell git describe --tags --match 'v[0-9]*' --dirty='.m' --always)
@@ -46,7 +46,9 @@ TESTFLAGS_PARALLEL ?= 8
 
 all: binaries
 
-check: ## run golangci-lint, with defaults
+check: lint
+
+lint: ## run golangci-lint, with defaults
 	@echo "$(WHALE) $@"
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_VERSION} run
 
@@ -99,7 +101,7 @@ db-structure-dump:
 	@./script/dev/db-structure-dump
 
 dev-tools:
-	@npm install -g \
+	npm install -g \
 		@commitlint/cli@17 \
 		@commitlint/config-conventional@17 \
 		semantic-release@21 \
@@ -108,6 +110,7 @@ dev-tools:
 		@semantic-release/changelog@6 \
 		@semantic-release/git@10 \
 		conventional-changelog-conventionalcommits@6
+	go install go.uber.org/mock/mockgen@v0.4.0
 
 # https://github.com/semantic-release/git#environment-variables
 export GIT_AUTHOR_NAME="$(shell git config user.name)"

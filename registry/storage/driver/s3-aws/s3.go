@@ -295,7 +295,7 @@ func parseParameters(parameters map[string]interface{}) (*DriverParameters, erro
 		err := errors.New("no bucket parameter provided")
 		result = multierror.Append(result, err)
 	}
-	//encryptBool := false
+	// encryptBool := false
 	encryptBool, err := parse.Bool(parameters, "encrypt", false)
 	if err != nil {
 		result = multierror.Append(result, err)
@@ -472,7 +472,7 @@ func parseParameters(parameters map[string]interface{}) (*DriverParameters, erro
 
 // getParameterAsInt64 converts parameters[name] to an int64 value (using
 // default if nil), verifies it is no smaller than min, and returns it.
-func getParameterAsInt64(parameters map[string]interface{}, name string, defaultt int64, min int64, max int64) (int64, error) {
+func getParameterAsInt64(parameters map[string]interface{}, name string, defaultt, min, max int64) (int64, error) {
 	rv := defaultt
 	param := parameters[name]
 	switch v := param.(type) {
@@ -647,7 +647,6 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 			Key:    aws.String(d.s3Path(path)),
 			Range:  aws.String("bytes=" + strconv.FormatInt(offset, 10) + "-"),
 		})
-
 	if err != nil {
 		if s3Err, ok := err.(awserr.Error); ok && s3Err.Code() == "InvalidRange" {
 			return io.NopCloser(bytes.NewReader(nil)), nil
@@ -858,7 +857,7 @@ func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 
 // Move moves an object stored at sourcePath to destPath, removing the original
 // object.
-func (d *driver) Move(ctx context.Context, sourcePath string, destPath string) error {
+func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	/* This is terrible, but aws doesn't have an actual move. */
 	if err := d.copy(ctx, sourcePath, destPath); err != nil {
 		return err
@@ -867,7 +866,7 @@ func (d *driver) Move(ctx context.Context, sourcePath string, destPath string) e
 }
 
 // copy copies an object stored at sourcePath to destPath.
-func (d *driver) copy(ctx context.Context, sourcePath string, destPath string) error {
+func (d *driver) copy(ctx context.Context, sourcePath, destPath string) error {
 	// S3 can copy objects up to 5 GB in size with a single PUT Object - Copy
 	// operation. For larger objects, the multipart upload API must be used.
 	//

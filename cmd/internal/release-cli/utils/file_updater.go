@@ -47,7 +47,7 @@ func updateFileWithScanner(fileName, stage, newVersion string) ([]byte, error) {
 	}
 
 	output := strings.Join(outputLines, "\n") + "\n"
-	err = os.WriteFile(fileName, []byte(output), 0644)
+	err = os.WriteFile(fileName, []byte(output), 0o644)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func updateFileWithRegex(fileName, version, pattern string) ([]byte, error) {
 		return fmt.Sprintf("%s:%s", prefix, version)
 	})
 
-	err = os.WriteFile(fileName, []byte(output), 0644)
+	err = os.WriteFile(fileName, []byte(output), 0o644)
 	if err != nil {
 		return nil, err
 	}

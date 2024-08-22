@@ -5566,7 +5566,8 @@ CREATE TABLE public.batched_background_migrations (
     status smallint DEFAULT 0 NOT NULL,
     job_signature_name text NOT NULL,
     table_name text NOT NULL,
-    column_name text NOT NULL
+    column_name text NOT NULL,
+    failure_error_code smallint
 );
 
 ALTER TABLE public.batched_background_migrations
@@ -12311,6 +12312,12 @@ CREATE INDEX tags_p_7_top_level_namespace_id_repository_id_manifest_id_idx ON pa
 CREATE INDEX tags_p_8_top_level_namespace_id_repository_id_manifest_id_idx ON partitions.tags_p_8 USING btree (top_level_namespace_id, repository_id, manifest_id);
 
 CREATE INDEX tags_p_9_top_level_namespace_id_repository_id_manifest_id_idx ON partitions.tags_p_9 USING btree (top_level_namespace_id, repository_id, manifest_id);
+
+CREATE INDEX index_batched_background_migration_jobs_on_bbm_id ON public.batched_background_migration_jobs USING btree (batched_background_migration_id);
+
+CREATE INDEX index_batched_background_migration_jobs_on_bbm_id_and_id_desc ON public.batched_background_migration_jobs USING btree (batched_background_migration_id, id DESC);
+
+CREATE INDEX index_batched_background_migration_jobs_on_bbm_id_and_max_value ON public.batched_background_migration_jobs USING btree (batched_background_migration_id, max_value);
 
 CREATE INDEX index_gc_blob_review_queue_on_review_after ON public.gc_blob_review_queue USING btree (review_after);
 

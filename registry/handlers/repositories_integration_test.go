@@ -20,11 +20,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/gitlab-org/labkit/correlation"
+	"go.uber.org/mock/gomock"
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/urls"
 	"github.com/docker/distribution/registry/datastore"
+	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
 )
@@ -44,11 +46,24 @@ type testEnv struct {
 }
 
 func (e testEnv) mockDB() sqlmock.Sqlmock {
+	ctrl := gomock.NewController(e.t)
+	mockBalancer := mocks.NewMockLoadBalancer(ctrl)
+
 	db, mock, err := sqlmock.New()
 	require.NoError(e.t, err)
 
-	e.t.Cleanup(func() { db.Close() })
-	e.app.db = &datastore.DB{DB: db}
+	e.t.Cleanup(func() {
+		db.Close()
+		ctrl.Finish()
+	})
+
+	// TODO(dlb): use actual replica for testing
+	primary := &datastore.DB{DB: db}
+	replica := &datastore.DB{DB: db}
+	mockBalancer.EXPECT().Primary().Return(primary).AnyTimes()
+	mockBalancer.EXPECT().Replica().Return(replica).AnyTimes()
+
+	e.app.db = mockBalancer
 
 	return mock
 }

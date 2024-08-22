@@ -28,21 +28,23 @@ type trigger struct {
 }
 
 const (
-	NamespacesTable            table = "top_level_namespaces"
-	RepositoriesTable          table = "repositories"
-	MediaTypesTable            table = "media_types"
-	ManifestsTable             table = "manifests"
-	ManifestReferencesTable    table = "manifest_references"
-	BlobsTable                 table = "blobs"
-	RepositoryBlobsTable       table = "repository_blobs"
-	LayersTable                table = "layers"
-	TagsTable                  table = "tags"
-	GCBlobReviewQueueTable     table = "gc_blob_review_queue"
-	GCBlobsConfigurationsTable table = "gc_blobs_configurations"
-	GCBlobsLayersTable         table = "gc_blobs_layers"
-	GCManifestReviewQueueTable table = "gc_manifest_review_queue"
-	GCTmpBlobsManifestsTable   table = "gc_tmp_blobs_manifests"
-	GCReviewAfterDefaultsTable table = "gc_review_after_defaults"
+	NamespacesTable              table = "top_level_namespaces"
+	RepositoriesTable            table = "repositories"
+	MediaTypesTable              table = "media_types"
+	ManifestsTable               table = "manifests"
+	ManifestReferencesTable      table = "manifest_references"
+	BlobsTable                   table = "blobs"
+	RepositoryBlobsTable         table = "repository_blobs"
+	LayersTable                  table = "layers"
+	TagsTable                    table = "tags"
+	GCBlobReviewQueueTable       table = "gc_blob_review_queue"
+	GCBlobsConfigurationsTable   table = "gc_blobs_configurations"
+	GCBlobsLayersTable           table = "gc_blobs_layers"
+	GCManifestReviewQueueTable   table = "gc_manifest_review_queue"
+	GCTmpBlobsManifestsTable     table = "gc_tmp_blobs_manifests"
+	GCReviewAfterDefaultsTable   table = "gc_review_after_defaults"
+	BackgroundMigrationTable     table = "batched_background_migrations"
+	BackgroundMigrationJobsTable table = "batched_background_migration_jobs"
 )
 
 // AllTables represents all tables in the test database.
@@ -213,16 +215,17 @@ func NewDSNFromConfig(config configuration.Database) (*datastore.DSN, error) {
 	return dsn, nil
 }
 
-func newDB(dsn *datastore.DSN, logLevel logrus.Level, logOut io.Writer, poolConfig datastore.PoolConfig) (*datastore.DB, error) {
+func newDB(dsn *datastore.DSN, logLevel logrus.Level, logOut io.Writer, opts []datastore.Option) (datastore.LoadBalancer, error) {
 	log := logrus.New()
 	log.SetLevel(logLevel)
 	log.SetOutput(logOut)
 
-	db, err := datastore.Open(dsn, datastore.WithLogger(logrus.NewEntry(log)))
+	opts = append(opts, datastore.WithLogger(logrus.NewEntry(log)))
+
+	db, err := datastore.NewDBLoadBalancer(context.Background(), dsn, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("opening database connection: %w", err)
 	}
-	db.SetMaxOpenConns(poolConfig.MaxOpen)
 
 	return db, nil
 }
@@ -251,6 +254,8 @@ func NewDBFromEnv() (*datastore.DB, error) {
 		logOut = os.Stdout
 	}
 
+	var dbOpts []datastore.Option
+
 	poolConfig := datastore.PoolConfig{}
 	tmp := os.Getenv("REGISTRY_DATABASE_POOL_MAXOPEN")
 	if tmp != "" {
@@ -259,13 +264,19 @@ func NewDBFromEnv() (*datastore.DB, error) {
 			return nil, fmt.Errorf("invalid REGISTRY_DATABASE_POOL_MAXOPEN: %w", err)
 		}
 		poolConfig.MaxOpen = poolMaxOpen
+		dbOpts = append(dbOpts, datastore.WithPoolConfig(&poolConfig))
 	}
 
-	return newDB(dsn, logLevel, logOut, poolConfig)
+	dlb, err := newDB(dsn, logLevel, logOut, dbOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	return dlb.Primary(), nil
 }
 
-// NewDBFromConfig generates a new datastore.DB and opens the underlying connection based on configuration settings.
-func NewDBFromConfig(config *configuration.Configuration) (*datastore.DB, error) {
+// NewDBFromConfig generates a new datastore.LoadBalancer and opens the underlying connections based on configuration settings.
+func NewDBFromConfig(config *configuration.Configuration) (datastore.LoadBalancer, error) {
 	dsn, err := NewDSNFromConfig(config.Database)
 	if err != nil {
 		return nil, err
@@ -287,9 +298,27 @@ func NewDBFromConfig(config *configuration.Configuration) (*datastore.DB, error)
 		logOut = configuration.LogOutputStdout.Descriptor()
 	}
 
-	poolConfig := datastore.PoolConfig{MaxOpen: config.Database.Pool.MaxOpen}
+	var dbOpts []datastore.Option
 
-	return newDB(dsn, logLevel, logOut, poolConfig)
+	poolConfig := datastore.PoolConfig{MaxOpen: config.Database.Pool.MaxOpen}
+	dbOpts = append(dbOpts, datastore.WithPoolConfig(&poolConfig))
+
+	if config.Database.LoadBalancing.Enabled {
+		// service discovery takes precedence over fixed hosts
+		if config.Database.LoadBalancing.Record != "" {
+			nameserver := config.Database.LoadBalancing.Nameserver
+			port := config.Database.LoadBalancing.Port
+			record := config.Database.LoadBalancing.Record
+
+			resolver := datastore.NewDNSResolver(nameserver, port, record)
+			dbOpts = append(dbOpts, datastore.WithServiceDiscovery(resolver))
+		} else if len(config.Database.LoadBalancing.Hosts) > 0 {
+			hosts := config.Database.LoadBalancing.Hosts
+			dbOpts = append(dbOpts, datastore.WithFixedHosts(hosts))
+		}
+	}
+
+	return newDB(dsn, logLevel, logOut, dbOpts)
 }
 
 // TruncateTables truncates a set of tables in the test database.
@@ -350,7 +379,7 @@ func updateGoldenFile(tb testing.TB, path string, content []byte) {
 	tb.Helper()
 
 	tb.Log("updating .golden file")
-	err := os.WriteFile(path, content, 0644)
+	err := os.WriteFile(path, content, 0o644)
 	require.NoError(tb, err, "error updating .golden file")
 }
 

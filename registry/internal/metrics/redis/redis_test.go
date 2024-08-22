@@ -82,7 +82,6 @@ func TestNewPoolStatsCollector(t *testing.T) {
 			validateMetric(t, c, maxConnsName, maxConnsDesc, "gauge", float64(tt.expectedMaxConns), tt.expectedLabels)
 		})
 	}
-
 }
 
 type labelsIter struct {
@@ -95,7 +94,7 @@ func (l *labelsIter) HasMore() bool {
 	return l.Counter < len(l.Dict)
 }
 
-func validateMetric(t *testing.T, collector prometheus.Collector, name string, desc string, valueType string, value float64, labels prometheus.Labels) {
+func validateMetric(t *testing.T, collector prometheus.Collector, name, desc, valueType string, value float64, labels prometheus.Labels) {
 	t.Helper()
 
 	tmpl := template.New("")

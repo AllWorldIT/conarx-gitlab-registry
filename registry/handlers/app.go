@@ -89,7 +89,7 @@ type App struct {
 
 	router   *metaRouter                 // router dispatcher while we consolidate into the new router
 	driver   storagedriver.StorageDriver // driver maintains the app global storage driver instance.
-	db       *datastore.DB               // db is the global database handle used across the app.
+	db       datastore.LoadBalancer      // db is the global database handle used across the app.
 	registry distribution.Namespace      // registry is the primary registry backend for the app instance.
 
 	repoRemover      distribution.RepositoryRemover // repoRemover provides ability to delete repos
@@ -328,7 +328,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 	// Connect to the metadata database, if enabled.
 	if config.Database.Enabled {
-		log.Warn("the metadata database is a beta feature, please carefully review the documentation before enabling it in production")
+		log.Info("using the metadata database")
 
 		if config.GC.Disabled {
 			log.Warn("garbage collection is disabled")
@@ -337,7 +337,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
 		options = append(options, storage.UseDatabase)
 
-		db, err := datastore.Open(&datastore.DSN{
+		dsn := &datastore.DSN{
 			Host:           config.Database.Host,
 			Port:           config.Database.Port,
 			User:           config.Database.User,
@@ -348,7 +348,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			SSLKey:         config.Database.SSLKey,
 			SSLRootCert:    config.Database.SSLRootCert,
 			ConnectTimeout: config.Database.ConnectTimeout,
-		},
+		}
+
+		dbOpts := []datastore.Option{
 			datastore.WithLogger(log.WithFields(logrus.Fields{"database": config.Database.DBName})),
 			datastore.WithLogLevel(config.Log.Level),
 			datastore.WithPreparedStatements(config.Database.PreparedStatements),
@@ -358,14 +360,44 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				MaxLifetime: config.Database.Pool.MaxLifetime,
 				MaxIdleTime: config.Database.Pool.MaxIdleTime,
 			}),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to construct database connection: %w", err)
 		}
+
+		if config.Database.LoadBalancing.Enabled {
+			// service discovery takes precedence over fixed hosts
+			if config.Database.LoadBalancing.Record != "" {
+				nameserver := config.Database.LoadBalancing.Nameserver
+				port := config.Database.LoadBalancing.Port
+				record := config.Database.LoadBalancing.Record
+				replicaCheckInterval := config.Database.LoadBalancing.ReplicaCheckInterval
+
+				log.WithFields(dlog.Fields{
+					"nameserver":               nameserver,
+					"port":                     port,
+					"record":                   record,
+					"replica_check_interval_s": replicaCheckInterval.Seconds(),
+				}).Info("enabling database load balancing with service discovery")
+
+				resolver := datastore.NewDNSResolver(nameserver, port, record)
+				dbOpts = append(dbOpts,
+					datastore.WithServiceDiscovery(resolver),
+					datastore.WithReplicaCheckInterval(replicaCheckInterval),
+				)
+			} else if len(config.Database.LoadBalancing.Hosts) > 0 {
+				hosts := config.Database.LoadBalancing.Hosts
+				log.WithField("hosts", hosts).Info("enabling database load balancing with static hosts list")
+				dbOpts = append(dbOpts, datastore.WithFixedHosts(hosts))
+			}
+		}
+
+		db, err := datastore.NewDBLoadBalancer(ctx, dsn, dbOpts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize database connections: %w", err)
+		}
+		startDBReplicaChecking(ctx, db)
 
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
-		m := migrations.NewMigrator(db.DB, migrations.SkipPostDeployment)
+		m := migrations.NewMigrator(db.Primary().DB, migrations.SkipPostDeployment)
 		pending, err := m.HasPending()
 		if err != nil {
 			return nil, fmt.Errorf("failed to check database migrations status: %w", err)
@@ -380,19 +412,20 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		if config.HTTP.Debug.Prometheus.Enabled {
 			// Expose database metrics to prometheus.
-			collector := sqlmetrics.NewDBStatsCollector(config.Database.DBName, db)
+			// TODO(dlb): collect metrics for all hosts
+			collector := sqlmetrics.NewDBStatsCollector(config.Database.DBName, db.Primary())
 			promclient.MustRegister(collector)
 		}
 
 		// update online GC settings (if needed) in the background to avoid delaying the app start
 		go func() {
-			if err := updateOnlineGCSettings(app.Context, app.db, config); err != nil {
+			if err := updateOnlineGCSettings(app.Context, app.db.Primary(), config); err != nil {
 				errortracking.Capture(err, errortracking.WithContext(app.Context), errortracking.WithStackTrace())
 				log.WithError(err).Error("failed to update online GC settings")
 			}
 		}()
 
-		startOnlineGC(app.Context, app.db, app.driver, config)
+		startOnlineGC(app.Context, app.db.Primary(), app.driver, config)
 
 		// Now that we've started the database successfully, lock the filesystem
 		// to signal that this object storage needs to be managed by the database.
@@ -404,7 +437,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			log.WithError(err).Warn("failed to mark filesystem for database only usage, continuing")
 		}
 		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
-			startBackgroundMigrations(app.Context, app.db, config)
+			startBackgroundMigrations(app.Context, app.db.Primary(), config)
 		}
 	}
 
@@ -509,9 +542,8 @@ func updateOnlineGCSettings(ctx context.Context, db datastore.Queryer, config *c
 	log := dcontext.GetLogger(ctx)
 
 	// execute DB update after a randomized jitter of up to 60 seconds to ease concurrency in clustered environments
-	rand.Seed(systemClock.Now().UnixNano())
-	/* #nosec G404 */
-	jitter := time.Duration(rand.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
+	jitter := time.Duration(r.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
 
 	log.WithField("jitter_s", jitter.Seconds()).Info("preparing to update online GC settings")
 	systemClock.Sleep(jitter)
@@ -624,6 +656,37 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 	}
 }
 
+func startDBReplicaChecking(ctx context.Context, lb *datastore.DBLoadBalancer) {
+	l := dlog.GetLogger(dlog.WithContext(ctx))
+
+	// TODO(dlb): add startup jitter
+	go func() {
+		// This function can only end in three situations: 1) service discovery is disabled and therefore there is
+		// nothing left to do (no error) 2) context cancellation 3) panic. If a panic occurs we should log, report to
+		// Sentry and then re-panic, as the instance would be in an inconsistent/unknown state. In case of context
+		// cancellation, the app is shutting down, so there is nothing to worry about.
+		defer func() {
+			if err := recover(); err != nil {
+				l.WithFields(dlog.Fields{"error": err}).Error("database load balancing replica checking stopped with panic")
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(5 * time.Second)
+				panic(err)
+			}
+		}()
+		if err := lb.StartReplicaChecking(ctx); err != nil {
+			if errors.Is(err, context.Canceled) {
+				// leaving this here for now for additional confidence and improved observability
+				l.Warn("database load balancing replica checking stopped due to context cancellation")
+			} else {
+				// this should never happen, but leaving it here for future proofing against bugs
+				e := fmt.Errorf("database load balancing replica checking stopped with error: %w", err)
+				errortracking.Capture(e, errortracking.WithStackTrace())
+				l.WithError(err).Error("database load balancing replica checking stopped with error")
+			}
+		}
+	}()
+}
+
 // RegisterHealthChecks is an awful hack to defer health check registration
 // control to callers. This should only ever be called once per registry
 // process, typically in a main function. The correct way would be register
@@ -717,7 +780,7 @@ var routeMetricsMiddleware = metricskit.NewHandlerFactory(
 	// Keeping the same buckets used before LabKit, as defined in
 	// https://github.com/docker/go-metrics/blob/b619b3592b65de4f087d9f16863a7e6ff905973c/handler.go#L31:L32
 	metricskit.WithRequestDurationBuckets([]float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 60}),
-	metricskit.WithByteSizeBuckets(promclient.ExponentialBuckets(1024, 2, 22)), //1K to 4G
+	metricskit.WithByteSizeBuckets(promclient.ExponentialBuckets(1024, 2, 22)), // 1K to 4G
 )
 
 // register a handler with the application, by route name. The handler will be
@@ -1466,7 +1529,7 @@ func apiBase(w http.ResponseWriter, r *http.Request) {
 }
 
 // appendAccessRecords checks the method and adds the appropriate Access records to the records list.
-func appendAccessRecords(records []auth.Access, method string, repo string) []auth.Access {
+func appendAccessRecords(records []auth.Access, method, repo string) []auth.Access {
 	resource := auth.Resource{
 		Type: "repository",
 		Name: repo,
@@ -1692,8 +1755,6 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 	}
 
 	go func() {
-		rand.Seed(time.Now().Unix())
-		/* #nosec G404 */
 		jitter := time.Duration(rand.Int()%60) * time.Minute
 		log.Infof("Starting upload purge in %s", jitter)
 		time.Sleep(jitter)
@@ -1729,7 +1790,8 @@ func (app *App) GracefulShutdown(ctx context.Context) error {
 
 // DBStats returns the sql.DBStats for the metadata database connection handle.
 func (app *App) DBStats() sql.DBStats {
-	return app.db.Stats()
+	// TODO(dlb): collect metrics for all hosts
+	return app.db.Primary().Stats()
 }
 
 func (app *App) repositoryFromContext(ctx *Context, w http.ResponseWriter) (distribution.Repository, error) {

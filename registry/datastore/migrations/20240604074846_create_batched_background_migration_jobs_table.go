@@ -21,7 +21,8 @@ func init() {
 					attempts smallint DEFAULT 0 NOT NULL,
 					CONSTRAINT pk_batched_background_migrations_job PRIMARY KEY (id),
 					CONSTRAINT fk_batched_background_migration_jobs_bbm_id_bbms FOREIGN KEY (batched_background_migration_id) REFERENCES batched_background_migrations (id) ON DELETE CASCADE
-				)`},
+				)`,
+			},
 			Down: []string{"DROP TABLE IF EXISTS batched_background_migration_jobs CASCADE"},
 		},
 		PostDeployment: false,

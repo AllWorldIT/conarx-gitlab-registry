@@ -82,6 +82,7 @@ const (
 	lastQueryParamKey                      = "last"
 	dryRunParamKey                         = "dry_run"
 	tagNameQueryParamKey                   = "name"
+	tagExactNameQueryParamKey              = "name_exact"
 	sortQueryParamKey                      = "sort"
 	publishedAtQueryParamKey               = "published_at"
 	sortOrderDescPrefix                    = "-"
@@ -175,7 +176,7 @@ func timeToStringMicroPrecision(t time.Time) string {
 }
 
 // replacePathName removes the last part (i.e the name) of `originPath` and replaces it with `newName`
-func replacePathName(originPath string, newName string) string {
+func replacePathName(originPath, newName string) string {
 	dir := path.Dir(originPath)
 	return path.Join(dir, newName)
 }
@@ -219,7 +220,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 	if h.App.redisCache != nil {
 		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(h.App.redisCache)))
 	}
-	store := datastore.NewRepositoryStore(h.db, opts...)
+	store := datastore.NewRepositoryStore(h.db.Primary(), opts...)
 
 	repo, err := store.FindByPath(h.Context, h.Repository.Named().Name())
 	if err != nil {
@@ -238,7 +239,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 		// If this is the case, we need to find the corresponding top-level namespace. That must exist. If not we
 		// throw a 404 Not Found here.
 		repo = &models.Repository{Path: h.Repository.Named().Name()}
-		ns := datastore.NewNamespaceStore(h.db)
+		ns := datastore.NewNamespaceStore(h.db.Primary())
 		n, err := ns.FindByName(h.Context, repo.TopLevelPathSegment())
 		if err != nil {
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -356,6 +357,10 @@ func tagNameQueryParamValue(r *http.Request) string {
 	return r.URL.Query().Get(tagNameQueryParamKey)
 }
 
+func tagExactNameQueryParamValue(r *http.Request) string {
+	return r.URL.Query().Get(tagExactNameQueryParamKey)
+}
+
 func sortQueryParamValue(q url.Values) string {
 	return strings.ToLower(strings.TrimSpace(q.Get(sortQueryParamKey)))
 }
@@ -438,6 +443,12 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	}
 	filters.LastEntry = lastEntry
 
+	// `name` and `name_exact` are mutually exclusive
+	if q.Has(tagNameQueryParamKey) && q.Has(tagExactNameQueryParamKey) {
+		detail := v1.MutuallyExclusiveParametersErrorDetail(tagNameQueryParamKey, tagExactNameQueryParamKey)
+		return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
+	}
+
 	nameFilter := tagNameQueryParamValue(r)
 	if nameFilter != "" {
 		if !queryParamValueMatchesPattern(nameFilter, tagNameQueryParamPattern) {
@@ -446,6 +457,15 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 		}
 	}
 	filters.Name = nameFilter
+
+	exactNameFilter := tagExactNameQueryParamValue(r)
+	if exactNameFilter != "" {
+		if !queryParamValueMatchesPattern(exactNameFilter, tagQueryParamPattern) {
+			detail := v1.InvalidQueryParamValuePatternErrorDetail(tagExactNameQueryParamKey, tagQueryParamPattern)
+			return filters, v1.ErrorCodeInvalidQueryParamValue.WithDetail(detail)
+		}
+	}
+	filters.ExactName = exactNameFilter
 
 	sort := sortQueryParamValue(q)
 	if sort != "" {
@@ -496,7 +516,7 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	if h.App.redisCache != nil {
 		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(h.App.redisCache)))
 	}
-	rStore := datastore.NewRepositoryStore(h.db, opts...)
+	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
 	path := h.Repository.Named().Name()
 	repo, err := rStore.FindByPath(h.Context, path)
 	if err != nil {
@@ -515,7 +535,9 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Add a link header if there are more entries to retrieve
-	if len(tagsList) > 0 {
+	// NOTE(prozlach): with exact-match filter we get only one or no entries,
+	// so pagination is not needed.
+	if len(tagsList) > 0 && filters.ExactName == "" {
 		filters.LastEntry = tagsList[len(tagsList)-1].Name
 		filters.PublishedAt = timeToStringMicroPrecision(tagsList[len(tagsList)-1].PublishedAt)
 		publishedLast := filters.PublishedAt
@@ -621,7 +643,7 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 
 	// try to find the namespaceid for the repo if it exists
 	topLevelPathSegment := repo.TopLevelPathSegment()
-	nStore := datastore.NewNamespaceStore(h.db)
+	nStore := datastore.NewNamespaceStore(h.db.Primary())
 	namespace, err := nStore.FindByName(h.Context, topLevelPathSegment)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -637,7 +659,7 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 	repo.NamespaceID = namespace.ID
 	repo.Name = repo.Path[strings.LastIndex(repo.Path, "/")+1:]
 
-	rStore := datastore.NewRepositoryStore(h.db)
+	rStore := datastore.NewRepositoryStore(h.db.Primary())
 	repoList, err := rStore.FindPaginatedRepositoriesForPath(h.Context, repo, filters)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -703,8 +725,8 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	rStore := datastore.NewRepositoryStore(h.db)
-	nStore := datastore.NewNamespaceStore(h.db)
+	rStore := datastore.NewRepositoryStore(h.db.Primary())
+	nStore := datastore.NewNamespaceStore(h.db.Primary())
 
 	// find the origin repository for the path to be renamed (if it exists), if the origin path does not exist
 	// we still need to check and rename the sub-repositories of the provided path (if they exist)
@@ -759,7 +781,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 	// with existing repositories/sub-repositories within the registry. we proceed
 	// with procuring a lease for the rename operation and/or executing the rename in the datastore.
 
-	var rsp = renameStoreParams{
+	rsp := renameStoreParams{
 		source:           repo,
 		newPath:          newPath,
 		newName:          newName,
@@ -767,7 +789,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		isPathOriginRepo: renameOriginRepo,
 	}
 
-	err = handleRenameStoreOperation(h.Context, w, rsp, h.App.redisCache, h.db)
+	err = handleRenameStoreOperation(h.Context, w, rsp, h.App.redisCache, h.db.Primary())
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
@@ -895,7 +917,6 @@ func inferRepository(context context.Context, path string, rStore datastore.Repo
 // isRepositoryNameTaken checks if the `name` and `path` provided in the arguments are used by
 // any base repositories or sub-repositories within a given namespace with `namespaceId`
 func isRepositoryNameTaken(ctx context.Context, rStore datastore.RepositoryStore, namespaceId int64, newName, newPath string) (bool, error) {
-
 	newRepo, err := rStore.FindByPath(ctx, newPath)
 	if err != nil {
 		return false, err
@@ -1002,7 +1023,6 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 // validateRenameRequestAttributes verifies the attributes of the rename request are correct and also decides if the request
 // is for renaming the repository name of an origin repository or moving the namespace of an origin repository.
 func validateRenameRequestAttributes(renameObject *RenameRepositoryAPIRequest) (bool, error) {
-
 	var (
 		newName          = renameObject.Name
 		newNamespacePath = renameObject.Namespace
@@ -1155,7 +1175,6 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return errcode.FromUnknownError(fmt.Errorf("failed to create database transaction: %w", err))
-
 	}
 	defer tx.Rollback()
 
@@ -1167,7 +1186,6 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 	// only commit the transaction if the request was not a dry-run
 	if !repo.isDryRun {
 		if err := tx.Commit(); err != nil {
-
 			return errcode.FromUnknownError(fmt.Errorf("failed to commit database transaction: %w", err))
 		}
 		w.WriteHeader(http.StatusNoContent)

@@ -16,6 +16,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	itestutil "github.com/docker/distribution/registry/internal/testutil"
+	maintestutil "github.com/docker/distribution/testutil"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -764,7 +765,7 @@ func TestRepositoryStore_Manifests(t *testing.T) {
 			SchemaVersion: 2,
 			MediaType:     "application/vnd.docker.distribution.manifest.v2+json",
 			Digest:        "sha256:bd165db4bd480656a539e8e00db265377d162d6b98eebbfe5805d0fbd5144155",
-			Payload:       models.Payload(`{"schemaVersion":2,"mediaType":"application/vnd.docker.distribution.manifest.v2+json","config":{"mediaType":"application/vnd.docker.container.image.v1+json","size":1640,"digest":"sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9"},"layers":[{"mediaType":"application/vnd.docker.image.rootfs.diff.tar.gzip","size":2802957,"digest":"sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9"},{"mediaType":"application/vnd.docker.image.rootfs.diff.tar.gzip","size":108,"digest":"sha256:6b0937e234ce911b75630b744fb12836fe01bda5f7db203927edbb1390bc7e21"}]}`),
+			Payload:       models.Payload(maintestutil.SampleManifestJSON),
 			Configuration: &models.Configuration{
 				MediaType: "application/vnd.docker.container.image.v1+json",
 				Digest:    "sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9",
@@ -2964,7 +2965,6 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 				require.Equal(t, test.expectedTags[i].Name, receivedTag.Name)
 				require.Equal(t, test.expectedTags[i].PublishedAt.UTC(), receivedTag.PublishedAt.UTC(), "for tag: %s", receivedTag.Name)
 			}
-
 		})
 	}
 }
@@ -3207,7 +3207,6 @@ func TestRepositoryStore_RenamePathForSubRepositories(t *testing.T) {
 		// 		gitlab-org/gitlab-test/backend 							(4 tag(s))
 		// 		gitlab-org/gitlab-test/frontend 						(4 tag(s))
 	}{
-
 		name: "update all sub-repository paths starting with path `gitlab-org`",
 		baseRepo: &models.Repository{
 			ID:          1,
@@ -3454,7 +3453,6 @@ func TestRepositoryStore_RenameRepository(t *testing.T) {
 		// 		gitlab-org/gitlab-test 									(0 tag(s))
 	}{
 		{
-
 			name:        "update repository name and path for path `gitlab-org`",
 			oldPath:     "gitlab-org",
 			namespaceID: 1,
@@ -3469,7 +3467,6 @@ func TestRepositoryStore_RenameRepository(t *testing.T) {
 			},
 		},
 		{
-
 			name:        "update repository name and path for nested repo `gitlab-org/gitlab-test`",
 			oldPath:     "gitlab-org/gitlab-test",
 			namespaceID: 1,
@@ -3496,7 +3493,6 @@ func TestRepositoryStore_RenameRepository(t *testing.T) {
 			require.NotEmpty(t, repo.CreatedAt)
 			repo.CreatedAt = time.Time{}
 			require.Equal(t, test.expectedUpdatedRepo, repo)
-
 		})
 	}
 }

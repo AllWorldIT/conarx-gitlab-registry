@@ -4,9 +4,10 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"github.com/cenkalti/backoff/v4"
 	"sync"
 	"time"
+
+	"github.com/cenkalti/backoff/v4"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -219,7 +220,7 @@ type ignoredSink struct {
 	ignoreActions    map[string]bool
 }
 
-func newIgnoredSink(sink Sink, ignored []string, ignoreActions []string) Sink {
+func newIgnoredSink(sink Sink, ignored, ignoreActions []string) Sink {
 	if len(ignored) == 0 {
 		return sink
 	}

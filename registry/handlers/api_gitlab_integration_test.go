@@ -585,6 +585,26 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 			},
 		},
 		{
+			name:           "filtered by the exact name - found",
+			queryParams:    url.Values{"name_exact": []string{"jyi7b"}},
+			expectedStatus: http.StatusOK,
+			expectedOrderedTags: []string{
+				"jyi7b",
+			},
+		},
+		{
+			name:                "filtered by the exact name - not found",
+			queryParams:         url.Values{"name_exact": []string{"bogumil"}},
+			expectedStatus:      http.StatusOK,
+			expectedOrderedTags: []string{},
+		},
+		{
+			name:           "filtered both by the exact name and partial name",
+			queryParams:    url.Values{"name": []string{"jyi7b"}, "name_exact": []string{"jyi7b"}},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v1.ErrorCodeInvalidQueryParamValue,
+		},
+		{
 			name:           "filtered by name with literal underscore",
 			queryParams:    url.Values{"name": []string{"_y_"}},
 			expectedStatus: http.StatusOK,
@@ -699,7 +719,7 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 
 func TestGitlabAPI_RepositoryTagsList_WithCentralRepositoryCache(t *testing.T) {
 	srv := testutil.RedisServer(t)
-	testGitlabApiRepositoryGet(t, withRedisCache(srv.Addr()))
+	testGitlabApiRepositoryTagsList(t, withRedisCache(srv.Addr()))
 }
 
 func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
@@ -713,11 +733,11 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
 
-	dbtestutil.ReloadFixtures(t, env.db, "../datastore/",
+	dbtestutil.ReloadFixtures(t, env.db.Primary(), "../datastore/",
 		// A Tag has a foreign key for a Manifest, which in turn references a Repository (insert order matters)
 		dbtestutil.NamespacesTable, dbtestutil.RepositoriesTable, dbtestutil.BlobsTable, dbtestutil.ManifestsTable, dbtestutil.TagsTable)
 	t.Cleanup(func() {
-		require.NoError(t, dbtestutil.TruncateAllTables(env.db))
+		require.NoError(t, dbtestutil.TruncateAllTables(env.db.Primary()))
 	})
 
 	// see ../datastore/testdata/fixtures/tags.sql
@@ -967,7 +987,6 @@ func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expec
 	} else {
 		require.Empty(t, gotNextLink)
 	}
-
 }
 
 // TestGitlabAPI_RepositoryTagsList_DefaultPageSize asserts that the API enforces a default page size of 100. We do it
@@ -1443,7 +1462,6 @@ func TestGitlabAPI_SubRepositoryList(t *testing.T) {
 // w/tags to test this. Doing it in the former test would mean more complicated table test definitions,
 // instead of the current small set of repositories w/tags that make it easy to follow/understand the expected results.
 func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
-
 	env := newTestEnv(t)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
@@ -1826,7 +1844,6 @@ func TestGitlabAPI_RenameRepository_Namespace_Empty(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
-
 	// apply base app config/setup (without authorization) to allow seeding repository with test data
 	env := newTestEnv(t)
 	env.requireDB(t)
@@ -1871,7 +1888,6 @@ func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
-
 	// apply base app config/setup (without authorization) to allow seeding repository with test data
 	env := newTestEnv(t)
 	env.requireDB(t)
@@ -2089,7 +2105,6 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
-
 	baseRepoName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
 

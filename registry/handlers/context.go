@@ -53,6 +53,13 @@ func (ctx *Context) Value(key interface{}) interface{} {
 	return ctx.Context.Value(key)
 }
 
+func (ctx *Context) GetRepoCache() datastore.RepositoryCache {
+	if ctx.App != nil && ctx.App.redisCache != nil {
+		return datastore.NewCentralRepositoryCache(ctx.App.redisCache)
+	}
+	return ctx.repoCache
+}
+
 func getName(ctx context.Context) (name string) {
 	return dcontext.GetStringValue(ctx, "vars.name")
 }

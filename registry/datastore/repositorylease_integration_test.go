@@ -67,7 +67,6 @@ func TestCentralRepositoryLeaseCache(t *testing.T) {
 }
 
 func TestRepositoryLeaseStore_RenameLease_FindRenameLeaseByPath_Empty(t *testing.T) {
-
 	path := "a-test-group/foo"
 
 	// create a store and try fetching the rename lease
@@ -332,7 +331,6 @@ func TestRepositoryLeaseStore_RenameLease_CreateLease(t *testing.T) {
 }
 
 func TestRepositoryLeaseStore_RenameLease_CreateLease_Empty(t *testing.T) {
-
 	ttl := 60 * time.Minute
 	// create a store
 	cache := datastore.NewCentralRepositoryLeaseCache(itestutil.RedisCache(t, ttl))

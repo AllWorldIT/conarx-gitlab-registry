@@ -1,3 +1,5 @@
+//go:generate mockgen -package mocks -destination mocks/repository.go . RepositoryCache
+
 package datastore
 
 import (
@@ -42,6 +44,9 @@ const (
 
 	// sizeWithDescendantsKeyTTL is the TTL for the cached value of the "size with descendants" for a given repository.
 	sizeWithDescendantsKeyTTL = 5 * time.Minute
+
+	// lsnKeyTTL is the TTL for the cached primary database Log Sequence Number (LSN) for a given repository.
+	lsnKeyTTL = 1 * time.Hour
 )
 
 // FilterParams contains the specific filters used to get
@@ -50,6 +55,7 @@ type FilterParams struct {
 	SortOrder        SortOrder
 	OrderBy          string
 	Name             string
+	ExactName        string
 	BeforeEntry      string
 	LastEntry        string
 	PublishedAt      string
@@ -214,6 +220,14 @@ type RepositoryCache interface {
 	// GetSizeWithDescendants gets the computed "size with descendants" of a given repository. Returns whether the key
 	// was found and its value.
 	GetSizeWithDescendants(ctx context.Context, r *models.Repository) (bool, int64)
+
+	// SetLSN records the primary database Log Sequence Number (LSN) associated with a given repository.
+	// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md?ref_type=heads#primary-sticking
+	SetLSN(ctx context.Context, r *models.Repository, lsn string) error
+
+	// GetLSN gets the primary database Log Sequence Number (LSN) associated with a given repository.
+	// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md?ref_type=heads#primary-sticking
+	GetLSN(ctx context.Context, r *models.Repository) (string, error)
 }
 
 // noOpRepositoryCache satisfies the RepositoryCache, but does not cache anything.
@@ -237,7 +251,13 @@ func (n *noOpRepositoryCache) SetSizeWithDescendants(context.Context, *models.Re
 func (n *noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
 	return false, 0
 }
+
 func (n *noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
+}
+
+func (n *noOpRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
+func (n *noOpRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
+	return "", nil
 }
 
 // singleRepositoryCache caches a single repository in-memory. This implementation is not thread-safe. Deprecated in
@@ -299,6 +319,14 @@ func (c *singleRepositoryCache) GetSizeWithDescendants(context.Context, *models.
 func (c *singleRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
+// SetLSN is a noop as this functionality depends on Redis.
+func (c *singleRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
+
+// GetLSN is a noop as this functionality depends on Redis.
+func (c *singleRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
+	return "", nil
+}
+
 // centralRepositoryCache is the interface for the centralized repository object cache backed by Redis.
 type centralRepositoryCache struct {
 	// cache provides access to the raw gocache interface
@@ -313,7 +341,7 @@ func NewCentralRepositoryCache(cache *gocache.Cache[any]) *centralRepositoryCach
 }
 
 // key generates a valid Redis key string for a given repository object. The used key format is described in
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/redis-dev-guidelines.md#key-format.
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
 func (c *centralRepositoryCache) key(path string) string {
 	nsPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()
@@ -467,6 +495,42 @@ func (c *centralRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *
 	}
 
 	return true, *size
+}
+
+// lsnKey generates a valid Redis key string for the cached primary database Log Sequence Number (LSN) for a
+// given repository.
+func (c *centralRepositoryCache) lsnKey(path string) string {
+	return fmt.Sprintf("%s:lsn", c.key(path))
+}
+
+// SetLSN implements RepositoryCache.
+func (c *centralRepositoryCache) SetLSN(ctx context.Context, r *models.Repository, lsn string) error {
+	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
+	defer cancel()
+
+	return c.cache.Set(setCtx, c.lsnKey(r.Path), lsn, libstore.WithExpiration(lsnKeyTTL))
+}
+
+// GetLSN implements RepositoryCache.
+func (c *centralRepositoryCache) GetLSN(ctx context.Context, r *models.Repository) (string, error) {
+	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
+	defer cancel()
+
+	v, err := c.cache.Get(getCtx, c.lsnKey(r.Path))
+	if err != nil {
+		// a wrapped redis.Nil is returned when the key is not found in Redis
+		if !errors.Is(err, redis.Nil) {
+			return "", fmt.Errorf("failed to read LSN key from cache: %w", err)
+		}
+		return "", nil
+	}
+
+	lsn, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("LSN cache key has invalid value type: %T", v)
+	}
+
+	return lsn, nil
 }
 
 func scanFullRepository(row *sql.Row) (*models.Repository, error) {
@@ -914,8 +978,8 @@ func sqlPartialMatch(value string) string {
 // used exclusively for the GET /gitlab/v1/<name>/tags/list API, where pagination is done with a marker (`filters.LastEntry`).
 // Even if there is no tag with a name of `filters.LastEntry`, the returned tags will always be those with a path lexicographically
 // after `filters.LastEntry`. Tags are lexicographically sorted.
-// Optionally, it is possible to pass a string to be used as a  partial match filter for tag names using `filters.Name`.
-// The search is not filtered if this value is an empty string.
+// Optionally, it is possible to pass a string to be used as a partial match filter for tag names using `filters.Name` and exact match using
+// `filters.ExactName`. The search is not filtered if both of these values are empty.
 func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error) {
 	defer metrics.InstrumentQuery("repository_tags_detail_paginated")()
 
@@ -981,16 +1045,31 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 			JOIN media_types AS mt ON mt.id = m.media_type_id
 		WHERE
 			t.top_level_namespace_id = $1
-			AND t.repository_id = $2
+			AND t.repository_id = $2`
+
+	args := []any{r.NamespaceID, r.ID}
+
+	if filters.ExactName != "" {
+		// NOTE(prozlach): In the case when there is exact match requested,
+		// there is going to be only single entry in the response, or none. So
+		// there is no point in adding pagination and sorting keywords here.
+		args = append(args, filters.ExactName)
+		baseQuery += `
+		  	AND t.name = $3`
+		return baseQuery, args
+	}
+
+	// NOTE(prozlach): We handle both cases in this path - empty and not
+	// empty `Name` filter
+	// FIXME(prozlach): the code relies on a strict number of parameters,
+	// so we need to have $3 here even when adding this condition is not
+	// necessary. The proper way to handle it is a query builder that would
+	// automatically adjusts the numbering of arguments in the query text
+	// depending on the number of parameters passed.
+	args = append(args, sqlPartialMatch(filters.Name))
+	baseQuery += `
 		  	AND t.name LIKE $3
 			%s`
-
-	var (
-		q       string
-		subArgs []any
-	)
-
-	args := []any{r.NamespaceID, r.ID, sqlPartialMatch(filters.Name)}
 
 	// default to ascending order to keep backwards compatibility
 	if filters.SortOrder == "" {
@@ -999,6 +1078,11 @@ func tagsDetailPaginatedQuery(r *models.Repository, filters FilterParams) (strin
 	if filters.OrderBy == "" {
 		filters.OrderBy = orderByName
 	}
+
+	var (
+		q       string
+		subArgs []any
+	)
 
 	switch {
 	case filters.LastEntry == "" && filters.BeforeEntry == "" && filters.PublishedAt == "":
@@ -1073,6 +1157,7 @@ func getLastEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
 
 	return q, args
 }
+
 func getBeforeEntryQuery(baseQuery string, filters FilterParams) (string, []any) {
 	var (
 		comparisonOperator     string
@@ -1853,7 +1938,7 @@ func (s *repositoryStore) CreateOrFind(ctx context.Context, r *models.Repository
 
 	row := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.Name, r.Path, r.ParentID)
 	if err := row.Scan(&r.ID, &r.CreatedAt, &r.DeletedAt); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("creating repository: %w", err)
 		}
 		// if the result set has no rows, then the repository already exists

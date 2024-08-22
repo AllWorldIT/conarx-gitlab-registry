@@ -29,10 +29,10 @@ import (
 	"github.com/docker/distribution/registry/storage"
 	memorycache "github.com/docker/distribution/registry/storage/cache/memory"
 	"github.com/docker/distribution/registry/storage/driver/testdriver"
-	"github.com/golang/mock/gomock"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 // TestAppDistribtionDispatcher builds an application with a test dispatcher and
@@ -457,8 +457,8 @@ func Test_updateOnlineGCSettings(t *testing.T) {
 
 	// use fixed time for reproducible rand seeds (used to generate jitter durations)
 	now := time.Time{}
-	rand.Seed(now.UnixNano())
-	expectedJitter := time.Duration(rand.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewSource(now.UnixNano()))
+	expectedJitter := time.Duration(r.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
 
 	startTime := now.Add(1 * time.Millisecond)
 
@@ -604,14 +604,12 @@ func Test_updateOnlineGCSettings_Timeout(t *testing.T) {
 // is logged if it exists in the request header
 // `GET /gitlab/v1/` endpoint.
 func TestGitlabAPI_LogsCFRayID(t *testing.T) {
-
 	testcases := []struct {
 		name          string
 		headers       map[string]string
 		checkContains func(buf bytes.Buffer) bool
 	}{
 		{
-
 			name:    "a request with a CF-ray header",
 			headers: map[string]string{"CF-Ray": "value"},
 			checkContains: func(buf bytes.Buffer) bool {
@@ -619,7 +617,6 @@ func TestGitlabAPI_LogsCFRayID(t *testing.T) {
 			},
 		},
 		{
-
 			name:    "a request with a CF-ray header but empty value",
 			headers: map[string]string{"CF-Ray": ""},
 			checkContains: func(buf bytes.Buffer) bool {
@@ -628,7 +625,6 @@ func TestGitlabAPI_LogsCFRayID(t *testing.T) {
 			},
 		},
 		{
-
 			name:    "a request without a CF-ray header",
 			headers: map[string]string{"Not-CF-Ray": "value"},
 			checkContains: func(buf bytes.Buffer) bool {
@@ -674,14 +670,12 @@ func TestGitlabAPI_LogsCFRayID(t *testing.T) {
 // is logged if it exists in the request header
 // `GET /v2/` endpoint.
 func TestDistributionAPI_LogsCFRayID(t *testing.T) {
-
 	testcases := []struct {
 		name          string
 		headers       map[string]string
 		checkContains func(buf bytes.Buffer) bool
 	}{
 		{
-
 			name:    "a request with a CF-ray header",
 			headers: map[string]string{"CF-Ray": "value"},
 			checkContains: func(buf bytes.Buffer) bool {
@@ -689,7 +683,6 @@ func TestDistributionAPI_LogsCFRayID(t *testing.T) {
 			},
 		},
 		{
-
 			name:    "a request with a CF-ray header but empty value",
 			headers: map[string]string{"CF-Ray": ""},
 			checkContains: func(buf bytes.Buffer) bool {
@@ -698,7 +691,6 @@ func TestDistributionAPI_LogsCFRayID(t *testing.T) {
 			},
 		},
 		{
-
 			name:    "a request without a CF-ray header",
 			headers: map[string]string{"Not-CF-Ray": "value"},
 			checkContains: func(buf bytes.Buffer) bool {
@@ -739,8 +731,8 @@ func TestDistributionAPI_LogsCFRayID(t *testing.T) {
 		test.checkContains(buf)
 	}
 }
-func bufferStreamLogger(ctx context.Context, buf *bytes.Buffer) *logrus.Entry {
 
+func bufferStreamLogger(ctx context.Context, buf *bytes.Buffer) *logrus.Entry {
 	fields := logrus.Fields{}
 	fields["test"] = true
 	logger := logrus.StandardLogger().WithFields(fields)

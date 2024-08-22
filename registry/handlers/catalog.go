@@ -71,7 +71,7 @@ func dbGetCatalog(ctx context.Context, db datastore.Queryer, filters datastore.F
 }
 
 func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
-	var moreEntries = true
+	moreEntries := true
 
 	q := r.URL.Query()
 	lastEntry := q.Get("last")
@@ -93,7 +93,7 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	var repos []string
 
 	if ch.useDatabase {
-		repos, moreEntries, err = dbGetCatalog(ch.Context, ch.db, filters)
+		repos, moreEntries, err = dbGetCatalog(ch.Context, ch.db.Primary(), filters)
 		if err != nil {
 			ch.Errors = append(ch.Errors, errcode.FromUnknownError(err))
 			return
@@ -217,11 +217,10 @@ func EncodeFilter(publishedAt, tagName string) (v string) {
 	return base64.StdEncoding.EncodeToString(
 		[]byte(fmt.Sprintf("%s%s%s", publishedAt, encodingSeparator, tagName)),
 	)
-
 }
 
 // DecodeFilter base64 filter using encodingSeparator to obtain the values for published_at and tag name
-func DecodeFilter(encodedStr string) (a string, b string, e error) {
+func DecodeFilter(encodedStr string) (a, b string, e error) {
 	urlUnescaped, err := url.QueryUnescape(encodedStr)
 	if err != nil {
 		return "", "", err

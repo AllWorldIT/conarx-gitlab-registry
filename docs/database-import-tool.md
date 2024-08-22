@@ -32,15 +32,6 @@ final step of a three step import. Running this command ensures that any
 unreferenced blobs are visible to the online garbage collector, allowing them
 to be removed from object storage. Alias: `--step-three`
 
-#### Require Empty Database
-
-The `--require-empty-database` option allows the user to enable a safety check
-which prevents the import command from running on a database which already
-contains some information. This option is useful for relatively small registries
-where it is possible to import all registry data in one single period of
-read-only mode or downtime. Larger registries will likely need to break up the
-import process over multiple sessions.
-
 #### Dry Run
 
 The `--dry-run` option will perform a full import without committing any changes

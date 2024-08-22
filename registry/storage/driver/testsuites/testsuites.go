@@ -162,7 +162,8 @@ func (suite *DriverSuite) TestValidPaths(c *check.C) {
 		"/a-.b",
 		"/_.abc",
 		"/Docker/docker-registry",
-		"/Abc/Cba"}
+		"/Abc/Cba",
+	}
 
 	for _, filename := range validFiles {
 		err := suite.StorageDriver.PutContent(suite.ctx, filename, contents)
@@ -200,7 +201,8 @@ func (suite *DriverSuite) TestInvalidPaths(c *check.C) {
 		"abc",
 		"123.abc",
 		"//bcd",
-		"/abc_123/"}
+		"/abc_123/",
+	}
 
 	for _, filename := range invalidFiles {
 		err := suite.StorageDriver.PutContent(suite.ctx, filename, contents)
@@ -731,7 +733,7 @@ func (suite *DriverSuite) testDeleteDir(c *check.C, numFiles int) {
 
 // buildFiles builds a num amount of test files with a size of size under parentDir. Returns a slice with the path of
 // the created files.
-func (suite *DriverSuite) buildFiles(c *check.C, parentDir string, num int64, size int64) []string {
+func (suite *DriverSuite) buildFiles(c *check.C, parentDir string, num, size int64) []string {
 	paths := make([]string, 0, num)
 
 	for i := int64(0); i < num; i++ {
@@ -2015,8 +2017,10 @@ func (suite *DriverSuite) writeReadCompareStreams(c *check.C, filename string, c
 	c.Assert(readContents, check.DeepEquals, contents)
 }
 
-var filenameChars = []byte("abcdefghijklmnopqrstuvwxyz0123456789")
-var separatorChars = []byte("._-")
+var (
+	filenameChars  = []byte("abcdefghijklmnopqrstuvwxyz0123456789")
+	separatorChars = []byte("._-")
+)
 
 func randomPath(length int64) string {
 	path := "/"

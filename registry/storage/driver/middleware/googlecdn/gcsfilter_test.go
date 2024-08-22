@@ -134,7 +134,7 @@ func TestInvalidNetworkType(t *testing.T) {
 func TestParsing(t *testing.T) {
 	t.Parallel()
 
-	var data = `{
+	data := `{
 	   "syncToken": "1640628111578",
 	   "creationTime": "2021-12-27T10:01:51.578099",
 	   "prefixes": [{
@@ -272,7 +272,7 @@ func TestResponseNotOK(t *testing.T) {
 // populate ips with a number of different ipv4 and ipv6 networks, for the purposes
 // of benchmarking contains() performance.
 func populateRandomNetworks(b *testing.B, ips *googleIPs, ipv4Count, ipv6Count int) {
-	generateNetworks := func(dest *[]net.IPNet, bytes int, count int) {
+	generateNetworks := func(dest *[]net.IPNet, bytes, count int) {
 		for i := 0; i < count; i++ {
 			ip := make([]byte, bytes)
 			_, err := rand.Read(ip)

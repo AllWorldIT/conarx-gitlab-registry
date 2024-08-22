@@ -36,7 +36,6 @@ func TestNamespaceStore_FindByName(t *testing.T) {
 		Name:      "gitlab-org",
 		CreatedAt: testutil.ParseTimestamp(t, "2020-03-02 17:47:39.849864", n.CreatedAt.Location()),
 	}, n)
-
 }
 
 func TestNamespaceStore_FindByName_NotFound(t *testing.T) {

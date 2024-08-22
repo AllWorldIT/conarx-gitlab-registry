@@ -91,7 +91,7 @@ func init() {
 }
 
 func TestPathToKey(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name          string
 		rootDirectory string
 		providedPath  string
@@ -201,7 +201,7 @@ func TestStatRootPath(t *testing.T) {
 		t.Skip(skipCheck())
 	}
 
-	var tests = []struct {
+	tests := []struct {
 		name          string
 		rootDirectory string
 		legacyPath    bool
@@ -340,13 +340,11 @@ func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
 		expectedUseLegacyPrefix bool
 	}{
 		{
-
 			name:                    "config: legacyrootprefix not set trimlegacyrootprefix not set",
 			config:                  map[string]interface{}{},
 			expectedUseLegacyPrefix: false,
 		},
 		{
-
 			name: "config: legacyrootprefix set trimlegacyrootprefix not set",
 			config: map[string]interface{}{
 				paramLegacyRootPrefix: true,
@@ -354,7 +352,6 @@ func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
 			expectedUseLegacyPrefix: true,
 		},
 		{
-
 			name: "config: legacyrootprefix false trimlegacyrootprefix not set",
 			config: map[string]interface{}{
 				paramLegacyRootPrefix: false,
@@ -362,7 +359,6 @@ func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
 			expectedUseLegacyPrefix: false,
 		},
 		{
-
 			name: "config: legacyrootprefix not set trimlegacyrootprefix true",
 			config: map[string]interface{}{
 				paramTrimLegacyRootPrefix: true,
@@ -370,7 +366,6 @@ func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
 			expectedUseLegacyPrefix: false,
 		},
 		{
-
 			name: "config: legacyrootprefix not set trimlegacyrootprefix false",
 			config: map[string]interface{}{
 				paramTrimLegacyRootPrefix: false,
@@ -378,7 +373,6 @@ func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
 			expectedUseLegacyPrefix: true,
 		},
 		{
-
 			name: "config: legacyrootprefix true trimlegacyrootprefix false",
 			config: map[string]interface{}{
 				paramTrimLegacyRootPrefix: false,
@@ -387,7 +381,6 @@ func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
 			expectedUseLegacyPrefix: true,
 		},
 		{
-
 			name: "config: legacyrootprefix false trimlegacyrootprefix true",
 			config: map[string]interface{}{
 				paramTrimLegacyRootPrefix: true,
@@ -401,7 +394,6 @@ func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
 			actualTrimLegacyPrefix, err := inferRootPrefixConfiguration(test.config)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedUseLegacyPrefix, actualTrimLegacyPrefix)
-
 		})
 	}
 }
@@ -413,7 +405,6 @@ func TestInferRootPrefixConfiguration_Invalid(t *testing.T) {
 		expectedUseLegacyPrefix bool
 	}{
 		{
-
 			name: "config: legacyrootprefix true trimlegacyrootprefix true",
 			config: map[string]interface{}{
 				paramTrimLegacyRootPrefix: true,
@@ -421,7 +412,6 @@ func TestInferRootPrefixConfiguration_Invalid(t *testing.T) {
 			},
 		},
 		{
-
 			name: "config: legacyrootprefix false trimlegacyrootprefix false",
 			config: map[string]interface{}{
 				paramTrimLegacyRootPrefix: false,

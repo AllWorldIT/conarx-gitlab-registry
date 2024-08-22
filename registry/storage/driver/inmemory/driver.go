@@ -191,7 +191,6 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 	}
 
 	entries, err := found.(*dir).list(normalized)
-
 	if err != nil {
 		switch err {
 		case errNotExists:
@@ -208,7 +207,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 
 // Move moves an object stored at sourcePath to destPath, removing the original
 // object.
-func (d *driver) Move(ctx context.Context, sourcePath string, destPath string) error {
+func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 

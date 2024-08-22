@@ -94,6 +94,7 @@ func NewNoOpRepositoryLeaseCache() *noOpRepositoryLeaseCache {
 func (n *noOpRepositoryLeaseCache) Get(ctx context.Context, path string, leaseType models.LeaseType) (*models.RepositoryLease, error) {
 	return nil, nil
 }
+
 func (n *noOpRepositoryLeaseCache) Set(ctx context.Context, lease *models.RepositoryLease, ttl time.Duration) error {
 	return nil
 }
@@ -101,6 +102,7 @@ func (n *noOpRepositoryLeaseCache) Set(ctx context.Context, lease *models.Reposi
 func (n *noOpRepositoryLeaseCache) TTL(ctx context.Context, lease *models.RepositoryLease) (time.Duration, error) {
 	return 0, nil
 }
+
 func (n *noOpRepositoryLeaseCache) Invalidate(ctx context.Context, path string) error {
 	return nil
 }
@@ -119,7 +121,7 @@ func NewCentralRepositoryLeaseCache(cache *gocache.Cache[any]) *centralRepositor
 }
 
 // key generates a valid Redis key string for a given repository lease object. The used key format is described in
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/redis-dev-guidelines.md#key-format.
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
 func (c *centralRepositoryLeaseCache) key(path string) string {
 	nsPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()

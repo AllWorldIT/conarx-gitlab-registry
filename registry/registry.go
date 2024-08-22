@@ -50,7 +50,6 @@ var ServeCmd = &cobra.Command{
 	Short: "`serve` stores and distributes Docker images",
 	Long:  "`serve` stores and distributes Docker images.",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		// setup context
 		ctx := dcontext.WithVersion(dcontext.Background(), version.Version)
 
@@ -635,7 +634,7 @@ func nextProtos(http2Disabled bool) []string {
 }
 
 func dbFromConfig(config *configuration.Configuration) (*datastore.DB, error) {
-	return datastore.Open(&datastore.DSN{
+	return datastore.NewConnector().Open(context.Background(), &datastore.DSN{
 		Host:        config.Database.Host,
 		Port:        config.Database.Port,
 		User:        config.Database.User,

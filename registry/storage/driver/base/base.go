@@ -48,10 +48,8 @@ import (
 	"github.com/docker/go-metrics"
 )
 
-var (
-	// storageAction is the metrics of blob related operations
-	storageAction = prometheus.StorageNamespace.NewLabeledTimer("action", "The number of seconds that the storage action takes", "driver", "action")
-)
+// storageAction is the metrics of blob related operations
+var storageAction = prometheus.StorageNamespace.NewLabeledTimer("action", "The number of seconds that the storage action takes", "driver", "action")
 
 func init() {
 	metrics.Register(prometheus.StorageNamespace)
@@ -181,7 +179,7 @@ func (base *Base) List(ctx context.Context, path string) ([]string, error) {
 }
 
 // Move wraps Move of underlying storage driver.
-func (base *Base) Move(ctx context.Context, sourcePath string, destPath string) error {
+func (base *Base) Move(ctx context.Context, sourcePath, destPath string) error {
 	ctx, done := dcontext.WithTrace(ctx)
 	defer done("%s.Move(%q, %q", base.Name(), sourcePath, destPath)
 

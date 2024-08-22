@@ -264,7 +264,8 @@ func (imh *manifestHandler) rewriteManifestList(manifestList *manifestlist.Deser
 	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{
 		"manifest_list_digest": imh.Digest.String(),
 		"default_arch":         defaultArch,
-		"default_os":           defaultOS})
+		"default_os":           defaultOS,
+	})
 	l.Info("client does not advertise support for manifest lists, selecting a manifest image for the default arch and os")
 
 	// Find the image manifest corresponding to the default platform.
@@ -330,7 +331,7 @@ type dbManifestGetter struct {
 
 func newDBManifestGetter(imh *manifestHandler, req *http.Request) (*dbManifestGetter, error) {
 	return &dbManifestGetter{
-		RepositoryStore: datastore.NewRepositoryStore(imh.App.db, datastore.WithRepositoryCache(imh.repoCache)),
+		RepositoryStore: datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(imh.repoCache)),
 		repoPath:        imh.Repository.Named().Name(),
 		req:             req,
 	}, nil
@@ -513,7 +514,7 @@ func (p *dbManifestWriter) Tag(imh *manifestHandler, mfst distribution.Manifest,
 	// To be removed on completion of: https://gitlab.com/groups/gitlab-org/-/epics/9050
 	repoCache := getRepoCache(imh)
 
-	if err := dbTagManifest(imh, imh.db, repoCache, imh.Digest, imh.Tag, repoName); err != nil {
+	if err := dbTagManifest(imh, imh.db.Primary(), repoCache, imh.Digest, imh.Tag, repoName); err != nil {
 		if errors.Is(err, datastore.ErrManifestNotFound) {
 			// If online GC was already reviewing the manifest that we want to tag, and that manifest had no
 			// tags before the review start, the API is unable to stop the GC from deleting the manifest (as
@@ -526,7 +527,7 @@ func (p *dbManifestWriter) Tag(imh *manifestHandler, mfst distribution.Manifest,
 			if err = p.Put(imh, mfst); err != nil {
 				return fmt.Errorf("failed to recreate manifest in database: %w", err)
 			}
-			if err = dbTagManifest(imh, imh.db, repoCache, imh.Digest, imh.Tag, repoName); err != nil {
+			if err = dbTagManifest(imh, imh.db.Primary(), repoCache, imh.Digest, imh.Tag, repoName); err != nil {
 				return fmt.Errorf("failed to create tag in database after manifest recreate: %w", err)
 			}
 		} else {
@@ -632,7 +633,6 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 
 	mediaType := r.Header.Get("Content-Type")
 	manifest, desc, err := distribution.UnmarshalManifest(mediaType, jsonBuf.Bytes())
-
 	if err != nil {
 		imh.Errors = append(imh.Errors, v2.ErrorCodeManifestInvalid.WithDetail(err.Error()))
 		return
@@ -814,7 +814,7 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 
 	// We need to find and lock a GC manifest task that is related with the manifest that we're about to tag. This
 	// is needed to ensure we lock any related online GC tasks to prevent race conditions around the tag creation. See:
-	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-tag-for-an-untagged-manifest
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create database transaction: %w", err)
@@ -857,7 +857,7 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 }
 
 func dbPutManifestOCI(imh *manifestHandler, manifest *ocischema.DeserializedManifest, payload []byte) error {
-	repoReader := datastore.NewRepositoryStore(imh.App.db, datastore.WithRepositoryCache(getRepoCache(imh)))
+	repoReader := datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
 	repoPath := imh.Repository.Named().Name()
 
 	v := validation.NewOCIValidator(
@@ -876,7 +876,7 @@ func dbPutManifestOCI(imh *manifestHandler, manifest *ocischema.DeserializedMani
 }
 
 func dbPutManifestSchema2(imh *manifestHandler, manifest *schema2.DeserializedManifest, payload []byte) error {
-	repoReader := datastore.NewRepositoryStore(imh.App.db, datastore.WithRepositoryCache(getRepoCache(imh)))
+	repoReader := datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
 	repoPath := imh.Repository.Named().Name()
 
 	v := validation.NewSchema2Validator(
@@ -904,7 +904,7 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 	})
 
 	// create or find target repository
-	rStore := datastore.NewRepositoryStore(imh.App.db, datastore.WithRepositoryCache(getRepoCache(imh)))
+	rStore := datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
 	dbRepo, err := rStore.CreateOrFindByPath(imh, repoPath)
 	if err != nil {
 		return err
@@ -984,7 +984,7 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 		ll := mfst.DistributableLayers()
 		m.NonDistributableLayers = len(ll) < len(mfst.Layers())
 
-		mStore := datastore.NewManifestStore(imh.App.db)
+		mStore := datastore.NewManifestStore(imh.App.db.Primary())
 		// Use CreateOrFind to prevent race conditions while pushing the same manifest with digest for different tags
 		if err := mStore.CreateOrFind(imh, m); err != nil {
 			return err
@@ -1020,7 +1020,7 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 
 func layerMediaTypeExists(imh *manifestHandler, mt string) bool {
 	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{"media_type": mt})
-	mtStore := datastore.NewMediaTypeStore(imh.App.db)
+	mtStore := datastore.NewMediaTypeStore(imh.App.db.Primary())
 
 	exists, err := mtStore.Exists(imh.Context, mt)
 	if err != nil {
@@ -1064,7 +1064,8 @@ func dbFindManifestListManifest(
 	rStore datastore.RepositoryStore,
 	dbRepo *models.Repository,
 	dgst digest.Digest,
-	repoPath string) (*models.Manifest, error) {
+	repoPath string,
+) (*models.Manifest, error) {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "manifest_digest": dgst})
 	l.Debug("finding manifest list manifest")
 
@@ -1098,7 +1099,7 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 	})
 	l.Debug("putting manifest list")
 
-	rStore := datastore.NewRepositoryStore(imh.App.db, datastore.WithRepositoryCache(getRepoCache(imh)))
+	rStore := datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
 	v := validation.NewManifestListValidator(
 		&datastore.RepositoryManifestService{
 			RepositoryReader: rStore,
@@ -1145,7 +1146,7 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 
 	// We need to find and lock referenced manifests to ensure we lock any related online GC tasks to prevent race
 	// conditions around the manifest list insert. See:
-	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
 	mm := make([]*models.Manifest, 0, len(manifestList.Manifests))
 	ids := make([]int64, 0, len(mm))
 	for _, desc := range manifestList.Manifests {
@@ -1157,7 +1158,7 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 		ids = append(ids, m.ID)
 	}
 
-	tx, err := imh.db.BeginTx(imh.Context, nil)
+	tx, err := imh.db.Primary().BeginTx(imh.Context, nil)
 	if err != nil {
 		return fmt.Errorf("creating database transaction: %w", err)
 	}
@@ -1277,7 +1278,7 @@ func (imh *manifestHandler) applyResourcePolicy(manifest distribution.Manifest) 
 // index to a valid OCI image manifest and validates it accordingly. The original index digest and payload are
 // preserved when stored on the database.
 func dbPutBuildkitIndex(imh *manifestHandler, ml *manifestlist.DeserializedManifestList, payload []byte) error {
-	repoReader := datastore.NewRepositoryStore(imh.db, datastore.WithRepositoryCache(getRepoCache(imh)))
+	repoReader := datastore.NewRepositoryStore(imh.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
 	repoPath := imh.Repository.Named().Name()
 
 	// convert to OCI manifest and process as if it was one
@@ -1329,7 +1330,7 @@ func dbDeleteManifest(ctx context.Context, db datastore.Handler, cache datastore
 
 	// We need to find the manifest first and then lookup for any manifest it references (if it's a manifest list). This
 	// is needed to ensure we lock any related online GC tasks to prevent race conditions around the delete. See:
-	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-manifest-list
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#deleting-the-last-referencing-manifest-list
 	m, err := rStore.FindManifestByDigest(ctx, r, d)
 	if err != nil {
 		return err
@@ -1418,7 +1419,7 @@ func (imh *manifestHandler) deleteTag() error {
 		// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
 		repoCache := getRepoCache(imh)
 
-		if err := dbDeleteTag(imh.Context, imh.db, repoCache, imh.Repository.Named().Name(), imh.Tag); err != nil {
+		if err := dbDeleteTag(imh.Context, imh.db.Primary(), repoCache, imh.Repository.Named().Name(), imh.Tag); err != nil {
 			return err
 		}
 	}
@@ -1469,7 +1470,7 @@ func (imh *manifestHandler) deleteManifest() error {
 		// To be removed on completion of: https://gitlab.com/groups/gitlab-org/-/epics/9050
 		repoCache := getRepoCache(imh)
 
-		if err := dbDeleteManifest(imh.Context, imh.db, repoCache, imh.Repository.Named().String(), imh.Digest); err != nil {
+		if err := dbDeleteManifest(imh.Context, imh.db.Primary(), repoCache, imh.Repository.Named().String(), imh.Digest); err != nil {
 			return err
 		}
 	}
@@ -1523,7 +1524,7 @@ func logIfManifestListInvalid(ctx context.Context, ml *manifestlist.Deserialized
 		return
 	}
 
-	var seenUnknownReferenceMediaTypes = make(map[string]struct{}, 0)
+	seenUnknownReferenceMediaTypes := make(map[string]struct{}, 0)
 	var unknownReferenceMediaTypes []string
 
 	for _, desc := range mlcompat.References(ml).Blobs {
@@ -1559,7 +1560,7 @@ const (
 	tagDeleteGCLockTimeout  = 5 * time.Second
 )
 
-func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.RepositoryCache, repoPath string, tagName string) error {
+func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.RepositoryCache, repoPath, tagName string) error {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "tag_name": tagName})
 	l.Debug("deleting tag from repository in database")
 
@@ -1574,7 +1575,7 @@ func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.Repo
 
 	// We first check if the tag exists and grab the corresponding manifest ID, then we find and lock a related online
 	// GC manifest review record (if any) to prevent conflicting online GC reviews, and only then delete the tag. See:
-	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs-gitlab/db/online-garbage-collection.md#deleting-the-last-referencing-tag
+	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#deleting-the-last-referencing-tag
 
 	t, err := rStore.FindTagByName(ctx, r, tagName)
 	if err != nil {

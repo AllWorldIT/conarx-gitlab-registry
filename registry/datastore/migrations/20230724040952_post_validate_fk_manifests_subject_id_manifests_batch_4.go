@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	var ups = []string{
+	ups := []string{
 		"SET statement_timeout TO 0",
 	}
 

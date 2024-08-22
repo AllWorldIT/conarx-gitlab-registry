@@ -335,3 +335,185 @@ database:
 ```
 
 You should be able to [run the migrations](#migrations) and continue from there.
+
+## Load Balancing
+
+> This feature is a work in progress. See [epic 8591](https://gitlab.com/groups/gitlab-org/-/epics/8591).
+
+The easiest path to set up load balancing locally is to rely on GDK, which includes support for PostgreSQL replication,
+PgBouncer and Consul.
+
+You have two options, using a fixed hosts list or service discovery.
+
+### Fixed Hosts
+
+This option does not rely on service discovery to find the PostgreSQL hosts. Instead, you need to provide a fixed list
+of hosts that should be used as read replicas.
+
+1. Set up GDK following the setup guide [here](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/database_load_balancing.md); 
+
+1. Run `gdk psql` to get into a `psql` console and then create the registry database:
+   ```sql
+   CREATE DATABASE registry;
+   ```
+
+1. Configure the registry:
+   ```yaml
+   log:
+     level: debug
+     formatter: text
+   database:
+     enabled: true
+     host: /<full path to gdk root>/postgresql/
+     port: 5432
+     user: <your local username>
+     password: gitlab
+     dbname: registry
+     sslmode: disable
+     loadbalancing:
+       enabled: true
+       hosts:
+         - /<full path to gdk root>/postgresql-replica/
+   ```
+   
+   You can optionally add the primary host to `loadbalancing.hosts` to make it part of the read-only pool.
+
+3. Tail PostgreSQL logs in a separate window:
+   ```shell
+   gdk tail postgresql*
+   ```
+
+4. Run the registry. You should see something like this:
+   ```text
+   INFO[0000] Connect                                       database=registry duration_ms=3 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84101 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=5 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql-replica/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84102 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=2 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84104 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Query                                         args="[]" commandTag="CREATE TABLE" database=registry duration_ms=0 go_version=go1.21.5 instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84104 sql="create table if not exists \"schema_migrations\" (\"id\" text not null primary key, \"applied_at\" timestamp with time zone) ;" version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=4 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84105 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Query                                         args="[map[16:1 17:1 20:1 21:1 23:1 26:1 28:1 29:1 700:1 701:1 1082:1 1114:1 1184:1]]" commandTag="SELECT 162" database=registry duration_ms=5 go_version=go1.21.5 instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84105 sql="SELECT * FROM \"schema_migrations\" ORDER BY \"id\" ASC" version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=1 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84106 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Query                                         args="[]" commandTag="CREATE TABLE" database=registry duration_ms=0 go_version=go1.21.5 instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84106 sql="create table if not exists \"schema_migrations\" (\"id\" text not null primary key, \"applied_at\" timestamp with time zone) ;" version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Connect                                       database=registry duration_ms=1 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84107 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
+   INFO[0000] Query                                         args="[map[16:1 17:1 20:1 21:1 23:1 26:1 28:1 29:1 700:1 701:1 1082:1 1114:1 1184:1]]" commandTag="SELECT 162" database=registry duration_ms=0 go_version=go1.21.5 instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84107 sql="SELECT * FROM \"schema_migrations\" ORDER BY \"id\" ASC" version=v4.5.0-gitlab-20-gbac9b1549.m
+   ```
+
+   Note that database log entries contain a `host` key/value pair that tells us the host that each operation is
+targeting. We can see that the registry connects to both primary and replica hosts.
+
+5. In the PostgreSQL logs you should see something like this:
+   ```sql
+   2024-06-27_13:56:57.69718 postgresql            : 2024-06-27 14:56:57.697 WEST [16895] LOG:  statement: -- ping
+   2024-06-27_13:56:57.71803 postgresql-replica    : 2024-06-27 14:56:57.716 WEST [16896] LOG:  statement: -- ping
+   2024-06-27_13:56:57.75166 postgresql            : 2024-06-27 14:56:57.751 WEST [16920] LOG:  statement: create table if not exists "schema_migrations" ("id" text not null primary key, "applied_at" timestamp with time zone) ;
+   2024-06-27_13:56:57.75564 postgresql            : 2024-06-27 14:56:57.755 WEST [16922] LOG:  statement: SELECT * FROM "schema_migrations" ORDER BY "id" ASC
+   2024-06-27_13:56:57.77475 postgresql            : 2024-06-27 14:56:57.773 WEST [16927] LOG:  statement: create table if not exists "schema_migrations" ("id" text not null primary key, "applied_at" timestamp with time zone) ;
+   2024-06-27_13:56:57.78049 postgresql            : 2024-06-27 14:56:57.779 WEST [16931] LOG:  statement: SELECT * FROM "schema_migrations" ORDER BY "id" ASC
+   ```
+
+### Service Discovery
+
+This option allows automatic discovery of PostgreSQL hosts using DNS lookup queries and SRV records. See the related
+[specification](./spec/gitlab/database-load-balancing.md?ref_type=heads#service-discovery) for more details.
+
+1. Set up GDK following the setup guide [here](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/database_load_balancing_with_service_discovery.md);
+
+1. Lookup the addresses behind the default replicas SRV record in Consul to confirm that service discovery is working:
+   ```shell
+   dig +short @127.0.0.1 -p 8600 replica.pgbouncer.service.consul -t SRV
+   ```
+   You should see something similar to the following:
+   ```text
+   1 1 6434 7f000001.addr.dc1.consul.
+   1 1 6435 7f000001.addr.dc1.consul.
+   1 1 6432 7f000001.addr.dc1.consul.
+   1 1 6433 7f000001.addr.dc1.consul.
+   ```
+
+1. Run `gdk psql` to get into a `psql` console and then create the registry database:
+   ```sql
+   CREATE DATABASE registry;
+   ```
+
+1. Update the GDK PgBouncer configuration template at `support/templates/pgbouncer/pgbouncer-replica.ini.erb` to add an
+entry for the registry database under the `[databases]` section:
+   ```text
+   registry = host=<%= host %> dbname=registry user=<%= config.__whoami %>
+   ```
+
+1. Reconfigure and restart your GDK:
+   ```shell
+   gdk reconfigure
+   gdk restart
+   ```
+
+1. Open a `psql` session in one of the replica hosts to confirm that the setup is ready:
+   ```shell
+   PGPASSWORD=gitlab psql -h 127.0.0.1 -p 6434 -U <your local username> -d registry
+   ```
+
+1. Configure the registry:
+   ```yaml
+   log:
+     level: debug
+     formatter: text
+   database:
+     enabled: true
+     host: /Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/
+     port: 5432
+     user: <your local username>
+     password: gitlab
+     dbname: registry
+     sslmode: disable
+     loadbalancing:
+       enabled: true
+       nameserver: localhost
+       port: 8600
+       record: replica.pgbouncer.service.consul
+   ```
+
+3. Tail PostgreSQL logs in a separate window:
+   ```shell
+   gdk tail postgresql*
+   ```
+
+4. Run the registry. You should see something like this:
+   ```text
+   INFO[0000] enabling database load balancing with service discovery  go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 nameserver=localhost port=8600 record=replica.pgbouncer.service.consul version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=9 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16048 port=5432 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=0 go_version=go1.21.5 host=127.0.0.1 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=776127547 port=6435 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=2 go_version=go1.21.5 host=127.0.0.1 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=837580158 port=6433 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=1 go_version=go1.21.5 host=127.0.0.1 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=806750629 port=6434 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=0 go_version=go1.21.5 host=127.0.0.1 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=890723796 port=6432 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=2 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16049 port=5432 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Query                                         args="[]" commandTag="CREATE TABLE" database=registry duration_ms=0 go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16049 sql="create table if not exists \"schema_migrations\" (\"id\" text not null primary key, \"applied_at\" timestamp with time zone) ;" version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=1 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16050 port=5432 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Query                                         args="[map[16:1 17:1 20:1 21:1 23:1 26:1 28:1 29:1 700:1 701:1 1082:1 1114:1 1184:1]]" commandTag="SELECT 162" database=registry duration_ms=0 go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16050 sql="SELECT * FROM \"schema_migrations\" ORDER BY \"id\" ASC" version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=2 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16051 port=5432 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Query                                         args="[]" commandTag="CREATE TABLE" database=registry duration_ms=0 go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16051 sql="create table if not exists \"schema_migrations\" (\"id\" text not null primary key, \"applied_at\" timestamp with time zone) ;" version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Connect                                       database=registry duration_ms=2 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16052 port=5432 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] Query                                         args="[map[16:1 17:1 20:1 21:1 23:1 26:1 28:1 29:1 700:1 701:1 1082:1 1114:1 1184:1]]" commandTag="SELECT 162" database=registry duration_ms=0 go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16052 sql="SELECT * FROM \"schema_migrations\" ORDER BY \"id\" ASC" version=v4.6.0-gitlab-9-gd3cdf3193.m
+   DEBU[0000] filesystem.Stat("/docker/registry/lockfiles/database-in-use")  go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 trace_duration="38.583µs" trace_file=/Users/jpereira/Developer/gitlab.com/gitlab-org/container-registry/registry/storage/driver/base/base.go trace_func="github.com/docker/distribution/registry/storage/driver/base.(*Base).Stat" trace_id=9c4c46c5-0b5e-4aed-b67f-c683835b8002 trace_line=155 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] starting health checker                       address=":5001" go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 path=/debug/health version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] starting Prometheus listener                  address=":5001" go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 path=/metrics version=v4.6.0-gitlab-9-gd3cdf3193.m
+   INFO[0000] listening on 172.16.123.1:5000                go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 version=v4.6.0-gitlab-9-gd3cdf3193.m
+   ```
+
+   Note that database log entries contain a `host` key/value pair that tells us the host that each operation is
+   targeting. We can see that the registry connects to all hosts.
+
+5. In the PostgreSQL logs you should see something like this:
+   ```sql
+   2024-07-02_15:15:59.87681 postgresql            : 2024-07-02 16:15:59.876 WEST [16048] LOG:  statement: -- ping
+   2024-07-02_15:15:59.89020 postgresql-replica-2  : 2024-07-02 16:15:59.890 WEST [2438] LOG:  statement: select 1
+   2024-07-02_15:15:59.89081 postgresql-replica-2  : 2024-07-02 16:15:59.890 WEST [2438] LOG:  statement: -- ping
+   2024-07-02_15:15:59.89635 postgresql-replica    : 2024-07-02 16:15:59.894 WEST [2436] LOG:  statement: select 1
+   2024-07-02_15:15:59.90377 postgresql-replica    : 2024-07-02 16:15:59.901 WEST [2436] LOG:  statement: -- ping
+   2024-07-02_15:15:59.90807 postgresql-replica-2  : 2024-07-02 16:15:59.907 WEST [93615] LOG:  statement: select 1
+   2024-07-02_15:15:59.90879 postgresql-replica-2  : 2024-07-02 16:15:59.908 WEST [93615] LOG:  statement: -- ping
+   2024-07-02_15:15:59.91026 postgresql-replica    : 2024-07-02 16:15:59.910 WEST [2437] LOG:  statement: select 1
+   2024-07-02_15:15:59.91049 postgresql-replica    : 2024-07-02 16:15:59.910 WEST [2437] LOG:  statement: -- ping
+   2024-07-02_15:15:59.91307 postgresql            : 2024-07-02 16:15:59.912 WEST [16049] LOG:  statement: create table if not exists "schema_migrations" ("id" text not null primary key, "applied_at" timestamp with time zone) ;
+   2024-07-02_15:15:59.91542 postgresql            : 2024-07-02 16:15:59.915 WEST [16050] LOG:  statement: SELECT * FROM "schema_migrations" ORDER BY "id" ASC
+   2024-07-02_15:15:59.91822 postgresql            : 2024-07-02 16:15:59.918 WEST [16051] LOG:  statement: create table if not exists "schema_migrations" ("id" text not null primary key, "applied_at" timestamp with time zone) ;
+   2024-07-02_15:15:59.92081 postgresql            : 2024-07-02 16:15:59.920 WEST [16052] LOG:  statement: SELECT * FROM "schema_migrations" ORDER BY "id" ASC
+   ```

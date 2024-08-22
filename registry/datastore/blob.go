@@ -5,6 +5,7 @@ package datastore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/docker/distribution/registry/datastore/metrics"
@@ -47,7 +48,7 @@ func scanFullBlob(row *sql.Row) (*models.Blob, error) {
 	b := new(models.Blob)
 
 	if err := row.Scan(&b.MediaType, &dgst, &b.Size, &b.CreatedAt); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("scanning blob: %w", err)
 		}
 		return nil, nil
@@ -199,7 +200,7 @@ func (s *blobStore) CreateOrFind(ctx context.Context, b *models.Blob) error {
 
 	row := s.db.QueryRowContext(ctx, q, dgst, mediaTypeID, b.Size)
 	if err := row.Scan(&b.CreatedAt); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("creating blob: %w", err)
 		}
 		// if the result set has no rows, then the blob already exists

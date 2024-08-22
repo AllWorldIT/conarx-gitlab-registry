@@ -32,6 +32,7 @@ import (
 var (
 	errNegativeTestingDelay = errors.New("negative testing delay")
 	errManifestSkip         = errors.New("the manifest is invalid and its (pre)import should be skipped")
+	errTagsTableNotEmpty    = errors.New("tags table is not empty")
 	commonBarOptions        = []progressbar.Option{
 		progressbar.OptionSetElapsedTime(true),
 		progressbar.OptionShowCount(),
@@ -63,7 +64,6 @@ type Importer struct {
 
 	importDanglingManifests bool
 	importDanglingBlobs     bool
-	requireEmptyDatabase    bool
 	dryRun                  bool
 	tagConcurrency          int
 	rowCount                bool
@@ -91,12 +91,6 @@ func WithImportDanglingManifests(imp *Importer) {
 // in the import command made available to the user.
 func WithImportDanglingBlobs(imp *Importer) {
 	imp.importDanglingBlobs = true
-}
-
-// WithRequireEmptyDatabase configures the Importer to stop import unless the
-// database being imported to is empty.
-func WithRequireEmptyDatabase(imp *Importer) {
-	imp.requireEmptyDatabase = true
 }
 
 // WithDryRun configures the Importer to use a single transacton which is rolled
@@ -972,6 +966,15 @@ func (imp *Importer) countRows(ctx context.Context) (map[string]int, error) {
 	return count, nil
 }
 
+func (imp *Importer) isTagsTableEmpty(ctx context.Context) (bool, error) {
+	count, err := imp.tagStore.Count(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return count == 0, nil
+}
+
 func (imp *Importer) isDatabaseEmpty(ctx context.Context) (bool, error) {
 	counters, err := imp.countRows(ctx)
 	if err != nil {
@@ -1010,16 +1013,6 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 
 	start := time.Now()
 	l.Info("starting metadata import")
-
-	if imp.requireEmptyDatabase {
-		empty, err := imp.isDatabaseEmpty(ctx)
-		if err != nil {
-			return fmt.Errorf("checking if database is empty: %w", err)
-		}
-		if !empty {
-			return errors.New("non-empty database")
-		}
-	}
 
 	if imp.importDanglingBlobs {
 		if err := imp.importBlobs(ctx); err != nil {
@@ -1101,7 +1094,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 
 	if imp.showProgressBar {
 		fn := fmt.Sprintf("%s-registry-import.log", time.Now().Format(time.RFC3339))
-		f, err = os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		f, err = os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
 		if err != nil {
 			return fmt.Errorf("opening log file: %w", err)
 		}
@@ -1128,16 +1121,6 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 	})
 
 	ctx = log.WithLogger(ctx, l)
-
-	if imp.requireEmptyDatabase {
-		empty, err := imp.isDatabaseEmpty(ctx)
-		if err != nil {
-			return fmt.Errorf("checking if database is empty: %w", err)
-		}
-		if !empty {
-			return errors.New("non-empty database")
-		}
-	}
 
 	// Create a single transaction and roll it back at the end for dry runs.
 	if imp.dryRun {
@@ -1320,6 +1303,15 @@ func (imp *Importer) importAllRepositories(ctx context.Context) error {
 	var tx Transactor
 	var err error
 
+	isTagsTableEmpty, err := imp.isTagsTableEmpty(ctx)
+	if err != nil {
+		return fmt.Errorf("chechking if tags table is empty: %w", err)
+	}
+	if !isTagsTableEmpty {
+		log.GetLogger(log.WithContext(ctx)).WithError(errTagsTableNotEmpty).Error("cannot import all repositories while the tags table has entries, you must truncate the table manually before retrying, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#troubleshooting")
+		return errTagsTableNotEmpty
+	}
+
 	repositoryEnumerator, ok := imp.registry.(distribution.RepositoryEnumerator)
 	if !ok {
 		return errors.New("error building repository enumerator")
@@ -1386,16 +1378,6 @@ func (imp *Importer) Import(ctx context.Context, path string) error {
 	l = l.WithFields(log.Fields{"repository": path})
 	l.Info("starting metadata import")
 
-	if imp.requireEmptyDatabase {
-		empty, err := imp.isDatabaseEmpty(ctx)
-		if err != nil {
-			return fmt.Errorf("checking if database is empty: %w", err)
-		}
-		if !empty {
-			return errors.New("non-empty database")
-		}
-	}
-
 	l.Info("importing repository")
 	if err := imp.importRepository(ctx, path); err != nil {
 		l.WithError(err).Error("error importing repository")
@@ -1460,16 +1442,6 @@ func (imp *Importer) PreImport(ctx context.Context, path string) error {
 			return fmt.Errorf("begin dry run transaction: %w", err)
 		}
 		defer tx.Rollback()
-	}
-
-	if imp.requireEmptyDatabase {
-		empty, err := imp.isDatabaseEmpty(ctx)
-		if err != nil {
-			return fmt.Errorf("checking if database is empty: %w", err)
-		}
-		if !empty {
-			return errors.New("non-empty database")
-		}
 	}
 
 	start := time.Now()

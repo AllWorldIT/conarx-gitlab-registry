@@ -70,14 +70,14 @@ type StorageDriver interface {
 	Stat(ctx context.Context, path string) (FileInfo, error)
 
 	// List returns a list of the objects that are direct descendants of the
-	//given path.
+	// given path.
 	List(ctx context.Context, path string) ([]string, error)
 
 	// Move moves an object stored at sourcePath to destPath, removing the
 	// original object.
 	// Note: This may be no more efficient than a copy followed by a delete for
 	// many implementations.
-	Move(ctx context.Context, sourcePath string, destPath string) error
+	Move(ctx context.Context, sourcePath, destPath string) error
 
 	// URLFor returns a URL which may be used to retrieve the content stored at
 	// the given path, possibly using the given options.
