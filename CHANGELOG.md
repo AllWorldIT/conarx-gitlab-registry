@@ -1,3 +1,29 @@
+## [4.8.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.7.0-gitlab...v4.8.0-gitlab) (2024-8-22)
+
+
+### ✨ Features ✨
+
+* add Redis ACL username support in cache ([7e927fb](https://gitlab.com/gitlab-org/container-registry/commit/7e927fb3bc466ac354b40bdeab481d3884be055e))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **api/gitlab/v1:** allow moving repository to its top-level-namespace ([ee7469d](https://gitlab.com/gitlab-org/container-registry/commit/ee7469d1864efba0c2abca9211107c6110bbf31d))
+
+
+### ⏮️️ Reverts ⏮️️
+
+* Revert "perf(redis): Temporary revert of !1679" ([55a2edd](https://gitlab.com/gitlab-org/container-registry/commit/55a2edd9bb3de46363567436bd5f6635d212a3a0))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.14.5 ([019aa9d](https://gitlab.com/gitlab-org/container-registry/commit/019aa9d12855e04292b74c2b8dde897c2225975d))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.14.6 ([bdaafef](https://gitlab.com/gitlab-org/container-registry/commit/bdaafef6fed5d066d9a5e70639cd364ce0964c3f))
+* **deps:** update module golang.org/x/crypto to v0.26.0 ([d4bb81b](https://gitlab.com/gitlab-org/container-registry/commit/d4bb81bd575c217fcb17176b7c2b2ea5b06fed28))
+* **deps:** update module golang.org/x/oauth2 to v0.22.0 ([225b489](https://gitlab.com/gitlab-org/container-registry/commit/225b4899f1a5270b5cfce041b7f2eeaf65a53688))
+* **deps:** update module golang.org/x/time to v0.6.0 ([fe40709](https://gitlab.com/gitlab-org/container-registry/commit/fe4070918a13df9aae0a918ec718e14deae7b569))
+
 ## [4.7.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.6.0-gitlab...v4.7.0-gitlab) (2024-8-1)
 
 
