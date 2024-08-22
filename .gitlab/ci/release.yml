@@ -7,7 +7,7 @@ dry-run:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - make dev-tools
+    - make release-tools
     - npx semantic-release --dry-run
 
 cut:
@@ -20,7 +20,7 @@ cut:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
   script:
-    - make dev-tools
+    - make release-tools
     - npx semantic-release
 
 publish:
