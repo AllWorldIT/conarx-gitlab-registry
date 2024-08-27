@@ -369,6 +369,7 @@ type LoadBalancer interface {
 	Replicas() []*DB
 	Close() error
 	RecordLSN(context.Context, *models.Repository) error
+	StartReplicaChecking(context.Context) error
 }
 
 // DBLoadBalancer manages connections to a primary database and multiple replicas.

@@ -348,6 +348,20 @@ func (mr *MockLoadBalancerMockRecorder) Replicas() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Replicas", reflect.TypeOf((*MockLoadBalancer)(nil).Replicas))
 }
 
+// StartReplicaChecking mocks base method.
+func (m *MockLoadBalancer) StartReplicaChecking(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartReplicaChecking", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StartReplicaChecking indicates an expected call of StartReplicaChecking.
+func (mr *MockLoadBalancerMockRecorder) StartReplicaChecking(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartReplicaChecking", reflect.TypeOf((*MockLoadBalancer)(nil).StartReplicaChecking), arg0)
+}
+
 // UpToDateReplica mocks base method.
 func (m *MockLoadBalancer) UpToDateReplica(arg0 context.Context, arg1 *models.Repository) *datastore.DB {
 	m.ctrl.T.Helper()
