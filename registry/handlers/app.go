@@ -397,7 +397,10 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize database connections: %w", err)
 		}
-		startDBReplicaChecking(ctx, db)
+
+		if config.Database.LoadBalancing.Enabled && config.Database.LoadBalancing.ReplicaCheckInterval != 0 {
+			startDBReplicaChecking(ctx, db)
+		}
 
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
@@ -660,10 +663,19 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 	}
 }
 
-func startDBReplicaChecking(ctx context.Context, lb *datastore.DBLoadBalancer) {
+const dlbReplicaCheckJitterMaxSeconds = 10
+
+func startDBReplicaChecking(ctx context.Context, lb datastore.LoadBalancer) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
-	// TODO(dlb): add startup jitter
+	// delay startup using a randomized jitter to ease concurrency in clustered environments
+	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
+	jitter := time.Duration(r.Intn(dlbReplicaCheckJitterMaxSeconds)) * time.Second
+
+	l.WithFields(dlog.Fields{"jitter_s": jitter.Seconds()}).
+		Info("preparing to start database load balancing replica checking")
+	systemClock.Sleep(jitter)
+
 	go func() {
 		// This function can only end in three situations: 1) service discovery is disabled and therefore there is
 		// nothing left to do (no error) 2) context cancellation 3) panic. If a panic occurs we should log, report to

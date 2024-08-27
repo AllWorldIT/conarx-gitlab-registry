@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -739,4 +740,36 @@ func bufferStreamLogger(ctx context.Context, buf *bytes.Buffer) *logrus.Entry {
 	logger.Logger.SetOutput(buf)
 
 	return logger.WithFields(fields)
+}
+
+func Test_startDBReplicaChecking_StartupJitter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	clockMock := imocks.NewMockClock(ctrl)
+	testutil.StubClock(t, &systemClock, clockMock)
+
+	// use fixed time for reproducible rand seeds (used to generate jitter durations)
+	now := time.Time{}
+	r := rand.New(rand.NewSource(now.UnixNano()))
+	expectedJitter := time.Duration(r.Intn(dlbReplicaCheckJitterMaxSeconds)) * time.Second
+
+	// Create the load balancer with the required options
+	lbMock := dmocks.NewMockLoadBalancer(ctrl)
+	ctx := context.TODO()
+
+	var wg sync.WaitGroup
+	wg.Add(1) // We expect one goroutine to be run
+
+	// Start the DB replica checking and mark the WaitGroup as done when finished
+	gomock.InOrder(
+		clockMock.EXPECT().Now().Return(now).Times(1),     // base for jitter
+		clockMock.EXPECT().Sleep(expectedJitter).Times(1), // jitter sleep
+		lbMock.EXPECT().StartReplicaChecking(ctx).Return(nil).Times(1).Do(func(_ context.Context) {
+			wg.Done() // Mark the goroutine as done
+		}),
+	)
+
+	startDBReplicaChecking(ctx, lbMock)
+
+	// Wait for the goroutine to complete before checking expectations
+	wg.Wait()
 }
