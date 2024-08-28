@@ -552,7 +552,8 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error
 		}
 	}
 
-	for i, dsn := range replicaDSNs {
+	for i := range replicaDSNs {
+		dsn := replicaDSNs[i]
 		l := l.WithFields(logrus.Fields{
 			"index":   i,
 			"total":   len(replicaDSNs),
