@@ -367,6 +367,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		}
 
 		if config.Database.LoadBalancing.Enabled {
+			if app.redisCache == nil {
+				return nil, errors.New("redis cache required for enabling database load balancing")
+			}
+			dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisCache)))
+
 			// service discovery takes precedence over fixed hosts
 			if config.Database.LoadBalancing.Record != "" {
 				nameserver := config.Database.LoadBalancing.Nameserver

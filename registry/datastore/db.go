@@ -29,6 +29,10 @@ const (
 	driverName                  = "pgx"
 	dnsTimeout                  = 2 * time.Second
 	defaultReplicaCheckInterval = 1 * time.Minute
+
+	HostTypePrimary = "primary"
+	HostTypeReplica = "replica"
+	HostTypeUnknown = "unknown"
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -370,6 +374,7 @@ type LoadBalancer interface {
 	Close() error
 	RecordLSN(context.Context, *models.Repository) error
 	StartReplicaChecking(context.Context) error
+	TypeOf(*DB) string
 }
 
 // DBLoadBalancer manages connections to a primary database and multiple replicas.
@@ -791,6 +796,22 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	l.Info("replica is not up-to-date, falling back to primary")
 	metrics.PrimaryFallbackNotUpToDate()
 	return lb.primary
+}
+
+// TypeOf returns the type of the provided *DB instance: HostTypePrimary, HostTypeReplica or HostTypeUnknown.
+func (lb *DBLoadBalancer) TypeOf(db *DB) string {
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
+	if db == lb.primary {
+		return HostTypePrimary
+	}
+	for _, replica := range lb.replicas {
+		if db == replica {
+			return HostTypeReplica
+		}
+	}
+	return HostTypeUnknown
 }
 
 // QueryBuilder helps in building SQL queries with parameters.

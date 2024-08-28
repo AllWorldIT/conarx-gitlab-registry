@@ -329,3 +329,24 @@ func TestDBLoadBalancer_UpToDateReplica_NoStore(t *testing.T) {
 	require.NotNil(t, db)
 	require.Equal(t, primaryDB, db.DB)
 }
+
+func TestDBLoadBalancer_TypeOf(t *testing.T) {
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+	replicaDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaDB.Close()
+	unknownDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer unknownDB.Close()
+
+	lb := &DBLoadBalancer{
+		primary:  &DB{DB: primaryDB},
+		replicas: []*DB{{DB: replicaDB}},
+	}
+
+	require.Equal(t, HostTypePrimary, lb.TypeOf(lb.primary))
+	require.Equal(t, HostTypeReplica, lb.TypeOf(lb.replicas[0]))
+	require.Equal(t, HostTypeUnknown, lb.TypeOf(&DB{DB: unknownDB}))
+}

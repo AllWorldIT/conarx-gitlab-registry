@@ -362,6 +362,20 @@ func (mr *MockLoadBalancerMockRecorder) StartReplicaChecking(arg0 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartReplicaChecking", reflect.TypeOf((*MockLoadBalancer)(nil).StartReplicaChecking), arg0)
 }
 
+// TypeOf mocks base method.
+func (m *MockLoadBalancer) TypeOf(arg0 *datastore.DB) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TypeOf", arg0)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// TypeOf indicates an expected call of TypeOf.
+func (mr *MockLoadBalancerMockRecorder) TypeOf(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TypeOf", reflect.TypeOf((*MockLoadBalancer)(nil).TypeOf), arg0)
+}
+
 // UpToDateReplica mocks base method.
 func (m *MockLoadBalancer) UpToDateReplica(arg0 context.Context, arg1 *models.Repository) *datastore.DB {
 	m.ctrl.T.Helper()
