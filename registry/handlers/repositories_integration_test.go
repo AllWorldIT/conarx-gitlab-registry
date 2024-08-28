@@ -52,16 +52,15 @@ func (e testEnv) mockDB() sqlmock.Sqlmock {
 	db, mock, err := sqlmock.New()
 	require.NoError(e.t, err)
 
-	e.t.Cleanup(func() {
-		db.Close()
-		ctrl.Finish()
-	})
+	e.t.Cleanup(func() { db.Close() })
 
-	// TODO(dlb): use actual replica for testing
 	primary := &datastore.DB{DB: db}
 	replica := &datastore.DB{DB: db}
+
 	mockBalancer.EXPECT().Primary().Return(primary).AnyTimes()
-	mockBalancer.EXPECT().Replica(context.Background()).Return(replica).AnyTimes()
+	mockBalancer.EXPECT().UpToDateReplica(gomock.Any(), gomock.Any()).Return(replica).AnyTimes()
+	mockBalancer.EXPECT().TypeOf(primary).Return(datastore.HostTypePrimary).AnyTimes()
+	mockBalancer.EXPECT().TypeOf(replica).Return(datastore.HostTypeReplica).AnyTimes()
 
 	e.app.db = mockBalancer
 

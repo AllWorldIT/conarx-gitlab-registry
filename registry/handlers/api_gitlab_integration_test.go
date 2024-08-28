@@ -1790,6 +1790,8 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 }
 
 func TestGitlabAPI_RenameRepository_WithoutRedis(t *testing.T) {
+	skipRedisCacheEnabled(t)
+
 	env := newTestEnv(t)
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)

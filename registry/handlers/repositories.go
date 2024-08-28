@@ -276,6 +276,10 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 		t := time.Now()
 		ctx := h.Context.Context
 
+		db := h.db.UpToDateReplica(ctx, repo)
+		l := l.WithFields(log.Fields{"db_host_type": h.db.TypeOf(db), "db_host_addr": db.Address()})
+		store := datastore.NewRepositoryStore(db, opts...)
+
 		switch sizeVal {
 		case sizeQueryParamSelfValue:
 			size, err = store.Size(ctx, repo)

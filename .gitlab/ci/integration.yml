@@ -195,9 +195,13 @@ database:background-migrations:
     POSTGRESQL_REPLICATION_PASSWORD: "replpassword"
     REGISTRY_DATABASE_HOST: "primary"
     REGISTRY_DATABASE_LOADBALANCING_ENABLED: "true"
+    REGISTRY_REDIS_CACHE_ENABLED:  "true"
+    REGISTRY_REDIS_CACHE_ADDR: "redis:6379"
     PACKAGE: "github.com/docker/distribution/registry/handlers"
     TAGS: "integration,handlers_test,api_gitlab_test,api_conformance_test"
   services:
+    - name: redis:alpine
+      alias: "redis"
     - name: bitnami/postgresql:${PG_VERSION}
       alias: "primary"
       variables:

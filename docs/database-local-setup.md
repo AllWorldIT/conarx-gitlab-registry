@@ -343,7 +343,7 @@ You should be able to [run the migrations](#migrations) and continue from there.
 The easiest path to set up load balancing locally is to rely on GDK, which includes support for PostgreSQL replication,
 PgBouncer, Consul and Redis.
 
-You have two options, using a fixed hosts list or service discovery.
+You have two options, using a fixed hosts list or service discovery. The Redis cache is required for both.
 
 ### Fixed Hosts
 

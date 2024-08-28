@@ -274,6 +274,15 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 				}
 			}
 		}
+
+		if os.Getenv("REGISTRY_REDIS_CACHE_ENABLED") == "true" {
+			config.Redis.Cache = configuration.RedisCommon{
+				Enabled:  true,
+				Addr:     os.Getenv("REGISTRY_REDIS_CACHE_ADDR"),
+				Username: os.Getenv("REGISTRY_REDIS_CACHE_USERNAME"),
+				Password: os.Getenv("REGISTRY_REDIS_CACHE_PASSWORD"),
+			}
+		}
 	}
 
 	for _, o := range opts {
@@ -287,6 +296,14 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 	}
 
 	return *config
+}
+
+func skipRedisCacheEnabled(tb testing.TB) {
+	tb.Helper()
+
+	if os.Getenv("REGISTRY_REDIS_CACHE_ENABLED") == "true" {
+		tb.Skip("skipping test because Redis cache is enabled")
+	}
 }
 
 func skipDatabaseNotEnabled(tb testing.TB) {
