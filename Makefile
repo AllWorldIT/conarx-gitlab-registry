@@ -28,6 +28,9 @@ endif
 
 WHALE = "+"
 
+MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+MAKEFILE_DIR := $(dir $(MAKEFILE_PATH))
+
 # Go files
 #
 TESTFLAGS_RACE=
@@ -53,8 +56,17 @@ lint: ## run golangci-lint, with defaults
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_VERSION} run
 
 lint-docs: ## run golangci-lint, with defaults
+	@#There are few issues with installing the tooling natively:
+	@# * lychee is not available for asdf and we do not use asdf in our script in the first place
+	@# * some of us are on Mac (brew), some of us are on Linux (apt/cargo/snap/...)
+	@# * only markdownlint-cli2 can be easily installed using npm
+	@# TODO(prozlach): the docker image name+tag should be extracted directly from 
 	@echo "$(WHALE) $@"
-	@script/lint-docs.sh
+	@docker run \
+		-w /root/repo/ \
+		-v ${MAKEFILE_DIR}:/root/repo/ \
+		registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.20-vale-3.6.1-markdownlint2-0.13.0-lychee-0.15.1 \
+			script/lint-docs.sh
 
 test: ## run tests, except integration test with test.short
 	@echo "$(WHALE) $@"
