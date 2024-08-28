@@ -179,7 +179,6 @@ issues:
   exclude-dirs:
     - bin/
     - .GOPATH/
-    - migrations/
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
     # Exclude some linters from running on tests files.
@@ -198,6 +197,11 @@ issues:
     - linters:
         - lll
       source: "^//go:generate "
+
+    # Do not check for duplicates on migration files as they are commonly found and expected
+    - path: "^registry/datastore/migrations/.*\\.go$"
+      linters:
+        - dupl
 
   # Independently from option `exclude` we use default exclude patterns,
   # it can be disabled by this option. To list all
