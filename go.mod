@@ -25,7 +25,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
-	github.com/prometheus/client_golang v1.19.1
+	github.com/prometheus/client_golang v1.20.0
 	github.com/redis/go-redis/v9 v9.6.1
 	github.com/rubenv/sql-migrate v1.7.0
 	github.com/schollz/progressbar/v3 v3.14.6
@@ -94,18 +94,21 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid/v2 v2.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_model v0.5.0 // indirect
-	github.com/prometheus/common v0.48.0 // indirect
-	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/prometheus/client_model v0.6.1 // indirect
+	github.com/prometheus/common v0.55.0 // indirect
+	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect

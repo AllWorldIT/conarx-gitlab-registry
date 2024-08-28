@@ -77,10 +77,9 @@ registry_storage_blob_download_bytes_bucket{redirect="true",le="+Inf"} 2
 registry_storage_blob_download_bytes_sum{redirect="true"} 3072
 registry_storage_blob_download_bytes_count{redirect="true"} 2
 `)
-	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, blobDownloadBytesName)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, blobDownloadBytesName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName, totalFullName)
+	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -158,9 +157,8 @@ registry_storage_blob_upload_bytes_bucket{le="+Inf"} 3
 registry_storage_blob_upload_bytes_sum 3584
 registry_storage_blob_upload_bytes_count 3
 `)
-	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, blobUploadBytesName)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, blobUploadBytesName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName, totalFullName)
+	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
