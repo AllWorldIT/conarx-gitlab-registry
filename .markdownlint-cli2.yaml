@@ -162,5 +162,3 @@ config:
       "YAML",
       "YouTrack"
     ]
-customRules:
-  - "./docs/.markdownlint/rules/tabs_wrapper_tags.js"
