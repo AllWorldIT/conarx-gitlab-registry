@@ -11,7 +11,7 @@ FILES=$(find "${GIT_ROOT}/docs/" -type f -name "*.md" -print)
 
 echo "Lint prose"
 if command -v vale >/dev/null 2>&1; then
-    echo $FILES | xargs vale --config "${GIT_ROOT}/.vale.ini" || ((ERROR_RESULTS++))
+    echo $FILES | xargs vale --minAlertLevel error --output=docs/.vale/vale.tmpl --config "${GIT_ROOT}/.vale.ini" || ((ERROR_RESULTS++))
 else
     echo "Vale is missing, please install it from https://vale.sh/docs/vale-cli/installation/"
 fi
