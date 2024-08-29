@@ -2,6 +2,7 @@
 ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 GOLANGCI_VERSION ?= v1.59.1
+DOCSLINT_VERSION ?= registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.20-vale-3.6.1-markdownlint2-0.13.0-lychee-0.15.1
 
 # Used to populate version variable in main package.
 VERSION?=$(shell git describe --tags --match 'v[0-9]*' --dirty='.m' --always)
@@ -60,12 +61,11 @@ lint-docs: ## run golangci-lint, with defaults
 	@# * lychee is not available for asdf and we do not use asdf in our script in the first place
 	@# * some of us are on Mac (brew), some of us are on Linux (apt/cargo/snap/...)
 	@# * only markdownlint-cli2 can be easily installed using npm
-	@# TODO(prozlach): the docker image name+tag should be extracted directly from 
 	@echo "$(WHALE) $@"
 	@docker run \
 		-w /root/repo/ \
 		-v ${MAKEFILE_DIR}:/root/repo/ \
-		registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.20-vale-3.6.1-markdownlint2-0.13.0-lychee-0.15.1 \
+		 ${DOCSLINT_VERSION} \
 			script/lint-docs.sh
 
 test: ## run tests, except integration test with test.short
