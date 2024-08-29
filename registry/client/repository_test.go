@@ -770,7 +770,7 @@ func TestV1ManifestFetch(t *testing.T) {
 		t.Fatalf("Unexpected returned content digest %v, expected %v", contentDigest, dgst)
 	}
 
-	manifest, err = ms.Get(ctx, dgst, distribution.WithTag("badcontenttype"))
+	_, err = ms.Get(ctx, dgst, distribution.WithTag("badcontenttype"))
 	if err == nil {
 		t.Fatal("expected error, got none")
 	}

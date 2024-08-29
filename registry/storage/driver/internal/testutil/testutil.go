@@ -62,15 +62,15 @@ func TestBoolValue(t *testing.T, opts Opts) {
 	AssertParam(t, driverParams, opts.DriverParamName, opts.Defaultt, "param is nil")
 
 	params[opts.ParamName] = ""
-	driverParams, err = opts.ParseParametersFn(params)
+	_, err = opts.ParseParametersFn(params)
 	require.Error(t, err, "empty string")
 
 	params[opts.ParamName] = "invalid"
-	driverParams, err = opts.ParseParametersFn(params)
+	_, err = opts.ParseParametersFn(params)
 	require.Error(t, err, "not boolean string")
 
 	params[opts.ParamName] = 12
-	driverParams, err = opts.ParseParametersFn(params)
+	_, err = opts.ParseParametersFn(params)
 	require.Error(t, err, "not boolean type")
 }
 

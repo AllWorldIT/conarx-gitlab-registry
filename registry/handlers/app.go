@@ -1423,6 +1423,7 @@ func (app *App) context(w http.ResponseWriter, r *http.Request) *Context {
 	ctx := r.Context()
 	ctx = dcontext.WithVars(ctx, r)
 	name := dcontext.GetStringValue(ctx, "vars.name")
+	//nolint: staticcheck // SA1029: should not use built-in type string as key for value
 	ctx = context.WithValue(ctx, "root_repo", strings.Split(name, "/")[0])
 	ctx = dcontext.WithLogger(ctx, dcontext.GetLogger(ctx,
 		"root_repo",

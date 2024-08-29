@@ -110,6 +110,9 @@ linters-settings:
   dogsled:
     # checks assignments with too many blank identifiers; default is 2
     max-blank-identifiers: 2
+  staticcheck:
+    checks:
+      - "all"
   stylecheck:
     # Disable checks by prefixing with a `-`
     # ST1000: at least one file in a package should have a package comment
@@ -188,6 +191,29 @@ issues:
         - errcheck
         - dupl
         - gosec
+
+    # TODO: replace rand.Read with crypto/rand.Read
+    - text: 'rand.Read has been deprecated since Go 1.20'
+      linters:
+        - staticcheck
+
+#     CertPool.Subjects() has been deprecated but there is no alternative
+#	 https://github.com/golang/go/issues/46287
+    - text: 'SA1019: pool.Subjects has been deprecated since Go 1.18'
+      linters:
+        - staticcheck
+
+    # don't report this for test files
+    - text: 'SA1029: should not use built-in type string as key for value'
+      path: _test\.go|testsuites\.go
+    - text: 'SA5011'
+      path: _test\.go|testsuites\.go
+
+    # We should keep these definitions and checks around, even if deprecated
+    - text: 'v1.MediaTypeImageLayerNonDistributable|v1.MediaTypeImageLayerNonDistributableGzip is deprecated'
+      linters:
+        - staticcheck
+
     # Don't report on shadowing `err`. Strictly avoiding shadowing `err` often
     # results in code that is not idomatic for little gain in clarity or correctness.
     - text: 'shadow: declaration of "err" shadows declaration at'

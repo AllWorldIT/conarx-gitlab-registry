@@ -564,6 +564,7 @@ func TestEmptyManifestContent(t *testing.T) {
 	// Wipe the content of the manifest in common blob storage, but leave
 	// the metadata references.
 	blobPath, err := pathFor(blobDataPathSpec{digest: img.ManifestDigest})
+	require.NoError(t, err)
 	env.driver.PutContent(ctx, blobPath, []byte{})
 
 	manifestService, err := env.repository.Manifests(ctx)
