@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -37,13 +36,13 @@ func (g *Client) CreateBranch(projectID int, branchName, ref string) (*gitlab.Br
 
 func (g *Client) CreateCommit(projectID int, change []byte, fileName, commitMessage string, branch *gitlab.Branch) (*gitlab.Commit, error) {
 	aco := &gitlab.CommitActionOptions{
-		Action:   gitlab.FileAction(gitlab.FileUpdate),
-		FilePath: gitlab.String(fileName),
-		Content:  gitlab.String(string(change)),
+		Action:   gitlab.Ptr(gitlab.FileUpdate),
+		FilePath: gitlab.Ptr(fileName),
+		Content:  gitlab.Ptr(string(change)),
 	}
 
 	commit, _, err := g.client.Commits.CreateCommit(projectID, &gitlab.CreateCommitOptions{
-		Branch:        gitlab.String(branch.Name),
+		Branch:        gitlab.Ptr(branch.Name),
 		CommitMessage: &commitMessage,
 		Actions:       []*gitlab.CommitActionOptions{aco},
 	})
@@ -52,11 +51,11 @@ func (g *Client) CreateCommit(projectID int, change []byte, fileName, commitMess
 
 func (g *Client) CreateMergeRequest(projectID int, sourceBranch *gitlab.Branch, description, targetBranch, title string, labels *gitlab.LabelOptions, reviwerIDs []int) (*gitlab.MergeRequest, error) {
 	mr, _, err := g.client.MergeRequests.CreateMergeRequest(projectID, &gitlab.CreateMergeRequestOptions{
-		SourceBranch: gitlab.String(sourceBranch.Name),
+		SourceBranch: gitlab.Ptr(sourceBranch.Name),
 		TargetBranch: &targetBranch,
 		Title:        &title,
 		Description:  &description,
-		Squash:       gitlab.Bool(true),
+		Squash:       gitlab.Ptr(true),
 		Labels:       labels,
 		ReviewerIDs:  &reviwerIDs,
 	})
@@ -65,7 +64,7 @@ func (g *Client) CreateMergeRequest(projectID int, sourceBranch *gitlab.Branch, 
 
 func (g *Client) GetFile(fileName, ref string, pid int) (string, error) {
 	rfo := &gitlab.GetFileOptions{
-		Ref: gitlab.String(ref),
+		Ref: gitlab.Ptr(ref),
 	}
 
 	file, _, err := g.client.RepositoryFiles.GetFile(pid, fileName, rfo)
@@ -78,7 +77,7 @@ func (g *Client) GetFile(fileName, ref string, pid int) (string, error) {
 		return "", err
 	}
 
-	f, err := ioutil.TempFile("", "tmp")
+	f, err := os.CreateTemp("", "tmp")
 	if err != nil {
 		return "", err
 	}

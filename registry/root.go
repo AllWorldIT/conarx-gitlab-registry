@@ -252,6 +252,11 @@ var MigrateUpCmd = &cobra.Command{
 		}
 
 		plan, err := m.UpNPlan(*maxNumMigrations)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to prepare Up plan: %v", err)
+			os.Exit(1)
+		}
+
 		if len(plan) > 0 {
 			fmt.Println(strings.Join(plan, "\n"))
 		}
@@ -296,6 +301,11 @@ var MigrateDownCmd = &cobra.Command{
 
 		m := migrations.NewMigrator(db.DB)
 		plan, err := m.DownNPlan(*maxNumMigrations)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to prepare Down plan: %v", err)
+			os.Exit(1)
+		}
+
 		if len(plan) > 0 {
 			fmt.Println(strings.Join(plan, "\n"))
 		}

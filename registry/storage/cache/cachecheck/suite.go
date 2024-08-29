@@ -182,7 +182,7 @@ func checkBlobDescriptorCacheClear(ctx context.Context, t *testing.T, provider c
 		t.Error(err)
 	}
 
-	desc, err = cache.Stat(ctx, localDigest)
+	_, err = cache.Stat(ctx, localDigest)
 	if err == nil {
 		t.Fatalf("expected error statting deleted blob: %v", err)
 	}
