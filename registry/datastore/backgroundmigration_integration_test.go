@@ -19,6 +19,10 @@ func reloadBackgroundMigrationJobFixtures(tb testing.TB) {
 	testutil.ReloadFixtures(tb, suite.db, suite.basePath, testutil.BackgroundMigrationJobsTable)
 }
 
+func unloadBackgroundMigrationFixtures(tb testing.TB) {
+	require.NoError(tb, testutil.TruncateTables(suite.db, testutil.BackgroundMigrationTable))
+}
+
 func TestBackgroundMigrationStore_FindByID(t *testing.T) {
 	reloadBackgroundMigrationFixtures(t)
 
@@ -508,4 +512,59 @@ func TestBackgroundMigrationStore_ValidateMigrationColumn_NotFound(t *testing.T)
 	ok, err := s.ExistsColumn(suite.ctx, "public", "repositories", "does_not_exist")
 	require.NoError(t, err)
 	require.False(t, ok)
+}
+
+func TestBackgroundMigrationStore_FindAll(t *testing.T) {
+	reloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	bb, err := s.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	// see testdata/fixtures/batched_background_migrations.sql
+	expected := models.BackgroundMigrations{
+		{
+			ID:           1,
+			Name:         "CopyMediaTypesIDToNewIDColumn",
+			Status:       models.BackgroundMigrationFinished,
+			StartID:      1,
+			EndID:        100,
+			BatchSize:    20,
+			JobName:      "CopyMediaTypesIDToNewIDColumn",
+			TargetTable:  "public.media_types",
+			TargetColumn: "id",
+		},
+		{
+			ID:           2,
+			Name:         "CopyBlobIDToNewIDColumn",
+			Status:       models.BackgroundMigrationActive,
+			StartID:      5,
+			EndID:        10,
+			BatchSize:    1,
+			JobName:      "CopyBlobIDToNewIDColumn",
+			TargetTable:  "public.blobs",
+			TargetColumn: "id",
+		},
+		{
+			ID:           3,
+			Name:         "CopyRepositoryIDToNewIDColumn",
+			Status:       models.BackgroundMigrationActive,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+	}
+
+	require.Equal(t, expected, bb)
+}
+
+func TestBackgroundMigrationStore_FindAll_NotFound(t *testing.T) {
+	unloadBackgroundMigrationFixtures(t)
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	bb, err := s.FindAll(suite.ctx)
+	require.Empty(t, bb)
+	require.NoError(t, err)
 }

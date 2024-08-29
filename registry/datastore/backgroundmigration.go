@@ -58,6 +58,8 @@ type BackgroundMigrationStore interface {
 	Lock(ctx context.Context) error
 	// ValidateMigrationTableAndColumn asserts that the column and table exists in the database.
 	ValidateMigrationTableAndColumn(ctx context.Context, tableWithSchema, column string) error
+	// FindAll returns all background migrations.
+	FindAll(ctx context.Context) (models.BackgroundMigrations, error)
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
@@ -395,6 +397,33 @@ func (bms *backgroundMigrationStore) UpdateJobStatus(ctx context.Context, job *m
 	return nil
 }
 
+// FindAll returns the status of all background migrations.
+func (bms *backgroundMigrationStore) FindAll(ctx context.Context) (models.BackgroundMigrations, error) {
+	defer metrics.InstrumentQuery("bbm_all_migrations")()
+	q := `SELECT
+			id,
+			name,
+			min_value,
+			max_value,
+			batch_size,
+			status,
+			job_signature_name,
+			table_name,
+			column_name,
+			failure_error_code
+		FROM
+			batched_background_migrations
+		ORDER BY
+			id ASC`
+
+	rows, err := bms.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("finding background migrations: %w", err)
+	}
+
+	return scanFullBackgroundMigrations(rows)
+}
+
 // Lock sets a lock to prevent concurrent execution of new Background Migration jobs.
 // This implementation uses PostgreSQL's Transaction Advisory Locks via `pg_try_advisory_xact_lock()` and should be used within a transaction context.
 // For details on Advisory Locks, see: https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS
@@ -472,4 +501,24 @@ func scanBackgroundMigration(row *sql.Row) (*models.BackgroundMigration, error) 
 	}
 
 	return bm, nil
+}
+
+func scanFullBackgroundMigrations(rows *sql.Rows) (models.BackgroundMigrations, error) {
+	bb := make(models.BackgroundMigrations, 0)
+	defer rows.Close()
+
+	for rows.Next() {
+		b := new(models.BackgroundMigration)
+		err := rows.Scan(&b.ID, &b.Name, &b.StartID, &b.EndID, &b.BatchSize, &b.Status, &b.JobName, &b.TargetTable, &b.TargetColumn, &b.ErrorCode)
+		if err != nil {
+			return nil, fmt.Errorf("scanning background migrations: %w", err)
+		}
+
+		bb = append(bb, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("scanning background migrations: %w", err)
+	}
+
+	return bb, nil
 }
