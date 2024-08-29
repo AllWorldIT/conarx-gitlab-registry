@@ -77,7 +77,7 @@ const randomSecretSize = 32
 const defaultCheckInterval = 10 * time.Second
 
 // defaultDBCheckTimeout is the default timeout for DB connection checks. Chosen
-// arbitrarly
+// arbitrary
 const defaultDBCheckTimeout = 5 * time.Second
 
 // redisCacheTTL is the global expiry duration for objects cached in Redis.

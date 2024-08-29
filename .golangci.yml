@@ -116,7 +116,7 @@ linters-settings:
   stylecheck:
     # Disable checks by prefixing with a `-`
     # ST1000: at least one file in a package should have a package comment
-    # ST1003: initialism should be capitilized, for example: `var webhookUrl should be webhookURL`
+    # ST1003: initialism should be capitalized, for example: `var webhookUrl should be webhookURL`
     checks: ["all", "-ST1000", "-ST1003"]
   whitespace:
     multi-if: false   # Enforces newlines (or comments) after every multi-line if statement
@@ -218,15 +218,22 @@ issues:
     # results in code that is not idomatic for little gain in clarity or correctness.
     - text: 'shadow: declaration of "err" shadows declaration at'
       linters: [ govet ]
-
     # Exclude lll issues for long lines with go:generate
     - linters:
         - lll
       source: "^//go:generate "
 
-    # Do not check for duplicates on migration files as they are commonly found and expected
+    - path: ^CHANGELOG\.md$
+      linters:
+        # The changelog captures a set of commits in a release, featuring their commit message, which we shouldn't alter
+        - misspell
+
     - path: "^registry/datastore/migrations/.*\\.go$"
       linters:
+        # Migration files shouldn't be updated after being introduced, and we found misspell errors on some of the
+        # existing ones, so we have to disable these entirely.
+        - misspell
+        # Do not check for duplicates on migration files as they are commonly found and expected
         - dupl
 
   # Independently from option `exclude` we use default exclude patterns,

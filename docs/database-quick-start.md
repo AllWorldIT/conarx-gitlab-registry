@@ -18,7 +18,7 @@ the database was active.
 [import step](#import-exisiting-data) has been completed. That command is not compatible with registries using
 the database and it will delete good data. 
    - Check that you have not used a service, such as cron, to automate offline garbage collection!
-- You are running GitLab Verison 17.3 or higher
+- You are running GitLab Version 17.3 or higher
 - Geo replication is not enabled
 - Be aware that all untagged images will be removed automatically by online garbage collection
 
