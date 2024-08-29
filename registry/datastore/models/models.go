@@ -216,6 +216,9 @@ type BackgroundMigration struct {
 	ErrorCode    BBMErrorCode
 }
 
+// BackgroundMigrations is a slice of BackgroundMigration pointers.
+type BackgroundMigrations []*BackgroundMigration
+
 // BackgroundMigrationJob is the representation of a BackgroundMigration Job.
 type BackgroundMigrationJob struct {
 	ID               int

@@ -15,6 +15,7 @@ import (
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/internal/feature"
+	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/storage"
@@ -30,6 +31,7 @@ func init() {
 	RootCmd.AddCommand(ServeCmd)
 	RootCmd.AddCommand(GCCmd)
 	RootCmd.AddCommand(DBCmd)
+	RootCmd.AddCommand(BBMCmd)
 	RootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "show the version and exit")
 
 	GCCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do everything except remove the blobs")
@@ -63,6 +65,8 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&dynamicMediaTypes, "dynamic-media-types", "m", true, "record unknown media types during import")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
+
+	BBMCmd.AddCommand(BBMStatusCmd)
 }
 
 // Command flag vars
@@ -562,5 +566,54 @@ var ImportCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "failed to import metadata: %v", err)
 			os.Exit(1)
 		}
+	},
+}
+
+// BBMCmd is the cobra command that corresponds to the background-migrate subcommand
+var BBMCmd = &cobra.Command{
+	Use:   "background-migrate <config>",
+	Short: "Manage batched background migrations",
+	Long:  "Manage batched background migrations",
+	Run: func(cmd *cobra.Command, args []string) {
+		cmd.Usage()
+	},
+}
+
+// BBMStatusCmd is the `status` sub-command of `background-migrate` that shows the batched background migrations status.
+var BBMStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show batched background migration status",
+	Long:  "Show batched background migration status",
+	Run: func(cmd *cobra.Command, args []string) {
+		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		db, err := migrationDBFromConfig(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
+			os.Exit(1)
+		}
+
+		bbmw := bbm.NewWorker(nil, bbm.WithDB(db))
+		bbMigrations, err := bbmw.AllMigrations(dcontext.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to fetch background migrations: %v", err)
+			os.Exit(1)
+		}
+
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Batched Background Migration", "Status"})
+		table.SetColWidth(80)
+
+		// Display table rows
+		for _, bbm := range bbMigrations {
+			table.Append([]string{bbm.Name, bbm.Status.String()})
+		}
+
+		table.Render()
 	},
 }
