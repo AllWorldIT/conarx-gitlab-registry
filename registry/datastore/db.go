@@ -528,83 +528,81 @@ func (lb *DBLoadBalancer) logger(ctx context.Context) log.Logger {
 // ResolveReplicas initializes or updates the list of available replicas atomically by resolving the provided hosts
 // either through service discovery or using a fixed hosts list. As result, the load balancer replica pool will be
 // up-to-date. Replicas for which we failed to establish a connection to are not included in the pool.
-func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error {
-	var replicas []*DB
+func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
 	var result *multierror.Error
-
 	l := lb.logger(ctx)
-	tmpDSN := *lb.primaryDSN
-	var replicaDSNs []DSN
 
+	// Resolve replica DSNs
+	var resolvedDSNs []DSN
 	if lb.resolver != nil {
 		l.Info("resolving replicas with service discovery")
 		addrs, err := resolveHosts(ctx, lb.resolver)
 		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("failed to resolve replica hosts: %w", err))
-		} else {
-			for _, addr := range addrs {
-
-				tmpDSN.Host = addr.IP.String()
-				tmpDSN.Port = addr.Port
-				replicaDSNs = append(replicaDSNs, tmpDSN)
-			}
+			return fmt.Errorf("failed to resolve replica hosts: %w", err)
+		}
+		for _, addr := range addrs {
+			dsn := *lb.primaryDSN
+			dsn.Host = addr.IP.String()
+			dsn.Port = addr.Port
+			resolvedDSNs = append(resolvedDSNs, dsn)
 		}
 	} else if len(lb.fixedHosts) > 0 {
 		l.Info("resolving replicas with fixed hosts list")
 		for _, host := range lb.fixedHosts {
-			tmpDSN.Host = host
-			replicaDSNs = append(replicaDSNs, tmpDSN)
+			dsn := *lb.primaryDSN
+			dsn.Host = host
+			resolvedDSNs = append(resolvedDSNs, dsn)
 		}
 	}
 
-	for i := range replicaDSNs {
-		dsn := replicaDSNs[i]
-		l := l.WithFields(logrus.Fields{
-			"index":   i,
-			"total":   len(replicaDSNs),
-			"address": dsn.Address(),
-		})
-		l.Info("opening replica connection")
-		replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
-		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Address(), err))
-		} else {
-			replicas = append(replicas, replica)
-		}
-	}
-
-	// TODO(dlb): use disconnecttimeout to close handlers from retired replicas
-	lb.replicaMutex.Lock()
-	defer lb.replicaMutex.Unlock()
-
+	// Open connections for _added_ replicas
+	var outputReplicas []*DB
 	var added, removed []string
+	for i := range resolvedDSNs {
+		var err error
+		dsn := &resolvedDSNs[i]
+		l = l.WithFields(logrus.Fields{"address": dsn.Address()})
+
+		r := dbByAddress(lb.replicas, dsn.Address())
+		if r != nil {
+			l.Info("replica is known, reusing existing connection")
+		} else {
+			l.Info("replica is new, opening connection")
+			if r, err = lb.connector.Open(ctx, dsn, lb.replicaOpenOpts...); err != nil {
+				result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Address(), err))
+				continue
+			}
+			added = append(added, r.Address())
+			metrics.ReplicaAdded()
+		}
+		outputReplicas = append(outputReplicas, r)
+	}
+
+	// Identify removed replicas
 	for _, r := range lb.replicas {
-		if !containsReplica(replicas, r.Address()) {
+		if dbByAddress(outputReplicas, r.Address()) == nil {
 			removed = append(removed, r.Address())
 			metrics.ReplicaRemoved()
 		}
 	}
-	for _, r := range replicas {
-		if !containsReplica(lb.replicas, r.Address()) {
-			added = append(added, r.Address())
-			metrics.ReplicaAdded()
-		}
-	}
 
 	l.WithFields(logrus.Fields{"added": added, "removed": removed}).Info("updating replicas list")
-	metrics.ReplicaPoolSize(len(replicas))
-	lb.replicas = replicas
+	metrics.ReplicaPoolSize(len(outputReplicas))
+	lb.replicas = outputReplicas
 
-	return result
+	return result.ErrorOrNil()
 }
 
-func containsReplica(replicas []*DB, addr string) bool {
-	for _, r := range replicas {
+func dbByAddress(dbs []*DB, addr string) *DB {
+	for _, r := range dbs {
 		if r.Address() == addr {
-			return true
+			return r
 		}
 	}
-	return false
+	return nil
 }
 
 // StartReplicaChecking synchronously refreshes the list of replicas in the configured interval.
@@ -654,7 +652,7 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	}
 	lb.primary = primary
 
-	if err := lb.ResolveReplicas(ctx); err.ErrorOrNil() != nil {
+	if err := lb.ResolveReplicas(ctx); err != nil {
 		result = multierror.Append(result, err)
 	}
 

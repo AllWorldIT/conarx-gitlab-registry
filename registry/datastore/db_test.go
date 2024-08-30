@@ -806,9 +806,12 @@ func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 	}
 
 	// Expect initial connection attempts to primary, replica 1 and 2
-	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1)
-	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB}, nil).Times(1)
-	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
 
 	// Create the load balancer with the required options
 	lb, err := datastore.NewDBLoadBalancer(
@@ -832,22 +835,22 @@ func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 		Return([]*net.SRV{
 			{Target: "srv1.example.com", Port: 6432},
 			{Target: "srv3.example.com", Port: 6434},
-		}, nil).AnyTimes()
+		}, nil).Times(1)
 
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv1.example.com").
-		Return([]string{"192.168.1.1"}, nil).AnyTimes()
+		Return([]string{"192.168.1.1"}, nil).Times(1)
 
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv3.example.com").
-		Return([]string{"192.168.1.3"}, nil).AnyTimes()
+		Return([]string{"192.168.1.3"}, nil).Times(1)
 
-	// Expect new connection attempts to replica 1 and 3
-	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB}, nil).Times(1)
-	mockConnector.EXPECT().Open(gomock.Any(), replica3DSN, gomock.Any()).Return(&datastore.DB{DB: replica3MockDB}, nil).Times(1)
+	// Expect new connection attempts to replica 3 (not 1, which was already open, neither 2, which is gone)
+	mockConnector.EXPECT().Open(gomock.Any(), replica3DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica3MockDB, DSN: replica3DSN}, nil).Times(1)
 
-	errs := lb.ResolveReplicas(context.Background())
-	require.NoError(t, errs.ErrorOrNil())
+	err = lb.ResolveReplicas(context.Background())
+	require.NoError(t, err)
 
 	// Verify updated replicas
 	replicas = lb.Replicas()
@@ -1059,7 +1062,6 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 
 func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -1147,7 +1149,7 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	}
 
 	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
-	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(2)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
 	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
 	mockConnector.EXPECT().Open(gomock.Any(), replica3DSN, gomock.Any()).Return(&datastore.DB{DB: replica3MockDB, DSN: replica3DSN}, nil).Times(1)
 
