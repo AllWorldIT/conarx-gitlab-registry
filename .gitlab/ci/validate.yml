@@ -30,12 +30,21 @@ semgrep-sast:
   before_script:
     - echo ".GOPATH/" > .semgrepignore
 
-# Perform documentation linting and link checking on Markdown files
+# Perform documentation linting and link checking on Markdown files #
+# NOTE(prozlach): The reason why we run DinD plus install software on every run
+# is that we want to keep the single place where the tooling versions are
+# defined and we have diverse range of hosts running `make lint` target (macs,
+# linux, brew, apt, snap, etc...). So the idea is to run the linting tools from
+# inside docker container both on the laptops of the developers and in the CI.
 docslint:
-  image: registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.20-vale-3.6.1-markdownlint2-0.13.0-lychee-0.15.1
+  image: docker:27.2.0
+  services:
+    - docker:dind
   stage: validate
   needs: []
   script:
+    - apk update
+    - apk add make
     # Lint content and Markdown, and check links
     - make lint-docs
   allow_failure: true
