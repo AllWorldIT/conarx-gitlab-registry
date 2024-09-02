@@ -1,6 +1,6 @@
 # Event notifications metrics
 
-When enabled, the registry emits [webhook notifications](./../docs/configuration.md#notifications)
+When enabled, the registry emits [webhook notifications](../docs/configuration.md#notifications)
 when certain events occur, for example when pushing a manifest to the registry.
 
 ## Metrics available

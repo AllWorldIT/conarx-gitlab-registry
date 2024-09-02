@@ -12,7 +12,7 @@ sequenceDiagram
   participant R as Registry
 
   Note right of C: Check if registry supports v2 API
-	C->>R: GET /v2/
+  C->>R: GET /v2/
   R->>C: 200 OK
   loop For each layer first and then one last time for the image configuration
     Note right of C: Check if blob with digest <digest> already exists in repository <name>
@@ -80,7 +80,7 @@ sequenceDiagram
   participant R as Registry
 
   Note right of C: Check if registry supports v2 API
-	C->>R: GET /v2/
+  C->>R: GET /v2/
   R->>C: 200 OK
   Note right of C: Download manifest for image <reference> from repository <name>
   C->>R: GET /v2/<name>/manifests/<reference>

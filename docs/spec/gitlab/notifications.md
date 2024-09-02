@@ -101,7 +101,7 @@ Below is a sample payload of an event notification sent by the registry on diffe
 | `deploy_token`            | `action` performed by an authenticated [deploy token](https://docs.gitlab.com/ee/user/project/deploy_tokens/#pull-images-from-a-container-registry).                             |
 | `personal_access_token`   | [Personal access tokens](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html#personal-access-token-scopes) with the `read_registry` or `write_registry` scopes.  |
 | `build`                   | Refers to the `CI_JOB_TOKEN` available in [GitLab CI/CD](https://docs.gitlab.com/ee/ci/jobs/ci_job_token.html#gitlab-cicd-job-token) pipelines.                                  |
- | `gitlab_or_ldap`          | When the user logged in via username and password. Or when [LDAP](https://docs.gitlab.com/ee/administration/auth/ldap/) was used to login.                                       |
+ | `gitlab_or_ldap`          | When the user logged in via username and password. Or when [LDAP](https://docs.gitlab.com/ee/administration/auth/ldap/) was used to log in.                                       |
 | `""`                      | The user type might be empty when there was no authentication required. For example, pulling public images from the registry.                                                    |
 
 #### `source`
@@ -110,7 +110,6 @@ Below is a sample payload of an event notification sent by the registry on diffe
 |--------------|--------|----------------|-----------------------------------------------------------------------------------------|
 | `addr`       | String | No             | Contains the IP or hostname and the port of the registry node that generated the event. |
 | `instanceID` | String | No             | Identifies a running instance of the registry node.                                     |
-
 
 #### `meta`
 
@@ -122,5 +121,5 @@ Below is a sample payload of an event notification sent by the registry on diffe
 
 | Field             | Type    | Always present | Description                                                                                                               |
 |-------------------|---------|----------------|---------------------------------------------------------------------------------------------------------------------------|
-| `redirected`      | Boolean | Yes            | Identifies if a blob download request was served via a redirect url to the requesting client.                                                                                                         |
-| `storageBackend`  | String  | Yes            | Identifies the backend that was used to serve a blob download request. This is always the configured storage backend (and not the redirect url provider) until  https://gitlab.com/gitlab-org/container-registry/-/issues/1003 is addressed.  |
+| `redirected`      | Boolean | Yes            | Identifies if a blob download request was served via a redirect URL to the requesting client.                                                                                                         |
+| `storageBackend`  | String  | Yes            | Identifies the backend that was used to serve a blob download request. This is always the configured storage backend (and not the redirect URL provider) until [this issue](https://gitlab.com/gitlab-org/container-registry/-/issues/1003) is addressed.  |

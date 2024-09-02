@@ -3,11 +3,11 @@
 
 This document illustrates the flow of the API request for GitLab Rails to rename or transfer (within the same top-level namespace) a project with container repositories.
 
-This flow works under the assumption that all authorization tokens referenced in the diagram have been issued to GitLab Rails with full sub-repository pull scopes and base-repository push & pull scopes for project name changes, and an additional push scope (on a namespace's sub-path) for requests that move a project's namespace as highlighted in the [GitLab registry API rename spec](../docs/spec/gitlab/api.md#rename-base-repository)
-
+This flow works under the assumption that all authorization tokens referenced in the diagram have been issued to GitLab Rails with full sub-repository pull scopes and base-repository push & pull scopes for project name changes, and an additional push scope (on a namespace's sub-path) for requests that move a project's namespace as highlighted in the [GitLab registry API rename spec](../docs/spec/gitlab/api.md#renamemove-origin-repository)
+base
 **Note** : When making a request to the rename API GitLab Rails must pass the project path in place of the repository (base) `<path>` parameter in the request. This is because some repositories may not have a base repository (i.e. a repository with the same exact path as the GitLab project) but may have sub repositories under the GitLab project path, which would still need to be renamed.
 
-In the diagrams below we highlight example requests their respective flows for changing a GitLab's project `name` references in the container registry. This same approach and flow applies to changing the project's `namespace` when substituting the request's body and token requirements highlighted in the [GitLab registry API rename spec](../docs/spec/gitlab/api.md#rename-base-repository) for that of the appropriate `namespace` request.
+In the diagrams below we highlight example requests their respective flows for changing a GitLab project `name` references in the container registry. This same approach and flow applies to changing the project's `namespace` when substituting the request's body and token requirements highlighted in the [GitLab registry API rename spec](../docs/spec/gitlab/api.md#renamemove-origin-repository) for that of the appropriate `namespace` request.
 
 ## Rename (Dry-run)
 

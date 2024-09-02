@@ -1,12 +1,10 @@
 Follow this guide to start using the metadata database with the container registry.
 
-
 The metadata database enables you make use of many new features, such as
 [online garbage collection](spec/gitlab/online-garbage-collection.md) and increases the
 efficiency of many registry operations.
 
 [TOC]
-
 
 ## Things to Consider Before Migration
 
@@ -15,9 +13,9 @@ now the sole source of the registry metadata, so disabling it after this point
 will cause the registry to lose visibility to all images written to it while
 the database was active.
 - **Never** run offline garbage collection at any point after the
-[import step](#import-exisiting-data) has been completed. That command is not compatible with registries using
+[import step](#import-existing-data) has been completed. That command is not compatible with registries using
 the database and it will delete good data. 
-   - Check that you have not used a service, such as cron, to automate offline garbage collection!
+- Check that you have not used a service, such as cron, to automate offline garbage collection!
 - You are running GitLab Version 17.3 or higher
 - Geo replication is not enabled
 - Be aware that all untagged images will be removed automatically by online garbage collection
@@ -46,7 +44,7 @@ ensure that the database is reachable via the values supplied in the configurati
 
 Locate your registry configuration.
 
-For omnibus, you will need to edit `/etc/gitlab/gitlab.rb` using the ruby hash
+For omnibus, you will need to edit `/etc/gitlab/gitlab.rb` using the Ruby hash
 syntax as shown in the [configuration template](https://gitlab.com/gitlab-org/omnibus-gitlab/-/blob/e54e2ed029a5312617a990f0809407b72703bf87/files/gitlab-config-template/gitlab.rb.template#L938) and run `gitlab-ctl reconfigure` to propagate those changes to
 `/var/opt/gitlab/registry/config.yml`. The registry commands in this guide need
 to be pointed to this second file.
@@ -69,9 +67,9 @@ database:
   sslmode:  "disable"
 ```
 
-A complete, but minimal, configuration file using the database can be seen at
-[config/database-filesystem.yml](../config/database-filesystem.yml)
-
+<!-- vale gitlab_base.Substitutions = NO -->
+A complete, but minimal, configuration file using the database can be seen at [config/database-filesystem.yml](../config/database-filesystem.yml)
+<!-- vale gitlab_base.Substitutions = YES -->
 
 ## Run Database Migrations
 
@@ -87,16 +85,15 @@ appropriate for your environment.
 
 Run the following command to apply all pending migrations to the registry database:
 
-```
-$ registry database migrate up config.yml
+```shell
+registry database migrate up config.yml
 ```
 
 You will also need to run this command each time before upgrading to a newer
 version of the registry.
 The registry will fail to start if the database is enabled and there are pending migrations.
 
-For a complete treatment of migrations, please see the
-[database-migrations](./database-migrations.yml) guide.
+For a complete treatment of migrations, please see the [database-migrations](database-migrations.md) guide.
 
 ## Enabling the Database
 
@@ -128,6 +125,7 @@ object storage.
 
 If you encounter failures during the import step, you **do not** need to restore
 to backup, simply keep the registry database disabled in the configuration.
+
 #### Import existing data
 
 Choose an option to import your existing registry data into the database.
@@ -158,8 +156,8 @@ storage:
 
 Next, run the following command:
 
-```bash
-$ registry database import config.yml
+```shell
+registry database import config.yml
 ```
 
 If the command completed successfully, the registry is now fully imported. We
@@ -188,8 +186,8 @@ of downtime possible.
 
 First, run the following command:
 
-```bash
-$ registry database import config.yml --step-one
+```shell
+registry database import config.yml --step-one
 ```
 
 For larger instances, this command may take some time to complete, but you may
@@ -223,8 +221,8 @@ storage:
 
 Next, run the following command:
 
-```bash
-$ registry database import config.yml --step-two
+```shell
+registry database import config.yml --step-two
 ```
 
 If the command completed successfully, the registry is now fully imported. We
@@ -250,8 +248,8 @@ Even though the registry is now fully using the database for its metadata. It
 does not yet have access to any potentially unused layer blobs. We'll need one
 final step to enable the online garbage collector to remove these old blobs:
 
-```bash
-$ registry database import config.yml --step-three
+```shell
+registry database import config.yml --step-three
 ```
 
 Once that command exists successfully, the registry is now fully migrated to the database!

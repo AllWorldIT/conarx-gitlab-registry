@@ -1,8 +1,8 @@
 # Database Development Guidelines
 
-The registry database development adheres to the same [rules and
-principles](https://docs.gitlab.com/ee/development/database/) defined for the
-GitLab database. We only detail what is specific to the registry in this document.
+The registry database development adheres to the same [rules and principles](https://docs.gitlab.com/ee/development/database/)
+defined for the GitLab database. We only detail what is specific to the
+registry in this document.
 
 ## Generic Interfaces
 
@@ -29,7 +29,7 @@ Make sure to run `make db-structure-dump` to update the DDL script whenever you 
 
 ## Creating New Tables
 
-New tables introduced to the registry database, which may potentially undergo data migration in the future, must include an auto-incrementing integer `id` column. This requirement ensures compatibility with the registry's [Batched Background Migration](./spec/gitlab/database-background-migrations.md) process, which depend on the sequential ordering of the `id` column to determine migration batches.
+New tables introduced to the registry database, which may potentially undergo data migration in the future, must include an auto-incrementing integer `id` column. This requirement ensures compatibility with the registry's [Batched Background Migration](spec/gitlab/database-background-migrations.md) process, which depend on the sequential ordering of the `id` column to determine migration batches.
 
 ## Testing
 
@@ -82,7 +82,7 @@ If we wanted to test a new table `foo` in `TestImporter_Import`, we would do:
 
 1. Run the `go test` command with the `create` flag:
 
-```
+```shell
 go test -v -tags=integration github.com/docker/distribution/registry/datastore -create
 ```
 
@@ -101,7 +101,7 @@ If for example we changed the name of column `a` in the `foo` table to `b`,
 instead of manually updating the corresponding golden file we could simply rerun
 the test with the `update` flag:
 
-```
+```shell
 go test -v -tags=integration github.com/docker/distribution/registry/datastore -update
 ```
 

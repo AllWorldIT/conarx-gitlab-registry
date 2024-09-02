@@ -11,7 +11,7 @@ in the contributing guide.
 The `release-cli` runs on a release CI pipeline when a new tag is pushed to
 this project. The following commands are available from the root of this project:
 
-```bash
+```shell
 Release a new version of Container Registry on the specified project
 
 Usage:

@@ -48,7 +48,7 @@ YAML configuration file by mounting it as a volume in the container.
 Typically, create a new configuration file from scratch,named `config.yml`, then
 specify it in the `docker run` command:
 
-```bash
+```shell
 $ docker run -d -p 5000:5000 --restart=always --name registry \
              -v `pwd`/config.yml:/etc/docker/registry/config.yml \
              registry:2
@@ -484,8 +484,7 @@ returns an error. You can choose any of these backend storage drivers:
 | `gcs`                  | Uses Google Cloud Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/gcs.md).                                                                                                                           |
 | `s3`                   | Uses Amazon Simple Storage Service (S3) and compatible Storage Services. See the [driver's reference documentation](https://github.com/distribution/distribution/blob/main/docs/storage-drivers/s3.md), or the [extra parameters documentation](#s3)                                 |
 
-For testing only, you can use the [`inmemory` storage
-driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/inmemory.md).
+For testing only, you can use the [`inmemory` storage driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/inmemory.md).
 If you would like to run a registry from volatile memory, use the
 [`filesystem` driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md)
 on a ramdisk.
@@ -500,7 +499,7 @@ or this error will occur:
 mkdir /XXX protocol error and your registry will not function properly.
 ```
 
-#### `s3`
+### `s3`
 
 Extra parameters:
 
@@ -508,7 +507,7 @@ Extra parameters:
 |-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `multipartcopychunksize`      | Chunk size for all but the last Upload Part - Copy operation of a multipart copy. Empirically, 32 MB is optimal.                                                                                                                                                                                                                                                                                                                                                         |
 | `multipartcopymaxconcurrency` | Maximum number of concurrent Upload Part - Copy operations for a multipart copy.                                                                                                                                                                                                                                                                                                                                                                                         |
-| `multipartcopythresholdsize`  | Object size above which multipart copy will be used. (PUT Object - Copy is used for objects at or below this size.)  Empirically, 32 MB is optimal.                                                                                                                                                                                                                                                                                                                      |
+| `multipartcopythresholdsize`  | Object size above which multipart copy will be used. (PUT Object - Copy is used for objects at or below this size.) Empirically, 32 MB is optimal.                                                                                                                                                                                                                                                                                                                      |
 | `loglevel`                    | The possible log levels are the lowercase version of the AWS Go SDK [LogLevelType](https://docs.aws.amazon.com/sdk-for-go/api/aws/#LogLevelType) values (see the documentation for a description of each): `logoff` `logdebug` `logdebugwithsigning` `logdebugwithhttpbody` `logdebugwithrequestretries` `logdebugwithrequesterrors` `logdebugwitheventstreambody`. This configuration setting can be set using the `REGISTRY_STORAGE_S3_LOGLEVEL` environment variable. |
 | `objectacl`                    | The S3 Canned ACL for objects. The default value is "private". If you are using a bucket owned by another AWS account, it is recommended that you set this to `bucket-owner-full-control` so that the bucket owner can access your objects. Other valid options are available in the [AWS S3 documentation](http://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#canned-acl). |
 | `objectownership`              | Indicates whether the S3 storage bucket to be used by the registry disabled access control lists (ACLs). The default value is `false`. This parameter can not be `true` if the `objectacl` parameter is also set. S3 Object Ownership is an Amazon S3 bucket-level setting that you can use to disable access control lists (ACLs) and take ownership of every object in your bucket. More information is available in the [AWS S3 documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html). |
@@ -526,11 +525,10 @@ default. Upload purging will be disabled if `readonly` is enabled.
 To configure upload directory purging, the following parameters must
 be set.
 
-
 | Parameter  | Required | Description                                                                                        |
 |------------|----------|----------------------------------------------------------------------------------------------------|
 | `enabled`  | yes      | Set to `true` to enable upload purging. Defaults to `true`.                                        |
-| `age`      | yes      | Upload directories which are older than this age will be deleted.Defaults to `168h` (1 week).      |
+| `age`      | yes      | Upload directories which are older than this age will be deleted. Defaults to `168h` (1 week).      |
 | `interval` | yes      | The interval between upload directory purging. Defaults to `24h`.                                  |
 | `dryrun`   | yes      | Set `dryrun` to `true` to obtain a summary of what directories will be deleted. Defaults to `false`.|
 
@@ -671,7 +669,7 @@ Use these settings to configure the behavior of the database connection pool.
 
 > **_NOTE:_** Batched Background Migrations (BBM) are an experimental feature, please do not enable it in production.
 
-The `backgroundmigrations` subsection configures Batched Background Migrations (BBM) in the registry. BBM are used for performing database data migration in batches, ensuring efficient and manageable data migrations without disrupting service availability. See the [specification](./spec/gitlab/database-background-migrations.md) for a detailed explanation of how it works.
+The `backgroundmigrations` subsection configures Batched Background Migrations (BBM) in the registry. BBM are used for performing database data migration in batches, ensuring efficient and manageable data migrations without disrupting service availability. See the [specification](spec/gitlab/database-background-migrations.md) for a detailed explanation of how it works.
 
 ```yaml
 backgroundmigrations:
@@ -690,7 +688,7 @@ backgroundmigrations:
 
 > **Note**: This is an experimental feature and should _not_ be used in production.
 
-This subsection allows enabling and configuring Database Load Balancing (DLB). See the corresponding [specification](./spec/gitlab/database-load-balancing.md)
+This subsection allows enabling and configuring Database Load Balancing (DLB). See the corresponding [specification](spec/gitlab/database-load-balancing.md)
 for more details on how it works.
 
 ```none
@@ -769,10 +767,6 @@ security.
 | `rootcertbundle` | yes | The absolute path to the root certificate bundle. This bundle contains the public part of the certificates used to sign authentication tokens. |
 | `autoredirect`   | no      | When set to `true`, `realm` will automatically be set using the Host header of the request as the domain and a path of `/auth/token/`|
 
-
-For more information about Token based authentication configuration, see the
-[specification](spec/auth/token.md).
-
 ## `middleware`
 
 The `middleware` structure is **optional**. Use this option to inject middleware at
@@ -847,7 +841,6 @@ interpretation of the options.
 | `updatefrequency`  | no | The frequency to update AWS IP regions, default: `12h` |
 | `iprangesurl` | no      | The URL contains the AWS IP ranges information, default: `https://ip-ranges.amazonaws.com/ip-ranges.json` |
 
-
 Value of `ipfilteredby` can be:
 
 | Value       | Description                        |
@@ -884,7 +877,7 @@ location of a proxy for the layer stored by the S3 storage driver.
 
 ## `reporting`
 
-```
+```yaml
 reporting:
   sentry:
     enabled: true
@@ -909,7 +902,7 @@ A valid configuration may contain multiple.
 
 ## `profiling`
 
-```
+```yaml
 profiling:
   stackdriver:
     service: registry
@@ -934,7 +927,7 @@ performance overhead to processes when it is enabled ([source](https://medium.co
 | `service`        | no       | The name of the service under which the profiled data will be recorded and exposed. Defaults to the value of the `GAE_SERVICE` environment variable or instance metadata.                      |
 | `serviceversion` | no       | The version of the service. Defaults to the `GAE_VERSION` environment variable if that is set, or to empty string otherwise.                                              |
 | `projectid`      | no       | The project ID. Defaults to the `GOOGLE_CLOUD_PROJECT` environment variable or instance metadata.                                                                                              |
-| `keyfile`        | no       | Path of a private service account key file in JSON format used for [Service Account Authentication](https://cloud.google.com/storage/docs/authentication#service_accounts). The service account must have the `roles/cloudprofiler.agent` role or manually specified permissions as described at https://cloud.google.com/profiler/docs/iam#roles for the agent role. Defaults to the `GOOGLE_APPLICATION_CREDENTIALS` environment variable or instance metadata. |
+| `keyfile`        | no       | Path of a private service account key file in JSON format used for [Service Account Authentication](https://cloud.google.com/storage/docs/authentication#service_accounts). The service account must have the `roles/cloudprofiler.agent` role or manually specified permissions as described [here](https://cloud.google.com/profiler/docs/iam#roles) for the agent role. Defaults to the `GOOGLE_APPLICATION_CREDENTIALS` environment variable or instance metadata. |
 
 See the Stackdriver Profiler [API docs](https://pkg.go.dev/cloud.google.com/go/profiler?tab=doc#Config)
 for more details about configuration options.
@@ -987,9 +980,8 @@ registry.
 | `prefix`  | no       | If the server does not run at the root path, set this to the value of the prefix. The root path is the section before `v2`. It requires both preceding and trailing slashes, such as in the example `/path/`. |
 | `host`    | no       | A fully-qualified URL for an externally-reachable address for the registry. If present, it is used when creating generated URLs. Otherwise, these URLs are derived from client requests. |
 | `secret`  | no       | A random piece of data used to sign state that may be stored with the client to protect against tampering. For production environments you should generate a random piece of data using a cryptographically secure random generator. If you omit the secret, the registry will automatically generate a secret when it starts. **If you are building a cluster of registries behind a load balancer, you MUST ensure the secret is the same for all registries.**|
-| `relativeurls`| no    | If `true`,  the registry returns relative URLs in Location headers. The client is responsible for resolving the correct URL. **This option is not compatible with Docker 1.7 and earlier.**|
+| `relativeurls`| no    | If `true`, the registry returns relative URLs in Location headers. The client is responsible for resolving the correct URL. **This option is not compatible with Docker 1.7 and earlier.**|
 | `draintimeout`| no    | Amount of time to wait for HTTP connections to drain before shutting down after registry receives SIGTERM signal|
-
 
 ### `tls`
 
@@ -1000,9 +992,9 @@ and proxy connections to the registry server.
 
 | Parameter | Required | Description                                           |
 |-----------|----------|-------------------------------------------------------|
-| `certificate` | yes  | Absolute path to the x509 certificate file.           |
-| `key`         | yes  | Absolute path to the x509 private key file.           |
-| `clientcas`   | no   | An array of absolute paths to x509 CA files.          |
+| `certificate` | yes  | Absolute path to the X.509 certificate file.           |
+| `key`         | yes  | Absolute path to the X.509 private key file.           |
+| `clientcas`   | no   | An array of absolute paths to X.509 CA files.          |
 | `minimumtls`  | no   | Minimum TLS version allowed (tls1.2, tls1.3). Defaults to tls1.2. |
 
 ### `letsencrypt`
@@ -1035,7 +1027,6 @@ monitoring registry metrics and health, as well as profiling. Sensitive
 information may be available via the debug endpoint. Please be certain that
 access to the debug endpoint is locked down in a production environment.
 
-
 | Parameter | Required | Description                                                                    |
 |-----------|----------|--------------------------------------------------------------------------------|
 | `addr`    | yes      | Specifies the `HOST:PORT` on which the debug server should accept connections. |
@@ -1053,17 +1044,17 @@ Please refer to the [`tls`](#tls) documentation for details.
 
 #### `prometheus`
 
-The `prometheus` option defines whether the prometheus metrics is enable, as well
+The `prometheus` option defines whether the Prometheus metrics is enable, as well
 as the path to access the metrics.
 
 These parameters are ignored if `debug.addr` is not set.
 
 | Parameter | Required | Description                                           |
 |-----------|----------|-------------------------------------------------------|
-| `enabled` | no       | Set `true` to enable the prometheus server            |
+| `enabled` | no       | Set `true` to enable the Prometheus server            |
 | `path`    | no       | The path to access the metrics, `/metrics` by default |
 
-The url to access the metrics is `HOST:PORT/path`, where `HOST:PORT` is defined
+The URL to access the metrics is `HOST:PORT/path`, where `HOST:PORT` is defined
 in `addr` under `debug`.
 
 #### `pprof`
@@ -1076,7 +1067,7 @@ These parameters are ignored if `debug.addr` is not set.
 |-----------|----------|-------------------------------------------------------|
 | `enabled` | no       | Set `true` to enable the pprof server                 |
 
-The url to access the pprof server is `HOST:PORT/debug/pprof/`, where `HOST:PORT`
+The URL to access the pprof server is `HOST:PORT/debug/pprof/`, where `HOST:PORT`
 is defined in `addr` under `debug`.
 
 ### `headers`
@@ -1140,13 +1131,14 @@ accept event notifications.
 | `url`     | yes      | The URL to which events should be published.                                                                                                                                                                                       |
 | `headers` | yes      | A list of static headers to add to each request. Each header's name is a key beneath `headers`, and each value is a list of payloads for that header name. Values must always be lists.                                            |
 | `timeout` | yes      | A value for the HTTP timeout. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used.                                  |
-| `threshold` | yes    | DEPRECATED: use maxretries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243. An integer specifying how long to wait before backing off a failure.                                                            |
+| `threshold` | yes    | DEPRECATED: use maxretries instead, more details [here](https://gitlab.com/gitlab-org/container-registry/-/issues/1243). An integer specifying how long to wait before backing off a failure.                                                            |
 | `maxretries` | no | An integer specifying the maximum number of times to retry sending a failed event. `threshold` is ignored when defining this field.                                                                                                |
 | `backoff` | yes      | How long the system backs off before retrying after a failure. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. |
 | `ignoredmediatypes`|no| A list of target media types to ignore. Events with these target media types are not published to the endpoint.                                                                                                                    |
 | `ignore`  |no| Events with these mediatypes or actions are not published to the endpoint.                                                                                                                                                         |
 
 #### `ignore`
+
 | Parameter | Required | Description                                           |
 |-----------|----------|-------------------------------------------------------|
 | `mediatypes`|no| A list of target media types to ignore. Events with these target media types are not published to the endpoint. |
@@ -1313,7 +1305,6 @@ refer to the documentation for the remaining connection parameters [`here`](#red
 | Parameter | Required | Description                                                                   |
 |-----------|----------|-------------------------------------------------------------------------------|
 | `enabled` | no       | If the Redis caching functionality is enabled (boolean). Defaults to `false`. |
-
 
 ### `ratelimiter`
 
@@ -1497,9 +1488,8 @@ If `allow` is unset, pushing a manifest containing URLs fails.
 If `allow` is set, pushing a manifest succeeds only if all URLs match
 one of the `allow` regular expressions **and** one of the following holds:
 
-1.  `deny` is unset.
-2.  `deny` is set but no URLs within the manifest match any of the `deny` regular
-    expressions.
+1. `deny` is unset.
+1. `deny` is set but no URLs within the manifest match any of the `deny` regular expressions.
 
 ## `gc`
 
@@ -1521,6 +1511,7 @@ gc:
     interval: 5s
     storagetimeout: 5s
 ```
+
 | Parameter       | Required | Description                                                                                                                                                                                                                                                                                                               |
 | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `disabled`      | no       | When set to `true`, the online GC workers are disabled. Defaults to `false`.                                                                                                                                                                                                                                                           |
@@ -1529,7 +1520,6 @@ gc:
 | `transactiontimeout`   | no       | The database transaction timeout for each worker run. Each worker starts a database transaction at the start. The worker run is canceled if this timeout is exceeded to avoid stalled or long-running transactions. Defaults to `10s`.                                                                                    |
 | `reviewafter`   | no       | The minimum amount of time after which the garbage collector should pick up a record for review. `-1` means no wait. Defaults to `24h`. |
 | `errorcooldownperiod` | no | The period of time after an error occurs that the GC workers will continue to exponentially backoff. If the worker encounters an error while cooling down, the cool down period is extended again by the configured value. This is useful to ensure that GC workers in multiple registry deployments will slow down during periods of intermittent errors. Defaults to 0 (no cooldown) by default. |
-
 
 ### `blobs`
 
@@ -1586,11 +1576,10 @@ This example configures the registry instance to run on port `5000`, binding to
 `/var/lib/registry` directory. Logging is set to `debug` mode, which is the most
 verbose.
 
-See
-[config-example.yml](https://github.com/docker/distribution/blob/master/cmd/registry/config-example.yml)
+See 
+[`config-example.yml`](https://github.com/docker/distribution/blob/master/cmd/registry/config-example.yml)
 for another simple configuration. Both examples are generally useful for local
 development.
-
 
 ## Example: Middleware configuration
 
@@ -1618,6 +1607,6 @@ middleware:
 See the configuration reference for [Cloudfront](#cloudfront) for more
 information about configuration options.
 
-> **Note**: Cloudfront keys exist separately from other AWS keys.  See
+> **Note**: Cloudfront keys exist separately from other AWS keys. See
 > [the documentation on AWS credentials](http://docs.aws.amazon.com/general/latest/gr/aws-security-credentials.html)
 > for more information.

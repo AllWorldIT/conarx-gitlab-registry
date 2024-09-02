@@ -12,24 +12,26 @@ make binaries and execute the `registry` binary.
 ### Requirements
 
 You will need to have Go installed on your machine. You must use one of the
-officially supported Go versions. Please refer to the Go [release
-policy](https://golang.org/doc/devel/release.html#policy) and [install
-documentation](https://golang.org/doc/install) for guidance.
+officially supported Go versions. Please refer to the Go [release policy](https://golang.org/doc/devel/release.html#policy)
+and [install documentation](https://golang.org/doc/install) for guidance.
 
 ### Building
 
-> These instructions assume you are using a Go version with
-[modules](https://golang.org/ref/mod) support enabled.
+> These instructions assume you are using a Go version with [modules](https://golang.org/ref/mod) support enabled.
 
 1. Clone repository:
-    ```
+
+    ```shell
     git clone git@gitlab.com:gitlab-org/container-registry.git
     cd container-registry
     ```
+
 1. Make binaries:
-    ```
+
+    ```shell
     make binaries
     ```
+
     This step should complete without any errors. If not, please double check
     the official Go install documentation and make sure you have all build
     dependencies installed on your machine.
@@ -39,14 +41,13 @@ documentation](https://golang.org/doc/install) for guidance.
 This command will start the registry in the foreground, listening at
 `localhost:5000`:
 
-```
+```shell
 ./bin/registry serve config/filesystem.yml
 ```
 
 The configuration file [`config/filesystem.yml`](../config/filesystem.yml) is a sample
 configuration file with the minimum required settings, plus some recommended
-ones for a better development experience. Please see the [configuration
-documentation](configuration.md) for more details and additional
+ones for a better development experience. Please see the [configuration documentation](configuration.md) for more details and additional
 settings.
 
 ## Docker
@@ -58,32 +59,32 @@ that you can run the `docker` command in your environment.
 
 ### Building
 
-This command will build the registry from the code in the git repository,
+This command will build the registry from the code in the Git repository,
 whether the changes are committed or not. After this command completes, we
-will have local access to a docker image called `registry:dev`. You may choose
+will have local access to a Docker image called `registry:dev`. You may choose
 to use any name:tag combination, and you may also build multiple images with
 different versions of the registry for easier comparison of changes.
 
 This command will use the `Dockerfile` in the root of this repository.
 
-```bash
+```shell
 docker build -t registry:dev .
 ```
 
 ### Running
 
-This command will start the registry in a docker container, with the API
+This command will start the registry in a Docker container, with the API
 listening at `localhost:5000`.
 
 The registry name, `dev-registry`, can be used to easily reference the container
-in docker commands and is arbitrary.
+in Docker commands and is arbitrary.
 
 This container is ran with host networking on linux machines. This option facilitates an easier
 and more general configuration, especially when using external services, such as
 GCS or S3, but also removes the network isolation that a container typically
 provides.
 
-```bash
+```shell
 docker run -d \
     --restart=always \ 
     --network=host \
@@ -94,14 +95,14 @@ docker run -d \
 
 The host networking driver in the command above [only works on Linux hosts](https://docs.docker.com/network/host/)
 and is not supported on Docker Desktop for Mac, Docker Desktop for Windows, or Docker EE 
-for Windows Server. The reason for this behavior is that on Mac and Windows, docker daemon is 
+for Windows Server. The reason for this behavior is that on Mac and Windows, Docker daemon is 
 actually running in a virtual machine, not natively on the host. Thus, it is not actually connected
 to the host ports of your Mac or Windows machine, but rather to the host ports of the virtual machine.
 
 A way around this is to port-forward the desired container port to localhost by adding
  `-p 5000:5000` and removing the `--network=host` option in the command above, to become:
 
-```bash
+```shell
 docker run -d \
     --restart=always \ 
     --name dev-registry \
@@ -112,15 +113,14 @@ docker run -d \
 
 The configuration file [`config/filesystem.yml`](../config/filesystem.yml) is a sample
 configuration file with the minimum required settings, plus some recommended
-ones for a better development experience. Please see the [configuration
-documentation](configuration.md) for more details and additional
+ones for a better development experience. Please see the [configuration documentation](configuration.md) for more details and additional
 settings.
 
 ### Logs
 
 The registry logs can be accessed with the following command:
 
-```bash
+```shell
 docker logs -f dev-registry
 ```
 
@@ -132,7 +132,7 @@ certificates.
 
 In this case, you must instruct Docker to treat your registry as insecure.
 Otherwise, you will not be able to push/pull images. Please follow the
-instructions at https://docs.docker.com/registry/insecure/ to configure your
+instructions [here](https://docs.docker.com/registry/insecure/) to configure your
 Docker daemon.
 
 ## Verification
@@ -140,7 +140,7 @@ Docker daemon.
 If everything is running correctly, the following command should produce this
 output:
 
-```bash
+```shell
 curl localhost:5000/v2/_catalog
 {"repositories":[]}
 ```
@@ -148,7 +148,7 @@ curl localhost:5000/v2/_catalog
 You can now try to build and push/pull images to/from your development registry,
 for example:
 
-```bash
+```shell
 docker pull alpine:latest
 docker tag alpine:latest localhost:5000/alpine:latest
 docker push localhost:5000/alpine:latest
@@ -175,7 +175,7 @@ If you use macOS without [Docker Desktop](https://hub.docker.com/editions/commun
 
 [Colima](https://github.com/abiosoft/colima) provides compatibility with the `dockerd` (default) and `containerd` container runtimes.
 
-1. Install the docker CLI and Colima:
+1. Install the Docker CLI and Colima:
 
    ```shell
    brew update
@@ -198,7 +198,7 @@ If you use macOS without [Docker Desktop](https://hub.docker.com/editions/commun
    colima start
    ```
 
-1. Test the docker runtime is working by pulling an image from Docker Hub:
+1. Test the Docker runtime is working by pulling an image from Docker Hub:
 
    ```shell
    docker login
@@ -321,7 +321,7 @@ If you prefer to set them up manually:
    alpine                                                                latest     21a3deaa0d32    13 days ago     linux/amd64    5.9 MiB
    ```
 
-1. Optionally, you can setup an alias for the same command:
+1. Optionally, you can set up an alias for the same command:
 
    ```shell
    alias docker='limactl shell docker nerdctl'
@@ -344,7 +344,6 @@ If you prefer to set them up manually:
 Because `containerd` is running inside the virtual machine, you must
 use your host's IP address such as `172.16.123.1` or hostname `registry.test`
 configured on a [loopback interface](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/local_network.md#local-network-binding).
-
 
 ## Troubleshooting
 
