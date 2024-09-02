@@ -95,7 +95,7 @@ modules:download:
   stage: validate
   parallel:
     matrix:
-      - GO_VERSION: [ "1.21", "1.22" ]
+      - GO_VERSION: [ "1.22", "1.23" ]
   script:
     - go mod download
     # This is an external tool used to run tests, we can save some time by downloading in advance
