@@ -60,6 +60,8 @@ type BackgroundMigrationStore interface {
 	ValidateMigrationTableAndColumn(ctx context.Context, tableWithSchema, column string) error
 	// FindAll returns all background migrations.
 	FindAll(ctx context.Context) (models.BackgroundMigrations, error)
+	// Pause updates the `status` of all `running` and `active` background migrations to the `pause` state.
+	Pause(ctx context.Context) error
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
@@ -440,6 +442,22 @@ func (bms *backgroundMigrationStore) Lock(ctx context.Context) error {
 		return ErrBackgroundMigrationLockInUse
 	}
 	return nil
+}
+
+// Pause updates the `status` of all `running` and `active` background migrations to the `pause` state.
+func (bms *backgroundMigrationStore) Pause(ctx context.Context) error {
+	defer metrics.InstrumentQuery("bbm_pause")()
+
+	q := `UPDATE 
+			batched_background_migrations
+		SET 
+			status = $1 
+		WHERE 
+			status = $2 
+			OR status = $3`
+	_, err := bms.db.ExecContext(ctx, q, models.BackgroundMigrationPaused, models.BackgroundMigrationActive, models.BackgroundMigrationRunning)
+
+	return err
 }
 
 // ValidateMigrationTableAndColumn asserts that the column and table exists in the database.

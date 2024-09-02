@@ -93,14 +93,14 @@ func TestBackgroundMigrationStore_FindNext(t *testing.T) {
 
 	// see testdata/fixtures/batched_background_migrations.sql
 	expected := &models.BackgroundMigration{
-		ID:           2,
-		Name:         "CopyBlobIDToNewIDColumn",
-		Status:       models.BackgroundMigrationActive,
-		StartID:      5,
-		EndID:        10,
+		ID:           4,
+		Name:         "CopyRepositoryIDToNewIDColumn2",
+		Status:       models.BackgroundMigrationRunning,
+		StartID:      1,
+		EndID:        16,
 		BatchSize:    1,
-		JobName:      "CopyBlobIDToNewIDColumn",
-		TargetTable:  "public.blobs",
+		JobName:      "CopyRepositoryIDToNewIDColumn2",
+		TargetTable:  "public.repositories",
 		TargetColumn: "id",
 	}
 	require.Equal(t, expected, m)
@@ -556,6 +556,17 @@ func TestBackgroundMigrationStore_FindAll(t *testing.T) {
 			TargetTable:  "public.repositories",
 			TargetColumn: "id",
 		},
+		{
+			ID:           4,
+			Name:         "CopyRepositoryIDToNewIDColumn2",
+			Status:       models.BackgroundMigrationRunning,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn2",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
 	}
 
 	require.Equal(t, expected, bb)
@@ -567,4 +578,66 @@ func TestBackgroundMigrationStore_FindAll_NotFound(t *testing.T) {
 	bb, err := s.FindAll(suite.ctx)
 	require.Empty(t, bb)
 	require.NoError(t, err)
+}
+
+func TestBackgroundMigrationStore_Pause(t *testing.T) {
+	reloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	err := s.Pause(suite.ctx)
+	require.NoError(t, err)
+
+	// see testdata/fixtures/batched_background_migrations.sql
+	expected := models.BackgroundMigrations{
+		{
+			ID:           1,
+			Name:         "CopyMediaTypesIDToNewIDColumn",
+			Status:       models.BackgroundMigrationFinished,
+			StartID:      1,
+			EndID:        100,
+			BatchSize:    20,
+			JobName:      "CopyMediaTypesIDToNewIDColumn",
+			TargetTable:  "public.media_types",
+			TargetColumn: "id",
+		},
+		{
+			ID:           2,
+			Name:         "CopyBlobIDToNewIDColumn",
+			Status:       models.BackgroundMigrationPaused,
+			StartID:      5,
+			EndID:        10,
+			BatchSize:    1,
+			JobName:      "CopyBlobIDToNewIDColumn",
+			TargetTable:  "public.blobs",
+			TargetColumn: "id",
+		},
+		{
+			ID:           3,
+			Name:         "CopyRepositoryIDToNewIDColumn",
+			Status:       models.BackgroundMigrationPaused,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+		{
+			ID:           4,
+			Name:         "CopyRepositoryIDToNewIDColumn2",
+			Status:       models.BackgroundMigrationPaused,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn2",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+	}
+
+	var actual models.BackgroundMigrations
+	actual, err = s.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	require.Equal(t, expected, actual)
 }
