@@ -232,6 +232,20 @@ func (mr *MockBackgroundMigrationStoreMockRecorder) Lock(arg0 any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Lock), arg0)
 }
 
+// Pause mocks base method.
+func (m *MockBackgroundMigrationStore) Pause(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Pause", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Pause indicates an expected call of Pause.
+func (mr *MockBackgroundMigrationStoreMockRecorder) Pause(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pause", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Pause), arg0)
+}
+
 // UpdateJobStatus mocks base method.
 func (m *MockBackgroundMigrationStore) UpdateJobStatus(arg0 context.Context, arg1 *models.BackgroundMigrationJob) error {
 	m.ctrl.T.Helper()

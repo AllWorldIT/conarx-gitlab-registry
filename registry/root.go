@@ -67,6 +67,7 @@ func init() {
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
 
 	BBMCmd.AddCommand(BBMStatusCmd)
+	BBMCmd.AddCommand(BBMPauseCmd)
 }
 
 // Command flag vars
@@ -625,5 +626,33 @@ var BBMStatusCmd = &cobra.Command{
 		}
 
 		table.Render()
+	},
+}
+
+// BBMPauseCmd is the `pause` sub-command of `background-migrate` that pauses a batched background migrations identified by the name parameter.
+var BBMPauseCmd = &cobra.Command{
+	Use:   "pause",
+	Short: "Pause all running or active batched background migrations",
+	Long:  "Pause all running or active batched background migrations",
+	Run: func(cmd *cobra.Command, args []string) {
+		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		db, err := migrationDBFromConfig(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
+			os.Exit(1)
+		}
+
+		bbmw := bbm.NewWorker(nil, bbm.WithDB(db))
+		err = bbmw.PauseEligibleMigrations(dcontext.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to pause background migrations: %v", err)
+			os.Exit(1)
+		}
 	},
 }
