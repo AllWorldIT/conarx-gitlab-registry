@@ -30,8 +30,7 @@ particularly when the `--delete-untagged` (`-m`) option is specified.
 
 This parameter determines the maximum number of requests that
 the driver will make to the configured S3 bucket per second. Defaults to `350`
-with a maximum value of `3500` which corresponds to the current rate limits of
-S3: https://docs.aws.amazon.com/AmazonS3/latest/dev/optimizing-performance.html
+with a maximum value of `3500` which corresponds to the [current rate limits of S3](https://docs.aws.amazon.com/AmazonS3/latest/dev/optimizing-performance.html)
 `0` is a special value which disables rate limiting. This is not recommended
 for use in production environments, as exceeding your request budget will result
 in errors from the Amazon S3 service.
@@ -57,13 +56,13 @@ appearing in some places as `/<no-name>/` within the Azure UI. This legacy
 behavior must be preserved to support older deployments using this driver.
 Set to `false` to build root paths with an extra leading slash (i.e `//`).
 Defaults to the `true` to remove legacy root prefix. It is recommended to use
-`legacyrootprefix` to control this behaviour.
+`legacyrootprefix` to control this behavior.
 
 `legacyrootprefix`
 
 This parameter is the recommended configuration (as opposed to `trimlegacyrootprefix`) to be used to preserve
-the Azure driver legacy behaviour of using  `//` (appearing in some places as `/<no-name>/` within the Azure UI)
-as the root directory. When `legacyrootprefix` is set to `true` the azure driver uses the legacy azure root directory.
+the Azure driver legacy behavior of using  `//` (appearing in some places as `/<no-name>/` within the Azure UI)
+as the root directory. When `legacyrootprefix` is set to `true` the Azure driver uses the legacy Azure root directory.
 When this parameter is specified together with `trimlegacyrootprefix` the registry will fail to start if the parameters conflict
 ( i.e `trimlegacyrootprefix: true` and `legacyrootprefix: true` or `legacyrootprefix: false` and `trimlegacyrootprefix: true`).
 
@@ -83,7 +82,7 @@ increase the memory and CPU usage of this command as compared to the default.
 ### Invalid Link Files
 
 If a bad link file (e.g. 0B in size or invalid checksum) is found during the
-*mark* stage, instead of stopping the garbage collector (standard behaviour)
+*mark* stage, instead of stopping the garbage collector (standard behavior)
 it will log a warning message and ignore it, letting the process continue.
 Blobs related with invalid link files will be automatically swept away in the
 *sweep* stage if those blobs are not associated with another valid link file.
@@ -105,7 +104,7 @@ dereferenced, leading to an underestimate.
 A pprof debug server can be used to collect profiling information on a
 garbage collection run by providing an `address:port` to the command via
 the `--debug-server` (`--s`) flag. Usage information for this server can be
-found in the documentation for pprof: https://golang.org/pkg/net/http/pprof/
+found in [the documentation for pprof](https://golang.org/pkg/net/http/pprof/).
 
 ## API
 
@@ -131,14 +130,14 @@ the broken link file.
 
 The following headers were added to the response of `GET /v2/` requests:
 
-* `Gitlab-Container-Registry-Version`: The semantic version of the GitLab
+- `Gitlab-Container-Registry-Version`: The semantic version of the GitLab
   Container Registry (e.g. `2.9.0-gitlab`). This is set during build time (in
   `version.Version`).
-* `Gitlab-Container-Registry-Features`: A comma separated list of supported
+- `Gitlab-Container-Registry-Features`: A comma separated list of supported
   features/extensions that are not part of the Docker Distribution spec (e.g.
   `tag_delete,...`). Its value (hardcoded in `version.ExtFeatures`) should be
   updated whenever a custom feature is added/deprecated.
-* `Gitlab-Container-Registry-Database-Enabled`: A boolean indicating whether
+- `Gitlab-Container-Registry-Database-Enabled`: A boolean indicating whether
   the metadata database is enabled in the registry configuration.
 
 This is necessary to detect whether a registry is the GitLab Container Registry

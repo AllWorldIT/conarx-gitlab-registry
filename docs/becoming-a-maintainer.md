@@ -16,7 +16,7 @@ To work around that problem, one must be comfortable in the following areas of t
 - Storage drivers ~"container registry::storage drivers" 
 - Metadata database behavior ~"container registry::database" 
 - V2 API ~"container registry::API-V2" 
-- GitLab's V1 API ~"container registry::API-GitLab-V1" 
+- GitLab V1 API ~"container registry::API-GitLab-V1" 
 - Garbage collection (online and offline) ~"container registry::garbage collection" 
 - Authorization ~"container registry::authorization"
 

@@ -6,8 +6,7 @@ CLI. Internally, the registry is currently using the
 
 ## Best Practices
 
-The registry database migrations should adhere to the [GitLab database migrations
-style guide](https://docs.gitlab.com/ee/development/migration_style_guide.html)
+The registry database migrations should adhere to the [GitLab database migrations style guide](https://docs.gitlab.com/ee/development/migration_style_guide.html)
 whenever possible, considering that these applications are written in different
 programming languages and use a different set of tools.
 
@@ -118,7 +117,7 @@ migrations.
  
 #### Example
 
-```text
+```plaintext
 psql -h localhost -U postgres -w -c "CREATE DATABASE registry_dev;"
 ```
 
@@ -127,7 +126,7 @@ psql -h localhost -U postgres -w -c "CREATE DATABASE registry_dev;"
 To create a new database migration run the following command from the root of
 the repository:
 
-```text
+```plaintext
 make db-new-migration [name]
 ```
 
@@ -148,7 +147,7 @@ default.
 
 #### Example
 
-```text
+```plaintext
 $ make db-new-migration create_users_table
 OK: ./registry/datastore/migrations/20200713143615_create_users_table.go
 ```
@@ -165,7 +164,7 @@ a transaction. To disable transaction mode you can set the migration
 Database migrations are managed through the `registry` CLI, using the `database
 migrate` command:
 
-```text
+```plaintext
 $ registry database migrate --help config.yml
 Usage:
   registry database migrate [flags]
@@ -185,19 +184,18 @@ Use "registry database migrate [command] --help" for more information about a co
 
 ### Pre-Requisites
 
-* A PostgreSQL 13 database for the registry must already exist;
-* The database should be configured under the `database` section of the registry
-  `config.yml` configuration file. Please see the [configuration
-  docs](https://gitlab.com/gitlab-org/container-registry/-/blob/database/docs/configuration.md#database)
+- A PostgreSQL 13 database for the registry must already exist;
+- The database should be configured under the `database` section of the registry
+  `config.yml` configuration file. Please see the [configuration docs](https://gitlab.com/gitlab-org/container-registry/-/blob/database/docs/configuration.md#database)
   for additional information;
-* The `registry` binary, built from the source. See the [development
-  guidelines](standalone-dev-registry.md) for more details.
+- The `registry` binary, built from the source. See the [`Building` section of development environment setup doc](development-environment-setup.md#building) for more
+  details.
 
 ### Apply Up Migrations
 
 To apply pending up migrations use the `up` sub-command: 
 
-```text
+```plaintext
 $ registry database migrate up --help config.yml
 Apply up migrations
 
@@ -223,7 +221,7 @@ service is active by running the `up` subcommand again without the
 
 #### Example
 
-```text
+```plaintext
 $ registry database migrate up -n 1 config.yml
 20200713143615_create_users_table
 OK: applied 1 migrations in 0.412s
@@ -233,7 +231,7 @@ OK: applied 1 migrations in 0.412s
 
 To apply pending down migrations (rollback) use the `down` sub-command: 
 
-```text
+```plaintext
 $ registry database migrate down --help config.yml
 Apply up migrations
 
@@ -256,7 +254,7 @@ flag can be used to bypass the confirmation message.
 
 #### Example
 
-```text
+```plaintext
 $ registry database migrate down config.yml
 20200713143615_create_users_table
 20200527132906_create_repository_blobs_table
@@ -278,7 +276,7 @@ OK: applied 12 migrations in 121.334s
 
 To check the status of database migrations use the `status` sub-command:
 
-```text
+```plaintext
 $ registry database migrate status --help config.yml
 Show migration status
 
@@ -303,7 +301,7 @@ to ignore post-deployment migrations.
 
 #### Example
 
-```text
+```plaintext
 $ registry database migrate status config.yml
 +--------------------------------------------------------+---------------------------------------+
 |                       MIGRATION                        |                APPLIED                |
@@ -323,7 +321,7 @@ $ registry database migrate status config.yml
 +--------------------------------------------------------+---------------------------------------+
 ```
 
-```text
+```plaintext
 $ registry database migrate status --up-to-date config.yml
 false
 ```
@@ -334,7 +332,7 @@ The `version` sub-command displays the currently applied database migration.
 
 #### Example
 
-```text
+```plaintext
 $ registry database migrate version config.yml
 20200527132906_create_repository_blobs_table
 ```

@@ -22,6 +22,7 @@ This is a safe way to find or create a repository by path for highly concurrent 
 1. We start by finding or creating the namespace by `name`. This is the first portion of the path, e.g. `a` for a path of `a/b/c`:
    
    First we search for the target namespace:
+
    ```sql
    SELECT
         id,
@@ -60,22 +61,23 @@ we can find it by name:
        name = $1;
    ```
 
-2. With the namespace in hand, we create or find all parent repositories, including the root one (namespace). For a path of `a/b/c`, we therefore create repositories `a` and `b`, in this order, making sure to link them together through `parent_id`:
+1. With the namespace in hand, we create or find all parent repositories, including the root one (namespace). For a path of `a/b/c`, we therefore create repositories `a` and `b`, in this order, making sure to link them together through `parent_id`:
 
    First we search for the target repository:
+
    ```sql
    SELECT
-		id,
-		top_level_namespace_id,
-		name,
-		path,
-		parent_id,
-		created_at,
-		updated_at
-	FROM
-		repositories
-	WHERE
-		path = $1;
+     id,
+     top_level_namespace_id,
+     name,
+     path,
+     parent_id,
+     created_at,
+     updated_at
+   FROM
+     repositories
+   WHERE
+     path = $1;
    ```
 
    If it exists then we return, otherwise we do an upsert to create the repository:
@@ -91,7 +93,7 @@ we can find it by name:
 
    If the result set from each of the queries above has no rows, then we know the corresponding parent repository already exists and we can [find it by path](#check-if-repository-with-a-given-path-exists-and-grab-its-id).
 
-3. Finally, we create the leaf repository, e.g., `c` for a path of `a/b/c`, linking it to `b`. This is done as described in (2).
+1. Finally, we create the leaf repository, e.g., `c` for a path of `a/b/c`, linking it to `b`. This is done as described in (2).
 
 #### Find manifest by digest in repository
 
@@ -186,7 +188,7 @@ ON CONFLICT (top_level_namespace_id, repository_id, blob_digest)
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#get-catalog)
 
-```
+```plaintext
 GET /v2/_catalog 
 ```
 
@@ -223,18 +225,18 @@ LIMIT $2; -- pagination limit
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#get-blob)
 
-```
+```plaintext
 GET /v2/<name>/blobs/<digest>
 ```
 
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
-2. [Find blob with digest `<digest>` in repository `<name>`](#find-blob-by-digest-in-repository).
+1. [Find blob with digest `<digest>` in repository `<name>`](#find-blob-by-digest-in-repository).
 
 #### Check existence
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#existing-layers)
 
-```
+```plaintext
 HEAD /v2/<name>/blobs/<digest>
 ```
 
@@ -244,13 +246,13 @@ Same as for pull operation. Although we're just checking for existence, the HTTP
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#put-blob-upload)
 
-```
+```plaintext
 PUT /v2/<name>/blobs/uploads/<uuid>?digest=<digest>
 ```
 
 1. [Find or create repository(ies) with `path` `<name>`](#find-or-create-repository-by-path);
 
-2. "*Create or find*" blob with digest `<digest>` in repository `<name>`. We avoid a "*find or create*" because it's prone to race conditions on inserts and this is a concurrent operation:
+1. "*Create or find*" blob with digest `<digest>` in repository `<name>`. We avoid a "*find or create*" because it's prone to race conditions on inserts and this is a concurrent operation:
 
    ```sql
    INSERT INTO blobs (digest, media_type_id, size)
@@ -263,32 +265,32 @@ PUT /v2/<name>/blobs/uploads/<uuid>?digest=<digest>
 
    If the resultset is empty, we know the blob already exists and we [find it by digest](#find-blob-by-digest-in-repository). Otherwise, we get the attributes initialized by the database during the insert and proceed.
 
-3. [Link blob with digest `<digest>` to repository `<name>`](#link-blob-to-repository).
+1. [Link blob with digest `<digest>` to repository `<name>`](#link-blob-to-repository).
 
 #### Cross repository mount
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#mount-blob)
 
-```
+```plaintext
 POST /v2/<name>/blobs/uploads/?mount=<digest>&from=<repository name> 
 ```
 
 1. [Find or create repository(ies) with `path` `<name>`](#find-or-create-repository-by-path);
-2. [Check if *source* repository with `path` `<repository name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
-3. [Check if blob with digest `<digest>` exists and is linked to the *source* `<repository name>` repository](#check-if-blob-exists-in-repository);
-4. [Link blob with digest `<digest>` to *target* `<name>` repository](#link-blob-to-repository).
+1. [Check if *source* repository with `path` `<repository name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
+1. [Check if blob with digest `<digest>` exists and is linked to the *source* `<repository name>` repository](#check-if-blob-exists-in-repository);
+1. [Link blob with digest `<digest>` to *target* `<name>` repository](#link-blob-to-repository).
 
 #### Delete blob link
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#delete-blob)
 
-```
+```plaintext
 DELETE /v2/<name>/blobs/<digest> 
 ```
 
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
 
-2. Delete link for blob with digest `<digest>` in repository `<name>`:
+1. Delete link for blob with digest `<digest>` in repository `<name>`:
 
    ```sql
    DELETE FROM repository_blobs
@@ -305,7 +307,7 @@ DELETE /v2/<name>/blobs/<digest>
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#get-manifest)
 
-```
+```plaintext
 GET /v2/<name>/manifests/<reference>
 ```
 
@@ -314,13 +316,14 @@ A manifest can be pulled by digest or tag.
 ##### By digest
 
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
-2. [Find manifest with digest `<reference>` in repository `<name>`](#find-manifest-by-digest-in-repository);
+1. [Find manifest with digest `<reference>` in repository `<name>`](#find-manifest-by-digest-in-repository);
 
 ##### By tag
 
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
 
-2. Find manifest with tag name `<reference>`  within repository `<name>`:
+1. Find manifest with tag name `<reference>`  within repository `<name>`:
+
    ```sql
    SELECT
        m.id,
@@ -355,7 +358,7 @@ A manifest can be pulled by digest or tag.
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#existing-manifests)
 
-```
+```plaintext
 HEAD /v2/<name>/manifests/<reference>
 ```
 
@@ -365,7 +368,7 @@ Same as for pull operation. Although we're just checking for existence, the HTTP
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#put-manifest)
 
-```
+```plaintext
 PUT /v2/<name>/manifests/<reference> 
 ```
 
@@ -377,13 +380,13 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
 
 1. [Find or create repository(ies) with `path` `<name>`](#find-or-create-repository-by-path)
 
-2. For each referenced artifact in the manifest payload (configuration, layer and/or other manifest):
+1. For each referenced artifact in the manifest payload (configuration, layer and/or other manifest):
 
    - Configuration or layer: [Check if blob exists in repository `<name>`](#check-if-blob-exists-in-repository);
 
    - Manifest: [Check if manifest exists in repository `<name>`](#check-if-manifest-exists-in-repository).
 
-3. "*Create or find*" manifest in repository `<name>`. We avoid a "*find or create*" because it's prone to race conditions on inserts and this is a concurrent operation:
+1. "*Create or find*" manifest in repository `<name>`. We avoid a "*find or create*" because it's prone to race conditions on inserts and this is a concurrent operation:
 
    ```sql
    INSERT INTO manifests (top_level_namespace_id, repository_id, schema_version, media_type_id, digest, payload, configuration_payload, configuration_blob_digest)
@@ -396,11 +399,11 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
 
    If the resultset is empty, we know the manifest already exists and [find it by digest](#find-manifest-by-digest-in-repository). Otherwise, we get the attributes initialized by the database during the insert and proceed.
 
-4. For each layer in the manifest payload do:
+1. For each layer in the manifest payload do:
 
    1. [Check if blob exists in repository `<name>`](#check-if-blob-exists-in-repository);
 
-   2. Create layer record. It does nothing if already exists:
+   1. Create layer record. It does nothing if already exists:
 
       ```sql
       INSERT INTO layers (top_level_namespace_id, repository_id, manifest_id, digest, size, media_type_id)
@@ -413,7 +416,7 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
 
 1. Same steps as by digest;
 
-2. Upsert tag with name `<reference>` in repository `<name>`. A tag with name `<reference>` may: not exist; already exist and point to the same manifest; already exist but point to a different manifest.
+1. Upsert tag with name `<reference>` in repository `<name>`. A tag with name `<reference>` may: not exist; already exist and point to the same manifest; already exist but point to a different manifest.
 
    If the tag doesn't exist we insert it, if the tag already exists we update it, but only if the current manifest that it points to is different (to avoid "empty" updates that may trigger unwanted/unnecessary actions in the database):
 
@@ -435,9 +438,9 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
 
 1. [Find or create repository(ies) with `path` `<name>`](#find-or-create-repository-by-path);
 
-2. For each manifest referenced in the list, [check if manifest exists in repository `<name>`](#check-if-manifest-exists-in-repository);
+1. For each manifest referenced in the list, [check if manifest exists in repository `<name>`](#check-if-manifest-exists-in-repository);
 
-3. "*Create or find*" manifest list in repository `<name>`. We avoid a "*find or create*" because it's prone to race conditions on inserts and this is a concurrent operation:
+1. "*Create or find*" manifest list in repository `<name>`. We avoid a "*find or create*" because it's prone to race conditions on inserts and this is a concurrent operation:
 
    ```sql
    INSERT INTO manifests (top_level_namespace_id, repository_id, schema_version, media_type_id, digest, payload, configuration_payload, configuration_blob_digest)
@@ -450,7 +453,7 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
 
    If the resultset is empty, we know the manifest list already exists and [find it by digest](#find-manifest-by-digest-in-repository). Otherwise, we get the attributes initialized by the database during the insert and proceed.
 
-4. Create a relationship record for each manifest referenced in the manifest list payload, where `parent_id` is the manifest list ID and `child_id` is the referenced manifest ID (bulk insert). Do nothing if relationship already exists:
+1. Create a relationship record for each manifest referenced in the manifest list payload, where `parent_id` is the manifest list ID and `child_id` is the referenced manifest ID (bulk insert). Do nothing if relationship already exists:
 
    ```sql
    INSERT INTO manifest_references (top_level_namespace_id, repository_id, parent_id, child_id)
@@ -462,19 +465,19 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
 ###### By tag
 
 1. Same steps as by digest;
-2. Upsert tag with name `<reference>` like it's done for atomic manifests.
+1. Upsert tag with name `<reference>` like it's done for atomic manifests.
 
 #### Delete
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#delete-manifest)
 
-```
+```plaintext
 DELETE /v2/<name>/manifests/<reference> 
 ```
 
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
 
-2. Delete manifest with digest `<reference>` in repository `<name>`:
+1. Delete manifest with digest `<reference>` in repository `<name>`:
 
    ```sql
    DELETE FROM manifests
@@ -491,7 +494,7 @@ DELETE /v2/<name>/manifests/<reference>
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#get-tags)
 
-```
+```plaintext
 GET /v2/<name>/tags/list 
 ```
 
@@ -521,13 +524,13 @@ GET /v2/<name>/tags/list
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#delete-tags)
 
-```
+```plaintext
 DELETE /v2/<name>/tags/reference/<reference> 
 ```
 
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
 
-2. Delete tag `<reference>` in repository `<name>`:
+1. Delete tag `<reference>` in repository `<name>`:
 
    ```sql
    DELETE FROM tags

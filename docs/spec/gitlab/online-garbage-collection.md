@@ -10,7 +10,13 @@ In this document, we describe an approach for online garbage collection based on
 1. Tracking dangling blobs and manifests.
 1. Identifying and removing dangling blobs and manifests.
 
-As described in this document, stages 1 and 2 are operated by database triggers and not by the application (API). Although the described logic can also be translated and implemented on the application side, we expect the process to be more efficient and reliable with database triggers. These stages are mostly about reacting to the creation and deletion of data, making sense to rely on triggers for inserts and deletes. By concentrating the logic in one place, instead of repeating it across all API routes, we also reduce the garbage collection footprint and the chances to introduce bugs. Furthermore, by decoupling this logic from the API, we avoid incurring any performance penalty when serving the requests, as garbage collection occurs in the background. We are also not prone to application crashes or bugs that could lead to untracked artifacts. We still can (and must) test all of the garbage collection scenarios with integration tests at the application level by manipulating data and observing the changes that happen as a result, so test coverage should not be an issue. As a downside, observability is not as good as it could be if done at the application level, so special attention must be paid to new triggers and how they perform after being created.
+As described in this document, stages 1 and 2 are operated by database triggers and not by the application (API).
+Although the described logic can also be translated and implemented on the application side, we expect the process to be more efficient and reliable with database triggers.
+These stages are mostly about reacting to the creation and deletion of data, making sense to rely on triggers for inserts and deletes.
+By concentrating the logic in one place, instead of repeating it across all API routes, we also reduce the garbage collection footprint and the chances to introduce bugs.
+Furthermore, by decoupling this logic from the API, we avoid incurring any performance penalty when serving the requests, as garbage collection occurs in the background.
+We are also not prone to application crashes or bugs that could lead to untracked artifacts. We still can (and must) test all of the garbage collection scenarios with integration tests at the application level by manipulating data and observing the changes that happen as a result, so test coverage should not be an issue.
+As a downside, observability is not as good as it could be if done at the application level, so special attention must be paid to new triggers and how they perform after being created.
 
 On the contrary, stage 3 is handled at the application level. This process will leverage and act upon the database's work during stages 1 and 2 to actively identify and remove dangling artifacts. Therefore, it needs to happen at the application level, as connectivity to the storage backend is required. Being the last stage of garbage collection, where dangling artifacts are identified and removed, we can expose metrics and observe the garbage collection process. This should include metrics such as the number of reviewed and deleted blobs, the amount of space recovered in the storage backend after each run, and any errors that may occur.
 
@@ -283,7 +289,8 @@ CREATE TRIGGER gc_track_deleted_layers_trigger
     EXECUTE FUNCTION gc_track_deleted_layers ();
 ```
 
-Note that the `gc_track_deleted_layers` function supports both row and statement level executions, and that `gc_track_deleted_layers_trigger` uses the latter. This is done like so to avoid deadlocks where multiple concurrent manifest deletions attempt to upsert the same blob references in a different order on the blob review queue. See [gitlab-org/container-registry#732](https://gitlab.com/gitlab-org/container-registry/-/issues/732) for additional details.
+Note that the `gc_track_deleted_layers` function supports both row and statement level executions, and that `gc_track_deleted_layers_trigger` uses the latter.
+This is done like so to avoid deadlocks where multiple concurrent manifest deletions attempt to upsert the same blob references in a different order on the blob review queue. See [`gitlab-org/container-registry#732`](https://gitlab.com/gitlab-org/container-registry/-/issues/732) for additional details.
 
 #### Manifest lists
 
@@ -370,7 +377,7 @@ When uploading a manifest by tag (although uncommon, it can be by digest), we ha
 
 For example, if we:
 
-1. Build a docker image for a sample application, tag it with `myapp:latest` and push it to the registry. When pushing the image to the registry, its manifest, `A`, will be tagged with `latest` inside the repository `myapp`;
+1. Build a Docker image for a sample application, tag it with `myapp:latest` and push it to the registry. When pushing the image to the registry, its manifest, `A`, will be tagged with `latest` inside the repository `myapp`;
 1. Change the sample application source code, rebuild the image with the same `myapp:latest` tag, and push it to the registry. Because we changed the source code, the image will have a different manifest, `B`, which will be uploaded with the tag name `latest`.
 
 When the registry receives manifest `B`, it finds out that another manifest, `A`, is already tagged with `latest` in the repository. In this situation, the registry will switch the `latest` tag from `A` and point it to `B` instead. Because of this, manifest `A` and its configuration and layer(s) blobs **may** now be eligible for deletion if no other tag or manifest list references it.
@@ -430,6 +437,7 @@ A timeout should be set for every transaction to avoid holding it open for too l
 We want to manually handle the transaction commit/rollback to increment the `review_count` and `review_after` attributes in normal conditions. Therefore, the transaction timeout is only meant to be used as a last defense against application bugs.
 
 ### Handling failures
+
 The `review_count` of locked records should be incremented in the case of processing failures. The garbage collector should also leverage on `review_count` to implement an exponential backoff algorithm, increasing the delay added to `review_after` on every failed review:
 
 ```sql
@@ -463,7 +471,7 @@ The process of reviewing and possibly deleting a blob is the following:
    LIMIT 1;
    ```
 
-2. Determine if blob is eligible for deletion. With the extensive work done on tracking associations and dissociations, the only thing needed is a query by digest across `gc_blobs_configurations` and `gc_blobs_layers`:
+1. Determine if blob is eligible for deletion. With the extensive work done on tracking associations and dissociations, the only thing needed is a query by digest across `gc_blobs_configurations` and `gc_blobs_layers`:
 
    ```sql
    SELECT
@@ -483,7 +491,7 @@ The process of reviewing and possibly deleting a blob is the following:
                digest = decode($1, 'hex'));
    ```
 
-3. If the result from 2. is `true`, the blob is still referenced by a manifest, and it is not eligible for deletion. Therefore, we should remove it from the blob review queue and commit the transaction:
+1. If the result from 2. is `true`, the blob is still referenced by a manifest, and it is not eligible for deletion. Therefore, we should remove it from the blob review queue and commit the transaction:
 
    ```sql
    DELETE FROM gc_blob_review_queue
@@ -492,11 +500,11 @@ The process of reviewing and possibly deleting a blob is the following:
    COMMIT;
    ```
 
-4. If the result from 2. is `false`, the blob is not referenced by any manifest or manifest list, and it is eligible for deletion. Therefore, the garbage collector should:
+1. If the result from 2. is `false`, the blob is not referenced by any manifest or manifest list, and it is eligible for deletion. Therefore, the garbage collector should:
 
    1. Delete the blob from the storage backend (wrapped in a timeout smaller than the outer processing timeout);
 
-   2. Delete the corresponding row in the `blobs` table:
+   1. Delete the corresponding row in the `blobs` table:
 
       ```sql
       DELETE FROM blobs
@@ -505,7 +513,7 @@ The process of reviewing and possibly deleting a blob is the following:
 
       This will cascade to `repository_blobs`, deleting any remaining links between the deleted blob and any repositories.
 
-   3. Delete the corresponding row from `gc_blob_review_queue` and commit the transaction:
+   1. Delete the corresponding row from `gc_blob_review_queue` and commit the transaction:
 
       ```sql
       DELETE FROM gc_blob_review_queue
@@ -569,17 +577,17 @@ With synchronization in place, depending on which process acquires the lock firs
 
     1. To stop the blob from being deleted between the check for existence and the manifest upload that is expected to follow, the API pushes the `review_after` of the blob review record forward by one day and commits the transaction:
         
-      ```sql
-      UPDATE
-          gc_blob_review_queue
-      SET
-          review_after = review_after + INTERVAL '1 day'
-      WHERE
-          digest = ?;
-      COMMIT;
-      ```
+       ```sql
+       UPDATE
+           gc_blob_review_queue
+       SET
+           review_after = review_after + INTERVAL '1 day'
+       WHERE
+           digest = ?;
+       COMMIT;
+       ```
   
-      This will ensure that the blob will not be garbage collected unless it remains unreferenced after that time.
+       This will ensure that the blob will not be garbage collected unless it remains unreferenced after that time.
 
     1. The API can then search for the blob in `blobs` and find it as expected.
 
@@ -589,7 +597,12 @@ Serializing operations with locks on `gc_blob_review_queue` instead of `blobs` e
 
 As a downside, the garbage collector needs to keep a transaction open (and the review record locked) for the run's duration, including the possible deletion from the remote storage backend. For this reason, we must ensure that the garbage collector will timeout and postpone the blob review if the delete from the storage backend takes more time than ideal. This will avoid keeping database transactions open and holding existence checks for too long. This timeout will be configurable and default to 2 seconds.
 
-Although this procedure would avoid the described race conditions, it could lead to several open transactions on the API side if the garbage collector is reviewing a blob heavily shared across many repositories. Furthermore, as a read-write connection is required to perform a `FOR UPDATE` query, by implementing this strategy, we would lose the ability to prioritize/fallback to read-only database replicas for existence checks. At least for GitLab.com, this route is heavily used, so this limitation could lead to lower availability/performance. Unlike the possible race conditions around manifests (described in the next section), these do not pose any integrity risks. In the worst-case scenario, they will lead to an image push retry. Furthermore, the chances of being in the process of deleting (not reviewing) a specific blob and having an API request targeting that same blob at roughly the same time should be negligible and inversely proportional to the registry size.
+Although this procedure would avoid the described race conditions, it could lead to several open transactions on the API side if the garbage collector is reviewing a blob heavily shared across many repositories.
+Furthermore, as a read-write connection is required to perform a `FOR UPDATE` query, by implementing this strategy, we would lose the ability to prioritize/fallback to read-only database replicas for existence checks.
+At least for GitLab.com, this route is heavily used, so this limitation could lead to lower availability/performance.
+Unlike the possible race conditions around manifests (described in the next section), these do not pose any integrity risks.
+In the worst-case scenario, they will lead to an image push retry.
+Furthermore, the chances of being in the process of deleting (not reviewing) a specific blob and having an API request targeting that same blob at roughly the same time should be negligible and inversely proportional to the registry size.
 
 For all these reasons, we decided not to implement this explicit locking from the start. The solution is documented here and so are the risks. We will revisit this approach if we do observe this pattern in production. At that point, we will have factual data around the deduplication ratio of blobs across all repositories and a real insight into the impact that this issue might produce. With that in hand, we can make an informed decision based on the pros and cons explained above.
 
@@ -620,7 +633,7 @@ The process of reviewing and possibly deleting a manifest or a manifest list (it
    LIMIT 1;
    ```
 
-2. Determine if it's eligible for deletion, i.e., if there are no remaining tags for it **and** it's not referenced by any manifest list (manifest lists may also be referenced by other manifest lists) within the same repository:
+1. Determine if it's eligible for deletion, i.e., if there are no remaining tags for it **and** it's not referenced by any manifest list (manifest lists may also be referenced by other manifest lists) within the same repository:
 
    ```sql
     SELECT
@@ -644,7 +657,7 @@ The process of reviewing and possibly deleting a manifest or a manifest list (it
                 AND child_id = $3);
    ```
 
-3. If it's not eligible for deletion, remove it from the review queue and commit the transaction:
+1. If it's not eligible for deletion, remove it from the review queue and commit the transaction:
 
    ```sql
    DELETE FROM gc_manifest_review_queue
@@ -655,7 +668,7 @@ The process of reviewing and possibly deleting a manifest or a manifest list (it
    COMMIT;
    ```
 
-4. If it's eligible for deletion, delete the corresponding row in the `manifests` table and commit the transaction:
+1. If it's eligible for deletion, delete the corresponding row in the `manifests` table and commit the transaction:
 
    ```sql
    DELETE FROM manifests

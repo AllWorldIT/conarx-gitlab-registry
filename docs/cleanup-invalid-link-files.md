@@ -3,7 +3,7 @@
 When an invalid link file is detected, a warning will appear in the garbage
 collector output.
 
-```
+```shell
 $ registry garbage-collect /path/to/config.yml -m
 ...
 myorg/myproj/myimg
@@ -26,7 +26,7 @@ path to the corresponding invalid file.
 The log can be parsed as follows to obtain a list with the full path of the
 invalid link files:
 
-```
+```shell
 cat /path/to/garbage_collector.log | sed -n 's/^.*invalid link file.*path="\(\S*\)"$/\1/p' > invalid_files.txt
 ```
 
@@ -36,6 +36,6 @@ containing a line with the full path to each invalid link file.
 The files can then be deleted by iterating over the list. As an example, for
 the filesystem driver it could be done as follows:
 
-```
+```shell
 xargs rm < invalid_files.txt
 ```
