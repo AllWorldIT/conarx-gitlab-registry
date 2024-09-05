@@ -13,6 +13,19 @@ are CROSSSLOT compatible. See the Redis Cluster specification
 [here](https://redis.io/docs/reference/cluster-spec/#hash-tags) and the corresponding GitLab documentation
 [here](https://docs.gitlab.com/ee/development/redis.html#multi-key-commands) for additional information on this subject.
 
+### Suffixes
+
+We use [hash tags](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/#hash-tags)
+when storing keys for a given repository. This ensures that operations for that repository
+are done on the same Redis server.
+
+Sometimes, a key may need to refer to sub-categories, for example for certain operations.
+To add sub-categories, we use suffixes that are added after the hash key inside the brackets `{}`.
+For example, for push/pull counters we would use the following keys:
+
+- `registry:api:{repository:<namespace path>:<path hash>}:pull`
+- `registry:api:{repository:<namespace path>:<path hash>}:push`
+
 ### Cache Data
 
 #### Repository Objects
