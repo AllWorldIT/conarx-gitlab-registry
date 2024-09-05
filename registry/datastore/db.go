@@ -568,7 +568,17 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 
 		r := dbByAddress(lb.replicas, dsn.Address())
 		if r != nil {
-			l.Info("replica is known, reusing existing connection")
+			// check if connection to existing replica is still usable
+			if err := r.PingContext(ctx); err != nil {
+				l.WithError(err).Warn("replica is known but connection is stale, attempting to reconnect")
+				r, err = lb.connector.Open(ctx, dsn, lb.replicaOpenOpts...)
+				if err != nil {
+					result = multierror.Append(result, fmt.Errorf("reopening replica %q database connection: %w", dsn.Address(), err))
+					continue
+				}
+			} else {
+				l.Info("replica is known and healthy, reusing connection")
+			}
 		} else {
 			l.Info("replica is new, opening connection")
 			if r, err = lb.connector.Open(ctx, dsn, lb.replicaOpenOpts...); err != nil {

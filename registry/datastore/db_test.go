@@ -1060,6 +1060,125 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 }
 
+func TestDBLoadBalancer_ResolveReplicas_PingKnownAndReopenIfStale(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	// Mock the expected DNS lookups
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+			{Target: "srv2.example.com", Port: 6433},
+		}, nil).
+		Times(3)
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		Return([]string{"192.168.1.1"}, nil).
+		Times(3)
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv2.example.com").
+		Return([]string{"192.168.1.2"}, nil).
+		Times(3)
+
+	primaryMockDB, primaryMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replica1MockDB, replica1Mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer replica1MockDB.Close()
+
+	replica2MockDB, replica2Mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer replica2MockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+	replica1DSN := &datastore.DSN{
+		Host:     "192.168.1.1",
+		Port:     6432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+	replica2DSN := &datastore.DSN{
+		Host:     "192.168.1.2",
+		Port:     6433,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	// Simulate successful initial connections to primary and all replicas
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
+
+	// Create the load balancer with the service discovery option
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	// Expect successful ping for replica 1 and simulate failed ping for replica 2 with an expected reconnection attempt
+	connErr := errors.New("connection refused")
+	replica1Mock.ExpectPing()
+	replica2Mock.ExpectPing().WillReturnError(connErr)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
+
+	err = lb.ResolveReplicas(context.Background())
+	require.NoError(t, err)
+
+	// Ensure that the pool is composed by replica 1 and 2
+	replicas := lb.Replicas()
+	require.Len(t, replicas, 2)
+	require.Equal(t, replica1MockDB, replicas[0].DB)
+	require.Equal(t, replica2MockDB, replicas[1].DB)
+
+	// Repeat but this time simulate a failed reconnection attempt to replica 2
+	replica1Mock.ExpectPing()
+	replica2Mock.ExpectPing().WillReturnError(connErr)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(nil, connErr).Times(1)
+
+	err = lb.ResolveReplicas(context.Background())
+	require.Error(t, err)
+
+	var errs *multierror.Error
+	require.ErrorAs(t, err, &errs)
+	require.Len(t, errs.Errors, 1)
+	require.EqualError(t, errs.Errors[0], `reopening replica "192.168.1.2:6433" database connection: connection refused`)
+
+	// Ensure that there is only one replica in the pool, and that's replica 1
+	replicas = lb.Replicas()
+	require.Len(t, replicas, 1)
+	require.Equal(t, replica1MockDB, replicas[0].DB)
+
+	// Verify mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replica1Mock.ExpectationsWereMet())
+	require.NoError(t, replica2Mock.ExpectationsWereMet())
+}
+
 func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
