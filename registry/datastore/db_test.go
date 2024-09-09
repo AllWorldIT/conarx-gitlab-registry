@@ -1725,6 +1725,42 @@ func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
 	require.NoError(t, replicaMock.ExpectationsWereMet())
 }
 
+func TestDBLoadBalancer_UpToDateReplica_Inactive(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+	lsnCacheMock := mocks.NewMockRepositoryCache(ctrl)
+
+	// Define expected DB connections (only primary)
+	mockConnector.EXPECT().
+		Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1)
+
+	// Setup load balancer without WithFixedHosts nor WithServiceDiscovery options
+	lb, err := datastore.NewDBLoadBalancer(
+		ctx,
+		&datastore.DSN{},
+		datastore.WithConnector(mockConnector),
+		datastore.WithLSNCache(lsnCacheMock),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+	require.Equal(t, primaryMockDB, lb.Primary().DB)
+	require.Len(t, lb.Replicas(), 0)
+
+	// Test that we successfully get the primary handle as result
+	repo := &models.Repository{Path: "test/repo"}
+	db := lb.UpToDateReplica(ctx, repo)
+	require.Equal(t, lb.Primary(), db)
+
+	// Verify mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+}
+
 func TestDB_Address(t *testing.T) {
 	tests := []struct {
 		name string
