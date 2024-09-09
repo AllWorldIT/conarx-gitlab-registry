@@ -430,6 +430,11 @@ func (jw *Worker) PauseEligibleMigrations(ctx context.Context) error {
 	return datastore.NewBackgroundMigrationStore(jw.db).Pause(ctx)
 }
 
+// ResumeEligibleMigrations resumes all paused background migrations.
+func (jw *Worker) ResumeEligibleMigrations(ctx context.Context) error {
+	return datastore.NewBackgroundMigrationStore(jw.db).Resume(ctx)
+}
+
 // findRetryableJobs looks for jobs that failed prior in the scope of a specific Background Migration.
 // if no failed jobs are found in the Background Migration it sets the status of the Background Migration to finished.
 func findRetryableJobs(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, bbm *models.BackgroundMigration) (*models.BackgroundMigrationJob, error) {
