@@ -162,6 +162,7 @@ type PoolConfig struct {
 
 // LoadBalancingConfig represents the database load balancing configuration.
 type LoadBalancingConfig struct {
+	active               bool
 	hosts                []string
 	resolver             DNSResolver
 	connector            Connector
@@ -379,6 +380,7 @@ type LoadBalancer interface {
 
 // DBLoadBalancer manages connections to a primary database and multiple replicas.
 type DBLoadBalancer struct {
+	active   bool
 	primary  *DB
 	replicas []*DB
 
@@ -403,6 +405,7 @@ type DBLoadBalancer struct {
 func WithFixedHosts(hosts []string) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.hosts = hosts
+		opts.loadBalancing.active = true
 	}
 }
 
@@ -410,6 +413,7 @@ func WithFixedHosts(hosts []string) Option {
 func WithServiceDiscovery(resolver DNSResolver) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.resolver = resolver
+		opts.loadBalancing.active = true
 	}
 }
 
@@ -647,6 +651,7 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	var result *multierror.Error
 
 	lb := &DBLoadBalancer{
+		active:               config.loadBalancing.active,
 		primaryDSN:           primaryDSN,
 		connector:            config.loadBalancing.connector,
 		resolver:             config.loadBalancing.resolver,
@@ -662,8 +667,10 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	}
 	lb.primary = primary
 
-	if err := lb.ResolveReplicas(ctx); err != nil {
-		result = multierror.Append(result, err)
+	if lb.active {
+		if err := lb.ResolveReplicas(ctx); err != nil {
+			result = multierror.Append(result, err)
+		}
 	}
 
 	if result.ErrorOrNil() != nil {
@@ -743,6 +750,10 @@ func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) e
 // models.Repository based on the last recorded primary Log Sequence Number (LSN) for that same repository. All errors
 // are handled gracefully with a fallback to the primary connection handle.
 func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Repository) *DB {
+	if !lb.active {
+		return lb.primary
+	}
+
 	l := lb.logger(ctx).WithFields(log.Fields{"repository": r.Path})
 
 	if lb.lsnCache == nil {
