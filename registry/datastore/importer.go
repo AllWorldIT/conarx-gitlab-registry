@@ -644,7 +644,12 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 		close(tagResChan)
 	}()
 
-	opts := append(commonBarOptions, progressbar.OptionSetDescription(fmt.Sprintf("importing tags in %s", dbRepo.Path)), progressbar.OptionSetItsString("tags"))
+	opts := append(
+		commonBarOptions,
+		progressbar.OptionSetDescription(fmt.Sprintf("importing tags in %s", dbRepo.Path)),
+		progressbar.OptionSetItsString("tags"),
+		progressbar.OptionSetVisibility(imp.showProgressBar),
+	)
 	bar := progressbar.NewOptions(total, opts...)
 	defer func() {
 		bar.Finish()
@@ -778,7 +783,12 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": dbRepo.Path, "total": total})
 	l.Info("processing tags")
 
-	opts := append(commonBarOptions, progressbar.OptionSetDescription(fmt.Sprintf("pre importing manifests in %s", dbRepo.Path)), progressbar.OptionSetItsString("manifests"))
+	opts := append(
+		commonBarOptions,
+		progressbar.OptionSetDescription(fmt.Sprintf("pre importing manifests in %s", dbRepo.Path)),
+		progressbar.OptionSetItsString("manifests"),
+		progressbar.OptionSetVisibility(imp.showProgressBar),
+	)
 	bar := progressbar.NewOptions(total, opts...)
 	defer func() {
 		bar.Finish()
@@ -1265,7 +1275,12 @@ func (imp *Importer) importBlobs(ctx context.Context) error {
 	l := log.GetLogger(log.WithContext(ctx))
 	l.Info("importing all blobs")
 
-	opts := append(commonBarOptions, progressbar.OptionSetDescription("importing blobs"), progressbar.OptionSetItsString("blobs"))
+	opts := append(
+		commonBarOptions,
+		progressbar.OptionSetDescription("importing blobs"),
+		progressbar.OptionSetItsString("blobs"),
+		progressbar.OptionSetVisibility(imp.showProgressBar),
+	)
 	bar := progressbar.NewOptions(-1, opts...)
 	defer func() {
 		bar.Finish()
