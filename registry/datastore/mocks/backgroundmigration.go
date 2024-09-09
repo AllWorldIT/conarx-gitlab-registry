@@ -204,6 +204,21 @@ func (mr *MockBackgroundMigrationStoreMockRecorder) FindNext(arg0 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindNext", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindNext), arg0)
 }
 
+// FindNextByStatus mocks base method.
+func (m *MockBackgroundMigrationStore) FindNextByStatus(arg0 context.Context, arg1 models.BackgroundMigrationStatus) (*models.BackgroundMigration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindNextByStatus", arg0, arg1)
+	ret0, _ := ret[0].(*models.BackgroundMigration)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindNextByStatus indicates an expected call of FindNextByStatus.
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindNextByStatus(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindNextByStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindNextByStatus), arg0, arg1)
+}
+
 // IncrementJobAttempts mocks base method.
 func (m *MockBackgroundMigrationStore) IncrementJobAttempts(arg0 context.Context, arg1 int) error {
 	m.ctrl.T.Helper()
@@ -244,6 +259,34 @@ func (m *MockBackgroundMigrationStore) Pause(arg0 context.Context) error {
 func (mr *MockBackgroundMigrationStoreMockRecorder) Pause(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pause", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Pause), arg0)
+}
+
+// Resume mocks base method.
+func (m *MockBackgroundMigrationStore) Resume(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Resume", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Resume indicates an expected call of Resume.
+func (mr *MockBackgroundMigrationStoreMockRecorder) Resume(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resume", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Resume), arg0)
+}
+
+// SyncLock mocks base method.
+func (m *MockBackgroundMigrationStore) SyncLock(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncLock", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SyncLock indicates an expected call of SyncLock.
+func (mr *MockBackgroundMigrationStoreMockRecorder) SyncLock(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncLock", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).SyncLock), arg0)
 }
 
 // UpdateJobStatus mocks base method.
