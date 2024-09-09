@@ -68,6 +68,8 @@ func init() {
 
 	BBMCmd.AddCommand(BBMStatusCmd)
 	BBMCmd.AddCommand(BBMPauseCmd)
+	BBMCmd.AddCommand(BBMRunCmd)
+	BBMRunCmd.Flags().VarP(nullableInt{&maxBBMJobRetry}, "max-job-retry", "r", "Set the maximum number of job retry attempts (default 2, must be between 1 and 10)")
 }
 
 // Command flag vars
@@ -89,6 +91,7 @@ var (
 	tagConcurrency     *int
 	logToSTDOUT        bool
 	dynamicMediaTypes  bool
+	maxBBMJobRetry     *int
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -582,7 +585,7 @@ var ImportCmd = &cobra.Command{
 
 // BBMCmd is the cobra command that corresponds to the background-migrate subcommand
 var BBMCmd = &cobra.Command{
-	Use:   "background-migrate <config>",
+	Use:   "background-migrate <config> {status|pause|run}",
 	Short: "Manage batched background migrations",
 	Long:  "Manage batched background migrations",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -592,9 +595,9 @@ var BBMCmd = &cobra.Command{
 
 // BBMStatusCmd is the `status` sub-command of `background-migrate` that shows the batched background migrations status.
 var BBMStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show batched background migration status",
-	Long:  "Show batched background migration status",
+	Use:   "status <config>",
+	Short: "Show the current status of all batched background migrations",
+	Long:  "Show the current status of all batched background migrations.",
 	Run: func(cmd *cobra.Command, args []string) {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
@@ -629,9 +632,9 @@ var BBMStatusCmd = &cobra.Command{
 	},
 }
 
-// BBMPauseCmd is the `pause` sub-command of `background-migrate` that pauses a batched background migrations identified by the name parameter.
+// BBMPauseCmd is the `pause` sub-command of `background-migrate` that pauses a batched background migrations.
 var BBMPauseCmd = &cobra.Command{
-	Use:   "pause",
+	Use:   "pause <config>",
 	Short: "Pause all running or active batched background migrations",
 	Long:  "Pause all running or active batched background migrations",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -652,6 +655,42 @@ var BBMPauseCmd = &cobra.Command{
 		err = bbmw.PauseEligibleMigrations(dcontext.Background())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to pause background migrations: %v", err)
+			os.Exit(1)
+		}
+	},
+}
+
+// BBMRunCmd is the `run` sub-command of `background-migrate` that runs unfinished background migration.
+var BBMRunCmd = &cobra.Command{
+	Use:   "run <config> [--max-job-retry <n>]",
+	Short: "Run all unfinished batched background migrations",
+	Long:  "Run all unfinished batched background migrations",
+
+	Run: func(cmd *cobra.Command, args []string) {
+		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		db, err := migrationDBFromConfig(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
+			os.Exit(1)
+		}
+
+		// Set default max job retry if not set, and validate its range
+		if maxBBMJobRetry == nil {
+			*maxBBMJobRetry = 2
+		} else if *maxBBMJobRetry < 1 || *maxBBMJobRetry > 10 {
+			fmt.Fprintf(os.Stderr, "limit must be greater than 0 and less than 10")
+			os.Exit(1)
+		}
+
+		// Create a new sync worker with the database and max job attempt options, and run it
+		if err := bbm.NewSyncWorker(db, bbm.WithSyncMaxJobAttempt(*maxBBMJobRetry)).Run(dcontext.Background()); err != nil {
+			fmt.Fprintf(os.Stderr, "running background migrations failed: %v", err)
 			os.Exit(1)
 		}
 	},

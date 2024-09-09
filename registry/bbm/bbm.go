@@ -472,6 +472,16 @@ func findNewJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore
 			return nil, err
 		}
 	} else {
+		// Update status to running if migration was left in active state.
+		// This can happen after a pause command (sets migrations to paused)
+		// followed by a resume command (sets paused migrations to active).
+		if bbm.Status == models.BackgroundMigrationActive {
+			bbm.Status = models.BackgroundMigrationRunning
+			err = bbmStore.UpdateStatus(ctx, bbm)
+			if err != nil {
+				return nil, err
+			}
+		}
 		// otherwise find the starting point for the next job that should be created for the Background Migration.
 		start = lastCreatedJob.EndID + 1
 		// the start point of the job to be created must not be greater than the Background Migration end bound.
