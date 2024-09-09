@@ -66,7 +66,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 	metricskit "gitlab.com/gitlab-org/labkit/metrics"
-	"gitlab.com/gitlab-org/labkit/metrics/sqlmetrics"
 )
 
 // randomSecretSize is the number of random bytes to generate if no secret
@@ -398,6 +397,10 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			}
 		}
 
+		if config.HTTP.Debug.Prometheus.Enabled {
+			dbOpts = append(dbOpts, datastore.WithMetricsCollection())
+		}
+
 		db, err := datastore.NewDBLoadBalancer(ctx, dsn, dbOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize database connections: %w", err)
@@ -421,13 +424,6 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		app.db = db
 		options = append(options, storage.Database(app.db))
-
-		if config.HTTP.Debug.Prometheus.Enabled {
-			// Expose database metrics to prometheus.
-			// TODO(dlb): collect metrics for all hosts
-			collector := sqlmetrics.NewDBStatsCollector(config.Database.DBName, db.Primary())
-			promclient.MustRegister(collector)
-		}
 
 		// update online GC settings (if needed) in the background to avoid delaying the app start
 		go func() {
@@ -1851,7 +1847,6 @@ func (app *App) GracefulShutdown(ctx context.Context) error {
 
 // DBStats returns the sql.DBStats for the metadata database connection handle.
 func (app *App) DBStats() sql.DBStats {
-	// TODO(dlb): collect metrics for all hosts
 	return app.db.Primary().Stats()
 }
 

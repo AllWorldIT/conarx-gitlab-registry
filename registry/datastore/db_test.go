@@ -17,6 +17,8 @@ import (
 	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/hashicorp/go-multierror"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -735,6 +737,297 @@ func TestNewDBLoadBalancer_WithBothHostsAndDiscoveryOptions(t *testing.T) {
 	require.NoError(t, replicaMock2.ExpectationsWereMet())
 }
 
+func TestNewDBLoadBalancer_MetricsCollection_Primary(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	tests := []struct {
+		name                  string
+		enableMetrics         bool
+		openPrimarySucceeds   bool
+		wantMetricsRegistered bool
+	}{
+		{
+			name:                  "metrics collection disabled",
+			enableMetrics:         false,
+			openPrimarySucceeds:   true,
+			wantMetricsRegistered: false,
+		},
+		{
+			name:                  "metrics collection enabled, primary connection succeeds",
+			enableMetrics:         true,
+			openPrimarySucceeds:   true,
+			wantMetricsRegistered: true,
+		},
+		{
+			name:                  "metrics collection enabled, primary connection fails",
+			enableMetrics:         true,
+			openPrimarySucceeds:   false,
+			wantMetricsRegistered: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ *datastore.DSN, _ ...datastore.Option) (*datastore.DB, error) {
+					if tt.openPrimarySucceeds {
+						return &datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil
+					}
+					return nil, errors.New("failed to open connection")
+				}).Times(1)
+
+			reg := prometheus.NewRegistry()
+
+			options := []datastore.Option{
+				datastore.WithConnector(mockConnector),
+				datastore.WithPrometheusRegisterer(reg),
+			}
+			if tt.enableMetrics {
+				options = append(options, datastore.WithMetricsCollection())
+			}
+
+			lb, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
+			if tt.openPrimarySucceeds {
+				require.NoError(t, err)
+				require.NotNil(t, lb)
+			} else {
+				require.Error(t, err)
+				require.Nil(t, lb)
+			}
+
+			// verify registered metrics
+			metricCount, err := testutil.GatherAndCount(reg)
+			require.NoError(t, err)
+
+			if tt.wantMetricsRegistered {
+				require.NotZero(t, metricCount)
+				// verify that custom labels were added to all metrics
+				metrics, err := reg.Gather()
+				require.NoError(t, err)
+
+				var hostTypeLabelFound, hostAddrLabelFound bool
+				for _, m := range metrics {
+					for _, metric := range m.GetMetric() {
+						for _, label := range metric.GetLabel() {
+							switch label.GetName() {
+							case "host_type":
+								hostTypeLabelFound = true
+								require.Equal(t, datastore.HostTypePrimary, label.GetValue())
+							case "host_addr":
+								hostAddrLabelFound = true
+								require.Equal(t, lb.Primary().Address(), label.GetValue())
+							}
+						}
+					}
+				}
+				require.True(t, hostTypeLabelFound)
+				require.True(t, hostAddrLabelFound)
+			} else {
+				require.Zero(t, metricCount)
+			}
+		})
+	}
+}
+
+func TestNewDBLoadBalancer_MetricsCollection_Replicas(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	replica1DSN := &datastore.DSN{
+		Host:     "replica1",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	replica2DSN := &datastore.DSN{
+		Host:     "replica2",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	replicaMockDB1, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaMockDB1.Close()
+
+	replicaMockDB2, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaMockDB2.Close()
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	tests := []struct {
+		name                         string
+		enableMetrics                bool
+		openReplica1Succeeds         bool
+		openReplica2Succeeds         bool
+		wantReplicaMetricsRegistered bool
+	}{
+		{
+			name:                         "metrics collection disabled",
+			enableMetrics:                false,
+			openReplica1Succeeds:         true,
+			openReplica2Succeeds:         true,
+			wantReplicaMetricsRegistered: false,
+		},
+		{
+			name:                         "metrics collection enabled, all replicas succeed",
+			enableMetrics:                true,
+			openReplica1Succeeds:         true,
+			openReplica2Succeeds:         true,
+			wantReplicaMetricsRegistered: true,
+		},
+		{
+			name:                         "metrics collection enabled, one replica fails",
+			enableMetrics:                true,
+			openReplica1Succeeds:         true,
+			openReplica2Succeeds:         false,
+			wantReplicaMetricsRegistered: true,
+		},
+		{
+			name:                         "metrics collection enabled, all replicas fail",
+			enableMetrics:                true,
+			openReplica1Succeeds:         false,
+			openReplica2Succeeds:         false,
+			wantReplicaMetricsRegistered: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := prometheus.NewRegistry()
+
+			// Mock connections according to expectations
+			mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+				Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+			mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ *datastore.DSN, _ ...datastore.Option) (*datastore.DB, error) {
+					if tt.openReplica1Succeeds {
+						return &datastore.DB{DB: replicaMockDB1, DSN: replica1DSN}, nil
+					}
+					return nil, errors.New("failed to open replica 1 connection")
+				}).Times(1)
+			mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ *datastore.DSN, _ ...datastore.Option) (*datastore.DB, error) {
+					if tt.openReplica2Succeeds {
+						return &datastore.DB{DB: replicaMockDB2, DSN: replica2DSN}, nil
+					}
+					return nil, errors.New("failed to open replica 2 connection")
+				}).Times(1)
+
+			// Initialize load balancer
+			options := []datastore.Option{
+				datastore.WithConnector(mockConnector),
+				datastore.WithPrometheusRegisterer(reg),
+				datastore.WithFixedHosts([]string{"replica1", "replica2"}),
+			}
+			if tt.enableMetrics {
+				options = append(options, datastore.WithMetricsCollection())
+			}
+
+			_, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
+			if tt.openReplica1Succeeds && tt.openReplica2Succeeds {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+
+			// Verify registered metrics
+			metricCount, err := testutil.GatherAndCount(reg)
+			require.NoError(t, err)
+
+			metrics, err := reg.Gather()
+			require.NoError(t, err)
+
+			if tt.enableMetrics {
+				require.NotZero(t, metricCount)
+			} else {
+				require.Zero(t, metricCount)
+			}
+
+			// Scan all registered metrics and keep track of which labels are found
+			var (
+				primaryLabelsFound,
+				replica1LabelsFound,
+				replica2LabelsFound bool
+			)
+
+			for _, m := range metrics {
+				for _, metric := range m.GetMetric() {
+					var hostType, hostAddr string
+					for _, label := range metric.GetLabel() {
+						switch label.GetName() {
+						case "host_type":
+							hostType = label.GetValue()
+						case "host_addr":
+							hostAddr = label.GetValue()
+						}
+					}
+					// Check for primary labels
+					if hostType == datastore.HostTypePrimary {
+						primaryLabelsFound = true
+						require.Equal(t, primaryDSN.Address(), hostAddr)
+					}
+					// Check for replica labels
+					if hostType == datastore.HostTypeReplica {
+						if hostAddr == replica1DSN.Address() {
+							replica1LabelsFound = true
+						}
+						if hostAddr == replica2DSN.Address() {
+							replica2LabelsFound = true
+						}
+					}
+				}
+			}
+
+			require.Equal(t, tt.enableMetrics, primaryLabelsFound)
+			if tt.wantReplicaMetricsRegistered {
+				require.Equal(t, tt.openReplica1Succeeds, replica1LabelsFound)
+				require.Equal(t, tt.openReplica2Succeeds, replica2LabelsFound)
+			} else {
+				require.False(t, replica1LabelsFound)
+				require.False(t, replica2LabelsFound)
+			}
+		})
+	}
+}
+
 func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -1061,41 +1354,38 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 }
 
-func TestDBLoadBalancer_ResolveReplicas_PingKnownAndReopenIfStale(t *testing.T) {
+func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_PoolUnchanged(t *testing.T) {
 	ctrl := gomock.NewController(t)
+
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
 
-	// Mock the expected DNS lookups
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replica1MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica1MockDB.Close()
+
+	replica2MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica2MockDB.Close()
+
 	mockResolver.EXPECT().
 		LookupSRV(gomock.Any()).
 		Return([]*net.SRV{
 			{Target: "srv1.example.com", Port: 6432},
 			{Target: "srv2.example.com", Port: 6433},
-		}, nil).
-		Times(3)
+		}, nil).Times(2)
 
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv1.example.com").
-		Return([]string{"192.168.1.1"}, nil).
-		Times(3)
+		Return([]string{"192.168.1.1"}, nil).Times(2)
 
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv2.example.com").
-		Return([]string{"192.168.1.2"}, nil).
-		Times(3)
-
-	primaryMockDB, primaryMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
-	require.NoError(t, err)
-	defer primaryMockDB.Close()
-
-	replica1MockDB, replica1Mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
-	require.NoError(t, err)
-	defer replica1MockDB.Close()
-
-	replica2MockDB, replica2Mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
-	require.NoError(t, err)
-	defer replica2MockDB.Close()
+		Return([]string{"192.168.1.2"}, nil).Times(2)
 
 	primaryDSN := &datastore.DSN{
 		Host:     "primary",
@@ -1122,7 +1412,7 @@ func TestDBLoadBalancer_ResolveReplicas_PingKnownAndReopenIfStale(t *testing.T) 
 		SSLMode:  primaryDSN.SSLMode,
 	}
 
-	// Simulate successful initial connections to primary and all replicas
+	// Expect initial connection attempts to primary, replica 1 and 2
 	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
 		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
 	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
@@ -1130,54 +1420,831 @@ func TestDBLoadBalancer_ResolveReplicas_PingKnownAndReopenIfStale(t *testing.T) 
 	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
 		Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
 
-	// Create the load balancer with the service discovery option
-	lb, err := datastore.NewDBLoadBalancer(
-		context.Background(),
-		primaryDSN,
+	// Initialize load balancer (metrics collection during the initial call to ResolveReplicas within NewDBLoadBalancer
+	// is already tested in TestNewDBLoadBalancer_MetricsCollection_*).
+	reg := prometheus.NewRegistry()
+	options := []datastore.Option{
 		datastore.WithConnector(mockConnector),
 		datastore.WithServiceDiscovery(mockResolver),
-	)
+		datastore.WithPrometheusRegisterer(reg),
+		datastore.WithMetricsCollection(),
+	}
+
+	ctx := context.Background()
+	lb, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
-	// Expect successful ping for replica 1 and simulate failed ping for replica 2 with an expected reconnection attempt
-	connErr := errors.New("connection refused")
-	replica1Mock.ExpectPing()
-	replica2Mock.ExpectPing().WillReturnError(connErr)
+	// Simulate scenario where nothing has changed, so we should still see metrics labelled for primary, replica 1 and 2
+	err = lb.ResolveReplicas(ctx)
+	require.NoError(t, err)
+
+	// Verify registered metrics
+	metricCount, err := testutil.GatherAndCount(reg)
+	require.NoError(t, err)
+
+	metrics, err := reg.Gather()
+	require.NoError(t, err)
+	require.NotZero(t, metricCount)
+
+	// Track which labels are found during the scan
+	var (
+		primaryLabelsFound,
+		replica1LabelsFound,
+		replica2LabelsFound bool
+	)
+
+	for _, m := range metrics {
+		for _, metric := range m.GetMetric() {
+			var hostType, hostAddr string
+			for _, label := range metric.GetLabel() {
+				switch label.GetName() {
+				case "host_type":
+					hostType = label.GetValue()
+				case "host_addr":
+					hostAddr = label.GetValue()
+				}
+			}
+			// Check for primary metrics
+			if hostType == datastore.HostTypePrimary {
+				primaryLabelsFound = true
+				require.Equal(t, primaryDSN.Address(), hostAddr)
+			}
+			// Check for replica metrics
+			if hostType == datastore.HostTypeReplica {
+				if hostAddr == replica1DSN.Address() {
+					replica1LabelsFound = true
+				}
+				if hostAddr == replica2DSN.Address() {
+					replica2LabelsFound = true
+				}
+			}
+		}
+	}
+
+	// Verify presence of labeled metrics
+	require.True(t, primaryLabelsFound)
+	require.True(t, replica1LabelsFound)
+	require.True(t, replica2LabelsFound)
+}
+
+func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_ReplicaRemoved(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replica1MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica1MockDB.Close()
+
+	replica2MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica2MockDB.Close()
+
+	// Initial DNS resolver response, with replica 1 and 2
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+			{Target: "srv2.example.com", Port: 6433},
+		}, nil).Times(1)
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		Return([]string{"192.168.1.1"}, nil).AnyTimes()
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv2.example.com").
+		Return([]string{"192.168.1.2"}, nil).AnyTimes()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+	replica1DSN := &datastore.DSN{
+		Host:     "192.168.1.1",
+		Port:     6432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+	replica2DSN := &datastore.DSN{
+		Host:     "192.168.1.2",
+		Port:     6433,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	// Expect initial connection attempts to primary, replica 1 and 2
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
 	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
 		Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
 
-	err = lb.ResolveReplicas(context.Background())
+	// Initialize load balancer (metrics collection during the initial call to ResolveReplicas within NewDBLoadBalancer
+	// is already tested in TestNewDBLoadBalancer_MetricsCollection_*).
+	reg := prometheus.NewRegistry()
+	options := []datastore.Option{
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+		datastore.WithPrometheusRegisterer(reg),
+		datastore.WithMetricsCollection(),
+	}
+
+	ctx := context.Background()
+	lb, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	// Simulate the scenario where a replica (2) goes missing and the corresponding collector should be unregistered
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+		}, nil).Times(1)
+
+	err = lb.ResolveReplicas(ctx)
 	require.NoError(t, err)
 
-	// Ensure that the pool is composed by replica 1 and 2
-	replicas := lb.Replicas()
-	require.Len(t, replicas, 2)
-	require.Equal(t, replica1MockDB, replicas[0].DB)
-	require.Equal(t, replica2MockDB, replicas[1].DB)
+	// Verify registered metrics
+	metricCount, err := testutil.GatherAndCount(reg)
+	require.NoError(t, err)
 
-	// Repeat but this time simulate a failed reconnection attempt to replica 2
-	replica1Mock.ExpectPing()
-	replica2Mock.ExpectPing().WillReturnError(connErr)
-	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(nil, connErr).Times(1)
+	metrics, err := reg.Gather()
+	require.NoError(t, err)
+	require.NotZero(t, metricCount)
 
-	err = lb.ResolveReplicas(context.Background())
-	require.Error(t, err)
+	// Track which labels are found during the scan
+	var (
+		primaryLabelsFound,
+		replica1LabelsFound,
+		replica2LabelsFound bool
+	)
 
-	var errs *multierror.Error
-	require.ErrorAs(t, err, &errs)
-	require.Len(t, errs.Errors, 1)
-	require.EqualError(t, errs.Errors[0], `reopening replica "192.168.1.2:6433" database connection: connection refused`)
+	for _, m := range metrics {
+		for _, metric := range m.GetMetric() {
+			var hostType, hostAddr string
+			for _, label := range metric.GetLabel() {
+				switch label.GetName() {
+				case "host_type":
+					hostType = label.GetValue()
+				case "host_addr":
+					hostAddr = label.GetValue()
+				}
+			}
+			// Check for primary metrics
+			if hostType == datastore.HostTypePrimary {
+				primaryLabelsFound = true
+				require.Equal(t, primaryDSN.Address(), hostAddr)
+			}
+			// Check for replica metrics
+			if hostType == datastore.HostTypeReplica {
+				if hostAddr == replica1DSN.Address() {
+					replica1LabelsFound = true
+				}
+				if hostAddr == replica2DSN.Address() {
+					replica2LabelsFound = true
+				}
+			}
+		}
+	}
 
-	// Ensure that there is only one replica in the pool, and that's replica 1
-	replicas = lb.Replicas()
-	require.Len(t, replicas, 1)
-	require.Equal(t, replica1MockDB, replicas[0].DB)
+	// Verify presence of labeled metrics
+	require.True(t, primaryLabelsFound)
+	require.True(t, replica1LabelsFound)
+	require.False(t, replica2LabelsFound)
+}
 
-	// Verify mock expectations
-	require.NoError(t, primaryMock.ExpectationsWereMet())
-	require.NoError(t, replica1Mock.ExpectationsWereMet())
-	require.NoError(t, replica2Mock.ExpectationsWereMet())
+func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_ReplicaAdded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replica1MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica1MockDB.Close()
+
+	replica2MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica2MockDB.Close()
+
+	replica3MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica3MockDB.Close()
+
+	// Initial DNS resolver response, with replica 1 and 2
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+			{Target: "srv2.example.com", Port: 6433},
+		}, nil).Times(1)
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		Return([]string{"192.168.1.1"}, nil).AnyTimes()
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv2.example.com").
+		Return([]string{"192.168.1.2"}, nil).AnyTimes()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+	replica1DSN := &datastore.DSN{
+		Host:     "192.168.1.1",
+		Port:     6432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+	replica2DSN := &datastore.DSN{
+		Host:     "192.168.1.2",
+		Port:     6433,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+	replica3DSN := &datastore.DSN{
+		Host:     "192.168.1.3",
+		Port:     6434,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	// Expect initial connection attempts to primary, replica 1 and 2
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
+
+	// Initialize load balancer (metrics collection during the initial call to ResolveReplicas within NewDBLoadBalancer
+	// is already tested in TestNewDBLoadBalancer_MetricsCollection_*).
+	reg := prometheus.NewRegistry()
+	options := []datastore.Option{
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+		datastore.WithPrometheusRegisterer(reg),
+		datastore.WithMetricsCollection(),
+	}
+
+	ctx := context.Background()
+	lb, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	// Simulate the scenario where a replica (3) is introduced and the corresponding collector should be registered
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+			{Target: "srv2.example.com", Port: 6433},
+			{Target: "srv3.example.com", Port: 6434},
+		}, nil).Times(1)
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv3.example.com").
+		Return([]string{"192.168.1.3"}, nil).Times(1)
+
+	mockConnector.EXPECT().Open(gomock.Any(), replica3DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica3MockDB, DSN: replica3DSN}, nil).Times(1)
+
+	err = lb.ResolveReplicas(ctx)
+	require.NoError(t, err)
+
+	// Verify registered metrics
+	metricCount, err := testutil.GatherAndCount(reg)
+	require.NoError(t, err)
+
+	metrics, err := reg.Gather()
+	require.NoError(t, err)
+	require.NotZero(t, metricCount)
+
+	// Track which labels are found during the scan
+	var (
+		primaryLabelsFound,
+		replica1LabelsFound,
+		replica2LabelsFound,
+		replica3LabelsFound bool
+	)
+
+	for _, m := range metrics {
+		for _, metric := range m.GetMetric() {
+			var hostType, hostAddr string
+			for _, label := range metric.GetLabel() {
+				switch label.GetName() {
+				case "host_type":
+					hostType = label.GetValue()
+				case "host_addr":
+					hostAddr = label.GetValue()
+				}
+			}
+			// Check for primary metrics
+			if hostType == datastore.HostTypePrimary {
+				primaryLabelsFound = true
+				require.Equal(t, primaryDSN.Address(), hostAddr)
+			}
+			// Check for replica metrics
+			if hostType == datastore.HostTypeReplica {
+				if hostAddr == replica1DSN.Address() {
+					replica1LabelsFound = true
+				}
+				if hostAddr == replica2DSN.Address() {
+					replica2LabelsFound = true
+				}
+				if hostAddr == replica3DSN.Address() {
+					replica3LabelsFound = true
+				}
+			}
+		}
+	}
+
+	// Verify presence of labeled metrics
+	require.True(t, primaryLabelsFound)
+	require.True(t, replica1LabelsFound)
+	require.True(t, replica2LabelsFound)
+	require.True(t, replica3LabelsFound)
+}
+
+func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_ReplicaReAdded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replica1MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica1MockDB.Close()
+
+	replica2MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica2MockDB.Close()
+
+	// Initial DNS resolver response, with replica 1 and 2
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+			{Target: "srv2.example.com", Port: 6433},
+		}, nil).Times(1)
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		Return([]string{"192.168.1.1"}, nil).AnyTimes()
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv2.example.com").
+		Return([]string{"192.168.1.2"}, nil).AnyTimes()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+	replica1DSN := &datastore.DSN{
+		Host:     "192.168.1.1",
+		Port:     6432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+	replica2DSN := &datastore.DSN{
+		Host:     "192.168.1.2",
+		Port:     6433,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	// Expect initial connection attempts to primary, replica 1 and 2
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(2)
+
+	// Initialize load balancer (metrics collection during the initial call to ResolveReplicas within NewDBLoadBalancer
+	// is already tested in TestNewDBLoadBalancer_MetricsCollection_*).
+	reg := prometheus.NewRegistry()
+	options := []datastore.Option{
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+		datastore.WithPrometheusRegisterer(reg),
+		datastore.WithMetricsCollection(),
+	}
+
+	ctx := context.Background()
+	lb, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	// Simulate the scenario where a replica (2) goes missing temporarily but then gets re-added on the next refresh
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+		}, nil).Times(1)
+
+	err = lb.ResolveReplicas(ctx)
+	require.NoError(t, err)
+
+	// re-add replica 2
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+			{Target: "srv2.example.com", Port: 6433},
+		}, nil).Times(1)
+
+	err = lb.ResolveReplicas(ctx)
+	require.NoError(t, err)
+
+	// Verify registered metrics
+	metricCount, err := testutil.GatherAndCount(reg)
+	require.NoError(t, err)
+
+	metrics, err := reg.Gather()
+	require.NoError(t, err)
+	require.NotZero(t, metricCount)
+
+	// Track which labels are found during the scan
+	var (
+		primaryLabelsFound,
+		replica1LabelsFound,
+		replica2LabelsFound bool
+	)
+
+	for _, m := range metrics {
+		for _, metric := range m.GetMetric() {
+			var hostType, hostAddr string
+			for _, label := range metric.GetLabel() {
+				switch label.GetName() {
+				case "host_type":
+					hostType = label.GetValue()
+				case "host_addr":
+					hostAddr = label.GetValue()
+				}
+			}
+			// Check for primary metrics
+			if hostType == datastore.HostTypePrimary {
+				primaryLabelsFound = true
+				require.Equal(t, primaryDSN.Address(), hostAddr)
+			}
+			// Check for replica metrics
+			if hostType == datastore.HostTypeReplica {
+				if hostAddr == replica1DSN.Address() {
+					replica1LabelsFound = true
+				}
+				if hostAddr == replica2DSN.Address() {
+					replica2LabelsFound = true
+				}
+			}
+		}
+	}
+
+	// Verify presence of labeled metrics
+	require.True(t, primaryLabelsFound)
+	require.True(t, replica1LabelsFound)
+	require.True(t, replica2LabelsFound)
+}
+
+func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+	replica1DSN := &datastore.DSN{
+		Host:     "192.168.1.1",
+		Port:     6432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+	replica2DSN := &datastore.DSN{
+		Host:     "192.168.1.2",
+		Port:     6433,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+	replica3DSN := &datastore.DSN{
+		Host:     "192.168.1.3",
+		Port:     6434,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replica1MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica1MockDB.Close()
+
+	replica2MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica2MockDB.Close()
+
+	replica3MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica3MockDB.Close()
+
+	tests := []struct {
+		name                     string
+		setupMocks               func()
+		numberOfResolveCalls     int
+		expectedLabelAddrTypeMap map[string]string
+	}{
+		{
+			name: "pool unchanged",
+			setupMocks: func() {
+				// Mock initial (NewDBLoadBalancer) DNS resolver response and the one that follows (ResolveReplicas)
+				// to return the exact same replicas
+				mockResolver.EXPECT().
+					LookupSRV(gomock.Any()).
+					Return([]*net.SRV{
+						{Target: "srv1.example.com", Port: 6432},
+						{Target: "srv2.example.com", Port: 6433},
+					}, nil).Times(2)
+
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv1.example.com").
+					Return([]string{"192.168.1.1"}, nil).Times(2)
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv2.example.com").
+					Return([]string{"192.168.1.2"}, nil).Times(2)
+
+				// Mock connection attempts
+				mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+					Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+				mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
+			},
+			numberOfResolveCalls: 1,
+			expectedLabelAddrTypeMap: map[string]string{
+				primaryDSN.Address():  datastore.HostTypePrimary,
+				replica1DSN.Address(): datastore.HostTypeReplica,
+				replica2DSN.Address(): datastore.HostTypeReplica,
+			},
+		},
+		{
+			name: "replica removed",
+			setupMocks: func() {
+				// Mock initial (NewDBLoadBalancer) DNS resolver response with replica 1 and 2
+				mockResolver.EXPECT().
+					LookupSRV(gomock.Any()).
+					Return([]*net.SRV{
+						{Target: "srv1.example.com", Port: 6432},
+						{Target: "srv2.example.com", Port: 6433},
+					}, nil).Times(1)
+
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv1.example.com").
+					Return([]string{"192.168.1.1"}, nil).Times(2)
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv2.example.com").
+					Return([]string{"192.168.1.2"}, nil).Times(1)
+
+				// Mock connection attempts
+				mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+					Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+				mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
+
+				// Mock second (ResolveReplicas) DNS resolver response, with only replica 1
+				mockResolver.EXPECT().
+					LookupSRV(gomock.Any()).
+					Return([]*net.SRV{
+						{Target: "srv1.example.com", Port: 6432},
+					}, nil).Times(1)
+			},
+			numberOfResolveCalls: 1,
+			expectedLabelAddrTypeMap: map[string]string{
+				primaryDSN.Address():  datastore.HostTypePrimary,
+				replica1DSN.Address(): datastore.HostTypeReplica,
+			},
+		},
+		{
+			name: "replica added",
+			setupMocks: func() {
+				// Mock initial (NewDBLoadBalancer) DNS resolver response with replica 1 and 2
+				mockResolver.EXPECT().
+					LookupSRV(gomock.Any()).
+					Return([]*net.SRV{
+						{Target: "srv1.example.com", Port: 6432},
+						{Target: "srv2.example.com", Port: 6433},
+					}, nil).Times(1)
+
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv1.example.com").
+					Return([]string{"192.168.1.1"}, nil).Times(2)
+
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv2.example.com").
+					Return([]string{"192.168.1.2"}, nil).Times(2)
+
+				// Setup connection attempts
+				mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+					Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+				mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
+
+				// Mock second (ResolveReplicas) DNS resolver response, with replica 3 added
+				mockResolver.EXPECT().
+					LookupSRV(gomock.Any()).
+					Return([]*net.SRV{
+						{Target: "srv1.example.com", Port: 6432},
+						{Target: "srv2.example.com", Port: 6433},
+						{Target: "srv3.example.com", Port: 6434},
+					}, nil).Times(1)
+
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv3.example.com").
+					Return([]string{"192.168.1.3"}, nil).Times(1)
+
+				mockConnector.EXPECT().Open(gomock.Any(), replica3DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica3MockDB, DSN: replica3DSN}, nil).Times(1)
+			},
+			numberOfResolveCalls: 1,
+			expectedLabelAddrTypeMap: map[string]string{
+				primaryDSN.Address():  datastore.HostTypePrimary,
+				replica1DSN.Address(): datastore.HostTypeReplica,
+				replica2DSN.Address(): datastore.HostTypeReplica,
+				replica3DSN.Address(): datastore.HostTypeReplica,
+			},
+		},
+		{
+			name: "replica re-added",
+			setupMocks: func() {
+				// Mock initial (NewDBLoadBalancer) DNS resolver response with replica 1 and 2
+				mockResolver.EXPECT().
+					LookupSRV(gomock.Any()).
+					Return([]*net.SRV{
+						{Target: "srv1.example.com", Port: 6432},
+						{Target: "srv2.example.com", Port: 6433},
+					}, nil).Times(1)
+
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv1.example.com").
+					Return([]string{"192.168.1.1"}, nil).Times(3)
+
+				mockResolver.EXPECT().
+					LookupHost(gomock.Any(), "srv2.example.com").
+					Return([]string{"192.168.1.2"}, nil).Times(2)
+
+				// Setup connection attempts
+				mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+					Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+				mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+					Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(2)
+
+				// Mock second (ResolveReplicas) DNS resolver response, with replica 2 missing
+				mockResolver.EXPECT().
+					LookupSRV(gomock.Any()).
+					Return([]*net.SRV{
+						{Target: "srv1.example.com", Port: 6432},
+					}, nil).Times(1)
+
+				// Mock third (ResolveReplicas) DNS resolver response, with replica 2 re-added
+				mockResolver.EXPECT().
+					LookupSRV(gomock.Any()).
+					Return([]*net.SRV{
+						{Target: "srv1.example.com", Port: 6432},
+						{Target: "srv2.example.com", Port: 6433},
+					}, nil).Times(1)
+			},
+			numberOfResolveCalls: 2,
+			expectedLabelAddrTypeMap: map[string]string{
+				primaryDSN.Address():  datastore.HostTypePrimary,
+				replica1DSN.Address(): datastore.HostTypeReplica,
+				replica2DSN.Address(): datastore.HostTypeReplica,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up mocks
+			tt.setupMocks()
+
+			// Initialize load balancer with the test Prometheus registry
+			reg := prometheus.NewRegistry()
+			options := []datastore.Option{
+				datastore.WithConnector(mockConnector),
+				datastore.WithServiceDiscovery(mockResolver),
+				datastore.WithPrometheusRegisterer(reg),
+				datastore.WithMetricsCollection(),
+			}
+
+			ctx := context.Background()
+			lb, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
+			require.NoError(t, err)
+			require.NotNil(t, lb)
+
+			// Resolve replicas
+			for i := 0; i < tt.numberOfResolveCalls; i++ {
+				err = lb.ResolveReplicas(ctx)
+				require.NoError(t, err)
+			}
+
+			// Verify registered metrics
+			metricCount, err := testutil.GatherAndCount(reg)
+			require.NoError(t, err)
+			require.NotZero(t, metricCount)
+
+			metrics, err := reg.Gather()
+			require.NoError(t, err)
+
+			// Search for relevant matching labels
+			labelsFound := map[string]string{}
+			for _, m := range metrics {
+				for _, metric := range m.GetMetric() {
+					var hostType, hostAddr string
+					for _, label := range metric.GetLabel() {
+						switch label.GetName() {
+						case "host_type":
+							hostType = label.GetValue()
+						case "host_addr":
+							hostAddr = label.GetValue()
+						}
+					}
+					// Record found addresses and their host types
+					labelsFound[hostAddr] = hostType
+				}
+			}
+
+			// Verify the presence and correctness of expected host addresses and type labels
+			for expectedAddr, expectedType := range tt.expectedLabelAddrTypeMap {
+				foundType, found := labelsFound[expectedAddr]
+				require.True(t, found)
+				require.Equal(t, expectedType, foundType)
+			}
+
+			// Ensure there are no extra host type/addr labels beyond the expected ones
+			require.Equal(t, len(tt.expectedLabelAddrTypeMap), len(labelsFound))
+		})
+	}
 }
 
 func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {

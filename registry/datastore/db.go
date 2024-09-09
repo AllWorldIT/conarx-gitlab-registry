@@ -22,7 +22,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/tracelog"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"gitlab.com/gitlab-org/labkit/errortracking"
+	"gitlab.com/gitlab-org/labkit/metrics/sqlmetrics"
 )
 
 const (
@@ -151,6 +154,8 @@ type opts struct {
 	pool                 *PoolConfig
 	preferSimpleProtocol bool
 	loadBalancing        *LoadBalancingConfig
+	metricsEnabled       bool
+	promRegisterer       prometheus.Registerer
 }
 
 type PoolConfig struct {
@@ -250,6 +255,7 @@ func applyOptions(input []Option) opts {
 			connector:            NewConnector(),
 			replicaCheckInterval: defaultReplicaCheckInterval,
 		},
+		promRegisterer: prometheus.DefaultRegisterer,
 	}
 
 	for _, v := range input {
@@ -399,6 +405,10 @@ type DBLoadBalancer struct {
 	// primaryDSN is stored separately to ensure we can derive replicas DSNs, even if the initial connection to the
 	// primary database fails. This is necessary as DB.DSN is only set after successfully establishing a connection.
 	primaryDSN *DSN
+
+	metricsEnabled        bool
+	promRegisterer        prometheus.Registerer
+	replicaPromCollectors map[string]prometheus.Collector
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
@@ -438,6 +448,20 @@ func WithReplicaCheckInterval(interval time.Duration) Option {
 func WithLSNCache(cache RepositoryCache) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.lsnStore = cache
+	}
+}
+
+// WithMetricsCollection enables metrics collection.
+func WithMetricsCollection() Option {
+	return func(opts *opts) {
+		opts.metricsEnabled = true
+	}
+}
+
+// WithPrometheusRegisterer allows specifying a custom Prometheus Registerer for metrics registration.
+func WithPrometheusRegisterer(r prometheus.Registerer) Option {
+	return func(opts *opts) {
+		opts.promRegisterer = r
 	}
 }
 
@@ -529,6 +553,17 @@ func (lb *DBLoadBalancer) logger(ctx context.Context) log.Logger {
 	})
 }
 
+func (lb *DBLoadBalancer) metricsCollector(db *DB, hostType string) *sqlmetrics.DBStatsCollector {
+	return sqlmetrics.NewDBStatsCollector(
+		lb.primaryDSN.DBName,
+		db,
+		sqlmetrics.WithExtraLabels(map[string]string{
+			"host_type": hostType,
+			"host_addr": db.Address(),
+		}),
+	)
+}
+
 // ResolveReplicas initializes or updates the list of available replicas atomically by resolving the provided hosts
 // either through service discovery or using a fixed hosts list. As result, the load balancer replica pool will be
 // up-to-date. Replicas for which we failed to establish a connection to are not included in the pool.
@@ -591,6 +626,20 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 			}
 			added = append(added, r.Address())
 			metrics.ReplicaAdded()
+
+			// Register metrics collector for the added replica
+			if lb.metricsEnabled {
+				collector := lb.metricsCollector(r, HostTypeReplica)
+				// Unlike the primary host metrics collector, replica collectors wil be registered in the background
+				// whenever the pool changes. We don't want to cause a panic here, so we'll rely on prometheus.Register
+				// instead of prometheus.MustRegister and gracefully handle an error by logging and reporting it.
+				if err := lb.promRegisterer.Register(collector); err != nil {
+					l.WithError(err).WithFields(log.Fields{"host_addr": r.Address()}).
+						Error("failed to register collector for database replica metrics")
+					errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+				}
+				lb.replicaPromCollectors[r.Address()] = collector
+			}
 		}
 		outputReplicas = append(outputReplicas, r)
 	}
@@ -600,6 +649,14 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 		if dbByAddress(outputReplicas, r.Address()) == nil {
 			removed = append(removed, r.Address())
 			metrics.ReplicaRemoved()
+
+			// Unregister the metrics collector for the removed replica
+			if lb.metricsEnabled {
+				if collector, exists := lb.replicaPromCollectors[r.Address()]; exists {
+					lb.promRegisterer.Unregister(collector)
+					delete(lb.replicaPromCollectors, r.Address())
+				}
+			}
 		}
 	}
 
@@ -651,14 +708,17 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	var result *multierror.Error
 
 	lb := &DBLoadBalancer{
-		active:               config.loadBalancing.active,
-		primaryDSN:           primaryDSN,
-		connector:            config.loadBalancing.connector,
-		resolver:             config.loadBalancing.resolver,
-		fixedHosts:           config.loadBalancing.hosts,
-		replicaOpenOpts:      opts,
-		replicaCheckInterval: config.loadBalancing.replicaCheckInterval,
-		lsnCache:             config.loadBalancing.lsnStore,
+		active:                config.loadBalancing.active,
+		primaryDSN:            primaryDSN,
+		connector:             config.loadBalancing.connector,
+		resolver:              config.loadBalancing.resolver,
+		fixedHosts:            config.loadBalancing.hosts,
+		replicaOpenOpts:       opts,
+		replicaCheckInterval:  config.loadBalancing.replicaCheckInterval,
+		lsnCache:              config.loadBalancing.lsnStore,
+		metricsEnabled:        config.metricsEnabled,
+		promRegisterer:        config.promRegisterer,
+		replicaPromCollectors: make(map[string]prometheus.Collector),
 	}
 
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
@@ -666,6 +726,11 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 		result = multierror.Append(result, fmt.Errorf("failed to open primary database connection: %w", err))
 	}
 	lb.primary = primary
+
+	// Conditionally register metrics for the primary database handle
+	if lb.metricsEnabled && primary != nil {
+		lb.promRegisterer.MustRegister(lb.metricsCollector(primary, HostTypePrimary))
+	}
 
 	if lb.active {
 		if err := lb.ResolveReplicas(ctx); err != nil {
