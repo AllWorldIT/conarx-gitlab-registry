@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
@@ -1290,13 +1291,20 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go lb.StartReplicaChecking(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := lb.StartReplicaChecking(ctx)
+		require.Error(t, err, context.Canceled)
+	}()
 
 	// Wait just enough time for the replicas to be refreshed once
 	time.Sleep(60 * time.Millisecond)
 
 	// Cancel the context to stop the refreshing
 	cancel()
+	wg.Wait()
 
 	// Verify new replicas
 	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
@@ -1378,20 +1386,29 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
-	// this should return immediately with no error
-	err = lb.StartReplicaChecking(context.Background())
-	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := lb.StartReplicaChecking(ctx)
+		require.NoError(t, err)
+	}()
 
 	// Wait just enough time to confirm that no connections were attempted in the background. We've set expectations
 	// for the amount of times that connections can be established, so any attempt here to do so would lead to a failure.
 	time.Sleep(50 * time.Millisecond)
+
+	// Cancelling the context should not lead to an error as the execution should have been skipped
+	cancel()
+	wg.Wait()
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 	require.NoError(t, replicaMock1.ExpectationsWereMet())
 }
 
-func TestDBLoadBalancer_StartReplicaChecking_NoServiceDiscovery(t *testing.T) {
+func TestDBLoadBalancer_StartReplicaChecking_NoFixedHostsOrServiceDiscovery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -1399,10 +1416,6 @@ func TestDBLoadBalancer_StartReplicaChecking_NoServiceDiscovery(t *testing.T) {
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer primaryMockDB.Close()
-
-	replica1MockDB, replicaMock1, err := sqlmock.New()
-	require.NoError(t, err)
-	defer replica1MockDB.Close()
 
 	primaryDSN := &datastore.DSN{
 		Host:     "primary",
@@ -1412,40 +1425,41 @@ func TestDBLoadBalancer_StartReplicaChecking_NoServiceDiscovery(t *testing.T) {
 		DBName:   "dbname",
 		SSLMode:  "disable",
 	}
-	replica1DSN := &datastore.DSN{
-		Host:     "replica1",
-		Port:     5432,
-		User:     primaryDSN.User,
-		Password: primaryDSN.Password,
-		DBName:   primaryDSN.DBName,
-		SSLMode:  primaryDSN.SSLMode,
-	}
 
 	// Mock the expected connections
-	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil)
-	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB}, nil)
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
 
-	// Create load balancer without service discovery
+	// Create load balancer without fixed hosts or service discovery
+	ctx := context.Background()
 	lb, err := datastore.NewDBLoadBalancer(
-		context.Background(),
+		ctx,
 		primaryDSN,
-		datastore.WithFixedHosts([]string{"replica1"}),
 		datastore.WithConnector(mockConnector),
+		datastore.WithReplicaCheckInterval(10*time.Millisecond),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
-	// this should return immediately with no error
-	err = lb.StartReplicaChecking(context.Background())
-	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := lb.StartReplicaChecking(ctx)
+		require.NoError(t, err)
+	}()
 
 	// Wait just enough time to confirm that no connections were attempted in the background. We've set expectations
 	// for the amount of times that connections can be established, so any attempt here to do so would lead to a failure.
 	time.Sleep(50 * time.Millisecond)
 
+	// Cancelling the context should not lead to an error as the execution should have been skipped
+	cancel()
+	wg.Wait()
+
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
-	require.NoError(t, replicaMock1.ExpectationsWereMet())
 }
 
 func TestDBLoadBalancer_RecordLSN(t *testing.T) {
