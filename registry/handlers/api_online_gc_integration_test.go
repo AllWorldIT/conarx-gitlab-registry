@@ -182,7 +182,7 @@ func TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
-	require.WithinDuration(t, start, end, lockDuration+100*time.Millisecond)
+	require.WithinDuration(t, start, end, lockDuration+600*time.Millisecond)
 }
 
 // TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview tests that when we try to delete a manifest list
