@@ -44,6 +44,7 @@ func TestAPIConformance(t *testing.T) {
 		baseURLPrefix,
 
 		manifest_Put_Schema1_ByTag,
+		manifest_Put_Schema1_ByDigest,
 		manifest_Put_Schema2_ByDigest,
 		manifest_Put_Schema2_ByDigest_ConfigNotAssociatedWithRepository,
 		manifest_Put_Schema2_ByDigest_LayersNotAssociatedWithRepository,
