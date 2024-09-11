@@ -1038,15 +1038,15 @@ func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 	require.NoError(t, err)
 	defer primaryMockDB.Close()
 
-	replica1MockDB, replicaMock1, err := sqlmock.New()
+	replica1MockDB, replica1Mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer replica1MockDB.Close()
 
-	replica2MockDB, replicaMock2, err := sqlmock.New()
+	replica2MockDB, replica2Mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer replica2MockDB.Close()
 
-	replica3MockDB, replicaMock3, err := sqlmock.New()
+	replica3MockDB, replica3Mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer replica3MockDB.Close()
 
@@ -1142,6 +1142,7 @@ func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 	// Expect new connection attempts to replica 3 (not 1, which was already open, neither 2, which is gone)
 	mockConnector.EXPECT().Open(gomock.Any(), replica3DSN, gomock.Any()).
 		Return(&datastore.DB{DB: replica3MockDB, DSN: replica3DSN}, nil).Times(1)
+	replica2Mock.ExpectClose()
 
 	err = lb.ResolveReplicas(context.Background())
 	require.NoError(t, err)
@@ -1154,9 +1155,9 @@ func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
-	require.NoError(t, replicaMock1.ExpectationsWereMet())
-	require.NoError(t, replicaMock2.ExpectationsWereMet())
-	require.NoError(t, replicaMock3.ExpectationsWereMet())
+	require.NoError(t, replica1Mock.ExpectationsWereMet())
+	require.NoError(t, replica2Mock.ExpectationsWereMet())
+	require.NoError(t, replica3Mock.ExpectationsWereMet())
 }
 
 func TestDBLoadBalancer_ResolveReplicas_PartialFail(t *testing.T) {
@@ -1286,11 +1287,11 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 	require.NoError(t, err)
 	defer primaryMockDB.Close()
 
-	replica1MockDB, _, err := sqlmock.New()
+	replica1MockDB, replica1Mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer replica1MockDB.Close()
 
-	replica2MockDB, _, err := sqlmock.New()
+	replica2MockDB, replica2Mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer replica2MockDB.Close()
 
@@ -1337,6 +1338,8 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 	// Simulate failed connections to all replicas
 	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(nil, errors.New("failed to open replica 1")).Times(1)
 	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(nil, errors.New("failed to open replica 2")).Times(1)
+	replica1Mock.ExpectClose()
+	replica2Mock.ExpectClose()
 
 	err = lb.ResolveReplicas(context.Background())
 	require.Error(t, err)
@@ -1352,6 +1355,122 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replica1Mock.ExpectationsWereMet())
+	require.NoError(t, replica2Mock.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_ResolveReplicas_CloseRemoved(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	// Mock the initial expected DNS lookups
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+			{Target: "srv2.example.com", Port: 6433},
+		}, nil).
+		Times(1)
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		Return([]string{"192.168.1.1"}, nil).
+		Times(2)
+
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv2.example.com").
+		Return([]string{"192.168.1.2"}, nil).
+		Times(1)
+
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replica1MockDB, replica1Mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica1MockDB.Close()
+
+	replica2MockDB, replica2Mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica2MockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+	replica1DSN := &datastore.DSN{
+		Host:     "192.168.1.1",
+		Port:     6432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+	replica2DSN := &datastore.DSN{
+		Host:     "192.168.1.2",
+		Port:     6433,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	// Simulate successful connections to primary and all replicas
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
+
+	// Create the load balancer with the service discovery option
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	// Mock the next DNS lookup, where replica 2 is gone
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+		}, nil).
+		Times(1)
+
+	// Ensure replica 2 connection handle is removed from the pool AND closed
+	replica2Mock.ExpectClose()
+	err = lb.ResolveReplicas(context.Background())
+	require.NoError(t, err)
+
+	replicas := lb.Replicas()
+	require.Len(t, replicas, 1)
+	require.Equal(t, replica1MockDB, replicas[0].DB)
+
+	// Repeat with replica 1 gone but this time simulate a close error to make sure it's handled properly
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{}, nil).
+		Times(1)
+
+	fakeErr := errors.New("foo")
+	replica1Mock.ExpectClose().WillReturnError(fakeErr)
+	err = lb.ResolveReplicas(context.Background())
+	require.ErrorIs(t, err, fakeErr)
+
+	// Verify mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replica1Mock.ExpectationsWereMet())
+	require.NoError(t, replica2Mock.ExpectationsWereMet())
 }
 
 func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_PoolUnchanged(t *testing.T) {
@@ -1502,7 +1621,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_ReplicaRemoved(t *test
 	require.NoError(t, err)
 	defer replica1MockDB.Close()
 
-	replica2MockDB, _, err := sqlmock.New()
+	replica2MockDB, replica2Mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer replica2MockDB.Close()
 
@@ -1576,6 +1695,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_ReplicaRemoved(t *test
 		Return([]*net.SRV{
 			{Target: "srv1.example.com", Port: 6432},
 		}, nil).Times(1)
+	replica2Mock.ExpectClose()
 
 	err = lb.ResolveReplicas(ctx)
 	require.NoError(t, err)
@@ -1810,7 +1930,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_ReplicaReAdded(t *test
 	require.NoError(t, err)
 	defer replica1MockDB.Close()
 
-	replica2MockDB, _, err := sqlmock.New()
+	replica2MockDB, replica2Mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer replica2MockDB.Close()
 
@@ -1884,6 +2004,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_ReplicaReAdded(t *test
 		Return([]*net.SRV{
 			{Target: "srv1.example.com", Port: 6432},
 		}, nil).Times(1)
+	replica2Mock.ExpectClose()
 
 	err = lb.ResolveReplicas(ctx)
 	require.NoError(t, err)
@@ -1994,7 +2115,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 	require.NoError(t, err)
 	defer replica1MockDB.Close()
 
-	replica2MockDB, _, err := sqlmock.New()
+	replica2MockDB, replica2Mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer replica2MockDB.Close()
 
@@ -2007,6 +2128,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 		setupMocks               func()
 		numberOfResolveCalls     int
 		expectedLabelAddrTypeMap map[string]string
+		cleanup                  func(t *testing.T)
 	}{
 		{
 			name: "pool unchanged",
@@ -2074,11 +2196,17 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 					Return([]*net.SRV{
 						{Target: "srv1.example.com", Port: 6432},
 					}, nil).Times(1)
+				replica2Mock.ExpectClose()
 			},
 			numberOfResolveCalls: 1,
 			expectedLabelAddrTypeMap: map[string]string{
 				primaryDSN.Address():  datastore.HostTypePrimary,
 				replica1DSN.Address(): datastore.HostTypeReplica,
+			},
+			cleanup: func(t *testing.T) {
+				// recreate replica 2 connection as it was closed during this test
+				replica2MockDB, replica2Mock, err = sqlmock.New()
+				require.NoError(t, err)
 			},
 		},
 		{
@@ -2165,6 +2293,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 					Return([]*net.SRV{
 						{Target: "srv1.example.com", Port: 6432},
 					}, nil).Times(1)
+				replica2Mock.ExpectClose()
 
 				// Mock third (ResolveReplicas) DNS resolver response, with replica 2 re-added
 				mockResolver.EXPECT().
@@ -2243,6 +2372,11 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 
 			// Ensure there are no extra host type/addr labels beyond the expected ones
 			require.Equal(t, len(tt.expectedLabelAddrTypeMap), len(labelsFound))
+
+			// Cleanup before next test
+			if tt.cleanup != nil {
+				tt.cleanup(t)
+			}
 		})
 	}
 }
