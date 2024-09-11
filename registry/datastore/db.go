@@ -657,6 +657,14 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 					delete(lb.replicaPromCollectors, r.Address())
 				}
 			}
+
+			// Close handlers for retired replicas
+			l.WithFields(log.Fields{"address": r.Address()}).Info("closing connection handler for retired replica")
+			if err := r.Close(); err != nil {
+				err = fmt.Errorf("failed to close retired replica %q connection: %w", r.Address(), err)
+				result = multierror.Append(result, err)
+				errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			}
 		}
 	}
 
@@ -813,7 +821,11 @@ func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) e
 
 // UpToDateReplica returns the most suitable database connection handle for serving a read request for a given
 // models.Repository based on the last recorded primary Log Sequence Number (LSN) for that same repository. All errors
-// are handled gracefully with a fallback to the primary connection handle.
+// during this method execution are handled gracefully with a fallback to the primary connection handle.
+// Relevant errors during query execution should be handled _explicitly_ by the caller. For example, if the caller
+// obtained a connection handle for replica `R` at time `T`, and `R` is retired from the load balancer pool at `T+1`,
+// then any queries attempted against `R` after `T+1` would result in a `sql: database is closed` error raised by the
+// `database/sql` package. In such case, it is the caller's responsibility to fall back to Primary and retry.
 func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Repository) *DB {
 	if !lb.active {
 		return lb.primary
