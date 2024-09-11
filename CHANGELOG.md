@@ -1,3 +1,44 @@
+## [4.9.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.8.0-gitlab...v4.9.0-gitlab) (2024-09-11)
+
+
+### ✨ Features ✨
+
+* **bbm:** add background migration cli with status sub command ([fa618bb](https://gitlab.com/gitlab-org/container-registry/commit/fa618bbd6fd23c4e25cd5863ad108de561c4ddca))
+* **bbm:** add bbm pause subcommand ([c31a7da](https://gitlab.com/gitlab-org/container-registry/commit/c31a7dae639d864c4b57fdc890453ef766b7eeb3))
+* **bbm:** add resume command ([5da4879](https://gitlab.com/gitlab-org/container-registry/commit/5da4879ae6337e66f5b81fce90ce547d8bccbe3f))
+* **bbm:** add run and resume commands for bbm cli ([703308a](https://gitlab.com/gitlab-org/container-registry/commit/703308a8a315821eb7a65ce4ae6ef1949199c7ff))
+* **datastore:** check that connections to known DLB replicas are usable during a refresh ([c6ce2c4](https://gitlab.com/gitlab-org/container-registry/commit/c6ce2c4368eb10ae1e05d5f61e8f1719be2283c5))
+* **datastore:** include DLB replica(s) stats in exported metrics ([cae49a9](https://gitlab.com/gitlab-org/container-registry/commit/cae49a971537bc736febd967ffccaef57d741ee9))
+* **handlers:** use read-only replicas for calculating the size of repositories ([03284a4](https://gitlab.com/gitlab-org/container-registry/commit/03284a4750ae844ff051347c6e624d0ed462cca3))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **datastore:** bypass DLB replica logic when appropriate ([1fc64dc](https://gitlab.com/gitlab-org/container-registry/commit/1fc64dcbcb50ceff8549b04411e48572b9b48487))
+* **datastore:** do not override DLB replica DSNs in for loop ([5571a7f](https://gitlab.com/gitlab-org/container-registry/commit/5571a7f98ca1b6f4ba218b0b5fb9f3cca105ed9d))
+* **datastore:** do not recycle existing replica connections ([98acfbe](https://gitlab.com/gitlab-org/container-registry/commit/98acfbef1cfdf93e71917e46ee68dd422e1cb5ba))
+* make progress bar respect visibility settings ([abba238](https://gitlab.com/gitlab-org/container-registry/commit/abba238751678b26a9d20f33c2ff5f7f7605b3cc))
+
+
+### ⏮️️ Reverts ⏮️️
+
+* Revert "perf(redis):  Temporary revert of !1683" ([b6b3e5c](https://gitlab.com/gitlab-org/container-registry/commit/b6b3e5cffaf9a86dd7fbc2371a5550e4c579bc02))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/jackc/pgx/v5 to v5.7.1 ([a44a1fb](https://gitlab.com/gitlab-org/container-registry/commit/a44a1fb6762d06d3e71b92e459d2bc65e98209cc))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.0 ([cbf2899](https://gitlab.com/gitlab-org/container-registry/commit/cbf28991e8473888a141c595f779919c4eee41a3))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.2 ([eb3a3f0](https://gitlab.com/gitlab-org/container-registry/commit/eb3a3f022dd07393bb537ab709f7d75db422a8d5))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.3 ([d4bb30b](https://gitlab.com/gitlab-org/container-registry/commit/d4bb30bd9f0ee8bbd190d98168500863e2b5bac2))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.108.0 ([2610795](https://gitlab.com/gitlab-org/container-registry/commit/2610795fe979c13e20da6650f99b1a31f9bbd9c3))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.109.0 ([85c3478](https://gitlab.com/gitlab-org/container-registry/commit/85c347871678706b3abc854b09d2421f15c6b8f3))
+* **deps:** update module golang.org/x/crypto to v0.27.0 ([26ddb37](https://gitlab.com/gitlab-org/container-registry/commit/26ddb37c8b35faa940815e52334a8bfc3d38a0a5))
+* **deps:** update module golang.org/x/oauth2 to v0.23.0 ([39f5331](https://gitlab.com/gitlab-org/container-registry/commit/39f5331d506ab8cee788ffd6a36b38ac7bbc7e8e))
+* **deps:** update module google.golang.org/api to v0.194.0 ([364a608](https://gitlab.com/gitlab-org/container-registry/commit/364a608a9b052ea89c79157e3611b7b75d0a71a7))
+* **deps:** update module google.golang.org/api to v0.195.0 ([58d79a6](https://gitlab.com/gitlab-org/container-registry/commit/58d79a67f73c19dedb2aac6f7245c821c9ab7025))
+* **deps:** update module google.golang.org/api to v0.196.0 ([bb13c23](https://gitlab.com/gitlab-org/container-registry/commit/bb13c2372f0efb9b0a2b688d35037fd6b8e5d4c2))
+
 ## [4.8.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.7.0-gitlab...v4.8.0-gitlab) (2024-8-22)
 
 
