@@ -1233,7 +1233,7 @@ func finishUpload(t *testing.T, ub *urls.Builder, name reference.Named, uploadUR
 	return resp.Header.Get("Location")
 }
 
-func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) (*http.Request, digest.Digester) {
+func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) *http.Request {
 	u, err := url.Parse(uploadURLBase)
 	if err != nil {
 		t.Fatalf("unexpected error parsing pushLayer url: %v", err)
@@ -1245,18 +1245,32 @@ func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) (*ht
 
 	uploadURL := u.String()
 
-	digester := digest.Canonical.Digester()
-
-	req, err := http.NewRequest(http.MethodPatch, uploadURL, io.TeeReader(body, digester.Hash()))
+	req, err := http.NewRequest(http.MethodPatch, uploadURL, body)
 	if err != nil {
 		t.Fatalf("unexpected error creating new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
-	return req, digester
+	return req
 }
 
 func doPushChunk(t *testing.T, uploadURLBase string, body io.Reader, requestopts ...requestOpt) (*http.Response, digest.Digest, error) {
-	req, digester := doPushChunkRequest(t, uploadURLBase, body)
+	// NOTE(prozlach): There is an issue/bug in golang:
+	// https://github.com/golang/go/issues/51907
+	// It prevents us from using the same request body reader for both digest
+	// calculation and making the request as there is no guarantee that the
+	// request body will be fully read after the call to Do(). We workaround it
+	// by simply draining the requests body into the local buffer while
+	// calculating the body and then pass the buffer to http request call.
+	buf := new(bytes.Buffer)
+
+	digester := digest.Canonical.Digester()
+	multiWriter := io.MultiWriter(buf, digester.Hash())
+
+	if _, err := io.Copy(multiWriter, body); err != nil {
+		t.Fatalf("unexpected error while copying request body: %v", err)
+	}
+
+	req := doPushChunkRequest(t, uploadURLBase, buf)
 	req = newRequest(req, requestopts...)
 	resp, err := http.DefaultClient.Do(req)
 
