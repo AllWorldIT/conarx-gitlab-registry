@@ -757,9 +757,86 @@ func TestMigrator_HasPending_Yes_PendingPostDeployment(t *testing.T) {
 	require.True(t, pending)
 }
 
-func cleanupDB(t *testing.T, db *datastore.DB) {
+// clenaupOpts provides functional options for cleaning up the database.
+type clenaupOpts func(*datastore.DB)
+
+// WithCleanupBBM wipes the entire batched_background_migrations table.
+func WithCleanupBBM(t *testing.T) clenaupOpts {
+	return func(db *datastore.DB) {
+		_, err := db.DB.Exec("DROP TABLE IF EXISTS batched_background_migrations CASCADE")
+		require.NoError(t, err)
+	}
+}
+
+func cleanupDB(t *testing.T, db *datastore.DB, opts ...clenaupOpts) {
 	_, err := db.DB.Exec("DELETE FROM " + migrationTableName)
 	require.NoError(t, err)
 
+	for _, opt := range opts {
+		opt(db)
+	}
+
 	require.NoError(t, db.Close())
+}
+
+// TestMigrator_Up_WithEnforcedBBM tests the behavior of the migrator when an enforced
+// Batched Background Migration (BBM) is present.
+func TestMigrator_Up_WithEnforcedBBM(t *testing.T) {
+	// Set up a test database and ensure cleanup after the test
+	db, err := testutil.NewDBFromEnv()
+	require.NoError(t, err)
+	defer cleanupDB(t, db, WithCleanupBBM(t))
+
+	// Create a new migrator with enforced BBM migrations
+	m := migrations.NewMigrator(db.DB, migrations.Source(testmigrations.AllWithEnforcedBBMMigrations()))
+	all := testmigrations.AllWithEnforcedBBMMigrations()
+
+	// Attempt to run all migrations
+	count, err := m.Up()
+	// Expect an error because the enforced BBM is not complete
+	require.Error(t, err)
+	require.ErrorIs(t, err, migrations.ErrBBMNotComplete)
+	// Expect all migrations except the last one (enforced BBM) to be applied
+	require.Equal(t, len(all)-1, count)
+
+	// Check the current version after migration
+	currentVersion, err := m.Version()
+	require.NoError(t, err)
+
+	// Verify that the current version is not the latest version
+	v, err := m.LatestVersion()
+	require.NoError(t, err)
+	require.NotEqual(t, v, currentVersion)
+	// The current version should be the second-to-last migration
+	require.Equal(t, all[len(all)-2].Id, currentVersion)
+}
+
+// TestMigrator_Up_WithUnEnforcedBBM tests the behavior of the migrator when an unenforced
+// Batched Background Migration (BBM) is present.
+func TestMigrator_Up_WithUnEnforcedBBM(t *testing.T) {
+	// Set up a test database and ensure cleanup after the test
+	db, err := testutil.NewDBFromEnv()
+	require.NoError(t, err)
+	defer cleanupDB(t, db, WithCleanupBBM(t))
+
+	// Create a new migrator with unenforced BBM migrations
+	m := migrations.NewMigrator(db.DB, migrations.Source(testmigrations.AllWithUnEnforcedBBMMigrations()))
+
+	all := testmigrations.AllWithUnEnforcedBBMMigrations()
+
+	// Run all migrations
+	count, err := m.Up()
+	// Expect no error as the BBM is unenforced
+	require.NoError(t, err)
+	// Expect all migrations to be applied
+	require.Equal(t, len(all), count)
+
+	// Check the current version after migration
+	currentVersion, err := m.Version()
+	require.NoError(t, err)
+
+	// Verify that the current version is the latest version
+	v, err := m.LatestVersion()
+	require.NoError(t, err)
+	require.Equal(t, v, currentVersion)
 }

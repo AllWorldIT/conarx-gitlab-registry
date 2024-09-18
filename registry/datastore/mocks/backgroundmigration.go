@@ -40,6 +40,21 @@ func (m *MockBackgroundMigrationStore) EXPECT() *MockBackgroundMigrationStoreMoc
 	return m.recorder
 }
 
+// AreFinished mocks base method.
+func (m *MockBackgroundMigrationStore) AreFinished(arg0 context.Context, arg1 []string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AreFinished", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AreFinished indicates an expected call of AreFinished.
+func (mr *MockBackgroundMigrationStoreMockRecorder) AreFinished(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AreFinished", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).AreFinished), arg0, arg1)
+}
+
 // CreateNewJob mocks base method.
 func (m *MockBackgroundMigrationStore) CreateNewJob(arg0 context.Context, arg1 *models.BackgroundMigrationJob) error {
 	m.ctrl.T.Helper()

@@ -69,6 +69,8 @@ type BackgroundMigrationStore interface {
 	Resume(ctx context.Context) error
 	// FindNextByStatus finds the next BackgroundMigration with status `status`.
 	FindNextByStatus(ctx context.Context, status models.BackgroundMigrationStatus) (*models.BackgroundMigration, error)
+	// AreFinished checks if a list of background migrations referenced by name are in the finished state.
+	AreFinished(ctx context.Context, names []string) (bool, error)
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
@@ -523,6 +525,27 @@ func (bms *backgroundMigrationStore) Resume(ctx context.Context) error {
 	_, err := bms.db.ExecContext(ctx, q, models.BackgroundMigrationActive, models.BackgroundMigrationPaused)
 
 	return err
+}
+
+// AreFinished checks if a list of background migrations referenced by name are in the finished state, returns false if at least one in unfinished.
+func (bms *backgroundMigrationStore) AreFinished(ctx context.Context, names []string) (bool, error) {
+	defer metrics.InstrumentQuery("bbm_are_finished")()
+
+	q := `SELECT
+			COUNT(*)
+		FROM
+			batched_background_migrations
+		WHERE
+			name = ANY($1)
+			AND status != $2`
+
+	var count int
+	err := bms.db.QueryRowContext(ctx, q, names, models.BackgroundMigrationFinished).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("counting unfinished background migrations: %w", err)
+	}
+
+	return count == 0, nil
 }
 
 // ValidateMigrationTableAndColumn asserts that the column and table exists in the database.
