@@ -526,13 +526,13 @@ func New(params *DriverParameters) (*Driver, error) {
 	awsConfig.WithRegion(params.Region)
 	awsConfig.WithDisableSSL(!params.Secure)
 
-	if params.SkipVerify {
-		awsConfig.WithHTTPClient(&http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
-		})
-	}
+	// configure http client
+	httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+	httpTransport.MaxIdleConnsPerHost = 10
+	httpTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: params.SkipVerify}
+	awsConfig.WithHTTPClient(&http.Client{
+		Transport: httpTransport,
+	})
 
 	// disable MD5 header when fips is enabled
 	awsConfig.WithS3DisableContentMD5Validation(fips.Enabled())
