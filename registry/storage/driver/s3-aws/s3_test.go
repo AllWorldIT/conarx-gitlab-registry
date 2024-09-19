@@ -994,3 +994,49 @@ func TestExistsPathNotFound(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, exists)
 }
+
+func TestClientTransport(t *testing.T) {
+	if skipS3() != "" {
+		t.Skip(skipS3())
+	}
+
+	testCases := []struct {
+		skipverify bool
+	}{
+		{true},
+		{false},
+	}
+
+	for _, tc := range testCases {
+		params := map[string]interface{}{
+			"region":     os.Getenv("AWS_REGION"),
+			"bucket":     os.Getenv("S3_BUCKET"),
+			"skipverify": tc.skipverify,
+		}
+		t.Run(fmt.Sprintf("SkipVerify %v", tc.skipverify), func(t *testing.T) {
+			drv, err := FromParameters(params)
+			if err != nil {
+				t.Fatalf("failed to create driver: %v", err)
+			}
+
+			s3drv := drv.baseEmbed.Base.StorageDriver.(*driver)
+			s3s, ok := s3drv.S3.s3.(*s3.S3)
+			if !ok {
+				t.Fatal("failed to cast storage driver to *s3.S3")
+			}
+			tr, ok := s3s.Config.HTTPClient.Transport.(*http.Transport)
+			if !ok {
+				t.Fatal("unexpected driver transport")
+			}
+			if tr.TLSClientConfig.InsecureSkipVerify != tc.skipverify {
+				t.Errorf("unexpected TLS Config. Expected InsecureSkipVerify: %v, got %v",
+					tc.skipverify,
+					tr.TLSClientConfig.InsecureSkipVerify)
+			}
+			// make sure the proxy is always set
+			if tr.Proxy == nil {
+				t.Fatal("missing HTTP transport proxy config")
+			}
+		})
+	}
+}
