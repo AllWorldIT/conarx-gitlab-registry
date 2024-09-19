@@ -2,6 +2,8 @@ module github.com/docker/distribution
 
 go 1.22
 
+toolchain go1.22.7
+
 require (
 	cloud.google.com/go/storage v1.43.0
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
