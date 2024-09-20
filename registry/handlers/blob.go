@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/log"
+	gocache "github.com/eko/gocache/lib/v4/cache"
 
 	"github.com/docker/distribution/registry/datastore"
 
@@ -55,11 +56,16 @@ type blobHandler struct {
 	Digest digest.Digest
 }
 
-func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string, dgst digest.Digest) error {
+func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string, dgst digest.Digest, cache *gocache.Cache[any]) error {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "digest": dgst})
 	l.Debug("finding repository blob link in database")
 
-	rStore := datastore.NewRepositoryStore(db)
+	var opts []datastore.RepositoryStoreOption
+	if cache != nil {
+		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(cache)))
+	}
+
+	rStore := datastore.NewRepositoryStore(db, opts...)
 	r, err := rStore.FindByPath(ctx, repoPath)
 	if err != nil {
 		return err
@@ -93,7 +99,7 @@ func (bh *blobHandler) GetBlob(w http.ResponseWriter, r *http.Request) {
 	blobs := bh.Repository.Blobs(bh)
 
 	if bh.useDatabase {
-		if err := dbBlobLinkExists(bh.Context, bh.db.Primary(), bh.Repository.Named().Name(), bh.Digest); err != nil {
+		if err := dbBlobLinkExists(bh.Context, bh.db.Primary(), bh.Repository.Named().Name(), bh.Digest, bh.App.redisCache); err != nil {
 			bh.Errors = append(bh.Errors, errcode.FromUnknownError(err))
 			return
 		}

@@ -110,6 +110,11 @@ linters-settings:
   dogsled:
     # checks assignments with too many blank identifiers; default is 2
     max-blank-identifiers: 2
+  stylecheck:
+    # Disable checks by prefixing with a `-`
+    # ST1000: at least one file in a package should have a package comment
+    # ST1003: initialism should be capitilized, for example: `var webhookUrl should be webhookURL`
+    checks: ["all", "-ST1000", "-ST1003"]
   whitespace:
     multi-if: false   # Enforces newlines (or comments) after every multi-line if statement
     multi-func: false # Enforces newlines (or comments) after every multi-line function signature

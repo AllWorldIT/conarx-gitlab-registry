@@ -304,8 +304,6 @@ func TestManifestWorker_processTask_IsDanglingContextError(t *testing.T) {
 		require.True(t, res.Found)
 		require.False(t, res.Dangling)
 		require.Equal(t, mt.Event, res.Event)
-
-		ctrl.Finish()
 	}
 }
 

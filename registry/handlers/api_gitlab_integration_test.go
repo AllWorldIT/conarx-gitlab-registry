@@ -2213,11 +2213,18 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 			requestBody:        []byte(`{ "namespace" : "foo/foo.foo" }`),
 		},
 		{
-			name:               "rename top level namespace",
-			expectedRespError:  &v1.ErrorCodeInvalidBodyParam,
-			expectedRespStatus: http.StatusBadRequest,
+			name:               "rename to same top level namespace",
+			expectedRespError:  nil,
+			expectedRespStatus: http.StatusNoContent,
 			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), "foo"),
 			requestBody:        []byte(`{ "namespace" : "foo" }`),
+		},
+		{
+			name:               "rename to different top level namespace",
+			expectedRespError:  &v1.ErrorCodeInvalidBodyParam,
+			expectedRespStatus: http.StatusBadRequest,
+			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), "bar"),
+			requestBody:        []byte(`{ "namespace" : "bar" }`),
 		},
 		{
 			name:               "namespace rename implemented",

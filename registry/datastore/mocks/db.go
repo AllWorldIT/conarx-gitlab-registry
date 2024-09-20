@@ -321,17 +321,17 @@ func (mr *MockLoadBalancerMockRecorder) RecordLSN(arg0, arg1 any) *gomock.Call {
 }
 
 // Replica mocks base method.
-func (m *MockLoadBalancer) Replica() *datastore.DB {
+func (m *MockLoadBalancer) Replica(arg0 context.Context) *datastore.DB {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Replica")
+	ret := m.ctrl.Call(m, "Replica", arg0)
 	ret0, _ := ret[0].(*datastore.DB)
 	return ret0
 }
 
 // Replica indicates an expected call of Replica.
-func (mr *MockLoadBalancerMockRecorder) Replica() *gomock.Call {
+func (mr *MockLoadBalancerMockRecorder) Replica(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Replica", reflect.TypeOf((*MockLoadBalancer)(nil).Replica))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Replica", reflect.TypeOf((*MockLoadBalancer)(nil).Replica), arg0)
 }
 
 // Replicas mocks base method.
@@ -346,6 +346,20 @@ func (m *MockLoadBalancer) Replicas() []*datastore.DB {
 func (mr *MockLoadBalancerMockRecorder) Replicas() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Replicas", reflect.TypeOf((*MockLoadBalancer)(nil).Replicas))
+}
+
+// UpToDateReplica mocks base method.
+func (m *MockLoadBalancer) UpToDateReplica(arg0 context.Context, arg1 *models.Repository) *datastore.DB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpToDateReplica", arg0, arg1)
+	ret0, _ := ret[0].(*datastore.DB)
+	return ret0
+}
+
+// UpToDateReplica indicates an expected call of UpToDateReplica.
+func (mr *MockLoadBalancerMockRecorder) UpToDateReplica(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpToDateReplica", reflect.TypeOf((*MockLoadBalancer)(nil).UpToDateReplica), arg0, arg1)
 }
 
 // MockConnector is a mock of Connector interface.

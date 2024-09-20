@@ -2,6 +2,8 @@ package datastore_test
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"net"
@@ -108,7 +110,6 @@ func TestDSN_Address(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithFixedHosts(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -152,9 +153,9 @@ func TestNewDBLoadBalancer_WithFixedHosts(t *testing.T) {
 	}
 
 	// Mock the expected connections
-	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil)
-	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB}, nil)
-	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB}, nil)
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil)
 
 	lb, err := datastore.NewDBLoadBalancer(
 		context.Background(),
@@ -171,8 +172,8 @@ func TestNewDBLoadBalancer_WithFixedHosts(t *testing.T) {
 	// Verify replicas
 	require.NotEmpty(t, lb.Replicas())
 	require.Equal(t, []*datastore.DB{
-		{DB: replica1MockDB},
-		{DB: replica2MockDB},
+		{DB: replica1MockDB, DSN: replica1DSN},
+		{DB: replica2MockDB, DSN: replica2DSN},
 	}, lb.Replicas())
 
 	// Verify mock expectations (no operations triggered)
@@ -183,7 +184,6 @@ func TestNewDBLoadBalancer_WithFixedHosts(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -204,7 +204,7 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 			} else if match, _ := regexp.MatchString(`fail_replica\d*`, dsn.Host); match {
 				return nil, errors.New("replica connection failed")
 			}
-			return &datastore.DB{}, nil
+			return &datastore.DB{DSN: dsn}, nil
 		}).AnyTimes()
 
 	tests := []struct {
@@ -226,7 +226,7 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 				"replica1",
 				"fail_replica2",
 			},
-			expectedErrs: []string{`failed to open replica "fail_replica2" database connection: replica connection failed`},
+			expectedErrs: []string{`failed to open replica "fail_replica2:5432" database connection: replica connection failed`},
 		},
 		{
 			name:       "multiple replica connections fail",
@@ -236,19 +236,19 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 				"fail_replica2",
 			},
 			expectedErrs: []string{
-				`failed to open replica "fail_replica1" database connection: replica connection failed`,
-				`failed to open replica "fail_replica2" database connection: replica connection failed`,
+				`failed to open replica "fail_replica1:5432" database connection: replica connection failed`,
+				`failed to open replica "fail_replica2:5432" database connection: replica connection failed`,
 			},
 		},
 		{
 			name:       "primary and replica connections fail",
-			primaryDSN: &datastore.DSN{Host: "fail_primary"},
+			primaryDSN: &datastore.DSN{Host: "fail_primary", Port: 1234},
 			replicaHosts: []string{
 				"fail_replica2",
 			},
 			expectedErrs: []string{
 				`failed to open primary database connection: primary connection failed`,
-				`failed to open replica "fail_replica2" database connection: replica connection failed`,
+				`failed to open replica "fail_replica2:1234" database connection: replica connection failed`,
 			},
 		},
 	}
@@ -277,7 +277,6 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithServiceDiscovery(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -352,13 +351,15 @@ func TestNewDBLoadBalancer_WithServiceDiscovery(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
+	ctx := context.Background()
+
 	// Verify primary
 	require.Equal(t, primaryMockDB, lb.Primary().DB)
 
 	// Verify replicas round-robin rotation
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
-	require.Equal(t, replica2MockDB, lb.Replica().DB)
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -368,7 +369,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithServiceDiscovery_SRVLookupError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -410,7 +410,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_SRVLookupError(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithServiceDiscovery_HostLookupError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -459,7 +458,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_HostLookupError(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -551,7 +549,7 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 				defer replica2MockDB.Close()
 				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB}, nil)
 			},
-			expectedErrors: []string{`failed to open replica "192.168.1.1" database connection: failed to open replica 1`},
+			expectedErrors: []string{`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`},
 		},
 		{
 			name:       "multiple replica connections fail",
@@ -565,8 +563,8 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(nil, fmt.Errorf("failed to open replica 2"))
 			},
 			expectedErrors: []string{
-				`failed to open replica "192.168.1.1" database connection: failed to open replica 1`,
-				`failed to open replica "192.168.1.2" database connection: failed to open replica 2`,
+				`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`,
+				`failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`,
 			},
 		},
 		{
@@ -579,8 +577,8 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 			},
 			expectedErrors: []string{
 				`failed to open primary database connection: primary connection failed`,
-				`failed to open replica "192.168.1.1" database connection: failed to open replica 1`,
-				`failed to open replica "192.168.1.2" database connection: failed to open replica 2`,
+				`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`,
+				`failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`,
 			},
 		},
 	}
@@ -612,7 +610,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithoutOptions(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -644,7 +641,6 @@ func TestNewDBLoadBalancer_WithoutOptions(t *testing.T) {
 
 func TestNewDBLoadBalancer_WithBothHostsAndDiscoveryOptions(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -722,13 +718,15 @@ func TestNewDBLoadBalancer_WithBothHostsAndDiscoveryOptions(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
+	ctx := context.Background()
+
 	// Verify primary
 	require.Equal(t, primaryMockDB, lb.Primary().DB)
 
 	// Verify replicas round-robin rotation
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
-	require.Equal(t, replica2MockDB, lb.Replica().DB)
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -738,7 +736,6 @@ func TestNewDBLoadBalancer_WithBothHostsAndDiscoveryOptions(t *testing.T) {
 
 func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -867,7 +864,6 @@ func TestDBLoadBalancer_ResolveReplicas(t *testing.T) {
 
 func TestDBLoadBalancer_ResolveReplicas_PartialFail(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -953,7 +949,7 @@ func TestDBLoadBalancer_ResolveReplicas_PartialFail(t *testing.T) {
 	var errs *multierror.Error
 	require.ErrorAs(t, err, &errs)
 	require.Len(t, errs.Errors, 1)
-	require.EqualError(t, errs.Errors[0], `failed to open replica "192.168.1.2" database connection: failed to open replica 2`)
+	require.EqualError(t, errs.Errors[0], `failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`)
 
 	// Ensure that there is only one replica in the pool, and that's replica 1
 	replicas := lb.Replicas()
@@ -966,7 +962,6 @@ func TestDBLoadBalancer_ResolveReplicas_PartialFail(t *testing.T) {
 
 func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -1052,8 +1047,8 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 	var errs *multierror.Error
 	require.ErrorAs(t, err, &errs)
 	require.Len(t, errs.Errors, 2)
-	require.EqualError(t, errs.Errors[0], `failed to open replica "192.168.1.1" database connection: failed to open replica 1`)
-	require.EqualError(t, errs.Errors[1], `failed to open replica "192.168.1.2" database connection: failed to open replica 2`)
+	require.EqualError(t, errs.Errors[0], `failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`)
+	require.EqualError(t, errs.Errors[1], `failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`)
 
 	// Ensure that there are no replicas in the pool
 	require.Empty(t, lb.Replicas())
@@ -1064,7 +1059,6 @@ func TestDBLoadBalancer_ResolveReplicas_AllFail(t *testing.T) {
 
 func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -1152,10 +1146,10 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 		SSLMode:  primaryDSN.SSLMode,
 	}
 
-	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1)
-	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB}, nil).Times(2)
-	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB}, nil).Times(1)
-	mockConnector.EXPECT().Open(gomock.Any(), replica3DSN, gomock.Any()).Return(&datastore.DB{DB: replica3MockDB}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB, DSN: replica1DSN}, nil).Times(2)
+	mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB, DSN: replica2DSN}, nil).Times(1)
+	mockConnector.EXPECT().Open(gomock.Any(), replica3DSN, gomock.Any()).Return(&datastore.DB{DB: replica3MockDB, DSN: replica3DSN}, nil).Times(1)
 
 	// Create the load balancer with the required options
 	lb, err := datastore.NewDBLoadBalancer(
@@ -1168,9 +1162,11 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
+	ctx := context.Background()
+
 	// Verify initial replicas
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
-	require.Equal(t, replica2MockDB, lb.Replica().DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go lb.StartReplicaChecking(ctx)
@@ -1182,8 +1178,8 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	cancel()
 
 	// Verify new replicas
-	require.Equal(t, replica1MockDB, lb.Replica().DB)
-	require.Equal(t, replica3MockDB, lb.Replica().DB)
+	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
+	require.Equal(t, replica3MockDB, lb.Replica(ctx).DB)
 
 	// Wait just enough time to confirm that context cancellation stopped the refresh process. We've set expectations
 	// for the amount of times that connections can be established, so any reattempt to do so would lead to a failure.
@@ -1198,7 +1194,6 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 
 func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -1277,7 +1272,6 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 
 func TestDBLoadBalancer_StartReplicaChecking_NoServiceDiscovery(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockConnector := mocks.NewMockConnector(ctrl)
 
@@ -1336,7 +1330,6 @@ func TestDBLoadBalancer_StartReplicaChecking_NoServiceDiscovery(t *testing.T) {
 func TestDBLoadBalancer_RecordLSN(t *testing.T) {
 	// Setup primary and replica DB mocks
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -1388,7 +1381,6 @@ func TestDBLoadBalancer_RecordLSN(t *testing.T) {
 func TestDBLoadBalancer_RecordLSN_QueryError(t *testing.T) {
 	// Setup primary and replica DB mocks
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -1438,7 +1430,6 @@ func TestDBLoadBalancer_RecordLSN_QueryError(t *testing.T) {
 func TestDBLoadBalancer_RecordLSN_StoreSetError(t *testing.T) {
 	// Setup primary and replica DB mocks
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -1485,4 +1476,292 @@ func TestDBLoadBalancer_RecordLSN_StoreSetError(t *testing.T) {
 	// Verify DB mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 	require.NoError(t, replicaMock.ExpectationsWereMet())
+}
+
+// expectSingleRowQuery asserts that a query on the mock database returns a single row with the specified value for the
+// given column, or returns an error if specified. It takes the mock database, the query string, the response row column
+// name, the expected response row column value, an error (if any), and the query arguments as input.
+func expectSingleRowQuery(db sqlmock.Sqlmock, query string, column string, value driver.Value, err error, args ...driver.Value) {
+	if err != nil {
+		db.ExpectQuery(query).
+			WithArgs(args...).
+			WillReturnError(err)
+	} else {
+		db.ExpectQuery(query).
+			WithArgs(args...).
+			WillReturnRows(sqlmock.NewRows([]string{column}).AddRow(value))
+	}
+}
+
+func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replicaMockDB, replicaMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+	lsnCacheMock := mocks.NewMockRepositoryCache(ctrl)
+
+	// Define expected DB connections. The connections' open logic is heavily tested elsewhere, here we only care about
+	// the bare minimum setup for testing the LSN logic, thus the use of gomock.Any()
+	gomock.InOrder(
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1),
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: replicaMockDB}, nil).Times(1),
+	)
+
+	// Setup load balancer
+	lb, err := datastore.NewDBLoadBalancer(
+		ctx,
+		&datastore.DSN{},
+		datastore.WithFixedHosts([]string{"replica"}),
+		datastore.WithConnector(mockConnector),
+		datastore.WithLSNCache(lsnCacheMock),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+	require.Equal(t, primaryMockDB, lb.Primary().DB)
+	require.Len(t, lb.Replicas(), 1)
+	require.Equal(t, replicaMockDB, lb.Replica(ctx).DB)
+
+	repo := &models.Repository{Path: "test/repo"}
+	primaryLSN := "0/16B3748"
+	query := "SELECT pg_last_wal_replay_lsn (.+) SELECT pg_wal_lsn_diff"
+	column := "pg_wal_lsn_diff"
+
+	tests := []struct {
+		name         string
+		getLSNReturn string
+		getLSNError  error
+		queryResult  driver.Value
+		queryError   error
+		expectedDB   *sql.DB
+	}{
+		{
+			name:         "LSN record exists and replica candidate is up-to-date",
+			getLSNReturn: primaryLSN,
+			queryResult:  true,
+			expectedDB:   replicaMockDB,
+		},
+		{
+			name:         "LSN record exists and replica candidate is not up-to-date",
+			getLSNReturn: primaryLSN,
+			queryResult:  false,
+			expectedDB:   primaryMockDB,
+		},
+		{
+			name:         "LSN record does not exist",
+			getLSNReturn: "",
+			expectedDB:   replicaMockDB,
+		},
+		{
+			name:         "Query fails",
+			getLSNReturn: primaryLSN,
+			queryError:   errors.New("database error"),
+			expectedDB:   primaryMockDB,
+		},
+		{
+			name:        "LSN cache retrieval fails",
+			getLSNError: errors.New("cache error"),
+			expectedDB:  primaryMockDB,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lsnCacheMock.EXPECT().GetLSN(ctx, repo).Return(tt.getLSNReturn, tt.getLSNError).Times(1)
+			if tt.getLSNError == nil && tt.getLSNReturn != "" {
+				expectSingleRowQuery(replicaMock, query, column, tt.queryResult, tt.queryError, primaryLSN)
+			}
+			db := lb.UpToDateReplica(ctx, repo)
+			require.Equal(t, tt.expectedDB, db.DB)
+		})
+	}
+
+	// Verify mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock.ExpectationsWereMet())
+}
+
+func TestDB_Address(t *testing.T) {
+	tests := []struct {
+		name string
+		arg  datastore.DB
+		out  string
+	}{
+		{name: "nil DSN", arg: datastore.DB{}, out: ""},
+		{name: "empty DSN", arg: datastore.DB{DSN: &datastore.DSN{}}, out: ":0"},
+		{name: "DSN with no port", arg: datastore.DB{DSN: &datastore.DSN{Host: "127.0.0.1"}}, out: "127.0.0.1:0"},
+		{name: "DSN with no host", arg: datastore.DB{DSN: &datastore.DSN{Port: 5432}}, out: ":5432"},
+		{name: "full DSN", arg: datastore.DB{DSN: &datastore.DSN{Host: "127.0.0.1", Port: 5432}}, out: "127.0.0.1:5432"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.out, tt.arg.Address())
+		})
+	}
+}
+
+func TestQueryBuilder_Build(t *testing.T) {
+	testCases := []struct {
+		name           string
+		query          string
+		args           []any
+		expectedSQL    string
+		expectedParams []any
+		expectError    bool
+	}{
+		{
+			name:           "empty query",
+			query:          "",
+			args:           []any{},
+			expectedSQL:    "",
+			expectedParams: []any{},
+		},
+		{
+			name:           "single placeholder",
+			query:          "SELECT * FROM users WHERE id = ?",
+			args:           []any{1},
+			expectedSQL:    "SELECT * FROM users WHERE id = $1",
+			expectedParams: []any{1},
+		},
+		{
+			name:           "leading and trailing space is removed",
+			query:          " SELECT * FROM users WHERE id = ? ",
+			args:           []any{1},
+			expectedSQL:    "SELECT * FROM users WHERE id = $1",
+			expectedParams: []any{1},
+		},
+		{
+			name:           "multiple placeholders",
+			query:          "SELECT * FROM users WHERE id = ? AND name = ?",
+			args:           []any{1, "John Doe"},
+			expectedSQL:    "SELECT * FROM users WHERE id = $1 AND name = $2",
+			expectedParams: []any{1, "John Doe"},
+		},
+		{
+			name:           "placeholders with spaces",
+			query:          "SELECT * FROM users WHERE id = ? AND name = ?",
+			args:           []any{1, "John Doe"},
+			expectedSQL:    "SELECT * FROM users WHERE id = $1 AND name = $2",
+			expectedParams: []any{1, "John Doe"},
+		},
+		{
+			name:           "query with newline",
+			query:          "SELECT * FROM users WHERE id = ?\n",
+			args:           []any{1},
+			expectedSQL:    "SELECT * FROM users WHERE id = $1",
+			expectedParams: []any{1},
+		},
+		{
+			name:           "query without arguments",
+			query:          "SELECT * FROM users WHERE id = 10",
+			args:           []any{},
+			expectedSQL:    "SELECT * FROM users WHERE id = 10",
+			expectedParams: []any{},
+		},
+		{
+			name:           "query with multiple newlines",
+			query:          "SELECT * FROM users\nWHERE id = ?\n",
+			args:           []any{1},
+			expectedSQL:    "SELECT * FROM users\nWHERE id = $1",
+			expectedParams: []any{1},
+		},
+		{
+			name:        "errors on mismatched placeholder count",
+			query:       "SELECT * FROM users WHERE id = ? AND name = ?",
+			args:        []any{1},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // capture range variable
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			qb := datastore.NewQueryBuilder()
+
+			err := qb.Build(tc.query, tc.args...)
+
+			if tc.expectError {
+				require.Error(t, err)
+			} else {
+				require.Equal(t, tc.expectedSQL, qb.SQL())
+				require.Equal(t, tc.expectedParams, qb.Params())
+			}
+		})
+	}
+}
+
+func TestQueryBuilder_MultipleBuildCalls(t *testing.T) {
+	t.Parallel()
+	qb := datastore.NewQueryBuilder()
+	qb.Build("SELECT * FROM users WHERE id = ?", 1)
+	qb.Build("AND name = ?", "John Doe")
+	require.Equal(t, "SELECT * FROM users WHERE id = $1 AND name = $2", qb.SQL())
+	require.Equal(t, []any{1, "John Doe"}, qb.Params())
+}
+
+func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
+	testCases := []struct {
+		name           string
+		query          string
+		args           []any
+		wrapQuery      string
+		expectedSQL    string
+		expectedParams []any
+		expectError    bool
+	}{
+		{
+			name:           "basic subquery",
+			query:          "SELECT * FROM users WHERE id = ?",
+			args:           []any{1},
+			wrapQuery:      "SELECT * FROM orders WHERE user_id IN (%s)",
+			expectedSQL:    "SELECT * FROM orders WHERE user_id IN (SELECT * FROM users WHERE id = $1)",
+			expectedParams: []any{1},
+		},
+		{
+			name:           "subquery with multiple placeholders",
+			query:          "SELECT * FROM users WHERE id = ? AND name = ?",
+			args:           []any{1, "John Doe"},
+			wrapQuery:      "SELECT * FROM orders WHERE user_id IN (%s)",
+			expectedSQL:    "SELECT * FROM orders WHERE user_id IN (SELECT * FROM users WHERE id = $1 AND name = $2)",
+			expectedParams: []any{1, "John Doe"},
+		},
+		{
+			name:        "subquery without placeholder",
+			query:       "SELECT * FROM users WHERE id = ? AND name = ?",
+			args:        []any{1, "John Doe"},
+			wrapQuery:   "SELECT * FROM orders WHERE user_id IN ?",
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // capture range variable
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			qb := datastore.NewQueryBuilder()
+
+			err := qb.Build(tc.query, tc.args...)
+			require.NoError(t, err)
+
+			err = qb.WrapIntoSubqueryOf(tc.wrapQuery)
+
+			if tc.expectError {
+				require.Error(t, err)
+			} else {
+				require.Equal(t, tc.expectedSQL, qb.SQL())
+				require.Equal(t, tc.expectedParams, qb.Params())
+			}
+		})
+	}
 }

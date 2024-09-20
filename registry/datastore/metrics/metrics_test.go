@@ -2,13 +2,16 @@ package metrics
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"strconv"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/docker/distribution/metrics"
 	"github.com/prometheus/client_golang/prometheus"
-	testutil "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,4 +58,286 @@ registry_database_query_duration_seconds_count{name="foo_find_by_id"} 2
 
 	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName, totalFullName)
 	require.NoError(t, err)
+}
+
+func TestReplicaPoolSize(t *testing.T) {
+	ReplicaPoolSize(10)
+
+	var expected bytes.Buffer
+	expected.WriteString(`
+# HELP registry_database_lb_pool_size A gauge for the current number of replicas in the load balancer pool.
+# TYPE registry_database_lb_pool_size gauge
+registry_database_lb_pool_size 10
+`)
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbPoolSizeName)
+	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func testLSNCacheOperation(t *testing.T, operation string, opFunc func() func(error)) {
+	restore := mockTimeSince(10 * time.Millisecond)
+	defer func() {
+		restore()
+		lbLSNCacheOpDuration.Reset()
+	}()
+
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbLSNCacheOpDuration)
+
+	report := opFunc()
+	report(nil)
+	report(errors.New("foo"))
+
+	mockTimeSince(20 * time.Millisecond)
+	report(nil)
+
+	tmplFormat := `
+# HELP registry_database_lb_lsn_cache_operation_duration_seconds A histogram of latencies for database load balancing LSN cache operations.
+# TYPE registry_database_lb_lsn_cache_operation_duration_seconds histogram
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="0.005"} 0
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="0.01"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="0.025"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="0.05"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="0.1"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="0.25"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="0.5"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="1"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="2.5"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="5"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="10"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="false",operation="{{.Operation}}",le="Inf"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_sum{error="false",operation="{{.Operation}}"} 0.03
+registry_database_lb_lsn_cache_operation_duration_seconds_count{error="false",operation="{{.Operation}}"} 2
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="0.005"} 0
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="0.01"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="0.025"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="0.05"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="0.1"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="0.25"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="0.5"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="1"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="2.5"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="5"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="10"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_bucket{error="true",operation="{{.Operation}}",le="Inf"} 1
+registry_database_lb_lsn_cache_operation_duration_seconds_sum{error="true",operation="{{.Operation}}"} 0.01
+registry_database_lb_lsn_cache_operation_duration_seconds_count{error="true",operation="{{.Operation}}"} 1
+`
+	tmplData := struct{ Operation string }{operation}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbLSNCacheOpDurationName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestLSNCacheSet(t *testing.T) {
+	testLSNCacheOperation(t, lbLSNCacheOpSet, LSNCacheSet)
+}
+
+func TestLSNCacheGet(t *testing.T) {
+	testLSNCacheOperation(t, lbLSNCacheOpGet, LSNCacheGet)
+}
+
+func testLSNCacheHitMiss(t *testing.T, result string, hitMissFunc func()) {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbLSNCacheHits)
+	defer func() { lbLSNCacheHits.Reset() }()
+
+	hitMissFunc()
+	hitMissFunc()
+
+	tmplFormat := `
+# HELP registry_database_lb_lsn_cache_hits_total A counter for database load balancing LSN cache hits and misses.
+# TYPE registry_database_lb_lsn_cache_hits_total counter
+registry_database_lb_lsn_cache_hits_total{result="{{.Result}}"} 2
+`
+	tmplData := struct{ Result string }{result}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbLSNCacheHitsName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestLSNCacheHit(t *testing.T) {
+	testLSNCacheHitMiss(t, lbLSNCacheResultHit, LSNCacheHit)
+}
+
+func TestLSNCacheMiss(t *testing.T) {
+	testLSNCacheHitMiss(t, lbLSNCacheResultMiss, LSNCacheMiss)
+}
+
+func testDNSLookup(t *testing.T, lookupFunc func() func(error), lookupType string) {
+	restore := mockTimeSince(10 * time.Millisecond)
+	defer func() {
+		restore()
+		lbDNSLookupDurationHist.Reset()
+	}()
+
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbDNSLookupDurationHist)
+
+	report := lookupFunc()
+	report(errors.New("foo"))
+	report(errors.New("foo")) // to see the aggregated counter increase to 2
+	report(nil)
+
+	mockTimeSince(20 * time.Millisecond)
+	report = lookupFunc()
+	report(nil)
+
+	tmplFormat := `
+# HELP registry_database_lb_lookup_seconds A histogram of latencies for database load balancing DNS lookups.
+# TYPE registry_database_lb_lookup_seconds histogram
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.005"} 0
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.01"} 1
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.025"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.05"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.1"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.25"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="0.5"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="1"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="2.5"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="5"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="10"} 2
+registry_database_lb_lookup_seconds_bucket{error="false",lookup_type="{{.LookupType}}",le="Inf"} 2
+registry_database_lb_lookup_seconds_sum{error="false",lookup_type="{{.LookupType}}"} 0.03
+registry_database_lb_lookup_seconds_count{error="false",lookup_type="{{.LookupType}}"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.005"} 0
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.01"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.025"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.05"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.1"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.25"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="0.5"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="1"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="2.5"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="5"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="10"} 2
+registry_database_lb_lookup_seconds_bucket{error="true",lookup_type="{{.LookupType}}",le="Inf"} 2
+registry_database_lb_lookup_seconds_sum{error="true",lookup_type="{{.LookupType}}"} 0.02
+registry_database_lb_lookup_seconds_count{error="true",lookup_type="{{.LookupType}}"} 2
+# HELP registry_database_lb_lookups_total A counter for database load balancing DNS lookups.
+# TYPE registry_database_lb_lookups_total counter
+registry_database_lb_lookups_total{error="false",lookup_type="{{.LookupType}}"} 2
+registry_database_lb_lookups_total{error="true",lookup_type="{{.LookupType}}"} 2
+`
+
+	tmplData := struct{ LookupType string }{lookupType}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbDNSLookupDurationName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestSRVLookup(t *testing.T) {
+	testDNSLookup(t, SRVLookup, srvLookupType)
+}
+
+func TestHostLookup(t *testing.T) {
+	testDNSLookup(t, HostLookup, hostLookupType)
+}
+
+func testPoolOperation(t *testing.T, event string, eventFunc func()) {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbPoolEvents)
+	defer func() { lbPoolEvents.Reset() }()
+
+	eventFunc()
+	eventFunc()
+
+	tmplFormat := `
+# HELP registry_database_lb_pool_events_total A counter of replicas added or removed from the database load balancer pool.
+# TYPE registry_database_lb_pool_events_total counter
+registry_database_lb_pool_events_total{event="{{.Event}}"} 2
+`
+	tmplData := struct{ Event string }{event}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbPoolEventsName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestReplicaAdded(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaAdded, ReplicaAdded)
+}
+
+func TestReplicaRemoved(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaRemoved, ReplicaRemoved)
+}
+
+func testTarget(t *testing.T, targetType string, fallback bool, reason string, targetFunc func()) {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbTargets)
+	defer func() { lbTargets.Reset() }()
+
+	targetFunc()
+	targetFunc()
+
+	tmplFormat := `
+# HELP registry_database_lb_targets_total A counter for primary and replica target elections during database load balancing.
+# TYPE registry_database_lb_targets_total counter
+registry_database_lb_targets_total{fallback="{{.Fallback}}",reason="{{.Reason}}",target_type="{{.Type}}"} 2
+`
+	tmplData := struct {
+		Type     string
+		Fallback string
+		Reason   string
+	}{
+		Type:     targetType,
+		Fallback: strconv.FormatBool(fallback),
+		Reason:   reason,
+	}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbTargetsName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestPrimaryTarget(t *testing.T) {
+	testTarget(t, lbPrimaryType, false, lbReasonSelected, PrimaryTarget)
+}
+
+func TestPrimaryFallbackNoCache(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackNoCache, PrimaryFallbackNoCache)
+}
+
+func TestPrimaryFallbackNoReplica(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackNoReplica, PrimaryFallbackNoReplica)
+}
+
+func TestPrimaryFallbackError(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackError, PrimaryFallbackError)
+}
+
+func TestPrimaryFallbackNotUpToDate(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackNotUpToDate, PrimaryFallbackNotUpToDate)
+}
+
+func TestReplicaTarget(t *testing.T) {
+	testTarget(t, lbReplicaType, false, lbReasonSelected, ReplicaTarget)
 }

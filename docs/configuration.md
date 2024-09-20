@@ -277,6 +277,7 @@ redis:
     enabled: true
     addr: localhost:16379,localhost:26379
     mainname: mainserver
+    username: default
     password: asecret
     db: 0
     dialtimeout: 10ms
@@ -1274,6 +1275,7 @@ redis:
     enabled: true
     addr: localhost:16379,localhost:26379
     mainname: mainserver
+    username: default
     password: asecret
     sentinelusername: my-sentinel-username
     sentinelpassword: some-sentinel-password
@@ -1356,6 +1358,11 @@ health:
     enabled: true
     interval: 10s
     threshold: 3
+  database:
+    enabled: true
+    interval: 3s
+    threshold: 2
+    timeout: 2s
   file:
     - file: /path/to/checked/file
       interval: 10s
@@ -1379,6 +1386,19 @@ health check on the storage driver's backend storage, as well as optional
 periodic checks on local files, HTTP URIs, and/or TCP servers. The results of
 the health checks are available at the `/debug/health` endpoint on the debug
 HTTP server if the debug HTTP server is enabled (see http section).
+
+### `database`
+
+The `database` structure contains options for a health check on the
+configured database and replicas if any. The health check is only active
+when `enabled` is set to `true`.
+
+| Parameter | Required | Description                                           |
+|-----------|----------|-------------------------------------------------------|
+| `enabled` | yes      | Set to `true` to enable database health checks or `false` to disable them. |
+| `interval`| no       | How long to wait between repetitions of the database health check. A positive integer and an optional suffix indicating the unit of time. The suffix is one of `ns`, `us`, `ms`, `s`, `m`, or `h`. Defaults to `10s` if the value is omitted. If you specify a value but omit the suffix, the value is interpreted as a number of nanoseconds. |
+| `threshold`| no      | A positive integer which represents the number of times the check must fail before the state is marked as unhealthy. If not specified, a single failure marks the state as unhealthy. |
+| `timeout` | no       | How long to wait before timing out the database check. A positive integer and an optional suffix indicating the unit of time. The suffix is one of `ns`, `us`, `ms`, `s`, `m`, or `h`. If you specify a value but omit the suffix, the value is interpreted as a number of nanoseconds. |
 
 ### `storagedriver`
 

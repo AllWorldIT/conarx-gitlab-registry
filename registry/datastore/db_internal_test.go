@@ -195,16 +195,16 @@ func TestDBLoadBalancer_Close_Error(t *testing.T) {
 	lb := &DBLoadBalancer{
 		primary: &DB{
 			DB:  primaryDB,
-			dsn: &DSN{Host: "primary"},
+			DSN: &DSN{Host: "primary"},
 		},
 		replicas: []*DB{
 			{
 				DB:  replicaDB1,
-				dsn: &DSN{Host: "replica1"},
+				DSN: &DSN{Host: "replica1"},
 			},
 			{
 				DB:  replicaDB2,
-				dsn: &DSN{Host: "replica2"},
+				DSN: &DSN{Host: "replica2"},
 			},
 		},
 	}
@@ -262,15 +262,16 @@ func TestDBLoadBalancer_Replica(t *testing.T) {
 	}
 
 	// Test round-robin selection of replicas
-	db1 := lb.Replica()
+	ctx := context.Background()
+	db1 := lb.Replica(ctx)
 	require.NotNil(t, db1)
 	require.Equal(t, replicaDB1, db1.DB)
 
-	db2 := lb.Replica()
+	db2 := lb.Replica(ctx)
 	require.NotNil(t, db2)
 	require.Equal(t, replicaDB2, db2.DB)
 
-	db3 := lb.Replica()
+	db3 := lb.Replica(ctx)
 	require.NotNil(t, db3)
 	require.Equal(t, replicaDB1, db3.DB)
 }
@@ -284,7 +285,7 @@ func TestDBLoadBalancer_NoReplicas(t *testing.T) {
 		primary: &DB{DB: primaryDB},
 	}
 
-	db := lb.Replica()
+	db := lb.Replica(context.Background())
 	require.NotNil(t, db)
 	require.Equal(t, primaryDB, db.DB)
 }
@@ -293,4 +294,38 @@ func TestDBLoadBalancer_RecordLSN_NoStoreError(t *testing.T) {
 	lb := &DBLoadBalancer{}
 	err := lb.RecordLSN(context.Background(), &models.Repository{})
 	require.EqualError(t, err, "LSN cache is not configured")
+}
+
+func TestDBLoadBalancer_UpToDateReplica_NoReplicas(t *testing.T) {
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	lb := &DBLoadBalancer{
+		primary:  &DB{DB: primaryDB},
+		lsnCache: NewNoOpRepositoryCache(),
+	}
+
+	db := lb.UpToDateReplica(context.Background(), &models.Repository{})
+	require.NotNil(t, db)
+	require.Equal(t, primaryDB, db.DB)
+}
+
+func TestDBLoadBalancer_UpToDateReplica_NoStore(t *testing.T) {
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	replicaDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaDB.Close()
+
+	lb := &DBLoadBalancer{
+		primary:  &DB{DB: primaryDB},
+		replicas: []*DB{{DB: replicaDB}},
+	}
+
+	db := lb.UpToDateReplica(context.Background(), &models.Repository{})
+	require.NotNil(t, db)
+	require.Equal(t, primaryDB, db.DB)
 }

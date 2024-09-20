@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/docker/distribution/health"
+	"github.com/docker/distribution/registry/datastore"
+	"github.com/hashicorp/go-multierror"
 )
 
 // FileChecker checks the existence of a file and returns an error
@@ -71,4 +74,35 @@ func TCPChecker(addr string, timeout time.Duration) health.Checker {
 		conn.Close()
 		return nil
 	})
+}
+
+func DBChecker(ctx context.Context, timeout time.Duration, db datastore.LoadBalancer) health.CheckFunc {
+	// NOTE(prozlach): We cant register replicas and the primary individually,
+	// as they may change in time and we would need to be able to de-register
+	// them. Hence we put them in one bag/check and alway fetch a fresh list
+	// from DB LB.
+	return func() error {
+		f := func(db *datastore.DB) error {
+			ctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+
+			err := db.PingContext(ctx)
+			if err != nil {
+				return fmt.Errorf("executing query for db %s: %w", db.Address(), err)
+			}
+			return nil
+		}
+
+		dbs := []*datastore.DB{db.Primary()}
+		dbs = append(dbs, db.Replicas()...)
+
+		var errs *multierror.Error
+		for _, db := range dbs {
+			err := f(db)
+			if err != nil {
+				errs = multierror.Append(errs, err)
+			}
+		}
+		return errs.ErrorOrNil()
+	}
 }

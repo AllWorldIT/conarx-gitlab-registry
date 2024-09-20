@@ -22,9 +22,8 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	_ "github.com/docker/distribution/registry/auth/silly"
 	"github.com/docker/distribution/registry/datastore"
-	dbmock "github.com/docker/distribution/registry/datastore/mocks"
-	storemock "github.com/docker/distribution/registry/datastore/mocks"
-	"github.com/docker/distribution/registry/internal/mocks"
+	dmocks "github.com/docker/distribution/registry/datastore/mocks"
+	imocks "github.com/docker/distribution/registry/internal/mocks"
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/registry/storage"
 	memorycache "github.com/docker/distribution/registry/storage/cache/memory"
@@ -364,7 +363,7 @@ func TestGitlabAPI_GetRepositoryDetails_SelfWithDescendantsAccessRecords(t *test
 
 func Test_updateOnlineGCSettings_SkipIfDatabaseDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 
 	config := &configuration.Configuration{}
 
@@ -375,7 +374,7 @@ func Test_updateOnlineGCSettings_SkipIfDatabaseDisabled(t *testing.T) {
 
 func Test_updateOnlineGCSettings_SkipIfGCDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
@@ -392,7 +391,7 @@ func Test_updateOnlineGCSettings_SkipIfGCDisabled(t *testing.T) {
 
 func Test_updateOnlineGCSettings_SkipIfAllGCWorkersDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
@@ -414,7 +413,7 @@ func Test_updateOnlineGCSettings_SkipIfAllGCWorkersDisabled(t *testing.T) {
 
 func Test_updateOnlineGCSettings_SkipIfReviewAfterNotSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
@@ -426,12 +425,12 @@ func Test_updateOnlineGCSettings_SkipIfReviewAfterNotSet(t *testing.T) {
 	require.NoError(t, err)
 }
 
-var storeMock *storemock.MockGCSettingsStore
+var storeMock *dmocks.MockGCSettingsStore
 
 func mockSettingsStore(tb testing.TB, ctrl *gomock.Controller) {
 	tb.Helper()
 
-	storeMock = storemock.NewMockGCSettingsStore(ctrl)
+	storeMock = dmocks.NewMockGCSettingsStore(ctrl)
 	bkp := gcSettingsStoreConstructor
 	gcSettingsStoreConstructor = func(db datastore.Queryer) datastore.GCSettingsStore { return storeMock }
 
@@ -440,10 +439,10 @@ func mockSettingsStore(tb testing.TB, ctrl *gomock.Controller) {
 
 func Test_updateOnlineGCSettings(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 	mockSettingsStore(t, ctrl)
 
-	clockMock := mocks.NewMockClock(ctrl)
+	clockMock := imocks.NewMockClock(ctrl)
 	testutil.StubClock(t, &systemClock, clockMock)
 
 	config := &configuration.Configuration{
@@ -479,10 +478,10 @@ func Test_updateOnlineGCSettings(t *testing.T) {
 
 func Test_updateOnlineGCSettings_NoReviewDelay(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 	mockSettingsStore(t, ctrl)
 
-	clockMock := mocks.NewMockClock(ctrl)
+	clockMock := imocks.NewMockClock(ctrl)
 	testutil.StubClock(t, &systemClock, clockMock)
 
 	config := &configuration.Configuration{
@@ -513,10 +512,10 @@ func Test_updateOnlineGCSettings_NoReviewDelay(t *testing.T) {
 
 func Test_updateOnlineGCSettings_NoRowsUpdated(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 	mockSettingsStore(t, ctrl)
 
-	clockMock := mocks.NewMockClock(ctrl)
+	clockMock := imocks.NewMockClock(ctrl)
 	testutil.StubClock(t, &systemClock, clockMock)
 
 	config := &configuration.Configuration{
@@ -543,10 +542,10 @@ func Test_updateOnlineGCSettings_NoRowsUpdated(t *testing.T) {
 
 func Test_updateOnlineGCSettings_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 	mockSettingsStore(t, ctrl)
 
-	clockMock := mocks.NewMockClock(ctrl)
+	clockMock := imocks.NewMockClock(ctrl)
 	testutil.StubClock(t, &systemClock, clockMock)
 
 	config := &configuration.Configuration{
@@ -573,10 +572,10 @@ func Test_updateOnlineGCSettings_Error(t *testing.T) {
 
 func Test_updateOnlineGCSettings_Timeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	dbMock := dbmock.NewMockHandler(ctrl)
+	dbMock := dmocks.NewMockHandler(ctrl)
 	mockSettingsStore(t, ctrl)
 
-	clockMock := mocks.NewMockClock(ctrl)
+	clockMock := imocks.NewMockClock(ctrl)
 	testutil.StubClock(t, &systemClock, clockMock)
 
 	config := &configuration.Configuration{
