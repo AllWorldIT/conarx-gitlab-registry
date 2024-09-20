@@ -379,9 +379,8 @@ func (rs *retryingSink) proceed() bool {
 // It will retry up to a number of maxretries as defined in the configuration
 // and will drop the event after it reaches the number of retries.
 type backoffSink struct {
-	mu      sync.Mutex
+	doneCh  chan struct{}
 	sink    Sink
-	closed  bool
 	backoff backoff.BackOff
 }
 
@@ -390,6 +389,7 @@ func newBackoffSink(sink Sink, initialInterval time.Duration, maxRetries int) *b
 	b.InitialInterval = initialInterval
 
 	return &backoffSink{
+		doneCh:  make(chan struct{}),
 		sink:    sink,
 		backoff: backoff.WithMaxRetries(b, uint64(maxRetries)),
 	}
@@ -401,12 +401,14 @@ func newBackoffSink(sink Sink, initialInterval time.Duration, maxRetries int) *b
 // It returns early if the sink is closed.
 func (bs *backoffSink) Write(event *Event) error {
 	op := func() error {
-		if bs.closed {
+		select {
+		case <-bs.doneCh:
 			return backoff.Permanent(ErrSinkClosed)
+		default:
 		}
 
 		if err := bs.sink.Write(event); err != nil {
-			log.WithError(err).Errorf("retryingsink: error writing event, retrying count")
+			log.WithError(err).Error("backoffSink: error writing event")
 			return err
 		}
 
@@ -418,12 +420,15 @@ func (bs *backoffSink) Write(event *Event) error {
 
 // Close closes the sink and the underlying sink.
 func (bs *backoffSink) Close() error {
-	bs.mu.Lock()
-	defer bs.mu.Unlock()
-
-	if bs.closed {
-		return fmt.Errorf("retryingsink: already closed")
+	log.Infof("backoffSink: closing")
+	select {
+	case <-bs.doneCh:
+		// already closed
+		return fmt.Errorf("backoffSink: already closed")
+	default:
+		// NOTE(prozlach): not stricly necessary, just a basic hygiene
+		close(bs.doneCh)
 	}
-	bs.closed = true
+
 	return bs.sink.Close()
 }
