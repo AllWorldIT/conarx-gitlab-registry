@@ -28,7 +28,7 @@ variables:
   BUILDTAGS: "include_gcs,continuous_profiler_stackdriver"
   CGO_ENABLED: "1"
   GOPATH: $CI_PROJECT_DIR/.GOPATH
-  GOTESTSUM_VERSION: v1.8.1
+  GOTESTSUM_VERSION: v1.12.0
   PG_PREV_VERSION: "14"
   PG_CURR_VERSION: "16"
   PG_NEXT_VERSION: "15" # TODO: change to 17 once the stable version is out and the `bitnami/postgresql:17` image is available
