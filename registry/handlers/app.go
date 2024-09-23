@@ -895,7 +895,10 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 
 	// TODO: replace broadcaster with a new worker that will consume events from the queue
 	// https://gitlab.com/gitlab-org/container-registry/-/issues/765
-	app.events.sink = notifications.NewBroadcaster(sinks...)
+	app.events.sink = notifications.NewBroadcaster(
+		configuration.Notifications.FanoutTimeout,
+		sinks...,
+	)
 
 	// Populate registry event source
 	hostname, err := os.Hostname()

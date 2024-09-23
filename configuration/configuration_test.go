@@ -96,6 +96,7 @@ var configStruct = Configuration{
 		},
 	},
 	Notifications: Notifications{
+		FanoutTimeout: 4 * time.Second,
 		Endpoints: []Endpoint{
 			{
 				Name: "endpoint-1",
@@ -197,6 +198,7 @@ auth:
     realm: silly
     service: silly
 notifications:
+  fanouttimeout: 4s
   endpoints:
     - name: endpoint-1
       url:  http://example.com
@@ -232,6 +234,7 @@ auth:
     realm: silly
     service: silly
 notifications:
+  fanouttimeout: 4s
   endpoints:
     - name: endpoint-1
       url:  http://example.com
@@ -1846,6 +1849,7 @@ func copyConfig(config Configuration) *Configuration {
 	for _, v := range config.Notifications.Endpoints {
 		configCopy.Notifications.Endpoints = append(configCopy.Notifications.Endpoints, v)
 	}
+	configCopy.Notifications.FanoutTimeout = config.Notifications.FanoutTimeout
 
 	configCopy.HTTP.Headers = make(http.Header)
 	for k, v := range config.HTTP.Headers {

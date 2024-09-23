@@ -166,6 +166,7 @@ func TestAPIConformance(t *testing.T) {
 
 				if o.webhookNotifications {
 					notifCfg := configuration.Notifications{
+						FanoutTimeout: 3 * time.Second,
 						Endpoints: []configuration.Endpoint{
 							{
 								Name:              t.Name(),
