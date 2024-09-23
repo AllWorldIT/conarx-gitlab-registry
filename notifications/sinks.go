@@ -8,9 +8,12 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/hashicorp/go-multierror"
 
 	log "github.com/sirupsen/logrus"
 )
+
+const DefaultBroadcasterFanoutTimeout = 15 * time.Second
 
 // NOTE(stevvooe): This file contains definitions for several utility sinks.
 // Typically, the broadcaster is the only sink that should be required
@@ -21,9 +24,14 @@ import (
 // component is to dispatch events to configured endpoints. Reliability can be
 // provided by wrapping incoming sinks.
 type Broadcaster struct {
-	sinks  []Sink
-	events chan *Event
-	closed chan chan struct{}
+	sinks []Sink
+
+	eventsCh chan *Event
+	doneCh   chan struct{}
+
+	fanoutTimeout time.Duration
+
+	wg *sync.WaitGroup
 }
 
 // NewBroadcaster ...
@@ -31,14 +39,23 @@ type Broadcaster struct {
 // behavior will be affected by the properties of the sink. Generally, the
 // sink should accept all messages and deal with reliability on its own. Use
 // of EventQueue and RetryingSink should be used here.
-func NewBroadcaster(sinks ...Sink) *Broadcaster {
+func NewBroadcaster(fanoutTimeout time.Duration, sinks ...Sink) *Broadcaster {
+	if fanoutTimeout == 0 {
+		fanoutTimeout = DefaultBroadcasterFanoutTimeout
+	}
 	b := Broadcaster{
-		sinks:  sinks,
-		events: make(chan *Event),
-		closed: make(chan chan struct{}),
+		sinks: sinks,
+
+		eventsCh: make(chan *Event),
+		doneCh:   make(chan struct{}),
+
+		fanoutTimeout: fanoutTimeout,
+
+		wg: new(sync.WaitGroup),
 	}
 
 	// Start the broadcaster
+	b.wg.Add(1)
 	go b.run()
 
 	return &b
@@ -49,11 +66,19 @@ func NewBroadcaster(sinks ...Sink) *Broadcaster {
 // slice memory to the broadcaster and should not modify it after calling
 // write.
 func (b *Broadcaster) Write(event *Event) error {
+	// NOTE(prozlach): avoid a racy situation when both channels are "ready",
+	// and make sure that closing the Sink takes priority:
 	select {
-	case b.events <- event:
-	case <-b.closed:
+	case <-b.doneCh:
 		return ErrSinkClosed
+	default:
+		select {
+		case b.eventsCh <- event:
+		case <-b.doneCh:
+			return ErrSinkClosed
+		}
 	}
+
 	return nil
 }
 
@@ -62,42 +87,106 @@ func (b *Broadcaster) Write(event *Event) error {
 func (b *Broadcaster) Close() error {
 	log.Infof("broadcaster: closing")
 	select {
-	case <-b.closed:
+	case <-b.doneCh:
 		// already closed
 		return fmt.Errorf("broadcaster: already closed")
 	default:
-		// do a little chan handoff dance to synchronize closing
-		closed := make(chan struct{})
-		b.closed <- closed
-		close(b.closed)
-		<-closed
-		return nil
+		close(b.doneCh)
 	}
+
+	b.wg.Wait()
+
+	errs := new(multierror.Error)
+	for _, sink := range b.sinks {
+		if err := sink.Close(); err != nil {
+			errs = multierror.Append(errs, err)
+			log.WithError(err).Errorf("broadcaster: error closing sink %v", sink)
+		}
+	}
+
+	// NOTE(prozlach): not stricly necessary, just a basic hygiene
+	close(b.eventsCh)
+
+	log.Debugf("broadcaster: closed")
+	return errs.ErrorOrNil()
 }
 
 // run is the main broadcast loop, started when the broadcaster is created.
 // Under normal conditions, it waits for events on the event channel. After
 // Close is called, this goroutine will exit.
 func (b *Broadcaster) run() {
+	defer b.wg.Done()
+
+loop:
 	for {
 		select {
-		case block := <-b.events:
-			for _, sink := range b.sinks {
-				if err := sink.Write(block); err != nil {
-					log.Errorf("broadcaster: error writing events to %v, these events will be lost: %v", sink, err)
+		case event := <-b.eventsCh:
+			sinksCount := len(b.sinks)
+
+			// NOTE(prozlach): we would only have a sink in the broadcaster if
+			// there are any endpoints configured. Ideally the broadcaster
+			// should not exist if there are no endpoints configured, but this
+			// would require a bigger refactoring.
+			if sinksCount == 0 {
+				log.Debugf("broadcaster: there are no sinks configured, dropping event %v", event)
+				continue loop
+			}
+
+			// NOTE(prozlach): The approach here is a compromise between the
+			// existing behaviour of Broadcaster (__attempt__ to reliably
+			// deliver to all dependant sinks) and making Broadcaster
+			// interruptable so that gracefull shutdown of container registry
+			// is possible.
+			// The idea is to do Write() calls in goroutine (they are blocking)
+			// and if the termination signal is received, wait up to
+			// fanouttimeout and then terminate `run()` goroutine, which in
+			// turn unblocks `Close()` call to close all sinks which terminates
+			// the gouroutines which do `Write()` calls as an efect..
+			finishedCount := 0
+			finishedCh := make(chan struct{}, sinksCount)
+
+			for i := 0; i < sinksCount; i++ {
+				go func(i int) {
+					if err := b.sinks[i].Write(event); err != nil {
+						log.WithError(err).
+							Errorf("broadcaster: error writing events to %v, these events will be lost", b.sinks[i])
+					}
+
+					finishedCh <- struct{}{}
+				}(i)
+			}
+
+		inner:
+			for {
+				select {
+				case <-b.doneCh:
+					timer := time.NewTimer(b.fanoutTimeout)
+
+					log.WithField("sinks_remaining", sinksCount-finishedCount).
+						Warnf("broadcaster: received termination signal")
+
+					select {
+					case <-timer.C:
+						log.WithField("sinks_remaining", sinksCount-finishedCount).
+							Warnf("broadcaster: queue purge timeout reached, sink broadcasts dropped")
+						return
+					case <-finishedCh:
+						finishedCount += 1
+						if finishedCount == sinksCount {
+							// All notifications were sent before the timeout
+							// was reached. We are done here.
+							return
+						}
+					}
+				case <-finishedCh:
+					finishedCount += 1
+					if finishedCount == sinksCount {
+						// All done!
+						break inner
+					}
 				}
 			}
-		case closing := <-b.closed:
-
-			// close all the underlying sinks
-			for _, sink := range b.sinks {
-				if err := sink.Close(); err != nil {
-					log.Errorf("broadcaster: error closing sink %v: %v", sink, err)
-				}
-			}
-			closing <- struct{}{}
-
-			log.Debugf("broadcaster: closed")
+		case <-b.doneCh:
 			return
 		}
 	}

@@ -1097,6 +1097,7 @@ settings for the registry.
 
 ```none
 notifications:
+  fanouttimeout: 5s
   events:
     includereferences: true
   endpoints:
@@ -1116,8 +1117,11 @@ notifications:
            - pull
 ```
 
-The notifications option is **optional** and currently may contain a single
-option, `endpoints`.
+The notifications option is **optional**.
+
+| Parameter | Required | Description                                                                                                                                                                                                                        |
+|-----------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `fanouttimeout` | no | The maximum amount of time registry tries to fan out notifications in the buffer after it received SIGINT. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. The default value is 15 seconds.|
 
 ### `endpoints`
 
