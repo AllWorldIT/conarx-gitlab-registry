@@ -264,15 +264,17 @@ func (imts *ignoredSink) Write(event *Event) error {
 // Concurrent calls to a retrying sink are serialized through the sink,
 // meaning that if one is in-flight, another will not proceed.
 type retryingSink struct {
-	mu     sync.Mutex
-	sink   Sink
-	closed bool
+	sink Sink
+
+	doneCh   chan struct{}
+	eventsCh chan *Event
+	errCh    chan error
+
+	wg *sync.WaitGroup
 
 	// circuit breaker heuristics
 	failures struct {
 		threshold int
-		recent    int
-		last      time.Time
 		backoff   time.Duration // time after which we retry after failure.
 	}
 }
@@ -283,96 +285,139 @@ type retryingSink struct {
 func newRetryingSink(sink Sink, threshold int, backoff time.Duration) *retryingSink {
 	rs := &retryingSink{
 		sink: sink,
+
+		doneCh:   make(chan struct{}),
+		eventsCh: make(chan *Event),
+		errCh:    make(chan error),
+
+		wg: new(sync.WaitGroup),
 	}
 	rs.failures.threshold = threshold
 	rs.failures.backoff = backoff
 
+	rs.wg.Add(1)
+	go rs.run()
+
 	return rs
+}
+
+func (rs *retryingSink) run() {
+	defer rs.wg.Done()
+
+main:
+	for {
+		select {
+		case <-rs.doneCh:
+			return
+		case event := <-rs.eventsCh:
+			for failuresCount := 0; failuresCount < rs.failures.threshold; failuresCount++ {
+				select {
+				case <-rs.doneCh:
+					rs.errCh <- ErrSinkClosed
+					return
+				default:
+				}
+
+				err := rs.sink.Write(event)
+
+				// Event sent sucessfully, fetch next event from channel:
+				if err == nil {
+					rs.errCh <- nil
+					continue main
+				}
+
+				// Underlying sink is closed, let's wrap up:
+				if errors.Is(err, ErrSinkClosed) {
+					rs.errCh <- ErrSinkClosed
+					return
+				}
+
+				log.WithError(err).
+					WithField("railure_count", failuresCount).
+					Error("retryingsink: error writing event, retrying")
+			}
+
+			log.WithField("sink", rs.sink).
+				Warnf("encountered too many errors when writing to sink, enabling backoff")
+
+			for {
+				// NOTE(prozlach): We can't use Ticker here as the write()
+				// operation may take longer than the backoff period and this
+				// would result in triggering new write imediatelly after the
+				// previous one.
+				timer := time.NewTimer(rs.failures.backoff)
+
+				select {
+				case <-rs.doneCh:
+					rs.errCh <- ErrSinkClosed
+					timer.Stop()
+					return
+				case lastFailureTime := <-timer.C:
+					err := rs.sink.Write(event)
+
+					// Event sent successfully, fetch next event from channel:
+					if err == nil {
+						rs.errCh <- nil
+						continue main
+					}
+
+					// Underlying sink is closed, let's wrap up:
+					if errors.Is(err, ErrSinkClosed) {
+						rs.errCh <- ErrSinkClosed
+						return
+					}
+
+					log.WithError(err).
+						WithField("next_retry_time", lastFailureTime.Add(rs.failures.backoff).String()).
+						Error("retryingsink: error writing event, backing off")
+				}
+			}
+		}
+	}
 }
 
 // Write attempts to flush the event to the downstream sink until it succeeds
 // or the sink is closed.
 func (rs *retryingSink) Write(event *Event) error {
-	rs.mu.Lock()
-	defer rs.mu.Unlock()
-
-retry:
-
-	if rs.closed {
+	// NOTE(prozlach): avoid a racy situation when both channels are "ready",
+	// and make sure that closing the Sink takes priority:
+	select {
+	case <-rs.doneCh:
 		return ErrSinkClosed
-	}
-
-	if !rs.proceed() {
-		log.Warnf("%v encountered too many errors, backing off", rs.sink)
-		rs.wait(rs.failures.backoff)
-		goto retry
-	}
-
-	if err := rs.write(event); err != nil {
-		if errors.Is(err, ErrSinkClosed) {
-			// terminal!
-			return err
+	default:
+		select {
+		case rs.eventsCh <- event:
+			return <-rs.errCh
+		case <-rs.doneCh:
+			return ErrSinkClosed
 		}
-
-		log.Errorf("retryingsink: error writing events: %v, retrying", err)
-		goto retry
 	}
-
-	return nil
 }
 
 // Close closes the sink and the underlying sink.
 func (rs *retryingSink) Close() error {
-	rs.mu.Lock()
-	defer rs.mu.Unlock()
-
-	if rs.closed {
-		return fmt.Errorf("retryingsink: already closed")
+	log.Infof("retryingSink: closing")
+	select {
+	case <-rs.doneCh:
+		return fmt.Errorf("retryingSink: already closed")
+	default:
+		close(rs.doneCh)
 	}
 
-	rs.closed = true
-	return rs.sink.Close()
-}
+	// NOTE(prozlach): the order of things is very important here as we need to
+	// first make sure that no new events will be accepted by this sink and
+	// then cancel the underlying sink so that we can unblock this sink so that
+	// it notices that the termination signal came.
+	err := rs.sink.Close()
+	rs.wg.Wait()
 
-// write provides a helper that dispatches failure and success properly. Used
-// by write as the single-flight write call.
-func (rs *retryingSink) write(event *Event) error {
-	if err := rs.sink.Write(event); err != nil {
-		rs.failure()
-		return err
-	}
+	// NOTE(prozlach): not stricly necessary, just a basic hygiene
+	close(rs.eventsCh)
+	close(rs.errCh)
 
-	rs.reset()
-	return nil
-}
+	log.Debugf("retryingSink: closed")
 
-// wait backoff time against the sink, unlocking so others can proceed. Should
-// only be called by methods that currently have the mutex.
-func (rs *retryingSink) wait(backoff time.Duration) {
-	rs.mu.Unlock()
-	defer rs.mu.Lock()
-
-	// backoff here
-	time.Sleep(backoff)
-}
-
-// reset marks a successful call.
-func (rs *retryingSink) reset() {
-	rs.failures.recent = 0
-	rs.failures.last = time.Time{}
-}
-
-// failure records a failure.
-func (rs *retryingSink) failure() {
-	rs.failures.recent++
-	rs.failures.last = time.Now().UTC()
-}
-
-// proceed returns true if the call should proceed based on circuit breaker
-// heuristics.
-func (rs *retryingSink) proceed() bool {
-	return rs.failures.recent < rs.failures.threshold ||
-		time.Now().UTC().After(rs.failures.last.Add(rs.failures.backoff))
+	return err
 }
 
 // backoffSink attempts to write an event to the given sink.
