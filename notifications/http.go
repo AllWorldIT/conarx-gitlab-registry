@@ -2,11 +2,14 @@ package notifications
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // httpSink implements a single-flight, http notification endpoint. This is
@@ -15,8 +18,14 @@ import (
 type httpSink struct {
 	url string
 
-	mu        sync.Mutex
-	closed    bool
+	ctx     context.Context
+	cancelF context.CancelFunc
+
+	eventsCh chan *Event
+	errCh    chan error
+
+	wg *sync.WaitGroup
+
 	client    *http.Client
 	listeners []httpStatusListener
 }
@@ -27,9 +36,21 @@ func newHTTPSink(u string, timeout time.Duration, headers http.Header, transport
 	if transport == nil {
 		transport = http.DefaultTransport.(*http.Transport)
 	}
-	return &httpSink{
+
+	ctx, cancelF := context.WithCancel(context.Background())
+
+	hs := &httpSink{
 		url:       u,
 		listeners: listeners,
+
+		ctx:     ctx,
+		cancelF: cancelF,
+
+		eventsCh: make(chan *Event),
+		errCh:    make(chan error),
+
+		wg: new(sync.WaitGroup),
+
 		client: &http.Client{
 			Transport: &headerRoundTripper{
 				Transport: transport,
@@ -38,6 +59,11 @@ func newHTTPSink(u string, timeout time.Duration, headers http.Header, transport
 			Timeout: timeout,
 		},
 	}
+
+	hs.wg.Add(1)
+	go hs.run()
+
+	return hs
 }
 
 // httpStatusListener is called on various outcomes of sending notifications.
@@ -51,64 +77,97 @@ type httpStatusListener interface {
 // fails. It is the caller's responsibility to retry on error. The events are
 // accepted or rejected as a group.
 func (hs *httpSink) Write(event *Event) error {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	select {
+	case <-hs.ctx.Done():
+		return ErrSinkClosed
+	default:
+		select {
+		case hs.eventsCh <- event:
+			return <-hs.errCh
+		case <-hs.ctx.Done():
+			return ErrSinkClosed
+		}
+	}
+}
+
+func (hs *httpSink) run() {
+	defer hs.wg.Done()
 	defer hs.client.Transport.(*headerRoundTripper).CloseIdleConnections()
 
-	if hs.closed {
-		return ErrSinkClosed
-	}
+	for {
+		select {
+		case <-hs.ctx.Done():
+			return
+		case event := <-hs.eventsCh:
+			envelope := Envelope{
+				Events: []Event{*event},
+			}
 
-	envelope := Envelope{
-		Events: []Event{*event},
-	}
+			p, err := json.MarshalIndent(envelope, "", "   ")
+			if err != nil {
+				for _, listener := range hs.listeners {
+					listener.err(event)
+				}
+				hs.errCh <- fmt.Errorf("%v: error marshaling event envelope: %v", hs, err)
+				continue
+			}
 
-	p, err := json.MarshalIndent(envelope, "", "   ")
-	if err != nil {
-		for _, listener := range hs.listeners {
-			listener.err(event)
+			body := bytes.NewReader(p)
+			req, err := http.NewRequestWithContext(hs.ctx, "POST", hs.url, body)
+			if err != nil {
+				for _, listener := range hs.listeners {
+					listener.err(event)
+				}
+
+				hs.errCh <- fmt.Errorf("%v: error creating request: %v", hs, err)
+				continue
+			}
+			req.Header.Set("Content-Type", EventsMediaType)
+			resp, err := hs.client.Do(req)
+			if err != nil {
+				for _, listener := range hs.listeners {
+					listener.err(event)
+				}
+
+				hs.errCh <- fmt.Errorf("%v: error posting: %v", hs, err)
+				continue
+			}
+
+			// The notifier will treat any 2xx or 3xx response as accepted by the
+			// endpoint.
+			switch {
+			case resp.StatusCode >= 200 && resp.StatusCode < 400:
+				for _, listener := range hs.listeners {
+					listener.success(resp.StatusCode, event)
+				}
+				err = nil
+			default:
+				for _, listener := range hs.listeners {
+					listener.failure(resp.StatusCode, event)
+				}
+				err = fmt.Errorf("%v: response status %v unaccepted", hs, resp.Status)
+			}
+			resp.Body.Close()
+			hs.errCh <- err
 		}
-		return fmt.Errorf("%v: error marshaling event envelope: %v", hs, err)
-	}
-
-	body := bytes.NewReader(p)
-	resp, err := hs.client.Post(hs.url, EventsMediaType, body)
-	if err != nil {
-		for _, listener := range hs.listeners {
-			listener.err(event)
-		}
-
-		return fmt.Errorf("%v: error posting: %v", hs, err)
-	}
-	defer resp.Body.Close()
-
-	// The notifier will treat any 2xx or 3xx response as accepted by the
-	// endpoint.
-	switch {
-	case resp.StatusCode >= 200 && resp.StatusCode < 400:
-		for _, listener := range hs.listeners {
-			listener.success(resp.StatusCode, event)
-		}
-
-		return nil
-	default:
-		for _, listener := range hs.listeners {
-			listener.failure(resp.StatusCode, event)
-		}
-		return fmt.Errorf("%v: response status %v unaccepted", hs, resp.Status)
 	}
 }
 
 // Close the endpoint
 func (hs *httpSink) Close() error {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
-
-	if hs.closed {
+	log.Infof("httpsink: closing")
+	select {
+	case <-hs.ctx.Done():
 		return fmt.Errorf("httpsink: already closed")
+	default:
 	}
 
-	hs.closed = true
+	hs.cancelF()
+	hs.wg.Wait()
+	close(hs.eventsCh)
+	close(hs.errCh)
+	log.Debugf("httpSink: closed")
+
 	return nil
 }
 
