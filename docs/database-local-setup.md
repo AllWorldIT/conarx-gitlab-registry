@@ -291,7 +291,7 @@ source /path/to/test.env
 1. Run some integration tests with the metadata database enabled:
 
 ```shell
-go run gotest.tools/gotestsum@v1.8.2 --format testname -- ./registry/handlers  -timeout 25m -run "TestAPIConformance" --tags api_conformance_test,integration
+go run gotest.tools/gotestsum@v1.12.0 --format testname -- ./registry/handlers  -timeout 25m -run "TestAPIConformance" --tags api_conformance_test,integration
 ```
 
 The command above is equivalent to the [job `database:api-conformance`](https://gitlab.com/gitlab-org/container-registry/-/blob/ef704fd1c07be20061e677a3cca624f6e24d4c91/.gitlab-ci.yml#L337) 

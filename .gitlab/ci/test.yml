@@ -1,7 +1,7 @@
 .go-test:
   needs: ['modules:download']
   variables:
-    GO_TEST: 'go run gotest.tools/gotestsum@$GOTESTSUM_VERSION --junitfile junit.xml --format standard-verbose --packages=$PACKAGE --'
+    GO_TEST: 'go run gotest.tools/gotestsum@$GOTESTSUM_VERSION --junitfile junit.xml --format testname --packages=$PACKAGE --'
   artifacts:
     reports:
       junit: junit.xml
