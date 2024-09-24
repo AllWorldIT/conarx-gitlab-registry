@@ -454,11 +454,15 @@ func (s *BackgroundMigrationTestSuite) TestSyncRunAllStateCombinationsBBM() {
 
 	// Start the synchronous background migration process
 	opts := []bbm.SyncWorkerOption{bbm.WithWorkMap(map[string]bbm.Work{defaultJobName: {Name: defaultJobName, Do: CopyIDColumnInTestTableToNewIDColumn}})}
-	err := bbm.NewSyncWorker(s.db, opts...).Run(context.Background())
+	worker := bbm.NewSyncWorker(s.db, opts...)
+	err := worker.Run(context.Background())
 	s.Require().NoError(err)
 
 	// Assert the background migration runs to completion
 	s.requireBackgroundMigrations(allMixedFinished)
+	// We expect `len(allMixedFinished)-1` completed migrations by the worker because one of the BBMs from `generateMixedStateBBMFixtures()`
+	// was already in the `finished` state prior to the worker run
+	s.Require().Equal(len(allMixedFinished)-1, worker.FinishedMigrationCount())
 }
 
 // requireBackgroundMigrations checks that the background migrations match the expected attributes.

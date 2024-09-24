@@ -375,6 +375,18 @@ deactivate Migrator
 
 A [required stop](https://docs.gitlab.com/ee/development/database/required_stops.html) is a perfect place to enforce a BBM dependency on a regular migration. [TBD](https://gitlab.com/gitlab-org/container-registry/-/issues/1346)
 
+## Troubleshooting
+
+### Background Migration Dependency Errors
+
+When a new migration is introduced that depends on a background migration that has not been finalized, running the `migrate up` command will fail. This failure is typically accompanied by an error message indicating that a required background migration is not complete. In such cases, the registry administrator has two options to resolve the issue:
+
+1. **Synchronous execution**: Use the [CLI](#cli) to run the pending background migrations synchronously, ensuring they complete before proceeding with the new migration.
+
+1. **Version downgrade and asynchronous completion**: Downgrade the registry to a version prior to when the background migration was marked as required. This allows the asynchronous process to complete the background migration.
+
+It's worth noting that fresh registry installations can execute and finalize their background migrations as part of the regular migration process using `migrate up`, avoiding these issues.
+
 ## Out of scope of first iteration
 
 - Concurrent migration processing: To reduce complexity, for the first iteration only one migration and one job can be run at a time.

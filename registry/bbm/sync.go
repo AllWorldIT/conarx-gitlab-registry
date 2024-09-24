@@ -14,14 +14,15 @@ import (
 
 // SyncWorker is the synchronous Background Migration agent of execution.
 type SyncWorker struct {
-	work            map[string]Work
-	logger          log.Logger
-	db              datastore.Handler
-	maxJobAttempt   int
-	maxJobPerBatch  int
-	maxBatchTimeout time.Duration
-	lockWaitTimeout time.Duration
-	wh              Handler
+	work                 map[string]Work
+	logger               log.Logger
+	db                   datastore.Handler
+	maxJobAttempt        int
+	maxJobPerBatch       int
+	maxBatchTimeout      time.Duration
+	lockWaitTimeout      time.Duration
+	wh                   Handler
+	lastRunCompletedBBMs int
 }
 
 // SyncWorkerOption provides functional options for NewSyncWorker.
@@ -143,6 +144,7 @@ func (jw *SyncWorker) Run(ctx context.Context) error {
 // 5. Waits for a random duration between `minDelayPerRun` and `maxDelayPerRun` before starting the next iteration.
 // This method continues running until all jobs are processed or an error occurs.
 func (jw *SyncWorker) run(ctx context.Context) error {
+	jw.lastRunCompletedBBMs = 0
 	for {
 		jw.logger = jw.logger.WithFields(log.Fields{"batch_id": correlation.SafeRandomID()})
 		// This loop runs at most `maxJobPerBatch` jobs (or until `maxBatchTimeout` elapses) before committing and releasing the background migration lock.
@@ -266,6 +268,7 @@ func (jw *SyncWorker) FindJob(ctx context.Context, bbmStore datastore.Background
 					jw.logger.WithError(err).Error("failed to update status of background migration")
 					return nil, fmt.Errorf("failed to update status of background migration: %w", err)
 				}
+				jw.lastRunCompletedBBMs++
 				jw.logger.Info("updated migration status, continuing to look for other jobs")
 				continue
 			}
@@ -378,4 +381,9 @@ func enrichJobWithBBMAttributes(job *models.BackgroundMigrationJob, bbm *models.
 		job.PaginationColumn = bbm.TargetColumn
 		job.BatchSize = bbm.BatchSize
 	}
+}
+
+// FinishedMigrationCount returns the count of background migrations completed in the last run.
+func (jw *SyncWorker) FinishedMigrationCount() int {
+	return jw.lastRunCompletedBBMs
 }
