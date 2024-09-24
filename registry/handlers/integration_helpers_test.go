@@ -400,7 +400,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := migrations.NewMigrator(db.Primary().DB)
+		m := migrations.NewMigrator(db.Primary())
 		if _, err = m.Up(); err != nil {
 			t.Fatal(err)
 		}

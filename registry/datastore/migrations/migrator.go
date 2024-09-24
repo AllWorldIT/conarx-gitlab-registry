@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	migrate "github.com/rubenv/sql-migrate"
 )
@@ -24,8 +25,16 @@ func init() {
 	migrate.SetTable(migrationTableName)
 }
 
+// MigrationResult holds the outcome of a migration operation.
+// It includes the count of applied Batched Background Migrations (BBMs)
+// and the total number of applied schema migrations.
+type MigrationResult struct {
+	AppliedBBMCount int
+	AppliedCount    int
+}
+
 type Migrator interface {
-	Up() (int, error)
+	Up() (MigrationResult, error)
 	Down() (int, error)
 }
 
@@ -34,12 +43,18 @@ type migrator struct {
 	migrations []*Migration
 
 	skipPostDeployment bool
+	bbmWorker          *bbm.SyncWorker
 }
 
-func NewMigrator(db *sql.DB, opts ...MigratorOption) *migrator {
+func NewMigrator(dsdb *datastore.DB, opts ...MigratorOption) *migrator {
+	var db *sql.DB
+	if dsdb != nil {
+		db = dsdb.DB
+	}
 	m := &migrator{
 		db:         db,
 		migrations: allMigrations,
+		bbmWorker:  bbm.NewSyncWorker(dsdb),
 	}
 
 	for _, o := range opts {
@@ -58,6 +73,14 @@ type MigratorOption func(m *migrator)
 func Source(a []*Migration) func(m *migrator) {
 	return func(m *migrator) {
 		m.migrations = a
+	}
+}
+
+// WithBBMWorker allows the migrator to use an alternative BBM worker, used
+// for testing.
+func WithBBMWorker(w *bbm.SyncWorker) func(m *migrator) {
+	return func(m *migrator) {
+		m.bbmWorker = w
 	}
 }
 
@@ -101,14 +124,14 @@ func (m *migrator) migrate(direction migrate.MigrationDirection, limit int) (int
 	return migrate.ExecMax(m.db, dialect, src, direction, limit)
 }
 
-// Up applies all pending up migrations. Returns the number of applied migrations.
-func (m *migrator) Up() (int, error) {
+// Up applies all pending up migrations. Returns the number of applied migrations and background migrations.
+func (m *migrator) Up() (MigrationResult, error) {
 	return m.migrateUpWithBBMCheck(0)
 }
 
 // UpN applies up to n pending up migrations. All pending migrations will be applied if n is 0.  Returns the number of
-// applied migrations.
-func (m *migrator) UpN(n int) (int, error) {
+// applied migrations and background migrations.
+func (m *migrator) UpN(n int) (MigrationResult, error) {
 	return m.migrateUpWithBBMCheck(n)
 }
 
@@ -281,23 +304,27 @@ func (m *migrator) FindMigrationByID(id string) *Migration {
 
 // migrateUpWithBBMCheck applies up to 'max' database migrations (0 for unlimited).
 // It verifies Batched Background Migration (BBM) dependencies before each migration.
-// Returns the number of applied migrations or an error if any step fails,
+// Returns the number of applied schema migrations, background migrations or an error if any step fails,
 // including when required BBMs are incomplete.
-func (m *migrator) migrateUpWithBBMCheck(max int) (int, error) {
+func (m *migrator) migrateUpWithBBMCheck(max int) (MigrationResult, error) {
+	var mr MigrationResult
 	// Initialize a new store to manage background migrations
 	bbmStore := datastore.NewBackgroundMigrationStore(m.db)
 
 	// Retrieve the source of eligible migrations
 	src, err := m.eligibleMigrationSource()
 	if err != nil {
-		return 0, fmt.Errorf("getting eligible migration source: %w", err)
+		return mr, fmt.Errorf("getting eligible migration source: %w", err)
 	}
 
 	// Fetch the migration records that have already been applied
 	migrationRecords, err := migrate.GetMigrationRecords(m.db, dialect)
 	if err != nil {
-		return 0, fmt.Errorf("retrieving migration records: %w", err)
+		return mr, fmt.Errorf("retrieving migration records: %w", err)
 	}
+
+	// no migrations have been applied means this is an new install
+	newInstall := len(migrationRecords) == 0
 
 	// Create a map to store applied migrations for quick lookup
 	migrationRecordsMap := make(map[string]struct{}, len(migrationRecords))
@@ -308,7 +335,7 @@ func (m *migrator) migrateUpWithBBMCheck(max int) (int, error) {
 	// Retrieve and sort all available migrations by ID
 	sortedMigrations, err := src.FindMigrations()
 	if err != nil {
-		return 0, fmt.Errorf("finding migrations: %w", err)
+		return mr, fmt.Errorf("finding migrations: %w", err)
 	}
 
 	// Map to hold all local migrations for reference during the process
@@ -317,12 +344,12 @@ func (m *migrator) migrateUpWithBBMCheck(max int) (int, error) {
 		localMigrationsMap[migration.Id] = migration
 	}
 
-	var appliedCount int
+	ctx := context.Background()
 
 	// Iterate through each migration, applying them if necessary
 	for _, migration := range sortedMigrations {
 		// Stop if we reach the specified 'max' number of migrations
-		if max != 0 && appliedCount == max {
+		if max != 0 && mr.AppliedCount == max {
 			break
 		}
 
@@ -332,22 +359,32 @@ func (m *migrator) migrateUpWithBBMCheck(max int) (int, error) {
 		}
 
 		// Ensure all Batched Background Migrations (BBMs) are completed before applying migration
-		lMigration := localMigrationsMap[migration.Id]
-		if err := m.ensureBBMsComplete(context.Background(), bbmStore, lMigration); err != nil {
-			return appliedCount, err
+		if err := m.ensureBBMsComplete(ctx, bbmStore, localMigrationsMap[migration.Id]); err != nil {
+			// Apply incomplete BBMs during new installations
+			if errors.Is(err, ErrBBMNotComplete) && newInstall {
+				// Run the BBM worker
+				if err := m.bbmWorker.Run(ctx); err != nil {
+					return mr, err
+				}
+				// Increment the count of finished BBMs
+				mr.AppliedBBMCount += m.bbmWorker.FinishedMigrationCount()
+			} else {
+				// Return the error if it's not a new installation and there are incomplete BBMs
+				return mr, err
+			}
 		}
 
 		// Apply the migration
 		if err := m.applyMigration(src, migration); err != nil {
-			return appliedCount, err
+			return mr, err
 		}
 
 		// Increment the count of applied migrations
-		appliedCount++
+		mr.AppliedCount++
 	}
 
 	// Return the number of applied migrations
-	return appliedCount, nil
+	return mr, nil
 }
 
 // ensureBBMsComplete checks if all required Batched Background Migrations (BBMs) are complete for a schema migration.

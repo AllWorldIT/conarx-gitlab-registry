@@ -12,6 +12,7 @@ package mocks
 import (
 	reflect "reflect"
 
+	migrations "github.com/docker/distribution/registry/datastore/migrations"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -54,10 +55,10 @@ func (mr *MockMigratorMockRecorder) Down() *gomock.Call {
 }
 
 // Up mocks base method.
-func (m *MockMigrator) Up() (int, error) {
+func (m *MockMigrator) Up() (migrations.MigrationResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Up")
-	ret0, _ := ret[0].(int)
+	ret0, _ := ret[0].(migrations.MigrationResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

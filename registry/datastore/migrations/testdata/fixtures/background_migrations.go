@@ -16,6 +16,7 @@ var (
 	// IDs of base schema migrations for batched background migrations
 	bbmBaseSchemaMigrationIDs = []string{
 		"20240604074823_create_batched_background_migrations_table",
+		"20240604074846_create_batched_background_migration_jobs_table",
 		"20240711175726_add_background_migration_failure_error_code_column",
 	}
 
@@ -25,14 +26,14 @@ var (
 			Id: fmt.Sprintf("%s_insert_enforced_bbm_record", currentTime.Format("20060102150405")),
 			Up: []string{
 				`INSERT INTO batched_background_migrations ("name", "min_value", "max_value", "batch_size", "status", "job_signature_name", "table_name", "column_name")
-				VALUES ('enforcedBBM', 0, 100, 5, 2, 'signatureName', 'targetTable', 'targetColumn')`,
+				VALUES ('enforcedBBM', 0, 5,  5, 2, 'signatureName', 'public.repository_manifests_test', 'id')`,
 			},
 			Down: []string{
 				`DELETE FROM batched_background_migrations WHERE "name" = 'enforcedBBM'`,
 			},
 		},
-		PostDeployment:  true,
-		RequiredBBMs: []string{"unenforcedBBM"},
+		PostDeployment: true,
+		RequiredBBMs:   []string{"unenforcedBBM"},
 	}
 
 	// Unenforced running background migration
@@ -41,7 +42,7 @@ var (
 			Id: fmt.Sprintf("%s_insert_unenforced_bbm_record", currentTime.Add(-1*time.Second).Format("20060102150405")),
 			Up: []string{
 				`INSERT INTO batched_background_migrations ("name", "min_value", "max_value", "batch_size", "status", "job_signature_name", "table_name", "column_name")
-				VALUES ('unenforcedBBM', 0, 100, 5, 4, 'signatureName', 'targetTable', 'targetColumn')`,
+				VALUES ('unenforcedBBM', 0, 5,  5, 4, 'signatureName', 'public.repository_manifests_test', 'id')`,
 			},
 			Down: []string{
 				`DELETE FROM batched_background_migrations WHERE "name" = 'unenforcedBBM'`,

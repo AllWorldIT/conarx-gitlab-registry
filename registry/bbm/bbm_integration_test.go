@@ -91,7 +91,7 @@ func newMigrator(t *testing.T, db *sql.DB, up, down []string) *Migrator {
 // upSetup sets-up a redirection of a call to "migrate up" to executes only the minimum base queries required for background migration testing.
 // Additional queries to be executed after the base queries can be passed in the `extra` argument.
 func (m *Migrator) upSetup(t *testing.T, extra ...string) {
-	m.EXPECT().Up().Do(upMigrate(t, m.db, extra...)).AnyTimes().Return(0, nil)
+	m.EXPECT().Up().Do(upMigrate(t, m.db, extra...)).AnyTimes().Return(migrations.MigrationResult{}, nil)
 }
 
 // downSetup sets-up a redirection of a call to "migrate down" to revert the schema changes added by `upSetup` call.

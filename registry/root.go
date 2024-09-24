@@ -255,7 +255,7 @@ var MigrateUpCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		if skipPostDeployment {
 			migrations.SkipPostDeployment(m)
 		}
@@ -272,12 +272,12 @@ var MigrateUpCmd = &cobra.Command{
 
 		if !dryRun {
 			start := time.Now()
-			n, err := m.UpN(*maxNumMigrations)
+			mr, err := m.UpN(*maxNumMigrations)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "failed to run database migrations: %v", err)
 				os.Exit(1)
 			}
-			fmt.Printf("OK: applied %d migrations in %.3fs\n", n, time.Since(start).Seconds())
+			fmt.Printf("OK: applied %d migrations and %d background migrations in %.3fs\n", mr.AppliedCount, mr.AppliedBBMCount, time.Since(start).Seconds())
 		}
 	},
 }
@@ -308,7 +308,7 @@ var MigrateDownCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		plan, err := m.DownNPlan(*maxNumMigrations)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to prepare Down plan: %v", err)
@@ -363,7 +363,7 @@ var MigrateVersionCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		v, err := m.Version()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to detect database version: %v", err)
@@ -396,7 +396,7 @@ var MigrateStatusCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		statuses, err := m.Status()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to detect database status: %v", err)
@@ -523,7 +523,7 @@ var ImportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		pending, err := m.HasPending()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to check database migrations status: %v", err)
