@@ -64,6 +64,7 @@ import (
 	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+	"gitlab.com/gitlab-org/labkit/correlation"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 	metricskit "gitlab.com/gitlab-org/labkit/metrics"
 )
@@ -1096,7 +1097,16 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx = dcontext.WithRequest(ctx, r)
 	ctx, w = dcontext.WithResponseWriter(ctx, w)
-	ctx = dcontext.WithLogger(ctx, dcontext.GetRequestCorrelationLogger(ctx))
+	// NOTE(prozlach): It is very important to pass to
+	// dcontext.GetLogger the context of the app and not the
+	// request context, as otherwise a new logger will be created instead of
+	// chaining the one that was created during application start and according
+	// to the configuration passed by the user.
+	ctx = dcontext.WithLogger(
+		ctx,
+		dcontext.GetLogger(app.Context).
+			WithField(correlation.FieldName, dcontext.GetRequestCorrelationID(ctx)),
+	)
 	r = r.WithContext(ctx)
 
 	if app.Config.Log.AccessLog.Disabled {
