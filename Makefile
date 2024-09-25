@@ -19,7 +19,7 @@ GO_TEST ?='go test'
 
 
 # Project binaries.
-COMMANDS=registry digest
+COMMANDS=registry
 
 # Allow turning off function inlining and variable registerization
 ifeq (${DISABLE_OPTIMIZATION},true)
