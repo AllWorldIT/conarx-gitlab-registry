@@ -887,6 +887,7 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 			Headers:           endpoint.Headers,
 			IgnoredMediaTypes: endpoint.IgnoredMediaTypes,
 			Ignore:            endpoint.Ignore,
+			QueuePurgeTimeout: endpoint.QueuePurgeTimeout,
 		})
 
 		sinks = append(sinks, endpoint)

@@ -64,7 +64,16 @@ func TestEventQueue(t *testing.T) {
 		&delayedSink{
 			Sink:  &ts,
 			delay: time.Millisecond * 1,
-		}, metrics.eventQueueListener())
+		},
+		// NOTE(prozlach): The very high timeout is motivied by the fact that
+		// we want to avoid any flakes. 60 seconds should be more than enough
+		// to purge the queue buffer. In production this timeout is much lower
+		// as we do not have any devlier guarantees ATM and the purge timeout
+		// is meant only to allow for graceful termination of the queue, not a
+		// reliable delivery.
+		60*time.Second,
+		metrics.eventQueueListener(),
+	)
 
 	event := createTestEvent("push", "library/test", "blob")
 	for i := 0; i <= nEvents-1; i++ {

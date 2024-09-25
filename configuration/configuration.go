@@ -1018,6 +1018,7 @@ type Endpoint struct {
 	Backoff           time.Duration `yaml:"backoff"`           // backoff duration
 	IgnoredMediaTypes []string      `yaml:"ignoredmediatypes"` // target media types to ignore
 	Ignore            Ignore        `yaml:"ignore"`            // ignore event types
+	QueuePurgeTimeout time.Duration `yaml:"queuepurgetimeout"`  // the amount of time registry tries to sent unsent notifications in the buffer after it received SIGINT
 }
 
 // Events configures notification events.
