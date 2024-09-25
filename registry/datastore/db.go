@@ -36,6 +36,13 @@ const (
 	HostTypePrimary = "primary"
 	HostTypeReplica = "replica"
 	HostTypeUnknown = "unknown"
+
+	// upToDateReplicaTimeout establishes the maximum amount of time we're willing to wait for an up-to-date database
+	// replica to be identified during load balancing. If a replica is not identified within this threshold, then it's
+	// likely that there is a performance degradation going on, in which case we want to gracefully fall back to the
+	// primary database to avoid further processing delays. The current 100ms value is a starting point/educated guess
+	// that matches the one used in GitLab Rails (https://gitlab.com/gitlab-org/gitlab/-/merge_requests/159633).
+	upToDateReplicaTimeout = 100 * time.Millisecond
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -838,6 +845,11 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 		metrics.PrimaryFallbackNoCache()
 		return lb.primary
 	}
+
+	// Do not let the LSN cache lookup and subsequent DB comparison (total) take more than upToDateReplicaTimeout,
+	// effectively enforcing a graceful fallback to the primary database if so.
+	ctx, cancel := context.WithTimeout(ctx, upToDateReplicaTimeout)
+	defer cancel()
 
 	// Get the next replica using round-robin. For simplicity, on the first iteration of DLB, we simply check against
 	// the first returned replica candidate, not against (potentially) all replicas in the pool. If the elected replica
