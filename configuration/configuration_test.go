@@ -109,6 +109,7 @@ var configStruct = Configuration{
 					MediaTypes: []string{"application/octet-stream"},
 					Actions:    []string{"pull"},
 				},
+				QueuePurgeTimeout: 3 * time.Second,
 			},
 		},
 	},
@@ -211,6 +212,7 @@ notifications:
            - application/octet-stream
         actions:
            - pull
+      queuepurgetimeout: 3s
 reporting:
   sentry:
     enabled: true
@@ -247,6 +249,7 @@ notifications:
            - application/octet-stream
         actions:
            - pull
+      queuepurgetimeout: 3s
 http:
   headers:
     X-Content-Type-Options: [nosniff]

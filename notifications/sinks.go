@@ -197,11 +197,17 @@ loop:
 // events will be dropped.
 type eventQueue struct {
 	sink      Sink
-	events    *list.List
 	listeners []eventQueueListener
-	cond      *sync.Cond
-	mu        sync.Mutex
-	closed    bool
+
+	doneCh chan struct{}
+
+	bufferInCh  chan *Event
+	bufferOutCh chan *Event
+
+	queuePurgeTimeout time.Duration
+
+	wgBufferer *sync.WaitGroup
+	wgSender   *sync.WaitGroup
 }
 
 // eventQueueListener is called when various events happen on the queue.
@@ -212,93 +218,167 @@ type eventQueueListener interface {
 
 // newEventQueue returns a queue to the provided sink. If the updater is non-
 // nil, it will be called to update pending metrics on ingress and egress.
-func newEventQueue(sink Sink, listeners ...eventQueueListener) *eventQueue {
+func newEventQueue(sink Sink, queuePurgeTimeout time.Duration, listeners ...eventQueueListener) *eventQueue {
 	eq := eventQueue{
 		sink:      sink,
-		events:    list.New(),
 		listeners: listeners,
+
+		doneCh: make(chan struct{}),
+
+		bufferInCh:  make(chan *Event),
+		bufferOutCh: make(chan *Event),
+
+		queuePurgeTimeout: queuePurgeTimeout,
+
+		wgBufferer: new(sync.WaitGroup),
+		wgSender:   new(sync.WaitGroup),
 	}
 
-	eq.cond = sync.NewCond(&eq.mu)
-	go eq.run()
+	eq.wgSender.Add(1)
+	eq.wgBufferer.Add(1)
+
+	go eq.sender()
+	go eq.bufferer()
 	return &eq
 }
 
 // Write accepts an event into the queue, only failing if the queue has
-// beend closed.
+// been closed.
 func (eq *eventQueue) Write(event *Event) error {
-	eq.mu.Lock()
-	defer eq.mu.Unlock()
-
-	if eq.closed {
+	// NOTE(prozlach): avoid a racy situation when both channels are "ready",
+	// and make sure that closing the Sink takes priority:
+	select {
+	case <-eq.doneCh:
 		return ErrSinkClosed
+	default:
+		select {
+		case eq.bufferInCh <- event:
+		case <-eq.doneCh:
+			return ErrSinkClosed
+		}
 	}
-
-	for _, listener := range eq.listeners {
-		listener.ingress(event)
-	}
-	eq.events.PushBack(event)
-	eq.cond.Signal() // signal waiters
 
 	return nil
 }
 
-// Close shuts down the event queue, flushing
-func (eq *eventQueue) Close() error {
-	eq.mu.Lock()
-	defer eq.mu.Unlock()
+func (eq *eventQueue) bufferer() {
+	defer eq.wgBufferer.Done()
+	defer log.Debugf("eventQueue bufferer: closed")
 
-	if eq.closed {
-		return fmt.Errorf("eventqueue: already closed")
+	events := list.New()
+
+	// Main loop is executed during normal operation. Depending on whether there
+	// are any events in the buffer or not, we include in select wait on write
+	// to the sender goroutine or not respectivelly.
+main:
+	for {
+		if events.Len() < 1 {
+			// List is empty, wait for an event
+			select {
+			case event := <-eq.bufferInCh:
+				for _, listener := range eq.listeners {
+					listener.ingress(event)
+				}
+				events.PushBack(event)
+			case <-eq.doneCh:
+				break main
+			}
+		} else {
+			front := events.Front()
+			select {
+			case event := <-eq.bufferInCh:
+				for _, listener := range eq.listeners {
+					listener.ingress(event)
+				}
+				events.PushBack(event)
+			case eq.bufferOutCh <- front.Value.(*Event):
+				events.Remove(front)
+			case <-eq.doneCh:
+				break main
+			default:
+			}
+		}
 	}
 
-	// set closed flag
-	eq.closed = true
-	eq.cond.Signal() // signal flushes queue
-	eq.cond.Wait()   // wait for signal from last flush
+	timer := time.NewTimer(eq.queuePurgeTimeout)
+	log.WithField("remaining_events", events.Len()).
+		Warnf("eventqueue: received termination signal")
 
-	return eq.sink.Close()
+		// This loop is executed only during the termination phase. It's purpose is to
+		// try to send all unsend notifications in the given time window.
+loop:
+	for events.Len() > 0 {
+		front := events.Front()
+		select {
+		case eq.bufferOutCh <- front.Value.(*Event):
+			events.Remove(front)
+		case <-timer.C:
+			break loop
+		default:
+		}
+	}
+
+	// NOTE(prozlach): We are done, tell sender to wrap it up too.
+	close(eq.bufferOutCh)
+
+	// NOTE(prozlach): queue is terminating, if there are still events in the
+	// buffer, let the operator know they were lost:
+	for events.Len() > 0 {
+		front := events.Front()
+		event := front.Value.(*Event)
+		log.Warnf("eventqueue: event lost: %v", event)
+		events.Remove(front)
+	}
 }
 
-// run is the main goroutine to flush events to the target sink.
-func (eq *eventQueue) run() {
-	for {
-		block := eq.next()
+func (eq *eventQueue) sender() {
+	defer eq.wgSender.Done()
+	defer log.Debugf("eventQueue sender: closed")
 
-		if block == nil {
-			return // nil block means event queue is closed.
+	for {
+		event, isOpen := <-eq.bufferOutCh
+		if !isOpen {
+			break
 		}
 
-		if err := eq.sink.Write(block); err != nil {
-			log.WithError(err).Warnf("eventqueue: event lost: %v", block)
+		if err := eq.sink.Write(event); err != nil {
+			log.WithError(err).
+				WithField("event", event).
+				Warnf("eventqueue: event lost")
 		}
 
 		for _, listener := range eq.listeners {
-			listener.egress(block)
+			listener.egress(event)
 		}
 	}
 }
 
-// next encompasses the critical section of the run loop. When the queue is
-// empty, it will block on the condition. If new data arrives, it will wake
-// and return a block. When closed, a nil slice will be returned.
-func (eq *eventQueue) next() *Event {
-	eq.mu.Lock()
-	defer eq.mu.Unlock()
-
-	for eq.events.Len() < 1 {
-		if eq.closed {
-			eq.cond.Broadcast()
-			return nil
-		}
-
-		eq.cond.Wait()
+// Close shuts down the event queue, flushing
+func (eq *eventQueue) Close() error {
+	log.Infof("event queue: closing")
+	select {
+	case <-eq.doneCh:
+		// already closed
+		return fmt.Errorf("eventqueue: already closed")
+	default:
+		close(eq.doneCh)
 	}
-	front := eq.events.Front()
-	block := front.Value.(*Event)
-	eq.events.Remove(front)
 
-	return block
+	// NOTE(prozlach): the order of things is very important here as we need to
+	// first make sure that no new events will be accepted by this sink and
+	// then cancel the underlying sink so that we can unblock this sink so that
+	// it notices that the termination signal came.
+	eq.wgBufferer.Wait()
+	err := eq.sink.Close()
+	eq.wgSender.Wait()
+
+	// NOTE(prozlach): not stricly necessary, just a basic hygiene
+	// NOTE(prozalch): we MUST not close eq.bufferInCh channel before waiting
+	// gouroutines had a chance to err out or send event, otherwise we will
+	// cause panics
+	close(eq.bufferInCh)
+
+	return err
 }
 
 // ignoredSink discards events with ignored target media types and actions.
