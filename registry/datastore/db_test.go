@@ -2912,7 +2912,7 @@ func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lsnCacheMock.EXPECT().GetLSN(ctx, repo).Return(tt.getLSNReturn, tt.getLSNError).Times(1)
+			lsnCacheMock.EXPECT().GetLSN(gomock.Any(), repo).Return(tt.getLSNReturn, tt.getLSNError).Times(1)
 			if tt.getLSNError == nil && tt.getLSNReturn != "" {
 				expectSingleRowQuery(replicaMock, query, column, tt.queryResult, tt.queryError, primaryLSN)
 			}
@@ -2960,6 +2960,70 @@ func TestDBLoadBalancer_UpToDateReplica_Inactive(t *testing.T) {
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_UpToDateReplica_FallbackToPrimaryOnTimeout(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replicaMockDB, replicaMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	ctx := context.Background()
+	mockConnector := mocks.NewMockConnector(ctrl)
+	lsnCacheMock := mocks.NewMockRepositoryCache(ctrl)
+
+	// Define expected DB connections
+	gomock.InOrder(
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).Times(1),
+		mockConnector.EXPECT().
+			Open(gomock.Any(), gomock.Any(), gomock.Any()).Return(&datastore.DB{DB: replicaMockDB}, nil).Times(1),
+	)
+
+	// Setup load balancer
+	lb, err := datastore.NewDBLoadBalancer(
+		ctx,
+		&datastore.DSN{},
+		datastore.WithFixedHosts([]string{"replica"}),
+		datastore.WithConnector(mockConnector),
+		datastore.WithLSNCache(lsnCacheMock),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+	require.Equal(t, primaryMockDB, lb.Primary().DB)
+	require.Len(t, lb.Replicas(), 1)
+	require.Equal(t, replicaMockDB, lb.Replica(ctx).DB)
+
+	repo := &models.Repository{Path: "test/repo"}
+	primaryLSN := "0/16B3748"
+	query := "SELECT pg_last_wal_replay_lsn (.+) SELECT pg_wal_lsn_diff"
+	column := "pg_wal_lsn_diff"
+
+	// test LSN cache lookup taking too long (over datastore.upToDateReplicaTimeout, i.e. 100ms)
+	lsnCacheMock.EXPECT().GetLSN(gomock.Any(), repo).DoAndReturn(func(_ context.Context, _ *models.Repository) (string, error) {
+		time.Sleep(110 * time.Millisecond)
+		return primaryLSN, nil
+	}).Times(1)
+	db := lb.UpToDateReplica(ctx, repo)
+	require.Equal(t, primaryMockDB, db.DB)
+
+	// test LSN cache lookup being fast, but subsequent LSN DB query taking too long
+	lsnCacheMock.EXPECT().GetLSN(gomock.Any(), repo).Return(primaryLSN, nil).Times(1)
+	replicaMock.ExpectQuery(query).
+		WithArgs(primaryLSN).
+		WillDelayFor(110 * time.Millisecond).
+		WillReturnRows(sqlmock.NewRows([]string{column}).AddRow(driver.Value(false)))
+	db = lb.UpToDateReplica(ctx, repo)
+	require.Equal(t, primaryMockDB, db.DB)
+
+	// Verify mock expectations
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+	require.NoError(t, replicaMock.ExpectationsWereMet())
 }
 
 func TestDB_Address(t *testing.T) {
