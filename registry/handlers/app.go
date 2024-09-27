@@ -676,9 +676,10 @@ func startDBReplicaChecking(ctx context.Context, lb datastore.LoadBalancer) {
 
 	l.WithFields(dlog.Fields{"jitter_s": jitter.Seconds()}).
 		Info("preparing to start database load balancing replica checking")
-	systemClock.Sleep(jitter)
 
 	go func() {
+		systemClock.Sleep(jitter)
+
 		// This function can only end in three situations: 1) service discovery is disabled and therefore there is
 		// nothing left to do (no error) 2) context cancellation 3) panic. If a panic occurs we should log, report to
 		// Sentry and then re-panic, as the instance would be in an inconsistent/unknown state. In case of context
