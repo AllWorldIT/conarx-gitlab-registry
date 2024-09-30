@@ -573,12 +573,8 @@ func (rs *retryingSink) Close() error {
 		close(rs.doneCh)
 	}
 
-	// NOTE(prozlach): the order of things is very important here as we need to
-	// first make sure that no new events will be accepted by this sink and
-	// then cancel the underlying sink so that we can unblock this sink so that
-	// it notices that the termination signal came.
-	err := rs.sink.Close()
 	rs.wg.Wait()
+	err := rs.sink.Close()
 
 	// NOTE(prozlach): not stricly necessary, just a basic hygiene
 	close(rs.eventsCh)
