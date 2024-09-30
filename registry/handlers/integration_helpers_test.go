@@ -674,7 +674,11 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 }
 
 func createRandomSmallLayer() (io.ReadSeeker, digest.Digest, int64) {
-	size := rand.Int63n(20)
+	// NOTE(prozlach): It is crucial to not to make the size of the layer too
+	// small as this will lead to flakes, as there is only one sha for layer
+	// size 0, handfull of shas for layer with size 1, etc... 128-196 bytes
+	// gives enough entropy to make tests reliable.
+	size := 128 + rand.Int63n(64)
 	b := make([]byte, size)
 	rand.Read(b)
 
