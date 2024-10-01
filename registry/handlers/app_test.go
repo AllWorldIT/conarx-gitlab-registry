@@ -773,3 +773,184 @@ func Test_startDBReplicaChecking_StartupJitter(t *testing.T) {
 	// Wait for the goroutine to complete before checking expectations
 	wg.Wait()
 }
+
+func TestStatusRecordingResponseWriter(t *testing.T) {
+	bodyContent := "default response"
+
+	tests := []struct {
+		name         string
+		writeHeader  bool
+		customStatus int
+		expectedCode int
+		expectedBody string
+	}{
+		{
+			name:         "default status without WriteHeader",
+			writeHeader:  false,
+			expectedCode: http.StatusOK,
+			expectedBody: bodyContent,
+		},
+		{
+			name:         "explicit WriteHeader with custom status",
+			writeHeader:  true,
+			customStatus: http.StatusCreated,
+			expectedCode: http.StatusCreated,
+			expectedBody: bodyContent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			srw := newStatusRecordingResponseWriter(recorder)
+
+			if tt.writeHeader {
+				srw.WriteHeader(tt.customStatus)
+			}
+			srw.Write([]byte(bodyContent))
+
+			assert.Equal(t, tt.expectedCode, srw.statusCode)
+			assert.Equal(t, tt.expectedCode, recorder.Result().StatusCode)
+			assert.Equal(t, tt.expectedBody, recorder.Body.String())
+		})
+	}
+}
+
+func TestRecordLSNMiddleware(t *testing.T) {
+	driver := testdriver.New()
+	ctx := context.Background()
+	registry, err := storage.NewRegistry(ctx, driver)
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDB := dmocks.NewMockLoadBalancer(ctrl)
+
+	app := &App{
+		Config: &configuration.Configuration{
+			Database: configuration.Database{
+				Enabled: true,
+				LoadBalancing: configuration.DatabaseLoadBalancing{
+					Enabled: true,
+				},
+			},
+		},
+		Context: ctx,
+		// doesn't matter which router we use (distribution or GitLab's), we're only testing the middleware internals
+		router:   &metaRouter{distribution: v2.Router()},
+		driver:   driver,
+		registry: registry,
+		db:       mockDB,
+	}
+	require.NoError(t, app.initMetaRouter())
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+	router := v2.Router()
+	serverURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
+
+	testDispatcher := func(expectedStatus int) dispatchFunc {
+		return func(ctx *Context, r *http.Request) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(expectedStatus)
+			})
+		}
+	}
+
+	for _, testcase := range []struct {
+		name            string
+		endpoint        string
+		method          string
+		vars            []string
+		status          int
+		shouldRecordLSN bool
+	}{
+		{
+			name:     "target repository and success status and write method",
+			endpoint: v2.RouteNameManifest,
+			method:   http.MethodDelete,
+			vars: []string{
+				"name", "foo/bar",
+				"reference", "sometag",
+			},
+			status:          http.StatusOK,
+			shouldRecordLSN: true,
+		},
+		{
+			name:     "target repository and success status and read method",
+			endpoint: v2.RouteNameManifest,
+			method:   http.MethodGet,
+			vars: []string{
+				"name", "foo/bar",
+				"reference", "sometag",
+			},
+			status: http.StatusOK,
+		},
+		{
+			name:     "target repository and error status and write method",
+			endpoint: v2.RouteNameManifest,
+			method:   http.MethodDelete,
+			vars: []string{
+				"name", "foo/bar",
+				"reference", "sometag",
+			},
+			status: http.StatusBadRequest,
+		},
+		{
+			name:     "target repository and error status and read method",
+			endpoint: v2.RouteNameManifest,
+			method:   http.MethodGet,
+			vars: []string{
+				"name", "foo/bar",
+				"reference", "sometag",
+			},
+			status: http.StatusBadRequest,
+		},
+		{
+			// there are no real write endpoints without a target repository, but just for future-proofing...
+			name:     "no target repository and success status and write method",
+			endpoint: v2.RouteNameBase,
+			method:   http.MethodPost,
+			status:   http.StatusOK,
+		},
+		{
+			name:     "no target repository and success status and read method",
+			endpoint: v2.RouteNameBase,
+			method:   http.MethodGet,
+			status:   http.StatusOK,
+		},
+		{
+			name:     "no target repository and error status and write method",
+			endpoint: v2.RouteNameBase,
+			method:   http.MethodPost,
+			status:   http.StatusInternalServerError,
+		},
+		{
+			name:     "no target repository and error status and read method",
+			endpoint: v2.RouteNameBase,
+			method:   http.MethodGet,
+			status:   http.StatusInternalServerError,
+		},
+	} {
+		t.Run(testcase.name, func(t *testing.T) {
+			app.registerDistribution(testcase.endpoint, testDispatcher(testcase.status))
+			route := router.GetRoute(testcase.endpoint).Host(serverURL.Host)
+			u, err := route.URL(testcase.vars...)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest(testcase.method, u.String(), nil)
+			require.NoError(t, err)
+
+			if testcase.shouldRecordLSN {
+				mockDB.EXPECT().RecordLSN(gomock.Any(), gomock.Any()).Times(1)
+			}
+
+			resp, err := http.DefaultClient.Do(req)
+			defer resp.Body.Close()
+			require.NoError(t, err)
+			require.Equal(t, testcase.status, resp.StatusCode)
+		})
+	}
+}
