@@ -42,6 +42,7 @@ import (
 	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
+	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/gc"
 	"github.com/docker/distribution/registry/gc/worker"
 	"github.com/docker/distribution/registry/internal"
@@ -1144,6 +1145,11 @@ func (app *App) initMetaRouter() error {
 
 	app.router.gitlab.Use(app.gorillaLogMiddleware)
 
+	if app.Config.Database.Enabled && app.Config.Database.LoadBalancing.Enabled {
+		app.router.distribution.Use(app.recordLSNMiddleware)
+		app.router.gitlab.Use(app.recordLSNMiddleware)
+	}
+
 	// Register the handler dispatchers.
 	app.registerDistribution(v2.RouteNameBase, func(_ *Context, _ *http.Request) http.Handler {
 		return distributionAPIBase(app.Config.Database.Enabled)
@@ -1226,6 +1232,56 @@ func (h dbAssertionhandler) wrap(child func(ctx *Context, r *http.Request) http.
 	}
 
 	return child
+}
+
+type statusRecordingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *statusRecordingResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func newStatusRecordingResponseWriter(w http.ResponseWriter) *statusRecordingResponseWriter {
+	// Default to 200 status code (for cases where WriteHeader may not be explicitly called)
+	return &statusRecordingResponseWriter{w, http.StatusOK}
+}
+
+func (app *App) recordLSNMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Wrap the original ResponseWriter to capture status code
+		srw := newStatusRecordingResponseWriter(w)
+		// Call the next handler
+		next.ServeHTTP(srw, r)
+
+		// Only record primary LSN if 1) the request targets a repository 2) it's a write request 3) it succeeded
+		if !app.nameRequired(r) {
+			return
+		}
+		if r.Method != http.MethodPut && r.Method != http.MethodPost &&
+			r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+			return
+		}
+		if srw.statusCode < 200 || srw.statusCode >= 400 {
+			return
+		}
+
+		// Get repository path from request context
+		ctx := app.context(w, r)
+		repo, err := app.repositoryFromContext(ctx, w)
+		if err != nil {
+			dcontext.GetLogger(ctx).WithError(err).
+				Error("failed to get repository from request context to record primary LSN")
+			return
+		}
+
+		if err := app.db.RecordLSN(r.Context(), &models.Repository{Path: repo.Named().Name()}); err != nil {
+			dcontext.GetLogger(ctx).WithError(err).
+				Error("failed to record primary LSN after successful repository write")
+		}
+	})
 }
 
 // distributionAPIVersionMiddleware sets a header with the Docker Distribution
