@@ -1370,7 +1370,11 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 		}
 
 		if ctx.useDatabase {
-			ctx.repoCache = datastore.NewSingleRepositoryCache()
+			if app.redisCache != nil {
+				ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
+			} else {
+				ctx.repoCache = datastore.NewSingleRepositoryCache()
+			}
 		}
 
 		dispatch(ctx, r).ServeHTTP(w, r)

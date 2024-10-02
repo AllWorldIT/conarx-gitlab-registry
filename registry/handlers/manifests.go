@@ -344,8 +344,12 @@ func newDBManifestGetter(
 	repoPath string,
 	req *http.Request,
 ) (*dbManifestGetter, error) {
+	var opts []datastore.RepositoryStoreOption
+	if rcache != nil {
+		opts = append(opts, datastore.WithRepositoryCache(rcache))
+	}
 	return &dbManifestGetter{
-		RepositoryStore: datastore.NewRepositoryStore(db, datastore.WithRepositoryCache(rcache)),
+		RepositoryStore: datastore.NewRepositoryStore(db, opts...),
 		repoPath:        repoPath,
 		req:             req,
 	}, nil
@@ -524,10 +528,7 @@ func (p *dbManifestWriter) Put(imh *manifestHandler, mfst distribution.Manifest)
 func (p *dbManifestWriter) Tag(imh *manifestHandler, mfst distribution.Manifest, tag string, _ distribution.Descriptor) error {
 	repoName := imh.Repository.Named().Name()
 
-	// To be removed on completion of: https://gitlab.com/groups/gitlab-org/-/epics/9050
-	repoCache := getRepoCache(imh)
-
-	if err := dbTagManifest(imh, imh.db.Primary(), repoCache, imh.Digest, imh.Tag, repoName); err != nil {
+	if err := dbTagManifest(imh, imh.db.Primary(), imh.GetRepoCache(), imh.Digest, imh.Tag, repoName); err != nil {
 		if errors.Is(err, datastore.ErrManifestNotFound) {
 			// If online GC was already reviewing the manifest that we want to tag, and that manifest had no
 			// tags before the review start, the API is unable to stop the GC from deleting the manifest (as
@@ -540,7 +541,7 @@ func (p *dbManifestWriter) Tag(imh *manifestHandler, mfst distribution.Manifest,
 			if err = p.Put(imh, mfst); err != nil {
 				return fmt.Errorf("failed to recreate manifest in database: %w", err)
 			}
-			if err = dbTagManifest(imh, imh.db.Primary(), repoCache, imh.Digest, imh.Tag, repoName); err != nil {
+			if err = dbTagManifest(imh, imh.db.Primary(), imh.repoCache, imh.Digest, imh.Tag, repoName); err != nil {
 				return fmt.Errorf("failed to create tag in database after manifest recreate: %w", err)
 			}
 		} else {
@@ -807,7 +808,11 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": path, "manifest_digest": dgst, "tag_name": tagName})
 	l.Debug("tagging manifest")
 
-	repositoryStore := datastore.NewRepositoryStore(db, datastore.WithRepositoryCache(cache))
+	var opts []datastore.RepositoryStoreOption
+	if cache != nil {
+		opts = append(opts, datastore.WithRepositoryCache(cache))
+	}
+	repositoryStore := datastore.NewRepositoryStore(db, opts...)
 	dbRepo, err := repositoryStore.FindByPath(ctx, path)
 	if err != nil {
 		return err
@@ -857,7 +862,7 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 		return err
 	}
 
-	repoStore := datastore.NewRepositoryStore(tx, datastore.WithRepositoryCache(cache))
+	repoStore := datastore.NewRepositoryStore(tx, opts...)
 	if err := repoStore.UpdateLastPublishedAt(ctx, dbRepo, tag); err != nil {
 		return err
 	}
@@ -870,7 +875,11 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 }
 
 func dbPutManifestOCI(imh *manifestHandler, manifest *ocischema.DeserializedManifest, payload []byte) error {
-	repoReader := datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
+	var opts []datastore.RepositoryStoreOption
+	if imh.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(imh.GetRepoCache()))
+	}
+	repoReader := datastore.NewRepositoryStore(imh.App.db.Primary(), opts...)
 	repoPath := imh.Repository.Named().Name()
 
 	v := validation.NewOCIValidator(
@@ -889,7 +898,11 @@ func dbPutManifestOCI(imh *manifestHandler, manifest *ocischema.DeserializedMani
 }
 
 func dbPutManifestSchema2(imh *manifestHandler, manifest *schema2.DeserializedManifest, payload []byte) error {
-	repoReader := datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
+	var opts []datastore.RepositoryStoreOption
+	if imh.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(imh.GetRepoCache()))
+	}
+	repoReader := datastore.NewRepositoryStore(imh.App.db.Primary(), opts...)
 	repoPath := imh.Repository.Named().Name()
 
 	v := validation.NewSchema2Validator(
@@ -917,7 +930,11 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 	})
 
 	// create or find target repository
-	rStore := datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
+	var opts []datastore.RepositoryStoreOption
+	if imh.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(imh.GetRepoCache()))
+	}
+	rStore := datastore.NewRepositoryStore(imh.App.db.Primary(), opts...)
 	dbRepo, err := rStore.CreateOrFindByPath(imh, repoPath)
 	if err != nil {
 		return err
@@ -1112,7 +1129,11 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 	})
 	l.Debug("putting manifest list")
 
-	rStore := datastore.NewRepositoryStore(imh.App.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
+	var opts []datastore.RepositoryStoreOption
+	if imh.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(imh.GetRepoCache()))
+	}
+	rStore := datastore.NewRepositoryStore(imh.App.db.Primary(), opts...)
 	v := validation.NewManifestListValidator(
 		&datastore.RepositoryManifestService{
 			RepositoryReader: rStore,
@@ -1291,7 +1312,11 @@ func (imh *manifestHandler) applyResourcePolicy(manifest distribution.Manifest) 
 // index to a valid OCI image manifest and validates it accordingly. The original index digest and payload are
 // preserved when stored on the database.
 func dbPutBuildkitIndex(imh *manifestHandler, ml *manifestlist.DeserializedManifestList, payload []byte) error {
-	repoReader := datastore.NewRepositoryStore(imh.db.Primary(), datastore.WithRepositoryCache(getRepoCache(imh)))
+	var opts []datastore.RepositoryStoreOption
+	if imh.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(imh.GetRepoCache()))
+	}
+	repoReader := datastore.NewRepositoryStore(imh.db.Primary(), opts...)
 	repoPath := imh.Repository.Named().Name()
 
 	// convert to OCI manifest and process as if it was one
@@ -1332,7 +1357,11 @@ func dbDeleteManifest(ctx context.Context, db datastore.Handler, cache datastore
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "digest": d})
 	l.Debug("deleting manifest from repository in database")
 
-	rStore := datastore.NewRepositoryStore(db, datastore.WithRepositoryCache(cache))
+	var opts []datastore.RepositoryStoreOption
+	if cache != nil {
+		opts = append(opts, datastore.WithRepositoryCache(cache))
+	}
+	rStore := datastore.NewRepositoryStore(db, opts...)
 	r, err := rStore.FindByPath(ctx, repoPath)
 	if err != nil {
 		return err
@@ -1391,7 +1420,7 @@ func dbDeleteManifest(ctx context.Context, db datastore.Handler, cache datastore
 		}
 	}
 
-	rStore = datastore.NewRepositoryStore(tx, datastore.WithRepositoryCache(cache))
+	rStore = datastore.NewRepositoryStore(tx, opts...)
 	found, err := rStore.DeleteManifest(ctx, r, d)
 	if err != nil {
 		return err
@@ -1429,10 +1458,7 @@ func (imh *manifestHandler) deleteTag() error {
 			return err
 		}
 	} else {
-		// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
-		repoCache := getRepoCache(imh)
-
-		if err := dbDeleteTag(imh.Context, imh.db.Primary(), repoCache, imh.Repository.Named().Name(), imh.Tag); err != nil {
+		if err := dbDeleteTag(imh.Context, imh.db.Primary(), imh.GetRepoCache(), imh.Repository.Named().Name(), imh.Tag); err != nil {
 			return err
 		}
 	}
@@ -1480,10 +1506,7 @@ func (imh *manifestHandler) deleteManifest() error {
 			}
 		}
 	} else {
-		// To be removed on completion of: https://gitlab.com/groups/gitlab-org/-/epics/9050
-		repoCache := getRepoCache(imh)
-
-		if err := dbDeleteManifest(imh.Context, imh.db.Primary(), repoCache, imh.Repository.Named().String(), imh.Digest); err != nil {
+		if err := dbDeleteManifest(imh.Context, imh.db.Primary(), imh.GetRepoCache(), imh.Repository.Named().String(), imh.Digest); err != nil {
 			return err
 		}
 	}
@@ -1557,17 +1580,6 @@ func logIfManifestListInvalid(ctx context.Context, ml *manifestlist.Deserialized
 	l.Warn("invalid manifest list/index reference(s), please report this issue to GitLab at https://gitlab.com/gitlab-org/container-registry/-/issues/409")
 }
 
-// getRepoCache selects the cache type to be used for a repository cache. It selects between the (default)
-// in-memory cache and a redis cache. The redis cache takes precedence if it is avaialible.
-func getRepoCache(imh *manifestHandler) (repoCache datastore.RepositoryCache) {
-	if imh.App != nil && imh.App.redisCache != nil {
-		repoCache = datastore.NewCentralRepositoryCache(imh.App.redisCache)
-	} else {
-		repoCache = imh.repoCache
-	}
-	return
-}
-
 const (
 	tagDeleteGCReviewWindow = 1 * time.Hour
 	tagDeleteGCLockTimeout  = 5 * time.Second
@@ -1577,7 +1589,11 @@ func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.Repo
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "tag_name": tagName})
 	l.Debug("deleting tag from repository in database")
 
-	rStore := datastore.NewRepositoryStore(db, datastore.WithRepositoryCache(cache))
+	var opts []datastore.RepositoryStoreOption
+	if cache != nil {
+		opts = append(opts, datastore.WithRepositoryCache(cache))
+	}
+	rStore := datastore.NewRepositoryStore(db, opts...)
 	r, err := rStore.FindByPath(ctx, repoPath)
 	if err != nil {
 		return err
@@ -1620,7 +1636,7 @@ func dbDeleteTag(ctx context.Context, db datastore.Handler, cache datastore.Repo
 	// transaction. The tag delete will trigger `gc_track_deleted_tags`, which will attempt to acquire the same row
 	// lock on the review queue in case of conflict. Not using the same transaction for both operations (i.e., using
 	// `tx` for `FindAndLockBefore` and `db` for `DeleteTagByName`) would therefore result in a deadlock.
-	rStore = datastore.NewRepositoryStore(tx, datastore.WithRepositoryCache(cache))
+	rStore = datastore.NewRepositoryStore(tx, opts...)
 	found, err := rStore.DeleteTagByName(txCtx, r, tagName)
 	if err != nil {
 		return err

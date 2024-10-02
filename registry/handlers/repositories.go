@@ -216,9 +216,8 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 	}
 
 	var opts []datastore.RepositoryStoreOption
-	// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
-	if h.App.redisCache != nil {
-		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(h.App.redisCache)))
+	if h.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(h.GetRepoCache()))
 	}
 	store := datastore.NewRepositoryStore(h.db.Primary(), opts...)
 
@@ -516,9 +515,8 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var opts []datastore.RepositoryStoreOption
-	// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
-	if h.App.redisCache != nil {
-		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(h.App.redisCache)))
+	if h.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(h.GetRepoCache()))
 	}
 	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
 	path := h.Repository.Named().Name()

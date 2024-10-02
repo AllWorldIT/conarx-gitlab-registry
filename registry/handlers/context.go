@@ -54,9 +54,6 @@ func (ctx *Context) Value(key interface{}) interface{} {
 }
 
 func (ctx *Context) GetRepoCache() datastore.RepositoryCache {
-	if ctx.App != nil && ctx.App.redisCache != nil {
-		return datastore.NewCentralRepositoryCache(ctx.App.redisCache)
-	}
 	return ctx.repoCache
 }
 
