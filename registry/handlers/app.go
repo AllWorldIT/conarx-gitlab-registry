@@ -61,6 +61,7 @@ import (
 	redisstore "github.com/eko/gocache/store/redis/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/mux"
+	"github.com/hashicorp/go-multierror"
 	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -1832,21 +1833,54 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 
 // GracefulShutdown allows the app to free any resources before shutdown.
 func (app *App) GracefulShutdown(ctx context.Context) error {
-	errors := make(chan error)
+	// TODO(prozlach): There are probably more components that need/will need
+	// graceful shutdown, hence making this function extendable.
+	numberOfComponentsToShutdown := 2
 
+	errs := new(multierror.Error)
+	l := dlog.GetLogger(dlog.WithContext(ctx))
+	errCh := make(chan error, numberOfComponentsToShutdown)
+
+	if app.db != nil {
+		// NOTE(prozlach): Database is enabled, let's shut it down
+		go func() {
+			l.Info("closing database connections")
+			err := app.db.Close()
+			if err != nil {
+				err = fmt.Errorf("database shutdown: %w", err)
+			} else {
+				l.Info("database component has been shut down")
+			}
+			errCh <- err
+		}()
+	} else {
+		errCh <- nil
+	}
+
+	// NOTE(prozlach): Events Broadcaster sink is always there, it may simply
+	// not have any dependent sinks attached if notifications are not
+	// configured.
 	go func() {
-		errors <- app.db.Close()
+		l.Info("closing events notification sink")
+		err := app.events.sink.Close()
+		if err != nil {
+			err = fmt.Errorf("events notification sink shutdown: %w", err)
+		} else {
+			l.Info("events notification sink has been shut down")
+		}
+		errCh <- err
 	}()
 
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("app shutdown failed: %w", ctx.Err())
-	case err := <-errors:
-		if err != nil {
-			return fmt.Errorf("app shutdown failed: %w", err)
+	for i := 0; i < numberOfComponentsToShutdown; i++ {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("app shutdown failed: %w", ctx.Err())
+		case err := <-errCh:
+			errs = multierror.Append(errs, err)
 		}
-		return nil
 	}
+
+	return errs.ErrorOrNil()
 }
 
 // DBStats returns the sql.DBStats for the metadata database connection handle.
