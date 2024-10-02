@@ -29,6 +29,7 @@ import (
 	"github.com/docker/distribution/registry/storage"
 	memorycache "github.com/docker/distribution/registry/storage/cache/memory"
 	"github.com/docker/distribution/registry/storage/driver/testdriver"
+	dtestutil "github.com/docker/distribution/testutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ import (
 // dispatchers must be tested individually.
 func TestAppDistribtionDispatcher(t *testing.T) {
 	driver := testdriver.New()
-	ctx := context.Background()
+	ctx := dtestutil.NewContextWithLogger(t)
 	registry, err := storage.NewRegistry(ctx, driver, storage.BlobDescriptorCacheProvider(memorycache.NewInMemoryBlobDescriptorCacheProvider()), storage.EnableDelete, storage.EnableRedirect)
 	if err != nil {
 		t.Fatalf("error creating registry: %v", err)
@@ -170,7 +171,7 @@ func testConfig() *configuration.Configuration {
 // TestNewApp covers the creation of an application via NewApp with a
 // configuration.
 func TestNewApp(t *testing.T) {
-	ctx := context.Background()
+	ctx := dtestutil.NewContextWithLogger(t)
 	config := testConfig()
 
 	// Mostly, with this test, given a sane configuration, we are simply
@@ -294,7 +295,7 @@ func TestAppendAccessRecords(t *testing.T) {
 // TestGitlabAPI_GetRepositoryDetailsAccessRecords ensures that only users will pull permissions for repository x can invoke the
 // `GET /gitlab/v1/repositories/x` endpoint.
 func TestGitlabAPI_GetRepositoryDetailsAccessRecords(t *testing.T) {
-	ctx := context.Background()
+	ctx := dtestutil.NewContextWithLogger(t)
 	config := testConfig()
 
 	app, err := NewApp(ctx, config)
@@ -329,7 +330,7 @@ func TestGitlabAPI_GetRepositoryDetailsAccessRecords(t *testing.T) {
 // for repositories `<name>` (base) and `<name>/*` (descendants) can invoke the `GET /gitlab/v1/repositories/<name>`
 // endpoint with the `size` query param set to `self_with_descendants`.
 func TestGitlabAPI_GetRepositoryDetails_SelfWithDescendantsAccessRecords(t *testing.T) {
-	ctx := context.Background()
+	ctx := dtestutil.NewContextWithLogger(t)
 	config := testConfig()
 
 	app, err := NewApp(ctx, config)
@@ -754,7 +755,7 @@ func Test_startDBReplicaChecking_StartupJitter(t *testing.T) {
 
 	// Create the load balancer with the required options
 	lbMock := dmocks.NewMockLoadBalancer(ctrl)
-	ctx := context.TODO()
+	ctx := dtestutil.NewContextWithLogger(t)
 
 	var wg sync.WaitGroup
 	wg.Add(1) // We expect one goroutine to be run
