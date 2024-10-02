@@ -98,10 +98,9 @@ func (buh *blobUploadHandler) StartBlobUpload(w http.ResponseWriter, r *http.Req
 	var rStore datastore.RepositoryStore
 	if buh.useDatabase {
 		var opts []datastore.RepositoryStoreOption
-		if buh.App.redisCache != nil {
-			opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(buh.App.redisCache)))
+		if buh.GetRepoCache() != nil {
+			opts = append(opts, datastore.WithRepositoryCache(buh.GetRepoCache()))
 		}
-
 		rStore = datastore.NewRepositoryStore(buh.db.Primary(), opts...)
 	}
 
@@ -206,7 +205,7 @@ func (buh *blobUploadHandler) PatchBlobData(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func dbPutBlobUploadComplete(ctx context.Context, db *datastore.DB, repoPath string, desc distribution.Descriptor, repoStoreOpts []datastore.RepositoryStoreOption) error {
+func dbPutBlobUploadComplete(ctx context.Context, db *datastore.DB, repoPath string, desc distribution.Descriptor, repoCache datastore.RepositoryCache) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning database transaction: %w", err)
@@ -225,7 +224,11 @@ func dbPutBlobUploadComplete(ctx context.Context, db *datastore.DB, repoPath str
 	}
 
 	// create or find repository
-	rStore := datastore.NewRepositoryStore(tx, repoStoreOpts...)
+	var opts []datastore.RepositoryStoreOption
+	if repoCache != nil {
+		opts = append(opts, datastore.WithRepositoryCache(repoCache))
+	}
+	rStore := datastore.NewRepositoryStore(tx, opts...)
 
 	r, err := rStore.CreateOrFindByPath(ctx, repoPath)
 	if err != nil {
@@ -311,11 +314,7 @@ func (buh *blobUploadHandler) PutBlobUploadComplete(w http.ResponseWriter, r *ht
 	}
 
 	if buh.useDatabase {
-		var opts []datastore.RepositoryStoreOption
-		if buh.App.redisCache != nil {
-			opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(buh.App.redisCache)))
-		}
-		if err := dbPutBlobUploadComplete(buh.Context, buh.db.Primary(), buh.Repository.Named().Name(), desc, opts); err != nil {
+		if err := dbPutBlobUploadComplete(buh.Context, buh.db.Primary(), buh.Repository.Named().Name(), desc, buh.GetRepoCache()); err != nil {
 			e := fmt.Errorf("failed to create blob in database: %w", err)
 			buh.Errors = append(buh.Errors, errcode.FromUnknownError(e))
 			return

@@ -7,7 +7,6 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/log"
-	gocache "github.com/eko/gocache/lib/v4/cache"
 
 	"github.com/docker/distribution/registry/datastore"
 
@@ -56,15 +55,14 @@ type blobHandler struct {
 	Digest digest.Digest
 }
 
-func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string, dgst digest.Digest, cache *gocache.Cache[any]) error {
+func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string, dgst digest.Digest, cache datastore.RepositoryCache) error {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "digest": dgst})
 	l.Debug("finding repository blob link in database")
 
 	var opts []datastore.RepositoryStoreOption
 	if cache != nil {
-		opts = append(opts, datastore.WithRepositoryCache(datastore.NewCentralRepositoryCache(cache)))
+		opts = append(opts, datastore.WithRepositoryCache(cache))
 	}
-
 	rStore := datastore.NewRepositoryStore(db, opts...)
 	r, err := rStore.FindByPath(ctx, repoPath)
 	if err != nil {
@@ -99,7 +97,7 @@ func (bh *blobHandler) GetBlob(w http.ResponseWriter, r *http.Request) {
 	blobs := bh.Repository.Blobs(bh)
 
 	if bh.useDatabase {
-		if err := dbBlobLinkExists(bh.Context, bh.db.Primary(), bh.Repository.Named().Name(), bh.Digest, bh.App.redisCache); err != nil {
+		if err := dbBlobLinkExists(bh.Context, bh.db.Primary(), bh.Repository.Named().Name(), bh.Digest, bh.GetRepoCache()); err != nil {
 			bh.Errors = append(bh.Errors, errcode.FromUnknownError(err))
 			return
 		}
@@ -208,10 +206,5 @@ func (bh *blobHandler) deleteBlob() error {
 		return blobs.Delete(bh, bh.Digest)
 	}
 
-	// TODO: remove as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1056
-	repoCache := bh.repoCache
-	if bh.App.redisCache != nil {
-		repoCache = datastore.NewCentralRepositoryCache(bh.App.redisCache)
-	}
-	return dbDeleteBlob(bh.Context, bh.App.Config, bh.db.Primary(), repoCache, bh.Repository.Named().Name(), bh.Digest)
+	return dbDeleteBlob(bh.Context, bh.App.Config, bh.db.Primary(), bh.GetRepoCache(), bh.Repository.Named().Name(), bh.Digest)
 }

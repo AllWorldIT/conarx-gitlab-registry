@@ -26,14 +26,14 @@ func TestGetManifest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	repositoryMockCache := mocks.NewMockRepositoryCache(ctrl)
+	repoCacheMock := mocks.NewMockRepositoryCache(ctrl)
 	matchFn := func(x any) bool {
 		repoArg := x.(*models.Repository)
 		return repoArg.Path == repoPath
 	}
 	gomock.InOrder(
-		repositoryMockCache.EXPECT().Get(env.ctx, repoPath).Return(nil).Times(1),
-		repositoryMockCache.EXPECT().Set(env.ctx, gomock.Cond(matchFn)).Times(1),
+		repoCacheMock.EXPECT().Get(env.ctx, repoPath).Return(nil).Times(1),
+		repoCacheMock.EXPECT().Set(env.ctx, gomock.Cond(matchFn)).Times(1),
 	)
 
 	// build test repository
@@ -68,7 +68,7 @@ func TestGetManifest(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test
-	manifestsGetter, err := newDBManifestGetter(env.db, repositoryMockCache, r.Path, &http.Request{})
+	manifestsGetter, err := newDBManifestGetter(env.db, repoCacheMock, r.Path, &http.Request{})
 	require.NoError(t, err)
 	manifest, digest, err := manifestsGetter.GetByTag(env.ctx, tagName)
 	require.NoError(t, err)
