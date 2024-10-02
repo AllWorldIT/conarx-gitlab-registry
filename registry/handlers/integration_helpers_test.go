@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -365,15 +366,16 @@ func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[stri
 }
 
 type testEnv struct {
-	pk          libtrust.PrivateKey
-	ctx         context.Context
-	config      *configuration.Configuration
-	app         *registryhandlers.App
-	server      *httptest.Server
-	builder     *urls.Builder
-	db          datastore.LoadBalancer
-	ns          *rtestutil.NotificationServer
-	cacheClient cacheClient
+	pk           libtrust.PrivateKey
+	ctx          context.Context
+	config       *configuration.Configuration
+	app          *registryhandlers.App
+	server       *httptest.Server
+	builder      *urls.Builder
+	db           datastore.LoadBalancer
+	ns           *rtestutil.NotificationServer
+	cacheClient  cacheClient
+	shutdownOnce *sync.Once
 }
 
 func (e *testEnv) requireDB(t *testing.T) {
@@ -458,47 +460,44 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	}
 
 	return &testEnv{
-		pk:          pk,
-		ctx:         ctx,
-		config:      config,
-		app:         app,
-		server:      server,
-		builder:     builder,
-		db:          db,
-		ns:          notifServer,
-		cacheClient: redis,
+		pk:           pk,
+		ctx:          ctx,
+		config:       config,
+		app:          app,
+		server:       server,
+		builder:      builder,
+		db:           db,
+		ns:           notifServer,
+		cacheClient:  redis,
+		shutdownOnce: new(sync.Once),
 	}
 }
 
 func (t *testEnv) Shutdown() {
-	t.server.CloseClientConnections()
-	t.server.Close()
+	t.shutdownOnce.Do(func() {
+		t.server.CloseClientConnections()
+		t.server.Close()
 
-	if t.config.Database.Enabled {
 		if err := t.app.GracefulShutdown(t.ctx); err != nil {
 			panic(err)
 		}
 
-		if err := datastoretestutil.TruncateAllTables(t.db.Primary()); err != nil {
-			panic(err)
+		if t.config.Database.Enabled {
+			if err := datastoretestutil.TruncateAllTables(t.db.Primary()); err != nil {
+				panic(err)
+			}
+
+			if err := t.db.Close(); err != nil {
+				panic(err)
+			}
 		}
 
-		if err := t.db.Close(); err != nil {
-			panic(err)
+		if t.config.Redis.Cache.Enabled {
+			if err := t.cacheClient.FlushCache(); err != nil {
+				panic(err)
+			}
 		}
-
-		// Needed for idempotency, so that shutdowns may be defer'd without worry.
-		t.config.Database.Enabled = false
-	}
-
-	if t.config.Redis.Cache.Enabled {
-		if err := t.cacheClient.FlushCache(); err != nil {
-			panic(err)
-		}
-
-		// Needed for idempotency, so that shutdowns may be defer'd without worry.
-		t.config.Redis.Cache.Enabled = false
-	}
+	})
 }
 
 type subjectManifest interface {
