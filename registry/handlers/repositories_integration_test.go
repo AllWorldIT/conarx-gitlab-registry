@@ -3,7 +3,6 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -29,6 +28,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
+	dtestutil "github.com/docker/distribution/testutil"
 )
 
 // testEnv is a drastically simplified version of the implementation in handlers_test (integration_helpers_test.go). The
@@ -96,7 +96,8 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 	}
 
-	app, err := NewApp(context.Background(), cfg)
+	ctx := dtestutil.NewContextWithLogger(t)
+	app, err := NewApp(ctx, cfg)
 	require.NoError(t, err)
 
 	handler := correlation.InjectCorrelationID(app, correlation.WithPropagation())

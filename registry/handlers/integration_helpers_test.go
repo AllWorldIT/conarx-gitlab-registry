@@ -391,7 +391,7 @@ func newTestEnv(t *testing.T, opts ...configOpt) *testEnv {
 }
 
 func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *testEnv {
-	ctx := context.Background()
+	ctx := testutil.NewContextWithLogger(t)
 
 	// The API test needs access to the database only to clean it up during
 	// shutdown so that environments come up with a fresh copy of the database.
