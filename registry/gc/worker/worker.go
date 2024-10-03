@@ -147,19 +147,24 @@ func exponentialBackoff(i int) time.Duration {
 	base := 5 * time.Minute
 	max := 24 * time.Hour
 
-	// this should never happen, but just in case...
+	// Protect against unit underflow.
 	if i < 0 {
 		return base
 	}
+
 	// avoid int64 overflow
-	if i > 30 {
+	if i > 24 {
 		return max
 	}
 
 	backoff := base * time.Duration(1<<uint(i))
-	if backoff > max {
-		backoff = max
-	}
 
-	return backoff
+	switch {
+	case backoff < base:
+		return base
+	case backoff > max:
+		return max
+	default:
+		return backoff
+	}
 }
