@@ -1,0 +1,2 @@
+# Versions of registry dependencies managed by asdf in gdk build.
+golang 1.22.8 1.23.2
