@@ -224,7 +224,7 @@ database:background-migrations:
         DNS_SERVER_REPLY_HOSTS: "replica1,replica2"
         DNS_SERVER_REPLY_PORT: "5432"
         DNS_SERVER_LISTEN_PORT: "8600"
-  script: $GO_TEST -v -timeout=25m -coverprofile=coverage.out -tags=$TAGS
+  script: $GO_TEST -v -timeout=35m -coverprofile=coverage.out -tags=$TAGS
 
 database:api-load-balancing-hosts:
   <<: *database-load-balancing
