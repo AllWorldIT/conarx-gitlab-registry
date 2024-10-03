@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1763,9 +1764,22 @@ func assertManifestDeleteResponse(t *testing.T, env *testEnv, repoName string, m
 func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagName string, repoPaths []string) {
 	t.Helper()
 
+	wg := new(sync.WaitGroup)
+	// NOTE(prozlach): concurency controll, value chosen arbitraly
+	semaphore := make(chan struct{}, 20)
+
 	for _, path := range repoPaths {
-		seedRandomSchema2Manifest(t, env, path, putByTag(tagName))
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			seedRandomSchema2Manifest(t, env, path, putByTag(tagName))
+		}(path)
 	}
+	wg.Wait()
 }
 
 func generateAuthToken(t *testing.T, user string, access []*token.ResourceActions, issuer issuerProps, signingKey libtrust.PrivateKey) string {
