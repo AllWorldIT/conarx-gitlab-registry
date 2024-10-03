@@ -90,9 +90,25 @@ func Test_exponentialBackoff(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := exponentialBackoff(tt.input)
-			if got != tt.want {
-				t.Errorf("want %v, got %v", tt.want, got)
-			}
+			require.Equal(t, tt.want, got)
 		})
 	}
+
+	// Test a wide range of input values to ensure base and max values are not violated.
+	base := 5 * time.Minute
+	max := 24 * time.Hour
+	durations := []time.Duration{}
+
+	for i := -12; i < 144; i++ {
+		d := exponentialBackoff(i)
+
+		// Ensure values never exceed base or max.
+		require.GreaterOrEqual(t, d, base)
+		require.LessOrEqual(t, d, max)
+
+		durations = append(durations, d)
+	}
+
+	// Ensure values are monotonic.
+	require.IsNonDecreasing(t, durations)
 }
