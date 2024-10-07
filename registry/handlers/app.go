@@ -47,6 +47,7 @@ import (
 	"github.com/docker/distribution/registry/gc/worker"
 	"github.com/docker/distribution/registry/internal"
 	redismetrics "github.com/docker/distribution/registry/internal/metrics/redis"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	registrymiddleware "github.com/docker/distribution/registry/middleware/registry"
 	repositorymiddleware "github.com/docker/distribution/registry/middleware/repository"
 	"github.com/docker/distribution/registry/storage"
@@ -57,9 +58,6 @@ import (
 	storagemiddleware "github.com/docker/distribution/registry/storage/driver/middleware"
 	"github.com/docker/distribution/registry/storage/validation"
 	"github.com/docker/distribution/version"
-	gocache "github.com/eko/gocache/lib/v4/cache"
-	libstore "github.com/eko/gocache/lib/v4/store"
-	redisstore "github.com/eko/gocache/store/redis/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/go-multierror"
@@ -121,8 +119,8 @@ type App struct {
 	manifestRefLimit         int
 	manifestPayloadSizeLimit int
 
-	// redisCache is the interface for manipulating cached data on Redis.
-	redisCache *gocache.Cache[any]
+	// redisCache is the abstraction for manipulating cached data on Redis.
+	redisCache *iredis.Cache
 }
 
 // NewApp takes a configuration and returns a configured app, ready to serve
@@ -1025,8 +1023,7 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 		return cmd.Err()
 	}
 
-	redisStore := redisstore.NewRedis(redisClient, libstore.WithExpiration(redisCacheTTL))
-	app.redisCache = gocache.New[any](redisStore)
+	app.redisCache = iredis.NewCache(redisClient, iredis.WithDefaultTTL(redisCacheTTL))
 
 	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis cache configured successfully")
 

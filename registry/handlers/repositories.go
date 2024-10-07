@@ -23,8 +23,7 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
-	gocache "github.com/eko/gocache/lib/v4/cache"
-
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/gorilla/handlers"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -1126,7 +1125,7 @@ type renameStoreParams struct {
 }
 
 // handleRenameStoreOperation procures the necessary lease on repositories, executes the rename request in our datastore and writes the appropriate response headers.
-func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo renameStoreParams, cache *gocache.Cache[any], db *datastore.DB) error {
+func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo renameStoreParams, cache *iredis.Cache, db *datastore.DB) error {
 	// create a repository lease store
 	var opts []datastore.RepositoryLeaseStoreOption
 	opts = append(opts, datastore.WithRepositoryLeaseCache(datastore.NewCentralRepositoryLeaseCache(cache)))

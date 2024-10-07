@@ -9,19 +9,14 @@ import (
 
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore/models"
-	gocache "github.com/eko/gocache/lib/v4/cache"
-	"github.com/eko/gocache/lib/v4/marshaler"
-	"github.com/eko/gocache/lib/v4/store"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/opencontainers/go-digest"
 	"github.com/redis/go-redis/v9"
-	"github.com/vmihailenco/msgpack/v5"
 )
 
 var (
-	errLeaseNotFound         = errors.New("repository lease not found")
-	errLeaseExtractionFailed = errors.New("failed to extract repository lease value")
-	errLeaseUnmarshalFailed  = errors.New("failed to unmarshal repository lease value")
-	errLeaseUpsertIsEmpty    = errors.New("repository lease to be upserted can not be empty")
+	errLeaseNotFound      = errors.New("repository lease not found")
+	errLeaseUpsertIsEmpty = errors.New("repository lease to be upserted can not be empty")
 )
 
 const (
@@ -109,15 +104,12 @@ func (n *noOpRepositoryLeaseCache) Invalidate(ctx context.Context, path string) 
 
 // centralRepositoryLeaseCache is the interface for the centralized repository lease cache backed by Redis.
 type centralRepositoryLeaseCache struct {
-	// cache provides access to the raw gocache interface
-	cache *gocache.Cache[any]
-	// marshaler provides access to a MessagePack backed marshaling interface
-	marshaler *marshaler.Marshaler
+	cache *iredis.Cache
 }
 
 // NewCentralRepositoryLeaseCache creates an interface for the centralized repository object cache backed by Redis.
-func NewCentralRepositoryLeaseCache(cache *gocache.Cache[any]) *centralRepositoryLeaseCache {
-	return &centralRepositoryLeaseCache{cache, marshaler.New(cache)}
+func NewCentralRepositoryLeaseCache(cache *iredis.Cache) *centralRepositoryLeaseCache {
+	return &centralRepositoryLeaseCache{cache}
 }
 
 // key generates a valid Redis key string for a given repository lease object. The used key format is described in
@@ -135,8 +127,8 @@ func (c *centralRepositoryLeaseCache) Get(ctx context.Context, path string, leas
 	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	tmp, err := c.marshaler.Get(getCtx, c.key(path), new(models.RepositoryLease))
-	if err != nil {
+	var lease models.RepositoryLease
+	if err := c.cache.MarshalGet(getCtx, c.key(path), &lease); err != nil {
 		l.WithError(err).Warn("repository lease cache: failed to read lease from cache")
 		// redis.Nil is returned when the key is not found in Redis
 		if errors.Is(err, redis.Nil) {
@@ -145,18 +137,12 @@ func (c *centralRepositoryLeaseCache) Get(ctx context.Context, path string, leas
 		return nil, err
 	}
 
-	lease, ok := tmp.(*models.RepositoryLease)
-	if !ok {
-		l.Warn("failed to unmarshal repository lease from cache")
-		return nil, errLeaseUnmarshalFailed
-	}
-
 	if lease.Type != leaseType {
 		l.Warn("failed to find the repository lease matching the lease type")
 		return nil, nil
 	}
 
-	return lease, nil
+	return &lease, nil
 }
 
 // Set a repository lease in the cache.
@@ -164,7 +150,7 @@ func (c *centralRepositoryLeaseCache) Set(ctx context.Context, lease *models.Rep
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	if err := c.marshaler.Set(setCtx, c.key(lease.Path), lease, store.WithExpiration(ttl)); err != nil {
+	if err := c.cache.MarshalSet(setCtx, c.key(lease.Path), lease, iredis.WithTTL(ttl)); err != nil {
 		return fmt.Errorf("failed to write repository lease to cache: %w", err)
 	}
 	return nil
@@ -175,27 +161,13 @@ func (c *centralRepositoryLeaseCache) TTL(ctx context.Context, lease *models.Rep
 	l := log.GetLogger(log.WithContext(ctx))
 
 	// find any existing ttl for the lease path
-	leaseInterface, ttl, err := c.cache.GetWithTTL(ctx, c.key(lease.Path))
+	var cachedLease models.RepositoryLease
+	ttl, err := c.cache.MarshalGetWithTTL(ctx, c.key(lease.Path), &cachedLease)
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return 0, errLeaseNotFound
 		}
 		return ttl, fmt.Errorf("failed to read lease TTL from cache: %w", err)
-	}
-
-	// convert from an empty interface return value to the interface's intrinsic type (i.e string)
-	leaseString, ok := leaseInterface.(string)
-	if !ok {
-		l.Warn("failed to extract lease returned from cache")
-		return 0, errLeaseExtractionFailed
-	}
-
-	// unmarshal the string into the lease object
-	var cachedLease models.RepositoryLease
-	err = msgpack.Unmarshal([]byte(leaseString), &cachedLease)
-	if err != nil {
-		l.Warn("failed to unmarshal repository lease from cache")
-		return 0, errLeaseUnmarshalFailed
 	}
 
 	// verify the lease was granted to the same repository requesting the TTL
@@ -212,7 +184,7 @@ func (c *centralRepositoryLeaseCache) Invalidate(ctx context.Context, path strin
 	invalCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	if err := c.marshaler.Delete(invalCtx, c.key(path)); err != nil {
+	if err := c.cache.Delete(invalCtx, c.key(path)); err != nil {
 		detail := "failed to invalidate repository lease in cache for leased path: " + path
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn(detail)
 		return fmt.Errorf("failed to invalidate repository lease: %w", err)

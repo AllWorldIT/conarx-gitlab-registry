@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"context"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	"os"
 	"testing"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
-	gocache "github.com/eko/gocache/lib/v4/cache"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -22,7 +22,7 @@ import (
 type env struct {
 	ctx    context.Context
 	db     *datastore.DB
-	cache  *gocache.Cache[any]
+	cache  *iredis.Cache
 	config *configuration.Configuration
 	rStore datastore.RepositoryStore
 

@@ -8,11 +8,8 @@ import (
 	"time"
 
 	"github.com/docker/distribution/log"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/opencontainers/go-digest"
-
-	gocache "github.com/eko/gocache/lib/v4/cache"
-	"github.com/eko/gocache/lib/v4/marshaler"
-	"github.com/eko/gocache/lib/v4/store"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -34,15 +31,12 @@ func NewProjectLeaseStore(cache *centralProjectLeaseCache) (*projectLeaseStore, 
 
 // centralProjectLeaseCache is the interface for the centralized project lease cache backed by Redis.
 type centralProjectLeaseCache struct {
-	// cache provides access to the raw gocache interface
-	cache *gocache.Cache[any]
-	// marshaler provides access to a MessagePack backed marshaling interface
-	marshaler *marshaler.Marshaler
+	cache *iredis.Cache
 }
 
 // NewCentralProjectLeaseCache creates an interface for the centralized project lease cache backed by Redis.
-func NewCentralProjectLeaseCache(cache *gocache.Cache[any]) *centralProjectLeaseCache {
-	return &centralProjectLeaseCache{cache, marshaler.New(cache)}
+func NewCentralProjectLeaseCache(cache *iredis.Cache) *centralProjectLeaseCache {
+	return &centralProjectLeaseCache{cache}
 }
 
 // key generates a valid Redis key string for a given project lease object. The used key format is described in
@@ -77,7 +71,7 @@ func (c *centralProjectLeaseCache) Set(ctx context.Context, path string, ttl tim
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	return c.cache.Set(setCtx, c.key(path), path, store.WithExpiration(ttl))
+	return c.cache.Set(setCtx, c.key(path), path, iredis.WithTTL(ttl))
 }
 
 // Invalidate the lease for a given project path in the cache.
