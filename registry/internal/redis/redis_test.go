@@ -105,7 +105,7 @@ func TestCache_MarshalGet(t *testing.T) {
 	mock.ExpectGet(key).SetVal(string(data))
 
 	var resultObj TestObject
-	err := cache.MarshalGet(context.Background(), key, &resultObj)
+	err := cache.UnmarshalGet(context.Background(), key, &resultObj)
 	assert.NoError(t, err)
 	assert.Equal(t, testObj, resultObj)
 
@@ -127,7 +127,7 @@ func TestCache_MarshalGetWithTTL(t *testing.T) {
 	mock.ExpectTTL(key).SetVal(ttl)
 
 	var resultObj TestObject
-	ttlResult, err := cache.MarshalGetWithTTL(context.Background(), key, &resultObj)
+	ttlResult, err := cache.UnmarshalGetWithTTL(context.Background(), key, &resultObj)
 	assert.NoError(t, err)
 	assert.Equal(t, testObj, resultObj)
 	assert.Equal(t, ttl, ttlResult)

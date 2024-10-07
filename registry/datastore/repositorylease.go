@@ -128,7 +128,7 @@ func (c *centralRepositoryLeaseCache) Get(ctx context.Context, path string, leas
 	defer cancel()
 
 	var lease models.RepositoryLease
-	if err := c.cache.MarshalGet(getCtx, c.key(path), &lease); err != nil {
+	if err := c.cache.UnmarshalGet(getCtx, c.key(path), &lease); err != nil {
 		l.WithError(err).Warn("repository lease cache: failed to read lease from cache")
 		// redis.Nil is returned when the key is not found in Redis
 		if errors.Is(err, redis.Nil) {
@@ -162,7 +162,7 @@ func (c *centralRepositoryLeaseCache) TTL(ctx context.Context, lease *models.Rep
 
 	// find any existing ttl for the lease path
 	var cachedLease models.RepositoryLease
-	ttl, err := c.cache.MarshalGetWithTTL(ctx, c.key(lease.Path), &cachedLease)
+	ttl, err := c.cache.UnmarshalGetWithTTL(ctx, c.key(lease.Path), &cachedLease)
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return 0, errLeaseNotFound

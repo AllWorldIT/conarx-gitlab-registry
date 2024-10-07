@@ -104,14 +104,14 @@ func (c *Cache) Delete(ctx context.Context, key string) error {
 	return c.cache.Delete(ctx, key)
 }
 
-// MarshalGet retrieves and unmarshal a cached object into the provided object argument.
-func (c *Cache) MarshalGet(ctx context.Context, key string, object any) error {
+// UnmarshalGet retrieves and unmarshal a cached object into the provided object argument.
+func (c *Cache) UnmarshalGet(ctx context.Context, key string, object any) error {
 	_, err := c.marshaler.Get(ctx, key, object)
 	return err
 }
 
-// MarshalGetWithTTL retrieves the TTL and unmarshal a cached object into the provided object argument.
-func (c *Cache) MarshalGetWithTTL(ctx context.Context, key string, object any) (time.Duration, error) {
+// UnmarshalGetWithTTL retrieves the TTL and unmarshal a cached object into the provided object argument.
+func (c *Cache) UnmarshalGetWithTTL(ctx context.Context, key string, object any) (time.Duration, error) {
 	value, ttl, err := c.cache.GetWithTTL(ctx, key)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get key from cache: %w", err)

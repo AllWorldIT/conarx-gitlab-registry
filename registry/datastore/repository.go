@@ -360,7 +360,7 @@ func (c *centralRepositoryCache) Get(ctx context.Context, path string) *models.R
 	defer cancel()
 
 	var repo models.Repository
-	if err := c.cache.MarshalGet(getCtx, c.key(path), &repo); err != nil {
+	if err := c.cache.UnmarshalGet(getCtx, c.key(path), &repo); err != nil {
 		// a wrapped redis.Nil is returned when the key is not found in Redis
 		if !errors.Is(err, redis.Nil) {
 			l.WithError(err).Error("failed to read repository from cache")
@@ -468,7 +468,7 @@ func (c *centralRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *
 	defer cancel()
 
 	var size int64
-	if err := c.cache.MarshalGet(getCtx, c.sizeWithDescendantsKey(r.Path), &size); err != nil {
+	if err := c.cache.UnmarshalGet(getCtx, c.sizeWithDescendantsKey(r.Path), &size); err != nil {
 		// a wrapped redis.Nil is returned when the key is not found in Redis
 		if !errors.Is(err, redis.Nil) {
 			log.GetLogger(log.WithContext(ctx)).WithError(err).Error("failed to read size with descendants key from cache")
