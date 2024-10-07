@@ -12,6 +12,8 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	maintestutil "github.com/docker/distribution/testutil"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
@@ -986,7 +988,12 @@ func TestManifestStore_DeleteManifest_FailsIfReferencedInList(t *testing.T) {
 	}
 
 	dgst, err := s.Delete(suite.ctx, m.NamespaceID, m.RepositoryID, m.ID)
-	require.EqualError(t, err, fmt.Errorf("deleting manifest: %w", datastore.ErrManifestReferencedInList).Error())
+	require.ErrorIs(t, err, datastore.ErrManifestReferencedInList)
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, err, &pgErr)
+	require.Equal(t, pgerrcode.ForeignKeyViolation, pgErr.Code)
+	require.Equal(t, "manifest_references", pgErr.TableName)
+	require.ErrorContains(t, err, fmt.Sprintf("deleting manifest ID %d", m.ID))
 	require.Nil(t, dgst)
 
 	// make sure the manifest was not deleted
