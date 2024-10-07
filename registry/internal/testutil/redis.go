@@ -5,9 +5,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	gocache "github.com/eko/gocache/lib/v4/cache"
-	libstore "github.com/eko/gocache/lib/v4/store"
-	redisstore "github.com/eko/gocache/store/redis/v4"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
 )
@@ -34,23 +32,22 @@ func redisClient(tb testing.TB) redis.UniversalClient {
 	return redis.NewClient(&redis.Options{Addr: srv.Addr()})
 }
 
-// redisCache creates a new gocache cache based on Redis. If a client is not provided, a server/client pair is created
+// redisCache creates a new Redis cache for testing. If a client is not provided, a server/client pair is created
 // using redisClient. A client can be provided when wanting to use a specific client, such as for mocking purposes. A
 // global TTL for cached objects can be specific (defaults to no TTL).
-func redisCache(tb testing.TB, client redis.UniversalClient, ttl time.Duration) *gocache.Cache[any] {
+func redisCache(tb testing.TB, client redis.UniversalClient, ttl time.Duration) *iredis.Cache {
 	tb.Helper()
 
 	if client == nil {
 		client = redisClient(tb)
 	}
 
-	s := redisstore.NewRedis(client, libstore.WithExpiration(ttl))
-	return gocache.New[any](s)
+	return iredis.NewCache(client, iredis.WithDefaultTTL(ttl))
 }
 
-// RedisCache creates a new gocache cache based on Redis using a new miniredis server and redis client. A global TTL for
+// RedisCache creates a new Redis cache using a new miniredis server and redis client. A global TTL for
 // cached objects can be specific (defaults to no TTL).
-func RedisCache(tb testing.TB, ttl time.Duration) *gocache.Cache[any] {
+func RedisCache(tb testing.TB, ttl time.Duration) *iredis.Cache {
 	tb.Helper()
 
 	return redisCache(tb, redisClient(tb), ttl)
@@ -58,13 +55,13 @@ func RedisCache(tb testing.TB, ttl time.Duration) *gocache.Cache[any] {
 
 // RedisCacheMock is similar to RedisCache but here we use a redismock client. A global TTL for cached objects can be
 // specific (defaults to no TTL).
-func RedisCacheMock(tb testing.TB, ttl time.Duration) (*gocache.Cache[any], redismock.ClientMock) {
+func RedisCacheMock(tb testing.TB, ttl time.Duration) (*iredis.Cache, redismock.ClientMock) {
 	client, mock := redismock.NewClientMock()
 
 	return redisCache(tb, client, ttl), mock
 }
 
-// NewRedisCacheController creates a new gocache cache based on Redis using a new miniredis server and redis client. A global TTL for
+// NewRedisCacheController creates a new Redis cache using a new miniredis server and redis client. A global TTL for
 // cached objects can be specific (defaults to no TTL).
 func NewRedisCacheController(tb testing.TB, ttl time.Duration) RedisCacheController {
 	tb.Helper()
@@ -78,6 +75,6 @@ func NewRedisCacheController(tb testing.TB, ttl time.Duration) RedisCacheControl
 
 // RedisCacheController contains the necessary cache client and underlying redis server used for a test
 type RedisCacheController struct {
-	*gocache.Cache[any]
+	*iredis.Cache
 	*miniredis.Miniredis
 }
