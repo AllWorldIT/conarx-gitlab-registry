@@ -1,28 +1,3 @@
-dry-run:
-  image: node:lts
-  stage: release
-  needs: []
-  variables:
-    GIT_COMMITTER_EMAIL: $GITLAB_TOKEN_EMAIL
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  script:
-    - make release-tools
-    - npx semantic-release --dry-run
-
-cut:
-  image: node:lts
-  stage: release
-  needs: [ "dry-run" ]
-  variables:
-    GIT_COMMITTER_EMAIL: $GITLAB_TOKEN_EMAIL
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
-  script:
-    - make release-tools
-    - npx semantic-release
-
 publish:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
