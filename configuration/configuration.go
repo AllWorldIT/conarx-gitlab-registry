@@ -477,14 +477,6 @@ type DatabaseLoadBalancing struct {
 	Port int `yaml:"port"`
 	// Record is the SRV DNS record to look up. This option is required for service discovery to work.
 	Record string `yaml:"record"`
-	// RecordCheckInterval is the interval to check the DNS record.
-	RecordCheckInterval time.Duration `yaml:"recordcheckinterval"`
-	// DisconnectTimeout is the time after which an old connection is closed, after the list of hosts was updated.
-	DisconnectTimeout time.Duration `yaml:"disconnecttimeout"`
-	// MaxReplicaLagTime is the maximum time a replica can be behind the primary before being quarantined.
-	MaxReplicaLagTime time.Duration `yaml:"maxreplicalagtime"`
-	// MaxReplicaLagBytes is the maximum number of bytes a replica can be behind the primary before being quarantined.
-	MaxReplicaLagBytes int `yaml:"maxreplicalagbytes"`
 	// ReplicaCheckInterval is the minimum amount of time between checking the status of a replica.
 	ReplicaCheckInterval time.Duration `yaml:"replicacheckinterval"`
 }
@@ -1018,7 +1010,7 @@ type Endpoint struct {
 	Backoff           time.Duration `yaml:"backoff"`           // backoff duration
 	IgnoredMediaTypes []string      `yaml:"ignoredmediatypes"` // target media types to ignore
 	Ignore            Ignore        `yaml:"ignore"`            // ignore event types
-	QueuePurgeTimeout time.Duration `yaml:"queuepurgetimeout"`  // the amount of time registry tries to sent unsent notifications in the buffer after it received SIGINT
+	QueuePurgeTimeout time.Duration `yaml:"queuepurgetimeout"` // the amount of time registry tries to sent unsent notifications in the buffer after it received SIGINT
 }
 
 // Events configures notification events.
@@ -1184,18 +1176,6 @@ func ApplyDefaults(config *Configuration) {
 		}
 		if config.Database.LoadBalancing.Port == 0 {
 			config.Database.LoadBalancing.Port = defaultDLBPort
-		}
-		if config.Database.LoadBalancing.RecordCheckInterval == 0 {
-			config.Database.LoadBalancing.RecordCheckInterval = defaultDLBRecordCheckInterval
-		}
-		if config.Database.LoadBalancing.DisconnectTimeout == 0 {
-			config.Database.LoadBalancing.DisconnectTimeout = defaultDLBDisconnectTimeout
-		}
-		if config.Database.LoadBalancing.MaxReplicaLagBytes == 0 {
-			config.Database.LoadBalancing.MaxReplicaLagBytes = defaultDLBMaxReplicaLagBytes
-		}
-		if config.Database.LoadBalancing.MaxReplicaLagTime == 0 {
-			config.Database.LoadBalancing.MaxReplicaLagTime = defaultDLBMaxReplicaLagTime
 		}
 		if config.Database.LoadBalancing.ReplicaCheckInterval == 0 {
 			config.Database.LoadBalancing.ReplicaCheckInterval = defaultDLBReplicaCheckInterval
