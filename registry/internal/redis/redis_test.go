@@ -2,12 +2,15 @@ package redis_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/go-redis/redismock/v9"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -177,4 +180,36 @@ func TestCache_MarshalSet(t *testing.T) {
 			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestCache_RunScript(t *testing.T) {
+	db, mock := redismock.NewClientMock()
+	cache := iredis.NewCache(db)
+
+	script := redis.NewScript(`
+		-- A simple Lua script that returns the sum of two arguments
+		return ARGV[1] + ARGV[2]
+	`)
+	keys := []string{"test-key"}
+	args := []any{1, 2}
+
+	t.Run("successful execution", func(t *testing.T) {
+		mock.ExpectEvalSha(script.Hash(), keys, args...).SetVal(3)
+
+		result, err := cache.RunScript(context.Background(), script, keys, args...)
+		require.NoError(t, err)
+		require.Equal(t, 3, result)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("failed execution", func(t *testing.T) {
+		expectedErr := "foo"
+		mock.ExpectEvalSha(script.Hash(), keys, args...).SetErr(errors.New(expectedErr))
+
+		result, err := cache.RunScript(context.Background(), script, keys, args...)
+		require.Error(t, err)
+		require.EqualError(t, err, expectedErr)
+		require.Nil(t, result)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
 }
