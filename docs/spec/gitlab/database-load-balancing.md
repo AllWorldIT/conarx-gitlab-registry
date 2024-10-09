@@ -114,10 +114,6 @@ database:
     nameserver: localhost
     port: 8600
     record: db-replica-registry.service.consul
-    recordcheckinterval: 1m
-    disconnecttimeout: 2m
-    maxreplicalagtime: 1m
-    maxreplicalagbytes: 8388608
     replicacheckinterval: 1m
 ```
 
@@ -127,10 +123,6 @@ database:
 | `nameserver`           | No       | The nameserver to use for looking up the DNS record.                                                                                                                                                           | `localhost`      |
 | `port`                 | No       | The port of the nameserver.                                                                                                                                                                                    | `8600`           |
 | `record`               | Yes      | The `SRV` record to look up. This option is required for service discovery to work.                                                                                                                            |                  |
-| `recordcheckinterval`  | No       | The minimum amount of time between checking the DNS record.                                                                                                                                                    | `1m`             |
-| `disconnecttimeout`    | No       | The amount of time after which an old connection is closed, after the list of hosts was updated.                                                                                                               | `2m`             |
-| `maxreplicalagbytes`   | No       | The amount of data (in bytes) a replica is allowed to lag behind before being quarantined.                                                                                                                     | `8388608` (8MiB) |
-| `maxreplicalagtime`    | No       | The maximum amount of time a replica is allowed to lag behind before being quarantined.                                                                                                                        | `1m`             |
 | `replicacheckinterval` | No       | The minimum amount of time between checking the status of a replica.                                                                                                                                           | `1m`             |
 
 We'll refer to each of these configuration parameters and their purpose in the following sections.
@@ -167,11 +159,11 @@ See [RFC 2782](https://datatracker.ietf.org/doc/html/rfc2782) for more details a
 
 To ensure fault tolerance, the Container Registry will:
 
-- Periodically (`recordcheckinterval`) refresh the list of resolved replica addresses asynchronously to maintain up-to-date information;
+- Periodically (`replicacheckinterval`) refresh the list of resolved replica addresses asynchronously to maintain up-to-date information;
 
 - Trigger an immediate refresh of the replica list in case of network/connectivity errors, as these might indicate events such as a cluster failover;
 
-- Gracefully expire open connections (`disconnecttimeout`) if the list of hosts changes, ensuring that stale connections are closed;
+- Gracefully expire open connections if the list of hosts changes, ensuring that stale connections are closed;
 
 - Fallback to the primary server if all replicas are unavailable or unresponsive. This also relates to [Primary Sticking](#primary-sticking).
 

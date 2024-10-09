@@ -622,10 +622,6 @@ database:
     nameserver: localhost
     port: 8600
     record: db-replica-registry.service.consul
-    recordcheckinterval: 1m
-    disconnecttimeout: 2m
-    maxreplicalagtime: 1m
-    maxreplicalagbytes: 8388608
     replicacheckinterval: 1m  
 ```
 
@@ -697,10 +693,6 @@ loadbalancing:
   nameserver: localhost
   port: 8600
   record: db-replica-registry.service.consul
-  recordcheckinterval: 1m
-  disconnecttimeout: 2m
-  maxreplicalagtime: 1m
-  maxreplicalagbytes: 8388608
   replicacheckinterval: 1m
 ```
 
@@ -710,10 +702,6 @@ loadbalancing:
 | `nameserver`           | No       | The nameserver to use for looking up the DNS record.                                                                                                                     | `localhost`      |
 | `port`                 | No       | The port of the nameserver.                                                                                                                                              | `8600`           |
 | `record`               | Yes      | The `SRV` record to look up. This option is required for service discovery to work.                                                                                      |                  |
-| `recordcheckinterval`  | No       | The minimum amount of time between checking the DNS record.                                                                                                              | `1m`             |
-| `disconnecttimeout`    | No       | The amount of time after which an old connection is closed, after the list of hosts was updated.                                                                         | `2m`             |
-| `maxreplicalagbytes`   | No       | The amount of data (in bytes) a replica is allowed to lag behind before being quarantined.                                                                               | `8388608` (8MiB) |
-| `maxreplicalagtime`    | No       | The maximum amount of time a replica is allowed to lag behind before being quarantined.                                                                                  | `1m`             |
 | `replicacheckinterval` | No       | The minimum amount of time between checking the status of a replica.                                                                                                     | `1m`             |
 
 ## `auth`
