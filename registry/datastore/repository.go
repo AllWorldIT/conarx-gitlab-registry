@@ -485,13 +485,52 @@ func (c *centralRepositoryCache) lsnKey(path string) string {
 	return fmt.Sprintf("%s:lsn", c.key(path))
 }
 
+// This Lua script atomically updates a PostgreSQL Log Sequence Number (LSN) stored in Redis. It compares the new LSN
+// with the existing LSN (if any) in Redis and only updates if the new LSN is greater or new.
+// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md#primary-sticking
+//
+// Conversion process (based on how PostgreSQL represents LSNs using its XLogRecPtr type):
+// 1. Split the LSN into major and minor parts using string manipulation;
+// 2. Convert the major and minor parts from hexadecimal to decimal;
+// 3. The final numeric representation is calculated as: (major_part * 2^32) + minor_part.
+//
+// Inputs:
+// KEYS[1]  - The Redis key where the LSN is stored.
+// ARGV[1]  - The new LSN to compare, in 'X/Y' format (hexadecimal).
+// ARGV[2]  - The TTL (in seconds) to set on the Redis key if the LSN is updated.
+var lsnUpdateScript = redis.NewScript(`
+local key, new_lsn, ttl = KEYS[1], ARGV[1], tonumber(ARGV[2])
+local current_lsn = redis.call('GET', key)
+
+if not current_lsn then
+    return redis.call('SET', key, new_lsn, 'EX', ttl)
+end
+
+local function parse_lsn(lsn)
+    local slash_pos = string.find(lsn, '/')
+    local major_part = tonumber(string.sub(lsn, 1, slash_pos - 1), 16)
+    local minor_part = tonumber(string.sub(lsn, slash_pos + 1), 16)
+    return (major_part * 2^32) + minor_part
+end
+
+if parse_lsn(new_lsn) > parse_lsn(current_lsn) then
+    return redis.call('SET', key, new_lsn, 'EX', ttl)
+end
+
+return false
+`)
+
 // SetLSN implements RepositoryCache.
 func (c *centralRepositoryCache) SetLSN(ctx context.Context, r *models.Repository, lsn string) error {
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
 	report := metrics.LSNCacheSet()
-	err := c.cache.Set(setCtx, c.lsnKey(r.Path), lsn, iredis.WithTTL(lsnKeyTTL))
+	_, err := c.cache.RunScript(setCtx, lsnUpdateScript, []string{c.lsnKey(r.Path)}, []any{lsn, lsnKeyTTL.Seconds()})
+	// ignore a redis.Nil error, which is the result of returning false from the script (no update occurred)
+	if errors.Is(err, redis.Nil) {
+		err = nil
+	}
 	report(err)
 
 	return err

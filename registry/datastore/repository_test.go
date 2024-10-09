@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -61,6 +63,13 @@ func TestCentralRepositoryCache(t *testing.T) {
 	require.NoError(t, redisMock.ExpectationsWereMet())
 }
 
+// Why the SHA1 and not the actual lsnUpdateScript script source: Redis can cache the source of scripts so that clients
+// don't have to re-send the script source with every invocation. Upon a first script EVAL, a script is hashed and then
+// clients can use that SHA1 to invoke the same command with EVALSHA without transmitting its source. The
+// github.com/redis/go-redis Redis client "optimistically uses EVALSHA to run the script. If script does not exist it
+// is retried using EVAL".
+const lsnUpdateScriptSha1 = "d01c935df18ece7f4483a3090060896c632e4d60"
+
 func TestCentralRepositoryCache_LSN(t *testing.T) {
 	actualLSN := "0/16B3748"
 	ttl := 1 * time.Hour
@@ -80,7 +89,7 @@ func TestCentralRepositoryCache_LSN(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, lsn)
 
-	redisMock.ExpectSet(key, actualLSN, ttl).SetVal("OK")
+	redisMock.ExpectEvalSha(lsnUpdateScriptSha1, []string{key}, []any{actualLSN, ttl.Seconds()}).SetVal("OK")
 	err = cache.SetLSN(ctx, repo, actualLSN)
 	require.NoError(t, err)
 
@@ -111,9 +120,84 @@ func TestCentralRepositoryCache_LSN_Error(t *testing.T) {
 	require.EqualError(t, err, "failed to read LSN key from cache: foo")
 	require.Empty(t, lsn)
 
-	redisMock.ExpectSet(key, lsn, ttl).SetErr(errors.New("bar"))
+	redisMock.ExpectEvalSha(lsnUpdateScriptSha1, []string{key}, []any{lsn, ttl.Seconds()}).SetErr(errors.New("bar"))
 	err = cache.SetLSN(ctx, repo, lsn)
 	require.EqualError(t, err, "bar")
 
 	require.NoError(t, redisMock.ExpectationsWereMet())
+}
+
+func TestCentralRepositoryCache_SetLSN_IsAtomic(t *testing.T) {
+	redisCache := testutil.RedisCache(t, 0)
+	cache := datastore.NewCentralRepositoryCache(redisCache)
+	ctx := context.Background()
+
+	currentLSN := "0/16B3748"
+	higherLSN := "0/16B3750"
+	lowerLSN := "0/16B3730"
+	repo := &models.Repository{Path: "gitlab-org/gitlab"}
+
+	// Ensure no LSN exists yet
+	lsn, err := cache.GetLSN(ctx, repo)
+	require.NoError(t, err)
+	require.Empty(t, lsn)
+
+	// Simulate setting the initial LSN in Redis
+	err = cache.SetLSN(ctx, repo, currentLSN)
+	require.NoError(t, err)
+	lsn, err = cache.GetLSN(ctx, repo)
+	require.NoError(t, err)
+	require.Equal(t, currentLSN, lsn)
+
+	// Attempt to set a lower LSN, should not update
+	err = cache.SetLSN(ctx, repo, lowerLSN)
+	require.NoError(t, err)
+	lsn, err = cache.GetLSN(ctx, repo)
+	require.NoError(t, err)
+	require.Equal(t, currentLSN, lsn)
+
+	// Attempt to set a higher LSN, should update
+	err = cache.SetLSN(ctx, repo, higherLSN)
+	require.NoError(t, err)
+	lsn, err = cache.GetLSN(ctx, repo)
+	require.NoError(t, err)
+	require.Equal(t, higherLSN, lsn)
+
+	// Ensure atomic behavior by checking that the LSN is set to the highest value when concurrent updates occur
+	lsnValues := []string{
+		"0/16B3730",         // Lower LSN (Major part 0, lower minor)
+		"0/16B3750",         // Higher LSN (Major part 0, higher minor)
+		"1/16B3749",         // Same major, higher minor
+		"2/16B3760",         // Higher major
+		"1/16B3740",         // Same major, lower minor
+		"2/16B3761",         // Higher major, slightly higher minor
+		"3/16B3770",         // Even higher major
+		"1/16B3755",         // Same major, in-between minor
+		"0/16B3725",         // Lower major and lower minor
+		"FFFFFFFF/FFFFFFFF", // Highest major and minor
+	}
+	rand.Shuffle(len(lsnValues), func(i, j int) { lsnValues[i], lsnValues[j] = lsnValues[j], lsnValues[i] })
+
+	var wg sync.WaitGroup
+	wg.Add(len(lsnValues))
+
+	for _, lsn := range lsnValues {
+		go func(lsn string) {
+			defer wg.Done()
+			require.NoError(t, cache.SetLSN(ctx, repo, lsn))
+		}(lsn)
+	}
+	wg.Wait()
+
+	finalLSN, err := cache.GetLSN(ctx, repo)
+	require.NoError(t, err)
+	require.Equal(t, "FFFFFFFF/FFFFFFFF", finalLSN)
+
+	// Ensure that the key has a TTL (we constructed the cache with no default TTL, but the SetLSN script should have
+	// set one for this key
+	key := fmt.Sprintf("registry:db:{repository:%s:%s}:lsn", repo.TopLevelPathSegment(), digest.FromString(repo.Path).Hex())
+	value, ttl, err := redisCache.GetWithTTL(ctx, key)
+	require.NoError(t, err)
+	require.Equal(t, finalLSN, value)
+	require.NotZero(t, ttl)
 }

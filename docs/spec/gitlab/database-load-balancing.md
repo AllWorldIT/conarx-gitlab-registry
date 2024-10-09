@@ -217,11 +217,13 @@ sequenceDiagram
 
 To avoid stale reads, the Container Registry will:
 
-- After a successful API write request for repository `R`, check the [Log Sequence Number (LSN)](https://www.postgresql.org/docs/14/wal-internals.html) for the Primary ([`pg_current_wal_insert_lsn`](https://www.postgresql.org/docs/14/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)) and record it in Redis, associated with `R` with a TTL*****.
+- After a successful API write request for repository `R`, check the [Log Sequence Number (LSN)](https://www.postgresql.org/docs/14/wal-internals.html) for the Primary ([`pg_current_wal_insert_lsn`](https://www.postgresql.org/docs/14/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)) and conditionally update it in Redis, associated with `R` with a TTL.
 
   The LSN represents the current write-ahead log (WAL) insert location, and can be used to determine if and how far apart primary and replicas are in terms of data replication.
 
   This strategy leverages the fact that the target repository path is part of every write API request's path. Therefore, it's possible to univocally determine the target repository for each write request.
+
+  The comparison and conditional update of LSN records in Redis is done atomically using a Lua script to avoid race conditions. LSNs in PostgreSQL are represented as `X/Y` strings, where `X` is the major part (higher order bits) and `Y` is the minor part (lower order bits) in hexadecimal. For proper comparison, the script converts both the current and new LSNs into 64-bit numeric values before comparing them, and only updates if the new LSN is greater or new.
 
 - When serving an API read request for `R`, check the LSN of the candidate replica ([`pg_last_wal_replay_lsn`](https://www.postgresql.org/docs/14/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)) and compare it ([`pg_wal_lsn_diff`](https://www.postgresql.org/docs/14/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)) with the previously recorded primary LSN for `R`. This can be done in a single query against the replica.
 

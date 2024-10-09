@@ -143,3 +143,8 @@ func (c *Cache) MarshalSet(ctx context.Context, key string, object any, opts ...
 
 	return c.marshaler.Set(ctx, key, object, libstore.WithExpiration(options.ttl))
 }
+
+// RunScript runs a Lua script on Redis with the given keys and arguments.
+func (c *Cache) RunScript(ctx context.Context, script *redis.Script, keys []string, args ...any) (any, error) {
+	return script.Run(ctx, c.client, keys, args...).Result()
+}
