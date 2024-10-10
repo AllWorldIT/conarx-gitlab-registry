@@ -77,8 +77,12 @@ func (d *dir) find(q string) node {
 	}
 
 	if child.isdir() {
-		// traverse down!
-		q = q[i+1:]
+		if i == -1 {
+			q = ""
+		} else {
+			// traverse down!
+			q = q[i+1:]
+		}
 		return child.(*dir).find(q)
 	}
 
