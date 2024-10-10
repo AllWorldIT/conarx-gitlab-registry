@@ -773,6 +773,22 @@ func (suite *DriverSuite) TestDeleteFiles(c *check.C) {
 	suite.assertPathNotFound(c, blobPaths...)
 }
 
+// TestDeleteFiles is a regression test for deleting files where the file name and folder where the file resides have the same names
+func (suite *DriverSuite) TestDeleteFileEqualFolderFileName(c *check.C) {
+	parentDir := randomPath(8)
+	fileName := "Maryna"
+	path := path.Join(parentDir, fileName, fileName)
+	defer suite.deletePath(c, firstPart(parentDir))
+
+	err := suite.StorageDriver.PutContent(suite.ctx, path, randomContents(32))
+	c.Assert(err, check.IsNil)
+
+	err = suite.StorageDriver.Delete(suite.ctx, path)
+	c.Assert(err, check.IsNil)
+
+	suite.assertPathNotFound(c, path)
+}
+
 // TestDeleteFilesNotFound checks that DeleteFiles is idempotent and doesn't return an error if a file was not found.
 func (suite *DriverSuite) TestDeleteFilesNotFound(c *check.C) {
 	parentDir := randomPath(8)
