@@ -114,14 +114,14 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 
 func (d *driver) reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
 	if offset < 0 {
-		return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset}
+		return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
 	}
 
 	normalized := normalize(path)
 	found := d.root.find(normalized)
 
 	if found.path() != normalized {
-		return nil, storagedriver.PathNotFoundError{Path: path}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 
 	if found.isdir() {
@@ -160,7 +160,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 	found := d.root.find(normalized)
 
 	if found.path() != normalized {
-		return nil, storagedriver.PathNotFoundError{Path: path}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 
 	fi := storagedriver.FileInfoFields{
@@ -194,7 +194,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 	if err != nil {
 		switch err {
 		case errNotExists:
-			return nil, storagedriver.PathNotFoundError{Path: path}
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		case errIsNotDir:
 			return nil, fmt.Errorf("not a directory")
 		default:
@@ -216,7 +216,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	err := d.root.move(normalizedSrc, normalizedDst)
 	switch err {
 	case errNotExists:
-		return storagedriver.PathNotFoundError{Path: destPath}
+		return storagedriver.PathNotFoundError{Path: destPath, DriverName: driverName}
 	default:
 		return err
 	}
@@ -232,7 +232,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 	err := d.root.delete(normalized)
 	switch err {
 	case errNotExists:
-		return storagedriver.PathNotFoundError{Path: path}
+		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	default:
 		return err
 	}
@@ -257,7 +257,7 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 // URLFor returns a URL which may be used to retrieve the content stored at the given path.
 // May return an UnsupportedMethodErr in certain StorageDriver implementations.
 func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
-	return "", storagedriver.ErrUnsupportedMethod{}
+	return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 }
 
 // Walk traverses a filesystem defined within driver, starting

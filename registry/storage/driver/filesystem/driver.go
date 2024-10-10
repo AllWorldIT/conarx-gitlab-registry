@@ -154,7 +154,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 	file, err := os.OpenFile(d.fullPath(path), os.O_RDONLY, 0o644)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, storagedriver.PathNotFoundError{Path: path}
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 
 		return nil, err
@@ -166,7 +166,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 		return nil, err
 	} else if seekPos < offset {
 		file.Close()
-		return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset}
+		return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
 	}
 
 	return file, nil
@@ -212,7 +212,7 @@ func (d *driver) Stat(ctx context.Context, subPath string) (storagedriver.FileIn
 	fi, err := os.Stat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, storagedriver.PathNotFoundError{Path: subPath}
+			return nil, storagedriver.PathNotFoundError{Path: subPath, DriverName: driverName}
 		}
 
 		return nil, err
@@ -232,7 +232,7 @@ func (d *driver) List(ctx context.Context, subPath string) ([]string, error) {
 	dir, err := os.Open(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, storagedriver.PathNotFoundError{Path: subPath}
+			return nil, storagedriver.PathNotFoundError{Path: subPath, DriverName: driverName}
 		}
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	dest := d.fullPath(destPath)
 
 	if _, err := os.Stat(source); os.IsNotExist(err) {
-		return storagedriver.PathNotFoundError{Path: sourcePath}
+		return storagedriver.PathNotFoundError{Path: sourcePath, DriverName: driverName}
 	}
 
 	if err := os.MkdirAll(path.Dir(dest), 0o755); err != nil {
@@ -281,7 +281,7 @@ func (d *driver) Delete(ctx context.Context, subPath string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	} else if err != nil {
-		return storagedriver.PathNotFoundError{Path: subPath}
+		return storagedriver.PathNotFoundError{Path: subPath, DriverName: driverName}
 	}
 
 	err = os.RemoveAll(fullPath)
@@ -328,7 +328,7 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 // URLFor returns a URL which may be used to retrieve the content stored at the given path.
 // May return an UnsupportedMethodErr in certain StorageDriver implementations.
 func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
-	return "", storagedriver.ErrUnsupportedMethod{}
+	return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 }
 
 // Walk traverses a filesystem defined within driver, starting

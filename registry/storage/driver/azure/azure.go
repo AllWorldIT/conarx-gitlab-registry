@@ -165,7 +165,7 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 	blob, err := blobRef.Get(nil)
 	if err != nil {
 		if is404(err) {
-			return nil, storagedriver.PathNotFoundError{Path: path}
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 	if ok, err := blobRef.Exists(); err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, storagedriver.PathNotFoundError{Path: path}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 
 	err := blobRef.GetProperties(nil)
@@ -268,7 +268,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 		}
 	} else {
 		if append {
-			return nil, storagedriver.PathNotFoundError{Path: path}
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 		err = blobRef.PutAppendBlob(nil)
 		if err != nil {
@@ -326,7 +326,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 	}
 
 	// path is not a blob or virtual container
-	return nil, storagedriver.PathNotFoundError{Path: path}
+	return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 }
 
 // List returns a list of objects that are direct descendants of the given path.
@@ -344,7 +344,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 		return nil, err
 	}
 	if path != "/" && len(list) == 0 {
-		return nil, storagedriver.PathNotFoundError{Path: path}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 
 	return list, nil
@@ -359,7 +359,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	err := destBlobRef.Copy(sourceBlobURL, nil)
 	if err != nil {
 		if is404(err) {
-			return storagedriver.PathNotFoundError{Path: sourcePath}
+			return storagedriver.PathNotFoundError{Path: sourcePath, DriverName: driverName}
 		}
 		return err
 	}
@@ -392,7 +392,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 	}
 
 	if len(blobs) == 0 {
-		return storagedriver.PathNotFoundError{Path: path}
+		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	return nil
 }
@@ -454,7 +454,7 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 }
 
 func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
-	return false, storagedriver.ErrUnsupportedMethod{}
+	return false, storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 }
 
 // list simulates a filesystem style list in which both files (blobs) and
