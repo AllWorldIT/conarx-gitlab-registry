@@ -21,8 +21,7 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/require"
-
-	"gopkg.in/check.v1"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/docker/distribution/context"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
@@ -30,158 +29,191 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 )
 
-// Hook up gocheck into the "go test" runner.
-func Test(t *testing.T) { check.TestingT(t) }
-
 var (
-	s3DriverConstructor func(rootDirectory, storageClass string) (*Driver, error)
-	skipS3              func() string
+	accessKey            = os.Getenv("AWS_ACCESS_KEY")
+	secretKey            = os.Getenv("AWS_SECRET_KEY")
+	bucket               = os.Getenv("S3_BUCKET")
+	encrypt              = os.Getenv("S3_ENCRYPT")
+	keyID                = os.Getenv("S3_KEY_ID")
+	secure               = os.Getenv("S3_SECURE")
+	skipVerify           = os.Getenv("S3_SKIP_VERIFY")
+	v4Auth               = os.Getenv("S3_V4_AUTH")
+	region               = os.Getenv("AWS_REGION")
+	objectACL            = os.Getenv("S3_OBJECT_ACL")
+	regionEndpoint       = os.Getenv("REGION_ENDPOINT")
+	sessionToken         = os.Getenv("AWS_SESSION_TOKEN")
+	pathStyle            = os.Getenv("AWS_PATH_STYLE")
+	maxRequestsPerSecond = os.Getenv("S3_MAX_REQUESTS_PER_SEC")
+	maxRetries           = os.Getenv("S3_MAX_RETRIES")
+	logLevel             = os.Getenv("S3_LOG_LEVEL")
+	objectOwnership      = os.Getenv("S3_OBJECT_OWNERSHIP")
 )
 
-func init() {
-	accessKey := os.Getenv("AWS_ACCESS_KEY")
-	secretKey := os.Getenv("AWS_SECRET_KEY")
-	bucket := os.Getenv("S3_BUCKET")
-	encrypt := os.Getenv("S3_ENCRYPT")
-	keyID := os.Getenv("S3_KEY_ID")
-	secure := os.Getenv("S3_SECURE")
-	skipVerify := os.Getenv("S3_SKIP_VERIFY")
-	v4Auth := os.Getenv("S3_V4_AUTH")
-	region := os.Getenv("AWS_REGION")
-	objectACL := os.Getenv("S3_OBJECT_ACL")
-	root, err := os.MkdirTemp("", "driver-")
-	regionEndpoint := os.Getenv("REGION_ENDPOINT")
-	sessionToken := os.Getenv("AWS_SESSION_TOKEN")
-	pathStyle := os.Getenv("AWS_PATH_STYLE")
-	maxRequestsPerSecond := os.Getenv("S3_MAX_REQUESTS_PER_SEC")
-	maxRetries := os.Getenv("S3_MAX_RETRIES")
-	logLevel := os.Getenv("S3_LOG_LEVEL")
-	objectOwnership := os.Getenv("S3_OBJECT_OWNERSHIP")
+func s3DriverConstructor(rootDirectory, storageClass string) (*Driver, error) {
+	var err error
 
-	if err != nil {
-		panic(err)
-	}
-	defer os.Remove(root)
-
-	s3DriverConstructor = func(rootDirectory, storageClass string) (*Driver, error) {
-		encryptBool := false
-		if encrypt != "" {
-			encryptBool, err = strconv.ParseBool(encrypt)
-			if err != nil {
-				return nil, err
-			}
+	encryptBool := false
+	if encrypt != "" {
+		encryptBool, err = strconv.ParseBool(encrypt)
+		if err != nil {
+			return nil, err
 		}
-
-		secureBool := true
-		if secure != "" {
-			secureBool, err = strconv.ParseBool(secure)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		skipVerifyBool := false
-		if skipVerify != "" {
-			skipVerifyBool, err = strconv.ParseBool(skipVerify)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		v4Bool := true
-		if v4Auth != "" {
-			v4Bool, err = strconv.ParseBool(v4Auth)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		pathStyleBool := false
-
-		// If regionEndpoint is set, default to forcing pathstyle to preserve legacy behavior.
-		if regionEndpoint != "" {
-			pathStyleBool = true
-		}
-
-		if pathStyle != "" {
-			pathStyleBool, err = strconv.ParseBool(pathStyle)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		maxRequestsPerSecondInt64 := int64(defaultMaxRequestsPerSecond)
-
-		if maxRequestsPerSecond != "" {
-			if maxRequestsPerSecondInt64, err = strconv.ParseInt(maxRequestsPerSecond, 10, 64); err != nil {
-				return nil, err
-			}
-		}
-
-		maxRetriesInt64 := int64(defaultMaxRetries)
-
-		if maxRetries != "" {
-			if maxRetriesInt64, err = strconv.ParseInt(maxRetries, 10, 64); err != nil {
-				return nil, err
-			}
-		}
-
-		objectOwnershipBool := false
-		if objectOwnership != "" {
-			objectOwnershipBool, err = strconv.ParseBool(objectOwnership)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		parallelWalkBool := true
-
-		logLevelType := parseLogLevelParam(logLevel)
-
-		parameters := &DriverParameters{
-			accessKey,
-			secretKey,
-			bucket,
-			region,
-			regionEndpoint,
-			encryptBool,
-			keyID,
-			secureBool,
-			skipVerifyBool,
-			v4Bool,
-			minChunkSize,
-			defaultMultipartCopyChunkSize,
-			defaultMultipartCopyMaxConcurrency,
-			defaultMultipartCopyThresholdSize,
-			rootDirectory,
-			storageClass,
-			objectACL,
-			sessionToken,
-			pathStyleBool,
-			maxRequestsPerSecondInt64,
-			maxRetriesInt64,
-			parallelWalkBool,
-			logLevelType,
-			objectOwnershipBool,
-		}
-
-		return New(parameters)
 	}
 
-	// Skip S3 storage driver tests if environment variable parameters are not provided
-	skipS3 = func() string {
-		if accessKey == "" || secretKey == "" || region == "" || bucket == "" || encrypt == "" {
-			return "Must set AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION, S3_BUCKET, and S3_ENCRYPT to run S3 tests"
+	secureBool := true
+	if secure != "" {
+		secureBool, err = strconv.ParseBool(secure)
+		if err != nil {
+			return nil, err
 		}
-		return ""
 	}
 
-	testsuites.RegisterSuite(func() (storagedriver.StorageDriver, error) {
-		return s3DriverConstructor(root, s3.StorageClassStandard)
-	}, skipS3)
+	skipVerifyBool := false
+	if skipVerify != "" {
+		skipVerifyBool, err = strconv.ParseBool(skipVerify)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	v4Bool := true
+	if v4Auth != "" {
+		v4Bool, err = strconv.ParseBool(v4Auth)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	pathStyleBool := false
+
+	// If regionEndpoint is set, default to forcing pathstyle to preserve legacy behavior.
+	if regionEndpoint != "" {
+		pathStyleBool = true
+	}
+
+	if pathStyle != "" {
+		pathStyleBool, err = strconv.ParseBool(pathStyle)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	maxRequestsPerSecondInt64 := int64(defaultMaxRequestsPerSecond)
+
+	if maxRequestsPerSecond != "" {
+		if maxRequestsPerSecondInt64, err = strconv.ParseInt(maxRequestsPerSecond, 10, 64); err != nil {
+			return nil, err
+		}
+	}
+
+	maxRetriesInt64 := int64(defaultMaxRetries)
+
+	if maxRetries != "" {
+		if maxRetriesInt64, err = strconv.ParseInt(maxRetries, 10, 64); err != nil {
+			return nil, err
+		}
+	}
+
+	objectOwnershipBool := false
+	if objectOwnership != "" {
+		objectOwnershipBool, err = strconv.ParseBool(objectOwnership)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	parallelWalkBool := true
+
+	logLevelType := parseLogLevelParam(logLevel)
+
+	parameters := &DriverParameters{
+		accessKey,
+		secretKey,
+		bucket,
+		region,
+		regionEndpoint,
+		encryptBool,
+		keyID,
+		secureBool,
+		skipVerifyBool,
+		v4Bool,
+		minChunkSize,
+		defaultMultipartCopyChunkSize,
+		defaultMultipartCopyMaxConcurrency,
+		defaultMultipartCopyThresholdSize,
+		rootDirectory,
+		storageClass,
+		objectACL,
+		sessionToken,
+		pathStyleBool,
+		maxRequestsPerSecondInt64,
+		maxRetriesInt64,
+		parallelWalkBool,
+		logLevelType,
+		objectOwnershipBool,
+	}
+
+	return New(parameters)
 }
 
-func Test_parseParameters(t *testing.T) {
+func skipS3() string {
+	if accessKey == "" || secretKey == "" || region == "" || bucket == "" || encrypt == "" {
+		return "Must set AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION, S3_BUCKET, and S3_ENCRYPT to run S3 tests"
+	}
+	return ""
+}
+
+func TestS3DriverSuite(t *testing.T) {
+	root, err := os.MkdirTemp("", "s3driver-test-")
+	require.NoError(t, err)
+
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
+	}
+
+	ts := testsuites.NewDriverSuite(
+		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return s3DriverConstructor(root, s3.StorageClassStandard)
+		},
+		func() error {
+			return os.Remove(root)
+		},
+	)
+	suite.Run(t, ts)
+}
+
+func BenchmarkS3DriverSuite(b *testing.B) {
+	root, err := os.MkdirTemp("", "s3driver-bench-")
+	require.NoError(b, err)
+
+	if skipMsg := skipS3(); skipMsg != "" {
+		b.Skip(skipMsg)
+	}
+
+	ts := testsuites.NewDriverSuite(
+		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return s3DriverConstructor(root, s3.StorageClassStandard)
+		},
+		func() error {
+			return os.Remove(root)
+		},
+	)
+
+	ts.SetupSuiteWithB(b)
+	b.Cleanup(func() { ts.TearDownSuiteWithB(b) })
+
+	// NOTE(prozlach): This is a method of embedded function, we need to pass
+	// the reference to "outer" struct directly
+	benchmarks := ts.EnumerateBenchmarks()
+
+	for _, benchmark := range benchmarks {
+		b.Run(benchmark.Name, benchmark.Func)
+	}
+}
+
+func TestS3Driver_parseParameters(t *testing.T) {
 	p := map[string]interface{}{
 		"region": "us-west-2",
 		"bucket": "test",
@@ -380,7 +412,7 @@ func Test_parseParameters(t *testing.T) {
 	}
 }
 
-func TestFromParameters(t *testing.T) {
+func TestS3DriverFromParameters(t *testing.T) {
 	// Minimal params needed to construct the driver.
 	baseParams := map[string]interface{}{
 		"region": "us-west-2",
@@ -448,9 +480,9 @@ func TestFromParameters(t *testing.T) {
 	}
 }
 
-func TestEmptyRootList(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverEmptyRootList(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	validRoot := t.TempDir()
@@ -494,9 +526,9 @@ func TestEmptyRootList(t *testing.T) {
 	}
 }
 
-func TestStorageClass(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverStorageClass(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	rootDir := t.TempDir()
@@ -566,9 +598,9 @@ func TestStorageClass(t *testing.T) {
 	}
 }
 
-func TestOverThousandBlobs(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverOverThousandBlobs(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	standardDriver := newTempDirDriver(t)
@@ -590,9 +622,9 @@ func TestOverThousandBlobs(t *testing.T) {
 	}
 }
 
-func TestURLFor_Expiry(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverURLFor_Expiry(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	ctx := context.Background()
@@ -628,9 +660,9 @@ func TestURLFor_Expiry(t *testing.T) {
 	require.Equal(t, fmt.Sprint(expected), u.Query().Get(param))
 }
 
-func TestMoveWithMultipartCopy(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	d := newTempDirDriver(t)
@@ -679,8 +711,8 @@ func (m *mockDeleteObjectsError) DeleteObjectsWithContext(ctx aws.Context, input
 }
 
 func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, error) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	d := newTempDirDriver(t)
@@ -698,7 +730,7 @@ func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, 
 }
 
 // TestDeleteFilesError checks that DeleteFiles handles network/service errors correctly.
-func TestDeleteFilesError(t *testing.T) {
+func TestS3DriverDeleteFilesError(t *testing.T) {
 	// Simulate deleting 2*deleteMax files, should run two iterations even if the first errors out.
 	count, err := testDeleteFilesError(t, &mockDeleteObjectsError{}, 2*deleteMax)
 	if err == nil {
@@ -754,7 +786,7 @@ func (m *mockDeleteObjectsPartialError) DeleteObjectsWithContext(ctx aws.Context
 }
 
 // TestDeleteFilesPartialError checks that DeleteFiles handles partial deletion errors correctly.
-func TestDeleteFilesPartialError(t *testing.T) {
+func TestS3DriverDeleteFilesPartialError(t *testing.T) {
 	// Simulate deleting 2*deleteMax files, should run two iterations even if
 	// the first response contains inner errors.
 	n := 2 * deleteMax
@@ -793,9 +825,9 @@ func (m *mockPutObjectWithContextRetryableError) ListObjectsV2PagesWithContext(c
 	return awserr.NewRequestFailure(nil, http.StatusInternalServerError, "expected test failure")
 }
 
-func TestBackoffDisabledByDefault(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	d := newTempDirDriver(t)
@@ -817,9 +849,9 @@ func TestBackoffDisabledByDefault(t *testing.T) {
 	require.Zero(t, retries)
 }
 
-func TestBackoffDisabledBySettingZeroRetries(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	d := newTempDirDriver(t)
@@ -842,9 +874,9 @@ func TestBackoffDisabledBySettingZeroRetries(t *testing.T) {
 	require.Zero(t, retries)
 }
 
-func TestBackoffRetriesRetryableErrors(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	d := newTempDirDriver(t)
@@ -887,9 +919,9 @@ func (m *mockPutObjectWithContextPermanentError) ListObjectsV2WithContext(ctx aw
 	return nil, awserr.NewRequestFailure(nil, http.StatusForbidden, "expected test failure")
 }
 
-func TestBackoffDoesNotRetryPermanentErrors(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	d := newTempDirDriver(t)
@@ -916,9 +948,9 @@ func TestBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 	require.Zero(t, retries)
 }
 
-func TestBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	d := newTempDirDriver(t)
@@ -952,9 +984,9 @@ func newTempDirDriver(t *testing.T) *Driver {
 	return d
 }
 
-func TestExistsPath(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverExistsPath(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	root := t.TempDir()
@@ -977,9 +1009,9 @@ func TestExistsPath(t *testing.T) {
 	require.True(t, exists)
 }
 
-func TestExistsPathNotFound(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverExistsPathNotFound(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	root := t.TempDir()
@@ -991,9 +1023,9 @@ func TestExistsPathNotFound(t *testing.T) {
 	require.False(t, exists)
 }
 
-func TestClientTransport(t *testing.T) {
-	if skipS3() != "" {
-		t.Skip(skipS3())
+func TestS3DriverClientTransport(t *testing.T) {
+	if skipMsg := skipS3(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	testCases := []struct {
