@@ -9,32 +9,56 @@ import (
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 	"github.com/stretchr/testify/require"
-	. "gopkg.in/check.v1"
+	"github.com/stretchr/testify/suite"
 )
 
-// Hook up gocheck into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
+func TestFilesystemDriverSuite(t *testing.T) {
+	root, err := os.MkdirTemp("", "fsdriver-test-")
+	require.NoError(t, err)
 
-func init() {
-	root, err := os.MkdirTemp("", "driver-")
-	if err != nil {
-		panic(err)
-	}
-	defer os.Remove(root)
-
-	driver, err := FromParameters(map[string]interface{}{
-		"rootdirectory": root,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	testsuites.RegisterSuite(func() (storagedriver.StorageDriver, error) {
-		return driver, nil
-	}, testsuites.NeverSkip)
+	ts := testsuites.NewDriverSuite(
+		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return FromParameters(map[string]interface{}{
+				"rootdirectory": root,
+			})
+		},
+		func() error {
+			return os.Remove(root)
+		},
+	)
+	suite.Run(t, ts)
 }
 
-func TestFromParametersImpl(t *testing.T) {
+func BenchmarkFilesystemDriverSuite(b *testing.B) {
+	root, err := os.MkdirTemp("", "fsdriver-bench-")
+	require.NoError(b, err)
+
+	ts := testsuites.NewDriverSuite(
+		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return FromParameters(map[string]interface{}{
+				"rootdirectory": root,
+			})
+		},
+		func() error {
+			return os.Remove(root)
+		},
+	)
+
+	ts.SetupSuiteWithB(b)
+	b.Cleanup(func() { ts.TearDownSuiteWithB(b) })
+
+	// NOTE(prozlach): This is a method of embedded function, we need to pass
+	// the reference to "outer" struct directly
+	benchmarks := ts.EnumerateBenchmarks()
+
+	for _, benchmark := range benchmarks {
+		b.Run(benchmark.Name, benchmark.Func)
+	}
+}
+
+func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 	tests := []struct {
 		params   map[string]interface{} // technically the yaml can contain anything
 		expected DriverParameters
@@ -107,7 +131,7 @@ func TestFromParametersImpl(t *testing.T) {
 }
 
 // TestDeleteFilesEmptyParentDir checks that DeleteFiles removes parent directories if empty.
-func TestDeleteFilesEmptyParentDir(t *testing.T) {
+func TestFilesystemDriverDeleteFilesEmptyParentDir(t *testing.T) {
 	d := newTempDirDriver(t)
 
 	parentDir := "/testdir"
@@ -130,7 +154,7 @@ func TestDeleteFilesEmptyParentDir(t *testing.T) {
 }
 
 // TestDeleteFilesNonEmptyParentDir checks that DeleteFiles does not remove parent directories if not empty.
-func TestDeleteFilesNonEmptyParentDir(t *testing.T) {
+func TestFilesystemDriverDeleteFilesNonEmptyParentDir(t *testing.T) {
 	d := newTempDirDriver(t)
 
 	parentDir := "/testdir"
@@ -158,7 +182,7 @@ func TestDeleteFilesNonEmptyParentDir(t *testing.T) {
 
 // TestDeleteFilesNonExistingParentDir checks that DeleteFiles is idempotent and doesn't return an error if a parent dir
 // of a not found file doesn't exist as well.
-func TestDeleteFilesNonExistingParentDir(t *testing.T) {
+func TestFilesystemDriverDeleteFilesNonExistingParentDir(t *testing.T) {
 	d := newTempDirDriver(t)
 
 	fp := path.Join("/non-existing-dir", "non-existing-file")
