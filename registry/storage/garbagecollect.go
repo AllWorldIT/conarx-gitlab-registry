@@ -231,15 +231,13 @@ func MarkAndSweep(ctx context.Context, storageDriver driver.StorageDriver, regis
 			//
 			// If we encounter a MultiError, check each underlying error, returning
 			// nil only if all errors are of type PathNotFound.
-			switch err := err.(type) {
-			case *multierror.Error:
-				for _, e := range err.Errors {
-					if _, ok := e.(driver.PathNotFoundError); !ok {
+			if me, ok := err.(*multierror.Error); ok {
+				for _, e := range me.Errors {
+					if !errors.As(e, new(driver.PathNotFoundError)) {
 						return err
 					}
 				}
-			case driver.PathNotFoundError:
-			default:
+			} else if !errors.As(err, new(driver.PathNotFoundError)) {
 				return err
 			}
 		}

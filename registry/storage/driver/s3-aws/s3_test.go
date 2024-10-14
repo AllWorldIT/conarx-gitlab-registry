@@ -666,11 +666,7 @@ func TestMoveWithMultipartCopy(t *testing.T) {
 	}
 
 	_, err = d.GetContent(ctx, sourcePath)
-	switch err.(type) {
-	case storagedriver.PathNotFoundError:
-	default:
-		t.Fatalf("unexpected error getting content: %v", err)
-	}
+	require.ErrorAs(t, err, new(storagedriver.PathNotFoundError))
 }
 
 type mockDeleteObjectsError struct {

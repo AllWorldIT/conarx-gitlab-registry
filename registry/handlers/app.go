@@ -732,7 +732,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 		storageDriverCheck := func() error {
 			_, err := app.driver.Stat(app, "/") // "/" should always exist
-			if _, ok := err.(storagedriver.PathNotFoundError); ok {
+			if errors.As(err, new(storagedriver.PathNotFoundError)) {
 				err = nil // pass this through, backend is responding, but this path doesn't exist.
 			}
 			return err

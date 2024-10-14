@@ -1437,10 +1437,10 @@ func dbDeleteManifest(ctx context.Context, db datastore.Handler, cache datastore
 }
 
 func (imh *manifestHandler) appendTagDeleteError(err error) {
-	switch err.(type) {
-	case distribution.ErrRepositoryUnknown:
+	switch {
+	case errors.As(err, new(distribution.ErrRepositoryUnknown)):
 		imh.Errors = append(imh.Errors, v2.ErrorCodeNameUnknown)
-	case distribution.ErrTagUnknown, storagedriver.PathNotFoundError:
+	case errors.As(err, new(distribution.ErrTagUnknown)) || errors.As(err, new(storagedriver.PathNotFoundError)):
 		imh.Errors = append(imh.Errors, v2.ErrorCodeManifestUnknown)
 	default:
 		imh.Errors = append(imh.Errors, errcode.FromUnknownError(err))

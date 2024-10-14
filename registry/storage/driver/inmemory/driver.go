@@ -245,7 +245,7 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 	count := 0
 	for _, path := range paths {
 		if err := d.Delete(ctx, path); err != nil {
-			if _, ok := err.(storagedriver.PathNotFoundError); !ok {
+			if !errors.As(err, new(storagedriver.PathNotFoundError)) {
 				return count, err
 			}
 		}
