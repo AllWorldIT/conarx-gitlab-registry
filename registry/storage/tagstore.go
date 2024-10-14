@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"path"
 
 	"github.com/docker/distribution"
@@ -34,12 +35,11 @@ func (ts *tagStore) All(ctx context.Context) ([]string, error) {
 
 	entries, err := ts.blobStore.driver.List(ctx, pathSpec)
 	if err != nil {
-		switch err := err.(type) {
-		case storagedriver.PathNotFoundError:
+		if errors.As(err, new(storagedriver.PathNotFoundError)) {
 			return tags, distribution.ErrRepositoryUnknown{Name: ts.repository.Named().Name()}
-		default:
-			return tags, err
 		}
+
+		return tags, err
 	}
 
 	for _, entry := range entries {
@@ -102,8 +102,7 @@ func (ts *tagStore) Get(ctx context.Context, tag string) (distribution.Descripto
 
 	revision, err := ts.blobStore.readlink(ctx, currentPath)
 	if err != nil {
-		switch err.(type) {
-		case storagedriver.PathNotFoundError:
+		if errors.As(err, new(storagedriver.PathNotFoundError)) {
 			return distribution.Descriptor{}, distribution.ErrTagUnknown{Tag: tag}
 		}
 
@@ -186,8 +185,7 @@ func (ts *tagStore) Lookup(ctx context.Context, desc distribution.Descriptor) ([
 		tagLinkPath, _ := pathFor(tagLinkPathSpec)
 		tagDigest, err := ts.blobStore.readlink(ctx, tagLinkPath)
 		if err != nil {
-			switch err.(type) {
-			case storagedriver.PathNotFoundError:
+			if errors.As(err, new(storagedriver.PathNotFoundError)) {
 				continue
 			}
 			return nil, err

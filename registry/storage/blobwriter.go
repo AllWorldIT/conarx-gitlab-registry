@@ -179,8 +179,8 @@ func (bw *blobWriter) validateBlob(ctx context.Context, desc distribution.Descri
 
 	// Stat the on disk file
 	if fi, err := bw.driver.Stat(ctx, bw.path); err != nil {
-		switch err := err.(type) {
-		case storagedriver.PathNotFoundError:
+		switch {
+		case errors.As(err, new(storagedriver.PathNotFoundError)):
 			// NOTE(stevvooe): We really don't care if the file is
 			// not actually present for the reader. We now assume
 			// that the desc length is zero.
@@ -301,10 +301,7 @@ func (bw *blobWriter) moveBlob(ctx context.Context, desc distribution.Descriptor
 
 	// Check for existence
 	if _, err := bw.blobStore.driver.Stat(ctx, blobPath); err != nil {
-		switch err := err.(type) {
-		case storagedriver.PathNotFoundError:
-			break // ensure that it doesn't exist.
-		default:
+		if !errors.As(err, new(storagedriver.PathNotFoundError)) {
 			return err
 		}
 	} else {
@@ -322,8 +319,8 @@ func (bw *blobWriter) moveBlob(ctx context.Context, desc distribution.Descriptor
 	// case. For the most part, this should only ever happen with zero-length
 	// blobs.
 	if _, err := bw.blobStore.driver.Stat(ctx, bw.path); err != nil {
-		switch err := err.(type) {
-		case storagedriver.PathNotFoundError:
+		switch {
+		case errors.As(err, new(storagedriver.PathNotFoundError)):
 			// HACK(stevvooe): This is slightly dangerous: if we verify above,
 			// get a hash, then the underlying file is deleted, we risk moving
 			// a zero-length blob into a nonzero-length blob location. To
@@ -369,10 +366,7 @@ func (bw *blobWriter) removeResources(ctx context.Context) error {
 	// upload related files.
 	dirPath := path.Dir(dataPath)
 	if err := bw.blobStore.driver.Delete(ctx, dirPath); err != nil {
-		switch err := err.(type) {
-		case storagedriver.PathNotFoundError:
-			break // already gone!
-		default:
+		if !errors.As(err, new(storagedriver.PathNotFoundError)) {
 			// This should be uncommon enough such that returning an error
 			// should be okay. At this point, the upload should be mostly
 			// complete, but perhaps the backend became unaccessible.
@@ -392,14 +386,14 @@ func (bw *blobWriter) Reader() (io.ReadCloser, error) {
 		if err == nil {
 			break
 		}
-		switch err.(type) {
-		case storagedriver.PathNotFoundError:
-			dcontext.GetLogger(bw.ctx).Debugf("Nothing found on try %d, sleeping...", try)
-			time.Sleep(1 * time.Second)
-			try++
-		default:
+
+		if !errors.As(err, new(storagedriver.PathNotFoundError)) {
 			return nil, err
 		}
+
+		dcontext.GetLogger(bw.ctx).Debugf("Nothing found on try %d, sleeping...", try)
+		time.Sleep(1 * time.Second)
+		try++
 	}
 
 	readCloser, err := bw.driver.Reader(bw.ctx, bw.path, 0)

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -114,16 +115,15 @@ func (fr *fileReader) reader() (io.Reader, error) {
 	// If we don't have a reader, open one up.
 	rc, err := fr.driver.Reader(fr.ctx, fr.path, fr.offset)
 	if err != nil {
-		switch err := err.(type) {
-		case storagedriver.PathNotFoundError:
+		if errors.As(err, new(storagedriver.PathNotFoundError)) {
 			// NOTE(stevvooe): If the path is not found, we simply return a
 			// reader that returns io.EOF. However, we do not set fr.rc,
 			// allowing future attempts at getting a reader to possibly
 			// succeed if the file turns up later.
 			return io.NopCloser(bytes.NewReader([]byte{})), nil
-		default:
-			return nil, err
 		}
+
+		return nil, err
 	}
 
 	fr.rc = rc

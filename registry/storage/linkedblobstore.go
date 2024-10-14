@@ -210,12 +210,11 @@ func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution
 
 	startedAtBytes, err := lbs.blobStore.driver.GetContent(ctx, startedAtPath)
 	if err != nil {
-		switch err := err.(type) {
-		case driver.PathNotFoundError:
+		if errors.As(err, new(driver.PathNotFoundError)) {
 			return nil, distribution.ErrBlobUploadUnknown
-		default:
-			return nil, err
 		}
+
+		return nil, err
 	}
 
 	startedAt, err := time.Parse(time.RFC3339, string(startedAtBytes))
@@ -408,12 +407,11 @@ func (lbs *linkedBlobStatter) Stat(ctx context.Context, dgst digest.Digest) (dis
 
 	target, err := lbs.blobStore.readlink(ctx, blobLinkPath)
 	if err != nil {
-		switch err := err.(type) {
-		case driver.PathNotFoundError:
+		if errors.As(err, new(driver.PathNotFoundError)) {
 			return distribution.Descriptor{}, distribution.ErrBlobUnknown
-		default:
-			return distribution.Descriptor{}, err
 		}
+
+		return distribution.Descriptor{}, err
 	}
 
 	if target != dgst {

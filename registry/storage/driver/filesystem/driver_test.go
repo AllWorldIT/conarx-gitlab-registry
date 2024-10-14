@@ -2,7 +2,6 @@ package filesystem
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path"
 	"testing"
@@ -123,11 +122,11 @@ func TestDeleteFilesEmptyParentDir(t *testing.T) {
 
 	// check deleted file
 	_, err = d.Stat(ctx, fp)
-	require.True(t, errors.As(err, &storagedriver.PathNotFoundError{}))
+	require.ErrorAs(t, err, new(storagedriver.PathNotFoundError))
 
 	// make sure the parent directory has been removed
 	_, err = d.Stat(ctx, parentDir)
-	require.True(t, errors.As(err, &storagedriver.PathNotFoundError{}))
+	require.ErrorAs(t, err, new(storagedriver.PathNotFoundError))
 }
 
 // TestDeleteFilesNonEmptyParentDir checks that DeleteFiles does not remove parent directories if not empty.
@@ -150,7 +149,7 @@ func TestDeleteFilesNonEmptyParentDir(t *testing.T) {
 
 	// check deleted file
 	_, err = d.Stat(ctx, fp)
-	require.True(t, errors.As(err, &storagedriver.PathNotFoundError{}))
+	require.ErrorAs(t, err, new(storagedriver.PathNotFoundError))
 
 	// make sure the parent directory has not been removed
 	_, err = d.Stat(ctx, parentDir)
