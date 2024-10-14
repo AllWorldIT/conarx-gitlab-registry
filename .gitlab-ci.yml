@@ -38,6 +38,7 @@ stages:
   - test
   - integration
   - release
+  - child jobs
   - document
 
 .go-pg-version-matrix:
