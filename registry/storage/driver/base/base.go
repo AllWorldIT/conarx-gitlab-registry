@@ -39,6 +39,7 @@ package base
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -63,21 +64,21 @@ type Base struct {
 
 // Format errors received from the storage driver
 func (base *Base) setDriverName(e error) error {
-	switch actual := e.(type) {
-	case nil:
+	if e == nil {
 		return nil
-	case storagedriver.ErrUnsupportedMethod:
-		actual.DriverName = base.StorageDriver.Name()
-		return actual
-	case storagedriver.PathNotFoundError:
-		actual.DriverName = base.StorageDriver.Name()
-		return actual
-	case storagedriver.InvalidPathError:
-		actual.DriverName = base.StorageDriver.Name()
-		return actual
-	case storagedriver.InvalidOffsetError:
-		actual.DriverName = base.StorageDriver.Name()
-		return actual
+	}
+
+	switch {
+	// NOTE(prozlach): These types have field sets in the code already
+	case errors.As(e, new(storagedriver.ErrUnsupportedMethod)):
+		return e
+	case errors.As(e, new(storagedriver.PathNotFoundError)):
+		return e
+	case errors.As(e, new(storagedriver.InvalidPathError)):
+		return e
+	case errors.As(e, new(storagedriver.InvalidOffsetError)):
+		return e
+	// NOTE(prozlach): Anything else needs to be wrapped
 	default:
 		storageError := storagedriver.Error{
 			DriverName: base.StorageDriver.Name(),
