@@ -83,6 +83,11 @@ const defaultDBCheckTimeout = 5 * time.Second
 // redisCacheTTL is the global expiry duration for objects cached in Redis.
 const redisCacheTTL = 6 * time.Hour
 
+var (
+	errFilesystemInUse = errors.New(`registry filesystem metadata in use, please import data before enabling the database, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#existing-registries`)
+	errDatabaseInUse   = errors.New(`registry metadata database in use, please enable the database https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html`)
+)
+
 // App is a global registry application object. Shared resources can be placed
 // on this object that will be accessible from all requests. Any writable
 // fields should be protected.
@@ -330,8 +335,24 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		options = append(options, storage.ManifestPayloadSizeLimit(app.manifestPayloadSizeLimit))
 	}
 
+	fsLocker := storage.FilesystemInUseLocker{Driver: app.driver}
+	dbLocker := storage.DatabaseInUseLocker{Driver: app.driver}
 	// Connect to the metadata database, if enabled.
 	if config.Database.Enabled {
+		// Temporary measure to enforce lock files while all the implementation is done
+		// Seehttps://gitlab.com/gitlab-org/container-registry/-/issues/1335
+		if feature.EnforceLockfiles.Enabled() {
+			fsLocked, err := fsLocker.IsLocked(ctx)
+			if err != nil {
+				log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+				return nil, err
+			}
+
+			if fsLocked {
+				return nil, errFilesystemInUse
+			}
+		}
+
 		log.Info("using the metadata database")
 
 		if config.GC.Disabled {
@@ -438,16 +459,37 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		// Now that we've started the database successfully, lock the filesystem
 		// to signal that this object storage needs to be managed by the database.
-		dbLock := storage.DatabaseInUseLocker{Driver: app.driver}
-		if err := dbLock.Lock(app.Context); err != nil {
-			// Right now, the server doesn't make use of this lock, only the offline
-			// garbage collector reads this file, so we are fee to log a warning
-			// and move on with spinning up the application.
-			log.WithError(err).Warn("failed to mark filesystem for database only usage, continuing")
+		if feature.EnforceLockfiles.Enabled() {
+			if err := dbLocker.Lock(app.Context); err != nil {
+				log.WithError(err).Error("failed to mark filesystem for database only usage, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+				return nil, err
+			}
 		}
+
 		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
 			startBackgroundMigrations(app.Context, app.db.Primary(), config)
 		}
+	} else {
+		if feature.EnforceLockfiles.Enabled() {
+			dbLocked, err := dbLocker.IsLocked(ctx)
+			if err != nil {
+				log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+				return nil, err
+			}
+
+			if dbLocked {
+				return nil, errDatabaseInUse
+			}
+		}
+
+		// Lock the filesystem metadata to prevent
+		// accidental start up of the registry in database mode
+		// before an import has been completed.
+		if err := fsLocker.Lock(app.Context); err != nil {
+			log.WithError(err).Error("failed to mark filesystem only usage, continuing")
+			return nil, err
+		}
+		log.Info("registry filesystem metadata in use")
 	}
 
 	// configure storage caches

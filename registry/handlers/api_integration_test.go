@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/docker/distribution/registry/storage/driver/inmemory"
 	"io"
 	"net/http"
 	"net/url"
@@ -587,6 +588,9 @@ func (factory *storageManifestErrDriverFactory) Create(parameters map[string]int
 	// Initialize the mock driver
 	errGenericStorage := errors.New("generic storage error")
 	return &mockErrorDriver{
+		//  We need a working driver to check for lock files existence
+		// as it is needed when creating a new handlers.App
+		StorageDriver: inmemory.New(),
 		returnErrs: []mockErrorMapping{
 			{
 				pathMatch: fmt.Sprintf("%s/_manifests/tags", repositoryWithManifestNotFound),
