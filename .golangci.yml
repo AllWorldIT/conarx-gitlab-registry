@@ -97,16 +97,6 @@ linters-settings:
     settings: # settings passed to gocritic
       captLocal: # must be valid enabled check name
         paramsOnly: true
-  godox:
-    # report any comments starting with keywords, this is useful for TODO or FIXME comments that
-    # might be left in the code accidentally and should be resolved before merging
-    keywords: # default keywords are TODO, BUG, and FIXME, these can be overwritten by this setting
-      - TODO
-      - BUG
-      - FIXME
-      - NOTE
-      - OPTIMIZE # marks code that should be optimized before merging
-      - HACK # marks hack-arounds that should be removed before merging
   dogsled:
     # checks assignments with too many blank identifiers; default is 2
     max-blank-identifiers: 2
@@ -150,7 +140,6 @@ linters:
     - gocognit
     - goconst
     - gocritic
-    - godox
     - gofumpt
     - goimports
     - gosec
