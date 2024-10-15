@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/internal/feature"
@@ -97,7 +98,12 @@ func newImporterWithRoot(t *testing.T, db *datastore.DB, root string, opts ...da
 	driver := newFilesystemStorageDriverWithRoot(t, root)
 	registry := newRegistry(t, driver)
 
-	return datastore.NewImporter(db, registry, opts...)
+	imp := datastore.NewImporter(db, registry, opts...)
+
+	// we need to ensure the lockfiles are returned to their original state
+	t.Cleanup(restoreLockfiles(t, imp))
+
+	return imp
 }
 
 func newTempDirDriver(t *testing.T) *filesystem.Driver {
@@ -759,4 +765,15 @@ func TestImporter_ImportAllRepositories(t *testing.T) {
 	imp := newImporter(t, suite.db)
 	require.NoError(t, imp.ImportAllRepositories(suite.ctx))
 	validateImport(t, suite.db)
+}
+
+func restoreLockfiles(t *testing.T, imp *datastore.Importer) func() {
+	t.Helper()
+
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		require.NoError(t, imp.RestoreLockfiles(ctx))
+	}
 }

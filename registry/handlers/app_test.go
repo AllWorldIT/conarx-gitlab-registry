@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/docker/distribution/internal/feature"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -28,6 +29,7 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/registry/storage"
 	memorycache "github.com/docker/distribution/registry/storage/cache/memory"
+	_ "github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/docker/distribution/registry/storage/driver/testdriver"
 	dtestutil "github.com/docker/distribution/testutil"
 	"github.com/sirupsen/logrus"
@@ -952,6 +954,52 @@ func TestRecordLSNMiddleware(t *testing.T) {
 			defer resp.Body.Close()
 			require.NoError(t, err)
 			require.Equal(t, testcase.status, resp.StatusCode)
+		})
+	}
+}
+
+func TestNewApp_Locks_Errors(t *testing.T) {
+	ctx := context.Background()
+	config := testConfig()
+	delete(config.Storage, "testdriver")
+
+	tcs := map[string]struct {
+		rootdir         string
+		databaseEnabled bool
+		expectedError   error
+	}{
+		"database in use": {
+			rootdir: "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			// disabling the database when database-in-use exists should error out
+			databaseEnabled: false,
+			expectedError:   errDatabaseInUse,
+		},
+		"filesystem in use": {
+			rootdir: "../datastore/testdata/fixtures/importer/happy-path",
+			// enabling the database when filesystem-in-use exists should error out
+			databaseEnabled: true,
+			expectedError:   errFilesystemInUse,
+		},
+		// we cannot test the scenario where the FF is disabled
+		// because it requires proper DB configuration and restoring of lockfiles
+		// this is meant to be a unit test rather than an integration test, so
+		// we can skip this test while the FF_ENFORCE_LOCKFILES exists
+	}
+
+	for tn, tc := range tcs {
+		t.Run(tn, func(t *testing.T) {
+			config.Storage["filesystem"] = map[string]interface{}{
+				"rootdirectory": tc.rootdir,
+			}
+			config.Database.Enabled = tc.databaseEnabled
+
+			// Temporary use of FF while other tests are updated and fixed
+			// see https://gitlab.com/gitlab-org/container-registry/-/issues/1335
+			t.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
+
+			_, err := NewApp(ctx, config)
+			require.ErrorIs(t, err, tc.expectedError)
+
 		})
 	}
 }
