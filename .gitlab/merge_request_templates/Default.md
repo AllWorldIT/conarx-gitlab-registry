@@ -28,7 +28,8 @@ Related to <!-- add the issue URL here -->
   - [ ] I added unit tests
 - Documentation:
   - [ ] [Documentation is not required](https://about.gitlab.com/handbook/engineering/ux/technical-writing/workflow/#when-documentation-is-required)
-  - [ ] I added [documentation](https://docs.gitlab.com/ee/development/documentation/workflow.html) 
+  - [ ] I added [documentation](https://docs.gitlab.com/ee/development/documentation/workflow.html)
+  - [ ] I created or linked to an existing issue for every added or updated `TODO`, `BUG`, `FIXME` or `OPTIMIZE` prefixed comment
 - ~database changes including schema migrations:
   - [ ] Change does not introduce database changes
   - MR includes DB chagnes
