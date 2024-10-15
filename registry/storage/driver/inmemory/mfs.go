@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	storagedriver "github.com/docker/distribution/registry/storage/driver"
 )
 
 var (
@@ -48,7 +50,7 @@ func (d *dir) add(n node) {
 }
 
 // find searches for the node, given path q in dir. If the node is found, it
-// will be returned. If the node is not found, the closet existing parent. If
+// will be returned. If the node is not found, the closest existing parent. If
 // the node is found, the returned (node).path() will match q.
 func (d *dir) find(q string) node {
 	q = strings.Trim(q, "/")
@@ -125,7 +127,7 @@ func (d *dir) mkfile(p string) (*file, error) {
 	// Make any non-existent directories
 	n, err := d.mkdirs(dirpath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mkdirs failed: %w", err)
 	}
 
 	dd := n.(*dir)
@@ -148,7 +150,7 @@ func (d *dir) mkdirs(p string) (*dir, error) {
 
 	if !n.isdir() {
 		// Found something there
-		return nil, errIsNotDir
+		return nil, fmt.Errorf("mkdirs found non-directory element at path %s: %w", n.path(), errIsNotDir)
 	}
 
 	if n.path() == p {
@@ -168,7 +170,7 @@ func (d *dir) mkdirs(p string) (*dir, error) {
 		d, err := dd.mkdir(component)
 		if err != nil {
 			// This should actually never happen, since there are no children.
-			return nil, err
+			return nil, fmt.Errorf("mkdir of %q failed: %w", component, err)
 		}
 		dd = d
 	}
@@ -179,12 +181,12 @@ func (d *dir) mkdirs(p string) (*dir, error) {
 // mkdir creates a child directory under d with the given name.
 func (d *dir) mkdir(name string) (*dir, error) {
 	if name == "" {
-		return nil, fmt.Errorf("invalid dirname")
+		return nil, fmt.Errorf("dirname passed to mkdir is empty")
 	}
 
 	_, ok := d.children[name]
 	if ok {
-		return nil, errExists
+		return nil, fmt.Errorf("child %q already exists: %w", name, errExists)
 	}
 
 	child := &dir{
@@ -204,24 +206,32 @@ func (d *dir) move(src, dst string) error {
 
 	dp, err := d.mkdirs(dstDirname)
 	if err != nil {
-		return err
+		return fmt.Errorf("mkdir failed: %w", err)
 	}
 
 	srcDirname, srcFilename := path.Split(src)
 	sp := d.find(srcDirname)
 
 	if normalize(srcDirname) != normalize(sp.path()) {
-		return errNotExists
+		return fmt.Errorf(
+			"source directory %q does not exist: %w",
+			srcDirname,
+			storagedriver.PathNotFoundError{DriverName: driverName, Path: src},
+		)
 	}
 
 	spd, ok := sp.(*dir)
 	if !ok {
-		return errIsNotDir // paranoid.
+		return fmt.Errorf("src paths' directory component is not a directory: %w", errIsNotDir) // paranoid.
 	}
 
 	s, ok := spd.children[srcFilename]
 	if !ok {
-		return errNotExists
+		return fmt.Errorf(
+			"src file %q does not exist: %w",
+			srcFilename,
+			storagedriver.PathNotFoundError{Path: src, DriverName: driverName},
+		)
 	}
 
 	delete(spd.children, srcFilename)
@@ -243,11 +253,19 @@ func (d *dir) delete(p string) error {
 	parent := d.find(dirname)
 
 	if normalize(dirname) != normalize(parent.path()) {
-		return errNotExists
+		return fmt.Errorf(
+			"directory %q does not exist: %w",
+			parent.path(),
+			storagedriver.PathNotFoundError{DriverName: driverName, Path: p},
+		)
 	}
 
 	if _, ok := parent.(*dir).children[filename]; !ok {
-		return errNotExists
+		return fmt.Errorf(
+			"file %q does not exist: %w",
+			filename,
+			storagedriver.PathNotFoundError{DriverName: driverName, Path: p},
+		)
 	}
 
 	delete(parent.(*dir).children, filename)

@@ -105,7 +105,7 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 
 		filled, err = ch.App.registry.Repositories(ch.Context, repos, filters.LastEntry)
 
-		if err == io.EOF || errors.As(err, new(driver.PathNotFoundError)) {
+		if errors.Is(err, io.EOF) || errors.As(err, new(driver.PathNotFoundError)) {
 			moreEntries = false
 		} else if err != nil {
 			ch.Errors = append(ch.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
