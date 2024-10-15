@@ -94,7 +94,7 @@ func (d *driver) PutContent(ctx context.Context, p string, contents []byte) erro
 
 	f, err := d.root.mkfile(normalized)
 	if err != nil {
-		return fmt.Errorf("not a file")
+		return fmt.Errorf("failed to create or retrieve file: %w", err)
 	}
 
 	f.truncate()
@@ -213,13 +213,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 
 	normalizedSrc, normalizedDst := normalize(sourcePath), normalize(destPath)
 
-	err := d.root.move(normalizedSrc, normalizedDst)
-	switch err {
-	case errNotExists:
-		return storagedriver.PathNotFoundError{Path: destPath, DriverName: driverName}
-	default:
-		return err
-	}
+	return d.root.move(normalizedSrc, normalizedDst)
 }
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
@@ -229,13 +223,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 
 	normalized := normalize(path)
 
-	err := d.root.delete(normalized)
-	switch err {
-	case errNotExists:
-		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
-	default:
-		return err
-	}
+	return d.root.delete(normalized)
 }
 
 // DeleteFiles deletes a set of files by iterating over their full path list and invoking Delete for each. Returns the

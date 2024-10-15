@@ -179,7 +179,7 @@ func (suite *DriverSuite) TestValidPaths(c *check.C) {
 func (suite *DriverSuite) deletePath(c *check.C, path string) {
 	for tries := 2; tries > 0; tries-- {
 		err := suite.StorageDriver.Delete(suite.ctx, path)
-		if _, ok := err.(storagedriver.PathNotFoundError); ok {
+		if errors.As(err, new(storagedriver.PathNotFoundError)) {
 			err = nil
 		}
 		c.Assert(err, check.IsNil)
@@ -636,7 +636,7 @@ func (suite *DriverSuite) TestMoveNonexistent(c *check.C) {
 
 	err = suite.StorageDriver.Move(suite.ctx, sourcePath, destPath)
 	c.Assert(err, check.NotNil)
-	c.Assert(err, check.FitsTypeOf, storagedriver.PathNotFoundError{})
+	c.Assert(errors.As(err, new(storagedriver.PathNotFoundError)), check.Equals, true)
 	c.Assert(strings.Contains(err.Error(), suite.Name()), check.Equals, true)
 
 	received, err := suite.StorageDriver.GetContent(suite.ctx, destPath)
@@ -877,7 +877,7 @@ func (suite *DriverSuite) TestDeleteNonexistent(c *check.C) {
 	filename := randomPath(32)
 	err := suite.StorageDriver.Delete(suite.ctx, filename)
 	c.Assert(err, check.NotNil)
-	c.Assert(err, check.FitsTypeOf, storagedriver.PathNotFoundError{})
+	c.Assert(errors.As(err, new(storagedriver.PathNotFoundError)), check.Equals, true)
 	c.Assert(strings.Contains(err.Error(), suite.Name()), check.Equals, true)
 }
 
