@@ -39,7 +39,7 @@ docker run --network=host -t --entrypoint=/bin/sh minio/mc \
 Now you can run the S3 integration tests against the MinIO server we created above:
 
 ```shell
-go test -timeout 20m -v github.com/docker/distribution/registry/storage/driver/s3-aws -args -check.v
+go test -timeout 20m -v github.com/docker/distribution/registry/storage/driver/s3-aws
 ```
 
 Finally, the MinIO server can be stopped once you are finished with the
@@ -55,7 +55,7 @@ To run the benchmarks against any configured driver, run the following
 command, substituting the appropriate driver:
 
 ```shell
-go test -v -cpuprofile profile.out github.com/docker/distribution/registry/storage/driver/s3-aws -args -check.v -check.b
+go test -v -cpuprofile profile.out github.com/docker/distribution/registry/storage/driver/s3-aws
 ```
 
 Afterwards, the `profile.out` file we generated above can be used to analyze

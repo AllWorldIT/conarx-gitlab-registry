@@ -4,22 +4,25 @@ import (
 	"os"
 	"testing"
 
-	check "gopkg.in/check.v1"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func Test(t *testing.T) { check.TestingT(t) }
-
-type MiddlewareSuite struct{}
-
-var _ = check.Suite(&MiddlewareSuite{})
-
-func (s *MiddlewareSuite) TestNoConfig(c *check.C) {
-	options := make(map[string]interface{})
-	_, err := newCloudFrontStorageMiddleware(nil, options)
-	c.Assert(err, check.ErrorMatches, "no baseurl provided")
+func TestCloudfrontMiddlewareSuite(t *testing.T) {
+	suite.Run(t, new(CloudfrontMiddlewareSuite))
 }
 
-func TestCloudFrontStorageMiddlewareGenerateKey(t *testing.T) {
+type CloudfrontMiddlewareSuite struct {
+	suite.Suite
+}
+
+func (suite *CloudfrontMiddlewareSuite) TestNoConfig() {
+	options := make(map[string]interface{})
+	_, err := newCloudFrontStorageMiddleware(nil, options)
+	require.ErrorContains(suite.T(), err, "no baseurl provided")
+}
+
+func (suite *CloudfrontMiddlewareSuite) TestCloudFrontStorageMiddlewareGenerateKey() {
 	options := make(map[string]interface{})
 	options["baseurl"] = "example.com"
 
@@ -41,18 +44,13 @@ pZeMRablbPQdp8/1NyIwimq1VlG0ohQ4P6qhW7E09ZMC
 `
 
 	file, err := os.CreateTemp("", "pkey")
-	if err != nil {
-		t.Fatal("File cannot be created")
-	}
+	require.NoErrorf(suite.T(), err, "File cannot be created")
 	file.WriteString(privk)
 	defer os.Remove(file.Name())
+
 	options["privatekey"] = file.Name()
 	options["keypairid"] = "test"
 	storageDriver, err := newCloudFrontStorageMiddleware(nil, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if storageDriver == nil {
-		t.Fatal("Driver couldnt be initialized.")
-	}
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), storageDriver, "Driver couldnt be initialized")
 }

@@ -1123,7 +1123,7 @@ func (suite *DriverSuite) TestStatCall() {
 	require.Greaterf(
 		suite.T(),
 		modTime,
-		createdTime,  
+		createdTime,
 		"modtime (%s) is before the creation time (%s)", modTime, createdTime,
 	)
 
