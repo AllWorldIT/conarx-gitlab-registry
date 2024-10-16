@@ -4,56 +4,59 @@ import (
 	"context"
 	"testing"
 
-	check "gopkg.in/check.v1"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func Test(t *testing.T) { check.TestingT(t) }
-
-type MiddlewareSuite struct{}
-
-var _ = check.Suite(&MiddlewareSuite{})
-
-func (s *MiddlewareSuite) TestNoConfig(c *check.C) {
-	options := make(map[string]interface{})
-	_, err := newRedirectStorageMiddleware(nil, options)
-	c.Assert(err, check.ErrorMatches, "no baseurl provided")
+func TestRedirectMiddlewareSuite(t *testing.T) {
+	suite.Run(t, new(RedirectMiddlewareSuite))
 }
 
-func (s *MiddlewareSuite) TestMissingScheme(c *check.C) {
+type RedirectMiddlewareSuite struct {
+	suite.Suite
+}
+
+func (suite *RedirectMiddlewareSuite) TestNoConfig() {
+	options := make(map[string]interface{})
+	_, err := newRedirectStorageMiddleware(nil, options)
+	require.ErrorContains(suite.T(), err, "no baseurl provided")
+}
+
+func (suite *RedirectMiddlewareSuite) TestMissingScheme() {
 	options := make(map[string]interface{})
 	options["baseurl"] = "example.com"
 	_, err := newRedirectStorageMiddleware(nil, options)
-	c.Assert(err, check.ErrorMatches, "no scheme specified for redirect baseurl")
+	require.ErrorContains(suite.T(), err, "no scheme specified for redirect baseurl")
 }
 
-func (s *MiddlewareSuite) TestHttpsPort(c *check.C) {
+func (suite *RedirectMiddlewareSuite) TestHttpsPort() {
 	options := make(map[string]interface{})
 	options["baseurl"] = "https://example.com:5443"
 	middleware, err := newRedirectStorageMiddleware(nil, options)
-	c.Assert(err, check.Equals, nil)
+	require.NoError(suite.T(), err)
 
 	m, ok := middleware.(*redirectStorageMiddleware)
-	c.Assert(ok, check.Equals, true)
-	c.Assert(m.scheme, check.Equals, "https")
-	c.Assert(m.host, check.Equals, "example.com:5443")
+	require.True(suite.T(), ok)
+	require.Equal(suite.T(), "https", m.scheme)
+	require.Equal(suite.T(), "example.com:5443", m.host)
 
 	url, err := middleware.URLFor(context.TODO(), "/rick/data", nil)
-	c.Assert(err, check.Equals, nil)
-	c.Assert(url, check.Equals, "https://example.com:5443/rick/data")
+	require.NoError(suite.T(), err)
+	require.Equal(suite.T(), "https://example.com:5443/rick/data", url)
 }
 
-func (s *MiddlewareSuite) TestHTTP(c *check.C) {
+func (suite *RedirectMiddlewareSuite) TestHTTP() {
 	options := make(map[string]interface{})
 	options["baseurl"] = "http://example.com"
 	middleware, err := newRedirectStorageMiddleware(nil, options)
-	c.Assert(err, check.Equals, nil)
+	require.NoError(suite.T(), err)
 
 	m, ok := middleware.(*redirectStorageMiddleware)
-	c.Assert(ok, check.Equals, true)
-	c.Assert(m.scheme, check.Equals, "http")
-	c.Assert(m.host, check.Equals, "example.com")
+	require.True(suite.T(), ok)
+	require.Equal(suite.T(), "http", m.scheme)
+	require.Equal(suite.T(), "example.com", m.host)
 
 	url, err := middleware.URLFor(context.TODO(), "morty/data", nil)
-	c.Assert(err, check.Equals, nil)
-	c.Assert(url, check.Equals, "http://example.com/morty/data")
+	require.NoError(suite.T(), err)
+	require.Equal(suite.T(), "http://example.com/morty/data", url)
 }
