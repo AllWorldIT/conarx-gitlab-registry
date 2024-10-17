@@ -717,10 +717,13 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 	}
 }
 
-// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections.
+// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections. An error is returned if failed
+// to connect to the primary server. Failures to connect to replica server(s) are handled gracefully, that is, logged,
+// reported and ignored. This is to prevent halting the app start, as it can function with the primary server only.
+// DBLoadBalancer.StartReplicaChecking can be used to periodically refresh the list of replicas, potentially leading to
+// the self-healing of transient connection failures during this initialization.
 func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*DBLoadBalancer, error) {
 	config := applyOptions(opts)
-	var result *multierror.Error
 
 	lb := &DBLoadBalancer{
 		active:                config.loadBalancing.active,
@@ -738,23 +741,20 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
 	if err != nil {
-		result = multierror.Append(result, fmt.Errorf("failed to open primary database connection: %w", err))
+		return nil, fmt.Errorf("failed to open primary database connection: %w", err)
 	}
 	lb.primary = primary
 
 	// Conditionally register metrics for the primary database handle
-	if lb.metricsEnabled && primary != nil {
+	if lb.metricsEnabled {
 		lb.promRegisterer.MustRegister(lb.metricsCollector(primary, HostTypePrimary))
 	}
 
 	if lb.active {
 		if err := lb.ResolveReplicas(ctx); err != nil {
-			result = multierror.Append(result, err)
+			lb.logger(ctx).WithError(err).Error("failed to resolve database load balancing replicas")
+			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		}
-	}
-
-	if result.ErrorOrNil() != nil {
-		return nil, result.ErrorOrNil()
 	}
 
 	return lb, nil
