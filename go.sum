@@ -100,8 +100,8 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapp
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
-github.com/Shopify/toxiproxy/v2 v2.8.0 h1:d7OzvAc0Rco3QO8jVsDSfadQ1up0Ca42hK+EGEpnQWs=
-github.com/Shopify/toxiproxy/v2 v2.8.0/go.mod h1:k0V84e/dLQmVNuI6S0G7TpXCl611OSRYdptoxm0XTzA=
+github.com/Shopify/toxiproxy/v2 v2.11.0 h1:iXm78nBN50T2BTs1Z8w1fdC0Y1kltkJZQEyMcYyCgGQ=
+github.com/Shopify/toxiproxy/v2 v2.11.0/go.mod h1:EPnGLFvhpcwVKCsbFZwyOq4PxnGg9cFbhMrVT3ROBEo=
 github.com/VividCortex/gohistogram v1.0.0/go.mod h1:Pf5mBqqDxYaXu3hDrrU+w6nw50o/4+TcAqDqk/vUH7g=
 github.com/afex/hystrix-go v0.0.0-20180502004556-fa1af6a1f4f5/go.mod h1:SkGFH1ia65gfNATL8TAiHDNxPzPdmEL5uirI2Uyuz6c=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
