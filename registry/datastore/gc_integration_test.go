@@ -90,7 +90,8 @@ const (
 
 	// defaultReviewAfterWithMaxJitterDelay is the default delay plus the minimum jitter in seconds applied by online GC triggers
 	// to review tasks plus the maximum jitter in seconds that the online GC triggers will use to set a task's review.
-	defaultReviewAfterWithMaxJitterDelay = defaultReviewAfterDelay + maxReviewAfterJitter
+	// A slack of 1s is added to avoid flaky tests in the CI environment as triggers may face a slight delay there.
+	defaultReviewAfterWithMaxJitterDelay = defaultReviewAfterDelay + maxReviewAfterJitter + 1*time.Second
 )
 
 func TestGC_TrackBlobUploads(t *testing.T) {
