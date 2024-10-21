@@ -1,3 +1,34 @@
+## [4.11.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.10.0-gitlab...v4.11.0-gitlab) (2024-10-21)
+
+### ✨ Features ✨
+
+* add filesystem lock file ([dbdd7ba](https://gitlab.com/gitlab-org/container-registry/commit/dbdd7bafebfd8eb2e69a006939ab034b46c5a997))
+* add manifest ID to FK violation error message ([12f7b1a](https://gitlab.com/gitlab-org/container-registry/commit/12f7b1ad00f3e99defb9721e33d0f931216efd79))
+* gracefully handle DLB replica resolve/connection failures ([14aeb62](https://gitlab.com/gitlab-org/container-registry/commit/14aeb62eb4c8f826682a5df56a88d25c4ac35bd6))
+
+### 🐛 Bug Fixes 🐛
+
+* ensure consistency of DLB primary LSN records ([42da9b1](https://gitlab.com/gitlab-org/container-registry/commit/42da9b13765b7860827216b66fedfb7785c5c14e))
+* fix path traversal for inmemory storage ([f8951ec](https://gitlab.com/gitlab-org/container-registry/commit/f8951ec144bd2cab0295a9ba941830767d130814))
+
+### ⚙️ Build ⚙️
+
+* add gdk build dependencies for asdf ([8c93d76](https://gitlab.com/gitlab-org/container-registry/commit/8c93d76a95f90d95390ea80256d73e3a22552bd7))
+* **deps:** update module cloud.google.com/go/storage to v1.44.0 ([637bdbb](https://gitlab.com/gitlab-org/container-registry/commit/637bdbbdcda058d5e6e5572f8262a4b91d9bf2d3))
+* **deps:** update module github.com/getsentry/sentry-go to v0.29.1 ([df968f0](https://gitlab.com/gitlab-org/container-registry/commit/df968f058748d750a0c1605a228b497a3ea8a30e))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.5 ([6d4bd3f](https://gitlab.com/gitlab-org/container-registry/commit/6d4bd3f6311002cf5aa914bda982b2d5295a8a3e))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.6.2 ([d40ec8f](https://gitlab.com/gitlab-org/container-registry/commit/d40ec8f56a3dd1eca5b53a52f9bf9796c088289e))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.7.0 ([500f98b](https://gitlab.com/gitlab-org/container-registry/commit/500f98bcad306718df1018ea9c80915bf3b51c91))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.16.1 ([0405c6e](https://gitlab.com/gitlab-org/container-registry/commit/0405c6e494a8535eaefe24e586cdd84b55b5e8b8))
+* **deps:** update module github.com/shopify/toxiproxy/v2 to v2.11.0 ([0b1621d](https://gitlab.com/gitlab-org/container-registry/commit/0b1621dea4ed56a2b4bdcab36ae9190ac503081b))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.110.0 ([156e38b](https://gitlab.com/gitlab-org/container-registry/commit/156e38bc153d20ea1bfb93aaa17740ea19f121c2))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.112.0 ([9448fc0](https://gitlab.com/gitlab-org/container-registry/commit/9448fc07ff8c9d04966940a39c712001fe5ceb1c))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.21.2 ([ec08f8d](https://gitlab.com/gitlab-org/container-registry/commit/ec08f8d9ebfac50e50e7aa1cc95c91f4630f594c))
+* **deps:** update module golang.org/x/crypto to v0.28.0 ([37f68d6](https://gitlab.com/gitlab-org/container-registry/commit/37f68d612cf41ad4e73e2a67cd7677128b2eda09))
+* **deps:** update module golang.org/x/time to v0.7.0 ([cdc3201](https://gitlab.com/gitlab-org/container-registry/commit/cdc3201a9c4526cc162c6ac4133142c6a028a327))
+* **deps:** update module google.golang.org/api to v0.200.0 ([466e2ea](https://gitlab.com/gitlab-org/container-registry/commit/466e2ead363ada430233192ac9a78a6402995a10))
+* **deps:** update module google.golang.org/api to v0.201.0 ([e83cb2a](https://gitlab.com/gitlab-org/container-registry/commit/e83cb2a0444ced5909cc5e466cd7c9913fd66e28))
+
 ## [4.10.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.9.0-gitlab...v4.10.0-gitlab) (2024-10-3)
 
 
