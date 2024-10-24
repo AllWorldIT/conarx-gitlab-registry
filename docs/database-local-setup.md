@@ -2,7 +2,6 @@
 
 Follow this guide to enable the Registry with the metadata database configured.
 
-
 ## macOS and Linux
 
 Requirements:
@@ -11,12 +10,12 @@ Requirements:
 - A container runtime, see [Docker Desktop alternatives](development-environment-setup.md#alternatives-to-docker-desktop)
 - The `docker` CLI
 
-**NOTE**: if you have an instance of the GDK running, you can use its postgres
+**NOTE**: if you have an instance of the GDK running, you can use its PostgreSQL
 server to run your local registry. You might find this slightly more performant
 when running multiple tests. Check the
 [running the registry against the GDK postgres instance](#running-the-registry-against-the-gdk-postgres-instance) section.
 
-### Run postgresql
+### Run PostgreSQL
 
 There are several options to install and run PostgreSQL
 and the instructions can be found in the [Postgres website](https://www.postgresql.org/download/).
@@ -25,14 +24,14 @@ For simplicity, this guide will focus on using a container runtime approach.
 To run PostgreSQL as a container, follow these instructions:
 
 1. Open a new terminal window
-2. Create a new directory to store the data
+1. Create a new directory to store the data
 
    ```shell
    cd ~
    mkdir -p postgres-registry/data
    ```
 
-3. Run PostgreSQL 13 (the current minimum required version) as a container
+1. Run PostgreSQL 13 (the current minimum required version) as a container
 
    ```shell
    docker run --name postgres-registry -d \
@@ -44,7 +43,7 @@ To run PostgreSQL as a container, follow these instructions:
      postgres:13-alpine
    ```
 
-4. Verify postgres is running by checking the logs:
+1. Verify postgres is running by checking the logs:
 
    ```shell
    docker logs postgres-registry
@@ -53,7 +52,7 @@ To run PostgreSQL as a container, follow these instructions:
    2022-10-18 04:18:09.106 UTC [1] LOG:  database system is ready to accept connections
    ```
 
-5. Connect to the database using a client, for example `psql` via a container:
+1. Connect to the database using a client, for example `psql` via a container:
 
 **NOTE**: if you are using a virtual machine to run the `docker daemon` like `colima`,
 you will need to obtain the container's IP or the host's IP address before connecting
@@ -75,7 +74,7 @@ You should now be able to verify the database exists and you will be ready
 to run the [database migrations](database-migrations.md).
 
 1. Connect to the database as shown in the last step of the previous section.
-2. Verify that the `registry_dev` database exists (you should already be connected by default), for example type
+1. Verify that the `registry_dev` database exists (you should already be connected by default), for example type
 `\l` in the psql session:
    
    ```shell
@@ -92,7 +91,7 @@ to run the [database migrations](database-migrations.md).
    (4 rows)
    ```
 
-3. The database exists but there are currently no tables, you can verify this by typing `\d`
+1. The database exists but there are currently no tables, you can verify this by typing `\d`
 
    ```shell
    registry_dev=# \d
@@ -104,7 +103,7 @@ You are ready to run the registry migrations!
 #### Migrations
 
 1. Open a separate terminal and `cd` into your local copy of the container registry codebase
-2. Update your local `config.yml` file for the registry and add the following section
+1. Update your local `config.yml` file for the registry and add the following section
 
 ```yaml
 database:
@@ -122,13 +121,13 @@ or use `cp config/database-filesystem.yml config.yml` to work with the pre-confi
 **NOTE**: we use the host's localhost here. If your registry can't connect to
 the database, try using the host's IP address instead (e.g. 192.168.1.100) 
 
-3. Compile the `bin/registry` binary
+1. Compile the `bin/registry` binary
 
 ```shell
 make bin/registry
 ```
 
-4. Run the following command which should apply all database migrations:
+1. Run the following command which should apply all database migrations:
 
 ```shell
 ./bin/registry database migrate up /path/to/your/config.yml
@@ -144,7 +143,7 @@ You should see all the migrations being applied. Something like this should be e
 OK: applied 127 migrations in 4.501s
 ```
 
-5. Verify the migrations have been applied to the correct database and that the tables are empty.
+1. Verify the migrations have been applied to the correct database and that the tables are empty.
 Go back to the terminal where you connected to the `registry_dev` database and type `\d`
 to see all the existing tables:
 
@@ -182,7 +181,7 @@ to see all the existing tables:
    (26 rows)
    ```
 
-6. Perform a test query on any table, for example:
+1. Perform a test query on any table, for example:
 
    ```sql
    registry_dev=# select count(*) from repositories;
@@ -192,7 +191,7 @@ to see all the existing tables:
    (1 row)
    ```
 
-7. Optional. You can verify which migration was last applied by querying the `schema_migrations` table
+1. Optional. You can verify which migration was last applied by querying the `schema_migrations` table
 
 ```sql
 registry_dev=# select * from schema_migrations order by applied_at desc limit 1;
@@ -223,7 +222,7 @@ INFO[0000] starting Prometheus listener                  address=":5001" go_vers
 INFO[0000] starting pprof listener                       address=":5001" go_version=go1.19.5 instance_id=b440332c-e835-45cf-9510-64f63cb2807e path=/debug/pprof/ version=v3.65.1-gitlab-11-g44ce3d88.m
 ```
 
-2. Open a new terminal and push a new image to the current registry:
+1. Open a new terminal and push a new image to the current registry:
 
 ```shell
 docker pull alpine
@@ -231,7 +230,7 @@ docker tag alpine localhost:5000/root/registry-tests/alpine:latest
 docker push localhost:5000/root/registry-tests/alpine:latest
 ```
 
-3. Verify the repository has been created in the database. To do so go to the `psql` terminal
+1. Verify the repository has been created in the database. To do so go to the `psql` terminal
 and query the following tables:
 
 ```psql
@@ -249,11 +248,11 @@ registry_dev-# select r.name as repo_name, r.path as repo_path, r.created_at, t.
 (1 row)
 ```
 
-4. You can also verify that the API is running properly by making a request to the
+1. You can also verify that the API is running properly by making a request to the
 [get repository details API](spec/gitlab/api.md#get-repository-details)
 
 ```shell
-$ curl http://localhost:5000/gitlab/v1/repositories/root/registry-tests/alpine/
+$ curl "http://localhost:5000/gitlab/v1/repositories/root/registry-tests/alpine/"
 
 {"name":"alpine","path":"root/registry-tests/alpine","created_at":"2022-10-18T05:03:26.143Z"}
 ```
@@ -271,7 +270,7 @@ registry_dev=# create database registry_test;
 CREATE DATABASE
 ```
 
-2. Create a test file `test.env` with the following environment variables:
+1. Create a test file `test.env` with the following environment variables:
 
 ```dotenv
 export REGISTRY_DATABASE_ENABLED=true
@@ -282,23 +281,23 @@ export REGISTRY_DATABASE_PASSWORD=apassword
 export REGISTRY_DATABASE_SSLMODE=disable
 ```
 
-3. Source the environment variables. Please note that environment variables take precedence over the corresponding attributes in the registry configuration file used to execute the `registry` binary. You can consider using a tool to automate the process of loading and unloading variables (such as [direnv](https://direnv.net/)) or configure isolated test commands on your editor/IDE of choice. 
+1. Source the environment variables. Please note that environment variables take precedence over the corresponding attributes in the registry configuration file used to execute the `registry` binary. You can consider using a tool to automate the process of loading and unloading variables (such as [direnv](https://direnv.net/)) or configure isolated test commands on your editor/IDE of choice. 
 
 ```shell
 cd /path/to/container/registry
 source /path/to/test.env
 ```
 
-4. Run some integration tests with the metadata database enabled:
+1. Run some integration tests with the metadata database enabled:
 
 ```shell
-go run gotest.tools/gotestsum@v1.8.2 --format testname -- ./registry/handlers  -timeout 25m -run "TestAPIConformance" --tags api_conformance_test,integration
+go run gotest.tools/gotestsum@v1.12.0 --format testname -- ./registry/handlers  -timeout 25m -run "TestAPIConformance" --tags api_conformance_test,integration
 ```
 
 The command above is equivalent to the [job `database:api-conformance`](https://gitlab.com/gitlab-org/container-registry/-/blob/ef704fd1c07be20061e677a3cca624f6e24d4c91/.gitlab-ci.yml#L337) 
 that we run in the [CI pipelines](https://gitlab.com/gitlab-org/container-registry/-/jobs/3186379779).
 
-There are other database-related test suites you may need to run. Look for jobs prefixed with `database:` in the project `gitlab-ci.yml` file.
+There are other database-related test suites you may need to run. Look for jobs prefixed with `database:` in the project `.gitlab-ci.yml` file.
 
 ## Running the registry against the GDK postgres instance
 
@@ -314,7 +313,7 @@ psql (12.10)
 Type "help" for help.
 ```
 
-2. Create the `registry_dev` database and connect to it
+1. Create the `registry_dev` database and connect to it
 
 ```shell
 gitlabhq_development=# create database registry_dev;
@@ -323,7 +322,7 @@ You are now connected to database "registry_dev" as user "jaime".
 registry_dev=#
 ```
 
-3. Update your `config.yml` file with the GDK settings:
+1. Update your `config.yml` file with the GDK settings:
 
 ```yaml
 database:
@@ -343,7 +342,7 @@ You should be able to [run the migrations](#migrations) and continue from there.
 The easiest path to set up load balancing locally is to rely on GDK, which includes support for PostgreSQL replication,
 PgBouncer, Consul and Redis.
 
-You have two options, using a fixed hosts list or service discovery.
+You have two options, using a fixed hosts list or service discovery. The Redis cache is required for both.
 
 ### Fixed Hosts
 
@@ -353,11 +352,13 @@ of hosts that should be used as read replicas.
 1. Set up GDK following the setup guide [here](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/database_load_balancing.md); 
 
 1. Run `gdk psql` to get into a `psql` console and then create the registry database:
+
    ```sql
    CREATE DATABASE registry;
    ```
 
 1. Configure the registry:
+
    ```yaml
    log:
      level: debug
@@ -382,13 +383,15 @@ of hosts that should be used as read replicas.
    
    You can optionally add the primary host to `loadbalancing.hosts` to make it part of the read-only pool.
 
-3. Tail PostgreSQL logs in a separate window:
+1. Tail PostgreSQL logs in a separate window:
+
    ```shell
    gdk tail postgresql*
    ```
 
-4. Run the registry. You should see something like this:
-   ```text
+1. Run the registry. You should see something like this:
+
+   ```plaintext
    INFO[0000] Connect                                       database=registry duration_ms=3 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84101 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
    INFO[0000] Connect                                       database=registry duration_ms=5 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql-replica/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84102 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
    INFO[0000] Connect                                       database=registry duration_ms=2 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=0d128114-c0ed-44be-8bec-e3a40f2b1fb1 pid=84104 port=5432 version=v4.5.0-gitlab-20-gbac9b1549.m
@@ -404,7 +407,8 @@ of hosts that should be used as read replicas.
    Note that database log entries contain a `host` key/value pair that tells us the host that each operation is
 targeting. We can see that the registry connects to both primary and replica hosts.
 
-5. In the PostgreSQL logs you should see something like this:
+1. In the PostgreSQL logs you should see something like this:
+
    ```sql
    2024-06-27_13:56:57.69718 postgresql            : 2024-06-27 14:56:57.697 WEST [16895] LOG:  statement: -- ping
    2024-06-27_13:56:57.71803 postgresql-replica    : 2024-06-27 14:56:57.716 WEST [16896] LOG:  statement: -- ping
@@ -417,16 +421,19 @@ targeting. We can see that the registry connects to both primary and replica hos
 ### Service Discovery
 
 This option allows automatic discovery of PostgreSQL hosts using DNS lookup queries and SRV records. See the related
-[specification](./spec/gitlab/database-load-balancing.md?ref_type=heads#service-discovery) for more details.
+[specification](spec/gitlab/database-load-balancing.md?ref_type=heads#service-discovery) for more details.
 
 1. Set up GDK following the setup guide [here](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/database_load_balancing_with_service_discovery.md);
 
 1. Lookup the addresses behind the default replicas SRV record in Consul to confirm that service discovery is working:
+
    ```shell
    dig +short @127.0.0.1 -p 8600 replica.pgbouncer.service.consul -t SRV
    ```
+
    You should see something similar to the following:
-   ```text
+
+   ```plaintext
    1 1 6434 7f000001.addr.dc1.consul.
    1 1 6435 7f000001.addr.dc1.consul.
    1 1 6432 7f000001.addr.dc1.consul.
@@ -434,28 +441,33 @@ This option allows automatic discovery of PostgreSQL hosts using DNS lookup quer
    ```
 
 1. Run `gdk psql` to get into a `psql` console and then create the registry database:
+
    ```sql
    CREATE DATABASE registry;
    ```
 
 1. Update the GDK PgBouncer configuration template at `support/templates/pgbouncer/pgbouncer-replica.ini.erb` to add an
 entry for the registry database under the `[databases]` section:
-   ```text
+
+   ```plaintext
    registry = host=<%= host %> dbname=registry user=<%= config.__whoami %>
    ```
 
 1. Reconfigure and restart your GDK:
+
    ```shell
    gdk reconfigure
    gdk restart
    ```
 
 1. Open a `psql` session in one of the replica hosts to confirm that the setup is ready:
+
    ```shell
    PGPASSWORD=gitlab psql -h 127.0.0.1 -p 6434 -U <your local username> -d registry
    ```
 
 1. Configure the registry:
+
    ```yaml
    log:
      level: debug
@@ -479,13 +491,15 @@ entry for the registry database under the `[databases]` section:
        addr: /<full path to gdk root>/redis/redis.socket
    ```
 
-3. Tail PostgreSQL logs in a separate window:
+1. Tail PostgreSQL logs in a separate window:
+
    ```shell
    gdk tail postgresql*
    ```
 
-4. Run the registry. You should see something like this:
-   ```text
+1. Run the registry. You should see something like this:
+
+   ```plaintext
    INFO[0000] enabling database load balancing with service discovery  go_version=go1.21.5 instance_id=044536cc-e998-469f-880b-52e62fd6d535 nameserver=localhost port=8600 record=replica.pgbouncer.service.consul version=v4.6.0-gitlab-9-gd3cdf3193.m
    INFO[0000] Connect                                       database=registry duration_ms=9 go_version=go1.21.5 host=/Users/jpereira/Developer/gitlab.com/gitlab-org/gdk/postgresql/ instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=16048 port=5432 version=v4.6.0-gitlab-9-gd3cdf3193.m
    INFO[0000] Connect                                       database=registry duration_ms=0 go_version=go1.21.5 host=127.0.0.1 instance_id=044536cc-e998-469f-880b-52e62fd6d535 pid=776127547 port=6435 version=v4.6.0-gitlab-9-gd3cdf3193.m
@@ -509,7 +523,8 @@ entry for the registry database under the `[databases]` section:
    Note that database log entries contain a `host` key/value pair that tells us the host that each operation is
    targeting. We can see that the registry connects to all hosts.
 
-5. In the PostgreSQL logs you should see something like this:
+1. In the PostgreSQL logs you should see something like this:
+
    ```sql
    2024-07-02_15:15:59.87681 postgresql            : 2024-07-02 16:15:59.876 WEST [16048] LOG:  statement: -- ping
    2024-07-02_15:15:59.89020 postgresql-replica-2  : 2024-07-02 16:15:59.890 WEST [2438] LOG:  statement: select 1

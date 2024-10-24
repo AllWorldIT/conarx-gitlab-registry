@@ -216,6 +216,9 @@ type BackgroundMigration struct {
 	ErrorCode    BBMErrorCode
 }
 
+// BackgroundMigrations is a slice of BackgroundMigration pointers.
+type BackgroundMigrations []*BackgroundMigration
+
 // BackgroundMigrationJob is the representation of a BackgroundMigration Job.
 type BackgroundMigrationJob struct {
 	ID               int
@@ -266,6 +269,7 @@ type BBMErrorCode struct {
 }
 
 var (
+	NullErrCode                    = BBMErrorCode{sql.NullInt16{Valid: false}}
 	UnknownBBMErrorCode            = BBMErrorCode{sql.NullInt16{Int16: 0, Valid: true}}
 	InvalidTableBBMErrCode         = BBMErrorCode{sql.NullInt16{Int16: 1, Valid: true}}
 	InvalidColumnBBMErrCode        = BBMErrorCode{sql.NullInt16{Int16: 2, Valid: true}}

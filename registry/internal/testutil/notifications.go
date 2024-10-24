@@ -38,12 +38,13 @@ func NewNotificationServer(t *testing.T, databaseEnabled bool) *NotificationServ
 
 	s := httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			dreq, _ := httputil.DumpRequest(r, true)
+			dreq, err := httputil.DumpRequest(r, true)
+			require.NoError(t, err)
 			fmt.Printf("Handler got event: \n\n%s\n\n", dreq)
 			events := struct {
 				Events []notifications.Event `json:"events"`
 			}{}
-			err := json.NewDecoder(r.Body).Decode(&events)
+			err = json.NewDecoder(r.Body).Decode(&events)
 			require.NoError(t, err)
 
 			require.Len(t, events.Events, 1)

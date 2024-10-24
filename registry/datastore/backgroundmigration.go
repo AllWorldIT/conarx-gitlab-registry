@@ -56,8 +56,21 @@ type BackgroundMigrationStore interface {
 	UpdateJobStatus(ctx context.Context, job *models.BackgroundMigrationJob) error
 	// Lock sets a lock to prevent new Background Migration jobs from running.
 	Lock(ctx context.Context) error
+	// SyncLock is similar to Lock, but it doesn’t return an error if a lock can not be immediately obtained;
+	// instead, it waits until it can obtain the lock or the context times outs.
+	SyncLock(ctx context.Context) error
 	// ValidateMigrationTableAndColumn asserts that the column and table exists in the database.
 	ValidateMigrationTableAndColumn(ctx context.Context, tableWithSchema, column string) error
+	// FindAll returns all background migrations.
+	FindAll(ctx context.Context) (models.BackgroundMigrations, error)
+	// Pause updates the `status` of all `running` and `active` background migrations to the `pause` state.
+	Pause(ctx context.Context) error
+	// Resume updates the `status` of all `paused` background migrations to the `active` state.
+	Resume(ctx context.Context) error
+	// FindNextByStatus finds the next BackgroundMigration with status `status`.
+	FindNextByStatus(ctx context.Context, status models.BackgroundMigrationStatus) (*models.BackgroundMigration, error)
+	// AreFinished checks if a list of background migrations referenced by name are in the finished state.
+	AreFinished(ctx context.Context, names []string) (bool, error)
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
@@ -286,6 +299,33 @@ func (bms *backgroundMigrationStore) FindById(ctx context.Context, id int) (*mod
 	return scanBackgroundMigration(row)
 }
 
+// FindNextByStatus finds the next BackgroundMigration with status `status`.
+func (bms *backgroundMigrationStore) FindNextByStatus(ctx context.Context, status models.BackgroundMigrationStatus) (*models.BackgroundMigration, error) {
+	defer metrics.InstrumentQuery("bbm_find_next_by_status")()
+	q := `SELECT
+			id,
+			name,
+			min_value,
+			max_value,
+			batch_size,
+			status,
+			job_signature_name,
+			table_name,
+			column_name,
+			failure_error_code
+		FROM
+			batched_background_migrations
+		WHERE
+			status = $1
+		ORDER BY
+			id ASC
+		LIMIT 1`
+
+	row := bms.db.QueryRowContext(ctx, q, status)
+
+	return scanBackgroundMigration(row)
+}
+
 // FindByName find a Background Migration with name `name`.
 func (bms *backgroundMigrationStore) FindByName(ctx context.Context, name string) (*models.BackgroundMigration, error) {
 	defer metrics.InstrumentQuery("bbm_find_by_name")()
@@ -395,6 +435,33 @@ func (bms *backgroundMigrationStore) UpdateJobStatus(ctx context.Context, job *m
 	return nil
 }
 
+// FindAll returns the status of all background migrations.
+func (bms *backgroundMigrationStore) FindAll(ctx context.Context) (models.BackgroundMigrations, error) {
+	defer metrics.InstrumentQuery("bbm_all_migrations")()
+	q := `SELECT
+			id,
+			name,
+			min_value,
+			max_value,
+			batch_size,
+			status,
+			job_signature_name,
+			table_name,
+			column_name,
+			failure_error_code
+		FROM
+			batched_background_migrations
+		ORDER BY
+			id ASC`
+
+	rows, err := bms.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("finding background migrations: %w", err)
+	}
+
+	return scanFullBackgroundMigrations(rows)
+}
+
 // Lock sets a lock to prevent concurrent execution of new Background Migration jobs.
 // This implementation uses PostgreSQL's Transaction Advisory Locks via `pg_try_advisory_xact_lock()` and should be used within a transaction context.
 // For details on Advisory Locks, see: https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS
@@ -411,6 +478,74 @@ func (bms *backgroundMigrationStore) Lock(ctx context.Context) error {
 		return ErrBackgroundMigrationLockInUse
 	}
 	return nil
+}
+
+// SyncLock is similar to Lock, but it doesn’t return an error if a lock cannot be immediately obtained;
+// instead, it waits until it can obtain the lock or the context times out.
+// https://www.postgresql.org/docs/9.1/explicit-locking.html#ADVISORY-LOCKS
+func (bms *backgroundMigrationStore) SyncLock(ctx context.Context) error {
+	defer metrics.InstrumentQuery("bbm_sync_lock")()
+
+	// Attempt to acquire the advisory lock, blocking until it is available
+	q := "SELECT pg_advisory_xact_lock($1)"
+	_, err := bms.db.ExecContext(ctx, q, advisoryLockKey)
+	if err != nil {
+		return fmt.Errorf("failed to acquire advisory lock: %w", err)
+	}
+
+	return nil
+}
+
+// Pause updates the `status` of all `running` and `active` background migrations to the `pause` state.
+func (bms *backgroundMigrationStore) Pause(ctx context.Context) error {
+	defer metrics.InstrumentQuery("bbm_pause")()
+
+	q := `UPDATE 
+			batched_background_migrations
+		SET 
+			status = $1 
+		WHERE 
+			status = $2 
+			OR status = $3`
+	_, err := bms.db.ExecContext(ctx, q, models.BackgroundMigrationPaused, models.BackgroundMigrationActive, models.BackgroundMigrationRunning)
+
+	return err
+}
+
+// Resume updates the `status` of all `paused` background migrations to the `active` state.
+func (bms *backgroundMigrationStore) Resume(ctx context.Context) error {
+	defer metrics.InstrumentQuery("bbm_resume")()
+
+	q := `UPDATE 
+			batched_background_migrations
+		SET 
+			status = $1 
+		WHERE 
+			status = $2`
+	_, err := bms.db.ExecContext(ctx, q, models.BackgroundMigrationActive, models.BackgroundMigrationPaused)
+
+	return err
+}
+
+// AreFinished checks if a list of background migrations referenced by name are in the finished state, returns false if at least one in unfinished.
+func (bms *backgroundMigrationStore) AreFinished(ctx context.Context, names []string) (bool, error) {
+	defer metrics.InstrumentQuery("bbm_are_finished")()
+
+	q := `SELECT
+			COUNT(*)
+		FROM
+			batched_background_migrations
+		WHERE
+			name = ANY($1)
+			AND status != $2`
+
+	var count int
+	err := bms.db.QueryRowContext(ctx, q, names, models.BackgroundMigrationFinished).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("counting unfinished background migrations: %w", err)
+	}
+
+	return count == 0, nil
 }
 
 // ValidateMigrationTableAndColumn asserts that the column and table exists in the database.
@@ -472,4 +607,24 @@ func scanBackgroundMigration(row *sql.Row) (*models.BackgroundMigration, error) 
 	}
 
 	return bm, nil
+}
+
+func scanFullBackgroundMigrations(rows *sql.Rows) (models.BackgroundMigrations, error) {
+	bb := make(models.BackgroundMigrations, 0)
+	defer rows.Close()
+
+	for rows.Next() {
+		b := new(models.BackgroundMigration)
+		err := rows.Scan(&b.ID, &b.Name, &b.StartID, &b.EndID, &b.BatchSize, &b.Status, &b.JobName, &b.TargetTable, &b.TargetColumn, &b.ErrorCode)
+		if err != nil {
+			return nil, fmt.Errorf("scanning background migrations: %w", err)
+		}
+
+		bb = append(bb, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("scanning background migrations: %w", err)
+	}
+
+	return bb, nil
 }

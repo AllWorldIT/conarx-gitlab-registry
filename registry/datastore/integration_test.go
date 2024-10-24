@@ -37,7 +37,7 @@ func (s *testSuite) setup() error {
 		return err
 	}
 
-	m := migrations.NewMigrator(db.DB)
+	m := migrations.NewMigrator(db)
 	if _, err := m.Up(); err != nil {
 		return err
 	}

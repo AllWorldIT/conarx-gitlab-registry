@@ -21,6 +21,7 @@ type EndpointConfig struct {
 	IgnoredMediaTypes []string
 	Transport         *http.Transport `json:"-"`
 	Ignore            configuration.Ignore
+	QueuePurgeTimeout time.Duration
 }
 
 // defaults set any zero-valued fields to a reasonable default.
@@ -35,6 +36,16 @@ func (ec *EndpointConfig) defaults() {
 
 	if ec.Backoff <= 0 {
 		ec.Backoff = time.Second
+	}
+
+	if ec.QueuePurgeTimeout <= 0 {
+		// NOTE(prozlach): Value chosen arbitrary. Intention was to make
+		// registry try to deliver as many notifications as possible, while
+		// still being under the threshold which e.g. Kubernetes uses to
+		// determine when to start SIGKILL pod that does not stop after SIGINT.
+		// NOTE(prozlach): There is no delivery guarantee for notifications
+		// ATM, this is best effort.
+		ec.QueuePurgeTimeout = 5 * time.Second
 	}
 
 	if ec.Transport == nil {
@@ -78,7 +89,7 @@ func NewEndpoint(name, url string, config EndpointConfig) *Endpoint {
 		endpoint.Sink = newRetryingSink(endpoint.Sink, endpoint.Threshold, endpoint.Backoff)
 	}
 
-	endpoint.Sink = newEventQueue(endpoint.Sink, endpoint.metrics.eventQueueListener())
+	endpoint.Sink = newEventQueue(endpoint.Sink, endpoint.QueuePurgeTimeout, endpoint.metrics.eventQueueListener())
 	mediaTypes := append(config.Ignore.MediaTypes, config.IgnoredMediaTypes...)
 	endpoint.Sink = newIgnoredSink(endpoint.Sink, mediaTypes, config.Ignore.Actions)
 

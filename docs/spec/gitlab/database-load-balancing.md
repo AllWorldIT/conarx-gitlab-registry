@@ -97,7 +97,7 @@ While most of these represent valuable features and improvements, they are out o
 
 - **Relative replication lag quarantine:** Selectively routing read requests to quarantined replicas based on their individual replication lag _relative_ to the last write activity of the target repository (see [Primary Sticking](#primary-sticking) for context) would allow us to improve resource utilization during periods of high write activity. However, this represents additional complexity and not including this in the scope for the first iteration does not leave us in a situation worse than we currently are (routing all traffic to the primary);
 
-- **Online garbage collection (GC):** Although [Online GC](./online-garbage-collection.md) requires both read and write database operations, it will continue to use the primary exclusively. GC queries occur mostly within transactions, and these require a read/write DB connection regardless. Even if/when that's not the case, online GC is a highly time-sensitive process, which should be guarded from replication lag at all cost.
+- **Online garbage collection (GC):** Although [Online GC](online-garbage-collection.md) requires both read and write database operations, it will continue to use the primary exclusively. GC queries occur mostly within transactions, and these require a read/write DB connection regardless. Even if/when that's not the case, online GC is a highly time-sensitive process, which should be guarded from replication lag at all cost.
 
 ## Solution
 
@@ -121,17 +121,17 @@ database:
     replicacheckinterval: 1m
 ```
 
-| Parameter              | Required | Description                                                                                                                                       | Default          |
-| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `hosts`                | No       | A static list of hosts to use for load balancing. Can be used as an alternative to service discovery. Ignored if `record` is set. |                  |
-| `nameserver`           | No       | The nameserver to use for looking up the DNS record.                                                                                              | `localhost`      |
-| `port`                 | No       | The port of the nameserver.                                                                                                                       | `8600`           |
-| `record`               | Yes      | The `SRV` record to look up. This option is required for service discovery to work.                                                               |                  |
-| `recordcheckinterval`  | No       | The minimum amount of time between checking the DNS record.                                                                                       | `1m`             |
-| `disconnecttimeout`    | No       | The amount of time after which an old connection is closed, after the list of hosts was updated.                                                  | `2m`             |
-| `maxreplicalagbytes`   | No       | The amount of data (in bytes) a replica is allowed to lag behind before being quarantined.                                                        | `8388608` (8MiB) |
-| `maxreplicalagtime`    | No       | The maximum amount of time a replica is allowed to lag behind before being quarantined.                                                           | `1m`             |
-| `replicacheckinterval` | No       | The minimum amount of time between checking the status of a replica.                                                                              | `1m`             |
+| Parameter              | Required | Description                                                                                                                                                                                                    | Default          |
+|------------------------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------|
+| `hosts`                | No       | A static list of host to use for load balancing. Can be used as an alternative to service discovery. Ignored if `record` is set. These hosts must be reachable on the same port configured in `database.port`. |                  |
+| `nameserver`           | No       | The nameserver to use for looking up the DNS record.                                                                                                                                                           | `localhost`      |
+| `port`                 | No       | The port of the nameserver.                                                                                                                                                                                    | `8600`           |
+| `record`               | Yes      | The `SRV` record to look up. This option is required for service discovery to work.                                                                                                                            |                  |
+| `recordcheckinterval`  | No       | The minimum amount of time between checking the DNS record.                                                                                                                                                    | `1m`             |
+| `disconnecttimeout`    | No       | The amount of time after which an old connection is closed, after the list of hosts was updated.                                                                                                               | `2m`             |
+| `maxreplicalagbytes`   | No       | The amount of data (in bytes) a replica is allowed to lag behind before being quarantined.                                                                                                                     | `8388608` (8MiB) |
+| `maxreplicalagtime`    | No       | The maximum amount of time a replica is allowed to lag behind before being quarantined.                                                                                                                        | `1m`             |
+| `replicacheckinterval` | No       | The minimum amount of time between checking the status of a replica.                                                                                                                                           | `1m`             |
 
 We'll refer to each of these configuration parameters and their purpose in the following sections.
 
@@ -245,9 +245,9 @@ sequenceDiagram
   CR->>M: Write to primary
   M->>CR: Response
   opt Write succeeds
-   	CR->>M: Check primary LSN
-   	M->>CR: LSN
-  	CR->>R: Record primary LSN for `my-org/my-project` with a TTL
+    CR->>M: Check primary LSN
+    M->>CR: LSN
+    CR->>R: Record primary LSN for `my-org/my-project` with a TTL
   end
   CR->>-C: Response
   C->>+CR: [HEAD|GET] <br>/repositories/my-org/my-project/...
@@ -256,18 +256,18 @@ sequenceDiagram
   R->>CR: Response
   alt 1 - Check succeeds
     alt 1.1 - Record exists
-    	CR->>S: Compare replica and primary LSNs
-    	S->>CR: Response
-			alt 1.1.1 - Replica caught up
+      CR->>S: Compare replica and primary LSNs
+      S->>CR: Response
+      alt 1.1.1 - Replica caught up
         CR->>S: Read from Replica
         S->>CR: Return data
       else 1.1.1 - Replica is lagging
         CR->>M: Read from Primary
         M->>CR: Return data
-			end
-		else 1.1 - Record does not exist
-		    CR->>S: Read from Replica
-    		S->>CR: Return data
+      end
+    else 1.1 - Record does not exist
+      CR->>S: Read from Replica
+      S->>CR: Return data
     end
   else 1 - Check fails
     CR->>M: Fallback to Primary
@@ -309,7 +309,7 @@ As highlighted in [Out of Scope](#out-of-scope), for the sake of simplicity, the
 
 ##### GitLab API
 
-The table below lists all the operations of our [custom API](./api.md) that the registry implements. For each operation, it mentions the target (Primary or Replicas) that will be used for incoming requests and the type of queries involved (read and/or write):
+The table below lists all the operations of our [custom API](api.md) that the registry implements. For each operation, it mentions the target (Primary or Replicas) that will be used for incoming requests and the type of queries involved (read and/or write):
 
 | Method  | Endpoint                                                | Target   | Read | Write | Observations                                                                                               |
 | ------- | ------------------------------------------------------- | -------- | ---- | ----- | ---------------------------------------------------------------------------------------------------------- |

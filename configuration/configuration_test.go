@@ -96,6 +96,7 @@ var configStruct = Configuration{
 		},
 	},
 	Notifications: Notifications{
+		FanoutTimeout: 4 * time.Second,
 		Endpoints: []Endpoint{
 			{
 				Name: "endpoint-1",
@@ -108,6 +109,7 @@ var configStruct = Configuration{
 					MediaTypes: []string{"application/octet-stream"},
 					Actions:    []string{"pull"},
 				},
+				QueuePurgeTimeout: 3 * time.Second,
 			},
 		},
 	},
@@ -197,6 +199,7 @@ auth:
     realm: silly
     service: silly
 notifications:
+  fanouttimeout: 4s
   endpoints:
     - name: endpoint-1
       url:  http://example.com
@@ -209,6 +212,7 @@ notifications:
            - application/octet-stream
         actions:
            - pull
+      queuepurgetimeout: 3s
 reporting:
   sentry:
     enabled: true
@@ -232,6 +236,7 @@ auth:
     realm: silly
     service: silly
 notifications:
+  fanouttimeout: 4s
   endpoints:
     - name: endpoint-1
       url:  http://example.com
@@ -244,6 +249,7 @@ notifications:
            - application/octet-stream
         actions:
            - pull
+      queuepurgetimeout: 3s
 http:
   headers:
     X-Content-Type-Options: [nosniff]
@@ -1846,6 +1852,7 @@ func copyConfig(config Configuration) *Configuration {
 	for _, v := range config.Notifications.Endpoints {
 		configCopy.Notifications.Endpoints = append(configCopy.Notifications.Endpoints, v)
 	}
+	configCopy.Notifications.FanoutTimeout = config.Notifications.FanoutTimeout
 
 	configCopy.HTTP.Headers = make(http.Header)
 	for k, v := range config.HTTP.Headers {

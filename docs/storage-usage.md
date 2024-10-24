@@ -2,6 +2,7 @@
 
 ## Context
 
+<!-- markdownlint-disable-next-line MD044 -->
 In %14.6, and more precisely [gitlab-org/container-registry#493](https://gitlab.com/gitlab-org/container-registry/-/issues/493), we started working on a new feature to calculate the storage usage of repositories, and exposed it through the API. Before this, we had no visibility over the size of container repositories.
 
 This document is intended to provide a technical summary of this feature as well as to document caveats and troubleshooting tips, all useful for registry engineers.
@@ -142,23 +143,28 @@ The new API route is `GET /gitlab/v1/repositories/<path>/?size=[self|self_with_d
 
 ### Extremely Large Namespaces
 
+<!-- markdownlint-disable-next-line MD044 -->
 In [gitlab-org&9415](https://gitlab.com/groups/gitlab-org/-/epics/9415) we've come to know that the database query used to measure the size of top-level namespaces was timining out for some on GitLab.com. Upon further analysis, we've identified that the affected namespaces were extremely large in size (terabytes). You can find all the relevant investigation details in the linked epic. In the end, we decided to move forward with a short-term mitigation change: [Fallback to alternative estimation method when measuring namespace usage](https://gitlab.com/gitlab-org/container-registry/-/issues/853).
 
 ## Troubleshooting
 
 ### Extremely Large Namespaces
 
+<!-- markdownlint-disable-next-line MD044 -->
 Despite the changes introduced in [gitlab-org/container-registry#853](https://gitlab.com/gitlab-org/container-registry/-/issues/853), the size estimation query is still not an universal solution (as expected), and there are a few namespaces for which the query still takes way more than 15 seconds (timeout) to execute, making it unfeasible to operate online.
 
 However, for GitLab.com, in case we need to estimate the size of one of these repositories (either on-demand or for statistics purposes), we can do so manually using a production database replica with no configured timeouts. To do so, do the following:
 
-1. Get access to a production database replica, as documented [here](ssh-access-for-debugging.mdonnecting-to-the-registry-db);
+1. Get access to a production database replica, as documented [here](ssh-access-for-debugging.md);
 1. Start a transaction and disable statement timeouts within:
+
     ```sql
     begin;
     set local statement_timeout = 0;
     ```
+
 1. Now execute the size estimation query for the target namespace. Here we're using `gitlab-org` as example:
+
     ```sql
     SELECT
         coalesce(sum(q.size), 0)
@@ -175,6 +181,5 @@ However, for GitLab.com, in case we need to estimate the size of one of these re
                 WHERE
                     name = 'gitlab-org')) q;
     ```
+
 1. The output of the query above is the estimated size in bytes.
-
-

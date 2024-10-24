@@ -1,3 +1,89 @@
+## [4.10.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.9.0-gitlab...v4.10.0-gitlab) (2024-10-3)
+
+
+### ✨ Features ✨
+
+* **api:** enforce short timeout on DLB replica lookups ([92c08bb](https://gitlab.com/gitlab-org/container-registry/commit/92c08bbcfdcd03bcb593b02cff6d76997e0e5968))
+* **bbm:** run background migration with db migrations on fresh install ([a56e6d1](https://gitlab.com/gitlab-org/container-registry/commit/a56e6d1015bde0d2cfcf374c36cb81c45d4823f0))
+* **datastore:** close connections of retired replicas during DLB ([5963fef](https://gitlab.com/gitlab-org/container-registry/commit/5963fefaa5e84b47f5b06689449cd95cecc6babc))
+* **db:** enforce bbm completion on schema migrations ([cceddd1](https://gitlab.com/gitlab-org/container-registry/commit/cceddd16d0d6aea1947f4a47138e00f097c8258e))
+* record load balancing primary LSN on writes ([6c85928](https://gitlab.com/gitlab-org/container-registry/commit/6c85928577dcfc051491561e6632fc33beaf9295))
+* remove digest package and binary ([abe0aff](https://gitlab.com/gitlab-org/container-registry/commit/abe0affda8f4435c0b375b94b7139677a5b95cda))
+
+
+### 🐛 Bug Fixes 🐛
+
+* eliminate race in http sink write during sink closing ([e6136da](https://gitlab.com/gitlab-org/container-registry/commit/e6136da7ce48f71086881379cd85e8b8a48584a3))
+* **gc/worker:** prevent negative backoff durations ([b0263aa](https://gitlab.com/gitlab-org/container-registry/commit/b0263aac119e4f522fb3d253ddb8f84082380492))
+* implement proper shutdown for App, fix goroutine leaks ([7b073c2](https://gitlab.com/gitlab-org/container-registry/commit/7b073c2872a1c06b31515b2c91577f5e7ab4d0cf))
+* make backoffSink sink interruptable ([123b206](https://gitlab.com/gitlab-org/container-registry/commit/123b2068716f495e54e95f68b40627e13f8bb7e8))
+* make broadcaster sink interruptable ([51cc5c4](https://gitlab.com/gitlab-org/container-registry/commit/51cc5c40429261af25fe849b0e523909dd83c102))
+* make eventqueue sink interruptable ([4d0e463](https://gitlab.com/gitlab-org/container-registry/commit/4d0e4639cc15185401c8f14567fca4517464be67))
+* make http sink interruptable ([d574ab7](https://gitlab.com/gitlab-org/container-registry/commit/d574ab752ad4d60e53ecb0eccda4dd8fa9557c67))
+* make retryingSink sink interruptable ([ca0f7ba](https://gitlab.com/gitlab-org/container-registry/commit/ca0f7bafc941874a55e7014a6bb90d4a19ef6cd7))
+* prevent DLB replica checking from delaying app start ([c09257f](https://gitlab.com/gitlab-org/container-registry/commit/c09257fffda2347e345b9b75de3f7cd227ff5865))
+* proper propagation of logger to request context ([2fe3b82](https://gitlab.com/gitlab-org/container-registry/commit/2fe3b82fab164e9d086624b1642683d01373c41e))
+
+
+### ⚡️ Performance Improvements ⚡️
+
+* **redis:** clean up  redis cache use across codebase ([b463680](https://gitlab.com/gitlab-org/container-registry/commit/b463680207a14f2139dec826f4af3cbb2865c5bc))
+* **storage/driver/s3-aws:** improve HTTP client parameters for s3 storage driver ([9a402de](https://gitlab.com/gitlab-org/container-registry/commit/9a402de4653ac93c71a3a33dad14ba5ac073baee))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/getsentry/sentry-go to v0.29.0 ([5f55645](https://gitlab.com/gitlab-org/container-registry/commit/5f55645bb8e021858b9d44a1cc79975468ab6680))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.4 ([72b84a9](https://gitlab.com/gitlab-org/container-registry/commit/72b84a9de6a20a24aa49a3945b2058a8a4781a72))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.15.0 ([fa07a25](https://gitlab.com/gitlab-org/container-registry/commit/fa07a25972450e86e622be973e52180ec5842c7e))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.16.0 ([ca76905](https://gitlab.com/gitlab-org/container-registry/commit/ca7690552083f538ee96abd38d89cb0b1f4c9411))
+* **deps:** update module go.uber.org/automaxprocs to v1.6.0 ([0d2c370](https://gitlab.com/gitlab-org/container-registry/commit/0d2c370cc1e6a8a72b159a6ea662a6507837f8d6))
+* **deps:** update module google.golang.org/api to v0.197.0 ([b1b8371](https://gitlab.com/gitlab-org/container-registry/commit/b1b83719769fa35ae33d4fe1ff9a3bd735fc40cb))
+* **deps:** update module google.golang.org/api to v0.198.0 ([f0a706b](https://gitlab.com/gitlab-org/container-registry/commit/f0a706b0ee4184c45eb4c5204ee647df7c55d561))
+* **deps:** update module google.golang.org/api to v0.199.0 ([6f82294](https://gitlab.com/gitlab-org/container-registry/commit/6f822947b565e64e088a5bda61e9235ae42f4bed))
+* labkit downstream pipeline ([d2345c4](https://gitlab.com/gitlab-org/container-registry/commit/d2345c417a01d7705c42bbb6f8734492726fe0d6))
+
+## [4.9.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.8.0-gitlab...v4.9.0-gitlab) (2024-09-11)
+
+
+### ✨ Features ✨
+
+* **bbm:** add background migration cli with status sub command ([fa618bb](https://gitlab.com/gitlab-org/container-registry/commit/fa618bbd6fd23c4e25cd5863ad108de561c4ddca))
+* **bbm:** add bbm pause subcommand ([c31a7da](https://gitlab.com/gitlab-org/container-registry/commit/c31a7dae639d864c4b57fdc890453ef766b7eeb3))
+* **bbm:** add resume command ([5da4879](https://gitlab.com/gitlab-org/container-registry/commit/5da4879ae6337e66f5b81fce90ce547d8bccbe3f))
+* **bbm:** add run and resume commands for bbm cli ([703308a](https://gitlab.com/gitlab-org/container-registry/commit/703308a8a315821eb7a65ce4ae6ef1949199c7ff))
+* **datastore:** check that connections to known DLB replicas are usable during a refresh ([c6ce2c4](https://gitlab.com/gitlab-org/container-registry/commit/c6ce2c4368eb10ae1e05d5f61e8f1719be2283c5))
+* **datastore:** include DLB replica(s) stats in exported metrics ([cae49a9](https://gitlab.com/gitlab-org/container-registry/commit/cae49a971537bc736febd967ffccaef57d741ee9))
+* **handlers:** use read-only replicas for calculating the size of repositories ([03284a4](https://gitlab.com/gitlab-org/container-registry/commit/03284a4750ae844ff051347c6e624d0ed462cca3))
+
+
+### 🐛 Bug Fixes 🐛
+
+* **datastore:** bypass DLB replica logic when appropriate ([1fc64dc](https://gitlab.com/gitlab-org/container-registry/commit/1fc64dcbcb50ceff8549b04411e48572b9b48487))
+* **datastore:** do not override DLB replica DSNs in for loop ([5571a7f](https://gitlab.com/gitlab-org/container-registry/commit/5571a7f98ca1b6f4ba218b0b5fb9f3cca105ed9d))
+* **datastore:** do not recycle existing replica connections ([98acfbe](https://gitlab.com/gitlab-org/container-registry/commit/98acfbef1cfdf93e71917e46ee68dd422e1cb5ba))
+* make progress bar respect visibility settings ([abba238](https://gitlab.com/gitlab-org/container-registry/commit/abba238751678b26a9d20f33c2ff5f7f7605b3cc))
+
+
+### ⏮️️ Reverts ⏮️️
+
+* Revert "perf(redis):  Temporary revert of !1683" ([b6b3e5c](https://gitlab.com/gitlab-org/container-registry/commit/b6b3e5cffaf9a86dd7fbc2371a5550e4c579bc02))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/jackc/pgx/v5 to v5.7.1 ([a44a1fb](https://gitlab.com/gitlab-org/container-registry/commit/a44a1fb6762d06d3e71b92e459d2bc65e98209cc))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.0 ([cbf2899](https://gitlab.com/gitlab-org/container-registry/commit/cbf28991e8473888a141c595f779919c4eee41a3))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.2 ([eb3a3f0](https://gitlab.com/gitlab-org/container-registry/commit/eb3a3f022dd07393bb537ab709f7d75db422a8d5))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.3 ([d4bb30b](https://gitlab.com/gitlab-org/container-registry/commit/d4bb30bd9f0ee8bbd190d98168500863e2b5bac2))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.108.0 ([2610795](https://gitlab.com/gitlab-org/container-registry/commit/2610795fe979c13e20da6650f99b1a31f9bbd9c3))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.109.0 ([85c3478](https://gitlab.com/gitlab-org/container-registry/commit/85c347871678706b3abc854b09d2421f15c6b8f3))
+* **deps:** update module golang.org/x/crypto to v0.27.0 ([26ddb37](https://gitlab.com/gitlab-org/container-registry/commit/26ddb37c8b35faa940815e52334a8bfc3d38a0a5))
+* **deps:** update module golang.org/x/oauth2 to v0.23.0 ([39f5331](https://gitlab.com/gitlab-org/container-registry/commit/39f5331d506ab8cee788ffd6a36b38ac7bbc7e8e))
+* **deps:** update module google.golang.org/api to v0.194.0 ([364a608](https://gitlab.com/gitlab-org/container-registry/commit/364a608a9b052ea89c79157e3611b7b75d0a71a7))
+* **deps:** update module google.golang.org/api to v0.195.0 ([58d79a6](https://gitlab.com/gitlab-org/container-registry/commit/58d79a67f73c19dedb2aac6f7245c821c9ab7025))
+* **deps:** update module google.golang.org/api to v0.196.0 ([bb13c23](https://gitlab.com/gitlab-org/container-registry/commit/bb13c2372f0efb9b0a2b688d35037fd6b8e5d4c2))
+
 ## [4.8.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.7.0-gitlab...v4.8.0-gitlab) (2024-8-22)
 
 

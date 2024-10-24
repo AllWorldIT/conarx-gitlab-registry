@@ -110,10 +110,13 @@ linters-settings:
   dogsled:
     # checks assignments with too many blank identifiers; default is 2
     max-blank-identifiers: 2
+  staticcheck:
+    checks:
+      - "all"
   stylecheck:
     # Disable checks by prefixing with a `-`
     # ST1000: at least one file in a package should have a package comment
-    # ST1003: initialism should be capitilized, for example: `var webhookUrl should be webhookURL`
+    # ST1003: initialism should be capitalized, for example: `var webhookUrl should be webhookURL`
     checks: ["all", "-ST1000", "-ST1003"]
   whitespace:
     multi-if: false   # Enforces newlines (or comments) after every multi-line if statement
@@ -179,7 +182,6 @@ issues:
   exclude-dirs:
     - bin/
     - .GOPATH/
-    - migrations/
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
     # Exclude some linters from running on tests files.
@@ -189,15 +191,50 @@ issues:
         - errcheck
         - dupl
         - gosec
+
+    # TODO: replace rand.Read with crypto/rand.Read
+    - text: 'rand.Read has been deprecated since Go 1.20'
+      linters:
+        - staticcheck
+
+#     CertPool.Subjects() has been deprecated but there is no alternative
+#	 https://github.com/golang/go/issues/46287
+    - text: 'SA1019: pool.Subjects has been deprecated since Go 1.18'
+      linters:
+        - staticcheck
+
+    # don't report this for test files
+    - text: 'SA1029: should not use built-in type string as key for value'
+      path: _test\.go|testsuites\.go
+    - text: 'SA5011'
+      path: _test\.go|testsuites\.go
+
+    # We should keep these definitions and checks around, even if deprecated
+    - text: 'v1.MediaTypeImageLayerNonDistributable|v1.MediaTypeImageLayerNonDistributableGzip is deprecated'
+      linters:
+        - staticcheck
+
     # Don't report on shadowing `err`. Strictly avoiding shadowing `err` often
     # results in code that is not idomatic for little gain in clarity or correctness.
     - text: 'shadow: declaration of "err" shadows declaration at'
       linters: [ govet ]
-
     # Exclude lll issues for long lines with go:generate
     - linters:
         - lll
       source: "^//go:generate "
+
+    - path: ^CHANGELOG\.md$
+      linters:
+        # The changelog captures a set of commits in a release, featuring their commit message, which we shouldn't alter
+        - misspell
+
+    - path: "^registry/datastore/migrations/.*\\.go$"
+      linters:
+        # Migration files shouldn't be updated after being introduced, and we found misspell errors on some of the
+        # existing ones, so we have to disable these entirely.
+        - misspell
+        # Do not check for duplicates on migration files as they are commonly found and expected
+        - dupl
 
   # Independently from option `exclude` we use default exclude patterns,
   # it can be disabled by this option. To list all

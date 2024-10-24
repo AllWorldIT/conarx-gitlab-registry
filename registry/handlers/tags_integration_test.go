@@ -22,14 +22,14 @@ func TestListTagDB(t *testing.T) {
 	repoPath := "babajaga"
 
 	ctrl := gomock.NewController(t)
-	repositoryMockCache := mocks.NewMockRepositoryCache(ctrl)
+	repoCacheMock := mocks.NewMockRepositoryCache(ctrl)
 	matchFn := func(x any) bool {
 		repoArg := x.(*models.Repository)
 		return repoArg.Path == repoPath
 	}
 	gomock.InOrder(
-		repositoryMockCache.EXPECT().Get(env.ctx, repoPath).Return(nil).Times(1),
-		repositoryMockCache.EXPECT().Set(env.ctx, gomock.Cond(matchFn)).Times(1),
+		repoCacheMock.EXPECT().Get(env.ctx, repoPath).Return(nil).Times(1),
+		repoCacheMock.EXPECT().Set(env.ctx, gomock.Cond(matchFn)).Times(1),
 	)
 
 	// build test repository
@@ -72,7 +72,7 @@ func TestListTagDB(t *testing.T) {
 		LastEntry:  "",
 		MaxEntries: 10,
 	}
-	resultTags, moreEntries, err := dbGetTags(env.ctx, env.db, repositoryMockCache, r.Path, filters)
+	resultTags, moreEntries, err := dbGetTags(env.ctx, env.db, repoCacheMock, r.Path, filters)
 	require.NoError(t, err)
 	require.ElementsMatch(t, resultTags, expectedTags)
 	require.False(t, moreEntries)

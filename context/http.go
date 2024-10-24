@@ -159,7 +159,7 @@ func GetResponseWriter(ctx context.Context) (http.ResponseWriter, error) {
 var getVarsFromRequest = mux.Vars
 
 // WithVars extracts gorilla/mux vars and makes them available on the returned
-// context. Variables are available at keys with the prefix "vars.". For
+// context. Variables are available as keys with the prefix "vars.". For
 // example, if looking for the variable "name", it can be accessed as
 // "vars.name". Implementations that are accessing values need not know that
 // the underlying context is implemented with gorilla/mux vars.
@@ -201,12 +201,6 @@ func GetMappedRequestLogger(ctx context.Context) Logger {
 		userAgentKey,
 		remoteAddressKey,
 		contentTypeKey)
-}
-
-// GetRequestCorrelationLogger returns a logger that contains a correlation ID, if available in ctx. Request loggers
-// can safely be pushed onto the context.
-func GetRequestCorrelationLogger(ctx context.Context) Logger {
-	return GetLogger(ctx).WithField(correlation.FieldName, GetRequestCorrelationID(ctx))
 }
 
 // GetResponseLogger reads the current response stats and builds a logger.

@@ -12319,6 +12319,8 @@ CREATE INDEX index_batched_background_migration_jobs_on_bbm_id_and_id_desc ON pu
 
 CREATE INDEX index_batched_background_migration_jobs_on_bbm_id_and_max_value ON public.batched_background_migration_jobs USING btree (batched_background_migration_id, max_value);
 
+CREATE INDEX index_batched_background_migrations_on_status ON public.batched_background_migrations USING btree (status);
+
 CREATE INDEX index_gc_blob_review_queue_on_review_after ON public.gc_blob_review_queue USING btree (review_after);
 
 CREATE INDEX index_gc_manifest_review_queue_on_review_after ON public.gc_manifest_review_queue USING btree (review_after);

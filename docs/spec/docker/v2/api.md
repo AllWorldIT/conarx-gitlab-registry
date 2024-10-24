@@ -4,19 +4,22 @@ description: "Specification for the Registry API."
 keywords: registry, on-prem, images, tags, repository, distribution, api, advanced
 ---
 
+<!-- markdownlint-disable MD025 -->
 # Docker Registry HTTP API V2
+<!-- markdownlint-enable MD025 -->
 
 ## Introduction
 
 The _Docker Registry HTTP API_ is the protocol to facilitate distribution of
-images to the docker engine. It interacts with instances of the docker
-registry, which is a service to manage information about docker images and
+images to the Docker engine. It interacts with instances of the Docker
+registry, which is a service to manage information about Docker images and
 enable their distribution. The specification covers the operation of version 2
 of this API, known as _Docker Registry HTTP API V2_.
 
 While the V1 registry protocol is usable, there are several problems with the
 architecture that have led to this new version. The main driver of this
 specification is a set of changes to the Docker image format, covered in
+<!-- markdownlint-disable-next-line MD044 -->
 [docker/docker#8093](https://github.com/docker/docker/issues/8093).
 The new, self-contained image manifest simplifies image definition and improves
 security. This specification will build on that work, leveraging new properties
@@ -26,15 +29,18 @@ decrease the likelihood of backend corruption.
 For relevant details and history leading up to this specification, please see
 the following issues:
 
+<!-- markdownlint-disable-next-line MD044 -->
 - [docker/docker#8093](https://github.com/docker/docker/issues/8093)
+<!-- markdownlint-disable-next-line MD044 -->
 - [docker/docker#9015](https://github.com/docker/docker/issues/9015)
+<!-- markdownlint-disable-next-line MD044 -->
 - [docker/docker-registry#612](https://github.com/docker/docker-registry/issues/612)
 
 ### Scope
 
 This specification covers the URL layout and protocols of the interaction
-between docker registry and docker core. This will affect the docker core
-registry API and the rewrite of docker-registry. Docker registry
+between Docker registry and Docker core. This will affect the Docker core
+registry API and the rewrite of `docker-registry`. Docker registry
 implementations may implement other API endpoints, but they are not covered by
 this specification.
 
@@ -70,18 +76,19 @@ version. Differentiating use cases are covered below.
 
 #### Image Verification
 
-A docker engine instance would like to run verified image named
-"library/ubuntu", with the tag "latest". The engine contacts the registry,
-requesting the manifest for "library/ubuntu:latest". An untrusted registry
-returns a manifest. Before proceeding to download the individual layers, the
-engine verifies the manifest's signature, ensuring that the content was
-produced from a trusted source and no tampering has occurred. After each layer
-is downloaded, the engine verifies the digest of the layer, ensuring that the
-content matches that specified by the manifest.
+<!-- markdownlint-disable-next-line MD044 -->
+A Docker engine instance would like to run verified image named "library/ubuntu", with the tag "latest".
+<!-- markdownlint-disable-next-line MD044 -->
+The engine contacts the registry, requesting the manifest for "library/ubuntu:latest".
+An untrusted registry returns a manifest. Before proceeding to download the
+individual layers, the engine verifies the manifest's signature, ensuring that
+the content was produced from a trusted source and no tampering has occurred.
+After each layer is downloaded, the engine verifies the digest of the layer,
+ensuring that the content matches that specified by the manifest.
 
 #### Resumable Push
 
-Company X's build servers lose connectivity to docker registry before
+Company X's build servers lose connectivity to Docker registry before
 completing an image layer transfer. After connectivity returns, the build
 server attempts to re-upload the image. The registry notifies the build server
 that the upload has already been partially attempted. The build server
@@ -96,7 +103,7 @@ interrupted before completion. The client keeps the partial data and uses http
 
 #### Layer Upload De-duplication
 
-Company Y's build system creates two identical docker layers from build
+Company Y's build system creates two identical Docker layers from build
 processes A and B. Build process A completes uploading the layer before B.
 When process B attempts to upload the layer, the registry indicates that its
 not necessary because the layer is already known.
@@ -223,12 +230,16 @@ layout of the new API is structured to support a rich authentication and
 authorization model by leveraging namespaces. All endpoints will be prefixed
 by the API version and the repository name:
 
-    /v2/<name>/
+```plaintext
+/v2/<name>/
+```
 
 For example, an API endpoint that will work with the `library/ubuntu`
 repository, the URI prefix will be:
 
-    /v2/library/ubuntu/
+```plaintext
+/v2/library/ubuntu/
+```
 
 This scheme provides rich access control over various operations and methods
 using the URI prefix and http methods that can be controlled in variety of
@@ -242,13 +253,13 @@ enforce this. The rules for a repository name are as follows:
    repository name must be at least one lowercase, alpha-numeric characters,
    optionally separated by periods, dashes or underscores. More strictly, it
    must match the regular expression `[a-z0-9]+(?:[._-][a-z0-9]+)*`.
-2. If a repository  name has two or more path components, they must be
-   separated by a forward slash ("/").
-3. The total length of a repository name, including slashes, must be less than
+1. If a repository name has two or more path components, they must be separated
+   by a forward slash ("/").
+1. The total length of a repository name, including slashes, must be less than
    256 characters.
 
 These name requirements _only_ apply to the registry API and should accept a
-superset of what is supported by other docker ecosystem components.
+superset of what is supported by other Docker ecosystem components.
 
 All endpoints should support aggressive http caching, compression and range
 headers, where appropriate. The new API attempts to leverage HTTP semantics
@@ -260,22 +271,24 @@ section.
 ### Errors
 
 Actionable failure conditions, covered in detail in their relevant sections,
-are reported as part of 4xx responses, in a json response body. One or more
+are reported as part of 4xx responses, in a JSON response body. One or more
 errors will be returned in the following format:
 
-    {
-        "errors:" [{
-                "code": <error identifier>,
-                "message": <message describing condition>,
-                "detail": <unstructured>
-            },
-            ...
-        ]
-    }
+```json
+{
+    "errors:" [{
+            "code": <error identifier>,
+            "message": <message describing condition>,
+            "detail": <unstructured>
+        },
+        ...
+    ]
+}
+```
 
 The `code` field will be a unique identifier, all caps with underscores by
 convention. The `message` field will be a human readable string. The optional
-`detail` field may contain arbitrary json data providing information the
+`detail` field may contain arbitrary JSON data providing information the
 client can use to resolve the issue.
 
 While the client can take action on certain error codes, the registry may add
@@ -292,7 +305,9 @@ section.
 A minimal endpoint, mounted at `/v2/` will provide version support information
 based on its response statuses. The request format is as follows:
 
-    GET /v2/
+```plaintext
+GET /v2/
+```
 
 If a `200 OK` response is returned, the registry implements the V2(.1)
 registry API and the client may proceed safely with other V2 operations.
@@ -330,7 +345,8 @@ portion. The _algorithm_ identifies the methodology used to calculate the
 digest. The _hex_ portion is the hex-encoded result of the hash.
 
 We define a _digest_ string to match the following grammar:
-```
+
+```plaintext
 digest      := algorithm ":" hex
 algorithm   := /[A-Fa-f0-9_+.-]+/
 hex         := /[A-Fa-f0-9]+/
@@ -339,7 +355,7 @@ hex         := /[A-Fa-f0-9]+/
 Some examples of _digests_ include the following:
 
 digest                                                                            | description                                   |
-----------------------------------------------------------------------------------|------------------------------------------------
+----------------------------------------------------------------------------------|-----------------------------------------------|
 sha256:6c3c624b58dbbcd3c0dd82b4c53f04194d1247c6eebdaab7c610cf7d66709b3b           | Common sha256 based digest                    |
 
 While the _algorithm_ does allow one to implement a wide variety of
@@ -349,7 +365,8 @@ uniqueness of the _digest_ but some canonicalization may be performed to
 ensure consistent identifiers.
 
 Let's use a simple example in pseudo-code to demonstrate a digest calculation:
-```
+
+```plaintext
 let C = 'a small string'
 let B = sha256(C)
 let D = 'sha256:' + EncodeHex(B)
@@ -401,8 +418,8 @@ tag       | The tag for this version of the image.         |
 fsLayers  | A list of layer descriptors (including digest) |
 signature | A JWS used to verify the manifest content      |
 
-For more information about the manifest format, please see
-[docker/docker#8093](https://github.com/docker/docker/issues/8093).
+<!-- markdownlint-disable-next-line MD044 -->
+For more information about the manifest format, please see [docker/docker#8093](https://github.com/docker/docker/issues/8093).
 
 When the manifest is in hand, the client must verify the signature to ensure
 the names and layers are valid. Once confirmed, the client will then use the
@@ -411,9 +428,9 @@ the V2 registry API, keyed by their digest.
 
 #### Pulling an Image Manifest
 
-The image manifest can be fetched with the following url:
+The image manifest can be fetched with the following URL:
 
-```
+```plaintext
 GET /v2/<name>/manifests/<reference>
 ```
 
@@ -429,30 +446,32 @@ header will indicate which manifest type is being returned.
 A `404 Not Found` response will be returned if the image is unknown to the
 registry. If the image exists and the response is successful, the image
 manifest will be returned, with the following format (see
-[docker/docker#8093](https://github.com/docker/docker/issues/8093) for details):
+[`docker/docker#8093`](https://github.com/docker/docker/issues/8093) for details):
 
-    {
-       "name": <name>,
-       "tag": <tag>,
-       "fsLayers": [
-          {
-             "blobSum": <digest>
-          },
-          ...
-        ]
-       ],
-       "history": <v1 images>,
-       "signature": <JWS>
-    }
+```json
+{
+    "name": <name>,
+    "tag": <tag>,
+    "fsLayers": [
+        {
+            "blobSum": <digest>
+        },
+        ...
+    ]
+    ],
+    "history": <v1 images>,
+    "signature": <JWS>
+}
+```
 
 The client should verify the returned manifest signature for authenticity
 before fetching layers.
 
 ##### Existing Manifests
 
-The image manifest can be checked for existence with the following url:
+The image manifest can be checked for existence with the following URL:
 
-```
+```plaintext
 HEAD /v2/<name>/manifests/<reference>
 ```
 
@@ -463,12 +482,11 @@ A `404 Not Found` response will be returned if the image is unknown to the
 registry. If the image exists and the response is successful the response will
 be as follows:
 
-```
+```plaintext
 200 OK
 Content-Length: <length of manifest>
 Docker-Content-Digest: <digest>
 ```
-
 
 #### Pulling a Layer
 
@@ -476,7 +494,9 @@ Layers are stored in the blob portion of the registry, keyed by digest.
 Pulling a layer is carried out by a standard http request. The URL is as
 follows:
 
-    GET /v2/<name>/blobs/<digest>
+```plaintext
+GET /v2/<name>/blobs/<digest>
+```
 
 Access to a layer will be gated by the `name` of the repository but is
 identified uniquely in the registry by `digest`.
@@ -501,9 +521,9 @@ The details of each step of the process are covered in the following sections.
 #### Pushing a Layer
 
 All layer uploads use two steps to manage the upload process. The first step
-starts the upload in the registry service, returning a url to carry out the
-second step. The second step uses the upload url to transfer the actual data.
-Uploads are started with a POST request which returns a url that can be used
+starts the upload in the registry service, returning a URL to carry out the
+second step. The second step uses the upload URL to transfer the actual data.
+Uploads are started with a POST request which returns a URL that can be used
 to push data and check upload status.
 
 The `Location` header will be used to communicate the upload location after
@@ -514,7 +534,7 @@ use the most recent value returned by the API.
 
 To begin the process, a POST request should be issued in the following format:
 
-```
+```plaintext
 POST /v2/<name>/blobs/uploads/
 ```
 
@@ -526,7 +546,7 @@ will be linked. Responses to this request are covered below.
 The existence of a layer can be checked via a `HEAD` request to the blob store
 API. The request should be formatted as follows:
 
-```
+```plaintext
 HEAD /v2/<name>/blobs/<digest>
 ```
 
@@ -534,7 +554,7 @@ If the layer with the digest specified in `digest` is available, a 200 OK
 response will be received, with no actual body content (this is according to
 http specification). The response will look as follows:
 
-```
+```plaintext
 200 OK
 Content-Length: <length of blob>
 Docker-Content-Digest: <digest>
@@ -550,7 +570,7 @@ for the existing registry layer, but the digests will be guaranteed to match.
 If the POST request is successful, a `202 Accepted` response will be returned
 with the upload URL in the `Location` header:
 
-```
+```plaintext
 202 Accepted
 Location: /v2/<name>/blobs/uploads/<uuid>
 Range: bytes=0-<offset>
@@ -558,17 +578,17 @@ Content-Length: 0
 Docker-Upload-UUID: <uuid>
 ```
 
-The rest of the upload process can be carried out with the returned url,
+The rest of the upload process can be carried out with the returned URL,
 called the "Upload URL" from the `Location` header. All responses to the
-upload url, whether sending data or getting status, will be in this format.
+upload URL, whether sending data or getting status, will be in this format.
 Though the URI format (`/v2/<name>/blobs/uploads/<uuid>`) for the `Location`
-header is specified, clients should treat it as an opaque url and should never
+header is specified, clients should treat it as an opaque URL and should never
 try to assemble it. While the `uuid` parameter may be an actual UUID, this
 proposal imposes no constraints on the format and clients should never impose
 any.
 
 If clients need to correlate local upload state with remote upload state, the
-contents of the `Docker-Upload-UUID` header should be used. Such an id can be
+contents of the `Docker-Upload-UUID` header should be used. Such an ID can be
 used to key the last used location header when implementing resumable uploads.
 
 ##### Upload Progress
@@ -579,20 +599,20 @@ header, there are examples of [similar approaches](https://developers.google.com
 For an upload that just started, for an example with a 1000 byte layer file,
 the `Range` header would be as follows:
 
-```
+```plaintext
 Range: bytes=0-0
 ```
 
 To get the status of an upload, issue a GET request to the upload URL:
 
-```
+```plaintext
 GET /v2/<name>/blobs/uploads/<uuid>
 Host: <registry host>
 ```
 
 The response will be similar to the above, except will return 204 status:
 
-```
+```plaintext
 204 No Content
 Location: /v2/<name>/blobs/uploads/<uuid>
 Range: bytes=0-<offset>
@@ -609,7 +629,7 @@ favored by clients that would like to avoided the complexity of chunking. To
 carry out a "monolithic" upload, one can simply put the entire content blob to
 the provided URL:
 
-```
+```plaintext
 PUT /v2/<name>/blobs/uploads/<uuid>?digest=<digest>
 Content-Length: <size of layer>
 Content-Type: application/octet-stream
@@ -626,7 +646,7 @@ and expected responses.
 To carry out an upload of a chunk, the client can specify a range header and
 only include that part of the layer file:
 
-```
+```plaintext
 PATCH /v2/<name>/blobs/uploads/<uuid>
 Content-Length: <size of chunk>
 Content-Range: <start of range>-<end of range>
@@ -641,7 +661,7 @@ server cannot accept the chunk, a `416 Requested Range Not Satisfiable`
 response will be returned and will include a `Range` header indicating the
 current status:
 
-```
+```plaintext
 416 Requested Range Not Satisfiable
 Location: /v2/<name>/blobs/uploads/<uuid>
 Range: 0-<last valid range>
@@ -660,7 +680,7 @@ following conditions:
 When a chunk is accepted as part of the upload, a `202 Accepted` response will
 be returned, including a `Range` header with the current upload status:
 
-```
+```plaintext
 202 Accepted
 Location: /v2/<name>/blobs/uploads/<uuid>
 Range: bytes=0-<offset>
@@ -675,7 +695,7 @@ request on the upload endpoint with a digest parameter. If it is not provided,
 the upload will not be considered complete. The format for the final chunk
 will be as follows:
 
-```
+```plaintext
 PUT /v2/<name>/blobs/uploads/<uuid>?digest=<digest>
 Content-Length: <size of chunk>
 Content-Range: <start of range>-<end of range>
@@ -693,7 +713,7 @@ client if the content is rejected.
 When the last chunk is received and the layer has been validated, the client
 will receive a `201 Created` response:
 
-```
+```plaintext
 201 Created
 Location: /v2/<name>/blobs/<digest>
 Content-Length: 0
@@ -712,7 +732,7 @@ The "digest" parameter is designed as an opaque parameter to support
 verification of a successful transfer. For example, an HTTP URI parameter
 might be as follows:
 
-```
+```plaintext
 sha256:6c3c624b58dbbcd3c0dd82b4c53f04194d1247c6eebdaab7c610cf7d66709b3b
 ```
 
@@ -724,7 +744,7 @@ match this digest.
 An upload can be cancelled by issuing a DELETE request to the upload endpoint.
 The format will be as follows:
 
-```
+```plaintext
 DELETE /v2/<name>/blobs/uploads/<uuid>
 ```
 
@@ -740,7 +760,7 @@ to, removing the need to upload a blob already known to the registry. To issue
 a blob mount instead of an upload, a POST request should be issued in the
 following format:
 
-```
+```plaintext
 POST /v2/<name>/blobs/uploads/?mount=<digest>&from=<repository name>
 Content-Length: 0
 ```
@@ -748,7 +768,7 @@ Content-Length: 0
 If the blob is successfully mounted, the client will receive a `201 Created`
 response:
 
-```
+```plaintext
 201 Created
 Location: /v2/<name>/blobs/<digest>
 Content-Length: 0
@@ -765,7 +785,7 @@ If a mount fails due to invalid repository or digest arguments, the registry
 will fall back to the standard upload behavior and return a `202 Accepted` with
 the upload URL in the `Location` header:
 
-```
+```plaintext
 202 Accepted
 Location: /v2/<name>/blobs/uploads/<uuid>
 Range: bytes=0-<offset>
@@ -776,7 +796,8 @@ Docker-Upload-UUID: <uuid>
 This behavior is consistent with older versions of the registry, which do not
 recognize the repository mount query parameters.
 
-Note: a client may issue a HEAD request to check existence of a blob in a source
+NOTE:
+A client may issue a HEAD request to check existence of a blob in a source
 repository to distinguish between the registry not supporting blob mounts and
 the blob not existing in the expected repository.
 
@@ -791,7 +812,7 @@ the problem. After receiving a 4xx response (except 416, as called out above),
 the upload will be considered failed and the client should take appropriate
 action.
 
-Note that the upload url will not be available forever. If the upload uuid is
+Note that the upload URL will not be available forever. If the upload uuid is
 unknown to the registry, a `404 Not Found` response will be returned and the
 client must restart the upload process.
 
@@ -800,13 +821,17 @@ client must restart the upload process.
 A layer may be deleted from the registry via its `name` and `digest`. A
 delete may be issued with the following request format:
 
-    DELETE /v2/<name>/blobs/<digest>
+```plaintext
+DELETE /v2/<name>/blobs/<digest>
+```
 
 If the blob exists and has been successfully deleted, the following response
 will be issued:
 
-    202 Accepted
-    Content-Length: None
+```plaintext
+202 Accepted
+Content-Length: None
+```
 
 If the blob had already been deleted or did not exist, a `404 Not Found`
 response will be issued instead.
@@ -819,23 +844,25 @@ then the complete images will not be resolvable.
 Once all of the layers for an image are uploaded, the client can upload the
 image manifest. An image can be pushed using the following request format:
 
-    PUT /v2/<name>/manifests/<reference>
-    Content-Type: <manifest media type>
+```plaintext
+PUT /v2/<name>/manifests/<reference>
+Content-Type: <manifest media type>
 
-    {
-       "name": <name>,
-       "tag": <tag>,
-       "fsLayers": [
-          {
-             "blobSum": <digest>
-          },
-          ...
-        ]
-       ],
-       "history": <v1 images>,
-       "signature": <JWS>,
-       ...
-    }
+{
+    "name": <name>,
+    "tag": <tag>,
+    "fsLayers": [
+        {
+            "blobSum": <digest>
+        },
+        ...
+    ]
+    ],
+    "history": <v1 images>,
+    "signature": <JWS>,
+    ...
+}
+```
 
 The `name` and `reference` fields of the response body must match those
 specified in the URL. The `reference` field may be a "tag" or a "digest". The
@@ -852,17 +879,19 @@ returned. The `detail` field of the error response will have a `digest` field
 identifying the missing blob. An error is returned for each unknown blob. The
 response format is as follows:
 
-    {
-        "errors:" [{
-                "code": "BLOB_UNKNOWN",
-                "message": "blob unknown to registry",
-                "detail": {
-                    "digest": <digest>
-                }
-            },
-            ...
-        ]
-    }
+```plaintext
+{
+    "errors:" [{
+            "code": "BLOB_UNKNOWN",
+            "message": "blob unknown to registry",
+            "detail": {
+                "digest": <digest>
+            }
+        },
+        ...
+    ]
+}
+```
 
 ### Listing Repositories
 
@@ -873,13 +902,13 @@ available through the _catalog_.
 
 The catalog for a given registry can be retrieved with the following request:
 
-```
+```plaintext
 GET /v2/_catalog
 ```
 
 The response will be in the following format:
 
-```
+```plaintext
 200 OK
 Content-Type: application/json
 
@@ -913,13 +942,13 @@ section.
 
 #### Pagination
 
-**CAUTION**: Pagination is only supported when using the metadata database.
+__CAUTION__: Pagination is only supported when using the metadata database.
 
 Paginated catalog results can be retrieved by adding an `n` parameter to the
 request URL, declaring that the response should be limited to `n` results.
 Starting a paginated flow begins as follows:
 
-```
+```plaintext
 GET /v2/_catalog?n=<integer>
 ```
 
@@ -927,7 +956,7 @@ The above specifies that a catalog response should be returned, from the start o
 the result set, ordered lexically, limiting the number of results to `n`. The
 response to such a request would look as follows:
 
-```
+```plaintext
 200 OK
 Content-Type: application/json
 Link: <<url>?n=<n from the request>&last=<last repository in response>>; rel="next"
@@ -951,7 +980,7 @@ issued. If the header is not present, the client can assume that all results
 have been received.
 
 > __NOTE:__ In the request template above, note that the brackets
-> are required. For example, if the url is
+> are required. For example, if the URL is
 > `http://example.com/v2/_catalog?n=20&last=b`, the value of the header would
 > be `<http://example.com/v2/_catalog?n=20&last=b>; rel="next"`. Please see
 > [RFC5988](https://tools.ietf.org/html/rfc5988) for details.
@@ -963,7 +992,7 @@ to skip forward in the catalog.
 To get the next result set, a client would issue the request as follows, using
 the URL encoded in the described `Link` header:
 
-```
+```plaintext
 GET /v2/_catalog?n=<n from the request>&last=<last repository value from previous response>
 ```
 
@@ -978,7 +1007,7 @@ entries.
 The behavior of `last` is quite simple when demonstrated with an example. Let
 us say the registry has the following repositories:
 
-```
+```plaintext
 a
 b
 c
@@ -989,7 +1018,7 @@ If the value of `n` is 2, _a_ and _b_ will be returned on the first response.
 The `Link` header returned on the response will have `n` set to 2 and last set
 to _b_:
 
-```
+```plaintext
 Link: <<url>?n=2&last=b>; rel="next"
 ```
 
@@ -1002,27 +1031,31 @@ to last response or be fully omitted, depending on the server implementation.
 It may be necessary to list all of the tags under a given repository. The tags
 for an image repository can be retrieved with the following request:
 
-    GET /v2/<name>/tags/list
+```plaintext
+GET /v2/<name>/tags/list
+```
 
 The response will be in the following format:
 
-    200 OK
-    Content-Type: application/json
+```plaintext
+200 OK
+Content-Type: application/json
 
-    {
-        "name": <name>,
-        "tags": [
-            <tag>,
-            ...
-        ]
-    }
+{
+    "name": <name>,
+    "tags": [
+        <tag>,
+        ...
+    ]
+}
+```
 
 For repositories with a large number of tags, this response may be quite
 large. If such a response is expected, one should use the pagination.
 
 #### Pagination
 
-**CAUTION**: Pagination is only supported when using the metadata database.
+__CAUTION__: Pagination is only supported when using the metadata database.
 
 Paginated tag results can be retrieved by adding the appropriate parameters to
 the request URL described above. The behavior of tag pagination is identical
@@ -1031,7 +1064,7 @@ any differences.
 
 Starting a paginated flow may begin as follows:
 
-```
+```plaintext
 GET /v2/<name>/tags/list?n=<integer>
 ```
 
@@ -1039,7 +1072,7 @@ The above specifies that a tags response should be returned, from the start of
 the result set, ordered lexically, limiting the number of results to `n`. The
 response to such a request would look as follows:
 
-```
+```plaintext
 200 OK
 Content-Type: application/json
 Link: <<url>?n=<n from the request>&last=<last tag value from previous response>>; rel="next"
@@ -1057,7 +1090,7 @@ To get the next result set, a client would issue the request as follows, using
 the value encoded in the [RFC5988](https://tools.ietf.org/html/rfc5988) `Link`
 header:
 
-```
+```plaintext
 GET /v2/<name>/tags/list?n=<n from the request>&last=<last tag value from previous response>
 ```
 
@@ -1072,18 +1105,22 @@ A tag can be deleted from a repository via its `name` and `reference`, where
 reference can be the tag name. A delete may be issued with the following
 request format:
 
-    DELETE /v2/<name>/tags/reference/<reference>
+```plaintext
+DELETE /v2/<name>/tags/reference/<reference>
+```
 
 If the tag exists and has been successfully deleted, the following response
 will be issued:
 
-    202 Accepted
-    Content-Length: 0
+```plaintext
+202 Accepted
+Content-Length: 0
+```
 
 If the tag had already been deleted or did not exist, a `404 Not Found`
 response will be issued instead.
 
-This call only deletes tag references to manifests and and never deletes
+This call only deletes tag references to manifests and never deletes
 manifests themselves.
 
 ### Deleting an Image
@@ -1091,14 +1128,18 @@ manifests themselves.
 An image may be deleted from the registry via its `name` and `reference`. A
 delete may be issued with the following request format:
 
-    DELETE /v2/<name>/manifests/<reference>
+```plaintext
+DELETE /v2/<name>/manifests/<reference>
+```
 
 For deletes, `reference` *must* be a digest or the delete will fail. If the
 image exists and has been successfully deleted, the following response will be
 issued:
 
-    202 Accepted
-    Content-Length: None
+```plaintext
+202 Accepted
+Content-Length: None
+```
 
 If the image had already been deleted or did not exist, a `404 Not Found`
 response will be issued instead.
@@ -1108,17 +1149,17 @@ referenced by at least one manifest list. The referencing manifest lists must
 be deleted before deleting the manifest. This integrity constraint is only
 enforced when using the metadata database.
 
-> **Note**  When deleting a manifest from a registry version 2.3 or later, the
+> __Note__  When deleting a manifest from a registry version 2.3 or later, the
 > following header must be used when `HEAD` or `GET`-ing the manifest to obtain
 > the correct digest to delete:
 
-    Accept: application/vnd.docker.distribution.manifest.v2+json
-
-> for more details, see: [compatibility.md](../compatibility.md#content-addressable-storage-cas)
+```plaintext
+Accept: application/vnd.docker.distribution.manifest.v2+json
+```
 
 ## Detail
 
-> **Note**: This section is still under construction. For the purposes of
+> __Note__: This section is still under construction. For the purposes of
 > implementation, if any details below differ from the described request flows
 > above, the section below should be corrected. When they match, this note
 > should be removed.
@@ -1128,29 +1169,28 @@ by route and entity. All aspects of the request and responses are covered,
 including headers, parameters and body formats. Examples of requests and their
 corresponding responses, with success and failure, are enumerated.
 
-> **Note**: The sections on endpoint detail are arranged with an example
+> __Note__: The sections on endpoint detail are arranged with an example
 > request, a description of the request, followed by information about that
 > request.
 
 A list of methods and URIs are covered in the table below:
 
-|Method|Path|Entity|Description|
-|------|----|------|-----------|
-| GET | `/v2/` | Base | Check that the endpoint implements Docker Registry API V2. |
-| GET | `/v2/<name>/tags/list` | Tags | Fetch the tags under the repository identified by `name`. |
-| DELETE | `/v2/<name>/tags/reference/<tag>` | Tag | Delete a tag identified by `name` and `reference`, where reference can be the tag name. This method never deletes a manifest the tag references. |
-| GET | `/v2/<name>/manifests/<reference>` | Manifest | Fetch the manifest identified by `name` and `reference` where `reference` can be a tag or digest. A `HEAD` request can also be issued to this endpoint to obtain resource information without receiving all data. |
-| PUT | `/v2/<name>/manifests/<reference>` | Manifest | Put the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
-| DELETE | `/v2/<name>/manifests/<reference>` | Manifest | Delete the manifest or tag identified by `name` and `reference` where `reference` can be a tag or digest. Note that a manifest can _only_ be deleted by digest. |
-| GET | `/v2/<name>/blobs/<digest>` | Blob | Retrieve the blob from the registry identified by `digest`. A `HEAD` request can also be issued to this endpoint to obtain resource information without receiving all data. |
-| DELETE | `/v2/<name>/blobs/<digest>` | Blob | Delete the blob identified by `name` and `digest` |
-| POST | `/v2/<name>/blobs/uploads/` | Initiate Blob Upload | Initiate a resumable blob upload. If successful, an upload location will be provided to complete the upload. Optionally, if the `digest` parameter is present, the request body will be used to complete the upload in a single request. |
-| GET | `/v2/<name>/blobs/uploads/<uuid>` | Blob Upload | Retrieve status of upload identified by `uuid`. The primary purpose of this endpoint is to resolve the current status of a resumable upload. |
-| PATCH | `/v2/<name>/blobs/uploads/<uuid>` | Blob Upload | Upload a chunk of data for the specified upload. |
-| PUT | `/v2/<name>/blobs/uploads/<uuid>` | Blob Upload | Complete the upload specified by `uuid`, optionally appending the body as the final chunk. |
-| DELETE | `/v2/<name>/blobs/uploads/<uuid>` | Blob Upload | Cancel outstanding upload processes, releasing associated resources. If this is not called, the unfinished uploads will eventually timeout. |
-| GET | `/v2/_catalog` | Catalog | Retrieve a sorted, json list of repositories available in the registry. |
-
+Method|Path|Entity|Description|
+------|----|------|-----------|
+ GET | `/v2/` | Base | Check that the endpoint implements Docker Registry API V2. |
+ GET | `/v2/<name>/tags/list` | Tags | Fetch the tags under the repository identified by `name`. |
+ DELETE | `/v2/<name>/tags/reference/<tag>` | Tag | Delete a tag identified by `name` and `reference`, where reference can be the tag name. This method never deletes a manifest the tag references. |
+ GET | `/v2/<name>/manifests/<reference>` | Manifest | Fetch the manifest identified by `name` and `reference` where `reference` can be a tag or digest. A `HEAD` request can also be issued to this endpoint to obtain resource information without receiving all data. |
+ PUT | `/v2/<name>/manifests/<reference>` | Manifest | Put the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
+ DELETE | `/v2/<name>/manifests/<reference>` | Manifest | Delete the manifest or tag identified by `name` and `reference` where `reference` can be a tag or digest. Note that a manifest can _only_ be deleted by digest. |
+ GET | `/v2/<name>/blobs/<digest>` | Blob | Retrieve the blob from the registry identified by `digest`. A `HEAD` request can also be issued to this endpoint to obtain resource information without receiving all data. |
+ DELETE | `/v2/<name>/blobs/<digest>` | Blob | Delete the blob identified by `name` and `digest` |
+ POST | `/v2/<name>/blobs/uploads/` | Initiate Blob Upload | Initiate a resumable blob upload. If successful, an upload location will be provided to complete the upload. Optionally, if the `digest` parameter is present, the request body will be used to complete the upload in a single request. |
+ GET | `/v2/<name>/blobs/uploads/<uuid>` | Blob Upload | Retrieve status of upload identified by `uuid`. The primary purpose of this endpoint is to resolve the current status of a resumable upload. |
+ PATCH | `/v2/<name>/blobs/uploads/<uuid>` | Blob Upload | Upload a chunk of data for the specified upload. |
+ PUT | `/v2/<name>/blobs/uploads/<uuid>` | Blob Upload | Complete the upload specified by `uuid`, optionally appending the body as the final chunk. |
+ DELETE | `/v2/<name>/blobs/uploads/<uuid>` | Blob Upload | Cancel outstanding upload processes, releasing associated resources. If this is not called, the unfinished uploads will eventually timeout. |
+ GET | `/v2/_catalog` | Catalog | Retrieve a sorted, JSON list of repositories available in the registry. |
 
 The detail for each endpoint is covered in the following sections.
 
@@ -1158,62 +1198,51 @@ The detail for each endpoint is covered in the following sections.
 
 The error codes encountered via the API are enumerated in the following table:
 
-|Code|Message|Description|
-|----|-------|-----------|
- `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload.
- `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed.
- `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned.
- `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest.
- `MANIFEST_BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a manifest blob is  unknown to the registry.
- `MANIFEST_INVALID` | manifest invalid | During upload, manifests undergo several checks ensuring validity. If those checks fail, this error may be returned, unless a more specific error is included. The detail will contain information the failed validation.
- `MANIFEST_UNKNOWN` | manifest unknown | This error is returned when the manifest, identified by name and tag is unknown to the repository.
- `MANIFEST_UNVERIFIED` | manifest failed signature verification | During manifest upload, if the manifest fails signature verification, this error will be returned.
- `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation.
- `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry.
- `SIZE_INVALID` | provided length did not match content length | When a layer is uploaded, the provided size will be checked against the uploaded content. If they do not match, this error will be returned.
- `TAG_INVALID` | manifest tag did not match URI | During a manifest upload, if the tag in the manifest does not match the uri tag, this error will be returned.
- `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate.
- `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource.
- `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters.
- `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename. | This is returned when the path where a repository resides is undergoing a rename.
- `CONTENT_RANGE_INVALID` | invalid content range | A layer chunked upload is checked against the pre-uploaded chunks - using the content range header, this error code is returned when a layer chunk is uploaded out of order.
- `PAGINATION_NUMBER_INVALID` | `invalid number of results requested` | `Returned when the "n" parameter (number of results to return) is not an integer, "n" is negative or "n" is bigger than the maximum allowed.`
-
+Code|Message|Description|
+----|-------|-----------|
+ `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload.|
+ `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed.|
+ `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned.|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest.|
+ `MANIFEST_BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a manifest blob is unknown to the registry.|
+ `MANIFEST_INVALID` | manifest invalid | During upload, manifests undergo several checks ensuring validity. If those checks fail, this error may be returned, unless a more specific error is included. The detail will contain information the failed validation.|
+ `MANIFEST_UNKNOWN` | manifest unknown | This error is returned when the manifest, identified by name and tag is unknown to the repository.|
+ `MANIFEST_UNVERIFIED` | manifest failed signature verification | During manifest upload, if the manifest fails signature verification, this error will be returned.|
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation.|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry.|
+ `SIZE_INVALID` | provided length did not match content length | When a layer is uploaded, the provided size will be checked against the uploaded content. If they do not match, this error will be returned.|
+ `TAG_INVALID` | manifest tag did not match URI | During a manifest upload, if the tag in the manifest does not match the uri tag, this error will be returned.|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate.|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource.|
+ `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters.|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename. | This is returned when the path where a repository resides is undergoing a rename.|
+ `CONTENT_RANGE_INVALID` | invalid content range | A layer chunked upload is checked against the pre-uploaded chunks - using the content range header, this error code is returned when a layer chunk is uploaded out of order.|
+ `PAGINATION_NUMBER_INVALID` | `invalid number of results requested` | `Returned when the "n" parameter (number of results to return) is not an integer, "n" is negative or "n" is bigger than the maximum allowed.`|
 
 ### Base
 
 Base V2 API route. Typically, this can be used for lightweight version checks and to validate registry authentication.
 
-
-
 #### GET Base
 
 Check that the endpoint implements Docker Registry API V2.
 
-
-
-```
+```plaintext
 GET /v2/
 Host: <registry host>
 Authorization: <scheme> <token>
 ```
 
-
-
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
 
+##### On Success: OK
 
-
-
-###### On Success: OK
-
-```
+```plaintext
 200 OK
 Gitlab-Container-Registry-Version: <semantic version>
 Gitlab-Container-Registry-Features: <comma separated list of features>
@@ -1223,35 +1252,30 @@ The API implements V2 protocol and is accessible.
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Gitlab-Container-Registry-Version`|The semantic version of the GitLab Container Registry.|
-|`Gitlab-Container-Registry-Features`|A list of features supported by the GitLab Container Registry API.|
+Name|Description|
+----|-----------|
+`Gitlab-Container-Registry-Version`|The semantic version of the GitLab Container Registry.|
+`Gitlab-Container-Registry-Features`|A list of features supported by the GitLab Container Registry API.|
 
+##### On Failure: Not Found
 
-
-
-###### On Failure: Not Found
-
-```
+```plaintext
 404 Not Found
 ```
 
 The registry does not implement the V2 API.
 
+##### On Failure: Authentication Required
 
-
-###### On Failure: Authentication Required
-
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1265,31 +1289,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1303,36 +1323,27 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
-
-
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ### Tags
 
 Retrieve information about tags.
 
-
-
 #### GET Tags
 
 Fetch the tags under the repository identified by `name`.
 
-
 ##### Tags
 
-```
+```plaintext
 GET /v2/<name>/tags/list
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -1340,21 +1351,17 @@ Authorization: <scheme> <token>
 
 Return all tags for the repository
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`name`|path|Name of the target repository.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`name`|path|Name of the target repository.|
 
 ###### On Success: OK
 
-```
+```plaintext
 200 OK
 Content-Length: <length>
 Content-Type: application/json
@@ -1372,24 +1379,21 @@ A list of tags for the named repository.
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1403,31 +1407,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1441,30 +1441,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1478,30 +1474,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1515,43 +1507,35 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ##### Tags Paginated
 
-```
+```plaintext
 GET /v2/<name>/tags/list?n=<integer>&last=<integer>
 ```
 
 Return a portion of the tags for the specified repository.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`name`|path|Name of the target repository.|
-|`n`|query|Limit the number of entries in each response. It not present, all entries will be returned.|
-|`last`|query|Result set will include values lexically after last.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`name`|path|Name of the target repository.|
+`n`|query|Limit the number of entries in each response. It not present, all entries will be returned.|
+`last`|query|Result set will include values lexically after last.|
 
 ###### On Success: OK
 
-```
+```plaintext
 200 OK
 Content-Length: <length>
 Link: <<url>?n=<last n value>&last=<last entry from response>>; rel="next"
@@ -1570,25 +1554,22 @@ A list of tags for the named repository.
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-|`Link`|RFC5988 compliant rel='next' with URL to next result set, if available|
-
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
+`Link`|RFC5988 compliant rel='next' with URL to next result set, if available|
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1602,31 +1583,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1640,30 +1617,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1677,30 +1650,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1714,57 +1683,42 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
-
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ### Manifest
 
 Create, update, delete and retrieve manifests.
 
-
-
 #### GET Manifest
 
 Fetch the manifest identified by `name` and `reference` where `reference` can be a tag or digest. A `HEAD` request can also be issued to this endpoint to obtain resource information without receiving all data.
 
-
-
-```
+```plaintext
 GET /v2/<name>/manifests/<reference>
 Host: <registry host>
 Authorization: <scheme> <token>
 ```
 
-
-
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`name`|path|Name of the target repository.|
-|`reference`|path|Tag or digest of the target manifest.|
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`name`|path|Name of the target repository.|
+`reference`|path|Tag or digest of the target manifest.|
 
+##### On Success: OK
 
-
-
-###### On Success: OK
-
-```
+```plaintext
 200 OK
 Docker-Content-Digest: <digest>
 Content-Type: <media type of manifest>
@@ -1788,22 +1742,19 @@ The manifest identified by `name` and `reference`. The contents can be used to i
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Docker-Content-Digest`|Digest of the targeted content for the request.|
+Name|Description|
+----|-----------|
+`Docker-Content-Digest`|Digest of the targeted content for the request.|
 
+##### On Failure: Bad Request
 
-
-
-###### On Failure: Bad Request
-
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1815,28 +1766,24 @@ Content-Type: application/json
 
 The name or reference was invalid.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `TAG_INVALID` | manifest tag did not match URI | During a manifest upload, if the tag in the manifest does not match the uri tag, this error will be returned. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `TAG_INVALID` | manifest tag did not match URI | During a manifest upload, if the tag in the manifest does not match the uri tag, this error will be returned. |
 
+##### On Failure: Authentication Required
 
-
-###### On Failure: Authentication Required
-
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1850,31 +1797,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
+##### On Failure: No Such Repository Error
 
-
-###### On Failure: No Such Repository Error
-
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1888,30 +1831,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
+##### On Failure: Access Denied
 
-
-###### On Failure: Access Denied
-
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1925,30 +1864,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
+##### On Failure: Too Many Requests
 
-
-###### On Failure: Too Many Requests
-
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -1962,28 +1897,21 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
-
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 #### PUT Manifest
 
 Put the manifest identified by `name` and `reference` where `reference` can be a tag or digest.
 
-
-
-```
+```plaintext
 PUT /v2/<name>/manifests/<reference>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -2004,24 +1932,18 @@ Content-Type: <media type of manifest>
 }
 ```
 
-
-
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`name`|path|Name of the target repository.|
-|`reference`|path|Tag or digest of the target manifest.|
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`name`|path|Name of the target repository.|
+`reference`|path|Tag or digest of the target manifest.|
 
+##### On Success: Created
 
-
-
-###### On Success: Created
-
-```
+```plaintext
 201 Created
 Location: <url>
 Content-Length: 0
@@ -2032,24 +1954,21 @@ The manifest has been accepted by the registry and is stored under the specified
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Location`|The canonical location url of the uploaded manifest.|
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
-|`Docker-Content-Digest`|Digest of the targeted content for the request.|
+Name|Description|
+----|-----------|
+`Location`|The canonical location URL of the uploaded manifest.|
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+`Docker-Content-Digest`|Digest of the targeted content for the request.|
 
+##### On Failure: Invalid Manifest
 
-
-
-###### On Failure: Invalid Manifest
-
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2061,31 +1980,27 @@ Content-Type: application/json
 
 The received manifest was invalid in some way, as described by the error codes. The client should resolve the issue and retry the request.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `TAG_INVALID` | manifest tag did not match URI | During a manifest upload, if the tag in the manifest does not match the uri tag, this error will be returned. |
-| `MANIFEST_INVALID` | manifest invalid | During upload, manifests undergo several checks ensuring validity. If those checks fail, this error may be returned, unless a more specific error is included. The detail will contain information the failed validation. |
-| `MANIFEST_UNVERIFIED` | manifest failed signature verification | During manifest upload, if the manifest fails signature verification, this error will be returned. |
-| `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `TAG_INVALID` | manifest tag did not match URI | During a manifest upload, if the tag in the manifest does not match the uri tag, this error will be returned. |
+ `MANIFEST_INVALID` | manifest invalid | During upload, manifests undergo several checks ensuring validity. If those checks fail, this error may be returned, unless a more specific error is included. The detail will contain information the failed validation. |
+ `MANIFEST_UNVERIFIED` | manifest failed signature verification | During manifest upload, if the manifest fails signature verification, this error will be returned. |
+ `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
 
+##### On Failure: Authentication Required
 
-
-###### On Failure: Authentication Required
-
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2099,31 +2014,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
+##### On Failure: No Such Repository Error
 
-
-###### On Failure: No Such Repository Error
-
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2137,30 +2048,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
+##### On Failure: Access Denied
 
-
-###### On Failure: Access Denied
-
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2174,30 +2081,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
+##### On Failure: Too Many Requests
 
-
-###### On Failure: Too Many Requests
-
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2211,23 +2114,19 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
+##### On Failure: Missing Layer(s)
 
-
-###### On Failure: Missing Layer(s)
-
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
@@ -2246,43 +2145,35 @@ Content-Type: application/json
 
 One or more layers may be missing during a manifest upload. If so, the missing layers will be enumerated in the error response.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
+Code|Message|Description|
+----|-------|-----------|
+ `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
 
+##### On Failure: Not allowed
 
-
-###### On Failure: Not allowed
-
-```
+```plaintext
 405 Method Not Allowed
 ```
 
 Manifest put is not allowed because the registry is configured as a pull-through cache or for some other reason
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
+Code|Message|Description|
+----|-------|-----------|
+ `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
 
+##### On Failure: Repository Rename In Progress
 
-
-###### On Failure: Repository Rename In Progress
-
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2296,57 +2187,44 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 #### DELETE Manifest
 
 Delete the manifest or tag identified by `name` and `reference` where `reference` can be a tag or digest. Note that a manifest can _only_ be deleted by digest.
 
-
-
-```
+```plaintext
 DELETE /v2/<name>/manifests/<reference>
 Host: <registry host>
 Authorization: <scheme> <token>
 ```
 
-
-
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`name`|path|Name of the target repository.|
-|`reference`|path|Tag or digest of the target manifest.|
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`name`|path|Name of the target repository.|
+`reference`|path|Tag or digest of the target manifest.|
 
+##### On Success: Accepted
 
-
-
-###### On Success: Accepted
-
-```
+```plaintext
 202 Accepted
 ```
 
-
-
-
-
-
 ###### On Failure: Invalid Name or Reference
 
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2358,28 +2236,24 @@ Content-Type: application/json
 
 The specified `name` or `reference` were invalid and the delete was unable to proceed.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `TAG_INVALID` | manifest tag did not match URI | During a manifest upload, if the tag in the manifest does not match the uri tag, this error will be returned. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `TAG_INVALID` | manifest tag did not match URI | During a manifest upload, if the tag in the manifest does not match the uri tag, this error will be returned. |
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2393,31 +2267,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2431,30 +2301,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2468,30 +2334,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2505,29 +2367,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ###### On Failure: Unknown Manifest
 
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2539,44 +2397,36 @@ Content-Type: application/json
 
 The specified `name` or `reference` are unknown to the registry and the delete was unable to proceed. Clients can assume the manifest or tag was already deleted if this response is returned.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-| `MANIFEST_UNKNOWN` | manifest unknown | This error is returned when the manifest, identified by name and tag is unknown to the repository. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+ `MANIFEST_UNKNOWN` | manifest unknown | This error is returned when the manifest, identified by name and tag is unknown to the repository. |
 
 ###### On Failure: Not allowed
 
-```
+```plaintext
 405 Method Not Allowed
 ```
 
 Manifest or tag delete is not allowed because the registry is configured as a pull-through cache or `delete` has been disabled.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
 
 ###### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2590,48 +2440,38 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 ### Blob
 
 Operations on blobs identified by `name` and `digest`. Used to fetch or delete layers by digest.
 
-
-
 #### GET Blob
 
 Retrieve the blob from the registry identified by `digest`. A `HEAD` request can also be issued to this endpoint to obtain resource information without receiving all data.
 
-
 ##### Fetch Blob
 
-```
+```plaintext
 GET /v2/<name>/blobs/<digest>
 Host: <registry host>
 Authorization: <scheme> <token>
 ```
 
-
-
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`name`|path|Name of the target repository.|
-|`digest`|path|Digest of desired blob.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`name`|path|Name of the target repository.|
+`digest`|path|Digest of desired blob.|
 
 ###### On Success: OK
 
-```
+```plaintext
 200 OK
 Content-Length: <length>
 Docker-Content-Digest: <digest>
@@ -2644,14 +2484,14 @@ The blob identified by `digest` is available. The blob content will be present i
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|The length of the requested blob content.|
-|`Docker-Content-Digest`|Digest of the targeted content for the request.|
+Name|Description|
+----|-----------|
+`Content-Length`|The length of the requested blob content.|
+`Docker-Content-Digest`|Digest of the targeted content for the request.|
 
 ###### On Success: Temporary Redirect
 
-```
+```plaintext
 307 Temporary Redirect
 Location: <blob location>
 Docker-Content-Digest: <digest>
@@ -2661,23 +2501,20 @@ The blob identified by `digest` is available at the provided location.
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Location`|The location where the layer should be accessible.|
-|`Docker-Content-Digest`|Digest of the targeted content for the request.|
-
-
-
+Name|Description|
+----|-----------|
+`Location`|The location where the layer should be accessible.|
+`Docker-Content-Digest`|Digest of the targeted content for the request.|
 
 ###### On Failure: Bad Request
 
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2689,26 +2526,22 @@ Content-Type: application/json
 
 There was a problem with the request that needs to be addressed by the client, such as an invalid `name` or `tag`.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
 
 ###### On Failure: Not Found
 
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2720,28 +2553,24 @@ Content-Type: application/json
 
 The blob, identified by `name` and `digest`, is unknown to the registry.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-| `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+ `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2755,31 +2584,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2793,30 +2618,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2830,30 +2651,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2867,23 +2684,19 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ##### Fetch Blob Part
 
-```
+```plaintext
 GET /v2/<name>/blobs/<digest>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -2892,23 +2705,19 @@ Range: bytes=<start>-<end>
 
 This endpoint may also support RFC7233 compliant range requests. Support can be detected by issuing a HEAD request. If the header `Accept-Range: bytes` is returned, range requests can be used to fetch partial content.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`Range`|header|HTTP Range header specifying blob chunk.|
-|`name`|path|Name of the target repository.|
-|`digest`|path|Digest of desired blob.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`Range`|header|HTTP Range header specifying blob chunk.|
+`name`|path|Name of the target repository.|
+`digest`|path|Digest of desired blob.|
 
 ###### On Success: Partial Content
 
-```
+```plaintext
 206 Partial Content
 Content-Length: <length>
 Content-Range: bytes <start>-<end>/<size>
@@ -2921,23 +2730,20 @@ The blob identified by `digest` is available. The specified chunk of blob conten
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|The length of the requested blob chunk.|
-|`Content-Range`|Content range of blob chunk.|
-
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|The length of the requested blob chunk.|
+`Content-Range`|Content range of blob chunk.|
 
 ###### On Failure: Bad Request
 
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2949,26 +2755,22 @@ Content-Type: application/json
 
 There was a problem with the request that needs to be addressed by the client, such as an invalid `name` or `tag`.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
 
 ###### On Failure: Not Found
 
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -2978,40 +2780,32 @@ Content-Type: application/json
 }
 ```
 
-
-
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-| `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+ `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
 
 ###### On Failure: Requested Range Not Satisfiable
 
-```
+```plaintext
 416 Requested Range Not Satisfiable
 ```
 
 The range specification cannot be satisfied for the requested content. This can happen when the range is not formatted correctly or if the range is outside of the valid size of the content.
 
-
-
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3025,31 +2819,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3063,30 +2853,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3100,30 +2886,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3137,96 +2919,72 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
-
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 #### DELETE Blob
 
 Delete the blob identified by `name` and `digest`
 
-
-
-```
+```plaintext
 DELETE /v2/<name>/blobs/<digest>
 Host: <registry host>
 Authorization: <scheme> <token>
 ```
 
-
-
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`name`|path|Name of the target repository.|
-|`digest`|path|Digest of desired blob.|
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`name`|path|Name of the target repository.|
+`digest`|path|Digest of desired blob.|
 
+##### On Success: Accepted
 
-
-
-###### On Success: Accepted
-
-```
+```plaintext
 202 Accepted
 Content-Length: 0
 Docker-Content-Digest: <digest>
 ```
 
-
-
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|0|
-|`Docker-Content-Digest`|Digest of the targeted content for the request.|
+Name|Description|
+----|-----------|
+`Content-Length`|0|
+`Docker-Content-Digest`|Digest of the targeted content for the request.|
 
+##### On Failure: Invalid Name or Digest
 
-
-
-###### On Failure: Invalid Name or Digest
-
-```
+```plaintext
 400 Bad Request
 ```
 
-
-
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+Code|Message|Description|
+----|-------|-----------|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
 
+##### On Failure: Not Found
 
-
-###### On Failure: Not Found
-
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3238,26 +2996,22 @@ Content-Type: application/json
 
 The blob, identified by `name` and `digest`, is unknown to the registry.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-| `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+ `BLOB_UNKNOWN` | blob unknown to registry | This error may be returned when a blob is unknown to the registry in a specified repository. This can be returned with a standard get or if a manifest references an unknown layer during upload. |
 
+##### On Failure: Method Not Allowed
 
-
-###### On Failure: Method Not Allowed
-
-```
+```plaintext
 405 Method Not Allowed
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3269,27 +3023,23 @@ Content-Type: application/json
 
 Blob delete is not allowed because the registry is configured as a pull-through cache or `delete` has been disabled
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
+Code|Message|Description|
+----|-------|-----------|
+ `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
 
+##### On Failure: Authentication Required
 
-
-###### On Failure: Authentication Required
-
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3303,31 +3053,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
+##### On Failure: No Such Repository Error
 
-
-###### On Failure: No Such Repository Error
-
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3341,30 +3087,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
+##### On Failure: Access Denied
 
-
-###### On Failure: Access Denied
-
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3378,30 +3120,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
+##### On Failure: Too Many Requests
 
-
-###### On Failure: Too Many Requests
-
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3415,27 +3153,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
-###### On Failure: Repository Rename In Progress
+##### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3449,27 +3185,21 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. 
-
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename.|
 
 ### Initiate Blob Upload
 
 Initiate a blob upload. This endpoint can be used to create resumable uploads or monolithic uploads.
 
-
-
 #### POST Initiate Blob Upload
 
 Initiate a resumable blob upload. If successful, an upload location will be provided to complete the upload. Optionally, if the `digest` parameter is present, the request body will be used to complete the upload in a single request.
 
-
 ##### Initiate Monolithic Blob Upload
 
-```
+```plaintext
 POST /v2/<name>/blobs/uploads/?digest=<digest>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -3481,23 +3211,19 @@ Content-Type: application/octet-stream
 
 Upload a blob identified by the `digest` parameter in single request. This upload will not be resumable unless a recoverable error is returned.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`Content-Length`|header||
-|`name`|path|Name of the target repository.|
-|`digest`|query|Digest of uploaded blob. If present, the upload will be completed, in a single request, with contents of the request body as the resulting blob.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`Content-Length`|header||
+`name`|path|Name of the target repository.|
+`digest`|query|Digest of uploaded blob. If present, the upload will be completed, in a single request, with contents of the request body as the resulting blob.|
 
 ###### On Success: Created
 
-```
+```plaintext
 201 Created
 Location: <blob location>
 Content-Length: 0
@@ -3508,63 +3234,50 @@ The blob has been created in the registry and is available at the provided locat
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Location`||
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
-|`Docker-Upload-UUID`|Identifies the docker upload uuid for the current request.|
-
-
-
+Name|Description|
+----|-----------|
+`Location`||
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+`Docker-Upload-UUID`|Identifies the Docker upload uuid for the current request.|
 
 ###### On Failure: Invalid Name or Digest
 
-```
+```plaintext
 400 Bad Request
 ```
 
-
-
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
 
 ###### On Failure: Not allowed
 
-```
+```plaintext
 405 Method Not Allowed
 ```
 
 Blob upload is not allowed because the registry is configured as a pull-through cache or for some other reason
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3578,31 +3291,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3616,30 +3325,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3653,30 +3358,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3690,27 +3391,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ###### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3724,14 +3423,13 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 ##### Initiate Resumable Blob Upload
 
-```
+```plaintext
 POST /v2/<name>/blobs/uploads/
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -3740,22 +3438,18 @@ Content-Length: 0
 
 Initiate a resumable blob upload with an empty request body.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`Content-Length`|header|The `Content-Length` header must be zero and the body must be empty.|
-|`name`|path|Name of the target repository.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`Content-Length`|header|The `Content-Length` header must be zero and the body must be empty.|
+`name`|path|Name of the target repository.|
 
 ###### On Success: Accepted
 
-```
+```plaintext
 202 Accepted
 Content-Length: 0
 Location: /v2/<name>/blobs/uploads/<uuid>
@@ -3767,46 +3461,37 @@ The upload has been created. The `Location` header must be used to complete the 
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
-|`Location`|The location of the created upload. Clients should use the contents verbatim to complete the upload, adding parameters where required.|
-|`Range`|Range header indicating the progress of the upload. When starting an upload, it will return an empty range, since no content has been received.|
-|`Docker-Upload-UUID`|Identifies the docker upload uuid for the current request.|
-
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+`Location`|The location of the created upload. Clients should use the contents verbatim to complete the upload, adding parameters where required.|
+`Range`|Range header indicating the progress of the upload. When starting an upload, it will return an empty range, since no content has been received.|
+`Docker-Upload-UUID`|Identifies the Docker upload uuid for the current request.|
 
 ###### On Failure: Invalid Name or Digest
 
-```
+```plaintext
 400 Bad Request
 ```
 
-
-
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3820,31 +3505,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3858,30 +3539,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3895,30 +3572,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3932,27 +3605,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ###### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -3966,14 +3637,13 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 ##### Mount Blob
 
-```
+```plaintext
 POST /v2/<name>/blobs/uploads/?mount=<digest>&from=<repository name>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -3982,24 +3652,20 @@ Content-Length: 0
 
 Mount a blob identified by the `mount` parameter from another repository.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`Content-Length`|header|The `Content-Length` header must be zero and the body must be empty.|
-|`name`|path|Name of the target repository.|
-|`mount`|query|Digest of blob to mount from the source repository.|
-|`from`|query|Name of the source repository.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`Content-Length`|header|The `Content-Length` header must be zero and the body must be empty.|
+`name`|path|Name of the target repository.|
+`mount`|query|Digest of blob to mount from the source repository.|
+`from`|query|Name of the source repository.|
 
 ###### On Success: Created
 
-```
+```plaintext
 201 Created
 Location: <blob location>
 Content-Length: 0
@@ -4010,63 +3676,50 @@ The blob has been mounted in the repository and is available at the provided loc
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Location`||
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
-|`Docker-Upload-UUID`|Identifies the docker upload uuid for the current request.|
-
-
-
+Name|Description|
+----|-----------|
+`Location`||
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+`Docker-Upload-UUID`|Identifies the Docker upload uuid for the current request.|
 
 ###### On Failure: Invalid Name or Digest
 
-```
+```plaintext
 400 Bad Request
 ```
 
-
-
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
 
 ###### On Failure: Not allowed
 
-```
+```plaintext
 405 Method Not Allowed
 ```
 
 Blob mount is not allowed because the registry is configured as a pull-through cache or for some other reason
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4080,31 +3733,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4118,30 +3767,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4155,30 +3800,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4192,27 +3833,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ###### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4226,26 +3865,19 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
-
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 ### Blob Upload
 
 Interact with blob uploads. Clients should never assemble URLs for this endpoint and should only take it through the `Location` header on related API requests. The `Location` header and its parameters should be preserved by clients, using the latest value returned via upload related API calls.
 
-
-
 #### GET Blob Upload
 
 Retrieve status of upload identified by `uuid`. The primary purpose of this endpoint is to resolve the current status of a resumable upload.
 
-
-
-```
+```plaintext
 GET /v2/<name>/blobs/uploads/<uuid>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -4253,22 +3885,18 @@ Authorization: <scheme> <token>
 
 Retrieve the progress of the current upload, as reported by the `Range` header.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`name`|path|Name of the target repository.|
-|`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`name`|path|Name of the target repository.|
+`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
 
+##### On Success: Upload Progress
 
-
-
-###### On Success: Upload Progress
-
-```
+```plaintext
 204 No Content
 Range: 0-<offset>
 Content-Length: 0
@@ -4279,24 +3907,21 @@ The upload is known and in progress. The last received offset is available in th
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Range`|Range indicating the current progress of the upload.|
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
-|`Docker-Upload-UUID`|Identifies the docker upload uuid for the current request.|
+Name|Description|
+----|-----------|
+`Range`|Range indicating the current progress of the upload.|
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+`Docker-Upload-UUID`|Identifies the Docker upload uuid for the current request.|
 
+##### On Failure: Bad Request
 
-
-
-###### On Failure: Bad Request
-
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4308,27 +3933,23 @@ Content-Type: application/json
 
 There was an error processing the upload and it must be restarted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
+Code|Message|Description|
+----|-------|-----------|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
 
+##### On Failure: Not Found
 
-
-###### On Failure: Not Found
-
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4340,27 +3961,23 @@ Content-Type: application/json
 
 The upload is unknown to the registry. The upload must be restarted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
+Code|Message|Description|
+----|-------|-----------|
+ `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
 
+##### On Failure: Authentication Required
 
-
-###### On Failure: Authentication Required
-
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4374,31 +3991,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
+##### On Failure: No Such Repository Error
 
-
-###### On Failure: No Such Repository Error
-
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4412,30 +4025,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
+##### On Failure: Access Denied
 
-
-###### On Failure: Access Denied
-
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4449,30 +4058,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
+##### On Failure: Too Many Requests
 
-
-###### On Failure: Too Many Requests
-
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4486,29 +4091,23 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
-
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 #### PATCH Blob Upload
 
 Upload a chunk of data for the specified upload.
 
-
 ##### Stream upload
 
-```
+```plaintext
 PATCH /v2/<name>/blobs/uploads/<uuid>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -4519,22 +4118,18 @@ Content-Type: application/octet-stream
 
 Upload a stream of data to upload without completing the upload.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`name`|path|Name of the target repository.|
-|`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`name`|path|Name of the target repository.|
+`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
 
 ###### On Success: Data Accepted
 
-```
+```plaintext
 204 No Content
 Location: /v2/<name>/blobs/uploads/<uuid>
 Range: 0-<offset>
@@ -4546,25 +4141,22 @@ The stream of data has been accepted and the current progress is available in th
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Location`|The location of the upload. Clients should assume this changes after each request. Clients should use the contents verbatim to complete the upload, adding parameters where required.|
-|`Range`|Range indicating the current progress of the upload.|
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
-|`Docker-Upload-UUID`|Identifies the docker upload uuid for the current request.|
-
-
-
+Name|Description|
+----|-----------|
+`Location`|The location of the upload. Clients should assume this changes after each request. Clients should use the contents verbatim to complete the upload, adding parameters where required.|
+`Range`|Range indicating the current progress of the upload.|
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+`Docker-Upload-UUID`|Identifies the Docker upload uuid for the current request.|
 
 ###### On Failure: Bad Request
 
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4576,27 +4168,23 @@ Content-Type: application/json
 
 There was an error processing the upload and it must be restarted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
 
 ###### On Failure: Not Found
 
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4608,27 +4196,23 @@ Content-Type: application/json
 
 The upload is unknown to the registry. The upload must be restarted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4642,31 +4226,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4680,30 +4260,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4717,30 +4293,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4754,27 +4326,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ###### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4788,14 +4358,13 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 ##### Chunked upload
 
-```
+```plaintext
 PATCH /v2/<name>/blobs/uploads/<uuid>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -4808,24 +4377,20 @@ Content-Type: application/octet-stream
 
 Upload a chunk of data to specified upload without completing the upload. The data will be uploaded to the specified Content Range.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`Content-Range`|header|Range of bytes identifying the desired block of content represented by the body. Start must the end offset retrieved via status check plus one. Note that this is a non-standard use of the `Content-Range` header.|
-|`Content-Length`|header|Length of the chunk being uploaded, corresponding the length of the request body.|
-|`name`|path|Name of the target repository.|
-|`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`Content-Range`|header|Range of bytes identifying the desired block of content represented by the body. Start must the end offset retrieved via status check plus one. Note that this is a non-standard use of the `Content-Range` header.|
+`Content-Length`|header|Length of the chunk being uploaded, corresponding the length of the request body.|
+`name`|path|Name of the target repository.|
+`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
 
 ###### On Success: Chunk Accepted
 
-```
+```plaintext
 204 No Content
 Location: /v2/<name>/blobs/uploads/<uuid>
 Range: 0-<offset>
@@ -4837,25 +4402,22 @@ The chunk of data has been accepted and the current progress is available in the
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Location`|The location of the upload. Clients should assume this changes after each request. Clients should use the contents verbatim to complete the upload, adding parameters where required.|
-|`Range`|Range indicating the current progress of the upload.|
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
-|`Docker-Upload-UUID`|Identifies the docker upload uuid for the current request.|
-
-
-
+Name|Description|
+----|-----------|
+`Location`|The location of the upload. Clients should assume this changes after each request. Clients should use the contents verbatim to complete the upload, adding parameters where required.|
+`Range`|Range indicating the current progress of the upload.|
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+`Docker-Upload-UUID`|Identifies the Docker upload uuid for the current request.|
 
 ###### On Failure: Bad Request
 
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4867,27 +4429,23 @@ Content-Type: application/json
 
 There was an error processing the upload and it must be restarted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
 
 ###### On Failure: Not Found
 
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4899,25 +4457,21 @@ Content-Type: application/json
 
 The upload is unknown to the registry. The upload must be restarted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
 
 ###### On Failure: Requested Range Not Satisfiable
 
-```
+```plaintext
 416 Requested Range Not Satisfiable
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4929,27 +4483,23 @@ Content-Type: application/json
 
 The `Content-Range` specification cannot be accepted, either because it does not overlap with the current progress or it is invalid.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `CONTENT_RANGE_INVALID` | invalid content range | If a layer chunk is uploaded with the content range out of order, this error will be returned. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `CONTENT_RANGE_INVALID` | invalid content range | If a layer chunk is uploaded with the content range out of order, this error will be returned. |
 
 ###### On Failure: Authentication Required
 
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -4963,31 +4513,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
 ###### On Failure: No Such Repository Error
 
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5001,30 +4547,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
 ###### On Failure: Access Denied
 
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5038,30 +4580,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
 ###### On Failure: Too Many Requests
 
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5075,27 +4613,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
 ###### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5109,19 +4645,15 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 #### PUT Blob Upload
 
 Complete the upload specified by `uuid`, optionally appending the body as the final chunk.
 
-
-
-```
+```plaintext
 PUT /v2/<name>/blobs/uploads/<uuid>?digest=<digest>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -5133,24 +4665,20 @@ Content-Type: application/octet-stream
 
 Complete the upload, providing all the data in the body, if necessary. A request without a body will just complete the upload with previously uploaded content.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`Content-Length`|header|Length of the data being uploaded, corresponding to the length of the request body. May be zero if no data is provided.|
-|`name`|path|Name of the target repository.|
-|`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
-|`digest`|query|Digest of uploaded blob.|
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`Content-Length`|header|Length of the data being uploaded, corresponding to the length of the request body. May be zero if no data is provided.|
+`name`|path|Name of the target repository.|
+`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
+`digest`|query|Digest of uploaded blob.|
 
+##### On Success: Upload Complete
 
-
-
-###### On Success: Upload Complete
-
-```
+```plaintext
 204 No Content
 Location: <blob location>
 Content-Range: <start of range>-<end of range, inclusive>
@@ -5162,25 +4690,22 @@ The upload has been completed and accepted by the registry. The canonical locati
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Location`|The canonical location of the blob for retrieval|
-|`Content-Range`|Range of bytes identifying the desired block of content represented by the body. Start must match the end of offset retrieved via status check. Note that this is a non-standard use of the `Content-Range` header.|
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
-|`Docker-Content-Digest`|Digest of the targeted content for the request.|
+Name|Description|
+----|-----------|
+`Location`|The canonical location of the blob for retrieval|
+`Content-Range`|Range of bytes identifying the desired block of content represented by the body. Start must match the end of offset retrieved via status check. Note that this is a non-standard use of the `Content-Range` header.|
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+`Docker-Content-Digest`|Digest of the targeted content for the request.|
 
+##### On Failure: Bad Request
 
-
-
-###### On Failure: Bad Request
-
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5192,28 +4717,24 @@ Content-Type: application/json
 
 There was an error processing the upload and it must be restarted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
-| `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
+Code|Message|Description|
+----|-------|-----------|
+ `DIGEST_INVALID` | provided digest did not match uploaded content | When a blob is uploaded, the registry will check that the content matches the digest provided by the client. The error may include a detail structure with the key "digest", including the invalid digest string. This error may also be returned when a manifest includes an invalid layer digest. |
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
+ `UNSUPPORTED` | The operation is unsupported. | The operation was unsupported due to a missing implementation or invalid set of parameters. |
 
+##### On Failure: Not Found
 
-
-###### On Failure: Not Found
-
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5225,27 +4746,23 @@ Content-Type: application/json
 
 The upload is unknown to the registry. The upload must be restarted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
+Code|Message|Description|
+----|-------|-----------|
+ `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
 
+##### On Failure: Authentication Required
 
-
-###### On Failure: Authentication Required
-
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5259,31 +4776,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
+##### On Failure: No Such Repository Error
 
-
-###### On Failure: No Such Repository Error
-
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5297,30 +4810,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
+##### On Failure: Access Denied
 
-
-###### On Failure: Access Denied
-
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5334,30 +4843,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
+##### On Failure: Too Many Requests
 
-
-###### On Failure: Too Many Requests
-
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5371,27 +4876,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
-###### On Failure: Repository Rename In Progress
+##### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5405,19 +4908,15 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 #### DELETE Blob Upload
 
 Cancel outstanding upload processes, releasing associated resources. If this is not called, the unfinished uploads will eventually timeout.
 
-
-
-```
+```plaintext
 DELETE /v2/<name>/blobs/uploads/<uuid>
 Host: <registry host>
 Authorization: <scheme> <token>
@@ -5426,23 +4925,19 @@ Content-Length: 0
 
 Cancel the upload specified by `uuid`.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
-|`Authorization`|header|An RFC7235 compliant authorization header.|
-|`Content-Length`|header|The `Content-Length` header must be zero and the body must be empty.|
-|`name`|path|Name of the target repository.|
-|`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
+Name|Kind|Description|
+----|----|-----------|
+`Host`|header|Standard HTTP Host Header. Should be set to the registry host.|
+`Authorization`|header|An RFC7235 compliant authorization header.|
+`Content-Length`|header|The `Content-Length` header must be zero and the body must be empty.|
+`name`|path|Name of the target repository.|
+`uuid`|path|A uuid identifying the upload. This field can accept characters that match `[a-zA-Z0-9-_.=]+`.|
 
+##### On Success: Upload Deleted
 
-
-
-###### On Success: Upload Deleted
-
-```
+```plaintext
 204 No Content
 Content-Length: 0
 ```
@@ -5451,22 +4946,19 @@ The upload has been successfully deleted.
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
+Name|Description|
+----|-----------|
+`Content-Length`|The `Content-Length` header must be zero and the body must be empty.|
 
+##### On Failure: Bad Request
 
-
-
-###### On Failure: Bad Request
-
-```
+```plaintext
 400 Bad Request
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5478,26 +4970,22 @@ Content-Type: application/json
 
 An error was encountered processing the delete. The client may ignore this error.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
-| `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_INVALID` | invalid repository name | Invalid repository name encountered either during manifest validation or any API operation. |
+ `BLOB_UPLOAD_INVALID` | blob upload invalid | The blob upload encountered an error and can no longer proceed. |
 
+##### On Failure: Not Found
 
-
-###### On Failure: Not Found
-
-```
+```plaintext
 404 Not Found
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5509,27 +4997,23 @@ Content-Type: application/json
 
 The upload is unknown to the registry. The client may ignore this error and assume the upload has been deleted.
 
-
-
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
+Code|Message|Description|
+----|-------|-----------|
+ `BLOB_UPLOAD_UNKNOWN` | blob upload unknown to registry | If a blob upload has been canceled or was never started, this error code may be returned. |
 
+##### On Failure: Authentication Required
 
-
-###### On Failure: Authentication Required
-
-```
+```plaintext
 401 Unauthorized
 WWW-Authenticate: <scheme> realm="<realm>", ..."
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5543,31 +5027,27 @@ The client is not authenticated.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`WWW-Authenticate`|An RFC7235 compliant authentication challenge header.|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
+Code|Message|Description|
+----|-------|-----------|
+ `UNAUTHORIZED` | authentication required | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate. |
 
+##### On Failure: No Such Repository Error
 
-
-###### On Failure: No Such Repository Error
-
-```
+```plaintext
 404 Not Found
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5581,30 +5061,26 @@ The repository is not known to the registry.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
+Code|Message|Description|
+----|-------|-----------|
+ `NAME_UNKNOWN` | repository name not known to registry | This is returned if the name used during an operation is unknown to the registry. |
 
+##### On Failure: Access Denied
 
-
-###### On Failure: Access Denied
-
-```
+```plaintext
 403 Forbidden
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5618,30 +5094,26 @@ The client does not have required access to the repository.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
+Code|Message|Description|
+----|-------|-----------|
+ `DENIED` | requested access to the resource is denied | The access controller denied access for the operation on a resource. |
 
+##### On Failure: Too Many Requests
 
-
-###### On Failure: Too Many Requests
-
-```
+```plaintext
 429 Too Many Requests
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5655,27 +5127,25 @@ The client made too many requests within a time interval.
 
 The following headers will be returned on the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
+Code|Message|Description|
+----|-------|-----------|
+ `TOOMANYREQUESTS` | too many requests | Returned when a client attempts to contact a service too many times |
 
-###### On Failure: Repository Rename In Progress
+##### On Failure: Repository Rename In Progress
 
-```
+```plaintext
 409 Conflict
 Content-Type: application/json
 
 {
-	"errors:" [
-	    {
+    "errors:" [
+        {
             "code": <error code>,
             "message": "<error message>",
             "detail": ...
@@ -5689,107 +5159,84 @@ The repository is undergoing a rename.
 
 The error codes that may be included in the response body are enumerated below:
 
-|Code|Message|Description|
-|----|-------|-----------|
-| `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
-
-
-
+Code|Message|Description|
+----|-------|-----------|
+ `RENAME_IN_PROGRESS` | the base repository path is undergoing a rename | This is returned when the path where a repository resides is undergoing a rename. |
 
 ### Catalog
 
 List a set of available repositories in the local registry cluster. Does not provide any indication of what may be available upstream. Applications can only determine if a repository is available but not if it is not available.
 
-
-
 #### GET Catalog
 
-Retrieve a sorted, json list of repositories available in the registry.
-
+Retrieve a sorted, JSON list of repositories available in the registry.
 
 ##### Catalog Fetch
 
-```
+```plaintext
 GET /v2/_catalog
 ```
 
-Request an unabridged list of repositories available.  The implementation may impose a maximum limit and return a partial set with pagination links.
-
-
-
-
+Request an unabridged list of repositories available. The implementation may impose a maximum limit and return a partial set with pagination links.
 
 ###### On Success: OK
 
-```
+```plaintext
 200 OK
 Content-Length: <length>
 Content-Type: application/json
 
 {
-	"repositories": [
-		<name>,
-		...
-	]
+    "repositories": [
+        <name>,
+        ...
+    ]
 }
 ```
 
-Returns the unabridged list of repositories as a json response.
+Returns the unabridged list of repositories as a JSON response.
 
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
 
 ##### Catalog Fetch Paginated
 
-```
+```plaintext
 GET /v2/_catalog?n=<integer>&last=<integer>
 ```
 
 Return the specified portion of repositories.
 
-
 The following parameters should be specified on the request:
 
-|Name|Kind|Description|
-|----|----|-----------|
-|`n`|query|Limit the number of entries in each response. It not present, all entries will be returned.|
-|`last`|query|Result set will include values lexically after last.|
-
-
-
+Name|Kind|Description|
+----|----|-----------|
+`n`|query|Limit the number of entries in each response. It not present, all entries will be returned.|
+`last`|query|Result set will include values lexically after last.|
 
 ###### On Success: OK
 
-```
+```plaintext
 200 OK
 Content-Length: <length>
 Link: <<url>?n=<last n value>&last=<last entry from response>>; rel="next"
 Content-Type: application/json
 
 {
-	"repositories": [
-		<name>,
-		...
-	]
-	"next": "<url>?last=<name>&n=<last value of n>"
+    "repositories": [
+        <name>,
+        ...
+    ]
+    "next": "<url>?last=<name>&n=<last value of n>"
 }
 ```
 
-
-
 The following headers will be returned with the response:
 
-|Name|Description|
-|----|-----------|
-|`Content-Length`|Length of the JSON response body.|
-|`Link`|RFC5988 compliant rel='next' with URL to next result set, if available|
-
-
-
-
-
+Name|Description|
+----|-----------|
+`Content-Length`|Length of the JSON response body.|
+`Link`|RFC5988 compliant rel='next' with URL to next result set, if available|

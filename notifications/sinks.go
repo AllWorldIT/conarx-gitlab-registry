@@ -8,9 +8,12 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/hashicorp/go-multierror"
 
 	log "github.com/sirupsen/logrus"
 )
+
+const DefaultBroadcasterFanoutTimeout = 15 * time.Second
 
 // NOTE(stevvooe): This file contains definitions for several utility sinks.
 // Typically, the broadcaster is the only sink that should be required
@@ -21,9 +24,14 @@ import (
 // component is to dispatch events to configured endpoints. Reliability can be
 // provided by wrapping incoming sinks.
 type Broadcaster struct {
-	sinks  []Sink
-	events chan *Event
-	closed chan chan struct{}
+	sinks []Sink
+
+	eventsCh chan *Event
+	doneCh   chan struct{}
+
+	fanoutTimeout time.Duration
+
+	wg *sync.WaitGroup
 }
 
 // NewBroadcaster ...
@@ -31,14 +39,23 @@ type Broadcaster struct {
 // behavior will be affected by the properties of the sink. Generally, the
 // sink should accept all messages and deal with reliability on its own. Use
 // of EventQueue and RetryingSink should be used here.
-func NewBroadcaster(sinks ...Sink) *Broadcaster {
+func NewBroadcaster(fanoutTimeout time.Duration, sinks ...Sink) *Broadcaster {
+	if fanoutTimeout == 0 {
+		fanoutTimeout = DefaultBroadcasterFanoutTimeout
+	}
 	b := Broadcaster{
-		sinks:  sinks,
-		events: make(chan *Event),
-		closed: make(chan chan struct{}),
+		sinks: sinks,
+
+		eventsCh: make(chan *Event),
+		doneCh:   make(chan struct{}),
+
+		fanoutTimeout: fanoutTimeout,
+
+		wg: new(sync.WaitGroup),
 	}
 
 	// Start the broadcaster
+	b.wg.Add(1)
 	go b.run()
 
 	return &b
@@ -49,11 +66,19 @@ func NewBroadcaster(sinks ...Sink) *Broadcaster {
 // slice memory to the broadcaster and should not modify it after calling
 // write.
 func (b *Broadcaster) Write(event *Event) error {
+	// NOTE(prozlach): avoid a racy situation when both channels are "ready",
+	// and make sure that closing the Sink takes priority:
 	select {
-	case b.events <- event:
-	case <-b.closed:
+	case <-b.doneCh:
 		return ErrSinkClosed
+	default:
+		select {
+		case b.eventsCh <- event:
+		case <-b.doneCh:
+			return ErrSinkClosed
+		}
 	}
+
 	return nil
 }
 
@@ -62,42 +87,106 @@ func (b *Broadcaster) Write(event *Event) error {
 func (b *Broadcaster) Close() error {
 	log.Infof("broadcaster: closing")
 	select {
-	case <-b.closed:
+	case <-b.doneCh:
 		// already closed
 		return fmt.Errorf("broadcaster: already closed")
 	default:
-		// do a little chan handoff dance to synchronize closing
-		closed := make(chan struct{})
-		b.closed <- closed
-		close(b.closed)
-		<-closed
-		return nil
+		close(b.doneCh)
 	}
+
+	b.wg.Wait()
+
+	errs := new(multierror.Error)
+	for _, sink := range b.sinks {
+		if err := sink.Close(); err != nil {
+			errs = multierror.Append(errs, err)
+			log.WithError(err).Errorf("broadcaster: error closing sink %v", sink)
+		}
+	}
+
+	// NOTE(prozlach): not stricly necessary, just a basic hygiene
+	close(b.eventsCh)
+
+	log.Debugf("broadcaster: closed")
+	return errs.ErrorOrNil()
 }
 
 // run is the main broadcast loop, started when the broadcaster is created.
 // Under normal conditions, it waits for events on the event channel. After
 // Close is called, this goroutine will exit.
 func (b *Broadcaster) run() {
+	defer b.wg.Done()
+
+loop:
 	for {
 		select {
-		case block := <-b.events:
-			for _, sink := range b.sinks {
-				if err := sink.Write(block); err != nil {
-					log.Errorf("broadcaster: error writing events to %v, these events will be lost: %v", sink, err)
+		case event := <-b.eventsCh:
+			sinksCount := len(b.sinks)
+
+			// NOTE(prozlach): we would only have a sink in the broadcaster if
+			// there are any endpoints configured. Ideally the broadcaster
+			// should not exist if there are no endpoints configured, but this
+			// would require a bigger refactoring.
+			if sinksCount == 0 {
+				log.Debugf("broadcaster: there are no sinks configured, dropping event %v", event)
+				continue loop
+			}
+
+			// NOTE(prozlach): The approach here is a compromise between the
+			// existing behaviour of Broadcaster (__attempt__ to reliably
+			// deliver to all dependant sinks) and making Broadcaster
+			// interruptable so that gracefull shutdown of container registry
+			// is possible.
+			// The idea is to do Write() calls in goroutine (they are blocking)
+			// and if the termination signal is received, wait up to
+			// fanouttimeout and then terminate `run()` goroutine, which in
+			// turn unblocks `Close()` call to close all sinks which terminates
+			// the gouroutines which do `Write()` calls as an efect..
+			finishedCount := 0
+			finishedCh := make(chan struct{}, sinksCount)
+
+			for i := 0; i < sinksCount; i++ {
+				go func(i int) {
+					if err := b.sinks[i].Write(event); err != nil {
+						log.WithError(err).
+							Errorf("broadcaster: error writing events to %v, these events will be lost", b.sinks[i])
+					}
+
+					finishedCh <- struct{}{}
+				}(i)
+			}
+
+		inner:
+			for {
+				select {
+				case <-b.doneCh:
+					timer := time.NewTimer(b.fanoutTimeout)
+
+					log.WithField("sinks_remaining", sinksCount-finishedCount).
+						Warnf("broadcaster: received termination signal")
+
+					select {
+					case <-timer.C:
+						log.WithField("sinks_remaining", sinksCount-finishedCount).
+							Warnf("broadcaster: queue purge timeout reached, sink broadcasts dropped")
+						return
+					case <-finishedCh:
+						finishedCount += 1
+						if finishedCount == sinksCount {
+							// All notifications were sent before the timeout
+							// was reached. We are done here.
+							return
+						}
+					}
+				case <-finishedCh:
+					finishedCount += 1
+					if finishedCount == sinksCount {
+						// All done!
+						break inner
+					}
 				}
 			}
-		case closing := <-b.closed:
-
-			// close all the underlying sinks
-			for _, sink := range b.sinks {
-				if err := sink.Close(); err != nil {
-					log.Errorf("broadcaster: error closing sink %v: %v", sink, err)
-				}
-			}
-			closing <- struct{}{}
-
-			log.Debugf("broadcaster: closed")
+		case <-b.doneCh:
 			return
 		}
 	}
@@ -108,11 +197,17 @@ func (b *Broadcaster) run() {
 // events will be dropped.
 type eventQueue struct {
 	sink      Sink
-	events    *list.List
 	listeners []eventQueueListener
-	cond      *sync.Cond
-	mu        sync.Mutex
-	closed    bool
+
+	doneCh chan struct{}
+
+	bufferInCh  chan *Event
+	bufferOutCh chan *Event
+
+	queuePurgeTimeout time.Duration
+
+	wgBufferer *sync.WaitGroup
+	wgSender   *sync.WaitGroup
 }
 
 // eventQueueListener is called when various events happen on the queue.
@@ -123,93 +218,167 @@ type eventQueueListener interface {
 
 // newEventQueue returns a queue to the provided sink. If the updater is non-
 // nil, it will be called to update pending metrics on ingress and egress.
-func newEventQueue(sink Sink, listeners ...eventQueueListener) *eventQueue {
+func newEventQueue(sink Sink, queuePurgeTimeout time.Duration, listeners ...eventQueueListener) *eventQueue {
 	eq := eventQueue{
 		sink:      sink,
-		events:    list.New(),
 		listeners: listeners,
+
+		doneCh: make(chan struct{}),
+
+		bufferInCh:  make(chan *Event),
+		bufferOutCh: make(chan *Event),
+
+		queuePurgeTimeout: queuePurgeTimeout,
+
+		wgBufferer: new(sync.WaitGroup),
+		wgSender:   new(sync.WaitGroup),
 	}
 
-	eq.cond = sync.NewCond(&eq.mu)
-	go eq.run()
+	eq.wgSender.Add(1)
+	eq.wgBufferer.Add(1)
+
+	go eq.sender()
+	go eq.bufferer()
 	return &eq
 }
 
 // Write accepts an event into the queue, only failing if the queue has
-// beend closed.
+// been closed.
 func (eq *eventQueue) Write(event *Event) error {
-	eq.mu.Lock()
-	defer eq.mu.Unlock()
-
-	if eq.closed {
+	// NOTE(prozlach): avoid a racy situation when both channels are "ready",
+	// and make sure that closing the Sink takes priority:
+	select {
+	case <-eq.doneCh:
 		return ErrSinkClosed
+	default:
+		select {
+		case eq.bufferInCh <- event:
+		case <-eq.doneCh:
+			return ErrSinkClosed
+		}
 	}
-
-	for _, listener := range eq.listeners {
-		listener.ingress(event)
-	}
-	eq.events.PushBack(event)
-	eq.cond.Signal() // signal waiters
 
 	return nil
 }
 
-// Close shuts down the event queue, flushing
-func (eq *eventQueue) Close() error {
-	eq.mu.Lock()
-	defer eq.mu.Unlock()
+func (eq *eventQueue) bufferer() {
+	defer eq.wgBufferer.Done()
+	defer log.Debugf("eventQueue bufferer: closed")
 
-	if eq.closed {
-		return fmt.Errorf("eventqueue: already closed")
+	events := list.New()
+
+	// Main loop is executed during normal operation. Depending on whether there
+	// are any events in the buffer or not, we include in select wait on write
+	// to the sender goroutine or not respectivelly.
+main:
+	for {
+		if events.Len() < 1 {
+			// List is empty, wait for an event
+			select {
+			case event := <-eq.bufferInCh:
+				for _, listener := range eq.listeners {
+					listener.ingress(event)
+				}
+				events.PushBack(event)
+			case <-eq.doneCh:
+				break main
+			}
+		} else {
+			front := events.Front()
+			select {
+			case event := <-eq.bufferInCh:
+				for _, listener := range eq.listeners {
+					listener.ingress(event)
+				}
+				events.PushBack(event)
+			case eq.bufferOutCh <- front.Value.(*Event):
+				events.Remove(front)
+			case <-eq.doneCh:
+				break main
+			default:
+			}
+		}
 	}
 
-	// set closed flag
-	eq.closed = true
-	eq.cond.Signal() // signal flushes queue
-	eq.cond.Wait()   // wait for signal from last flush
+	timer := time.NewTimer(eq.queuePurgeTimeout)
+	log.WithField("remaining_events", events.Len()).
+		Warnf("eventqueue: received termination signal")
 
-	return eq.sink.Close()
+		// This loop is executed only during the termination phase. It's purpose is to
+		// try to send all unsend notifications in the given time window.
+loop:
+	for events.Len() > 0 {
+		front := events.Front()
+		select {
+		case eq.bufferOutCh <- front.Value.(*Event):
+			events.Remove(front)
+		case <-timer.C:
+			break loop
+		default:
+		}
+	}
+
+	// NOTE(prozlach): We are done, tell sender to wrap it up too.
+	close(eq.bufferOutCh)
+
+	// NOTE(prozlach): queue is terminating, if there are still events in the
+	// buffer, let the operator know they were lost:
+	for events.Len() > 0 {
+		front := events.Front()
+		event := front.Value.(*Event)
+		log.Warnf("eventqueue: event lost: %v", event)
+		events.Remove(front)
+	}
 }
 
-// run is the main goroutine to flush events to the target sink.
-func (eq *eventQueue) run() {
-	for {
-		block := eq.next()
+func (eq *eventQueue) sender() {
+	defer eq.wgSender.Done()
+	defer log.Debugf("eventQueue sender: closed")
 
-		if block == nil {
-			return // nil block means event queue is closed.
+	for {
+		event, isOpen := <-eq.bufferOutCh
+		if !isOpen {
+			break
 		}
 
-		if err := eq.sink.Write(block); err != nil {
-			log.WithError(err).Warnf("eventqueue: event lost: %v", block)
+		if err := eq.sink.Write(event); err != nil {
+			log.WithError(err).
+				WithField("event", event).
+				Warnf("eventqueue: event lost")
 		}
 
 		for _, listener := range eq.listeners {
-			listener.egress(block)
+			listener.egress(event)
 		}
 	}
 }
 
-// next encompasses the critical section of the run loop. When the queue is
-// empty, it will block on the condition. If new data arrives, it will wake
-// and return a block. When closed, a nil slice will be returned.
-func (eq *eventQueue) next() *Event {
-	eq.mu.Lock()
-	defer eq.mu.Unlock()
-
-	for eq.events.Len() < 1 {
-		if eq.closed {
-			eq.cond.Broadcast()
-			return nil
-		}
-
-		eq.cond.Wait()
+// Close shuts down the event queue, flushing
+func (eq *eventQueue) Close() error {
+	log.Infof("event queue: closing")
+	select {
+	case <-eq.doneCh:
+		// already closed
+		return fmt.Errorf("eventqueue: already closed")
+	default:
+		close(eq.doneCh)
 	}
-	front := eq.events.Front()
-	block := front.Value.(*Event)
-	eq.events.Remove(front)
 
-	return block
+	// NOTE(prozlach): the order of things is very important here as we need to
+	// first make sure that no new events will be accepted by this sink and
+	// then cancel the underlying sink so that we can unblock this sink so that
+	// it notices that the termination signal came.
+	eq.wgBufferer.Wait()
+	err := eq.sink.Close()
+	eq.wgSender.Wait()
+
+	// NOTE(prozlach): not stricly necessary, just a basic hygiene
+	// NOTE(prozalch): we MUST not close eq.bufferInCh channel before waiting
+	// gouroutines had a chance to err out or send event, otherwise we will
+	// cause panics
+	close(eq.bufferInCh)
+
+	return err
 }
 
 // ignoredSink discards events with ignored target media types and actions.
@@ -264,15 +433,17 @@ func (imts *ignoredSink) Write(event *Event) error {
 // Concurrent calls to a retrying sink are serialized through the sink,
 // meaning that if one is in-flight, another will not proceed.
 type retryingSink struct {
-	mu     sync.Mutex
-	sink   Sink
-	closed bool
+	sink Sink
+
+	doneCh   chan struct{}
+	eventsCh chan *Event
+	errCh    chan error
+
+	wg *sync.WaitGroup
 
 	// circuit breaker heuristics
 	failures struct {
 		threshold int
-		recent    int
-		last      time.Time
 		backoff   time.Duration // time after which we retry after failure.
 	}
 }
@@ -283,105 +454,143 @@ type retryingSink struct {
 func newRetryingSink(sink Sink, threshold int, backoff time.Duration) *retryingSink {
 	rs := &retryingSink{
 		sink: sink,
+
+		doneCh:   make(chan struct{}),
+		eventsCh: make(chan *Event),
+		errCh:    make(chan error),
+
+		wg: new(sync.WaitGroup),
 	}
 	rs.failures.threshold = threshold
 	rs.failures.backoff = backoff
 
+	rs.wg.Add(1)
+	go rs.run()
+
 	return rs
+}
+
+func (rs *retryingSink) run() {
+	defer rs.wg.Done()
+
+main:
+	for {
+		select {
+		case <-rs.doneCh:
+			return
+		case event := <-rs.eventsCh:
+			for failuresCount := 0; failuresCount < rs.failures.threshold; failuresCount++ {
+				select {
+				case <-rs.doneCh:
+					rs.errCh <- ErrSinkClosed
+					return
+				default:
+				}
+
+				err := rs.sink.Write(event)
+
+				// Event sent sucessfully, fetch next event from channel:
+				if err == nil {
+					rs.errCh <- nil
+					continue main
+				}
+
+				// Underlying sink is closed, let's wrap up:
+				if errors.Is(err, ErrSinkClosed) {
+					rs.errCh <- ErrSinkClosed
+					return
+				}
+
+				log.WithError(err).
+					WithField("railure_count", failuresCount).
+					Error("retryingsink: error writing event, retrying")
+			}
+
+			log.WithField("sink", rs.sink).
+				Warnf("encountered too many errors when writing to sink, enabling backoff")
+
+			for {
+				// NOTE(prozlach): We can't use Ticker here as the write()
+				// operation may take longer than the backoff period and this
+				// would result in triggering new write imediatelly after the
+				// previous one.
+				timer := time.NewTimer(rs.failures.backoff)
+
+				select {
+				case <-rs.doneCh:
+					rs.errCh <- ErrSinkClosed
+					timer.Stop()
+					return
+				case lastFailureTime := <-timer.C:
+					err := rs.sink.Write(event)
+
+					// Event sent successfully, fetch next event from channel:
+					if err == nil {
+						rs.errCh <- nil
+						continue main
+					}
+
+					// Underlying sink is closed, let's wrap up:
+					if errors.Is(err, ErrSinkClosed) {
+						rs.errCh <- ErrSinkClosed
+						return
+					}
+
+					log.WithError(err).
+						WithField("next_retry_time", lastFailureTime.Add(rs.failures.backoff).String()).
+						Error("retryingsink: error writing event, backing off")
+				}
+			}
+		}
+	}
 }
 
 // Write attempts to flush the event to the downstream sink until it succeeds
 // or the sink is closed.
 func (rs *retryingSink) Write(event *Event) error {
-	rs.mu.Lock()
-	defer rs.mu.Unlock()
-
-retry:
-
-	if rs.closed {
+	// NOTE(prozlach): avoid a racy situation when both channels are "ready",
+	// and make sure that closing the Sink takes priority:
+	select {
+	case <-rs.doneCh:
 		return ErrSinkClosed
-	}
-
-	if !rs.proceed() {
-		log.Warnf("%v encountered too many errors, backing off", rs.sink)
-		rs.wait(rs.failures.backoff)
-		goto retry
-	}
-
-	if err := rs.write(event); err != nil {
-		if errors.Is(err, ErrSinkClosed) {
-			// terminal!
-			return err
+	default:
+		select {
+		case rs.eventsCh <- event:
+			return <-rs.errCh
+		case <-rs.doneCh:
+			return ErrSinkClosed
 		}
-
-		log.Errorf("retryingsink: error writing events: %v, retrying", err)
-		goto retry
 	}
-
-	return nil
 }
 
 // Close closes the sink and the underlying sink.
 func (rs *retryingSink) Close() error {
-	rs.mu.Lock()
-	defer rs.mu.Unlock()
-
-	if rs.closed {
-		return fmt.Errorf("retryingsink: already closed")
+	log.Infof("retryingSink: closing")
+	select {
+	case <-rs.doneCh:
+		return fmt.Errorf("retryingSink: already closed")
+	default:
+		close(rs.doneCh)
 	}
 
-	rs.closed = true
-	return rs.sink.Close()
-}
+	rs.wg.Wait()
+	err := rs.sink.Close()
 
-// write provides a helper that dispatches failure and success properly. Used
-// by write as the single-flight write call.
-func (rs *retryingSink) write(event *Event) error {
-	if err := rs.sink.Write(event); err != nil {
-		rs.failure()
-		return err
-	}
+	// NOTE(prozlach): not stricly necessary, just a basic hygiene
+	close(rs.eventsCh)
+	close(rs.errCh)
 
-	rs.reset()
-	return nil
-}
+	log.Debugf("retryingSink: closed")
 
-// wait backoff time against the sink, unlocking so others can proceed. Should
-// only be called by methods that currently have the mutex.
-func (rs *retryingSink) wait(backoff time.Duration) {
-	rs.mu.Unlock()
-	defer rs.mu.Lock()
-
-	// backoff here
-	time.Sleep(backoff)
-}
-
-// reset marks a successful call.
-func (rs *retryingSink) reset() {
-	rs.failures.recent = 0
-	rs.failures.last = time.Time{}
-}
-
-// failure records a failure.
-func (rs *retryingSink) failure() {
-	rs.failures.recent++
-	rs.failures.last = time.Now().UTC()
-}
-
-// proceed returns true if the call should proceed based on circuit breaker
-// heuristics.
-func (rs *retryingSink) proceed() bool {
-	return rs.failures.recent < rs.failures.threshold ||
-		time.Now().UTC().After(rs.failures.last.Add(rs.failures.backoff))
+	return err
 }
 
 // backoffSink attempts to write an event to the given sink.
 // It will retry up to a number of maxretries as defined in the configuration
 // and will drop the event after it reaches the number of retries.
 type backoffSink struct {
-	mu      sync.Mutex
+	doneCh  chan struct{}
 	sink    Sink
-	closed  bool
 	backoff backoff.BackOff
 }
 
@@ -390,6 +599,7 @@ func newBackoffSink(sink Sink, initialInterval time.Duration, maxRetries int) *b
 	b.InitialInterval = initialInterval
 
 	return &backoffSink{
+		doneCh:  make(chan struct{}),
 		sink:    sink,
 		backoff: backoff.WithMaxRetries(b, uint64(maxRetries)),
 	}
@@ -401,12 +611,14 @@ func newBackoffSink(sink Sink, initialInterval time.Duration, maxRetries int) *b
 // It returns early if the sink is closed.
 func (bs *backoffSink) Write(event *Event) error {
 	op := func() error {
-		if bs.closed {
+		select {
+		case <-bs.doneCh:
 			return backoff.Permanent(ErrSinkClosed)
+		default:
 		}
 
 		if err := bs.sink.Write(event); err != nil {
-			log.WithError(err).Errorf("retryingsink: error writing event, retrying count")
+			log.WithError(err).Error("backoffSink: error writing event")
 			return err
 		}
 
@@ -418,12 +630,15 @@ func (bs *backoffSink) Write(event *Event) error {
 
 // Close closes the sink and the underlying sink.
 func (bs *backoffSink) Close() error {
-	bs.mu.Lock()
-	defer bs.mu.Unlock()
-
-	if bs.closed {
-		return fmt.Errorf("retryingsink: already closed")
+	log.Infof("backoffSink: closing")
+	select {
+	case <-bs.doneCh:
+		// already closed
+		return fmt.Errorf("backoffSink: already closed")
+	default:
+		// NOTE(prozlach): not stricly necessary, just a basic hygiene
+		close(bs.doneCh)
 	}
-	bs.closed = true
+
 	return bs.sink.Close()
 }

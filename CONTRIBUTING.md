@@ -123,15 +123,15 @@ Commit messages must be:
 
 #### Examples
 
-```text
+```plaintext
 build(deps): upgrade cloud.google.com/go/storage to v1.16.0
 ```
 
-```text
+```plaintext
 fix(handlers): handle manifest not found errors gracefully (#12345)
 ```
 
-```text
+```plaintext
 perf(storage/driver/gcs): improve blob upload performance
 ```
 

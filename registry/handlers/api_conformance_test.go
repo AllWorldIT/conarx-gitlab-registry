@@ -44,6 +44,7 @@ func TestAPIConformance(t *testing.T) {
 		baseURLPrefix,
 
 		manifest_Put_Schema1_ByTag,
+		manifest_Put_Schema1_ByDigest,
 		manifest_Put_Schema2_ByDigest,
 		manifest_Put_Schema2_ByDigest_ConfigNotAssociatedWithRepository,
 		manifest_Put_Schema2_ByDigest_LayersNotAssociatedWithRepository,
@@ -161,10 +162,11 @@ func TestAPIConformance(t *testing.T) {
 				// root directories.
 				rootDir := t.TempDir()
 
-				o.opts = append(o.opts, withFSDriver(rootDir))
+				o.opts = append(o.opts, withFSDriver(rootDir), withAccessLog)
 
 				if o.webhookNotifications {
 					notifCfg := configuration.Notifications{
+						FanoutTimeout: 3 * time.Second,
 						Endpoints: []configuration.Endpoint{
 							{
 								Name:              t.Name(),

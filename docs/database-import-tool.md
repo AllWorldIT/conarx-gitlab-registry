@@ -9,7 +9,7 @@ the images and tags previously pushed to the registry.
 This command can be accessed via the registry binary and takes the following
 form.
 
-```bash
+```shell
 ./registry database import [flags] path/to/config.yml
 ```
 
@@ -43,6 +43,7 @@ performance of the registry and the import may not capture any images which
 are added while the dry run is in progress.
 
 #### Pre Import
+
 The `--pre-import` option will only import immutable registry data. When running
 with this flag, it is not necessary to switch the registry to read-only mode.
 This, in conjunction with a normal import command ran afterward, should enable
@@ -50,8 +51,7 @@ administrators to limit the amount of time a repository must be read-only, as
 much of the import work can be handled by the pre-import phase. Alias: `--step-one`
 
 While it is not necessary to switch the registry to read-only mode,
-administrators should take care not to use the [blob delete API
-endpoint](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#delete-blob)
+administrators should take care not to use the [blob delete API endpoint](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#delete-blob)
 during the pre-import phase. This endpoint is not used by any of the Docker
 client commands. If a blob is deleted after one of its associated manifests was
 pre-imported, the import step would import the manifest with the deleted blob
@@ -68,7 +68,8 @@ delay or garbage collection is not enabled until after the import step finishes.
 
 The `--row-count` option allows logging the row count of relevant database tables on (pre)import completion.
 
-####  Dynamic Media Types
+#### Dynamic Media Types
+
 The `--dynamic-media-types` option allows unknown media types to be recorded to
 the database during import. This option prevents rare media types from stopping
 the import. Defaults to `true`.
@@ -82,7 +83,7 @@ PostgreSQL instance before running the import command.
 
 #### Example
 
-```text
+```plaintext
 psql -h localhost -U postgres -w -c "CREATE DATABASE registry_metadata;"
 ```
 
@@ -106,7 +107,7 @@ prevent any new pushes. Without this, it's possible that the import utility
 would not import data related to pushes which happen after the start of the
 import.
 
-```
+```yaml
 maintenance:
   readonly:
     enabled: false
@@ -122,7 +123,7 @@ use to store the data picked up by the import and will serve as the source of
 metadata for the registry after the import is complete. Please substitute these
 example values with ones the ones that are applicable to your environment.
 
-```
+```yaml
 database:
   enabled:  true
   host:     "localhost"
@@ -133,7 +134,8 @@ database:
   sslmode:  "disable"
 ```
 
-Note: If you wish to continue reading from the registry during the import, you
+NOTE:
+If you wish to continue reading from the registry during the import, you
 will need make a copy of this configuration and pass it to the import command
 with `enabled` set to `true`, while the running registry will need to have
 `enabled` set to `false` to prevent it from attempting to read from the database
@@ -149,7 +151,7 @@ Navigate to the environment where your registry binary is located. You will need
 to locate the registry binary the run the import command. For this example, we
 will assume the registry binary is the in current working directory:
 
-```bash
+```shell
 ./registry database import [flags] config.yml
 ```
 

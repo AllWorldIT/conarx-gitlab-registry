@@ -19,7 +19,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 )
@@ -51,7 +51,7 @@ func signURLWithPrefix(url, keyName string, key []byte, expiration time.Time) (s
 
 // readKeyFile reads the base64url-encoded key file and decodes it.
 func readKeyFile(path string) ([]byte, error) {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read key file: %+v", err)
 	}

@@ -420,6 +420,21 @@ func (jw *Worker) ExecuteJob(ctx context.Context, bbmStore datastore.BackgroundM
 	}
 }
 
+// AllMigrations returns all background migrations.
+func (jw *Worker) AllMigrations(ctx context.Context) (models.BackgroundMigrations, error) {
+	return datastore.NewBackgroundMigrationStore(jw.db).FindAll(ctx)
+}
+
+// PauseEligibleMigrations pauses all running or active background migrations.
+func (jw *Worker) PauseEligibleMigrations(ctx context.Context) error {
+	return datastore.NewBackgroundMigrationStore(jw.db).Pause(ctx)
+}
+
+// ResumeEligibleMigrations resumes all paused background migrations.
+func (jw *Worker) ResumeEligibleMigrations(ctx context.Context) error {
+	return datastore.NewBackgroundMigrationStore(jw.db).Resume(ctx)
+}
+
 // findRetryableJobs looks for jobs that failed prior in the scope of a specific Background Migration.
 // if no failed jobs are found in the Background Migration it sets the status of the Background Migration to finished.
 func findRetryableJobs(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, bbm *models.BackgroundMigration) (*models.BackgroundMigrationJob, error) {
@@ -462,6 +477,16 @@ func findNewJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore
 			return nil, err
 		}
 	} else {
+		// Update status to running if migration was left in active state.
+		// This can happen after a pause command (sets migrations to paused)
+		// followed by a resume command (sets paused migrations to active).
+		if bbm.Status == models.BackgroundMigrationActive {
+			bbm.Status = models.BackgroundMigrationRunning
+			err = bbmStore.UpdateStatus(ctx, bbm)
+			if err != nil {
+				return nil, err
+			}
+		}
 		// otherwise find the starting point for the next job that should be created for the Background Migration.
 		start = lastCreatedJob.EndID + 1
 		// the start point of the job to be created must not be greater than the Background Migration end bound.

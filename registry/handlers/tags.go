@@ -45,10 +45,11 @@ func dbGetTags(
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": repoPath, "limit": filters.MaxEntries, "marker": filters.LastEntry})
 	l.Debug("finding tags in database")
 
-	rStore := datastore.NewRepositoryStore(
-		db,
-		datastore.WithRepositoryCache(rcache),
-	)
+	var opts []datastore.RepositoryStoreOption
+	if rcache != nil {
+		opts = append(opts, datastore.WithRepositoryCache(rcache))
+	}
+	rStore := datastore.NewRepositoryStore(db, opts...)
 	r, err := rStore.FindByPath(ctx, repoPath)
 	if err != nil {
 		return nil, false, err

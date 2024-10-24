@@ -15,6 +15,7 @@ import (
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/internal/feature"
+	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/storage"
@@ -30,6 +31,7 @@ func init() {
 	RootCmd.AddCommand(ServeCmd)
 	RootCmd.AddCommand(GCCmd)
 	RootCmd.AddCommand(DBCmd)
+	RootCmd.AddCommand(BBMCmd)
 	RootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "show the version and exit")
 
 	GCCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do everything except remove the blobs")
@@ -63,6 +65,12 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&dynamicMediaTypes, "dynamic-media-types", "m", true, "record unknown media types during import")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
+
+	BBMCmd.AddCommand(BBMStatusCmd)
+	BBMCmd.AddCommand(BBMPauseCmd)
+	BBMCmd.AddCommand(BBMResumeCmd)
+	BBMCmd.AddCommand(BBMRunCmd)
+	BBMRunCmd.Flags().VarP(nullableInt{&maxBBMJobRetry}, "max-job-retry", "r", "Set the maximum number of job retry attempts (default 2, must be between 1 and 10)")
 }
 
 // Command flag vars
@@ -84,6 +92,7 @@ var (
 	tagConcurrency     *int
 	logToSTDOUT        bool
 	dynamicMediaTypes  bool
+	maxBBMJobRetry     *int
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -246,24 +255,29 @@ var MigrateUpCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		if skipPostDeployment {
 			migrations.SkipPostDeployment(m)
 		}
 
 		plan, err := m.UpNPlan(*maxNumMigrations)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to prepare Up plan: %v", err)
+			os.Exit(1)
+		}
+
 		if len(plan) > 0 {
 			fmt.Println(strings.Join(plan, "\n"))
 		}
 
 		if !dryRun {
 			start := time.Now()
-			n, err := m.UpN(*maxNumMigrations)
+			mr, err := m.UpN(*maxNumMigrations)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "failed to run database migrations: %v", err)
 				os.Exit(1)
 			}
-			fmt.Printf("OK: applied %d migrations in %.3fs\n", n, time.Since(start).Seconds())
+			fmt.Printf("OK: applied %d migrations and %d background migrations in %.3fs\n", mr.AppliedCount, mr.AppliedBBMCount, time.Since(start).Seconds())
 		}
 	},
 }
@@ -294,8 +308,13 @@ var MigrateDownCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		plan, err := m.DownNPlan(*maxNumMigrations)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to prepare Down plan: %v", err)
+			os.Exit(1)
+		}
+
 		if len(plan) > 0 {
 			fmt.Println(strings.Join(plan, "\n"))
 		}
@@ -344,7 +363,7 @@ var MigrateVersionCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		v, err := m.Version()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to detect database version: %v", err)
@@ -377,7 +396,7 @@ var MigrateStatusCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		statuses, err := m.Status()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to detect database status: %v", err)
@@ -504,7 +523,7 @@ var ImportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		m := migrations.NewMigrator(db.DB)
+		m := migrations.NewMigrator(db)
 		pending, err := m.HasPending()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to check database migrations status: %v", err)
@@ -560,6 +579,146 @@ var ImportCmd = &cobra.Command{
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to import metadata: %v", err)
+			os.Exit(1)
+		}
+	},
+}
+
+// BBMCmd is the cobra command that corresponds to the background-migrate subcommand
+var BBMCmd = &cobra.Command{
+	Use:   "background-migrate <config> {status|pause|run}",
+	Short: "Manage batched background migrations",
+	Long:  "Manage batched background migrations",
+	Run: func(cmd *cobra.Command, args []string) {
+		cmd.Usage()
+	},
+}
+
+// BBMStatusCmd is the `status` sub-command of `background-migrate` that shows the batched background migrations status.
+var BBMStatusCmd = &cobra.Command{
+	Use:   "status <config>",
+	Short: "Show the current status of all batched background migrations",
+	Long:  "Show the current status of all batched background migrations.",
+	Run: func(cmd *cobra.Command, args []string) {
+		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		db, err := migrationDBFromConfig(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
+			os.Exit(1)
+		}
+
+		bbmw := bbm.NewWorker(nil, bbm.WithDB(db))
+		bbMigrations, err := bbmw.AllMigrations(dcontext.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to fetch background migrations: %v", err)
+			os.Exit(1)
+		}
+
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Batched Background Migration", "Status"})
+		table.SetColWidth(80)
+
+		// Display table rows
+		for _, bbm := range bbMigrations {
+			table.Append([]string{bbm.Name, bbm.Status.String()})
+		}
+
+		table.Render()
+	},
+}
+
+// BBMPauseCmd is the `pause` sub-command of `background-migrate` that pauses a batched background migrations.
+var BBMPauseCmd = &cobra.Command{
+	Use:   "pause <config>",
+	Short: "Pause all running or active batched background migrations",
+	Long:  "Pause all running or active batched background migrations",
+	Run: func(cmd *cobra.Command, args []string) {
+		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		db, err := migrationDBFromConfig(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
+			os.Exit(1)
+		}
+
+		bbmw := bbm.NewWorker(nil, bbm.WithDB(db))
+		err = bbmw.PauseEligibleMigrations(dcontext.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to pause background migrations: %v", err)
+			os.Exit(1)
+		}
+	},
+}
+
+// BBMResumeCmd is the `resume` sub-command of `background-migrate` that resumes all previously paused batched background migrations.
+var BBMResumeCmd = &cobra.Command{
+	Use:   "resume",
+	Short: "Resume all paused batched background migrations",
+	Long:  "Resume all paused batched background migrations",
+	Run: func(cmd *cobra.Command, args []string) {
+		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		db, err := migrationDBFromConfig(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
+			os.Exit(1)
+		}
+
+		bbmw := bbm.NewWorker(nil, bbm.WithDB(db))
+		err = bbmw.ResumeEligibleMigrations(dcontext.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to resume background migrations: %v", err)
+			os.Exit(1)
+		}
+	},
+}
+
+// BBMRunCmd is the `run` sub-command of `background-migrate` that runs unfinished background migration.
+var BBMRunCmd = &cobra.Command{
+	Use:   "run <config> [--max-job-retry <n>]",
+	Short: "Run all unfinished batched background migrations",
+	Long:  "Run all unfinished batched background migrations",
+	Run: func(cmd *cobra.Command, args []string) {
+		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		db, err := migrationDBFromConfig(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
+			os.Exit(1)
+		}
+
+		// Set default max job retry if not set, and validate its range
+		if maxBBMJobRetry == nil {
+			*maxBBMJobRetry = 2
+		} else if *maxBBMJobRetry < 1 || *maxBBMJobRetry > 10 {
+			fmt.Fprintf(os.Stderr, "limit must be greater than 0 and less than 10")
+			os.Exit(1)
+		}
+
+		// Create a new sync worker with the database and max job attempt options, and run it
+		if err := bbm.NewSyncWorker(db, bbm.WithSyncMaxJobAttempt(*maxBBMJobRetry)).Run(dcontext.Background()); err != nil {
+			fmt.Fprintf(os.Stderr, "running background migrations failed: %v", err)
 			os.Exit(1)
 		}
 	},

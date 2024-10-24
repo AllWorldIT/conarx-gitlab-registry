@@ -921,7 +921,7 @@ func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *mode
 			return err
 		}
 		q += " AND (m.artifact_media_type_id = ANY ($4) OR m.configuration_media_type_id = ANY ($4))"
-		rows, err = s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sbjDigests, ats)
+		rows, err = s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sbjDigests, ats) //nolint: staticcheck // err is checked below
 	} else {
 		rows, err = s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sbjDigests)
 	}

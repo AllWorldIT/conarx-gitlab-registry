@@ -3,7 +3,9 @@
 package datastore_test
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
@@ -17,6 +19,10 @@ func reloadBackgroundMigrationFixtures(tb testing.TB) {
 
 func reloadBackgroundMigrationJobFixtures(tb testing.TB) {
 	testutil.ReloadFixtures(tb, suite.db, suite.basePath, testutil.BackgroundMigrationJobsTable)
+}
+
+func unloadBackgroundMigrationFixtures(tb testing.TB) {
+	require.NoError(tb, testutil.TruncateTables(suite.db, testutil.BackgroundMigrationTable))
 }
 
 func TestBackgroundMigrationStore_FindByID(t *testing.T) {
@@ -89,14 +95,14 @@ func TestBackgroundMigrationStore_FindNext(t *testing.T) {
 
 	// see testdata/fixtures/batched_background_migrations.sql
 	expected := &models.BackgroundMigration{
-		ID:           2,
-		Name:         "CopyBlobIDToNewIDColumn",
-		Status:       models.BackgroundMigrationActive,
-		StartID:      5,
-		EndID:        10,
+		ID:           4,
+		Name:         "CopyRepositoryIDToNewIDColumn2",
+		Status:       models.BackgroundMigrationRunning,
+		StartID:      1,
+		EndID:        16,
 		BatchSize:    1,
-		JobName:      "CopyBlobIDToNewIDColumn",
-		TargetTable:  "public.blobs",
+		JobName:      "CopyRepositoryIDToNewIDColumn2",
+		TargetTable:  "public.repositories",
 		TargetColumn: "id",
 	}
 	require.Equal(t, expected, m)
@@ -508,4 +514,265 @@ func TestBackgroundMigrationStore_ValidateMigrationColumn_NotFound(t *testing.T)
 	ok, err := s.ExistsColumn(suite.ctx, "public", "repositories", "does_not_exist")
 	require.NoError(t, err)
 	require.False(t, ok)
+}
+
+func TestBackgroundMigrationStore_FindAll(t *testing.T) {
+	reloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	bb, err := s.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	// see testdata/fixtures/batched_background_migrations.sql
+	expected := models.BackgroundMigrations{
+		{
+			ID:           1,
+			Name:         "CopyMediaTypesIDToNewIDColumn",
+			Status:       models.BackgroundMigrationFinished,
+			StartID:      1,
+			EndID:        100,
+			BatchSize:    20,
+			JobName:      "CopyMediaTypesIDToNewIDColumn",
+			TargetTable:  "public.media_types",
+			TargetColumn: "id",
+		},
+		{
+			ID:           2,
+			Name:         "CopyBlobIDToNewIDColumn",
+			Status:       models.BackgroundMigrationActive,
+			StartID:      5,
+			EndID:        10,
+			BatchSize:    1,
+			JobName:      "CopyBlobIDToNewIDColumn",
+			TargetTable:  "public.blobs",
+			TargetColumn: "id",
+		},
+		{
+			ID:           3,
+			Name:         "CopyRepositoryIDToNewIDColumn",
+			Status:       models.BackgroundMigrationActive,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+		{
+			ID:           4,
+			Name:         "CopyRepositoryIDToNewIDColumn2",
+			Status:       models.BackgroundMigrationRunning,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn2",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+		{
+			ID:           5,
+			Name:         "CopyRepositoryIDToNewIDColumn3",
+			Status:       models.BackgroundMigrationPaused,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn3",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+	}
+
+	require.Equal(t, expected, bb)
+}
+
+func TestBackgroundMigrationStore_FindAll_NotFound(t *testing.T) {
+	unloadBackgroundMigrationFixtures(t)
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	bb, err := s.FindAll(suite.ctx)
+	require.Empty(t, bb)
+	require.NoError(t, err)
+}
+
+func TestBackgroundMigrationStore_Pause(t *testing.T) {
+	reloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	err := s.Pause(suite.ctx)
+	require.NoError(t, err)
+
+	// see testdata/fixtures/batched_background_migrations.sql
+	expected := models.BackgroundMigrations{
+		{
+			ID:           1,
+			Name:         "CopyMediaTypesIDToNewIDColumn",
+			Status:       models.BackgroundMigrationFinished,
+			StartID:      1,
+			EndID:        100,
+			BatchSize:    20,
+			JobName:      "CopyMediaTypesIDToNewIDColumn",
+			TargetTable:  "public.media_types",
+			TargetColumn: "id",
+		},
+		{
+			ID:           2,
+			Name:         "CopyBlobIDToNewIDColumn",
+			Status:       models.BackgroundMigrationPaused,
+			StartID:      5,
+			EndID:        10,
+			BatchSize:    1,
+			JobName:      "CopyBlobIDToNewIDColumn",
+			TargetTable:  "public.blobs",
+			TargetColumn: "id",
+		},
+		{
+			ID:           3,
+			Name:         "CopyRepositoryIDToNewIDColumn",
+			Status:       models.BackgroundMigrationPaused,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+		{
+			ID:           4,
+			Name:         "CopyRepositoryIDToNewIDColumn2",
+			Status:       models.BackgroundMigrationPaused,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn2",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+		{
+			ID:           5,
+			Name:         "CopyRepositoryIDToNewIDColumn3",
+			Status:       models.BackgroundMigrationPaused,
+			StartID:      1,
+			EndID:        16,
+			BatchSize:    1,
+			JobName:      "CopyRepositoryIDToNewIDColumn3",
+			TargetTable:  "public.repositories",
+			TargetColumn: "id",
+		},
+	}
+
+	var actual models.BackgroundMigrations
+	actual, err = s.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	require.Equal(t, expected, actual)
+}
+
+func TestBackgroundMigrationStore_FindNextByStatus(t *testing.T) {
+	reloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	status := models.BackgroundMigrationActive
+	bbm, err := s.FindNextByStatus(suite.ctx, status)
+	require.NoError(t, err)
+
+	expected := &models.BackgroundMigration{
+		ID:           2,
+		Name:         "CopyBlobIDToNewIDColumn",
+		Status:       models.BackgroundMigrationActive,
+		StartID:      5,
+		EndID:        10,
+		BatchSize:    1,
+		JobName:      "CopyBlobIDToNewIDColumn",
+		TargetTable:  "public.blobs",
+		TargetColumn: "id",
+	}
+	require.Equal(t, expected, bbm)
+}
+
+func TestBackgroundMigrationStore_FindNextByStatus_NotFound(t *testing.T) {
+	reloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	status := models.BackgroundMigrationFailed
+	bbm, err := s.FindNextByStatus(suite.ctx, status)
+	require.NoError(t, err)
+	require.Nil(t, bbm)
+}
+
+func TestBackgroundMigrationStore_Resume(t *testing.T) {
+	reloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	bbm := &models.BackgroundMigration{
+		ID: 5,
+	}
+	err := s.Resume(suite.ctx)
+	require.NoError(t, err)
+
+	// Verify the status has been updated to running
+	bbm, err = s.FindById(suite.ctx, bbm.ID)
+	require.NoError(t, err)
+	require.Equal(t, models.BackgroundMigrationActive, bbm.Status)
+}
+
+func TestBackgroundMigrationStore_SyncLock_Timeout(t *testing.T) {
+	// use transactions for obtaining pg transaction-level advisory locks.
+
+	// obtain the lock in the first transaction
+	tx, err := suite.db.BeginTx(suite.ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	s := datastore.NewBackgroundMigrationStore(tx)
+	require.NoError(t, s.Lock(suite.ctx))
+
+	// try to obtain the lock in a second transaction (while lock is locked by the first transaction)
+	tx2, err := suite.db.BeginTx(suite.ctx, nil)
+	require.NoError(t, err)
+	defer tx2.Rollback()
+	s2 := datastore.NewBackgroundMigrationStore(tx2)
+	timeoutCtx, cncl := context.WithTimeout(suite.ctx, 100*time.Millisecond)
+	defer cncl()
+	err = s2.SyncLock(timeoutCtx)
+	require.Error(t, err, datastore.ErrBackgroundMigrationLockInUse)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestBackgroundMigrationStore_Multiple_SyncLock(t *testing.T) {
+	// First lock should succeed
+	tx1, err := suite.db.BeginTx(suite.ctx, nil)
+	require.NoError(t, err)
+	defer tx1.Rollback()
+	s1 := datastore.NewBackgroundMigrationStore(tx1)
+	timeoutCtx, cncl := context.WithTimeout(suite.ctx, 100*time.Millisecond)
+	defer cncl()
+	require.NoError(t, s1.SyncLock(timeoutCtx))
+
+	// Second lock should fail
+	tx2, err := suite.db.BeginTx(suite.ctx, nil)
+	require.NoError(t, err)
+	defer tx2.Rollback()
+	s2 := datastore.NewBackgroundMigrationStore(tx2)
+	timeoutCtx2, cncl2 := context.WithTimeout(suite.ctx, 100*time.Millisecond)
+	defer cncl2()
+	err = s2.SyncLock(timeoutCtx2)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	// Release the first lock
+	require.NoError(t, tx1.Rollback())
+
+	// Now the lock should be available again
+	tx3, err := suite.db.BeginTx(suite.ctx, nil)
+	require.NoError(t, err)
+	defer tx3.Rollback()
+	s3 := datastore.NewBackgroundMigrationStore(tx3)
+	err = s3.SyncLock(suite.ctx)
+	require.NoError(t, err)
+}
+
+func TestBackgroundMigrationStore_SyncLock(t *testing.T) {
+	tx, err := suite.db.BeginTx(suite.ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	s := datastore.NewBackgroundMigrationStore(tx)
+	require.NoError(t, s.SyncLock(suite.ctx))
 }

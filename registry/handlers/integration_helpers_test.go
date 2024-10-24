@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -274,6 +275,15 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 				}
 			}
 		}
+
+		if os.Getenv("REGISTRY_REDIS_CACHE_ENABLED") == "true" {
+			config.Redis.Cache = configuration.RedisCommon{
+				Enabled:  true,
+				Addr:     os.Getenv("REGISTRY_REDIS_CACHE_ADDR"),
+				Username: os.Getenv("REGISTRY_REDIS_CACHE_USERNAME"),
+				Password: os.Getenv("REGISTRY_REDIS_CACHE_PASSWORD"),
+			}
+		}
 	}
 
 	for _, o := range opts {
@@ -287,6 +297,14 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 	}
 
 	return *config
+}
+
+func skipRedisCacheEnabled(tb testing.TB) {
+	tb.Helper()
+
+	if os.Getenv("REGISTRY_REDIS_CACHE_ENABLED") == "true" {
+		tb.Skip("skipping test because Redis cache is enabled")
+	}
 }
 
 func skipDatabaseNotEnabled(tb testing.TB) {
@@ -348,15 +366,16 @@ func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[stri
 }
 
 type testEnv struct {
-	pk          libtrust.PrivateKey
-	ctx         context.Context
-	config      *configuration.Configuration
-	app         *registryhandlers.App
-	server      *httptest.Server
-	builder     *urls.Builder
-	db          datastore.LoadBalancer
-	ns          *rtestutil.NotificationServer
-	cacheClient cacheClient
+	pk           libtrust.PrivateKey
+	ctx          context.Context
+	config       *configuration.Configuration
+	app          *registryhandlers.App
+	server       *httptest.Server
+	builder      *urls.Builder
+	db           datastore.LoadBalancer
+	ns           *rtestutil.NotificationServer
+	cacheClient  cacheClient
+	shutdownOnce *sync.Once
 }
 
 func (e *testEnv) requireDB(t *testing.T) {
@@ -372,7 +391,7 @@ func newTestEnv(t *testing.T, opts ...configOpt) *testEnv {
 }
 
 func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *testEnv {
-	ctx := context.Background()
+	ctx := testutil.NewContextWithLogger(t)
 
 	// The API test needs access to the database only to clean it up during
 	// shutdown so that environments come up with a fresh copy of the database.
@@ -383,7 +402,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := migrations.NewMigrator(db.Primary().DB)
+		m := migrations.NewMigrator(db.Primary())
 		if _, err = m.Up(); err != nil {
 			t.Fatal(err)
 		}
@@ -441,47 +460,44 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	}
 
 	return &testEnv{
-		pk:          pk,
-		ctx:         ctx,
-		config:      config,
-		app:         app,
-		server:      server,
-		builder:     builder,
-		db:          db,
-		ns:          notifServer,
-		cacheClient: redis,
+		pk:           pk,
+		ctx:          ctx,
+		config:       config,
+		app:          app,
+		server:       server,
+		builder:      builder,
+		db:           db,
+		ns:           notifServer,
+		cacheClient:  redis,
+		shutdownOnce: new(sync.Once),
 	}
 }
 
 func (t *testEnv) Shutdown() {
-	t.server.CloseClientConnections()
-	t.server.Close()
+	t.shutdownOnce.Do(func() {
+		t.server.CloseClientConnections()
+		t.server.Close()
 
-	if t.config.Database.Enabled {
 		if err := t.app.GracefulShutdown(t.ctx); err != nil {
 			panic(err)
 		}
 
-		if err := datastoretestutil.TruncateAllTables(t.db.Primary()); err != nil {
-			panic(err)
+		if t.config.Database.Enabled {
+			if err := datastoretestutil.TruncateAllTables(t.db.Primary()); err != nil {
+				panic(err)
+			}
+
+			if err := t.db.Close(); err != nil {
+				panic(err)
+			}
 		}
 
-		if err := t.db.Close(); err != nil {
-			panic(err)
+		if t.config.Redis.Cache.Enabled {
+			if err := t.cacheClient.FlushCache(); err != nil {
+				panic(err)
+			}
 		}
-
-		// Needed for idempotency, so that shutdowns may be defer'd without worry.
-		t.config.Database.Enabled = false
-	}
-
-	if t.config.Redis.Cache.Enabled {
-		if err := t.cacheClient.FlushCache(); err != nil {
-			panic(err)
-		}
-
-		// Needed for idempotency, so that shutdowns may be defer'd without worry.
-		t.config.Redis.Cache.Enabled = false
-	}
+	})
 }
 
 type subjectManifest interface {
@@ -657,7 +673,11 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 }
 
 func createRandomSmallLayer() (io.ReadSeeker, digest.Digest, int64) {
-	size := rand.Int63n(20)
+	// NOTE(prozlach): It is crucial to not to make the size of the layer too
+	// small as this will lead to flakes, as there is only one sha for layer
+	// size 0, handfull of shas for layer with size 1, etc... 128-196 bytes
+	// gives enough entropy to make tests reliable.
+	size := 128 + rand.Int63n(64)
 	b := make([]byte, size)
 	rand.Read(b)
 
@@ -1216,7 +1236,7 @@ func finishUpload(t *testing.T, ub *urls.Builder, name reference.Named, uploadUR
 	return resp.Header.Get("Location")
 }
 
-func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) (*http.Request, digest.Digester) {
+func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) *http.Request {
 	u, err := url.Parse(uploadURLBase)
 	if err != nil {
 		t.Fatalf("unexpected error parsing pushLayer url: %v", err)
@@ -1228,18 +1248,32 @@ func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) (*ht
 
 	uploadURL := u.String()
 
-	digester := digest.Canonical.Digester()
-
-	req, err := http.NewRequest(http.MethodPatch, uploadURL, io.TeeReader(body, digester.Hash()))
+	req, err := http.NewRequest(http.MethodPatch, uploadURL, body)
 	if err != nil {
 		t.Fatalf("unexpected error creating new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
-	return req, digester
+	return req
 }
 
 func doPushChunk(t *testing.T, uploadURLBase string, body io.Reader, requestopts ...requestOpt) (*http.Response, digest.Digest, error) {
-	req, digester := doPushChunkRequest(t, uploadURLBase, body)
+	// NOTE(prozlach): There is an issue/bug in golang:
+	// https://github.com/golang/go/issues/51907
+	// It prevents us from using the same request body reader for both digest
+	// calculation and making the request as there is no guarantee that the
+	// request body will be fully read after the call to Do(). We workaround it
+	// by simply draining the requests body into the local buffer while
+	// calculating the body and then pass the buffer to http request call.
+	buf := new(bytes.Buffer)
+
+	digester := digest.Canonical.Digester()
+	multiWriter := io.MultiWriter(buf, digester.Hash())
+
+	if _, err := io.Copy(multiWriter, body); err != nil {
+		t.Fatalf("unexpected error while copying request body: %v", err)
+	}
+
+	req := doPushChunkRequest(t, uploadURLBase, buf)
 	req = newRequest(req, requestopts...)
 	resp, err := http.DefaultClient.Do(req)
 
@@ -1728,9 +1762,22 @@ func assertManifestDeleteResponse(t *testing.T, env *testEnv, repoName string, m
 func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagName string, repoPaths []string) {
 	t.Helper()
 
+	wg := new(sync.WaitGroup)
+	// NOTE(prozlach): concurency controll, value chosen arbitraly
+	semaphore := make(chan struct{}, 20)
+
 	for _, path := range repoPaths {
-		seedRandomSchema2Manifest(t, env, path, putByTag(tagName))
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			seedRandomSchema2Manifest(t, env, path, putByTag(tagName))
+		}(path)
 	}
+	wg.Wait()
 }
 
 func generateAuthToken(t *testing.T, user string, access []*token.ResourceActions, issuer issuerProps, signingKey libtrust.PrivateKey) string {

@@ -994,6 +994,8 @@ func (auth Auth) MarshalYAML() (interface{}, error) {
 
 // Notifications configures multiple http endpoints.
 type Notifications struct {
+	// FanoutTimeout is the maximum amount of time registry tries to finish fanning out notifications to notification sinks after it received SIGINT
+	FanoutTimeout time.Duration `yaml:"fanouttimeout,omitempty"`
 	// EventConfig is the configuration for the event format that is sent to each Endpoint.
 	EventConfig Events `yaml:"events,omitempty"`
 	// Endpoints is a list of http configurations for endpoints that
@@ -1016,6 +1018,7 @@ type Endpoint struct {
 	Backoff           time.Duration `yaml:"backoff"`           // backoff duration
 	IgnoredMediaTypes []string      `yaml:"ignoredmediatypes"` // target media types to ignore
 	Ignore            Ignore        `yaml:"ignore"`            // ignore event types
+	QueuePurgeTimeout time.Duration `yaml:"queuepurgetimeout"`  // the amount of time registry tries to sent unsent notifications in the buffer after it received SIGINT
 }
 
 // Events configures notification events.

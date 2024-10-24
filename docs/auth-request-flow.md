@@ -51,8 +51,8 @@ sequenceDiagram
   autonumber
   participant C as Docker Client
   participant R as GitLab Container Registry
-	participant G as GitLab Rails
-	participant S as GCS
+  participant G as GitLab Rails
+  participant S as GCS
   C->>C: docker pull registry.gitlab.com/mygroup/myproj:latest
   C->>R: GET /v2/
   Note right of C: The `Authorization` header is not set in this request
@@ -133,8 +133,8 @@ sequenceDiagram
   autonumber
   participant C as Docker Client
   participant R as GitLab Container Registry
-	participant G as GitLab Rails
-	participant S as GCS
+  participant G as GitLab Rails
+  participant S as GCS
   C->>C: docker push registry.gitlab.com/mygroup/myproj:2.0.0
   C->>R: GET /v2/
   Note right of C: The `Authorization` header is not set in this request
@@ -166,9 +166,9 @@ sequenceDiagram
   Note right of C: Requests continue as described in *. All requests to the registry include an `Authorization` header with the token received in step 5. All POST requests will fail with `401 Unauthorized`.
   C->>C: denied: requested access to the resource is denied
 ```
+
 `*` See the detailed [push request flow](push-pull-request-flow.md#push)
 
 #### With Login
 
 Same steps as for pushing to a private repository with login.
-

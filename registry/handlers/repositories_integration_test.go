@@ -3,7 +3,6 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -29,6 +28,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
+	dtestutil "github.com/docker/distribution/testutil"
 )
 
 // testEnv is a drastically simplified version of the implementation in handlers_test (integration_helpers_test.go). The
@@ -52,16 +52,15 @@ func (e testEnv) mockDB() sqlmock.Sqlmock {
 	db, mock, err := sqlmock.New()
 	require.NoError(e.t, err)
 
-	e.t.Cleanup(func() {
-		db.Close()
-		ctrl.Finish()
-	})
+	e.t.Cleanup(func() { db.Close() })
 
-	// TODO(dlb): use actual replica for testing
 	primary := &datastore.DB{DB: db}
 	replica := &datastore.DB{DB: db}
+
 	mockBalancer.EXPECT().Primary().Return(primary).AnyTimes()
-	mockBalancer.EXPECT().Replica(context.Background()).Return(replica).AnyTimes()
+	mockBalancer.EXPECT().UpToDateReplica(gomock.Any(), gomock.Any()).Return(replica).AnyTimes()
+	mockBalancer.EXPECT().TypeOf(primary).Return(datastore.HostTypePrimary).AnyTimes()
+	mockBalancer.EXPECT().TypeOf(replica).Return(datastore.HostTypeReplica).AnyTimes()
 
 	e.app.db = mockBalancer
 
@@ -97,7 +96,8 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 	}
 
-	app, err := NewApp(context.Background(), cfg)
+	ctx := dtestutil.NewContextWithLogger(t)
+	app, err := NewApp(ctx, cfg)
 	require.NoError(t, err)
 
 	handler := correlation.InjectCorrelationID(app, correlation.WithPropagation())

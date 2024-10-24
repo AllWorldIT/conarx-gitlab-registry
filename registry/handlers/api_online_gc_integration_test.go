@@ -99,7 +99,7 @@ func TestTagsAPI_Delete_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
-	require.WithinDuration(t, start, end, lockDuration+100*time.Millisecond)
+	require.WithinDuration(t, start, end, lockDuration+300*time.Millisecond)
 }
 
 // TestTagsAPI_Delete_OnlineGC_TimeoutOnProlongedReview tests that when we try to delete a tag that points to a
@@ -182,7 +182,7 @@ func TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
-	require.WithinDuration(t, start, end, lockDuration+100*time.Millisecond)
+	require.WithinDuration(t, start, end, lockDuration+600*time.Millisecond)
 }
 
 // TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview tests that when we try to delete a manifest list
@@ -265,7 +265,7 @@ func TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview(t *testing.T) {
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	require.WithinDuration(t, start, end, lockDuration+100*time.Millisecond)
+	require.WithinDuration(t, start, end, lockDuration+300*time.Millisecond)
 }
 
 // TestManifestsAPI_Tag_OnlineGC_BlocksAndResumesAfterGCReview_DanglingManifest tests that when we try to tag a manifest

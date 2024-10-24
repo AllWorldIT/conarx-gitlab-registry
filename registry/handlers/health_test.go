@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/docker/distribution/configuration"
-	"github.com/docker/distribution/context"
 	"github.com/docker/distribution/health"
+	dtestutil "github.com/docker/distribution/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,7 +40,7 @@ func TestFileHealthCheck(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := dtestutil.NewContextWithLogger(t)
 
 	app, err := NewApp(ctx, config)
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestTCPHealthCheck(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := dtestutil.NewContextWithLogger(t)
 
 	app, err := NewApp(ctx, config)
 	require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestHTTPHealthCheck(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := dtestutil.NewContextWithLogger(t)
 
 	app, err := NewApp(ctx, config)
 	require.NoError(t, err)

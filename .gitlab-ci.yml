@@ -24,14 +24,14 @@ default:
 
 variables:
   # default Go version
-  GO_VERSION: "1.21"
+  GO_VERSION: "1.22"
   BUILDTAGS: "include_gcs,continuous_profiler_stackdriver"
   CGO_ENABLED: "1"
   GOPATH: $CI_PROJECT_DIR/.GOPATH
-  GOTESTSUM_VERSION: v1.8.1
-  PG_PREV_VERSION: "13"
-  PG_CURR_VERSION: "14"
-  PG_NEXT_VERSION: "15"
+  GOTESTSUM_VERSION: v1.12.0
+  PG_PREV_VERSION: "14"
+  PG_CURR_VERSION: "16"
+  PG_NEXT_VERSION: "15" # TODO: change to 17 once the stable version is out and the `bitnami/postgresql:17` image is available
 
 stages:
   - validate
@@ -44,8 +44,8 @@ stages:
   parallel:
     matrix:
       - PG_VERSION: $PG_PREV_VERSION
-        GO_VERSION: [ "1.21", "1.22" ]
+        GO_VERSION: [ "1.22", "1.23" ]
       - PG_VERSION: $PG_CURR_VERSION
-        GO_VERSION: [ "1.21", "1.22" ]
+        GO_VERSION: [ "1.22", "1.23" ]
       - PG_VERSION: $PG_NEXT_VERSION
-        GO_VERSION: [ "1.21", "1.22" ]
+        GO_VERSION: [ "1.22", "1.23" ]

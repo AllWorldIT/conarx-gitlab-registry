@@ -22,13 +22,27 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/tracelog"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"gitlab.com/gitlab-org/labkit/errortracking"
+	"gitlab.com/gitlab-org/labkit/metrics/sqlmetrics"
 )
 
 const (
 	driverName                  = "pgx"
 	dnsTimeout                  = 2 * time.Second
 	defaultReplicaCheckInterval = 1 * time.Minute
+
+	HostTypePrimary = "primary"
+	HostTypeReplica = "replica"
+	HostTypeUnknown = "unknown"
+
+	// upToDateReplicaTimeout establishes the maximum amount of time we're willing to wait for an up-to-date database
+	// replica to be identified during load balancing. If a replica is not identified within this threshold, then it's
+	// likely that there is a performance degradation going on, in which case we want to gracefully fall back to the
+	// primary database to avoid further processing delays. The current 100ms value is a starting point/educated guess
+	// that matches the one used in GitLab Rails (https://gitlab.com/gitlab-org/gitlab/-/merge_requests/159633).
+	upToDateReplicaTimeout = 100 * time.Millisecond
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -147,6 +161,8 @@ type opts struct {
 	pool                 *PoolConfig
 	preferSimpleProtocol bool
 	loadBalancing        *LoadBalancingConfig
+	metricsEnabled       bool
+	promRegisterer       prometheus.Registerer
 }
 
 type PoolConfig struct {
@@ -158,6 +174,7 @@ type PoolConfig struct {
 
 // LoadBalancingConfig represents the database load balancing configuration.
 type LoadBalancingConfig struct {
+	active               bool
 	hosts                []string
 	resolver             DNSResolver
 	connector            Connector
@@ -245,6 +262,7 @@ func applyOptions(input []Option) opts {
 			connector:            NewConnector(),
 			replicaCheckInterval: defaultReplicaCheckInterval,
 		},
+		promRegisterer: prometheus.DefaultRegisterer,
 	}
 
 	for _, v := range input {
@@ -369,10 +387,13 @@ type LoadBalancer interface {
 	Replicas() []*DB
 	Close() error
 	RecordLSN(context.Context, *models.Repository) error
+	StartReplicaChecking(context.Context) error
+	TypeOf(*DB) string
 }
 
 // DBLoadBalancer manages connections to a primary database and multiple replicas.
 type DBLoadBalancer struct {
+	active   bool
 	primary  *DB
 	replicas []*DB
 
@@ -391,12 +412,17 @@ type DBLoadBalancer struct {
 	// primaryDSN is stored separately to ensure we can derive replicas DSNs, even if the initial connection to the
 	// primary database fails. This is necessary as DB.DSN is only set after successfully establishing a connection.
 	primaryDSN *DSN
+
+	metricsEnabled        bool
+	promRegisterer        prometheus.Registerer
+	replicaPromCollectors map[string]prometheus.Collector
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
 func WithFixedHosts(hosts []string) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.hosts = hosts
+		opts.loadBalancing.active = true
 	}
 }
 
@@ -404,6 +430,7 @@ func WithFixedHosts(hosts []string) Option {
 func WithServiceDiscovery(resolver DNSResolver) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.resolver = resolver
+		opts.loadBalancing.active = true
 	}
 }
 
@@ -428,6 +455,20 @@ func WithReplicaCheckInterval(interval time.Duration) Option {
 func WithLSNCache(cache RepositoryCache) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.lsnStore = cache
+	}
+}
+
+// WithMetricsCollection enables metrics collection.
+func WithMetricsCollection() Option {
+	return func(opts *opts) {
+		opts.metricsEnabled = true
+	}
+}
+
+// WithPrometheusRegisterer allows specifying a custom Prometheus Registerer for metrics registration.
+func WithPrometheusRegisterer(r prometheus.Registerer) Option {
+	return func(opts *opts) {
+		opts.promRegisterer = r
 	}
 }
 
@@ -519,85 +560,135 @@ func (lb *DBLoadBalancer) logger(ctx context.Context) log.Logger {
 	})
 }
 
+func (lb *DBLoadBalancer) metricsCollector(db *DB, hostType string) *sqlmetrics.DBStatsCollector {
+	return sqlmetrics.NewDBStatsCollector(
+		lb.primaryDSN.DBName,
+		db,
+		sqlmetrics.WithExtraLabels(map[string]string{
+			"host_type": hostType,
+			"host_addr": db.Address(),
+		}),
+	)
+}
+
 // ResolveReplicas initializes or updates the list of available replicas atomically by resolving the provided hosts
 // either through service discovery or using a fixed hosts list. As result, the load balancer replica pool will be
 // up-to-date. Replicas for which we failed to establish a connection to are not included in the pool.
-func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) *multierror.Error {
-	var replicas []*DB
+func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
 	var result *multierror.Error
-
 	l := lb.logger(ctx)
-	tmpDSN := *lb.primaryDSN
-	var replicaDSNs []DSN
 
+	// Resolve replica DSNs
+	var resolvedDSNs []DSN
 	if lb.resolver != nil {
 		l.Info("resolving replicas with service discovery")
 		addrs, err := resolveHosts(ctx, lb.resolver)
 		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("failed to resolve replica hosts: %w", err))
-		} else {
-			for _, addr := range addrs {
-
-				tmpDSN.Host = addr.IP.String()
-				tmpDSN.Port = addr.Port
-				replicaDSNs = append(replicaDSNs, tmpDSN)
-			}
+			return fmt.Errorf("failed to resolve replica hosts: %w", err)
+		}
+		for _, addr := range addrs {
+			dsn := *lb.primaryDSN
+			dsn.Host = addr.IP.String()
+			dsn.Port = addr.Port
+			resolvedDSNs = append(resolvedDSNs, dsn)
 		}
 	} else if len(lb.fixedHosts) > 0 {
 		l.Info("resolving replicas with fixed hosts list")
 		for _, host := range lb.fixedHosts {
-			tmpDSN.Host = host
-			replicaDSNs = append(replicaDSNs, tmpDSN)
+			dsn := *lb.primaryDSN
+			dsn.Host = host
+			resolvedDSNs = append(resolvedDSNs, dsn)
 		}
 	}
 
-	for i, dsn := range replicaDSNs {
-		l := l.WithFields(logrus.Fields{
-			"index":   i,
-			"total":   len(replicaDSNs),
-			"address": dsn.Address(),
-		})
-		l.Info("opening replica connection")
-		replica, err := lb.connector.Open(ctx, &dsn, lb.replicaOpenOpts...)
-		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Address(), err))
-		} else {
-			replicas = append(replicas, replica)
-		}
-	}
-
-	// TODO(dlb): use disconnecttimeout to close handlers from retired replicas
-	lb.replicaMutex.Lock()
-	defer lb.replicaMutex.Unlock()
-
+	// Open connections for _added_ replicas
+	var outputReplicas []*DB
 	var added, removed []string
-	for _, r := range lb.replicas {
-		if !containsReplica(replicas, r.Address()) {
-			removed = append(removed, r.Address())
-			metrics.ReplicaRemoved()
-		}
-	}
-	for _, r := range replicas {
-		if !containsReplica(lb.replicas, r.Address()) {
+	for i := range resolvedDSNs {
+		var err error
+		dsn := &resolvedDSNs[i]
+		l = l.WithFields(logrus.Fields{"address": dsn.Address()})
+
+		r := dbByAddress(lb.replicas, dsn.Address())
+		if r != nil {
+			// check if connection to existing replica is still usable
+			if err := r.PingContext(ctx); err != nil {
+				l.WithError(err).Warn("replica is known but connection is stale, attempting to reconnect")
+				r, err = lb.connector.Open(ctx, dsn, lb.replicaOpenOpts...)
+				if err != nil {
+					result = multierror.Append(result, fmt.Errorf("reopening replica %q database connection: %w", dsn.Address(), err))
+					continue
+				}
+			} else {
+				l.Info("replica is known and healthy, reusing connection")
+			}
+		} else {
+			l.Info("replica is new, opening connection")
+			if r, err = lb.connector.Open(ctx, dsn, lb.replicaOpenOpts...); err != nil {
+				result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Address(), err))
+				continue
+			}
 			added = append(added, r.Address())
 			metrics.ReplicaAdded()
+
+			// Register metrics collector for the added replica
+			if lb.metricsEnabled {
+				collector := lb.metricsCollector(r, HostTypeReplica)
+				// Unlike the primary host metrics collector, replica collectors wil be registered in the background
+				// whenever the pool changes. We don't want to cause a panic here, so we'll rely on prometheus.Register
+				// instead of prometheus.MustRegister and gracefully handle an error by logging and reporting it.
+				if err := lb.promRegisterer.Register(collector); err != nil {
+					l.WithError(err).WithFields(log.Fields{"host_addr": r.Address()}).
+						Error("failed to register collector for database replica metrics")
+					errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+				}
+				lb.replicaPromCollectors[r.Address()] = collector
+			}
+		}
+		outputReplicas = append(outputReplicas, r)
+	}
+
+	// Identify removed replicas
+	for _, r := range lb.replicas {
+		if dbByAddress(outputReplicas, r.Address()) == nil {
+			removed = append(removed, r.Address())
+			metrics.ReplicaRemoved()
+
+			// Unregister the metrics collector for the removed replica
+			if lb.metricsEnabled {
+				if collector, exists := lb.replicaPromCollectors[r.Address()]; exists {
+					lb.promRegisterer.Unregister(collector)
+					delete(lb.replicaPromCollectors, r.Address())
+				}
+			}
+
+			// Close handlers for retired replicas
+			l.WithFields(log.Fields{"address": r.Address()}).Info("closing connection handler for retired replica")
+			if err := r.Close(); err != nil {
+				err = fmt.Errorf("failed to close retired replica %q connection: %w", r.Address(), err)
+				result = multierror.Append(result, err)
+				errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			}
 		}
 	}
 
 	l.WithFields(logrus.Fields{"added": added, "removed": removed}).Info("updating replicas list")
-	metrics.ReplicaPoolSize(len(replicas))
-	lb.replicas = replicas
+	metrics.ReplicaPoolSize(len(outputReplicas))
+	lb.replicas = outputReplicas
 
-	return result
+	return result.ErrorOrNil()
 }
 
-func containsReplica(replicas []*DB, addr string) bool {
-	for _, r := range replicas {
+func dbByAddress(dbs []*DB, addr string) *DB {
+	for _, r := range dbs {
 		if r.Address() == addr {
-			return true
+			return r
 		}
 	}
-	return false
+	return nil
 }
 
 // StartReplicaChecking synchronously refreshes the list of replicas in the configured interval.
@@ -632,13 +723,17 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	var result *multierror.Error
 
 	lb := &DBLoadBalancer{
-		primaryDSN:           primaryDSN,
-		connector:            config.loadBalancing.connector,
-		resolver:             config.loadBalancing.resolver,
-		fixedHosts:           config.loadBalancing.hosts,
-		replicaOpenOpts:      opts,
-		replicaCheckInterval: config.loadBalancing.replicaCheckInterval,
-		lsnCache:             config.loadBalancing.lsnStore,
+		active:                config.loadBalancing.active,
+		primaryDSN:            primaryDSN,
+		connector:             config.loadBalancing.connector,
+		resolver:              config.loadBalancing.resolver,
+		fixedHosts:            config.loadBalancing.hosts,
+		replicaOpenOpts:       opts,
+		replicaCheckInterval:  config.loadBalancing.replicaCheckInterval,
+		lsnCache:              config.loadBalancing.lsnStore,
+		metricsEnabled:        config.metricsEnabled,
+		promRegisterer:        config.promRegisterer,
+		replicaPromCollectors: make(map[string]prometheus.Collector),
 	}
 
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
@@ -647,8 +742,15 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	}
 	lb.primary = primary
 
-	if err := lb.ResolveReplicas(ctx); err.ErrorOrNil() != nil {
-		result = multierror.Append(result, err)
+	// Conditionally register metrics for the primary database handle
+	if lb.metricsEnabled && primary != nil {
+		lb.promRegisterer.MustRegister(lb.metricsCollector(primary, HostTypePrimary))
+	}
+
+	if lb.active {
+		if err := lb.ResolveReplicas(ctx); err != nil {
+			result = multierror.Append(result, err)
+		}
 	}
 
 	if result.ErrorOrNil() != nil {
@@ -726,8 +828,16 @@ func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) e
 
 // UpToDateReplica returns the most suitable database connection handle for serving a read request for a given
 // models.Repository based on the last recorded primary Log Sequence Number (LSN) for that same repository. All errors
-// are handled gracefully with a fallback to the primary connection handle.
+// during this method execution are handled gracefully with a fallback to the primary connection handle.
+// Relevant errors during query execution should be handled _explicitly_ by the caller. For example, if the caller
+// obtained a connection handle for replica `R` at time `T`, and `R` is retired from the load balancer pool at `T+1`,
+// then any queries attempted against `R` after `T+1` would result in a `sql: database is closed` error raised by the
+// `database/sql` package. In such case, it is the caller's responsibility to fall back to Primary and retry.
 func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Repository) *DB {
+	if !lb.active {
+		return lb.primary
+	}
+
 	l := lb.logger(ctx).WithFields(log.Fields{"repository": r.Path})
 
 	if lb.lsnCache == nil {
@@ -735,6 +845,11 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 		metrics.PrimaryFallbackNoCache()
 		return lb.primary
 	}
+
+	// Do not let the LSN cache lookup and subsequent DB comparison (total) take more than upToDateReplicaTimeout,
+	// effectively enforcing a graceful fallback to the primary database if so.
+	ctx, cancel := context.WithTimeout(ctx, upToDateReplicaTimeout)
+	defer cancel()
 
 	// Get the next replica using round-robin. For simplicity, on the first iteration of DLB, we simply check against
 	// the first returned replica candidate, not against (potentially) all replicas in the pool. If the elected replica
@@ -790,6 +905,22 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	l.Info("replica is not up-to-date, falling back to primary")
 	metrics.PrimaryFallbackNotUpToDate()
 	return lb.primary
+}
+
+// TypeOf returns the type of the provided *DB instance: HostTypePrimary, HostTypeReplica or HostTypeUnknown.
+func (lb *DBLoadBalancer) TypeOf(db *DB) string {
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
+	if db == lb.primary {
+		return HostTypePrimary
+	}
+	for _, replica := range lb.replicas {
+		if db == replica {
+			return HostTypeReplica
+		}
+	}
+	return HostTypeUnknown
 }
 
 // QueryBuilder helps in building SQL queries with parameters.

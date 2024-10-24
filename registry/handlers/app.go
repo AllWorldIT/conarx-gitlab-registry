@@ -42,6 +42,7 @@ import (
 	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
+	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/gc"
 	"github.com/docker/distribution/registry/gc/worker"
 	"github.com/docker/distribution/registry/internal"
@@ -61,12 +62,13 @@ import (
 	redisstore "github.com/eko/gocache/store/redis/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/mux"
+	"github.com/hashicorp/go-multierror"
 	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+	"gitlab.com/gitlab-org/labkit/correlation"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 	metricskit "gitlab.com/gitlab-org/labkit/metrics"
-	"gitlab.com/gitlab-org/labkit/metrics/sqlmetrics"
 )
 
 // randomSecretSize is the number of random bytes to generate if no secret
@@ -77,7 +79,7 @@ const randomSecretSize = 32
 const defaultCheckInterval = 10 * time.Second
 
 // defaultDBCheckTimeout is the default timeout for DB connection checks. Chosen
-// arbitrarly
+// arbitrary
 const defaultDBCheckTimeout = 5 * time.Second
 
 // redisCacheTTL is the global expiry duration for objects cached in Redis.
@@ -367,6 +369,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		}
 
 		if config.Database.LoadBalancing.Enabled {
+			if app.redisCache == nil {
+				return nil, errors.New("redis cache required for enabling database load balancing")
+			}
+			dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisCache)))
+
 			// service discovery takes precedence over fixed hosts
 			if config.Database.LoadBalancing.Record != "" {
 				nameserver := config.Database.LoadBalancing.Nameserver
@@ -393,15 +400,22 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			}
 		}
 
+		if config.HTTP.Debug.Prometheus.Enabled {
+			dbOpts = append(dbOpts, datastore.WithMetricsCollection())
+		}
+
 		db, err := datastore.NewDBLoadBalancer(ctx, dsn, dbOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize database connections: %w", err)
 		}
-		startDBReplicaChecking(ctx, db)
+
+		if config.Database.LoadBalancing.Enabled && config.Database.LoadBalancing.ReplicaCheckInterval != 0 {
+			startDBReplicaChecking(ctx, db)
+		}
 
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
-		m := migrations.NewMigrator(db.Primary().DB, migrations.SkipPostDeployment)
+		m := migrations.NewMigrator(db.Primary(), migrations.SkipPostDeployment)
 		pending, err := m.HasPending()
 		if err != nil {
 			return nil, fmt.Errorf("failed to check database migrations status: %w", err)
@@ -413,13 +427,6 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		app.db = db
 		options = append(options, storage.Database(app.db))
-
-		if config.HTTP.Debug.Prometheus.Enabled {
-			// Expose database metrics to prometheus.
-			// TODO(dlb): collect metrics for all hosts
-			collector := sqlmetrics.NewDBStatsCollector(config.Database.DBName, db.Primary())
-			promclient.MustRegister(collector)
-		}
 
 		// update online GC settings (if needed) in the background to avoid delaying the app start
 		go func() {
@@ -660,11 +667,21 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 	}
 }
 
-func startDBReplicaChecking(ctx context.Context, lb *datastore.DBLoadBalancer) {
+const dlbReplicaCheckJitterMaxSeconds = 10
+
+func startDBReplicaChecking(ctx context.Context, lb datastore.LoadBalancer) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
-	// TODO(dlb): add startup jitter
+	// delay startup using a randomized jitter to ease concurrency in clustered environments
+	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
+	jitter := time.Duration(r.Intn(dlbReplicaCheckJitterMaxSeconds)) * time.Second
+
+	l.WithFields(dlog.Fields{"jitter_s": jitter.Seconds()}).
+		Info("preparing to start database load balancing replica checking")
+
 	go func() {
+		systemClock.Sleep(jitter)
+
 		// This function can only end in three situations: 1) service discovery is disabled and therefore there is
 		// nothing left to do (no error) 2) context cancellation 3) panic. If a panic occurs we should log, report to
 		// Sentry and then re-panic, as the instance would be in an inconsistent/unknown state. In case of context
@@ -874,6 +891,7 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 			Headers:           endpoint.Headers,
 			IgnoredMediaTypes: endpoint.IgnoredMediaTypes,
 			Ignore:            endpoint.Ignore,
+			QueuePurgeTimeout: endpoint.QueuePurgeTimeout,
 		})
 
 		sinks = append(sinks, endpoint)
@@ -882,7 +900,10 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 
 	// TODO: replace broadcaster with a new worker that will consume events from the queue
 	// https://gitlab.com/gitlab-org/container-registry/-/issues/765
-	app.events.sink = notifications.NewBroadcaster(sinks...)
+	app.events.sink = notifications.NewBroadcaster(
+		configuration.Notifications.FanoutTimeout,
+		sinks...,
+	)
 
 	// Populate registry event source
 	hostname, err := os.Hostname()
@@ -1079,7 +1100,16 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx = dcontext.WithRequest(ctx, r)
 	ctx, w = dcontext.WithResponseWriter(ctx, w)
-	ctx = dcontext.WithLogger(ctx, dcontext.GetRequestCorrelationLogger(ctx))
+	// NOTE(prozlach): It is very important to pass to
+	// dcontext.GetLogger the context of the app and not the
+	// request context, as otherwise a new logger will be created instead of
+	// chaining the one that was created during application start and according
+	// to the configuration passed by the user.
+	ctx = dcontext.WithLogger(
+		ctx,
+		dcontext.GetLogger(app.Context).
+			WithField(correlation.FieldName, dcontext.GetRequestCorrelationID(ctx)),
+	)
 	r = r.WithContext(ctx)
 
 	if app.Config.Log.AccessLog.Disabled {
@@ -1115,6 +1145,11 @@ func (app *App) initMetaRouter() error {
 	app.router.distribution.Use(distributionAPIVersionMiddleware)
 
 	app.router.gitlab.Use(app.gorillaLogMiddleware)
+
+	if app.Config.Database.Enabled && app.Config.Database.LoadBalancing.Enabled {
+		app.router.distribution.Use(app.recordLSNMiddleware)
+		app.router.gitlab.Use(app.recordLSNMiddleware)
+	}
 
 	// Register the handler dispatchers.
 	app.registerDistribution(v2.RouteNameBase, func(_ *Context, _ *http.Request) http.Handler {
@@ -1198,6 +1233,56 @@ func (h dbAssertionhandler) wrap(child func(ctx *Context, r *http.Request) http.
 	}
 
 	return child
+}
+
+type statusRecordingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *statusRecordingResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func newStatusRecordingResponseWriter(w http.ResponseWriter) *statusRecordingResponseWriter {
+	// Default to 200 status code (for cases where WriteHeader may not be explicitly called)
+	return &statusRecordingResponseWriter{w, http.StatusOK}
+}
+
+func (app *App) recordLSNMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Wrap the original ResponseWriter to capture status code
+		srw := newStatusRecordingResponseWriter(w)
+		// Call the next handler
+		next.ServeHTTP(srw, r)
+
+		// Only record primary LSN if 1) the request targets a repository 2) it's a write request 3) it succeeded
+		if !app.nameRequired(r) {
+			return
+		}
+		if r.Method != http.MethodPut && r.Method != http.MethodPost &&
+			r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+			return
+		}
+		if srw.statusCode < 200 || srw.statusCode >= 400 {
+			return
+		}
+
+		// Get repository path from request context
+		ctx := app.context(w, r)
+		repo, err := app.repositoryFromContext(ctx, w)
+		if err != nil {
+			dcontext.GetLogger(ctx).WithError(err).
+				Error("failed to get repository from request context to record primary LSN")
+			return
+		}
+
+		if err := app.db.RecordLSN(r.Context(), &models.Repository{Path: repo.Named().Name()}); err != nil {
+			dcontext.GetLogger(ctx).WithError(err).
+				Error("failed to record primary LSN after successful repository write")
+		}
+	})
 }
 
 // distributionAPIVersionMiddleware sets a header with the Docker Distribution
@@ -1286,7 +1371,11 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 		}
 
 		if ctx.useDatabase {
-			ctx.repoCache = datastore.NewSingleRepositoryCache()
+			if app.redisCache != nil {
+				ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
+			} else {
+				ctx.repoCache = datastore.NewSingleRepositoryCache()
+			}
 		}
 
 		dispatch(ctx, r).ServeHTTP(w, r)
@@ -1406,6 +1495,7 @@ func (app *App) context(w http.ResponseWriter, r *http.Request) *Context {
 	ctx := r.Context()
 	ctx = dcontext.WithVars(ctx, r)
 	name := dcontext.GetStringValue(ctx, "vars.name")
+	//nolint: staticcheck // SA1029: should not use built-in type string as key for value
 	ctx = context.WithValue(ctx, "root_repo", strings.Split(name, "/")[0])
 	ctx = dcontext.WithLogger(ctx, dcontext.GetLogger(ctx,
 		"root_repo",
@@ -1814,26 +1904,58 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 
 // GracefulShutdown allows the app to free any resources before shutdown.
 func (app *App) GracefulShutdown(ctx context.Context) error {
-	errors := make(chan error)
+	// TODO(prozlach): There are probably more components that need/will need
+	// graceful shutdown, hence making this function extendable.
+	numberOfComponentsToShutdown := 2
 
+	errs := new(multierror.Error)
+	l := dlog.GetLogger(dlog.WithContext(ctx))
+	errCh := make(chan error, numberOfComponentsToShutdown)
+
+	if app.db != nil {
+		// NOTE(prozlach): Database is enabled, let's shut it down
+		go func() {
+			l.Info("closing database connections")
+			err := app.db.Close()
+			if err != nil {
+				err = fmt.Errorf("database shutdown: %w", err)
+			} else {
+				l.Info("database component has been shut down")
+			}
+			errCh <- err
+		}()
+	} else {
+		errCh <- nil
+	}
+
+	// NOTE(prozlach): Events Broadcaster sink is always there, it may simply
+	// not have any dependent sinks attached if notifications are not
+	// configured.
 	go func() {
-		errors <- app.db.Close()
+		l.Info("closing events notification sink")
+		err := app.events.sink.Close()
+		if err != nil {
+			err = fmt.Errorf("events notification sink shutdown: %w", err)
+		} else {
+			l.Info("events notification sink has been shut down")
+		}
+		errCh <- err
 	}()
 
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("app shutdown failed: %w", ctx.Err())
-	case err := <-errors:
-		if err != nil {
-			return fmt.Errorf("app shutdown failed: %w", err)
+	for i := 0; i < numberOfComponentsToShutdown; i++ {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("app shutdown failed: %w", ctx.Err())
+		case err := <-errCh:
+			errs = multierror.Append(errs, err)
 		}
-		return nil
 	}
+
+	return errs.ErrorOrNil()
 }
 
 // DBStats returns the sql.DBStats for the metadata database connection handle.
 func (app *App) DBStats() sql.DBStats {
-	// TODO(dlb): collect metrics for all hosts
 	return app.db.Primary().Stats()
 }
 
