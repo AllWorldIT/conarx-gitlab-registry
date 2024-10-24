@@ -551,7 +551,20 @@ func TestManifestStore_References(t *testing.T) {
 			CreatedAt: testutil.ParseTimestamp(t, "2020-03-02 17:50:26.461745", local),
 		},
 	}
-	require.Equal(t, expected, mm)
+
+	// Loop through each manifest and compare their attributes. We do this as opposed to using require.Equal as that can
+	// lead to flaky time comparisons in CI. By doing this we can rely on Time.Equal which is the best comparison
+	// mechanism as explained in https://pkg.go.dev/time#Time.
+	for i, manifest := range expected {
+		require.Equal(t, manifest.ID, mm[i].ID)
+		require.Equal(t, manifest.NamespaceID, mm[i].NamespaceID)
+		require.Equal(t, manifest.RepositoryID, mm[i].RepositoryID)
+		require.Equal(t, manifest.TotalSize, mm[i].TotalSize)
+		require.Equal(t, manifest.SchemaVersion, mm[i].SchemaVersion)
+		require.Equal(t, manifest.MediaType, mm[i].MediaType)
+		require.Equal(t, manifest.Digest, mm[i].Digest)
+		require.True(t, manifest.CreatedAt.Equal(mm[i].CreatedAt))
+	}
 }
 
 func TestManifestStore_References_None(t *testing.T) {
