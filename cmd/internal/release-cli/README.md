@@ -48,7 +48,7 @@ post a merge request on the project that we are releasing to and `$TARGET_TRIGGE
 Due to the way the `release-cli` tool updates files, it is important to be aware of major breaking changes
 on files that need to be updated for a release. These files are explicitly stated in the `config/config.yaml`.
 
-The CNG, Charts and Omnibus release commands make use of the the GitLab Dependency Bot, the bot user that the GitLab Distribution team uses for automatically submitting MRs with dependency updates using https://www.dependencies.io/.
-The file changes are stated on the `deps.yml` file of the release target project, like [this](https://gitlab.com/gitlab-org/build/CNG/-/blob/master/deps.yml#L87).
+The CNG, Charts and Omnibus release commands make use of the the GitLab Dependency Bot, the bot user that the GitLab Distribution team uses for automatically submitting MRs with dependency updates using https://docs.renovatebot.com/.
+The file changes are stated in the renovate-gitlab-bot repository, under the directory for the release target project, like [this](https://gitlab.com/gitlab-org/frontend/renovate-gitlab-bot/-/blob/main/renovate/distribution/omnibus.config.js). For more information refer to [Renovate GitLab Bot - 101](https://gitlab.com/gitlab-org/distribution/distributions-101/-/tree/main/GitLab%20Renovate%20Bot).
 
 We also require a few secrets to be set as CI Variables that are necessary for triggering a specific release following the `$BUMP_VERSION_TRIGGER_TOKEN_<PROJECT>` pattern if it is a [trigger token](https://docs.gitlab.com/ee/ci/triggers/#create-a-trigger-token) or `$BUMP_VERSION_AUTH_TOKEN_<PROJECT>` if it is an auth token.
