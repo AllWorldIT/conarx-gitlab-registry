@@ -851,6 +851,19 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 		return err
 	}
 
+	// identify and log a tag override event for audit purposes
+	repositoryStore = datastore.NewRepositoryStore(tx, opts...)
+	currentManifest, err := repositoryStore.FindManifestByTagName(ctx, dbRepo, tagName)
+	if err != nil {
+		return fmt.Errorf("failed to find if tag is already being used: %w", err)
+	}
+	if currentManifest != nil && (currentManifest.ID != dbManifest.ID) {
+		l.WithFields(log.Fields{
+			"root_repo":               dbRepo.TopLevelPathSegment(),
+			"current_manifest_digest": currentManifest.Digest,
+		}).Info("tag override")
+	}
+
 	tagStore := datastore.NewTagStore(tx)
 	tag := &models.Tag{
 		Name:         tagName,
