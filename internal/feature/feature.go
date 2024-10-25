@@ -50,7 +50,8 @@ var BBMProcess = Feature{
 // https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/lockfiles.md
 // for more information.
 var EnforceLockfiles = Feature{
-	EnvVariable: "REGISTRY_FF_ENFORCE_LOCKFILES",
+	defaultEnabled: false,
+	EnvVariable:    "REGISTRY_FF_ENFORCE_LOCKFILES",
 }
 
 // testFeature is used for testing purposes only

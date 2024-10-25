@@ -1324,6 +1324,7 @@ func (imp *Importer) handleLockers(ctx context.Context, err error) error {
 		if err := imp.RestoreLockfiles(ctx); err != nil {
 			return fmt.Errorf("could not restore lockfiles: %w", err)
 		}
+		return nil
 	}
 
 	// Once we have finished importing all tags, we need to release the
@@ -1332,6 +1333,7 @@ func (imp *Importer) handleLockers(ctx context.Context, err error) error {
 	if err := imp.registry.Lockers().FSUnlock(ctx); err != nil {
 		return fmt.Errorf("could not unlock filesystem-in-use lockfile: %w", err)
 	}
+
 	// Additionally, we need to lock the `database-in-use` lockfile
 	// to prevent the registry starting in filesystem mode again.
 	if err := imp.registry.Lockers().DBLock(ctx); err != nil {
