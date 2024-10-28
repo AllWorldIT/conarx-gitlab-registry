@@ -220,7 +220,12 @@ func newDB(dsn *datastore.DSN, logLevel logrus.Level, logOut io.Writer, opts []d
 	log.SetLevel(logLevel)
 	log.SetOutput(logOut)
 
-	opts = append(opts, datastore.WithLogger(logrus.NewEntry(log)))
+	// The registry application defaults to using the simple protocol for connecting to PostgreSQL
+	// instead of prepared statements. There are notable differences in how some queries are built
+	// and resolved depending on the chosen execution mode. For details, see issue https://github.com/jackc/pgx/issues/2157.
+	// To ensure consistency and avoid false positives in tests, we configure the test database
+	// to also use the simple protocol.
+	opts = append(opts, datastore.WithLogger(logrus.NewEntry(log)), datastore.WithPreparedStatements(false))
 
 	db, err := datastore.NewDBLoadBalancer(context.Background(), dsn, opts...)
 	if err != nil {
