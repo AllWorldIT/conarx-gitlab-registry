@@ -30,7 +30,7 @@ import (
 
 const (
 	driverName                  = "pgx"
-	dnsTimeout                  = 2 * time.Second
+	dnsTimeout                  = 10 * time.Second
 	defaultReplicaCheckInterval = 1 * time.Minute
 
 	HostTypePrimary = "primary"
