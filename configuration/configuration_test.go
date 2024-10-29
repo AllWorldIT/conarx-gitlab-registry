@@ -1748,9 +1748,7 @@ func copyConfig(config Configuration) *Configuration {
 	}
 
 	configCopy.Notifications = Notifications{Endpoints: []Endpoint{}}
-	for _, v := range config.Notifications.Endpoints {
-		configCopy.Notifications.Endpoints = append(configCopy.Notifications.Endpoints, v)
-	}
+	configCopy.Notifications.Endpoints = append(configCopy.Notifications.Endpoints, config.Notifications.Endpoints...)
 	configCopy.Notifications.FanoutTimeout = config.Notifications.FanoutTimeout
 
 	configCopy.HTTP.Headers = make(http.Header)

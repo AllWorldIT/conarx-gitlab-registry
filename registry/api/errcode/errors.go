@@ -215,11 +215,11 @@ func (errs Errors) MarshalJSON() ([]byte, error) {
 	for _, daErr := range errs {
 		var err Error
 
-		switch daErr.(type) {
-		case ErrorCode:
+		switch {
+		case errors.As(daErr, new(ErrorCode)):
 			err = daErr.(ErrorCode).WithDetail(nil)
-		case Error:
-			err = daErr.(Error)
+		case errors.As(daErr, &err):
+			// do nothing
 		default:
 			err = ErrorCodeUnknown.WithDetail(daErr)
 		}

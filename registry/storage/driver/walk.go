@@ -164,7 +164,6 @@ func doWalkParallel(ctx context.Context, driver StorageDriver, semaphore chan st
 			ReleaseSemaphoreAndReturn:
 				// Release the semaphore, signaling a free spot for another goroutine.
 				<-semaphore
-				return
 			}()
 		}
 	}
