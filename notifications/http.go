@@ -181,8 +181,7 @@ type headerRoundTripper struct {
 }
 
 func (hrt *headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	var nreq http.Request
-	nreq = *req
+	nreq := req.Clone(req.Context())
 	nreq.Header = make(http.Header)
 
 	merge := func(headers http.Header) {
@@ -194,5 +193,5 @@ func (hrt *headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 	merge(req.Header)
 	merge(hrt.headers)
 
-	return hrt.Transport.RoundTrip(&nreq)
+	return hrt.Transport.RoundTrip(nreq)
 }

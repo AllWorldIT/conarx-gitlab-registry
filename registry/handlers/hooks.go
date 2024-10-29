@@ -37,7 +37,7 @@ func (hook *logHook) Fire(entry *logrus.Entry) error {
 	if err := t.Execute(b, entry); err != nil {
 		return err
 	}
-	body := fmt.Sprintf("%s", b)
+	body := b.String()
 
 	return hook.Mail.sendMail(subject, body)
 }

@@ -1386,7 +1386,7 @@ func (suite *DriverSuite) TestWalkParallelStopsProcessingOnError() {
 	d := suite.StorageDriver.Name()
 	switch d {
 	case "filesystem", "azure":
-		suite.T().Skip(fmt.Sprintf("%s driver does not support true WalkParallel", d))
+		suite.T().Skipf("%s driver does not support true WalkParallel", d)
 	case "gcs":
 		parallelWalk := os.Getenv("GCS_PARALLEL_WALK")
 		var parallelWalkBool bool
@@ -1397,7 +1397,7 @@ func (suite *DriverSuite) TestWalkParallelStopsProcessingOnError() {
 		}
 
 		if !parallelWalkBool || parallelWalk == "" {
-			suite.T().Skip(fmt.Sprintf("%s driver is not configured with parallelwalk", d))
+			suite.T().Skipf("%s driver is not configured with parallelwalk", d)
 		}
 	}
 
@@ -1952,7 +1952,7 @@ func (suite *DriverSuite) TestRemoveManifestsPathBuildLargeScale() {
 		suite.T().Skip("Skipping test in short mode")
 	}
 	if suite.StorageDriver.Name() != "filesystem" {
-		suite.T().Skip(fmt.Sprintf("Skipping test for the %s driver", suite.StorageDriver.Name()))
+		suite.T().Skipf("Skipping test for the %s driver", suite.StorageDriver.Name())
 	}
 
 	numManifests := 100

@@ -1235,8 +1235,7 @@ func (d *driver) WalkParallel(ctx context.Context, from string, f storagedriver.
 
 func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
 	prefix := d.pathToDirKey(path)
-	var query *s3.ListObjectsV2Input
-	query = &s3.ListObjectsV2Input{
+	query := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(d.Bucket),
 		Prefix:    aws.String(prefix),
 		Delimiter: aws.String("/"),
