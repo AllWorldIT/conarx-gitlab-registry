@@ -1,3 +1,18 @@
+## [4.12.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.11.0-gitlab...v4.12.0-gitlab) (2024-10-29)
+
+### ✨ Features ✨
+
+* **api:** log tag override events ([0ffc35a](https://gitlab.com/gitlab-org/container-registry/commit/0ffc35ae727e490f021fd4337abd46b344d9542e))
+* temporarily bump DB load balancing DNS timeout ([d3de2a3](https://gitlab.com/gitlab-org/container-registry/commit/d3de2a31a8245a48017b3bfcfb6738bc5efa9533))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.45.0 ([fc19527](https://gitlab.com/gitlab-org/container-registry/commit/fc1952719cddd0410826242438136ec0996040fb))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.17.0 ([54a31fa](https://gitlab.com/gitlab-org/container-registry/commit/54a31faa1a63f860e4c84b04d1d1f2b77f271e66))
+* **deps:** update module go.uber.org/mock to v0.5.0 ([1b09600](https://gitlab.com/gitlab-org/container-registry/commit/1b096004d5aa4d093967df26dc703b9bfa075ff7))
+* update module github.com/aws/aws-sdk-go to v1.55.5 ([b1565ab](https://gitlab.com/gitlab-org/container-registry/commit/b1565ab45bbbb7f45fcd7d18d8e4def1d3fde72c))
+* update module google.golang.org/api to v0.203.0 ([9d990f8](https://gitlab.com/gitlab-org/container-registry/commit/9d990f8a97a1b35ebafd986c2b01492c2c84a7ee))
+
 ## [4.11.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.10.0-gitlab...v4.11.0-gitlab) (2024-10-21)
 
 ### ✨ Features ✨
