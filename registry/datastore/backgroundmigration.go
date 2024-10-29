@@ -219,7 +219,7 @@ func (bms *backgroundMigrationStore) FindNext(ctx context.Context) (*models.Back
 			id ASC
 		LIMIT 1`
 
-	row := bms.db.QueryRowContext(ctx, q, models.BackgroundMigrationActive, models.BackgroundMigrationRunning)
+	row := bms.db.QueryRowContext(ctx, q, int(models.BackgroundMigrationActive), int(models.BackgroundMigrationRunning))
 
 	return scanBackgroundMigration(row)
 }
@@ -269,7 +269,7 @@ func (bms *backgroundMigrationStore) FindJobWithStatus(ctx context.Context, bmID
 			id ASC
 		LIMIT 1`
 
-	row := bms.db.QueryRowContext(ctx, q, bmID, status)
+	row := bms.db.QueryRowContext(ctx, q, bmID, int(status))
 
 	return scanBackgroundMigrationJob(row)
 }
@@ -321,7 +321,7 @@ func (bms *backgroundMigrationStore) FindNextByStatus(ctx context.Context, statu
 			id ASC
 		LIMIT 1`
 
-	row := bms.db.QueryRowContext(ctx, q, status)
+	row := bms.db.QueryRowContext(ctx, q, int(status))
 
 	return scanBackgroundMigration(row)
 }
@@ -382,7 +382,7 @@ func (bms *backgroundMigrationStore) UpdateStatus(ctx context.Context, bbm *mode
 		RETURNING
 			status,
 			failure_error_code`
-	row := bms.db.QueryRowContext(ctx, q, bbm.Status, bbm.ErrorCode, bbm.ID)
+	row := bms.db.QueryRowContext(ctx, q, int(bbm.Status), bbm.ErrorCode, bbm.ID)
 	if err := row.Scan(&bbm.Status, &bbm.ErrorCode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("background migration not found")
@@ -425,7 +425,8 @@ func (bms *backgroundMigrationStore) UpdateJobStatus(ctx context.Context, job *m
 		RETURNING
 			status,
 			failure_error_code`
-	row := bms.db.QueryRowContext(ctx, q, job.Status, job.ErrorCode, job.ID)
+
+	row := bms.db.QueryRowContext(ctx, q, int(job.Status), job.ErrorCode, job.ID)
 	if err := row.Scan(&job.Status, &job.ErrorCode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("background migration job not found")
@@ -507,7 +508,7 @@ func (bms *backgroundMigrationStore) Pause(ctx context.Context) error {
 		WHERE 
 			status = $2 
 			OR status = $3`
-	_, err := bms.db.ExecContext(ctx, q, models.BackgroundMigrationPaused, models.BackgroundMigrationActive, models.BackgroundMigrationRunning)
+	_, err := bms.db.ExecContext(ctx, q, int(models.BackgroundMigrationPaused), int(models.BackgroundMigrationActive), int(models.BackgroundMigrationRunning))
 
 	return err
 }
@@ -522,7 +523,7 @@ func (bms *backgroundMigrationStore) Resume(ctx context.Context) error {
 			status = $1 
 		WHERE 
 			status = $2`
-	_, err := bms.db.ExecContext(ctx, q, models.BackgroundMigrationActive, models.BackgroundMigrationPaused)
+	_, err := bms.db.ExecContext(ctx, q, int(models.BackgroundMigrationActive), int(models.BackgroundMigrationPaused))
 
 	return err
 }
@@ -540,7 +541,7 @@ func (bms *backgroundMigrationStore) AreFinished(ctx context.Context, names []st
 			AND status != $2`
 
 	var count int
-	err := bms.db.QueryRowContext(ctx, q, names, models.BackgroundMigrationFinished).Scan(&count)
+	err := bms.db.QueryRowContext(ctx, q, names, int(models.BackgroundMigrationFinished)).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("counting unfinished background migrations: %w", err)
 	}
