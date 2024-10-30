@@ -28,31 +28,8 @@ publish:
     - if: '$CI_COMMIT_TAG'
   when: manual  
 
-version-bump:cng:
-  <<: *version-bump
-  variables:
-    TARGET_TRIGGER_TOKEN: $BUMP_VERSION_TRIGGER_TOKEN_CNG
-  script:
-   - go run cmd/internal/release-cli/main.go cng --cng-trigger-token $TARGET_TRIGGER_TOKEN --registry-access-token $CI_JOB_TOKEN --slack-webhook-url $SLACK_WEBHOOK_URL
-
-version-bump:charts:
-  <<: *version-bump
-  needs: ["version-bump:cng"]
-  variables:
-    TARGET_TRIGGER_TOKEN: $BUMP_VERSION_TRIGGER_TOKEN_CHARTS
-  script:
-   - go run cmd/internal/release-cli/main.go charts --charts-trigger-token $TARGET_TRIGGER_TOKEN --registry-access-token $CI_JOB_TOKEN --slack-webhook-url $SLACK_WEBHOOK_URL
-
-version-bump:omnibus:
-  <<: *version-bump
-  variables:
-    TARGET_TRIGGER_TOKEN: $BUMP_VERSION_TRIGGER_TOKEN_OMNIBUS
-  script:
-   - go run cmd/internal/release-cli/main.go omnibus --omnibus-trigger-token $TARGET_TRIGGER_TOKEN --registry-access-token $CI_JOB_TOKEN --slack-webhook-url $SLACK_WEBHOOK_URL
-
 version-bump:k8s:gstgpre:
   <<: *version-bump
-  needs: [ "version-bump:cng"]
   variables:
     TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
     SOURCE_AUTH_TOKEN: $RELEASE_PAT
@@ -62,7 +39,7 @@ version-bump:k8s:gstgpre:
 
 version-bump:k8s:gprdcny:
   <<: *version-bump
-  needs: [ "version-bump:cng"]
+  needs: [ "version-bump:k8s:gstgpre"]
   variables:
     TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
     SOURCE_AUTH_TOKEN: $RELEASE_PAT
@@ -72,7 +49,7 @@ version-bump:k8s:gprdcny:
 
 version-bump:k8s:gprd:
   <<: *version-bump
-  needs: [ "version-bump:cng"]
+  needs: [ "version-bump:k8s:gprdcny"]
   variables:
     TARGET_AUTH_TOKEN: $BUMP_VERSION_AUTH_TOKEN_K8S
     SOURCE_AUTH_TOKEN: $RELEASE_PAT
