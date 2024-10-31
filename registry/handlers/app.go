@@ -1462,6 +1462,7 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 			}
 
 			ctx.Repository = repository
+			ctx.queueBridge = app.queueBridge(ctx, r)
 		}
 
 		dispatch(ctx, r).ServeHTTP(w, r)

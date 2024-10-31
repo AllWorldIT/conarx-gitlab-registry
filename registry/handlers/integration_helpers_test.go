@@ -976,6 +976,26 @@ func buildEventManifestDeleteByTag(mediaType, repoPath, tag string, opts ...even
 	return buildEventManifestDelete(mediaType, repoPath, tag, "", opts...)
 }
 
+func buildEventRepositoryRenamed(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
+	return buildEventRepositoryRename(repoTargetPath, rename, opts...)
+}
+
+func buildEventRepositoryRename(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
+	event := notifications.Event{
+		Action: "rename",
+		Target: notifications.Target{
+			Repository: repoTargetPath,
+			Rename:     &rename,
+		},
+	}
+
+	for _, opt := range opts {
+		opt(&event)
+	}
+
+	return event
+}
+
 type eventOpt func(event *notifications.Event)
 
 func buildEventManifestDelete(mediaType, repoPath, tagName string, dgst digest.Digest, opts ...eventOpt) notifications.Event {

@@ -10,6 +10,7 @@ import (
 	"github.com/docker/distribution/uuid"
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -46,7 +47,7 @@ var (
 )
 
 func TestEventBridgeManifestPulled(t *testing.T) {
-	l := createTestEnv(t, func(event *Event) error {
+	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkCommonManifest(t, EventActionPull, event)
 
 		return nil
@@ -59,7 +60,7 @@ func TestEventBridgeManifestPulled(t *testing.T) {
 }
 
 func TestEventBridgeManifestPushed(t *testing.T) {
-	l := createTestEnv(t, func(event *Event) error {
+	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkCommonManifest(t, EventActionPush, event)
 
 		return nil
@@ -88,7 +89,7 @@ func TestEventBridgeManifestPushedWithTag(t *testing.T) {
 }
 
 func TestEventBridgeManifestPulledWithTag(t *testing.T) {
-	l := createTestEnv(t, func(event *Event) error {
+	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkCommonManifest(t, EventActionPull, event)
 		if event.Target.Tag != "latest" {
 			t.Fatalf("missing or unexpected tag: %#v", event.Target)
@@ -104,7 +105,7 @@ func TestEventBridgeManifestPulledWithTag(t *testing.T) {
 }
 
 func TestEventBridgeManifestDeleted(t *testing.T) {
-	l := createTestEnv(t, func(event *Event) error {
+	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkDeleted(t, EventActionDelete, event)
 		if event.Target.Digest != dgst {
 			t.Fatalf("unexpected digest on event target: %q != %q", event.Target.Digest, dgst)
@@ -119,7 +120,7 @@ func TestEventBridgeManifestDeleted(t *testing.T) {
 }
 
 func TestEventBridgeTagDeleted(t *testing.T) {
-	l := createTestEnv(t, func(event *Event) error {
+	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkDeleted(t, EventActionDelete, event)
 		if event.Target.Tag != m.Tag {
 			t.Fatalf("unexpected tag on event target: %q != %q", event.Target.Tag, m.Tag)
@@ -131,6 +132,22 @@ func TestEventBridgeTagDeleted(t *testing.T) {
 	if err := l.TagDeleted(repoRef, m.Tag); err != nil {
 		t.Fatalf("unexpected error notifying tag deletion: %v", err)
 	}
+}
+
+func TestEventBridgeRepoRenamed(t *testing.T) {
+	rename := Rename{
+		Type: NameRename,
+		To:   "foo/bar",
+		From: repo,
+	}
+
+	l := createQueueBridgeTestEnv(t, func(event *Event) (err error) {
+		checkRenamed(t, EventActionRename, rename, event)
+		return
+	})
+
+	repoRef, _ := reference.WithName(repo)
+	require.NoError(t, l.RepoRenamed(repoRef, rename), "unexpected error notifying repo rename")
 }
 
 func TestEventBridgeRepoDeleted(t *testing.T) {
@@ -162,6 +179,23 @@ func createTestEnv(t *testing.T, fn testSinkFn) Listener {
 	return NewBridge(ub, source, actor, request, fn, true)
 }
 
+func createQueueBridgeTestEnv(t *testing.T, fn testSinkFn) *QueueBridge {
+	pk, err := libtrust.GenerateECP256PrivateKey()
+	if err != nil {
+		t.Fatalf("error generating private key: %v", err)
+	}
+
+	sm, err = schema1.Sign(&m, pk)
+	if err != nil {
+		t.Fatalf("error signing manifest: %v", err)
+	}
+
+	payload = sm.Canonical
+	dgst = digest.FromBytes(payload)
+
+	return NewQueueBridge(ub, source, actor, request, fn, true)
+}
+
 func checkDeleted(t *testing.T, action string, event *Event) {
 	if event == nil {
 		t.Fatal("event is nil")
@@ -182,6 +216,16 @@ func checkDeleted(t *testing.T, action string, event *Event) {
 	if event.Target.Repository != repo {
 		t.Fatalf("unexpected repository: %q != %q", event.Target.Repository, repo)
 	}
+}
+
+func checkRenamed(t *testing.T, action string, rename Rename, event *Event) {
+	require.NotNil(t, event)
+	require.Equal(t, event.Action, action)
+	require.Equal(t, event.Source, source)
+	require.Equal(t, event.Request, request)
+	require.Equal(t, event.Actor, actor)
+	require.Equal(t, event.Target.Repository, repo)
+	require.EqualValues(t, event.Target.Rename, &rename)
 }
 
 func checkCommonManifest(t *testing.T, action string, event *Event) {
