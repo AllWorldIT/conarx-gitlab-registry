@@ -2065,11 +2065,13 @@ func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *co
 	if err != nil {
 		l.WithError(err).Error("background migration worker exited abruptly")
 	}
-	l.Info("Background migration worker is running")
+	l.Info("background migration worker is running")
 
-	// wait for the worker to acknowledge that it is safe to exit.
-	<-gracefulFinish
-	l.Info("Background migration worker stopped")
+	go func() {
+		// wait for the worker to acknowledge that it is safe to exit.
+		<-gracefulFinish
+		l.Info("background migration worker stopped gracefully")
+	}()
 }
 
 func bbmListenForShutdown(ctx context.Context, c chan os.Signal, doneCh chan struct{}) {
