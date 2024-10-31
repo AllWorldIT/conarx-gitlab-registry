@@ -10,13 +10,16 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/manifest/ocischema"
+	"github.com/docker/distribution/notifications"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
 	v1 "github.com/docker/distribution/registry/api/gitlab/v1"
@@ -1685,19 +1688,41 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 	// generate one full access auth token for all tests
 	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
+	notifCfg := configuration.Notifications{
+		FanoutTimeout: 3 * time.Second,
+		Endpoints: []configuration.Endpoint{
+			{
+				Name:      t.Name(),
+				Disabled:  false,
+				Headers:   http.Header{"test-header": []string{t.Name()}},
+				Timeout:   100 * time.Millisecond,
+				Threshold: 1,
+				Backoff:   100 * time.Millisecond,
+			},
+		},
+	}
+
 	tt := []struct {
-		name               string
-		queryParams        url.Values
-		requestBody        []byte
-		expectedRespStatus int
-		expectedRespError  *errcode.ErrorCode
-		expectedRespBody   *handlers.RenameRepositoryAPIResponse
+		name                 string
+		queryParams          url.Values
+		requestBody          []byte
+		expectedRespStatus   int
+		expectedRespError    *errcode.ErrorCode
+		expectedRespBody     *handlers.RenameRepositoryAPIResponse
+		expectedNotification notifications.Event
+		notificationEnabled  bool
 	}{
 		{
-			name:               "dry run param not set means implicit false",
-			requestBody:        []byte(`{ "name" : "not-bar" }`),
-			expectedRespStatus: http.StatusNoContent,
-			expectedRespBody:   nil,
+			name:                "dry run param not set means implicit false",
+			requestBody:         []byte(`{ "name" : "not-bar" }`),
+			expectedRespStatus:  http.StatusNoContent,
+			expectedRespBody:    nil,
+			notificationEnabled: true,
+			expectedNotification: buildEventRepositoryRename(baseRepoName.String(), notifications.Rename{
+				From: baseRepoName.String(),
+				To:   path.Dir(baseRepoName.String()) + "/" + "not-bar",
+				Type: notifications.NameRename,
+			}),
 		},
 		{
 			name:               "dry run param is set explicitly to true",
@@ -1707,11 +1732,17 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 			expectedRespBody:   &handlers.RenameRepositoryAPIResponse{},
 		},
 		{
-			name:               "dry run param is set explicitly to false",
-			queryParams:        url.Values{"dry_run": []string{"false"}},
-			requestBody:        []byte(`{ "name" : "not-bar" }`),
-			expectedRespStatus: http.StatusNoContent,
-			expectedRespBody:   nil,
+			name:                "dry run param is set explicitly to false",
+			queryParams:         url.Values{"dry_run": []string{"false"}},
+			requestBody:         []byte(`{ "name" : "not-bar" }`),
+			expectedRespStatus:  http.StatusNoContent,
+			expectedRespBody:    nil,
+			notificationEnabled: true,
+			expectedNotification: buildEventRepositoryRename(baseRepoName.String(), notifications.Rename{
+				From: baseRepoName.String(),
+				To:   path.Dir(baseRepoName.String()) + "/" + "not-bar",
+				Type: notifications.NameRename,
+			}),
 		},
 		{
 			name:               "bad json body",
@@ -1751,7 +1782,11 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
-			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps())}
+			if test.notificationEnabled {
+				opts = append(opts, withWebhookNotifications(notifCfg))
+			}
+			env = newTestEnv(t, opts...)
 
 			// create request
 			u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, test.queryParams)
@@ -1785,6 +1820,10 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 				body.TTL = time.Time{}
 			}
 			require.Equal(t, test.expectedRespBody, body)
+
+			if test.notificationEnabled {
+				env.ns.AssertEventNotification(t, test.expectedNotification)
+			}
 		})
 	}
 }
@@ -2178,13 +2217,28 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 	newNamespace := "foo/foo"
 
 	tokenProvider := NewAuthTokenProvider(t)
+	notifCfg := configuration.Notifications{
+		FanoutTimeout: 3 * time.Second,
+		Endpoints: []configuration.Endpoint{
+			{
+				Name:      t.Name(),
+				Disabled:  false,
+				Headers:   http.Header{"test-header": []string{t.Name()}},
+				Timeout:   100 * time.Millisecond,
+				Threshold: 1,
+				Backoff:   100 * time.Millisecond,
+			},
+		},
+	}
 
 	tt := []struct {
-		name               string
-		expectedRespStatus int
-		expectedRespError  *errcode.ErrorCode
-		tokenActions       []*token.ResourceActions
-		requestBody        []byte
+		name                 string
+		expectedRespStatus   int
+		expectedRespError    *errcode.ErrorCode
+		tokenActions         []*token.ResourceActions
+		requestBody          []byte
+		expectedNotification notifications.Event
+		notificationEnabled  bool
 	}{
 		{
 			name:               "invalid json",
@@ -2215,11 +2269,17 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 			requestBody:        []byte(`{ "namespace" : "foo/foo.foo" }`),
 		},
 		{
-			name:               "rename to same top level namespace",
-			expectedRespError:  nil,
-			expectedRespStatus: http.StatusNoContent,
-			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), "foo"),
-			requestBody:        []byte(`{ "namespace" : "foo" }`),
+			name:                "rename to same top level namespace",
+			expectedRespError:   nil,
+			expectedRespStatus:  http.StatusNoContent,
+			tokenActions:        fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), "foo"),
+			requestBody:         []byte(`{ "namespace" : "foo" }`),
+			notificationEnabled: true,
+			expectedNotification: buildEventRepositoryRename(baseRepoName.String(), notifications.Rename{
+				From: baseRepoName.String(),
+				To:   "foo/" + path.Base(baseRepoName.Name()),
+				Type: notifications.NamespaceRename,
+			}),
 		},
 		{
 			name:               "rename to different top level namespace",
@@ -2229,11 +2289,17 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 			requestBody:        []byte(`{ "namespace" : "bar" }`),
 		},
 		{
-			name:               "namespace rename implemented",
-			expectedRespError:  nil,
-			expectedRespStatus: http.StatusNoContent,
-			tokenActions:       fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), newNamespace),
-			requestBody:        []byte(`{ "namespace" : "` + newNamespace + `" }`),
+			name:                "namespace rename implemented",
+			expectedRespError:   nil,
+			expectedRespStatus:  http.StatusNoContent,
+			tokenActions:        fullAccessNamespaceTokenWithProjectMeta(baseRepoName.Name(), newNamespace),
+			requestBody:         []byte(`{ "namespace" : "` + newNamespace + `" }`),
+			notificationEnabled: true,
+			expectedNotification: buildEventRepositoryRename(baseRepoName.String(), notifications.Rename{
+				From: baseRepoName.String(),
+				To:   newNamespace + "/" + path.Base(baseRepoName.Name()),
+				Type: notifications.NamespaceRename,
+			}),
 		},
 	}
 
@@ -2249,7 +2315,11 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
-			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps())}
+			if test.notificationEnabled {
+				opts = append(opts, withWebhookNotifications(notifCfg))
+			}
+			env = newTestEnv(t, opts...)
 
 			// create and execute test request
 			u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName)
@@ -2270,6 +2340,10 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 			require.Equal(t, test.expectedRespStatus, resp.StatusCode)
 			if test.expectedRespError != nil {
 				checkBodyHasErrorCodes(t, "", resp, *test.expectedRespError)
+			}
+
+			if test.notificationEnabled {
+				env.ns.AssertEventNotification(t, test.expectedNotification)
 			}
 		})
 	}

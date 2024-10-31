@@ -13,6 +13,7 @@ const (
 	EventActionPush   = "push"
 	EventActionMount  = "mount"
 	EventActionDelete = "delete"
+	EventActionRename = "rename"
 )
 
 const (
@@ -73,6 +74,10 @@ type Meta interface{}
 type Target struct {
 	distribution.Descriptor
 
+	// Rename identifies the changed repository paths
+	// if appropriate.
+	Rename *Rename `json:"rename,omitempty"`
+
 	// Length in bytes of content. Same as Size field in Descriptor.
 	// Provided for backwards compatibility.
 	Length int64 `json:"length,omitempty"`
@@ -93,6 +98,25 @@ type Target struct {
 	// References provides the references descriptors.
 	References []distribution.Descriptor `json:"references,omitempty"`
 }
+
+type Rename struct {
+	// Type identifies the rename operation type (i.e. namespace or name)
+	Type RenameType `json:"type,omitempty"`
+
+	// From identifies the repository path which was renamed
+	From string `json:"from,omitempty"`
+
+	// To identifies the newly renamed path of a repository
+	To string `json:"to,omitempty"`
+}
+
+// RenameType defines the types of repository renames
+type RenameType string
+
+var (
+	NameRename      RenameType = "name"
+	NamespaceRename RenameType = "namespace"
+)
 
 // ActorRecord specifies the agent that initiated the event. For most
 // situations, this could be from the authorization context of the request.
