@@ -972,13 +972,13 @@ func TestNewApp_Locks_Errors(t *testing.T) {
 			rootdir: "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
 			// disabling the database when database-in-use exists should error out
 			databaseEnabled: false,
-			expectedError:   errDatabaseInUse,
+			expectedError:   ErrDatabaseInUse,
 		},
 		"filesystem in use": {
 			rootdir: "../datastore/testdata/fixtures/importer/happy-path",
 			// enabling the database when filesystem-in-use exists should error out
 			databaseEnabled: true,
-			expectedError:   errFilesystemInUse,
+			expectedError:   ErrFilesystemInUse,
 		},
 		// we cannot test the scenario where the FF is disabled
 		// because it requires proper DB configuration and restoring of lockfiles

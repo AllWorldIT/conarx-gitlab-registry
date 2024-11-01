@@ -84,8 +84,12 @@ const defaultDBCheckTimeout = 5 * time.Second
 const redisCacheTTL = 6 * time.Hour
 
 var (
-	errFilesystemInUse = errors.New(`registry filesystem metadata in use, please import data before enabling the database, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#existing-registries`)
-	errDatabaseInUse   = errors.New(`registry metadata database in use, please enable the database https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html`)
+	// ErrFilesystemInUse is returned when the registry attempts to start with an existing filesystem-in-use lockfile
+	// and the database is also enabled.
+	ErrFilesystemInUse = errors.New(`registry filesystem metadata in use, please import data before enabling the database, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#existing-registries`)
+	// ErrDatabaseInUse is returned when the registry attempts to start with an existing database-in-use lockfile
+	// and the database is disabled.
+	ErrDatabaseInUse = errors.New(`registry metadata database in use, please enable the database https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html`)
 )
 
 // App is a global registry application object. Shared resources can be placed
@@ -349,7 +353,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			}
 
 			if fsLocked {
-				return nil, errFilesystemInUse
+				return nil, ErrFilesystemInUse
 			}
 		}
 
@@ -478,7 +482,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			}
 
 			if dbLocked {
-				return nil, errDatabaseInUse
+				return nil, ErrDatabaseInUse
 			}
 		}
 
