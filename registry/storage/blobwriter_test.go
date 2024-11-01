@@ -117,13 +117,6 @@ func testIdempotentUpload(t *testing.T, env *env) {
 	}
 }
 
-func testEmptyLayerUpload(t *testing.T, env *env) {
-	dgst := digest.FromBytes([]byte{})
-
-	testLayerUpload(t, env, bytes.NewReader([]byte{}), dgst)
-	testLayerLinked(t, env, dgst)
-}
-
 func testDockerConfigurationPaylodUpload(t *testing.T, env *env) {
 	basePath, err := os.Getwd()
 	require.NoError(t, err)

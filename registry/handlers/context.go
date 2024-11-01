@@ -65,10 +65,6 @@ func getReference(ctx context.Context) (reference string) {
 	return dcontext.GetStringValue(ctx, "vars.reference")
 }
 
-func getTag(ctx context.Context) (reference string) {
-	return dcontext.GetStringValue(ctx, "vars.tag")
-}
-
 var errDigestNotAvailable = fmt.Errorf("digest not available in context")
 
 func getDigest(ctx context.Context) (dgst digest.Digest, err error) {

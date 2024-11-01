@@ -986,21 +986,6 @@ func (imp *Importer) isTagsTableEmpty(ctx context.Context) (bool, error) {
 	return count == 0, nil
 }
 
-func (imp *Importer) isDatabaseEmpty(ctx context.Context) (bool, error) {
-	counters, err := imp.countRows(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	for _, c := range counters {
-		if c > 0 {
-			return false, nil
-		}
-	}
-
-	return true, nil
-}
-
 // ImportAll populates the registry database with metadata from all repositories in the storage backend.
 //
 // Deprecated: ImportAll is the original implementation and should no longer be used, use FullImport instead.

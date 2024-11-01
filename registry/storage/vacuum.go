@@ -34,7 +34,6 @@ type BlobRemover interface {
 // Vacuum removes content from the filesystem. Implements BlobRemover.
 type Vacuum struct {
 	driver driver.StorageDeleter
-	logger dcontext.Logger
 }
 
 // RemoveBlob removes a blob from the filesystem

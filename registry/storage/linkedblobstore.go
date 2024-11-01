@@ -431,18 +431,6 @@ func (lbs *linkedBlobStatter) Clear(ctx context.Context, dgst digest.Digest) (er
 	return lbs.blobStore.driver.Delete(ctx, blobLinkPath)
 }
 
-// resolveTargetWithFunc allows us to read a link to a resource with different
-// linkPathFuncs to let us try a few different paths before returning not
-// found.
-func (lbs *linkedBlobStatter) resolveWithLinkFunc(ctx context.Context, dgst digest.Digest, linkPathFn linkPathFunc) (digest.Digest, error) {
-	blobLinkPath, err := linkPathFn(lbs.repository.Named().Name(), dgst)
-	if err != nil {
-		return "", err
-	}
-
-	return lbs.blobStore.readlink(ctx, blobLinkPath)
-}
-
 func (lbs *linkedBlobStatter) SetDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
 	// The canonical descriptor for a blob is set at the commit phase of upload
 	return nil
