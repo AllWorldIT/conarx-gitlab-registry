@@ -1,0 +1,16 @@
+trigger release:
+  stage: child jobs
+  trigger:
+    include:
+      - local: .gitlab/ci/release-trigger.yml
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+trigger ci tool:
+  stage: child jobs
+  trigger:
+    include:
+      - local: .gitlab/ci/ci_tool.yml
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: always

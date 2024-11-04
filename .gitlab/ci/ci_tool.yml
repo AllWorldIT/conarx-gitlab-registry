@@ -1,0 +1,14 @@
+stages:
+  - main
+
+ci tool:
+  image: python:3.12
+  stage: main
+  needs: []
+  script:
+    - pip install --root-user-action ignore -r script/ci_tool/script/requirements.txt
+    - python3 script/ci_tool/script/e2e_stats.py --period 3
+  #NOTE(prozlach): Specifying rules is necessary to make child-pipelines work
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+
