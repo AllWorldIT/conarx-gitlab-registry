@@ -1,3 +1,20 @@
+## [4.13.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.12.0-gitlab...v4.13.0-gitlab) (2024-11-04)
+
+### ✨ Features ✨
+
+* **notifications:** add rename repository event notifier ([11950c1](https://gitlab.com/gitlab-org/container-registry/commit/11950c12c70de8fb4c479cbb365ee2cdf12e9459))
+
+### 🐛 Bug Fixes 🐛
+
+* **bbm:** ensure bbm query comply to pgx simple protocol implementation ([f097738](https://gitlab.com/gitlab-org/container-registry/commit/f09773871f6c01bf62105ea8c4fb6a7397d2eb1a))
+* **bbm:** wait for shutdown signal asynchronously ([4ab392a](https://gitlab.com/gitlab-org/container-registry/commit/4ab392a76369e2bc316893bb8e177b992845d6ad))
+* ensure DB LB replica resolution timeout does not prevent app startup ([6ff9db8](https://gitlab.com/gitlab-org/container-registry/commit/6ff9db8c2318305b1ca1afb5cc5ae6a985e9ab4f))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.46.0 ([c9bb58f](https://gitlab.com/gitlab-org/container-registry/commit/c9bb58fc4b7dc8c38f43e9bde700d24702b84129))
+* **deps:** update module google.golang.org/api to v0.204.0 ([cbb92e5](https://gitlab.com/gitlab-org/container-registry/commit/cbb92e5ffe0a2a903d8230ff9447a3c7a69be436))
+
 ## [4.12.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.11.0-gitlab...v4.12.0-gitlab) (2024-10-29)
 
 ### ✨ Features ✨
