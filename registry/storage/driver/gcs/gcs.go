@@ -88,7 +88,6 @@ var customParamKeys = map[string]string{
 // driverParameters is a struct that encapsulates all the driver parameters after all values have been set
 type driverParameters struct {
 	bucket        string
-	config        *jwt.Config
 	email         string
 	privateKey    []byte
 	client        *http.Client

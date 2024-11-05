@@ -19,10 +19,6 @@ const (
 	NamespaceIdKey = "namespace_id"
 	// SizeBytesKey is the key used to reference the size of an object to be downloaded in the options map passed to a driver's `URLFor` method.
 	SizeBytesKey = "size_bytes"
-
-	// repositoryNameContextKey is the context key used to reference the targeted repository of a request.
-	// The key is set in the handlers when processing a request.
-	repositoryNameContextKey = "vars.name"
 )
 
 // Exists provides a utility method to test whether a path exists in

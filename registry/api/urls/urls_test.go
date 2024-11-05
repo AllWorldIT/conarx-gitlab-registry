@@ -247,11 +247,6 @@ func TestBuilderWithPrefix(t *testing.T) {
 	doTest(false)
 }
 
-type builderFromRequestTestCase struct {
-	request *http.Request
-	base    string
-}
-
 type testRequests struct {
 	name       string
 	request    *http.Request

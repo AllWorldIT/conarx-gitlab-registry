@@ -26,14 +26,6 @@ var (
 		Description: `Tag or digest of the target manifest.`,
 	}
 
-	tagParameterDescriptor = ParameterDescriptor{
-		Name:        "tag",
-		Type:        "string",
-		Format:      reference.TagRegexp.String(),
-		Required:    true,
-		Description: `Tag of the target manifest.`,
-	}
-
 	uuidParameterDescriptor = ParameterDescriptor{
 		Name:        "uuid",
 		Type:        "opaque",

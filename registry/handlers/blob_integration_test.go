@@ -4,7 +4,6 @@ package handlers
 
 import (
 	"context"
-	iredis "github.com/docker/distribution/registry/internal/redis"
 	"os"
 	"testing"
 
@@ -22,7 +21,6 @@ import (
 type env struct {
 	ctx    context.Context
 	db     *datastore.DB
-	cache  *iredis.Cache
 	config *configuration.Configuration
 	rStore datastore.RepositoryStore
 
@@ -67,8 +65,6 @@ func initDatabase(t *testing.T, env *env) {
 	_, err = m.Up()
 	require.NoError(t, err)
 }
-
-type envOpt func(*env)
 
 func newEnv(t *testing.T) *env {
 	t.Helper()

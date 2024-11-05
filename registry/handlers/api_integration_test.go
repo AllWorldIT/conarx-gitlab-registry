@@ -567,6 +567,8 @@ func TestStartPushReadOnly(t *testing.T) {
 	checkResponse(t, "starting push in read-only mode", resp, http.StatusMethodNotAllowed)
 }
 
+// TODO: re-enable these tests? https://gitlab.com/gitlab-org/container-registry/-/issues/1395
+// nolint: unused
 type manifestArgs struct {
 	imageName reference.Named
 	mediaType string
@@ -1829,6 +1831,8 @@ func TestManifestAPI_Put_ReuseTagManifestListToManifestList(t *testing.T) {}
 func TestManifestAPI_Put_DigestReadOnly(t *testing.T) {}
 func TestManifestAPI_Put_TagReadOnly(t *testing.T)    {}
 
+// TODO: re-enable these tests? https://gitlab.com/gitlab-org/container-registry/-/issues/1395
+// nolint: unused
 func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) {
 	imageName := args.imageName
 	tag := "manifestlisttag"
@@ -2008,6 +2012,8 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 	checkResponse(t, "fetching manifest by dgst with etag", resp, http.StatusNotModified)
 }
 
+// TODO: re-enable these tests? https://gitlab.com/gitlab-org/container-registry/-/issues/1395
+// nolint: unused
 func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	imageName := args.imageName
 	dgst := args.dgst

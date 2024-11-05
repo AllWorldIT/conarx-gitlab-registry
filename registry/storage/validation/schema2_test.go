@@ -17,9 +17,8 @@ import (
 )
 
 var (
-	errUnexpectedURL = errors.New("unexpected URL on layer")
-	errMissingURL    = errors.New("missing URL on layer")
-	errInvalidURL    = errors.New("invalid URL on layer")
+	errMissingURL = errors.New("missing URL on layer")
+	errInvalidURL = errors.New("invalid URL on layer")
 )
 
 func TestVerifyManifest_Schema2_ForeignLayer(t *testing.T) {

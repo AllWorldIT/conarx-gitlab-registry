@@ -212,9 +212,6 @@ type tagsAPIResponse struct {
 	Tags []string `json:"tags"`
 }
 
-// digestSha256EmptyTar is the canonical sha256 digest of empty data
-const digestSha256EmptyTar = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-
 func newConfig(opts ...configOpt) configuration.Configuration {
 	config := &configuration.Configuration{
 		Storage: configuration.Storage{
@@ -976,10 +973,6 @@ func buildEventManifestDeleteByTag(mediaType, repoPath, tag string, opts ...even
 	return buildEventManifestDelete(mediaType, repoPath, tag, "", opts...)
 }
 
-func buildEventRepositoryRenamed(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
-	return buildEventRepositoryRename(repoTargetPath, rename, opts...)
-}
-
 func buildEventRepositoryRename(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
 	event := notifications.Event{
 		Action: "rename",
@@ -1426,19 +1419,6 @@ func checkHeaders(t *testing.T, resp *http.Response, headers http.Header) {
 	}
 }
 
-func checkAllowedMethods(t *testing.T, url string, allowed []string) {
-	resp, err := httpOptions(url)
-	msg := "checking allowed methods"
-	checkErr(t, err, msg)
-
-	defer resp.Body.Close()
-
-	checkResponse(t, msg, resp, http.StatusOK)
-	checkHeaders(t, resp, http.Header{
-		"Allow": allowed,
-	})
-}
-
 func checkErr(t *testing.T, err error, msg string) {
 	if err != nil {
 		t.Fatalf("unexpected error %s: %v", msg, err)
@@ -1488,20 +1468,6 @@ func httpDelete(url string) (*http.Response, error) {
 		return nil, err
 	}
 	//	defer resp.Body.Close()
-	return resp, err
-}
-
-func httpOptions(url string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodOptions, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
 	return resp, err
 }
 

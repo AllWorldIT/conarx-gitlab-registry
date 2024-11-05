@@ -84,8 +84,6 @@ var (
 	skipPostDeployment bool
 	upToDateCheck      bool
 	preImport          bool
-	format             string
-	countTags          bool
 	rowCount           bool
 	importCommonBlobs  bool
 	importAllRepos     bool

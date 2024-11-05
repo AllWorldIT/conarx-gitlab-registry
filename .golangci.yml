@@ -12,6 +12,15 @@ run:
   # include test files or not, default is true
   tests: true
 
+  build-tags:
+   - api_conformance_test
+   - api_gitlab_test
+   - handlers_test
+   - include_gcs
+   - integration
+   - online_gc_test
+   - toxiproxy
+
 # output configuration options
 output:
   # print lines of code with issue, default is true

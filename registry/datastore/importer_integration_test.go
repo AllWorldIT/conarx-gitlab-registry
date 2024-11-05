@@ -26,12 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newFilesystemStorageDriver(tb testing.TB) *filesystem.Driver {
-	tb.Helper()
-
-	return newFilesystemStorageDriverWithRoot(tb, "happy-path")
-}
-
 func newFilesystemStorageDriverWithRoot(tb testing.TB, root string) *filesystem.Driver {
 	tb.Helper()
 
@@ -104,17 +98,6 @@ func newImporterWithRoot(t *testing.T, db *datastore.DB, root string, opts ...da
 	t.Cleanup(restoreLockfiles(t, imp))
 
 	return imp
-}
-
-func newTempDirDriver(t *testing.T) *filesystem.Driver {
-	rootDir := t.TempDir()
-
-	d, err := filesystem.FromParameters(map[string]interface{}{
-		"rootdirectory": rootDir,
-	})
-	require.NoError(t, err)
-
-	return d
 }
 
 // Dump each table as JSON and compare the output against reference snapshots (.golden files)
