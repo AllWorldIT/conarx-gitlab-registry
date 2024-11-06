@@ -685,7 +685,10 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 		}
 	}
 
-	l.WithFields(logrus.Fields{"added": added, "removed": removed}).Info("updating replicas list")
+	l.WithFields(logrus.Fields{
+		"added_hosts":   strings.Join(added, ","),
+		"removed_hosts": strings.Join(removed, ","),
+	}).Info("updating replicas list")
 	metrics.ReplicaPoolSize(len(outputReplicas))
 	lb.replicas = outputReplicas
 
