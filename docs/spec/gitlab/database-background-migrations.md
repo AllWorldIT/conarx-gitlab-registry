@@ -32,6 +32,8 @@ CREATE TABLE batched_background_migrations (
     name text NOT NULL,
     created_at timestamp WITH time zone NOT NULL DEFAULT now(),
     updated_at timestamp WITH time zone,
+    started_at timestamp WITH time zone,
+    finished_at timestamp WITH time zone,
     min_value bigint DEFAULT 1 NOT NULL,
     max_value bigint NOT NULL,
     batch_size integer NOT NULL,
@@ -48,6 +50,8 @@ CREATE TABLE batched_background_migrations (
 - `name`: A unique name that identifies the migration (ideally, all names should follow the format `<timestamp>_<migration_description>`).
 - `created_at`: Timestamp when the migration was created.
 - `updated_at`: Timestamp when the migration was last updated.
+- `started_at`: Timestamp when the migration was last started.
+- `finished_at`: Timestamp when the migration was successfully completed.
 - `min_value`: Starting row `id` eligible for migration.
 - `max_value`: Stopping row `id` eligible for migration. Used to exclude newly introduced records after a given point.
 - `batch_size`: Number of rows that should be migrated per batch.
@@ -94,6 +98,10 @@ CREATE INDEX idx_bbm_jobs_status ON batched_background_migration_jobs (status);
 ```
 
 - `batched_background_migration_id`: References the batched background migration the job is tied to.
+- `created_at`: Timestamp when the migration job was created.
+- `started_at`: Timestamp when the migration job was first started. Creation of a job corresponds to the first effective start of the job.
+- `updated_at`: Timestamp when the migration job was last updated.
+- `finished_at`: Timestamp when the migration job was successfully completed.
 - `min_value`: The starting `id` for the batch job.
 - `max_value`: The stopping `id` for the batch job.
 - `attempts`: How many times the batch job was tried.
