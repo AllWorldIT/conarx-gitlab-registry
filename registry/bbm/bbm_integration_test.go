@@ -40,6 +40,7 @@ var (
 		"20240604074846_create_batched_background_migration_jobs_table",
 		"20240711175726_add_background_migration_failure_error_code_column",
 		"20240711211048_add_background_migration_jobs_indices",
+		"20241031081325_add_background_migration_timing_columns",
 	}
 )
 
@@ -54,10 +55,10 @@ func init() {
 	for _, v := range bbmBaseSchemaMigrationIDs {
 		if mig := stdMigrator.FindMigrationByID(v); mig != nil {
 			allBBMUpSchemaMigration = append(allBBMUpSchemaMigration, mig.Up...)
-			// we skip `20240711175726_add_background_migration_failure_error_code_column` down migration
-			// because, for the purpose of testing all calls to `down` migrate must be idempotent to facilitate test cleanups. This specific down migration:
-			// "ALTER TABLE batched_background_migrations DROP COLUMN IF EXISTS failure_error_code" is not idempotent if the table `batched_background_migrations` does not exist.
-			if v == "20240711175726_add_background_migration_failure_error_code_column" {
+			// For the purpose of testing all calls to `down` migrate must be idempotent to facilitate test cleanups. The below down migrations
+			// are not idempotent if the table `batched_background_migrations` does not exist so we skip them. The entire background_migration table
+			// will eventually be cleaned up by the down migration of 20240604074823_create_batched_background_migrations_table irregardless.
+			if v == "20240711175726_add_background_migration_failure_error_code_column" || v == "20241031081325_add_background_migration_timing_columns" {
 				continue
 			}
 			downMigrations = append(downMigrations, mig.Down...)
