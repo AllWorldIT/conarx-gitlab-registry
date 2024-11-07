@@ -620,7 +620,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 	for i := range resolvedDSNs {
 		var err error
 		dsn := &resolvedDSNs[i]
-		l = l.WithFields(logrus.Fields{"address": dsn.Address()})
+		l = l.WithFields(logrus.Fields{"db_replica_addr": dsn.Address()})
 
 		r := dbByAddress(lb.replicas, dsn.Address())
 		if r != nil {
@@ -651,7 +651,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 				// whenever the pool changes. We don't want to cause a panic here, so we'll rely on prometheus.Register
 				// instead of prometheus.MustRegister and gracefully handle an error by logging and reporting it.
 				if err := lb.promRegisterer.Register(collector); err != nil {
-					l.WithError(err).WithFields(log.Fields{"host_addr": r.Address()}).
+					l.WithError(err).WithFields(log.Fields{"db_replica_addr": r.Address()}).
 						Error("failed to register collector for database replica metrics")
 					errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 				}
@@ -676,7 +676,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 			}
 
 			// Close handlers for retired replicas
-			l.WithFields(log.Fields{"address": r.Address()}).Info("closing connection handler for retired replica")
+			l.WithFields(log.Fields{"db_replica_addr": r.Address()}).Info("closing connection handler for retired replica")
 			if err := r.Close(); err != nil {
 				err = fmt.Errorf("failed to close retired replica %q connection: %w", r.Address(), err)
 				result = multierror.Append(result, err)
@@ -876,6 +876,7 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 		metrics.PrimaryFallbackNoReplica()
 		return lb.primary
 	}
+	l = l.WithFields(log.Fields{"db_replica_addr": replica.Address()})
 
 	// Fetch the primary LSN from cache
 	primaryLSN, err := lb.lsnCache.GetLSN(ctx, r)
