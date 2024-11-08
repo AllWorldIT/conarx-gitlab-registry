@@ -46,6 +46,13 @@ func TestFileHealthCheck(t *testing.T) {
 
 	app, err := NewApp(ctx, config)
 	require.NoError(t, err)
+	t.Cleanup(
+		func() {
+			err := app.GracefulShutdown(ctx)
+			require.NoError(t, err)
+		},
+	)
+
 	healthRegistry := health.NewRegistry()
 	app.RegisterHealthChecks(healthRegistry)
 
@@ -111,6 +118,13 @@ func TestTCPHealthCheck(t *testing.T) {
 
 	app, err := NewApp(ctx, config)
 	require.NoError(t, err)
+	t.Cleanup(
+		func() {
+			err := app.GracefulShutdown(ctx)
+			require.NoError(t, err)
+		},
+	)
+
 	healthRegistry := health.NewRegistry()
 	app.RegisterHealthChecks(healthRegistry)
 
@@ -234,6 +248,13 @@ func TestHTTPHealthCheck(t *testing.T) {
 
 			app, err := NewApp(ctx, config)
 			require.NoError(t, err)
+			t.Cleanup(
+				func() {
+					err := app.GracefulShutdown(ctx)
+					require.NoError(t, err)
+				},
+			)
+
 			healthRegistry := health.NewRegistry()
 			app.RegisterHealthChecks(healthRegistry)
 

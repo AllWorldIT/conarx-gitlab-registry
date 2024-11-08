@@ -92,6 +92,8 @@ var (
 	ErrDatabaseInUse = errors.New(`registry metadata database in use, please enable the database https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html`)
 )
 
+type shutdownFunc func(app *App, errCh chan error, l dlog.Logger)
+
 // App is a global registry application object. Shared resources can be placed
 // on this object that will be accessible from all requests. Any writable
 // fields should be protected.
@@ -130,6 +132,13 @@ type App struct {
 
 	// redisCache is the abstraction for manipulating cached data on Redis.
 	redisCache *iredis.Cache
+
+	healthRegistry *health.Registry
+
+	// shutdownFuncs is the slice of functions/code that needs to be called
+	// during app object termination in order to gracefully clean up
+	// resources/terminate goroutines
+	shutdownFuncs []shutdownFunc
 }
 
 // NewApp takes a configuration and returns a configured app, ready to serve
@@ -139,6 +148,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	app := &App{
 		Config:  config,
 		Context: ctx,
+
+		shutdownFuncs: make([]shutdownFunc, 0),
 	}
 
 	if err := app.initMetaRouter(); err != nil {
@@ -449,6 +460,18 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		}
 
 		app.db = db
+		app.registerShutdownFunc(
+			func(app *App, errCh chan error, l dlog.Logger) {
+				l.Info("closing database connections")
+				err := app.db.Close()
+				if err != nil {
+					err = fmt.Errorf("database shutdown: %w", err)
+				} else {
+					l.Info("database component has been shut down")
+				}
+				errCh <- err
+			},
+		)
 		options = append(options, storage.Database(app.db))
 
 		// update online GC settings (if needed) in the background to avoid delaying the app start
@@ -765,10 +788,25 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 	if len(healthRegistries) > 1 {
 		return fmt.Errorf("RegisterHealthChecks called with more than one registry")
 	}
-	healthRegistry := health.DefaultRegistry
-	if len(healthRegistries) == 1 {
-		healthRegistry = healthRegistries[0]
+
+	// Allow for dependency injection:
+	if len(healthRegistries) > 0 {
+		app.healthRegistry = healthRegistries[0]
+	} else {
+		app.healthRegistry = health.DefaultRegistry
 	}
+	app.registerShutdownFunc(
+		func(app *App, errCh chan error, l dlog.Logger) {
+			l.Info("closing healthchecks registry")
+			err := app.healthRegistry.Shutdown()
+			if err != nil {
+				err = fmt.Errorf("healthchecks registry shutdown: %w", err)
+			} else {
+				l.Info("healthchecks registry has been shut down")
+			}
+			errCh <- err
+		},
+	)
 
 	if app.Config.Health.StorageDriver.Enabled {
 		interval := app.Config.Health.StorageDriver.Interval
@@ -791,9 +829,9 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			},
 		).Info("configuring storage health check")
 		if app.Config.Health.StorageDriver.Threshold != 0 {
-			healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
+			app.healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
 		} else {
-			healthRegistry.RegisterPeriodicFunc("storagedriver_"+app.Config.Storage.Type(), interval, storageDriverCheck)
+			app.healthRegistry.RegisterPeriodicFunc("storagedriver_"+app.Config.Storage.Type(), interval, storageDriverCheck)
 		}
 	}
 
@@ -819,9 +857,9 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 				},
 			).Info("configuring database health check")
 			if app.Config.Health.Database.Threshold != 0 {
-				healthRegistry.RegisterPeriodicThresholdFunc("database_connection", interval, app.Config.Health.Database.Threshold, check)
+				app.healthRegistry.RegisterPeriodicThresholdFunc("database_connection", interval, app.Config.Health.Database.Threshold, check)
 			} else {
-				healthRegistry.RegisterPeriodicFunc("database_connection", interval, check)
+				app.healthRegistry.RegisterPeriodicFunc("database_connection", interval, check)
 			}
 		}
 	}
@@ -832,7 +870,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			interval = defaultCheckInterval
 		}
 		dcontext.GetLogger(app).Infof("configuring file health check path=%s, interval=%d", fileChecker.File, interval/time.Second)
-		healthRegistry.Register(fileChecker.File, health.PeriodicChecker(checks.FileChecker(fileChecker.File), interval))
+		app.healthRegistry.Register(fileChecker.File, health.PeriodicChecker(checks.FileChecker(fileChecker.File), interval))
 	}
 
 	for _, httpChecker := range app.Config.Health.HTTPCheckers {
@@ -850,10 +888,10 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 		if httpChecker.Threshold != 0 {
 			dcontext.GetLogger(app).Infof("configuring HTTP health check uri=%s, interval=%d, threshold=%d", httpChecker.URI, interval/time.Second, httpChecker.Threshold)
-			healthRegistry.Register(httpChecker.URI, health.PeriodicThresholdChecker(checker, interval, httpChecker.Threshold))
+			app.healthRegistry.Register(httpChecker.URI, health.PeriodicThresholdChecker(checker, interval, httpChecker.Threshold))
 		} else {
 			dcontext.GetLogger(app).Infof("configuring HTTP health check uri=%s, interval=%d", httpChecker.URI, interval/time.Second)
-			healthRegistry.Register(httpChecker.URI, health.PeriodicChecker(checker, interval))
+			app.healthRegistry.Register(httpChecker.URI, health.PeriodicChecker(checker, interval))
 		}
 	}
 
@@ -867,10 +905,10 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 		if tcpChecker.Threshold != 0 {
 			dcontext.GetLogger(app).Infof("configuring TCP health check addr=%s, interval=%d, threshold=%d", tcpChecker.Addr, interval/time.Second, tcpChecker.Threshold)
-			healthRegistry.Register(tcpChecker.Addr, health.PeriodicThresholdChecker(checker, interval, tcpChecker.Threshold))
+			app.healthRegistry.Register(tcpChecker.Addr, health.PeriodicThresholdChecker(checker, interval, tcpChecker.Threshold))
 		} else {
 			dcontext.GetLogger(app).Infof("configuring TCP health check addr=%s, interval=%d", tcpChecker.Addr, interval/time.Second)
-			healthRegistry.Register(tcpChecker.Addr, health.PeriodicChecker(checker, interval))
+			app.healthRegistry.Register(tcpChecker.Addr, health.PeriodicChecker(checker, interval))
 		}
 	}
 	return nil
@@ -947,6 +985,18 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 	app.events.sink = notifications.NewBroadcaster(
 		configuration.Notifications.FanoutTimeout,
 		sinks...,
+	)
+	app.registerShutdownFunc(
+		func(app *App, errCh chan error, l dlog.Logger) {
+			l.Info("closing events notification sink")
+			err := app.events.sink.Close()
+			if err != nil {
+				err = fmt.Errorf("events notification sink shutdown: %w", err)
+			} else {
+				l.Info("events notification sink has been shut down")
+			}
+			errCh <- err
+		},
 	)
 
 	// Populate registry event source
@@ -1946,47 +1996,24 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 	return nil
 }
 
+func (app *App) registerShutdownFunc(f shutdownFunc) {
+	app.shutdownFuncs = append(app.shutdownFuncs, f)
+}
+
 // GracefulShutdown allows the app to free any resources before shutdown.
 func (app *App) GracefulShutdown(ctx context.Context) error {
-	// TODO(prozlach): There are probably more components that need/will need
-	// graceful shutdown, hence making this function extendable.
-	numberOfComponentsToShutdown := 2
-
 	errs := new(multierror.Error)
 	l := dlog.GetLogger(dlog.WithContext(ctx))
-	errCh := make(chan error, numberOfComponentsToShutdown)
+	errCh := make(chan error, len(app.shutdownFuncs))
 
-	if app.db != nil {
-		// NOTE(prozlach): Database is enabled, let's shut it down
-		go func() {
-			l.Info("closing database connections")
-			err := app.db.Close()
-			if err != nil {
-				err = fmt.Errorf("database shutdown: %w", err)
-			} else {
-				l.Info("database component has been shut down")
-			}
-			errCh <- err
-		}()
-	} else {
-		errCh <- nil
+	// NOTE(prozlach): it is important that we are quick during shutdown, as
+	// e.g. k8s can forcefully terminate the pod with SIGKILL if the shutdown
+	// takes too long.
+	for _, f := range app.shutdownFuncs {
+		go f(app, errCh, l)
 	}
 
-	// NOTE(prozlach): Events Broadcaster sink is always there, it may simply
-	// not have any dependent sinks attached if notifications are not
-	// configured.
-	go func() {
-		l.Info("closing events notification sink")
-		err := app.events.sink.Close()
-		if err != nil {
-			err = fmt.Errorf("events notification sink shutdown: %w", err)
-		} else {
-			l.Info("events notification sink has been shut down")
-		}
-		errCh <- err
-	}()
-
-	for i := 0; i < numberOfComponentsToShutdown; i++ {
+	for i := 0; i < len(app.shutdownFuncs); i++ {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("app shutdown failed: %w", ctx.Err())
