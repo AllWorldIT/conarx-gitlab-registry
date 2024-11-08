@@ -15,6 +15,7 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/internal"
 	"github.com/getsentry/sentry-go"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sirupsen/logrus"
 	"gitlab.com/gitlab-org/labkit/correlation"
 	"gitlab.com/gitlab-org/labkit/errortracking"
@@ -112,9 +113,12 @@ func (w *baseWorker) logAndReportErr(ctx context.Context, err error) {
 func (w *baseWorker) rollbackOnExit(ctx context.Context, tx datastore.Transactor) {
 	rollback := func() {
 		if err := tx.Rollback(); err != nil {
-			if errors.Is(err, sql.ErrTxDone) {
+			switch {
+			case errors.Is(err, sql.ErrTxDone):
 				// the transaction was already committed or rolled back (good!), ignore
-			} else {
+			case pgconn.SafeToRetry(err) && err.Error() == "conn closed":
+				// The transaction context likely timed out and the connection is closed, ignore.
+			default:
 				// the transaction wasn't committed or rolled back yet (bad!), and we failed to rollback here (2x bad!)
 				w.logAndReportErr(ctx, fmt.Errorf("error rolling back database transaction on exit: %w", err))
 			}
