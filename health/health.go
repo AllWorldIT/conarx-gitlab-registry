@@ -17,6 +17,7 @@ import (
 type Registry struct {
 	mu               sync.RWMutex
 	registeredChecks map[string]Checker
+	isShutdown       bool
 }
 
 // NewRegistry creates a new registry. This isn't necessary for normal use of
@@ -36,7 +37,10 @@ var DefaultRegistry *Registry
 type Checker interface {
 	// Check returns nil if the service is okay.
 	Check() error
+	Shutdown()
 }
+
+var _ Checker = (CheckFunc)(nil)
 
 // CheckFunc is a convenience type to create functions that implement
 // the Checker interface
@@ -48,6 +52,11 @@ func (cf CheckFunc) Check() error {
 	return cf()
 }
 
+// Shutdown is a noop, just to fulfill the interface as the functions that are
+// using this do not need shutting down.
+func (cf CheckFunc) Shutdown() {
+}
+
 // Updater implements a health check that is explicitly set.
 type Updater interface {
 	Checker
@@ -56,17 +65,21 @@ type Updater interface {
 	Update(status error)
 }
 
-// updater implements Checker and Updater, providing an asynchronous Update
-// method.
-// This allows us to have a Checker that returns the Check() call immediately
-// not blocking on a potentially expensive check.
-type updater struct {
+var _ Updater = (*StatusUpdater)(nil)
+
+// StatusUpdater implements Checker and Updater, providing an asynchronous
+// Update method. This allows us to have a Checker that returns the Check()
+// call immediately not blocking on a potentially expensive check.
+type StatusUpdater struct {
 	mu     sync.Mutex
 	status error
+
+	wg     *sync.WaitGroup
+	doneCh chan struct{}
 }
 
 // Check implements the Checker interface
-func (u *updater) Check() error {
+func (u *StatusUpdater) Check() error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
@@ -75,31 +88,43 @@ func (u *updater) Check() error {
 
 // Update implements the Updater interface, allowing asynchronous access to
 // the status of a Checker.
-func (u *updater) Update(status error) {
+func (u *StatusUpdater) Update(status error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
 	u.status = status
 }
 
-// NewStatusUpdater returns a new updater
-func NewStatusUpdater() Updater {
-	return &updater{}
+func (u *StatusUpdater) Shutdown() {
+	close(u.doneCh)
+	u.wg.Wait()
 }
 
-// thresholdUpdater implements Checker and Updater, providing an asynchronous Update
-// method.
-// This allows us to have a Checker that returns the Check() call immediately
-// not blocking on a potentially expensive check.
-type thresholdUpdater struct {
+// NewStatusUpdater returns a new updater
+func NewStatusUpdater() *StatusUpdater {
+	return &StatusUpdater{
+		wg:     new(sync.WaitGroup),
+		doneCh: make(chan struct{}),
+	}
+}
+
+var _ Updater = (*ThresholdStatusUpdater)(nil)
+
+// ThresholdStatusUpdater implements Checker and Updater, providing an
+// asynchronous Update method. This allows us to have a Checker that returns
+// the Check() call immediately not blocking on a potentially expensive check.
+type ThresholdStatusUpdater struct {
 	mu        sync.Mutex
 	status    error
 	threshold int
 	count     int
+
+	wg     *sync.WaitGroup
+	doneCh chan struct{}
 }
 
 // Check implements the Checker interface
-func (tu *thresholdUpdater) Check() error {
+func (tu *ThresholdStatusUpdater) Check() error {
 	tu.mu.Lock()
 	defer tu.mu.Unlock()
 
@@ -112,7 +137,7 @@ func (tu *thresholdUpdater) Check() error {
 
 // thresholdUpdater implements the Updater interface, allowing asynchronous
 // access to the status of a Checker.
-func (tu *thresholdUpdater) Update(status error) {
+func (tu *ThresholdStatusUpdater) Update(status error) {
 	tu.mu.Lock()
 	defer tu.mu.Unlock()
 
@@ -125,19 +150,36 @@ func (tu *thresholdUpdater) Update(status error) {
 	tu.status = status
 }
 
+func (tu *ThresholdStatusUpdater) Shutdown() {
+	close(tu.doneCh)
+	tu.wg.Wait()
+}
+
 // NewThresholdStatusUpdater returns a new thresholdUpdater
-func NewThresholdStatusUpdater(t int) Updater {
-	return &thresholdUpdater{threshold: t}
+func NewThresholdStatusUpdater(t int) *ThresholdStatusUpdater {
+	return &ThresholdStatusUpdater{
+		threshold: t,
+		wg:        new(sync.WaitGroup),
+		doneCh:    make(chan struct{}),
+	}
 }
 
 // PeriodicChecker wraps an updater to provide a periodic checker
 func PeriodicChecker(check Checker, period time.Duration) Checker {
 	u := NewStatusUpdater()
+	u.wg.Add(1)
 	go func() {
+		defer u.wg.Done()
+
 		t := time.NewTicker(period)
+		defer t.Stop()
 		for {
-			<-t.C
-			u.Update(check.Check())
+			select {
+			case <-t.C:
+				u.Update(check.Check())
+			case <-u.doneCh:
+				return
+			}
 		}
 	}()
 
@@ -148,15 +190,49 @@ func PeriodicChecker(check Checker, period time.Duration) Checker {
 // uses a threshold before it changes status
 func PeriodicThresholdChecker(check Checker, period time.Duration, threshold int) Checker {
 	tu := NewThresholdStatusUpdater(threshold)
+	tu.wg.Add(1)
 	go func() {
+		defer tu.wg.Done()
+
 		t := time.NewTicker(period)
+		defer t.Stop()
 		for {
-			<-t.C
-			tu.Update(check.Check())
+			select {
+			case <-t.C:
+				tu.Update(check.Check())
+			case <-tu.doneCh:
+				return
+			}
 		}
 	}()
 
 	return tu
+}
+
+// Shutdown shuts down health checks registry
+func (registry *Registry) Shutdown() error {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	if registry.isShutdown {
+		return fmt.Errorf("registry has already been shutdown")
+	}
+	registry.isShutdown = true
+
+	// NOTE(prozlach): it is important that we are quick during shutdown, as
+	// e.g. k8s can forcefully terminate the pod with SIGKILL if the shutdown
+	// takes too long.
+	wg := new(sync.WaitGroup)
+	wg.Add(len(registry.registeredChecks))
+	for _, v := range registry.registeredChecks {
+		go func() {
+			defer wg.Done()
+			v.Shutdown()
+		}()
+	}
+	wg.Wait()
+
+	return nil
 }
 
 // CheckStatus returns a map with all the current health check errors

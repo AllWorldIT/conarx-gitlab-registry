@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestReturns200IfThereAreNoChecks ensures that the result code of the health
@@ -52,6 +54,12 @@ func TestReturns503IfThereAreErrorChecks(t *testing.T) {
 func TestHealthHandler(t *testing.T) {
 	// clear out existing checks.
 	DefaultRegistry = NewRegistry()
+	t.Cleanup(
+		func() {
+			err := DefaultRegistry.Shutdown()
+			require.NoError(t, err)
+		},
+	)
 
 	// protect an http server
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
