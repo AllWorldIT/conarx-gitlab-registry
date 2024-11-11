@@ -278,28 +278,28 @@ func (suite *DriverSuite) TestInvalidPaths() {
 
 // TestWriteRead1 tests a simple write-read workflow.
 func (suite *DriverSuite) TestWriteRead1() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := []byte("a")
 	suite.writeReadCompare(suite.T(), filename, contents)
 }
 
 // TestWriteRead2 tests a simple write-read workflow with unicode data.
 func (suite *DriverSuite) TestWriteRead2() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := []byte("\xc3\x9f")
 	suite.writeReadCompare(suite.T(), filename, contents)
 }
 
 // TestWriteRead3 tests a simple write-read workflow with a small string.
 func (suite *DriverSuite) TestWriteRead3() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(32)
 	suite.writeReadCompare(suite.T(), filename, contents)
 }
 
 // TestWriteRead4 tests a simple write-read workflow with 1MB of data.
 func (suite *DriverSuite) TestWriteRead4() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(1024 * 1024)
 	suite.writeReadCompare(suite.T(), filename, contents)
 }
@@ -307,7 +307,7 @@ func (suite *DriverSuite) TestWriteRead4() {
 // TestWriteReadNonUTF8 tests that non-utf8 data may be written to the storage
 // driver safely.
 func (suite *DriverSuite) TestWriteReadNonUTF8() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := []byte{0x80, 0x80, 0x80, 0x80}
 	suite.writeReadCompare(suite.T(), filename, contents)
 }
@@ -315,7 +315,7 @@ func (suite *DriverSuite) TestWriteReadNonUTF8() {
 // TestTruncate tests that putting smaller contents than an original file does
 // remove the excess contents.
 func (suite *DriverSuite) TestTruncate() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(1024 * 1024)
 	suite.writeReadCompare(suite.T(), filename, contents)
 
@@ -325,7 +325,7 @@ func (suite *DriverSuite) TestTruncate() {
 
 // TestReadNonexistent tests reading content from an empty path.
 func (suite *DriverSuite) TestReadNonexistent() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	_, err := suite.StorageDriver.GetContent(suite.ctx, filename)
 	require.Error(suite.T(), err)
 	require.ErrorIs(suite.T(), err, storagedriver.PathNotFoundError{
@@ -336,7 +336,7 @@ func (suite *DriverSuite) TestReadNonexistent() {
 
 // TestWriteReadStreams1 tests a simple write-read streaming workflow.
 func (suite *DriverSuite) TestWriteReadStreams1() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := []byte("a")
 	suite.writeReadCompareStreams(suite.T(), filename, contents)
 }
@@ -344,7 +344,7 @@ func (suite *DriverSuite) TestWriteReadStreams1() {
 // TestWriteReadStreams2 tests a simple write-read streaming workflow with
 // unicode data.
 func (suite *DriverSuite) TestWriteReadStreams2() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := []byte("\xc3\x9f")
 	suite.writeReadCompareStreams(suite.T(), filename, contents)
 }
@@ -352,7 +352,7 @@ func (suite *DriverSuite) TestWriteReadStreams2() {
 // TestWriteReadStreams3 tests a simple write-read streaming workflow with a
 // small amount of data.
 func (suite *DriverSuite) TestWriteReadStreams3() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(32)
 	suite.writeReadCompareStreams(suite.T(), filename, contents)
 }
@@ -360,7 +360,7 @@ func (suite *DriverSuite) TestWriteReadStreams3() {
 // TestWriteReadStreams4 tests a simple write-read streaming workflow with 1MB
 // of data.
 func (suite *DriverSuite) TestWriteReadStreams4() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(1024 * 1024)
 	suite.writeReadCompareStreams(suite.T(), filename, contents)
 }
@@ -368,7 +368,7 @@ func (suite *DriverSuite) TestWriteReadStreams4() {
 // TestWriteReadStreamsNonUTF8 tests that non-utf8 data may be written to the
 // storage driver safely.
 func (suite *DriverSuite) TestWriteReadStreamsNonUTF8() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := []byte{0x80, 0x80, 0x80, 0x80}
 	suite.writeReadCompareStreams(suite.T(), filename, contents)
 }
@@ -380,7 +380,7 @@ func (suite *DriverSuite) TestWriteReadLargeStreams() {
 		suite.T().Skip("Skipping test in short mode")
 	}
 
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	defer suite.deletePath(suite.T(), firstPart(filename))
 
 	checksum := sha256.New()
@@ -413,7 +413,7 @@ func (suite *DriverSuite) TestWriteReadLargeStreams() {
 // TestReaderWithOffset tests that the appropriate data is streamed when
 // reading with a given offset.
 func (suite *DriverSuite) TestReaderWithOffset() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	defer suite.deletePath(suite.T(), firstPart(filename))
 
 	chunkSize := int64(32)
@@ -505,7 +505,7 @@ func (suite *DriverSuite) TestContinueStreamAppendSmall() {
 }
 
 func (suite *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	defer suite.deletePath(t, firstPart(filename))
 
 	contentsChunk1 := randomContents(chunkSize)
@@ -561,7 +561,7 @@ func (suite *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64
 // TestReadNonexistentStream tests that reading a stream for a nonexistent path
 // fails.
 func (suite *DriverSuite) TestReadNonexistentStream() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 
 	_, err := suite.StorageDriver.Reader(suite.ctx, filename, 0)
 	require.Error(suite.T(), err)
@@ -634,8 +634,8 @@ func (suite *DriverSuite) testList(t *testing.T, numFiles int) {
 // does exist at the destination.
 func (suite *DriverSuite) TestMove() {
 	contents := randomContents(32)
-	sourcePath := randomPath(32)
-	destPath := randomPath(32)
+	sourcePath := randomPath(1, 32)
+	destPath := randomPath(1, 32)
 
 	defer suite.deletePath(suite.T(), firstPart(sourcePath))
 	defer suite.deletePath(suite.T(), firstPart(destPath))
@@ -661,8 +661,8 @@ func (suite *DriverSuite) TestMove() {
 // TestMoveOverwrite checks that a moved object no longer exists at the source
 // path and overwrites the contents at the destination.
 func (suite *DriverSuite) TestMoveOverwrite() {
-	sourcePath := randomPath(32)
-	destPath := randomPath(32)
+	sourcePath := randomPath(1, 32)
+	destPath := randomPath(1, 32)
 	sourceContents := randomContents(32)
 	destContents := randomContents(64)
 
@@ -694,8 +694,8 @@ func (suite *DriverSuite) TestMoveOverwrite() {
 // delete the data at the destination path.
 func (suite *DriverSuite) TestMoveNonexistent() {
 	contents := randomContents(32)
-	sourcePath := randomPath(32)
-	destPath := randomPath(32)
+	sourcePath := randomPath(1, 32)
+	destPath := randomPath(1, 32)
 
 	defer suite.deletePath(suite.T(), firstPart(destPath))
 
@@ -731,7 +731,7 @@ func (suite *DriverSuite) TestMoveInvalid() {
 // TestDelete checks that the delete operation removes data from the storage
 // driver
 func (suite *DriverSuite) TestDelete() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(32)
 
 	defer suite.deletePath(suite.T(), firstPart(filename))
@@ -810,7 +810,7 @@ func (suite *DriverSuite) buildFiles(t require.TestingT, parentDir string, num, 
 	paths := make([]string, 0, num)
 
 	for i := int64(0); i < num; i++ {
-		p := path.Join(parentDir, randomPath(32))
+		p := path.Join(parentDir, randomPath(4, 32))
 		paths = append(paths, p)
 
 		err := suite.StorageDriver.PutContent(suite.ctx, p, randomContents(size))
@@ -834,7 +834,7 @@ func (suite *DriverSuite) assertPathNotFound(t require.TestingT, path ...string)
 
 // TestDeleteFiles checks that DeleteFiles removes data from the storage driver for a random (<10) number of files.
 func (suite *DriverSuite) TestDeleteFiles() {
-	parentDir := randomPath(8)
+	parentDir := randomPath(1, 8)
 	defer suite.deletePath(suite.T(), firstPart(parentDir))
 
 	/* #nosec G404 */
@@ -849,7 +849,7 @@ func (suite *DriverSuite) TestDeleteFiles() {
 
 // TestDeleteFiles is a regression test for deleting files where the file name and folder where the file resides have the same names
 func (suite *DriverSuite) TestDeleteFileEqualFolderFileName() {
-	parentDir := randomPath(8)
+	parentDir := randomPath(1, 8)
 	fileName := "Maryna"
 	path := path.Join(parentDir, fileName, fileName)
 	defer suite.deletePath(suite.T(), firstPart(parentDir))
@@ -865,7 +865,7 @@ func (suite *DriverSuite) TestDeleteFileEqualFolderFileName() {
 
 // TestDeleteFilesNotFound checks that DeleteFiles is idempotent and doesn't return an error if a file was not found.
 func (suite *DriverSuite) TestDeleteFilesNotFound() {
-	parentDir := randomPath(8)
+	parentDir := randomPath(1, 8)
 	defer suite.deletePath(suite.T(), firstPart(parentDir))
 
 	blobPaths := suite.buildFiles(suite.T(), parentDir, 5, 32)
@@ -883,7 +883,7 @@ func (suite *DriverSuite) TestDeleteFilesNotFound() {
 
 // benchmarkDeleteFiles benchmarks DeleteFiles for an amount of num files.
 func (suite *DriverSuite) benchmarkDeleteFiles(b *testing.B, num int64) {
-	parentDir := randomPath(8)
+	parentDir := randomPath(1, 8)
 	defer suite.deletePath(b, firstPart(parentDir))
 
 	for i := 0; i < b.N; i++ {
@@ -911,7 +911,7 @@ func (suite *DriverSuite) BenchmarkDeleteFiles100Files(b *testing.B) {
 // TestURLFor checks that the URLFor method functions properly, but only if it
 // is implemented
 func (suite *DriverSuite) TestURLFor() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(32)
 
 	defer suite.deletePath(suite.T(), firstPart(filename))
@@ -948,7 +948,7 @@ func (suite *DriverSuite) TestURLFor() {
 
 // TestDeleteNonexistent checks that removing a nonexistent key fails.
 func (suite *DriverSuite) TestDeleteNonexistent() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	err := suite.StorageDriver.Delete(suite.ctx, filename)
 	require.Error(suite.T(), err)
 	require.ErrorIs(suite.T(), err, storagedriver.PathNotFoundError{
@@ -959,10 +959,10 @@ func (suite *DriverSuite) TestDeleteNonexistent() {
 
 // TestDeleteFolder checks that deleting a folder removes all child elements.
 func (suite *DriverSuite) TestDeleteFolder() {
-	dirname := randomPath(32)
-	filename1 := randomPath(32)
-	filename2 := randomPath(32)
-	filename3 := randomPath(32)
+	dirname := randomPath(1, 32)
+	filename1 := randomPath(1, 32)
+	filename2 := randomPath(1, 32)
+	filename3 := randomPath(1, 32)
 	contents := randomContents(32)
 
 	defer suite.deletePath(suite.T(), firstPart(dirname))
@@ -1022,8 +1022,8 @@ func (suite *DriverSuite) TestDeleteFolder() {
 // deleting "/a" does not delete "/ab").  This matters for services like S3 that
 // do not implement directories.
 func (suite *DriverSuite) TestDeleteOnlyDeletesSubpaths() {
-	dirname := randomPath(32)
-	filename := randomPath(32)
+	dirname := randomPath(1, 32)
+	filename := randomPath(1, 32)
 	contents := randomContents(32)
 
 	defer suite.deletePath(suite.T(), firstPart(dirname))
@@ -1070,7 +1070,7 @@ func (suite *DriverSuite) TestDeleteOnlyDeletesSubpaths() {
 // TestStatCall runs verifies the implementation of the storagedriver's Stat call.
 func (suite *DriverSuite) TestStatCall() {
 	content := randomContents(4096)
-	dirPath := randomPath(32)
+	dirPath := randomPath(1, 32)
 	fileName := randomFilename(32)
 	filePath := path.Join(dirPath, fileName)
 
@@ -1141,7 +1141,7 @@ func (suite *DriverSuite) TestStatCall() {
 // with an offset like Writer does and overwrites the file entirely
 // rather than writing the data to the [0,len(data)) of the file.
 func (suite *DriverSuite) TestPutContentMultipleTimes() {
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(4096)
 
 	defer suite.deletePath(suite.T(), firstPart(filename))
@@ -1167,7 +1167,7 @@ func (suite *DriverSuite) TestConcurrentStreamReads() {
 		suite.T().Log("Reducing file size to 10MB for short mode")
 	}
 
-	filename := randomPath(32)
+	filename := randomPath(1, 32)
 	contents := randomContents(filesize)
 
 	defer suite.deletePath(suite.T(), firstPart(filename))
@@ -1230,7 +1230,7 @@ func (suite *DriverSuite) TestConcurrentFileStreams() {
 // 		suite.T().Skip("Skipping test in short mode")
 // 	}
 //
-// 	filename := randomPath(32)
+// 	filename := randomPath(1,32)
 // 	defer suite.deletePath(suite.T(), firstPart(filename))
 //
 // 	var offset int64
@@ -1462,14 +1462,14 @@ func (suite *DriverSuite) BenchmarkPutGet1GBFiles(b *testing.B) {
 
 func (suite *DriverSuite) benchmarkPutGetFiles(b *testing.B, size int64) {
 	b.SetBytes(size)
-	parentDir := randomPath(8)
+	parentDir := randomPath(1, 8)
 	defer func() {
 		b.StopTimer()
 		suite.StorageDriver.Delete(suite.ctx, firstPart(parentDir))
 	}()
 
 	for i := 0; i < b.N; i++ {
-		filename := path.Join(parentDir, randomPath(32))
+		filename := path.Join(parentDir, randomPath(4, 32))
 		err := suite.StorageDriver.PutContent(suite.ctx, filename, randomContents(size))
 		require.NoError(b, err)
 
@@ -1503,14 +1503,14 @@ func (suite *DriverSuite) BenchmarkStream1GBFiles(b *testing.B) {
 
 func (suite *DriverSuite) benchmarkStreamFiles(b *testing.B, size int64) {
 	b.SetBytes(size)
-	parentDir := randomPath(8)
+	parentDir := randomPath(1, 8)
 	defer func() {
 		b.StopTimer()
 		suite.StorageDriver.Delete(suite.ctx, firstPart(parentDir))
 	}()
 
 	for i := 0; i < b.N; i++ {
-		filename := path.Join(parentDir, randomPath(32))
+		filename := path.Join(parentDir, randomPath(4, 32))
 		writer, err := suite.StorageDriver.Writer(suite.ctx, filename, false)
 		require.NoError(b, err)
 		written, err := io.Copy(writer, bytes.NewReader(randomContents(size)))
@@ -1539,14 +1539,14 @@ func (suite *DriverSuite) BenchmarkList50Files(b *testing.B) {
 }
 
 func (suite *DriverSuite) benchmarkListFiles(b *testing.B, numFiles int64) {
-	parentDir := randomPath(8)
+	parentDir := randomPath(1, 8)
 	defer func() {
 		b.StopTimer()
 		suite.StorageDriver.Delete(suite.ctx, firstPart(parentDir))
 	}()
 
 	for i := int64(0); i < numFiles; i++ {
-		err := suite.StorageDriver.PutContent(suite.ctx, path.Join(parentDir, randomPath(32)), nil)
+		err := suite.StorageDriver.PutContent(suite.ctx, path.Join(parentDir, randomPath(4, 32)), nil)
 		require.NoError(b, err)
 	}
 
@@ -1570,12 +1570,12 @@ func (suite *DriverSuite) BenchmarkDelete50Files(b *testing.B) {
 
 func (suite *DriverSuite) benchmarkDelete(b *testing.B, numFiles int64) {
 	for i := 0; i < b.N; i++ {
-		parentDir := randomPath(8)
+		parentDir := randomPath(4, 12)
 		defer suite.deletePath(b, firstPart(parentDir))
 
 		b.StopTimer()
 		for j := int64(0); j < numFiles; j++ {
-			err := suite.StorageDriver.PutContent(suite.ctx, path.Join(parentDir, randomPath(32)), nil)
+			err := suite.StorageDriver.PutContent(suite.ctx, path.Join(parentDir, randomPath(4, 32)), nil)
 			require.NoError(b, err)
 		}
 		b.StartTimer()
@@ -2032,7 +2032,7 @@ func (suite *DriverSuite) testFileStreams(t *testing.T, size int64) {
 	defer os.Remove(tf.Name())
 	defer tf.Close()
 
-	filename := randomPath(32)
+	filename := randomPath(4, 32)
 	defer suite.deletePath(t, firstPart(filename))
 
 	contents := randomContents(size)
@@ -2105,14 +2105,32 @@ var (
 	separatorChars = []byte("._-")
 )
 
-func randomPath(length int64) string {
+func randomPath(minTldLen int, length int) string {
+	// NOTE(prozlach): randomPath() is called in some tests concurrently and it
+	// may happen that the top-level directory of the path returned is not
+	// unique given enough calls to it. This leads to wonky race conditions as
+	// the tests are running concurrently and are trying to remove top level
+	// directory to clean up after themselves while others are still writing to
+	// it, leading to errors where paths are not being cleaned up.
+	//
+	// The solution is simple - enforce the minimal length of the top level dir
+	// enough so that the chance that there are collisions(i.e. same top-level
+	// directories) are very low for tests that require it.
+	//
+	// In my test script doing one million iterations I was not able to get a
+	// collision anymore for directories with minimal length of 4 and 32 calls
+	// to randomPath() function.
 	path := "/"
-	for int64(len(path)) < length {
+	for len(path) < length {
 		/* #nosec G404 */
-		chunkLength := rand.Int63n(length-int64(len(path))) + 1
+		chunkLength := rand.Intn(length-len(path)) + 1
+		if len(path) == 1 && chunkLength < minTldLen {
+			// First component is too short - retry
+			continue
+		}
 		chunk := randomFilename(chunkLength)
 		path += chunk
-		remaining := length - int64(len(path))
+		remaining := length - len(path)
 		if remaining == 1 {
 			path += randomFilename(1)
 		} else if remaining > 1 {
@@ -2122,7 +2140,7 @@ func randomPath(length int64) string {
 	return path
 }
 
-func randomFilename(length int64) string {
+func randomFilename(length int) string {
 	b := make([]byte, length)
 	wasSeparator := true
 	for i := range b {
@@ -2142,7 +2160,7 @@ func randomFilename(length int64) string {
 // chars long inclusive.
 func randomFilenameRange(min, max int) string {
 	/* #nosec G404 */
-	return randomFilename(int64(min + (rand.Intn(max + 1))))
+	return randomFilename(min + (rand.Intn(max + 1)))
 }
 
 // randomBranchingFiles creates n number of randomly named files at the end of
