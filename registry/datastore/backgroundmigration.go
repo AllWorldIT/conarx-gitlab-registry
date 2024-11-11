@@ -137,13 +137,15 @@ func (bms *backgroundMigrationStore) ExistsColumn(ctx context.Context, schema, t
 	return ok, nil
 }
 
-// FindJobEndFromJobStart finds the end cursor for a job based on the start of the job and the batch size of the Background Migration the job is associated with.
+// FindJobEndFromJobStart calculates the end cursor for a job based on its start position and the batch size.
+// If there are fewer records than the batch size, the end will be set to the last possible record.
 func (bms *backgroundMigrationStore) FindJobEndFromJobStart(ctx context.Context, table, column string, start, last, batchSize int) (int, error) {
 	err := bms.ValidateMigrationTableAndColumn(ctx, table, column)
 	if err != nil {
 		return 0, err
 	}
 
+	// If the range exceeds or meets the last record, return the last record.
 	if start+batchSize >= last {
 		return last, nil
 	}
@@ -157,7 +159,7 @@ func (bms *backgroundMigrationStore) FindJobEndFromJobStart(ctx context.Context,
 	err = bms.db.QueryRowContext(ctx, q, start, last, batchSize).Scan(&end)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return start, nil
+			return last, nil
 		}
 		return end, fmt.Errorf("calculating batched background migration job end id: %w", err)
 	}
