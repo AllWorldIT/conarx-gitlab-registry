@@ -123,6 +123,29 @@ func TestBackgroundMigrationStore_FindJobEndFromJobStart(t *testing.T) {
 	require.Equal(t, 2, j)
 }
 
+func TestBackgroundMigrationStore_FindJobEndFromJobStart_FewerRecordsThanBatchSizeRemaining(t *testing.T) {
+	// schedule a job to run on the "repositories" table
+	// see testdata/fixtures/batched_background_migrations.sql and
+	// testdata/fixtures/batched_background_migration_jobs.sql
+	reloadNamespaceFixtures(t)
+	reloadRepositoryFixtures(t)
+	reloadBackgroundMigrationFixtures(t)
+	reloadBackgroundMigrationJobFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+
+	// request the next end ID cursor, allowing for a range of up to 50 records
+	// between the provided start ID (1) and the returned end ID(100).
+	// Note: The "public.repositories" table contains only 17 records (IDs 0 to 16),
+	// as specified in testdata/fixtures/repositories.sql.
+	endID := 100
+	j, err := s.FindJobEndFromJobStart(suite.ctx, "public.repositories", "id", 1, endID, 50)
+	require.NoError(t, err)
+
+	// verify that the returned cursor is the end ID argument.
+	require.Equal(t, endID, j)
+}
+
 func TestBackgroundMigrationStore_FindJobEndFromJobStart_TableNotFound(t *testing.T) {
 	reloadBackgroundMigrationFixtures(t)
 	reloadBackgroundMigrationJobFixtures(t)
