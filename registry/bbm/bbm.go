@@ -221,7 +221,6 @@ func (jw *Worker) run(ctx context.Context) {
 		jw.logger.WithError(err).Error("failed to create database transaction")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		return
-
 	}
 	defer tx.Rollback()
 
@@ -281,7 +280,6 @@ func (jw *Worker) run(ctx context.Context) {
 		jw.logger.WithError(err).Error("failed to commit database transaction")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		return
-
 	}
 
 	l.Info("finished background migration job run")
@@ -363,7 +361,6 @@ func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigr
 			return nil, err
 		}
 		if job != nil {
-
 			l := l.WithFields(log.Fields{
 				jobIDKey:        job.ID,
 				jobBBMIDKey:     job.BBMID,

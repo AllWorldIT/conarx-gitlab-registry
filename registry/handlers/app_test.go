@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/docker/distribution/internal/feature"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/docker/distribution/internal/feature"
 
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
@@ -999,7 +1000,6 @@ func TestNewApp_Locks_Errors(t *testing.T) {
 
 			_, err := NewApp(ctx, config)
 			require.ErrorIs(t, err, tc.expectedError)
-
 		})
 	}
 }

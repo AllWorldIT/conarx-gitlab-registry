@@ -301,7 +301,6 @@ func (buh *blobUploadHandler) PutBlobUploadComplete(w http.ResponseWriter, r *ht
 				l.WithError(err).Error("unknown error completing upload")
 				buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			}
-
 		}
 
 		// Clean up the backend blob data if there was an error.

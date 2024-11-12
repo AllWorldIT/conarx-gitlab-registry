@@ -977,7 +977,6 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 		})
 
 		sinks = append(sinks, endpoint)
-
 	}
 
 	// TODO: replace broadcaster with a new worker that will consume events from the queue

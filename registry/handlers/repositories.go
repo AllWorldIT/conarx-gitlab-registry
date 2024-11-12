@@ -1056,14 +1056,12 @@ func validateRenameRequestAttributes(renameObject *RenameRepositoryAPIRequest, r
 	if isRenameNameRequest && isRenameNamespaceRequest {
 		detail := v1.OnlyOneOfParamsErrorDetail("name", "namespace")
 		return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParam.WithDetail(detail)
-
 	}
 
 	if isRenameNamespaceRequest {
 		if !reference.GitLabNamespacePathRegex.MatchString(newNamespacePath) {
 			detail := v1.InvalidPatchBodyTypeErrorDetail("namespace", reference.GitLabNamespacePathRegex.String())
 			return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
-
 		}
 
 		// requests that attempt to move repositories to a different top-level namespace are not allowed

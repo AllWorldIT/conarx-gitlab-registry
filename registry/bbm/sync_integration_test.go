@@ -513,7 +513,6 @@ func (s *BackgroundMigrationTestSuite) requireBackgroundMigrations(expected map[
 			s.Require().Equal(0, count, fmt.Sprintf("Expected no background migration jobs for background migration: %d, but found some", actualBM.ID))
 			return
 		} else {
-
 			// Check the associated jobs
 			qJobs := `SELECT
 						batched_background_migration_id,
@@ -580,7 +579,6 @@ func generateBBMFixtures(bbms map[models.BackgroundMigration][]models.Background
 	var down []string
 
 	for bbm, jobs := range bbms {
-
 		up = append(up,
 			fmt.Sprintf(`INSERT INTO batched_background_migrations ("id", "name", "min_value", "max_value", "batch_size", "status", "job_signature_name", "table_name", "column_name")
 				VALUES ('%d','%s', %d, %d,  %d, %d, '%s', '%s', '%s')`, bbm.ID, bbm.Name, bbm.StartID, bbm.EndID, bbm.BatchSize, bbm.Status, bbm.JobName, bbm.TargetTable, bbm.TargetColumn))

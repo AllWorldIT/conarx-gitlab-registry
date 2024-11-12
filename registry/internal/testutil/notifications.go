@@ -124,7 +124,6 @@ func (ns *NotificationServer) AssertEventNotification(t *testing.T, expectedEven
 		default:
 			t.Errorf("unknown action: %q", expectedEvent.Action)
 		}
-
 	}
 
 	t.Errorf("expected event did not match any received events")
