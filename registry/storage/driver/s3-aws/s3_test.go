@@ -164,8 +164,7 @@ func skipS3() string {
 }
 
 func TestS3DriverSuite(t *testing.T) {
-	root, err := os.MkdirTemp("", "s3driver-test-")
-	require.NoError(t, err)
+	root := t.TempDir()
 
 	if skipMsg := skipS3(); skipMsg != "" {
 		t.Skip(skipMsg)
@@ -176,16 +175,13 @@ func TestS3DriverSuite(t *testing.T) {
 		func() (storagedriver.StorageDriver, error) {
 			return s3DriverConstructor(root, s3.StorageClassStandard)
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 	suite.Run(t, ts)
 }
 
 func BenchmarkS3DriverSuite(b *testing.B) {
-	root, err := os.MkdirTemp("", "s3driver-bench-")
-	require.NoError(b, err)
+	root := b.TempDir()
 
 	if skipMsg := skipS3(); skipMsg != "" {
 		b.Skip(skipMsg)
@@ -196,9 +192,7 @@ func BenchmarkS3DriverSuite(b *testing.B) {
 		func() (storagedriver.StorageDriver, error) {
 			return s3DriverConstructor(root, s3.StorageClassStandard)
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 
 	ts.SetupSuiteWithB(b)

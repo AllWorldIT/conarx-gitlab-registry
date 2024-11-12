@@ -97,8 +97,7 @@ func skipGCS() string {
 }
 
 func TestGCSDriverSuite(t *testing.T) {
-	root, err := os.MkdirTemp("", "gcsdriver-test-")
-	require.NoError(t, err)
+	root := t.TempDir()
 
 	if skipMsg := skipGCS(); skipMsg != "" {
 		t.Skip(skipMsg)
@@ -109,16 +108,13 @@ func TestGCSDriverSuite(t *testing.T) {
 		func() (storagedriver.StorageDriver, error) {
 			return gcsDriverConstructor(root)
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 	suite.Run(t, ts)
 }
 
 func BenchmarkGCSDriverSuite(b *testing.B) {
-	root, err := os.MkdirTemp("", "gcsdriver-bench-")
-	require.NoError(b, err)
+	root := b.TempDir()
 
 	if skipMsg := skipGCS(); skipMsg != "" {
 		b.Skip(skipMsg)
@@ -129,9 +125,7 @@ func BenchmarkGCSDriverSuite(b *testing.B) {
 		func() (storagedriver.StorageDriver, error) {
 			return gcsDriverConstructor(root)
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 
 	ts.SetupSuiteWithB(b)
