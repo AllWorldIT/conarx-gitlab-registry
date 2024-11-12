@@ -242,7 +242,7 @@ func (t *Token) VerifySigningKey(verifyOpts VerifyOptions) (signingKey libtrust.
 	return
 }
 
-func parseAndVerifyCertChain(x5c []string, roots *x509.CertPool) (leafKey libtrust.PublicKey, err error) {
+func parseAndVerifyCertChain(x5c []string, roots *x509.CertPool) (libtrust.PublicKey, error) {
 	if len(x5c) == 0 {
 		return nil, errors.New("empty x509 certificate chain")
 	}
@@ -293,16 +293,15 @@ func parseAndVerifyCertChain(x5c []string, roots *x509.CertPool) (leafKey libtru
 		return nil, errors.New("unable to get leaf cert public key value")
 	}
 
-	leafKey, err = libtrust.FromCryptoPublicKey(leafCryptoKey)
+	leafKey, err := libtrust.FromCryptoPublicKey(leafCryptoKey)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make libtrust public key from leaf certificate: %s", err)
 	}
-
-	return
+	return leafKey, nil
 }
 
-func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (pubKey libtrust.PublicKey, err error) {
-	pubKey, err = libtrust.UnmarshalPublicKeyJWK([]byte(*rawJWK))
+func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (libtrust.PublicKey, error) {
+	pubKey, err := libtrust.UnmarshalPublicKeyJWK([]byte(*rawJWK))
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode raw JWK value: %s", err)
 	}
@@ -316,7 +315,7 @@ func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (pu
 		}
 
 		// The JWK is one of the trusted keys.
-		return
+		return pubKey, nil
 	}
 
 	// Ensure each item in the chain is of the correct type.
@@ -341,7 +340,7 @@ func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (pu
 		return nil, errors.New("leaf certificate public key ID does not match JWK key ID")
 	}
 
-	return
+	return pubKey, nil
 }
 
 // accessSet returns a set of actions available for the resource
