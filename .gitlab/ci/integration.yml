@@ -193,6 +193,7 @@ database:background-migrations:
     POSTGRESQL_DATABASE: "registry_test"
     POSTGRESQL_REPLICATION_USER: "repluser"
     POSTGRESQL_REPLICATION_PASSWORD: "replpassword"
+    POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
     REGISTRY_DATABASE_HOST: "primary"
     REGISTRY_DATABASE_LOADBALANCING_ENABLED: "true"
     REGISTRY_REDIS_CACHE_ENABLED:  "true"
@@ -206,16 +207,19 @@ database:background-migrations:
       alias: "primary"
       variables:
         POSTGRESQL_REPLICATION_MODE: "master"
+        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
     - name: bitnami/postgresql:${PG_VERSION}
       alias: "replica1"
       variables:
         POSTGRESQL_REPLICATION_MODE: "slave"
         POSTGRESQL_MASTER_HOST: "primary"
+        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
     - name: bitnami/postgresql:${PG_VERSION}
       alias: "replica2"
       variables:
         POSTGRESQL_REPLICATION_MODE: "slave"
         POSTGRESQL_MASTER_HOST: "primary"
+        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
     # not needed for all scenarios but avoids having to declare all services in each as `services` can't be extended
     - name: registry.gitlab.com/gitlab-org/container-registry/test-dns-server:28d4a455
       alias: "test-dns-server"
