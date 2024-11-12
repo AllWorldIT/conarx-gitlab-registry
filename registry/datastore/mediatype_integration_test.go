@@ -124,16 +124,16 @@ func TestMediaTypeStore_SafeFindOrCreate(t *testing.T) {
 
 	exists, err := s.Exists(suite.ctx, newMT)
 	require.NoError(t, err)
-	require.Equal(t, false, exists)
+	require.False(t, exists)
 
-	id, err = s.SafeFindOrCreateID(suite.ctx, newMT)
+	_, err = s.SafeFindOrCreateID(suite.ctx, newMT)
 	t.Cleanup(func() { deleteMediaType(t, newMT) })
 	wantErr := datastore.ErrUnknownMediaType{newMT}
 	require.EqualError(t, err, wantErr.Error())
 
 	exists, err = s.Exists(suite.ctx, newMT)
 	require.NoError(t, err)
-	require.Equal(t, false, exists)
+	require.False(t, exists)
 
 	t.Setenv(feature.DynamicMediaTypes.EnvVariable, "true")
 
@@ -149,7 +149,7 @@ func TestMediaTypeStore_SafeFindOrCreate(t *testing.T) {
 
 	exists, err = s.Exists(suite.ctx, newMT)
 	require.NoError(t, err)
-	require.Equal(t, false, exists)
+	require.False(t, exists)
 
 	id, err = s.SafeFindOrCreateID(suite.ctx, newMT)
 	t.Cleanup(func() { deleteMediaType(t, newMT) })
@@ -160,7 +160,7 @@ func TestMediaTypeStore_SafeFindOrCreate(t *testing.T) {
 
 	exists, err = s.Exists(suite.ctx, newMT)
 	require.NoError(t, err)
-	require.Equal(t, true, exists)
+	require.True(t, exists)
 }
 
 // Unlike other tables used during testing, the media types table comes pre-seeded

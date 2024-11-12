@@ -2436,6 +2436,7 @@ func manifest_Put_OCI_WithNonDistributableLayers(t *testing.T, opts ...configOpt
 	})
 
 	dm, err := ocischema.FromStruct(*m)
+	require.NoError(t, err)
 	validateManifestPutWithNonDistributableLayers(t, env, repoRef, dm, v1.MediaTypeImageManifest, d)
 }
 
@@ -2473,6 +2474,7 @@ func manifest_Put_Schema2_WithNonDistributableLayers(t *testing.T, opts ...confi
 	})
 
 	dm, err := schema2.FromStruct(*m)
+	require.NoError(t, err)
 	validateManifestPutWithNonDistributableLayers(t, env, repoRef, dm, schema2.MediaTypeManifest, d)
 }
 
@@ -3234,6 +3236,7 @@ func manifest_Delete_Tag_Notification_WithAuth(t *testing.T, opts ...configOpt) 
 	checkErr(t, err, "building tag URL")
 
 	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
+	require.NoError(t, err)
 
 	// attach authourization header to request
 	req = tokenProvider.RequestWithAuthActions(req, deleteAccessToken("foo/bar"))

@@ -102,7 +102,6 @@ func TestCentralRepositoryCache_LSN(t *testing.T) {
 }
 
 func TestCentralRepositoryCache_LSN_Error(t *testing.T) {
-	lsn := "0/16B3748"
 	ttl := 1 * time.Hour
 	repo := &models.Repository{
 		Path: "gitlab-org/gitlab",

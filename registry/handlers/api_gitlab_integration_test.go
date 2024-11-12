@@ -180,6 +180,7 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingBase(t *testing
 	// get size with descendants of base (non-existing) repository
 	baseRepoPath := "foo/bar"
 	baseRepoRef, err := reference.WithName(baseRepoPath)
+	require.NoError(t, err)
 	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoRef, url.Values{
 		"size": []string{"self_with_descendants"},
 	})
@@ -210,6 +211,7 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingTopLevel(t *tes
 
 	baseRepoPath := "foo/bar"
 	baseRepoRef, err := reference.WithName(baseRepoPath)
+	require.NoError(t, err)
 	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoRef, url.Values{
 		"size": []string{"self_with_descendants"},
 	})
