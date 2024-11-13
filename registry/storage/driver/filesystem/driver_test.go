@@ -2,7 +2,6 @@ package filesystem
 
 import (
 	"context"
-	"os"
 	"path"
 	"testing"
 
@@ -13,8 +12,7 @@ import (
 )
 
 func TestFilesystemDriverSuite(t *testing.T) {
-	root, err := os.MkdirTemp("", "fsdriver-test-")
-	require.NoError(t, err)
+	root := t.TempDir()
 
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
@@ -23,16 +21,13 @@ func TestFilesystemDriverSuite(t *testing.T) {
 				"rootdirectory": root,
 			})
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 	suite.Run(t, ts)
 }
 
 func BenchmarkFilesystemDriverSuite(b *testing.B) {
-	root, err := os.MkdirTemp("", "fsdriver-bench-")
-	require.NoError(b, err)
+	root := b.TempDir()
 
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
@@ -41,9 +36,7 @@ func BenchmarkFilesystemDriverSuite(b *testing.B) {
 				"rootdirectory": root,
 			})
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 
 	ts.SetupSuiteWithB(b)

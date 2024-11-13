@@ -76,8 +76,7 @@ func skipCheck() string {
 }
 
 func TestAzureDriverSuite(t *testing.T) {
-	root, err := os.MkdirTemp("", "azuredriver-test-")
-	require.NoError(t, err)
+	root := t.TempDir()
 
 	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
@@ -88,16 +87,13 @@ func TestAzureDriverSuite(t *testing.T) {
 		func() (storagedriver.StorageDriver, error) {
 			return azureDriverConstructor(root)
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 	suite.Run(t, ts)
 }
 
 func BenchmarkAzureDriverSuite(b *testing.B) {
-	root, err := os.MkdirTemp("", "azuredriver-bench-")
-	require.NoError(b, err)
+	root := b.TempDir()
 
 	if skipMsg := skipCheck(); skipMsg != "" {
 		b.Skip(skipMsg)
@@ -108,9 +104,7 @@ func BenchmarkAzureDriverSuite(b *testing.B) {
 		func() (storagedriver.StorageDriver, error) {
 			return azureDriverConstructor(root)
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 
 	ts.SetupSuiteWithB(b)
