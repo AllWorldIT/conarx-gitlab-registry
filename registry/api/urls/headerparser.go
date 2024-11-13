@@ -48,7 +48,7 @@ func parseForwardedHeader(forwarded string) (map[string]string, string, error) {
 	var (
 		parameter string
 		value     string
-		parse     = forwarded[:]
+		parse     = forwarded
 		res       = map[string]string{}
 		state     = stateElement
 	)

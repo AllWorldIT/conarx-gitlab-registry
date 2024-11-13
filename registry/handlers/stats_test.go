@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/require"
 	"testing"
+	"github.com/stretchr/testify/require"
 
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/handlers/mocks"

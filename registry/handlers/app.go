@@ -1570,7 +1570,7 @@ func (app *App) logError(ctx context.Context, r *http.Request, errors errcode.Er
 		// only report 500 errors to Sentry
 		if code == errcode.ErrorCodeUnknown {
 			// Encode detail in error message so that it shows up in Sentry. This is a hack until we refactor error
-			// handling across the whole application to enforce consistent behaviour and formatting.
+			// handling across the whole application to enforce consistent behavior and formatting.
 			// see https://gitlab.com/gitlab-org/container-registry/-/issues/198
 			detailSuffix := ""
 			if detail != "" {

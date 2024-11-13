@@ -1086,8 +1086,8 @@ var allMixedFinished = map[models.BackgroundMigration][]models.BackgroundMigrati
 }
 
 // doErrorReturn returns a function that increments the call count and returns the provided error.
-func doErrorReturn(err error, callCount *int) func(_ context.Context, _ datastore.Handler, _ string, _ string, _, _, _ int) error {
-	return func(_ context.Context, _ datastore.Handler, _ string, _ string, _, _, _ int) error {
+func doErrorReturn(err error, callCount *int) func(_ context.Context, _ datastore.Handler, _, _ string, _, _, _ int) error {
+	return func(_ context.Context, _ datastore.Handler, _, _ string, _, _, _ int) error {
 		*callCount++
 		return err
 	}

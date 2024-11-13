@@ -1237,7 +1237,7 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 			if errors.Is(err, datastore.ErrRefManifestNotFound) {
 				// This can only happen if the online GC deleted one of the referenced manifests (because they were
 				// untagged/unreferenced) between the call to `FindAndLockNBefore` and `AssociateManifest`. For now
-				// we need to return this error to mimic the behaviour of the corresponding filesystem validation.
+				// we need to return this error to mimic the behavior of the corresponding filesystem validation.
 				return distribution.ErrManifestVerification{
 					distribution.ErrManifestBlobUnknown{Digest: m.Digest},
 				}

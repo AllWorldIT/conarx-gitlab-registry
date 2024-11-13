@@ -383,7 +383,7 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobExceedsR
 		},
 	}
 
-	DoFunc := func(ctx context.Context, db datastore.Handler, paginationTable string, paginationColumn string, paginationAfter, paginationBefore, limit int) error {
+	DoFunc := func(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, limit int) error {
 		return errAnError
 	}
 	s.testAsyncBackgroundMigrationExpected(expectedBBM, expectedBBMJobs,
@@ -391,7 +391,7 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobExceedsR
 }
 
 // CopyIDColumnInTestTableToNewIDColumn is the job function that is executed for a background migration with a `job_signature_name` column value of `CopyIDColumnInTestTableToNewIDColumn`
-func CopyIDColumnInTestTableToNewIDColumn(ctx context.Context, db datastore.Handler, paginationTable string, paginationColumn string, paginationAfter, paginationBefore, limit int) error {
+func CopyIDColumnInTestTableToNewIDColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, limit int) error {
 	fmt.Printf(`Copying from column id to new_id,  Starting from id %d to %d on column %s`, paginationAfter, paginationBefore, paginationColumn)
 	q := fmt.Sprintf(`UPDATE %s SET %s = %s WHERE id >= $1 AND id <= $2`, targetBBMTable, targetBBMNewColumn, targetBBMColumn)
 	_, err := db.ExecContext(ctx, q, paginationAfter, paginationBefore)
@@ -422,7 +422,7 @@ func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigrationExpected(expe
 }
 
 // requireBBMEventually checks on every `tick` that a BBM in the database with name `bbmName` eventually matches `expectedBBM` in `waitFor` duration.
-func (s *BackgroundMigrationTestSuite) requireBBMEventually(expectedBBM models.BackgroundMigration, waitFor time.Duration, tick time.Duration) {
+func (s *BackgroundMigrationTestSuite) requireBBMEventually(expectedBBM models.BackgroundMigration, waitFor, tick time.Duration) {
 	s.Require().Eventually(
 		func() bool {
 			q := `SELECT

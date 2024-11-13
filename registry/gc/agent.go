@@ -138,7 +138,7 @@ func (a *Agent) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			l.Warn("context cancelled, exiting")
+			l.Warn("context canceled, exiting")
 			return ctx.Err()
 		default:
 			start := systemClock.Now()

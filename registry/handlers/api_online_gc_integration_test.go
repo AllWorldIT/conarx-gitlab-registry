@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is intended to test the HTTP API tolerance and behaviour under scenarios that are prone to race conditions
+// This file is intended to test the HTTP API tolerance and behavior under scenarios that are prone to race conditions
 // due to online GC.
 
 // maxReviewAfterJitter is the maximum jitter in seconds that the online GC triggers will use to set a task's review

@@ -106,7 +106,7 @@ func TestReferenceParse(t *testing.T) {
 		//{
 		//	input: "Uppercase/lowercase:tag",
 		//	err:   ErrNameContainsUppercase,
-		//},
+		// },
 		{
 			input: "test:5000/Uppercase/lowercase:tag",
 			err:   ErrNameContainsUppercase,

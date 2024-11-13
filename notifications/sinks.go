@@ -133,9 +133,9 @@ loop:
 			}
 
 			// NOTE(prozlach): The approach here is a compromise between the
-			// existing behaviour of Broadcaster (__attempt__ to reliably
+			// existing behavior of Broadcaster (__attempt__ to reliably
 			// deliver to all dependant sinks) and making Broadcaster
-			// interruptable so that gracefull shutdown of container registry
+			// interruptable so that graceful shutdown of container registry
 			// is possible.
 			// The idea is to do Write() calls in goroutine (they are blocking)
 			// and if the termination signal is received, wait up to
@@ -269,7 +269,7 @@ func (eq *eventQueue) bufferer() {
 
 	// Main loop is executed during normal operation. Depending on whether there
 	// are any events in the buffer or not, we include in select wait on write
-	// to the sender goroutine or not respectivelly.
+	// to the sender goroutine or not respectively.
 main:
 	for {
 		if events.Len() < 1 {
@@ -489,7 +489,7 @@ main:
 
 				err := rs.sink.Write(event)
 
-				// Event sent sucessfully, fetch next event from channel:
+				// Event sent successfully, fetch next event from channel:
 				if err == nil {
 					rs.errCh <- nil
 					continue main

@@ -72,7 +72,7 @@ type Work struct {
 // otherwise the migration will fail to run with an `ErrWorkFunctionNotFound` when picked up.
 func AllWork() []Work {
 	return []Work{
-		//{Name: "ExampleNameThatMatchesTheJobSignatureNameColumn", Do: ExampleDoFunction}
+		// {Name: "ExampleNameThatMatchesTheJobSignatureNameColumn", Do: ExampleDoFunction}
 	}
 }
 
