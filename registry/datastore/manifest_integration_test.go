@@ -692,8 +692,9 @@ func TestManifestStore_Create_InvalidConfigMediaType(t *testing.T) {
 		},
 	}
 	err := s.Create(suite.ctx, m)
+	require.Error(t, err)
 	var mtErr datastore.ErrUnknownMediaType
-	require.True(t, errors.As(err, &mtErr))
+	require.ErrorAs(t, err, &mtErr)
 	require.Equal(t, m.Configuration.MediaType, mtErr.MediaType)
 }
 
@@ -770,6 +771,7 @@ func TestManifestStore_CreateOrFind_InvalidConfigMediaType(t *testing.T) {
 		},
 	}
 	err := s.CreateOrFind(suite.ctx, m)
+	require.Error(t, err)
 	var mtErr datastore.ErrUnknownMediaType
 	require.ErrorAs(t, err, &mtErr)
 	require.Equal(t, m.Configuration.MediaType, mtErr.MediaType)
