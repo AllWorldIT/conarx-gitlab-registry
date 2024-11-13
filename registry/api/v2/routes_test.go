@@ -313,7 +313,6 @@ func checkTestRouter(t *testing.T, testCases []routeTestCase, prefix string, dee
 		if deeplyEqual && !reflect.DeepEqual(actualRouteInfo, testcase) {
 			t.Fatalf("actual does not equal expected: %#v != %#v", actualRouteInfo, testcase)
 		}
-
 	}
 }
 

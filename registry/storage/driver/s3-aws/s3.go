@@ -385,7 +385,6 @@ func parseParameters(parameters map[string]interface{}) (*DriverParameters, erro
 	objectACL := s3.ObjectCannedACLPrivate
 	objectACLParam := parameters["objectacl"]
 	if objectACLParam != nil {
-
 		if objectOwnership {
 			err := fmt.Errorf("object ACL parameter should not be set when object ownership is enabled")
 			result = multierror.Append(result, err)
