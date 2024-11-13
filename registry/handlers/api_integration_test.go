@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/docker/distribution/registry/storage/driver/inmemory"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/docker/distribution/registry/storage/driver/inmemory"
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/configuration"
@@ -1175,6 +1176,7 @@ func TestManifestAPI_Get_Schema1(t *testing.T) {
 	if env.config.Database.Enabled {
 		repositoryStore := datastore.NewRepositoryStore(env.db.Primary())
 		dbRepo, err := repositoryStore.CreateByPath(env.ctx, preseededSchema1RepoPath)
+		require.NoError(t, err)
 
 		mStore := datastore.NewManifestStore(env.db.Primary())
 

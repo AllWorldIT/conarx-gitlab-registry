@@ -489,19 +489,12 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	return filters, nil
 }
 
-func getSortOrderParams(sort string) (string, datastore.SortOrder) {
-	orderBy := tagNameQueryParamKey
-	sortOrder := datastore.OrderAsc
-
-	values := strings.Split(sort, sortOrderDescPrefix)
+func getSortOrderParams(sortP string) (string, datastore.SortOrder) {
+	values := strings.Split(sortP, sortOrderDescPrefix)
 	if len(values) == 2 {
-		sortOrder = datastore.OrderDesc
-		orderBy = values[1]
-	} else {
-		orderBy = sort
+		return values[1], datastore.OrderDesc
 	}
-
-	return orderBy, sortOrder
+	return sortP, datastore.OrderAsc
 }
 
 // GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination

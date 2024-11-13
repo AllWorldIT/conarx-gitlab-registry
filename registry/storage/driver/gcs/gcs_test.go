@@ -158,6 +158,7 @@ func TestGCSDriverCommitEmpty(t *testing.T) {
 	ctx := dcontext.Background()
 
 	writer, err := driver.Writer(ctx, filename, false)
+	require.NoErrorf(t, err, "driver.Writer")
 	defer driver.Delete(ctx, filename)
 	if err != nil {
 		t.Fatalf("driver.Writer: unexpected error: %v", err)
@@ -203,6 +204,7 @@ func TestGCSDriverCommit(t *testing.T) {
 
 	contents := make([]byte, defaultChunkSize)
 	writer, err := driver.Writer(ctx, filename, false)
+	require.NoError(t, err, "driver.Writer: unexpected error")
 	defer driver.Delete(ctx, filename)
 	if err != nil {
 		t.Fatalf("driver.Writer: unexpected error: %v", err)
@@ -306,6 +308,7 @@ func TestGCSDriverEmptyRootList(t *testing.T) {
 		}
 	}()
 	keys, err := emptyRootDriver.List(ctx, "/")
+	require.NoError(t, err)
 	for _, path := range keys {
 		if !storagedriver.PathRegexp.MatchString(path) {
 			t.Fatalf("unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
@@ -313,6 +316,7 @@ func TestGCSDriverEmptyRootList(t *testing.T) {
 	}
 
 	keys, err = slashRootDriver.List(ctx, "/")
+	require.NoError(t, err)
 	for _, path := range keys {
 		if !storagedriver.PathRegexp.MatchString(path) {
 			t.Fatalf("unexpected string in path: %q != %q", path, storagedriver.PathRegexp)

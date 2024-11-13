@@ -240,6 +240,7 @@ func TestURLForBypassIfNotGCSDriver(t *testing.T) {
 		"privatekey": createTmpKeyFile(t).Name(),
 		"keyname":    "my-key",
 	})
+	require.NoError(t, err)
 
 	u, err := d.URLFor(context.Background(), "/foo/bar", nil)
 

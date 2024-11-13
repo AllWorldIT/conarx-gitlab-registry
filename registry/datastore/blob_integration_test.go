@@ -319,6 +319,7 @@ func TestBlobStore_Delete(t *testing.T) {
 	require.NoError(t, err)
 
 	b, err := s.FindByDigest(suite.ctx, dgst)
+	require.NoError(t, err)
 	require.Nil(t, b)
 }
 

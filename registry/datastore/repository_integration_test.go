@@ -1673,6 +1673,7 @@ func TestRepositoryStore_Size_SingleRepositoryCache(t *testing.T) {
 
 	expectedSize, err := s.Size(suite.ctx,
 		&models.Repository{Path: path, NamespaceID: 2, ID: 6}) // see testdata/fixtures/repositories.sql
+	require.NoError(t, err)
 	require.NotNil(t, c.Get(ctx, path))
 	// the size attribute of an existing repo is calculated from the db
 	// on the very first call to `Size`,  once calculated the size
@@ -3534,6 +3535,7 @@ func TestRepositoryStore_UpdateLastPublishedAt(t *testing.T) {
 	require.Equal(t, tag.CreatedAt, r.LastPublishedAt.Time)
 	// check the actual value on DB
 	r, err = s.FindByPath(suite.ctx, repoName)
+	require.NoError(t, err)
 	require.Equal(t, tag.CreatedAt, r.LastPublishedAt.Time)
 
 	//
@@ -3549,6 +3551,7 @@ func TestRepositoryStore_UpdateLastPublishedAt(t *testing.T) {
 	require.Equal(t, tag.UpdatedAt.Time, r.LastPublishedAt.Time)
 	// check the actual value on DB
 	r, err = s.FindByPath(suite.ctx, repoName)
+	require.NoError(t, err)
 	require.Equal(t, tag.UpdatedAt.Time, r.LastPublishedAt.Time)
 }
 

@@ -135,6 +135,7 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 
 	// get size with descendants of a base repository
 	baseRepoRef, err := reference.WithName(want.Path)
+	require.NoError(t, err)
 	u, err := env.urlBuilder.BuildGitlabV1RepositoryURL(baseRepoRef, url.Values{
 		"size": []string{"self_with_descendants"},
 	})
