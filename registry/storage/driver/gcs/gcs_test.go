@@ -8,8 +8,6 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
-	"reflect"
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -154,34 +152,18 @@ func TestGCSDriverCommitEmpty(t *testing.T) {
 	writer, err := driver.Writer(ctx, filename, false)
 	require.NoErrorf(t, err, "driver.Writer")
 	defer driver.Delete(ctx, filename)
-	if err != nil {
-		t.Fatalf("driver.Writer: unexpected error: %v", err)
-	}
+	require.NoError(t, err, "driver.Writer")
 	err = writer.Commit()
-	if err != nil {
-		t.Fatalf("writer.Commit: unexpected error: %v", err)
-	}
+	require.NoError(t, err, "writer.Commit")
 	err = writer.Close()
-	if err != nil {
-		t.Fatalf("writer.Close: unexpected error: %v", err)
-	}
-	if writer.Size() != 0 {
-		t.Fatalf("writer.Size: %d != 0", writer.Size())
-	}
+	require.NoError(t, err, "writer.Close")
+	require.Zero(t, writer.Size(), "writer.Size")
 	readContents, err := driver.GetContent(ctx, filename)
-	if err != nil {
-		t.Fatalf("driver.GetContent: unexpected error: %v", err)
-	}
-	if len(readContents) != 0 {
-		t.Fatalf("len(driver.GetContent(..)): %d != 0", len(readContents))
-	}
+	require.NoError(t, err, "driver.GetContent")
+	require.Empty(t, readContents, "len(driver.GetContent(..))")
 	fileInfo, err := driver.Stat(ctx, filename)
-	if err != nil {
-		t.Fatalf("driver.Stat: unexpected error: %v", err)
-	}
-	if fileInfo.Size() != 0 {
-		t.Fatalf("stat.Size: %d != 0", fileInfo.Size())
-	}
+	require.NoError(t, err, "driver.Stat")
+	require.Zero(t, fileInfo.Size(), "stat.Size")
 }
 
 // Test Committing a FileWriter after having written exactly
@@ -200,38 +182,25 @@ func TestGCSDriverCommit(t *testing.T) {
 	writer, err := driver.Writer(ctx, filename, false)
 	require.NoError(t, err, "driver.Writer: unexpected error")
 	defer driver.Delete(ctx, filename)
-	if err != nil {
-		t.Fatalf("driver.Writer: unexpected error: %v", err)
-	}
+
 	_, err = writer.Write(contents)
-	if err != nil {
-		t.Fatalf("writer.Write: unexpected error: %v", err)
-	}
+	require.NoError(t, err, "writer.Write: unexpected error")
+
 	err = writer.Commit()
-	if err != nil {
-		t.Fatalf("writer.Commit: unexpected error: %v", err)
-	}
+	require.NoError(t, err, "writer.Commit: unexpected error")
+
 	err = writer.Close()
-	if err != nil {
-		t.Fatalf("writer.Close: unexpected error: %v", err)
-	}
-	if writer.Size() != int64(len(contents)) {
-		t.Fatalf("writer.Size: %d != %d", writer.Size(), len(contents))
-	}
+	require.NoError(t, err, "writer.Close: unexpected error")
+
+	require.Equal(t, int64(len(contents)), writer.Size(), "writer.Size mismatch")
+
 	readContents, err := driver.GetContent(ctx, filename)
-	if err != nil {
-		t.Fatalf("driver.GetContent: unexpected error: %v", err)
-	}
-	if len(readContents) != len(contents) {
-		t.Fatalf("len(driver.GetContent(..)): %d != %d", len(readContents), len(contents))
-	}
+	require.NoError(t, err, "driver.GetContent: unexpected error")
+	require.Equal(t, len(contents), len(readContents), "length mismatch for driver.GetContent(..)")
+
 	fileInfo, err := driver.Stat(ctx, filename)
-	if err != nil {
-		t.Fatalf("driver.Stat: unexpected error: %v", err)
-	}
-	if fileInfo.Size() != int64(len(contents)) {
-		t.Fatalf("driver.Stat.Size: %d != %d", fileInfo.Size(), len(contents))
-	}
+	require.NoError(t, err, "driver.Stat: unexpected error")
+	require.Equal(t, int64(len(contents)), fileInfo.Size(), "fileInfo.Size mismatch")
 }
 
 func TestGCSDriverRetry(t *testing.T) {
@@ -244,9 +213,7 @@ func TestGCSDriverRetry(t *testing.T) {
 		if observed != nil {
 			observedMsg = observed.Error()
 		}
-		if observedMsg != expected {
-			t.Fatalf("expected %v, observed %v\n", expected, observedMsg)
-		}
+		require.Equal(t, expected, observedMsg)
 	}
 
 	err := retry(func() error {
@@ -279,42 +246,35 @@ func TestGCSDriverEmptyRootList(t *testing.T) {
 	rootedDriver := newTempDirDriver(t)
 
 	emptyRootDriver, err := gcsDriverConstructor("")
-	if err != nil {
-		t.Fatalf("unexpected error creating empty root driver: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating empty root driver")
 
 	slashRootDriver, err := gcsDriverConstructor("/")
-	if err != nil {
-		t.Fatalf("unexpected error creating slash root driver: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating slash root driver")
 
 	filename := "/test"
 	contents := []byte("contents")
 	ctx := dcontext.Background()
+
 	err = rootedDriver.PutContent(ctx, filename, contents)
-	if err != nil {
-		t.Fatalf("unexpected error creating content: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating content")
+
 	defer func() {
 		err := rootedDriver.Delete(ctx, filename)
-		if err != nil {
-			t.Fatalf("failed to remove %v due to %v\n", filename, err)
-		}
+		require.NoError(t, err, "failed to remove %v", filename)
 	}()
+
 	keys, err := emptyRootDriver.List(ctx, "/")
-	require.NoError(t, err)
+	require.NoError(t, err, "unexpected error listing empty root driver")
+
 	for _, path := range keys {
-		if !storagedriver.PathRegexp.MatchString(path) {
-			t.Fatalf("unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
-		}
+		require.True(t, storagedriver.PathRegexp.MatchString(path), "unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
 	}
 
 	keys, err = slashRootDriver.List(ctx, "/")
-	require.NoError(t, err)
+	require.NoError(t, err, "unexpected error listing slash root driver")
+
 	for _, path := range keys {
-		if !storagedriver.PathRegexp.MatchString(path) {
-			t.Fatalf("unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
-		}
+		require.True(t, storagedriver.PathRegexp.MatchString(path), "unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
 	}
 }
 
@@ -338,16 +298,12 @@ func TestGCSDriverSubpathList(t *testing.T) {
 
 	for _, filename := range filenames {
 		err := rootedDriver.PutContent(ctx, filename, contents)
-		if err != nil {
-			t.Fatalf("unexpected error creating content: %v", err)
-		}
+		require.NoError(t, err, "unexpected error creating content")
 	}
 	defer func() {
 		for _, filename := range filenames {
 			err := rootedDriver.Delete(ctx, filename)
-			if err != nil {
-				t.Fatalf("failed to remove %v due to %v\n", filename, err)
-			}
+			require.NoErrorf(t, err, "failed to remove %q", filename)
 		}
 	}()
 
@@ -355,12 +311,8 @@ func TestGCSDriverSubpathList(t *testing.T) {
 	require.NoError(t, err)
 
 	expected := []string{"/test/test1.txt", "/test/test2.txt", "/test/subpath"}
-	sort.Strings(expected)
-	sort.Strings(keys)
 
-	if !reflect.DeepEqual(expected, keys) {
-		t.Fatalf("list %v does not match %v", keys, expected)
-	}
+	require.ElementsMatch(t, expected, keys)
 }
 
 // TestMoveDirectory checks that moving a directory returns an error.
@@ -375,20 +327,15 @@ func TestGCSDriverMoveDirectory(t *testing.T) {
 	contents := []byte("contents")
 	// Create a regular file.
 	err := driver.PutContent(ctx, "/parent/dir/foo", contents)
-	if err != nil {
-		t.Fatalf("unexpected error creating content: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating content")
+
 	defer func() {
 		err := driver.Delete(ctx, "/parent")
-		if err != nil {
-			t.Fatalf("failed to remove /parent due to %v\n", err)
-		}
+		require.NoError(t, err, "failed to remove /parent")
 	}()
 
 	err = driver.Move(ctx, "/parent/dir", "/parent/other")
-	if err == nil {
-		t.Fatalf("Moving directory /parent/dir /parent/other should have return a non-nil error\n")
-	}
+	require.Error(t, err, "Moving directory /parent/dir /parent/other should have return a non-nil error")
 }
 
 func TestGCSDriverExistsPath(t *testing.T) {
