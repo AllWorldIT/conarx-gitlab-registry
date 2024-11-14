@@ -149,8 +149,8 @@ type BenchmarkFunc struct {
 // to write this ourselves. This function is not recursive so it does not work
 // for embedded objects!
 // NOTE(prozlch): I wrote this function as I did not want to hardcode the list
-// of benchmarks defined in the suite. This would require carefull
-// maintainance/updating compared to simply automating it.
+// of benchmarks defined in the suite. This would require careful
+// maintenance/updating compared to simply automating it.
 func (suite *DriverSuite) EnumerateBenchmarks() []BenchmarkFunc {
 	benchmarks := []BenchmarkFunc{}
 
@@ -2105,7 +2105,7 @@ var (
 	separatorChars = []byte("._-")
 )
 
-func randomPath(minTldLen int, length int) string {
+func randomPath(minTldLen, length int) string {
 	// NOTE(prozlach): randomPath() is called in some tests concurrently and it
 	// may happen that the top-level directory of the path returned is not
 	// unique given enough calls to it. This leads to wonky race conditions as

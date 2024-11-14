@@ -88,7 +88,7 @@ func (c *Cache) GetWithTTL(ctx context.Context, key string) (string, time.Durati
 }
 
 // Set stores a string value in the cache with optional TTL or other custom options.
-func (c *Cache) Set(ctx context.Context, key string, value string, opts ...SetOption) error {
+func (c *Cache) Set(ctx context.Context, key, value string, opts ...SetOption) error {
 	options := setOptions{
 		ttl: c.defaultTTL,
 	}

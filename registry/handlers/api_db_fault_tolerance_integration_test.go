@@ -22,7 +22,7 @@ import (
 
 // This file is intended to test the HTTP API fault tolerance under adverse network conditions related to the metadata
 // database, using Shopify Toxiproxy as intermediary between the registry and its DB. Fine grain tests of the handlers
-// internal behaviour (e.g., Schema 1 support, content negotiation, etc.) are out of scope. Here we're mainly concerned
+// internal behavior (e.g., Schema 1 support, content negotiation, etc.) are out of scope. Here we're mainly concerned
 // with ensuring that all HTTP handlers and methods are handling failure scenarios properly.
 
 var (
@@ -724,7 +724,7 @@ func TestDBFaultTolerance_ConnectionPoolSaturation(t *testing.T) {
 
 	// Connection pooling is handled by database/sql behind the scenes, so there is no app specific logic (besides
 	// configuring db.SetMaxOpenConns), therefore using the catalog endpoint (or any other) as example is enough to
-	// assert the behaviour.
+	// assert the behavior.
 	u, err := env.builder.BuildCatalogURL()
 	require.NoError(t, err)
 

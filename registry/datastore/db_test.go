@@ -1525,7 +1525,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_PoolUnchanged(t *testi
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
-	// Simulate scenario where nothing has changed, so we should still see metrics labelled for primary, replica 1 and 2
+	// Simulate scenario where nothing has changed, so we should still see metrics labeled for primary, replica 1 and 2
 	err = lb.ResolveReplicas(ctx)
 	require.NoError(t, err)
 
@@ -2571,7 +2571,7 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 	// for the amount of times that connections can be established, so any attempt here to do so would lead to a failure.
 	time.Sleep(50 * time.Millisecond)
 
-	// Cancelling the context should not lead to an error as the execution should have been skipped
+	// Canceling the context should not lead to an error as the execution should have been skipped
 	cancel()
 	wg.Wait()
 
@@ -2626,7 +2626,7 @@ func TestDBLoadBalancer_StartReplicaChecking_NoFixedHostsOrServiceDiscovery(t *t
 	// for the amount of times that connections can be established, so any attempt here to do so would lead to a failure.
 	time.Sleep(50 * time.Millisecond)
 
-	// Cancelling the context should not lead to an error as the execution should have been skipped
+	// Canceling the context should not lead to an error as the execution should have been skipped
 	cancel()
 	wg.Wait()
 
@@ -2788,7 +2788,7 @@ func TestDBLoadBalancer_RecordLSN_StoreSetError(t *testing.T) {
 // expectSingleRowQuery asserts that a query on the mock database returns a single row with the specified value for the
 // given column, or returns an error if specified. It takes the mock database, the query string, the response row column
 // name, the expected response row column value, an error (if any), and the query arguments as input.
-func expectSingleRowQuery(db sqlmock.Sqlmock, query string, column string, value driver.Value, err error, args ...driver.Value) {
+func expectSingleRowQuery(db sqlmock.Sqlmock, query, column string, value driver.Value, err error, args ...driver.Value) {
 	if err != nil {
 		db.ExpectQuery(query).
 			WithArgs(args...).

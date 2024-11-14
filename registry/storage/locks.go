@@ -200,6 +200,7 @@ var _ distribution.Lockers = &lockers{}
 func (l *lockers) DBLock(ctx context.Context) error {
 	return l.DB.Lock(ctx)
 }
+
 func (l *lockers) DBUnlock(ctx context.Context) error {
 	return l.DB.Unlock(ctx)
 }
@@ -211,6 +212,7 @@ func (l *lockers) DBIsLocked(ctx context.Context) (bool, error) {
 func (l *lockers) FSLock(ctx context.Context) error {
 	return l.FS.Lock(ctx)
 }
+
 func (l *lockers) FSUnlock(ctx context.Context) error {
 	return l.FS.Unlock(ctx)
 }

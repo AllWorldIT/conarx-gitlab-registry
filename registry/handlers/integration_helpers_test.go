@@ -1748,7 +1748,7 @@ func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagN
 	t.Helper()
 
 	wg := new(sync.WaitGroup)
-	// NOTE(prozlach): concurency controll, value chosen arbitraly
+	// NOTE(prozlach): concurency control, value chosen arbitraly
 	semaphore := make(chan struct{}, 20)
 
 	for _, path := range repoPaths {

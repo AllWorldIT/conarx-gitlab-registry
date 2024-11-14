@@ -2,7 +2,7 @@
 // store blobs in Google cloud storage.
 //
 // This package leverages the google.golang.org/cloud/storage client library
-//for interfacing with gcs.
+// for interfacing with gcs.
 //
 // Because gcs is a key, value store the Stat call does not support last modification
 // time for directories (directories are an abstraction for key, value stores)

@@ -820,7 +820,7 @@ func (s *repositoryStore) Tags(ctx context.Context, r *models.Repository) (model
 // TagsPaginated finds up to `filters.MaxEntries` tags of a given repository with name lexicographically after `filters.LastEntry`. This is used
 // exclusively for the GET /v2/<name>/tags/list API route, where pagination is done with a marker (`filters.LastEntry`). Even if
 // there is no tag with a name of `filters.LastEntry`, the returned tags will always be those with a path lexicographically after
-// `filters.LastEntry`. Finally, tags are lexicographically sorted. These constraints exists to preserve the existing API behaviour
+// `filters.LastEntry`. Finally, tags are lexicographically sorted. These constraints exists to preserve the existing API behavior
 // (when doing a filesystem walk based pagination).
 func (s *repositoryStore) TagsPaginated(ctx context.Context, r *models.Repository, filters FilterParams) (models.Tags, error) {
 	defer metrics.InstrumentQuery("repository_tags_paginated")()
