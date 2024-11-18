@@ -102,7 +102,7 @@ func TestAppDistribtionDispatcher(t *testing.T) {
 	// unflatten a list of variables, suitable for gorilla/mux, to a map[string]string
 	unflatten := func(vars []string) map[string]string {
 		m := make(map[string]string)
-		for i := 0; i < len(vars)-1; i = i + 2 {
+		for i := 0; i < len(vars)-1; i += 2 {
 			m[vars[i]] = vars[i+1]
 		}
 
@@ -814,6 +814,7 @@ func TestStatusRecordingResponseWriter(t *testing.T) {
 			srw.Write([]byte(bodyContent))
 
 			assert.Equal(t, tt.expectedCode, srw.statusCode)
+			//nolint: bodyclose // not required here
 			assert.Equal(t, tt.expectedCode, recorder.Result().StatusCode)
 			assert.Equal(t, tt.expectedBody, recorder.Body.String())
 		})

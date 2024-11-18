@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -27,6 +26,7 @@ import (
 	"github.com/docker/distribution/uuid"
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/require"
 )
 
 func testServer(rrm testutil.RequestResponseMap) (string, func()) {
@@ -336,9 +336,7 @@ func TestBlobUploadChunked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if upload.ID() != uuids[0] {
-		log.Fatalf("Unexpected UUID %s; expected %s", upload.ID(), uuids[0])
-	}
+	require.Equalf(t, upload.ID(), uuids[0], "Unexpected UUID %s; expected %s", upload.ID(), uuids[0])
 
 	for _, chunk := range chunks {
 		n, err := upload.Write(chunk)
@@ -446,9 +444,7 @@ func TestBlobUploadMonolithic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if upload.ID() != uploadID {
-		log.Fatalf("Unexpected UUID %s; expected %s", upload.ID(), uploadID)
-	}
+	require.Equalf(t, upload.ID(), uploadID, "Unexpected UUID %s; expected %s", upload.ID(), uploadID)
 
 	n, err := upload.ReadFrom(bytes.NewReader(b1))
 	if err != nil {
@@ -508,31 +504,24 @@ func TestBlobMount(t *testing.T) {
 		},
 	})
 
-	e, c := testServer(m)
-	defer c()
+	e, cancelF := testServer(m)
+	defer cancelF()
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	l := r.Blobs(ctx)
 
 	bw, err := l.Create(ctx, WithMountFrom(canonicalRef))
-	if bw != nil {
-		t.Fatalf("Expected blob writer to be nil, was %v", bw)
-	}
+	require.Nilf(t, bw, "Expected blob writer to be nil, was %v", bw)
 
 	if ebm, ok := err.(distribution.ErrBlobMounted); ok {
-		if ebm.From.Digest() != dgst {
-			t.Fatalf("Unexpected digest: %s, expected %s", ebm.From.Digest(), dgst)
-		}
-		if ebm.From.Name() != sourceRepo.Name() {
-			t.Fatalf("Unexpected from: %s, expected %s", ebm.From.Name(), sourceRepo)
-		}
+		require.Equalf(t, ebm.From.Digest(), dgst, "Unexpected digest: %s, expected %s", ebm.From.Digest(), dgst)
+		require.Equalf(t, ebm.From.Name(), sourceRepo.Name(), "Unexpected from: %s, expected %s", ebm.From.Name(), sourceRepo)
 	} else {
-		t.Fatalf("Unexpected error: %v, expected an ErrBlobMounted", err)
+		t.Logf("Unexpected error: %v, expected an ErrBlobMounted", err)
+		t.FailNow()
 	}
 }
 

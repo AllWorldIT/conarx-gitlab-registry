@@ -156,11 +156,12 @@ func (s *awsIPs) updater() {
 func (s *awsIPs) getCandidateNetworks(ip net.IP) []net.IPNet {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	if ip.To4() != nil {
+	switch {
+	case ip.To4() != nil:
 		return s.ipv4
-	} else if ip.To16() != nil {
+	case ip.To16() != nil:
 		return s.ipv6
-	} else {
+	default:
 		dcontext.GetLoggerWithFields(dcontext.Background(), map[interface{}]interface{}{
 			"ip": ip,
 		}).Error("unknown ip address format")

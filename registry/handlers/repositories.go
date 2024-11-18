@@ -1061,12 +1061,10 @@ func validateRenameRequestAttributes(renameObject *RenameRepositoryAPIRequest, r
 		if strings.Split(newNamespacePath, "/")[0] != strings.Split(repoName, "/")[0] {
 			return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParam.WithDetail("top level namespaces can not be changed")
 		}
-	} else {
+	} else if !reference.GitLabProjectNameRegex.MatchString(newName) || !reference.NameComponentRegexp.MatchString(newName) {
 		// Validate the name suggested for the rename operation
-		if !reference.GitLabProjectNameRegex.MatchString(newName) || !reference.NameComponentRegexp.MatchString(newName) {
-			detail := v1.InvalidPatchBodyTypeErrorDetail("name", reference.GitLabProjectNameRegex.String(), reference.NameComponentRegexp.String())
-			return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
-		}
+		detail := v1.InvalidPatchBodyTypeErrorDetail("name", reference.GitLabProjectNameRegex.String(), reference.NameComponentRegexp.String())
+		return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
 	}
 
 	return isRenameNamespaceRequest, nil

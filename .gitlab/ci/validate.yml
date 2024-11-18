@@ -70,7 +70,6 @@ golangci-lint:
   cache: {}
   image: golangci/golangci-lint:$GOLANGCI_LINT_VERSION
   stage: validate
-  allow_failure: true
   needs: []
   before_script:
     - apt update

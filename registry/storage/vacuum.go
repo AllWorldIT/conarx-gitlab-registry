@@ -119,7 +119,9 @@ func (v Vacuum) removeManifestsBatch(ctx context.Context, batchNo int, mm []Mani
 		}
 	}
 
-	allLinks = append(manifestLinks, tagLinks...)
+	allLinks = make([]string, 0, len(manifestLinks)+len(tagLinks))
+	allLinks = append(allLinks, manifestLinks...)
+	allLinks = append(allLinks, tagLinks...)
 	total := len(allLinks)
 	if total == 0 {
 		return nil

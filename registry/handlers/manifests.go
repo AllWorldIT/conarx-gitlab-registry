@@ -652,7 +652,8 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if imh.Digest != "" {
+	switch {
+	case imh.Digest != "":
 		if desc.Digest != imh.Digest {
 			l.WithFields(log.Fields{
 				"payload_digest":  desc.Digest,
@@ -661,9 +662,9 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 			imh.Errors = append(imh.Errors, v2.ErrorCodeDigestInvalid)
 			return
 		}
-	} else if imh.Tag != "" {
+	case imh.Tag != "":
 		imh.Digest = desc.Digest
-	} else {
+	default:
 		imh.Errors = append(imh.Errors, v2.ErrorCodeTagInvalid.WithDetail("no tag or digest specified"))
 		return
 	}

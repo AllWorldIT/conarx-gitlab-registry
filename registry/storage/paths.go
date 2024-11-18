@@ -125,7 +125,9 @@ func pathFor(spec pathSpec) (string, error) {
 	// other version.
 
 	rootPrefix := []string{storagePathRoot, storagePathVersion}
-	repoPrefix := append(rootPrefix, "repositories")
+	repoPrefix := make([]string, len(rootPrefix), len(rootPrefix)+1)
+	copy(repoPrefix, rootPrefix)
+	repoPrefix = append(repoPrefix, "repositories")
 
 	switch v := spec.(type) {
 	case manifestRevisionsPathSpec:
@@ -198,11 +200,15 @@ func pathFor(spec pathSpec) (string, error) {
 			return "", err
 		}
 
-		blobLinkPathComponents := append(repoPrefix, v.name, "_layers")
+		blobLinkPathComponents := make([]string, len(repoPrefix), len(repoPrefix)+2)
+		copy(blobLinkPathComponents, repoPrefix)
+		blobLinkPathComponents = append(blobLinkPathComponents, v.name, "_layers")
 
 		return path.Join(path.Join(append(blobLinkPathComponents, components...)...), "link"), nil
 	case blobsPathSpec:
-		blobsPathPrefix := append(rootPrefix, "blobs")
+		blobsPathPrefix := make([]string, len(rootPrefix), len(rootPrefix)+1)
+		copy(blobsPathPrefix, rootPrefix)
+		blobsPathPrefix = append(blobsPathPrefix, "blobs")
 		return path.Join(blobsPathPrefix...), nil
 	case blobPathSpec:
 		components, err := digestPathComponents(v.digest, true)
@@ -210,7 +216,9 @@ func pathFor(spec pathSpec) (string, error) {
 			return "", err
 		}
 
-		blobPathPrefix := append(rootPrefix, "blobs")
+		blobPathPrefix := make([]string, len(rootPrefix), len(rootPrefix)+1)
+		copy(blobPathPrefix, rootPrefix)
+		blobPathPrefix = append(blobPathPrefix, "blobs")
 		return path.Join(append(blobPathPrefix, components...)...), nil
 	case blobDataPathSpec:
 		components, err := digestPathComponents(v.digest, true)
@@ -219,7 +227,9 @@ func pathFor(spec pathSpec) (string, error) {
 		}
 
 		components = append(components, "data")
-		blobPathPrefix := append(rootPrefix, "blobs")
+		blobPathPrefix := make([]string, len(rootPrefix), len(rootPrefix)+1)
+		copy(blobPathPrefix, rootPrefix)
+		blobPathPrefix = append(blobPathPrefix, "blobs")
 		return path.Join(append(blobPathPrefix, components...)...), nil
 
 	case uploadDataPathSpec:

@@ -97,7 +97,7 @@ var gdkCmd = &cobra.Command{
 			if err != nil {
 				log.Printf("Failed to send error notification to Slack: %v", err)
 			}
-			log.Fatalf(msg)
+			log.Fatal(msg)
 		}
 
 		msg := fmt.Sprintf("%s release: GDK version bump MR: %s", version, mr.WebURL)

@@ -298,6 +298,7 @@ func TestURLFor_Download(t *testing.T) {
 			require.Regexp(t, fmt.Sprintf("^%s.*", baseURL), cdnURL)
 			verifyCustomURLParamsExist(t, cdnURL, test.opts)
 
+			//nolint: bodyclose // body is! closed
 			resp, err = http.Get(cdnURL)
 			require.NoError(t, err)
 			defer resp.Body.Close()

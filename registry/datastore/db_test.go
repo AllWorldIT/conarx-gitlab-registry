@@ -3091,7 +3091,6 @@ func TestQueryBuilder_Build(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			qb := datastore.NewQueryBuilder()
@@ -3153,7 +3152,6 @@ func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			qb := datastore.NewQueryBuilder()

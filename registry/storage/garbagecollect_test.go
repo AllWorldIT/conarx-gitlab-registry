@@ -18,14 +18,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createRegistry(tb testing.TB, driver driver.StorageDriver, options ...RegistryOption) distribution.Namespace {
+func createRegistry(tb testing.TB, driver driver.StorageDriver) distribution.Namespace {
 	tb.Helper()
 	ctx := context.Background()
 
 	k, err := libtrust.GenerateECP256PrivateKey()
 	require.NoError(tb, err)
 
-	options = append([]RegistryOption{EnableDelete, Schema1SigningKey(k), EnableSchema1}, options...)
+	options := []RegistryOption{EnableDelete, Schema1SigningKey(k), EnableSchema1}
 	registry, err := NewRegistry(ctx, driver, options...)
 	require.NoError(tb, err)
 
@@ -381,7 +381,7 @@ func TestGarbageCollectAfterLastTagRemoved(t *testing.T) {
 	tagsPath, err := pathFor(manifestTagsPathSpec{"testgarbagecollectafterlasttagremoved"})
 	require.NoError(t, err)
 
-	t.Logf(tagsPath)
+	t.Log(tagsPath)
 	err = inmemoryDriver.Delete(ctx, tagsPath)
 	require.NoError(t, err)
 

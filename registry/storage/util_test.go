@@ -47,6 +47,7 @@ func TestInjectCustomKeyOpts(t *testing.T) {
 				SizeBytesKey: int64(456),
 				"custom":     "custom",
 			},
+			// nolint: gocritic // business logic
 			ctx: func() context.Context {
 				return context.Background()
 			},

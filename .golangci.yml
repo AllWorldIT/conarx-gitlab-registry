@@ -144,30 +144,34 @@ linters:
   # inverted configuration with `enable-all` and `disable` is not scalable during updates of golangci-lint
   disable-all: true
   enable:
+  # TODO: Tracked in https://gitlab.com/gitlab-org/container-registry/-/issues/1308
+  # - revive
+  # - gosec
+  # - gocognit
+  # MRs in flight:
+  # - unparam
+  # - govet
+  # Waits for decision of the team if it makes sense to keep them:
+  # - goconst
+  # - dupl
+    - gocritic
+    - misspell
+    - unconvert
     - bodyclose
+    - stylecheck
+    - gosimple
+    - staticcheck
     - depguard
     - dogsled
-    - dupl
-    - exportloopref
-    - gocognit
-    - goconst
-    - gocritic
     - gofumpt
     - goimports
-    - gosec
-    - gosimple
-    - govet
     - ineffassign
-    - misspell
     - nakedret
-    - revive
-    - staticcheck
-    - stylecheck
     - typecheck
-    - unconvert
-    - unparam
     - unused
     - whitespace
+    - copyloopvar
+
   # don't enable:
   # - errcheck
   # - deadcode

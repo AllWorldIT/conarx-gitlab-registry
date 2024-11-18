@@ -44,7 +44,7 @@ func TestWalkFileRemoved(t *testing.T) {
 		t.Errorf("unexpected path set during walk: %s", infos)
 	}
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 }
 

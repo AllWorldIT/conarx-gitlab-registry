@@ -155,7 +155,7 @@ func FromParameters(parameters map[string]interface{}) (storagedriver.StorageDri
 func parseParameters(parameters map[string]interface{}) (*driverParameters, error) {
 	bucket, ok := parameters["bucket"]
 	if !ok || fmt.Sprint(bucket) == "" {
-		return nil, fmt.Errorf("No bucket parameter provided")
+		return nil, fmt.Errorf("no bucket parameter provided")
 	}
 
 	rootDirectory, ok := parameters["rootdirectory"]
@@ -180,7 +180,7 @@ func parseParameters(parameters map[string]interface{}) (*driverParameters, erro
 		}
 
 		if chunkSize < minChunkSize {
-			return nil, fmt.Errorf("The chunksize %#v parameter should be a number that is larger than or equal to %d", chunkSize, minChunkSize)
+			return nil, fmt.Errorf("the chunksize %#v parameter should be a number that is larger than or equal to %d", chunkSize, minChunkSize)
 		}
 
 		if chunkSize%minChunkSize != 0 {
@@ -203,21 +203,21 @@ func parseParameters(parameters map[string]interface{}) (*driverParameters, erro
 	} else if credentials, ok := parameters["credentials"]; ok {
 		credentialMap, ok := credentials.(map[interface{}]interface{})
 		if !ok {
-			return nil, fmt.Errorf("The credentials were not specified in the correct format")
+			return nil, fmt.Errorf("the credentials were not specified in the correct format")
 		}
 
 		stringMap := map[string]interface{}{}
 		for k, v := range credentialMap {
 			key, ok := k.(string)
 			if !ok {
-				return nil, fmt.Errorf("One of the credential keys was not a string: %s", fmt.Sprint(k))
+				return nil, fmt.Errorf("one of the credential keys was not a string: %s", fmt.Sprint(k))
 			}
 			stringMap[key] = v
 		}
 
 		data, err := json.Marshal(stringMap)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to marshal gcs credentials to json")
+			return nil, fmt.Errorf("failed to marshal gcs credentials to json")
 		}
 
 		jwtConf, err = google.JWTConfigFromJSON(data, storage.ScopeFullControl)
@@ -268,7 +268,7 @@ func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 		rootDirectory += "/"
 	}
 	if params.chunkSize <= 0 || params.chunkSize%minChunkSize != 0 {
-		return nil, fmt.Errorf("Invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
+		return nil, fmt.Errorf("invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
 	}
 	d := &driver{
 		bucket:        params.bucket,
@@ -360,7 +360,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 				if err != nil {
 					return nil, err
 				}
-				if offset == int64(obj.Size) {
+				if offset == obj.Size {
 					return io.NopCloser(bytes.NewReader([]byte{})), nil
 				}
 				return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
@@ -393,6 +393,7 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 	var res *http.Response
 	err = retry(func() error {
 		var err error
+		//nolint: bodyclose // body is closed bit later in the code
 		res, err = client.Do(req)
 		return err
 	})
@@ -504,6 +505,7 @@ func putContentsClose(wc *storage.Writer, contents []byte) error {
 		}
 	}
 	if err != nil {
+		//nolint: staticcheck // this needs somre refactoring and deeper check
 		wc.CloseWithError(err)
 		return err
 	}
@@ -660,7 +662,7 @@ func retry(req request) error {
 
 		time.Sleep(backoff - time.Second + (time.Duration(rand.Int31n(1000)) * time.Millisecond))
 		if i <= 4 {
-			backoff = backoff * 2
+			backoff *= 2
 		}
 	}
 
@@ -693,8 +695,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 	// try to get as folder
 	dirpath := d.pathToDirKey(path)
 
-	var query *storage.Query
-	query = &storage.Query{}
+	query := &storage.Query{}
 	query.Prefix = dirpath
 
 	it, err := storageListObjects(ctx, d.storageClient, d.bucket, query)
@@ -724,8 +725,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 // List returns a list of the objects that are direct descendants of the
 // given path.
 func (d *driver) List(ctx context.Context, path string) ([]string, error) {
-	var query *storage.Query
-	query = &storage.Query{}
+	query := &storage.Query{}
 	query.Delimiter = "/"
 	query.Prefix = d.pathToDirKey(path)
 	list := make([]string, 0, 64)
@@ -1014,8 +1014,7 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
 	prefix := d.pathToDirKey(path)
 
-	var query *storage.Query
-	query = &storage.Query{
+	query := &storage.Query{
 		Prefix:     prefix,
 		Delimiter:  "/",                     // do not walk into child prefixes (if any)
 		Projection: storage.ProjectionNoACL, // no need for Owner and ACL data (faster)

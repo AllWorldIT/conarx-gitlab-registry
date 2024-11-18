@@ -408,7 +408,7 @@ func testBlobDelete(t *testing.T, env *testEnv, args blobArgs) {
 	ref, _ := reference.WithDigest(imageName, layerDigest)
 	layerURL, err := env.builder.BuildBlobURL(ref)
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 	// ---------------
 	// Delete a layer
@@ -684,7 +684,6 @@ func testManifestWithStorageError(t *testing.T, env *testEnv, imageName referenc
 	defer resp.Body.Close()
 	checkResponse(t, "getting non-existent manifest", resp, expectedStatusCode)
 	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, expectedErrorCode)
-	return
 }
 
 func TestManifestAPI_Get_Schema2NotInDatabase(t *testing.T) {
@@ -2247,6 +2246,7 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	req = newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(token))
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 
 	// Create and execute API request to continue with the started push (while a project lease is suddenly in effect for "foo/bar")

@@ -562,7 +562,7 @@ func TestEndpointAuthorizeTokenBasicWithExpiresIn(t *testing.T) {
 	authenicate1 := "Basic realm=localhost"
 	tokenExchanges := 0
 	basicCheck := func(a string) bool {
-		tokenExchanges = tokenExchanges + 1
+		tokenExchanges++
 		return a == fmt.Sprintf("Basic %s", basicAuth(username, password))
 	}
 	te, tc := testServerWithAuth(tokenMap, authenicate1, basicCheck)
@@ -725,7 +725,7 @@ func TestEndpointAuthorizeTokenBasicWithExpiresInAndIssuedAt(t *testing.T) {
 	authenicate1 := "Basic realm=localhost"
 	tokenExchanges := 0
 	basicCheck := func(a string) bool {
-		tokenExchanges = tokenExchanges + 1
+		tokenExchanges++
 		return a == fmt.Sprintf("Basic %s", basicAuth(username, password))
 	}
 	te, tc := testServerWithAuth(tokenMap, authenicate1, basicCheck)

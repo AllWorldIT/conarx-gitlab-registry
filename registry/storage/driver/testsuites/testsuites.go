@@ -61,12 +61,12 @@ type DriverSuite struct {
 	ctx           context.Context
 }
 
-// SetUpSuite sets up the test suite for tests.
+// SetupSuite sets up the test suite for tests.
 func (suite *DriverSuite) SetupSuite() {
 	suite.setupSuiteGeneric(suite.T())
 }
 
-// SetUpSuite sets up the test suite for benchmarks.
+// SetupSuiteWithB sets up the test suite for benchmarks.
 func (suite *DriverSuite) SetupSuiteWithB(b *testing.B) {
 	suite.setupSuiteGeneric(b)
 }
@@ -82,7 +82,7 @@ func (suite *DriverSuite) TearDownSuite() {
 	suite.tearDownSuiteGeneric(suite.T())
 }
 
-// TearDownSuite tears down the test suite when benchmarking.
+// TearDownSuiteWithB tears down the test suite when benchmarking.
 func (suite *DriverSuite) TearDownSuiteWithB(b *testing.B) {
 	suite.tearDownSuiteGeneric(b)
 }
@@ -847,7 +847,8 @@ func (suite *DriverSuite) TestDeleteFiles() {
 	suite.assertPathNotFound(suite.T(), blobPaths...)
 }
 
-// TestDeleteFiles is a regression test for deleting files where the file name and folder where the file resides have the same names
+// TestDeleteFileEqualFolderFileName is a regression test for deleting files
+// where the file name and folder where the file resides have the same names
 func (suite *DriverSuite) TestDeleteFileEqualFolderFileName() {
 	parentDir := randomPath(1, 8)
 	fileName := "Maryna"
@@ -1622,12 +1623,17 @@ func (suite *DriverSuite) benchmarkWalkParallel(b *testing.B, numFiles int, f st
 	}
 }
 
-func (suite *DriverSuite) createRegistry(t require.TestingT, options ...storage.RegistryOption) distribution.Namespace {
+func (suite *DriverSuite) createRegistry(t require.TestingT) distribution.Namespace {
 	k, err := libtrust.GenerateECP256PrivateKey()
 	require.NoError(t, err)
 
-	options = append([]storage.RegistryOption{storage.EnableDelete, storage.Schema1SigningKey(k), storage.EnableSchema1}, options...)
-	registry, err := storage.NewRegistry(suite.ctx, suite.StorageDriver, options...)
+	opts := []storage.RegistryOption{
+		storage.EnableDelete,
+		storage.Schema1SigningKey(k),
+		storage.EnableSchema1,
+	}
+
+	registry, err := storage.NewRegistry(suite.ctx, suite.StorageDriver, opts...)
 	require.NoError(t, err, "Failed to construct namespace")
 	return registry
 }

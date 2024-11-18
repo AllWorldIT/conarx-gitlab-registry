@@ -14,7 +14,7 @@ import (
 type EndpointConfig struct {
 	Headers http.Header
 	Timeout time.Duration
-	// DEPRECATED: use MaxRetries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243
+	// Deprecated: use MaxRetries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243
 	Threshold         int
 	MaxRetries        int
 	Backoff           time.Duration
@@ -90,7 +90,9 @@ func NewEndpoint(name, url string, config EndpointConfig) *Endpoint {
 	}
 
 	endpoint.Sink = newEventQueue(endpoint.Sink, endpoint.QueuePurgeTimeout, endpoint.metrics.eventQueueListener())
-	mediaTypes := append(config.Ignore.MediaTypes, config.IgnoredMediaTypes...)
+	mediaTypes := make([]string, len(config.Ignore.MediaTypes), len(config.Ignore.MediaTypes)+len(config.IgnoredMediaTypes))
+	copy(mediaTypes, config.Ignore.MediaTypes)
+	mediaTypes = append(mediaTypes, config.IgnoredMediaTypes...)
 	endpoint.Sink = newIgnoredSink(endpoint.Sink, mediaTypes, config.Ignore.Actions)
 
 	register(&endpoint)

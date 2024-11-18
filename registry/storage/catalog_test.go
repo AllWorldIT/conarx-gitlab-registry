@@ -262,48 +262,48 @@ func TestCatalogWalkError(t *testing.T) {
 	}
 }
 
-func BenchmarkPathCompareEqual(B *testing.B) {
-	B.StopTimer()
+func BenchmarkPathCompareEqual(b *testing.B) {
+	b.StopTimer()
 	pp := randomPath(100)
 	// make a real copy
 	ppb := append([]byte{}, []byte(pp)...)
-	a, b := pp, string(ppb)
+	x, y := pp, string(ppb)
 
-	B.StartTimer()
-	for i := 0; i < B.N; i++ {
-		lessPath(a, b)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		lessPath(x, y)
 	}
 }
 
-func BenchmarkPathCompareNotEqual(B *testing.B) {
-	B.StopTimer()
-	a, b := randomPath(100), randomPath(100)
-	B.StartTimer()
+func BenchmarkPathCompareNotEqual(b *testing.B) {
+	b.StopTimer()
+	x, y := randomPath(100), randomPath(100)
+	b.StartTimer()
 
-	for i := 0; i < B.N; i++ {
-		lessPath(a, b)
+	for i := 0; i < b.N; i++ {
+		lessPath(x, y)
 	}
 }
 
-func BenchmarkPathCompareNative(B *testing.B) {
-	B.StopTimer()
-	a, b := randomPath(100), randomPath(100)
-	B.StartTimer()
+func BenchmarkPathCompareNative(b *testing.B) {
+	b.StopTimer()
+	x, y := randomPath(100), randomPath(100)
+	b.StartTimer()
 
-	for i := 0; i < B.N; i++ {
-		c := a < b
+	for i := 0; i < b.N; i++ {
+		c := x < y
 		_ = c && false
 	}
 }
 
-func BenchmarkPathCompareNativeEqual(B *testing.B) {
-	B.StopTimer()
+func BenchmarkPathCompareNativeEqual(b *testing.B) {
+	b.StopTimer()
 	pp := randomPath(100)
-	a, b := pp, pp
-	B.StartTimer()
+	x, y := pp, pp
+	b.StartTimer()
 
-	for i := 0; i < B.N; i++ {
-		c := a < b
+	for i := 0; i < b.N; i++ {
+		c := x < y
 		_ = c && false
 	}
 }

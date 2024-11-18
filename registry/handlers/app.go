@@ -539,7 +539,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				return nil, fmt.Errorf("redis configuration required to use for layerinfo cache")
 			}
 			cacheProvider := rediscache.NewRedisBlobDescriptorCacheProvider(app.redis)
-			localOptions := append(options, storage.BlobDescriptorCacheProvider(cacheProvider))
+			localOptions := make([]storage.RegistryOption, len(options), len(options)+1)
+			copy(localOptions, options)
+			localOptions = append(localOptions, storage.BlobDescriptorCacheProvider(cacheProvider))
 			app.registry, err = storage.NewRegistry(app, app.driver, localOptions...)
 			if err != nil {
 				return nil, fmt.Errorf("could not create registry: %w", err)
@@ -547,7 +549,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			log.Info("using redis blob descriptor cache")
 		case "inmemory":
 			cacheProvider := memorycache.NewInMemoryBlobDescriptorCacheProvider()
-			localOptions := append(options, storage.BlobDescriptorCacheProvider(cacheProvider))
+			localOptions := make([]storage.RegistryOption, len(options), len(options)+1)
+			copy(localOptions, options)
+			localOptions = append(localOptions, storage.BlobDescriptorCacheProvider(cacheProvider))
 			app.registry, err = storage.NewRegistry(app, app.driver, localOptions...)
 			if err != nil {
 				return nil, fmt.Errorf("could not create registry: %w", err)
@@ -966,7 +970,8 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 
 		dcontext.GetLogger(app).Infof("configuring endpoint %v (%v), timeout=%s, headers=%v", endpoint.Name, endpoint.URL, endpoint.Timeout, endpoint.Headers)
 		endpoint := notifications.NewEndpoint(endpoint.Name, endpoint.URL, notifications.EndpointConfig{
-			Timeout:           endpoint.Timeout,
+			Timeout: endpoint.Timeout,
+			//nolint: staticcheck // needs more thorough investigation and fix
 			Threshold:         endpoint.Threshold,
 			MaxRetries:        endpoint.MaxRetries,
 			Backoff:           endpoint.Backoff,

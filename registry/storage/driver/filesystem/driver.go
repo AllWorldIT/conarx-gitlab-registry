@@ -419,11 +419,12 @@ func newFileWriter(file *os.File, size int64) *fileWriter {
 }
 
 func (fw *fileWriter) Write(p []byte) (int, error) {
-	if fw.closed {
+	switch {
+	case fw.closed:
 		return 0, fmt.Errorf("already closed")
-	} else if fw.committed {
+	case fw.committed:
 		return 0, fmt.Errorf("already committed")
-	} else if fw.canceled {
+	case fw.canceled:
 		return 0, fmt.Errorf("already canceled")
 	}
 	n, err := fw.bw.Write(p)
@@ -466,11 +467,12 @@ func (fw *fileWriter) Cancel() error {
 }
 
 func (fw *fileWriter) Commit() error {
-	if fw.closed {
+	switch {
+	case fw.closed:
 		return fmt.Errorf("already closed")
-	} else if fw.committed {
+	case fw.committed:
 		return fmt.Errorf("already committed")
-	} else if fw.canceled {
+	case fw.canceled:
 		return fmt.Errorf("already canceled")
 	}
 
