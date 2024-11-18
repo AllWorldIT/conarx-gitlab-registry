@@ -147,13 +147,8 @@ linters:
   # TODO: Tracked in https://gitlab.com/gitlab-org/container-registry/-/issues/1308
   # - revive
   # - gosec
-  # - gocognit
   # MRs in flight:
   # - unparam
-  # - govet
-  # Waits for decision of the team if it makes sense to keep them:
-  # - goconst
-  # - dupl
     - gocritic
     - misspell
     - unconvert
@@ -171,8 +166,10 @@ linters:
     - unused
     - whitespace
     - copyloopvar
-
   # don't enable:
+  # - gocognit
+  # - goconst
+  # - dupl
   # - errcheck
   # - deadcode
   # - gochecknoglobals
