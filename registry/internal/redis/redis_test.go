@@ -23,10 +23,10 @@ func TestCache_Get(t *testing.T) {
 	mock.ExpectGet(key).SetVal(value)
 
 	result, err := cache.Get(context.Background(), key)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, value, result)
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestCache_GetWithTTL(t *testing.T) {
@@ -41,11 +41,11 @@ func TestCache_GetWithTTL(t *testing.T) {
 	mock.ExpectTTL(key).SetVal(ttl)
 
 	result, ttlResult, err := cache.GetWithTTL(context.Background(), key)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, value, result)
 	assert.Equal(t, ttl, ttlResult)
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestCache_Set(t *testing.T) {
@@ -79,13 +79,13 @@ func TestCache_Set(t *testing.T) {
 
 			if tt.ttl == defaultTTL {
 				err := cache.Set(context.Background(), tt.key, tt.value)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
 				err := cache.Set(context.Background(), tt.key, tt.value, iredis.WithTTL(tt.ttl))
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
-			assert.NoError(t, mock.ExpectationsWereMet())
+			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
 }
@@ -109,10 +109,10 @@ func TestCache_MarshalGet(t *testing.T) {
 
 	var resultObj TestObject
 	err := cache.UnmarshalGet(context.Background(), key, &resultObj)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, testObj, resultObj)
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestCache_MarshalGetWithTTL(t *testing.T) {
@@ -131,11 +131,11 @@ func TestCache_MarshalGetWithTTL(t *testing.T) {
 
 	var resultObj TestObject
 	ttlResult, err := cache.UnmarshalGetWithTTL(context.Background(), key, &resultObj)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, testObj, resultObj)
 	assert.Equal(t, ttl, ttlResult)
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestCache_MarshalSet(t *testing.T) {
@@ -171,13 +171,13 @@ func TestCache_MarshalSet(t *testing.T) {
 
 			if tt.ttl == defaultTTL {
 				err := cache.MarshalSet(context.Background(), tt.key, testObj)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
 				err := cache.MarshalSet(context.Background(), tt.key, testObj, iredis.WithTTL(tt.ttl))
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
-			assert.NoError(t, mock.ExpectationsWereMet())
+			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
 }
@@ -198,7 +198,7 @@ func TestCache_RunScript(t *testing.T) {
 
 		result, err := cache.RunScript(context.Background(), script, keys, args...)
 		require.NoError(t, err)
-		require.Equal(t, 3, result)
+		assert.Equal(t, 3, result)
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -209,7 +209,7 @@ func TestCache_RunScript(t *testing.T) {
 		result, err := cache.RunScript(context.Background(), script, keys, args...)
 		require.Error(t, err)
 		require.EqualError(t, err, expectedErr)
-		require.Nil(t, result)
+		assert.Nil(t, result)
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 }

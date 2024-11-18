@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"regexp"
-	"sync"
 	"testing"
 	"time"
 
@@ -2463,12 +2462,9 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.Error(t, err, context.Canceled)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -2476,7 +2472,7 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 
 	// Cancel the context to stop the refreshing
 	cancel()
-	wg.Wait()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 
 	// Verify new replicas
 	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
@@ -2559,12 +2555,9 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 	require.NotNil(t, lb)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.NoError(t, err)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time to confirm that no connections were attempted in the background. We've set expectations
@@ -2573,7 +2566,7 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 
 	// Canceling the context should not lead to an error as the execution should have been skipped
 	cancel()
-	wg.Wait()
+	require.NoError(t, <-errCh)
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -2614,12 +2607,9 @@ func TestDBLoadBalancer_StartReplicaChecking_NoFixedHostsOrServiceDiscovery(t *t
 	require.NotNil(t, lb)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.NoError(t, err)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time to confirm that no connections were attempted in the background. We've set expectations
@@ -2628,7 +2618,7 @@ func TestDBLoadBalancer_StartReplicaChecking_NoFixedHostsOrServiceDiscovery(t *t
 
 	// Canceling the context should not lead to an error as the execution should have been skipped
 	cancel()
-	wg.Wait()
+	require.NoError(t, <-errCh)
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -2922,7 +2912,7 @@ func TestDBLoadBalancer_UpToDateReplica_Inactive(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 	require.Equal(t, primaryMockDB, lb.Primary().DB)
-	require.Len(t, lb.Replicas(), 0)
+	require.Empty(t, lb.Replicas())
 
 	// Test that we successfully get the primary handle as result
 	repo := &models.Repository{Path: "test/repo"}
@@ -3399,12 +3389,9 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.
 		Times(1)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.Error(t, err, context.Canceled)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3412,7 +3399,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.
 
 	// Cancel the context to stop the refreshing
 	cancel()
-	wg.Wait()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 
 	// Ensure replica list is empty
 	require.Empty(t, lb.Replicas())
@@ -3477,12 +3464,9 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing
 		Times(1)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.Error(t, err, context.Canceled)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3490,7 +3474,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing
 
 	// Cancel the context to stop the refreshing
 	cancel()
-	wg.Wait()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 
 	// Ensure replica list is empty
 	require.Empty(t, lb.Replicas())
@@ -3569,12 +3553,9 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 		Times(1)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.Error(t, err, context.Canceled)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3582,7 +3563,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 
 	// Cancel the context to stop the refreshing
 	cancel()
-	wg.Wait()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 
 	// Ensure replica list is empty
 	require.Empty(t, lb.Replicas())

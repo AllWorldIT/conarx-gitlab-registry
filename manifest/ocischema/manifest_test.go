@@ -208,7 +208,7 @@ func TestManifestWithSubject(t *testing.T) {
 
 	// Should include the subject in this manifest's references
 	references := deserialized.References()
-	require.Equal(t, 3, len(references))
+	require.Len(t, references, 3)
 }
 
 func TestManifestWithArtifactType(t *testing.T) {

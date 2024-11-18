@@ -201,7 +201,7 @@ func TestVerifyManifest_Schema2_ManifestLayer(t *testing.T) {
 	v := validation.NewSchema2Validator(manifestService, repo.Blobs(ctx), 0, 0, validation.ManifestURLs{})
 
 	err = v.Validate(ctx, dm)
-	require.NoErrorf(t, err, fmt.Sprintf("digest: %s", dgst))
+	require.NoErrorf(t, err, "digest: %s", dgst)
 }
 
 func TestVerifyManifest_Schema2_MultipleErrors(t *testing.T) {

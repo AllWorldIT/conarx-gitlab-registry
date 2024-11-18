@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/notifications"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,17 +39,19 @@ func NewNotificationServer(t *testing.T, databaseEnabled bool) *NotificationServ
 
 	s := httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
+			// NOTE(prozlach): we can't use require (which internally uses
+			// t.FailNow()) in a goroutine as we may get an undefined behavior
 			dreq, err := httputil.DumpRequest(r, true)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			fmt.Printf("Handler got event: \n\n%s\n\n", dreq)
 			events := struct {
 				Events []notifications.Event `json:"events"`
 			}{}
 			err = json.NewDecoder(r.Body).Decode(&events)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
-			require.Len(t, events.Events, 1)
-			require.Equal(t, notifications.EventsMediaType, r.Header.Get("Content-Type"), events.Events[0].ID)
+			assert.Len(t, events.Events, 1)
+			assert.Equal(t, notifications.EventsMediaType, r.Header.Get("Content-Type"), events.Events[0].ID)
 
 			ns.mu.Lock()
 			ns.receivedEvents = append(ns.receivedEvents, events.Events[0])

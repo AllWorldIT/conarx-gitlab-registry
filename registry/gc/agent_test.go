@@ -206,7 +206,7 @@ func TestAgent_Start_Jitter(t *testing.T) {
 	)
 
 	err := agent.Start(ctx)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.EqualError(t, context.Canceled, err.Error())
 }
 
@@ -244,7 +244,7 @@ func TestAgent_Start_NoTaskFound(t *testing.T) {
 	)
 
 	err := agent.Start(ctx)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.EqualError(t, context.Canceled, err.Error())
 }
 
@@ -284,7 +284,7 @@ func TestAgent_Start_NoTaskFoundWithoutIdleBackoff(t *testing.T) {
 	)
 
 	err := agent.Start(ctx)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.EqualError(t, context.Canceled, err.Error())
 }
 
@@ -324,7 +324,7 @@ func TestAgent_Start_ErrorWithoutIdleBackoff(t *testing.T) {
 	)
 
 	err := agent.Start(ctx)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.EqualError(t, context.Canceled, err.Error())
 }
 
@@ -364,7 +364,7 @@ func TestAgent_Start_RunFound(t *testing.T) {
 	)
 
 	err := agent.Start(ctx)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.EqualError(t, context.Canceled, err.Error())
 }
 
@@ -404,7 +404,7 @@ func TestAgent_Start_RunError(t *testing.T) {
 	)
 
 	err := agent.Start(ctx)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.EqualError(t, context.Canceled, err.Error())
 }
 
@@ -457,7 +457,7 @@ func TestAgent_Start_RunLoopSurvivesError(t *testing.T) {
 	)
 
 	err := agent.Start(ctx)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.EqualError(t, context.Canceled, err.Error())
 }
 
@@ -522,7 +522,7 @@ func TestAgent_Start_RunLoopSurvivesErrorWithErrorCooldown(t *testing.T) {
 	)
 
 	err := agent.Start(ctx)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.EqualError(t, context.Canceled, err.Error())
 }
 

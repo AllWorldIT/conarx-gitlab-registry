@@ -64,9 +64,10 @@ commitlint:
   rules:
     - if: $CI_MERGE_REQUEST_IID
 
-golangci-lint:
+codelint:
   variables:
     GOLANGCI_LINT_VERSION: 'v1.59.1'
+    TESTIFYLINT_VERSION: 'v1.5.2'
   cache: {}
   image: golangci/golangci-lint:$GOLANGCI_LINT_VERSION
   stage: validate
@@ -75,6 +76,7 @@ golangci-lint:
     - apt update
     - apt install jq -y
   script:
+    - go run github.com/Antonboom/testifylint@${TESTIFYLINT_VERSION} -disable suite-dont-use-pkg ./...
     # Write the code coverage report to gl-code-quality-report.json
     # and print linting issues to stdout in the format: path/to/file:line description
     - golangci-lint run --out-format code-climate | tee gl-code-quality-report.json | jq -r '.[] | "\(.location.path):\(.location.lines.begin) \(.description)"'

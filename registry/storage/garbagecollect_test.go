@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -506,7 +505,7 @@ func TestGarbageCollectManifestListReferenceDeleted(t *testing.T) {
 
 			for l := range img.Layers {
 				_, err := blobstatter.Stat(ctx, l)
-				require.True(t, errors.Is(err, distribution.ErrBlobUnknown))
+				require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 			}
 
 			continue
@@ -576,7 +575,7 @@ func TestGarbageCollectNotConformantBuildxCacheReferences(t *testing.T) {
 
 	for _, desc := range untaggedCacheReferences {
 		_, err := blobstatter.Stat(ctx, desc.Digest)
-		require.True(t, errors.Is(err, distribution.ErrBlobUnknown))
+		require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 	}
 }
 

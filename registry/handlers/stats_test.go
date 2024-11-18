@@ -10,7 +10,6 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/handlers/mocks"
 
-	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 
@@ -29,11 +28,11 @@ func TestRepositoryStats_IncrementPullCount(t *testing.T) {
 	mockCache.EXPECT().Incr(ctx, repoStats.key(repo.Path, statsOperationPull)).Return(nil).Times(2)
 
 	err := repoStats.IncrementPullCount(ctx, repo)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Increase the stats again
 	err = repoStats.IncrementPullCount(ctx, repo)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestRepositoryStats_IncrementPushCount(t *testing.T) {
@@ -51,10 +50,10 @@ func TestRepositoryStats_IncrementPushCount(t *testing.T) {
 	mockCache.EXPECT().Incr(ctx, repoStats.key(repo.Path, statsOperationPush)).Return(nil).Times(2)
 
 	err := repoStats.IncrementPushCount(ctx, repo)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = repoStats.IncrementPushCount(ctx, repo)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestRepositoryStats_CacheError(t *testing.T) {
