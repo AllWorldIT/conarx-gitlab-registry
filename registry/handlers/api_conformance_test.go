@@ -2966,7 +2966,6 @@ func blob_Delete_UnknownRepository(t *testing.T, opts ...configOpt) {
 }
 
 func tags_Get(t *testing.T, opts ...configOpt) {
-	opts = append(opts)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 

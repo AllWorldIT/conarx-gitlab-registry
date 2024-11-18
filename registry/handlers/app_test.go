@@ -952,8 +952,8 @@ func TestRecordLSNMiddleware(t *testing.T) {
 			}
 
 			resp, err := http.DefaultClient.Do(req)
-			defer resp.Body.Close()
 			require.NoError(t, err)
+			defer resp.Body.Close()
 			require.Equal(t, testcase.status, resp.StatusCode)
 		})
 	}

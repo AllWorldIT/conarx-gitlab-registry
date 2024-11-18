@@ -55,13 +55,13 @@ func Test_findAllGCReviewAfterDefaults(t *testing.T) {
 
 	// see testdata/fixtures/gc_review_after_defaults.sql
 	expected := []*models.GCReviewAfterDefault{
-		{"blob_upload", 24 * time.Hour},
-		{"layer_delete", 16 * time.Hour},
-		{"manifest_delete", 1 * time.Hour},
-		{"manifest_list_delete", 1 * time.Minute},
-		{"manifest_upload", 7 * 24 * time.Hour},
-		{"tag_delete", 21 * time.Minute},
-		{"tag_switch", 0},
+		{Event: "blob_upload", Value: 24 * time.Hour},
+		{Event: "layer_delete", Value: 16 * time.Hour},
+		{Event: "manifest_delete", Value: 1 * time.Hour},
+		{Event: "manifest_list_delete", Value: 1 * time.Minute},
+		{Event: "manifest_upload", Value: 7 * 24 * time.Hour},
+		{Event: "tag_delete", Value: 21 * time.Minute},
+		{Event: "tag_switch", Value: 0},
 	}
 
 	actual := findAllGCReviewAfterDefaults(t, suite.db)
@@ -78,13 +78,13 @@ func TestGCSettingsStore_UpdateAllReviewAfterDefaults(t *testing.T) {
 
 	// see testdata/fixtures/gc_review_after_defaults.sql
 	expected := []*models.GCReviewAfterDefault{
-		{"blob_upload", 1 * time.Minute},
-		{"layer_delete", 1 * time.Minute},
-		{"manifest_delete", 1 * time.Minute},
-		{"manifest_list_delete", 1 * time.Minute},
-		{"manifest_upload", 1 * time.Minute},
-		{"tag_delete", 1 * time.Minute},
-		{"tag_switch", 1 * time.Minute},
+		{Event: "blob_upload", Value: 1 * time.Minute},
+		{Event: "layer_delete", Value: 1 * time.Minute},
+		{Event: "manifest_delete", Value: 1 * time.Minute},
+		{Event: "manifest_list_delete", Value: 1 * time.Minute},
+		{Event: "manifest_upload", Value: 1 * time.Minute},
+		{Event: "tag_delete", Value: 1 * time.Minute},
+		{Event: "tag_switch", Value: 1 * time.Minute},
 	}
 
 	actual := findAllGCReviewAfterDefaults(t, suite.db)
