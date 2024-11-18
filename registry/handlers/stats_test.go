@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/docker/distribution/registry/datastore/models"

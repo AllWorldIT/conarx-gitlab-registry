@@ -14,7 +14,8 @@ type regexpMatch struct {
 
 func checkRegexp(t *testing.T, r *regexp.Regexp, m regexpMatch) {
 	matches := r.FindStringSubmatch(m.input)
-	if m.match && matches != nil {
+	switch {
+	case m.match && matches != nil:
 		if len(matches) != (r.NumSubexp()+1) || matches[0] != m.input {
 			t.Fatalf("Bad match result %#v for %q", matches, m.input)
 		}
@@ -26,9 +27,9 @@ func checkRegexp(t *testing.T, r *regexp.Regexp, m regexpMatch) {
 				t.Errorf("Unexpected submatch %d: %q, expected %q for %q", i+1, matches[i+1], m.subs[i], m.input)
 			}
 		}
-	} else if m.match {
+	case m.match:
 		t.Errorf("Expected match for %q", m.input)
-	} else if matches != nil {
+	case matches != nil:
 		t.Errorf("Unexpected match for %q", m.input)
 	}
 }

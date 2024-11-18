@@ -633,16 +633,17 @@ func TestParseNamed(t *testing.T) {
 		}
 
 		named, err := ParseNamed(testcase.input)
-		if err != nil && testcase.err == nil {
+		switch {
+		case err != nil && testcase.err == nil:
 			failf("error parsing name: %s", err)
 			continue
-		} else if err == nil && testcase.err != nil {
+		case err == nil && testcase.err != nil:
 			failf("parsing succeeded: expected error %v", testcase.err)
 			continue
-		} else if err != testcase.err {
+		case err != testcase.err:
 			failf("unexpected error %v, expected %v", err, testcase.err)
 			continue
-		} else if err != nil {
+		case err != nil:
 			continue
 		}
 

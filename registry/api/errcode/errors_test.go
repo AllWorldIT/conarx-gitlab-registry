@@ -63,7 +63,7 @@ func TestErrorCodes(t *testing.T) {
 			t.Fatalf("couldn't marshal ec %v: %v", ec, err)
 		}
 
-		if len(p) <= 0 {
+		if len(p) == 0 {
 			t.Fatalf("expected content in marshaled before for error code %v", ec)
 		}
 
@@ -87,7 +87,7 @@ func TestErrorCodes(t *testing.T) {
 			t.Fatalf("unexpected error code during error code marshal/unmarshal: %v != %v", ecUnmarshaled, ec)
 		}
 
-		expectedErrorString := strings.ToLower(strings.Replace(ec.Descriptor().Value, "_", " ", -1))
+		expectedErrorString := strings.ToLower(strings.ReplaceAll(ec.Descriptor().Value, "_", " "))
 		if ec.Error() != expectedErrorString {
 			t.Fatalf("unexpected return from %v.Error(): %q != %q", ec, ec.Error(), expectedErrorString)
 		}

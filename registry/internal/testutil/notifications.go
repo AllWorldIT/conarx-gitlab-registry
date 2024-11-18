@@ -114,11 +114,7 @@ func (ns *NotificationServer) AssertEventNotification(t *testing.T, expectedEven
 
 			return
 		case "rename":
-			err := validateRepositoryRename(t, expectedEvent, receivedEvent)
-			if err != nil {
-				t.Logf("repository rename event mismatch: %v", err)
-				continue
-			}
+			validateRepositoryRename(t, expectedEvent, receivedEvent)
 
 			return
 		default:
@@ -234,7 +230,7 @@ func (ns *NotificationServer) validateManifestPull(t *testing.T, expectedEvent, 
 }
 
 // validateRepositoryRename validates that a rename event contains the necessary fields.
-func validateRepositoryRename(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
+func validateRepositoryRename(t *testing.T, expectedEvent, receivedEvent notifications.Event) {
 	t.Helper()
 
 	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
@@ -244,6 +240,4 @@ func validateRepositoryRename(t *testing.T, expectedEvent, receivedEvent notific
 	require.Equal(t, expectedEvent.Action, receivedEvent.Action)
 	require.Equal(t, expectedEvent.Target.Repository, receivedEvent.Target.Repository)
 	require.Equal(t, expectedEvent.Target.Rename, receivedEvent.Target.Rename)
-
-	return nil
 }

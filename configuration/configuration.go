@@ -153,8 +153,8 @@ type Configuration struct {
 
 	// Validation configures validation options for the registry.
 	Validation struct {
-		// Enabled enables the other options in this section. This field is
-		// deprecated in favor of Disabled.
+		// Enabled enables the other options in this section.
+		// This field is deprecated in favor of Disabled.
 		Enabled bool `yaml:"enabled,omitempty"`
 		// Disabled disables the other options in this section.
 		Disabled bool `yaml:"disabled,omitempty"`
@@ -1004,7 +1004,7 @@ type Endpoint struct {
 	URL      string        `yaml:"url"`      // post url for the endpoint.
 	Headers  http.Header   `yaml:"headers"`  // static headers that should be added to all requests
 	Timeout  time.Duration `yaml:"timeout"`  // HTTP timeout
-	// DEPRECATED: use maxretries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243.
+	// Deprecated: use maxretries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243.
 	Threshold         int           `yaml:"threshold"`         // Circuit breaker threshold before backing off on failure
 	MaxRetries        int           `yaml:"maxretries"`        // maximum number of times to retry sending a failed event
 	Backoff           time.Duration `yaml:"backoff"`           // backoff duration

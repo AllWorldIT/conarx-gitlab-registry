@@ -533,6 +533,7 @@ func TestNewAccessControllerPemBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	//nolint: staticcheck // needs more thorought investigation and fix
 	if len(ac.(*accessController).rootCerts.Subjects()) != 2 {
 		t.Fatal("accessController has the wrong number of certificates")
 	}

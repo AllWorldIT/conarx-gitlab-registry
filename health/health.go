@@ -135,8 +135,8 @@ func (tu *ThresholdStatusUpdater) Check() error {
 	return nil
 }
 
-// thresholdUpdater implements the Updater interface, allowing asynchronous
-// access to the status of a Checker.
+// Update implements the Updater interface on ThresholdStatusUpdater, allowing
+// asynchronous access to the status of a Checker.
 func (tu *ThresholdStatusUpdater) Update(status error) {
 	tu.mu.Lock()
 	defer tu.mu.Unlock()

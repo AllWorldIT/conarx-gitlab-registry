@@ -332,10 +332,11 @@ func (th *tokenHandler) fetchTokenWithOAuth(realm *url.URL, refreshToken, servic
 	}
 	form.Set("client_id", clientID)
 
-	if refreshToken != "" {
+	switch {
+	case refreshToken != "":
 		form.Set("grant_type", "refresh_token")
 		form.Set("refresh_token", refreshToken)
-	} else if th.creds != nil {
+	case th.creds != nil:
 		form.Set("grant_type", "password")
 		username, password := th.creds.Basic(realm)
 		form.Set("username", username)
@@ -343,7 +344,7 @@ func (th *tokenHandler) fetchTokenWithOAuth(realm *url.URL, refreshToken, servic
 
 		// attempt to get a refresh token
 		form.Set("access_type", "offline")
-	} else {
+	default:
 		// refuse to do oauth without a grant type
 		return "", time.Time{}, fmt.Errorf("no supported grant type")
 	}

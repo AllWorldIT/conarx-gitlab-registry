@@ -529,11 +529,12 @@ func (d *driver) newWriter(path string, size int64) storagedriver.FileWriter {
 }
 
 func (w *writer) Write(p []byte) (int, error) {
-	if w.closed {
+	switch {
+	case w.closed:
 		return 0, fmt.Errorf("already closed")
-	} else if w.committed {
+	case w.committed:
 		return 0, fmt.Errorf("already committed")
-	} else if w.canceled {
+	case w.canceled:
 		return 0, fmt.Errorf("already canceled")
 	}
 
@@ -566,11 +567,12 @@ func (w *writer) Cancel() error {
 }
 
 func (w *writer) Commit() error {
-	if w.closed {
+	switch {
+	case w.closed:
 		return fmt.Errorf("already closed")
-	} else if w.committed {
+	case w.committed:
 		return fmt.Errorf("already committed")
-	} else if w.canceled {
+	case w.canceled:
 		return fmt.Errorf("already canceled")
 	}
 	w.committed = true

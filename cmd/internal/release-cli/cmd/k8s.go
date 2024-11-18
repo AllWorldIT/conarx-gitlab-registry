@@ -112,7 +112,7 @@ var k8sCmd = &cobra.Command{
 			if err != nil {
 				log.Printf("Failed to send error notification to Slack: %v", err)
 			}
-			log.Fatalf(msg)
+			log.Fatal(msg)
 		}
 
 		msg := fmt.Sprintf("%s release: K8s Workloads version bump MR (%s): %s", version, stage, mr.WebURL)

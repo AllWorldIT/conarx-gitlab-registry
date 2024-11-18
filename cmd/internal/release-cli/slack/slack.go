@@ -25,6 +25,7 @@ func SendSlackNotification(webhookUrl, msg string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		buf := new(bytes.Buffer)

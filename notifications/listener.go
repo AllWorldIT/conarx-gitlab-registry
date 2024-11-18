@@ -212,14 +212,14 @@ func (bsl *blobServiceListener) Put(ctx context.Context, mediaType string, p []b
 
 func (bsl *blobServiceListener) Create(ctx context.Context, options ...distribution.BlobCreateOption) (distribution.BlobWriter, error) {
 	wr, err := bsl.BlobStore.Create(ctx, options...)
-	switch err := err.(type) {
-	case distribution.ErrBlobMounted:
-		if err := bsl.parent.listener.BlobMounted(bsl.parent.Repository.Named(), err.Descriptor, err.From); err != nil {
-			dcontext.GetLogger(ctx).Errorf("error dispatching blob mount to listener: %v", err)
-		}
-		return nil, err
+	errIn, ok := err.(distribution.ErrBlobMounted)
+	if !ok {
+		return bsl.decorateWriter(wr), err
 	}
-	return bsl.decorateWriter(wr), err
+	if err := bsl.parent.listener.BlobMounted(bsl.parent.Repository.Named(), errIn.Descriptor, errIn.From); err != nil {
+		dcontext.GetLogger(ctx).Errorf("error dispatching blob mount to listener: %v", err)
+	}
+	return nil, err
 }
 
 func (bsl *blobServiceListener) Delete(ctx context.Context, dgst digest.Digest) error {

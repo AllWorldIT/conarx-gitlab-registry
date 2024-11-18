@@ -41,16 +41,17 @@ func WalkFallback(ctx context.Context, driver StorageDriver, from string, f Walk
 			return err
 		}
 		err = f(fileInfo)
-		if err == nil && fileInfo.IsDir() {
+		switch {
+		case err == nil && fileInfo.IsDir():
 			if err := WalkFallback(ctx, driver, child, f); err != nil {
 				return err
 			}
-		} else if err == ErrSkipDir {
+		case err == ErrSkipDir:
 			// Stop iteration if it's a file, otherwise noop if it's a directory
 			if !fileInfo.IsDir() {
 				return nil
 			}
-		} else if err != nil {
+		case err != nil:
 			return err
 		}
 	}

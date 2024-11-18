@@ -13,7 +13,7 @@ type logWriterType struct {
 }
 
 func (l logWriterType) Write(p []byte) (n int, err error) {
-	l.t.Logf(string(p))
+	l.t.Log(string(p))
 	return len(p), nil
 }
 

@@ -749,7 +749,8 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 		Path: path,
 	}
 
-	if len(resp.Contents) == 1 {
+	switch {
+	case len(resp.Contents) == 1:
 		if *resp.Contents[0].Key != d.s3Path(path) {
 			fi.IsDir = true
 		} else {
@@ -757,9 +758,9 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 			fi.Size = *resp.Contents[0].Size
 			fi.ModTime = *resp.Contents[0].LastModified
 		}
-	} else if len(resp.CommonPrefixes) == 1 {
+	case len(resp.CommonPrefixes) == 1:
 		fi.IsDir = true
-	} else {
+	default:
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 
@@ -770,7 +771,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 	path := opath
 	if path != "/" && path[len(path)-1] != '/' {
-		path = path + "/"
+		path += "/"
 	}
 
 	// This is to cover for the cases when the rootDirectory of the driver is either "" or "/".
@@ -1134,7 +1135,7 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]int
 func (d *driver) Walk(ctx context.Context, from string, f storagedriver.WalkFn) error {
 	path := from
 	if !strings.HasSuffix(path, "/") {
-		path = path + "/"
+		path += "/"
 	}
 
 	prefix := ""
@@ -1165,7 +1166,7 @@ func (d *driver) WalkParallel(ctx context.Context, from string, f storagedriver.
 
 	path := from
 	if !strings.HasSuffix(path, "/") {
-		path = path + "/"
+		path += "/"
 	}
 
 	prefix := ""
@@ -1547,11 +1548,12 @@ func (a completedParts) Less(i, j int) bool { return *a[i].PartNumber < *a[j].Pa
 func (w *writer) Write(p []byte) (int, error) {
 	ctx := context.Background()
 
-	if w.closed {
+	switch {
+	case w.closed:
 		return 0, fmt.Errorf("already closed")
-	} else if w.committed {
+	case w.committed:
 		return 0, fmt.Errorf("already committed")
-	} else if w.canceled {
+	case w.canceled:
 		return 0, fmt.Errorf("already canceled")
 	}
 
@@ -1715,11 +1717,12 @@ func (w *writer) Cancel() error {
 func (w *writer) Commit() error {
 	ctx := context.Background()
 
-	if w.closed {
+	switch {
+	case w.closed:
 		return fmt.Errorf("already closed")
-	} else if w.committed {
+	case w.committed:
 		return fmt.Errorf("already committed")
-	} else if w.canceled {
+	case w.canceled:
 		return fmt.Errorf("already canceled")
 	}
 	err := w.flushPart()

@@ -187,63 +187,64 @@ func (hrs *httpReadSeeker) reader() (io.Reader, error) {
 
 	// Normally would use client.SuccessStatus, but that would be a cyclic
 	// import
-	if resp.StatusCode >= 200 && resp.StatusCode <= 399 {
-		if hrs.readerOffset > 0 {
-			if resp.StatusCode != http.StatusPartialContent {
-				return nil, ErrWrongCodeForByteRange
-			}
-
-			contentRange := resp.Header.Get("Content-Range")
-			if contentRange == "" {
-				return nil, errors.New("no Content-Range header found in HTTP 206 response")
-			}
-
-			submatches := contentRangeRegexp.FindStringSubmatch(contentRange)
-			if len(submatches) < 4 {
-				return nil, fmt.Errorf("could not parse Content-Range header: %s", contentRange)
-			}
-
-			startByte, err := strconv.ParseUint(submatches[1], 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("could not parse start of range in Content-Range header: %s", contentRange)
-			}
-
-			if startByte != uint64(hrs.readerOffset) {
-				return nil, fmt.Errorf("received Content-Range starting at offset %d instead of requested %d", startByte, hrs.readerOffset)
-			}
-
-			endByte, err := strconv.ParseUint(submatches[2], 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("could not parse end of range in Content-Range header: %s", contentRange)
-			}
-
-			if submatches[3] == "*" {
-				hrs.size = -1
-			} else {
-				size, err := strconv.ParseUint(submatches[3], 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("could not parse total size in Content-Range header: %s", contentRange)
-				}
-
-				if endByte+1 != size {
-					return nil, fmt.Errorf("range in Content-Range stops before the end of the content: %s", contentRange)
-				}
-
-				hrs.size = int64(size)
-			}
-		} else if resp.StatusCode == http.StatusOK {
-			hrs.size = resp.ContentLength
-		} else {
-			hrs.size = -1
-		}
-		hrs.rc = resp.Body
-	} else {
+	if resp.StatusCode < 200 || resp.StatusCode > 399 {
 		defer resp.Body.Close()
 		if hrs.errorHandler != nil {
 			return nil, hrs.errorHandler(resp)
 		}
 		return nil, fmt.Errorf("unexpected status resolving reader: %v", resp.Status)
 	}
+
+	switch {
+	case hrs.readerOffset > 0:
+		if resp.StatusCode != http.StatusPartialContent {
+			return nil, ErrWrongCodeForByteRange
+		}
+
+		contentRange := resp.Header.Get("Content-Range")
+		if contentRange == "" {
+			return nil, errors.New("no Content-Range header found in HTTP 206 response")
+		}
+
+		submatches := contentRangeRegexp.FindStringSubmatch(contentRange)
+		if len(submatches) < 4 {
+			return nil, fmt.Errorf("could not parse Content-Range header: %s", contentRange)
+		}
+
+		startByte, err := strconv.ParseUint(submatches[1], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse start of range in Content-Range header: %s", contentRange)
+		}
+
+		if startByte != uint64(hrs.readerOffset) {
+			return nil, fmt.Errorf("received Content-Range starting at offset %d instead of requested %d", startByte, hrs.readerOffset)
+		}
+
+		endByte, err := strconv.ParseUint(submatches[2], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse end of range in Content-Range header: %s", contentRange)
+		}
+
+		if submatches[3] == "*" {
+			hrs.size = -1
+		} else {
+			size, err := strconv.ParseUint(submatches[3], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("could not parse total size in Content-Range header: %s", contentRange)
+			}
+
+			if endByte+1 != size {
+				return nil, fmt.Errorf("range in Content-Range stops before the end of the content: %s", contentRange)
+			}
+
+			hrs.size = int64(size)
+		}
+	case resp.StatusCode == http.StatusOK:
+		hrs.size = resp.ContentLength
+	default:
+		hrs.size = -1
+	}
+	hrs.rc = resp.Body
 
 	return hrs.rc, nil
 }

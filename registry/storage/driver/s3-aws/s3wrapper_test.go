@@ -162,7 +162,7 @@ func TestDeleteObjectsWithContext_retryableErrors(t *testing.T) {
 			if test.maxRetries < test.failedRequests {
 				totalRequests = int32(test.maxRetries) + 1
 			}
-			require.Equal(t, counter, int32(totalRequests), "request counts do not match")
+			require.Equal(t, counter, totalRequests, "request counts do not match")
 		})
 	}
 }

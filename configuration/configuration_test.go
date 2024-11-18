@@ -2299,7 +2299,6 @@ database:
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			config, err := Parse(bytes.NewReader([]byte(test.yml)))
 			require.NoError(t, err)

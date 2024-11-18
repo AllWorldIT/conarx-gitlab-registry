@@ -117,7 +117,8 @@ func (buh *blobUploadHandler) StartBlobUpload(w http.ResponseWriter, r *http.Req
 	upload, err := blobs.Create(buh, options...)
 	if err != nil {
 		var ebm distribution.ErrBlobMounted
-		if errors.As(err, &ebm) {
+		switch {
+		case errors.As(err, &ebm):
 			if buh.useDatabase {
 				if err = dbMountBlob(buh.Context, rStore, ebm.From.Name(), buh.Repository.Named().Name(), ebm.Descriptor.Digest); err != nil {
 					e := fmt.Errorf("failed to mount blob in database: %w", err)
@@ -128,9 +129,9 @@ func (buh *blobUploadHandler) StartBlobUpload(w http.ResponseWriter, r *http.Req
 			if err = buh.writeBlobCreatedHeaders(w, ebm.Descriptor); err != nil {
 				buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 			}
-		} else if errors.Is(err, distribution.ErrUnsupported) {
+		case errors.Is(err, distribution.ErrUnsupported):
 			buh.Errors = append(buh.Errors, errcode.ErrorCodeUnsupported)
-		} else {
+		default:
 			buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 		}
 		return
@@ -441,7 +442,7 @@ func (buh *blobUploadHandler) blobUploadResponse(w http.ResponseWriter, r *http.
 
 	endRange := buh.Upload.Size()
 	if endRange > 0 {
-		endRange = endRange - 1
+		endRange--
 	}
 
 	w.Header().Set("Docker-Upload-UUID", buh.UUID)

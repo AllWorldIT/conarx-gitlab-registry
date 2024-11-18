@@ -44,7 +44,6 @@ import (
 	registryhandlers "github.com/docker/distribution/registry/handlers"
 	iredis "github.com/docker/distribution/registry/internal/redis"
 	internaltestutil "github.com/docker/distribution/registry/internal/testutil"
-	rtestutil "github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	_ "github.com/docker/distribution/registry/storage/driver/filesystem"
@@ -369,7 +368,7 @@ type testEnv struct {
 	server       *httptest.Server
 	builder      *urls.Builder
 	db           datastore.LoadBalancer
-	ns           *rtestutil.NotificationServer
+	ns           *internaltestutil.NotificationServer
 	cacheClient  cacheClient
 	shutdownOnce *sync.Once
 }
@@ -429,9 +428,9 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 		}
 	}
 
-	var notifServer *rtestutil.NotificationServer
+	var notifServer *internaltestutil.NotificationServer
 	if len(config.Notifications.Endpoints) == 1 {
-		notifServer = rtestutil.NewNotificationServer(t, config.Database.Enabled)
+		notifServer = internaltestutil.NewNotificationServer(t, config.Database.Enabled)
 		// ensure URL is set properly with mock server URL
 		config.Notifications.Endpoints[0].URL = notifServer.URL
 	}
@@ -469,27 +468,27 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	}
 }
 
-func (t *testEnv) Shutdown() {
-	t.shutdownOnce.Do(func() {
-		t.server.CloseClientConnections()
-		t.server.Close()
+func (e *testEnv) Shutdown() {
+	e.shutdownOnce.Do(func() {
+		e.server.CloseClientConnections()
+		e.server.Close()
 
-		if err := t.app.GracefulShutdown(t.ctx); err != nil {
+		if err := e.app.GracefulShutdown(e.ctx); err != nil {
 			panic(err)
 		}
 
-		if t.config.Database.Enabled {
-			if err := datastoretestutil.TruncateAllTables(t.db.Primary()); err != nil {
+		if e.config.Database.Enabled {
+			if err := datastoretestutil.TruncateAllTables(e.db.Primary()); err != nil {
 				panic(err)
 			}
 
-			if err := t.db.Close(); err != nil {
+			if err := e.db.Close(); err != nil {
 				panic(err)
 			}
 		}
 
-		if t.config.Redis.Cache.Enabled {
-			if err := t.cacheClient.FlushCache(); err != nil {
+		if e.config.Redis.Cache.Enabled {
+			if err := e.cacheClient.FlushCache(); err != nil {
 				panic(err)
 			}
 		}
@@ -1838,7 +1837,7 @@ type authTokenProvider struct {
 func NewAuthTokenProvider(t *testing.T) *authTokenProvider {
 	t.Helper()
 
-	path, privKey, err := rtestutil.WriteTempRootCerts()
+	path, privKey, err := internaltestutil.WriteTempRootCerts()
 	t.Cleanup(func() {
 		err := os.Remove(path)
 		require.NoError(t, err)
@@ -1934,7 +1933,9 @@ func requireRenameTTLInRange(t *testing.T, actualTTL time.Time, expectedTTLDurat
 }
 
 // acquireProjectLease enacts a project lease for `projectPath` in the `redisCache` for time `TTL` duration
-func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath string, TTL time.Duration) {
+//
+//nolint:unparam //(`TTL` always receives `1 * time.Hour`)
+func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath string, ttl time.Duration) {
 	t.Helper()
 	// enact a lease on the project path which will be used to block all
 	// write operations to the existing repositories in the given GitLab project.
@@ -1948,7 +1949,7 @@ func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath str
 	require.NoError(t, err)
 
 	// create a lease that expires in less than TTL duration .
-	err = plStore.Set(context.Background(), projectPath, TTL)
+	err = plStore.Set(context.Background(), projectPath, ttl)
 	require.NoError(t, err)
 }
 

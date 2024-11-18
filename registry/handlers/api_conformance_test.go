@@ -1945,6 +1945,7 @@ func manifest_Delete_Tag(t *testing.T, opts ...configOpt) {
 
 	resp, err = http.Head(u)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
@@ -2393,6 +2394,7 @@ func validateManifestPutWithNonDistributableLayers(t *testing.T, env *testEnv, r
 
 		res, err := http.Head(u)
 		require.NoError(t, err)
+		defer res.Body.Close()
 
 		if desc.Digest == foreignDigest {
 			require.Equal(t, http.StatusNotFound, res.StatusCode)
@@ -2812,6 +2814,7 @@ func blob_Head(t *testing.T, opts ...configOpt) {
 	// check if layer exists
 	res, err := http.Head(blobURL)
 	require.NoError(t, err)
+	defer res.Body.Close()
 	require.Equal(t, http.StatusOK, res.StatusCode)
 
 	// verify headers
@@ -2846,6 +2849,7 @@ func blob_Head_RepositoryNotFound(t *testing.T, opts ...configOpt) {
 
 	res, err := http.Head(blobURL)
 	require.NoError(t, err)
+	defer res.Body.Close()
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 
 	body, err := io.ReadAll(res.Body)
@@ -2966,7 +2970,6 @@ func blob_Delete_UnknownRepository(t *testing.T, opts ...configOpt) {
 }
 
 func tags_Get(t *testing.T, opts ...configOpt) {
-	opts = append(opts)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 

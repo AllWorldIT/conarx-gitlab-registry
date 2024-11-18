@@ -43,7 +43,7 @@ func newRegistry(tb testing.TB, driver storageDriver.StorageDriver) distribution
 	// load custom key to be used for manifest signing, ensuring that we have reproducible signatures
 	pemKey, err := os.ReadFile(path.Join(suite.fixturesPath, "keys", "manifest_sign"))
 	require.NoError(tb, err)
-	block, _ := pem.Decode([]byte(pemKey))
+	block, _ := pem.Decode(pemKey)
 	require.NotNil(tb, block)
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	require.NoError(tb, err)
