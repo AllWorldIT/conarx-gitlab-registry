@@ -25,12 +25,10 @@ coverage:
 .oci-conformance-version-matrix:
   parallel:
     matrix:
-      - OCI_SPEC_VERSION: [ "v1.0.1", "latest" ]
-  rules:
-    # See https://gitlab.com/gitlab-org/container-registry/-/issues/1206 for why the latest OCI spec is allowed to fail
-    - if: $OCI_SPEC_VERSION == "latest"
-      allow_failure: true
-    - allow_failure: false
+      # latest/1.1 spec does not pass tests as we have yet to implement the
+      # referrers API
+      # - OCI_SPEC_VERSION: [ "v1.0.1", "latest" ]
+      - OCI_SPEC_VERSION: [ "v1.0.1" ]
   before_script:
     # Start local registry instance to test against
     - make binaries
