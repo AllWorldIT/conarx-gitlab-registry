@@ -56,8 +56,8 @@ func TestTryUpdate(t *testing.T) {
 
 	ips := newGoogleIPs(serverIPRanges(server), time.Hour)
 
-	require.Equal(t, 1, len(ips.ipv4))
-	require.Equal(t, 0, len(ips.ipv6))
+	require.Len(t, ips.ipv4, 1)
+	require.Empty(t, ips.ipv6)
 }
 
 func TestMatchIPV6(t *testing.T) {
@@ -73,9 +73,9 @@ func TestMatchIPV6(t *testing.T) {
 	err := ips.tryUpdate()
 	require.NoError(t, err)
 
-	require.Equal(t, true, ips.contains(net.ParseIP("ff00::")))
-	require.Equal(t, 1, len(ips.ipv6))
-	require.Equal(t, 0, len(ips.ipv4))
+	require.True(t, ips.contains(net.ParseIP("ff00::")))
+	require.Len(t, ips.ipv6, 1)
+	require.Empty(t, ips.ipv4)
 }
 
 func TestMatchIPV4(t *testing.T) {
@@ -91,9 +91,9 @@ func TestMatchIPV4(t *testing.T) {
 	err := ips.tryUpdate()
 	require.NoError(t, err)
 
-	require.Equal(t, true, ips.contains(net.ParseIP("192.168.0.0")))
-	require.Equal(t, true, ips.contains(net.ParseIP("192.168.0.1")))
-	require.Equal(t, false, ips.contains(net.ParseIP("192.169.0.0")))
+	require.True(t, ips.contains(net.ParseIP("192.168.0.0")))
+	require.True(t, ips.contains(net.ParseIP("192.168.0.1")))
+	require.False(t, ips.contains(net.ParseIP("192.169.0.0")))
 }
 
 func TestInvalidData(t *testing.T) {
@@ -111,7 +111,7 @@ func TestInvalidData(t *testing.T) {
 	err := ips.tryUpdate()
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(ips.ipv4))
+	require.Len(t, ips.ipv4, 1)
 }
 
 func TestInvalidNetworkType(t *testing.T) {
@@ -126,9 +126,9 @@ func TestInvalidNetworkType(t *testing.T) {
 	defer server.Close()
 
 	ips := newGoogleIPs(serverIPRanges(server), time.Hour)
-	require.Equal(t, 0, len(ips.getCandidateNetworks(make([]byte, 17)))) // 17 bytes does not correspond to any net type
-	require.Equal(t, 1, len(ips.getCandidateNetworks(make([]byte, 4))))  // netv4 networks
-	require.Equal(t, 2, len(ips.getCandidateNetworks(make([]byte, 16)))) // netv6 networks
+	require.Empty(t, ips.getCandidateNetworks(make([]byte, 17)))  // 17 bytes does not correspond to any net type
+	require.Len(t, ips.getCandidateNetworks(make([]byte, 4)), 1)  // netv4 networks
+	require.Len(t, ips.getCandidateNetworks(make([]byte, 16)), 2) // netv6 networks
 }
 
 func TestParsing(t *testing.T) {

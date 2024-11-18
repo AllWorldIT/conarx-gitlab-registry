@@ -261,5 +261,5 @@ func TestHTTPSink_Errors(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	require.Equal(t, metrics.EndpointMetrics, expectedMetrics)
+	require.Equal(t, expectedMetrics, metrics.EndpointMetrics)
 }

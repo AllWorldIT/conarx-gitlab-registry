@@ -13,6 +13,7 @@ import (
 	"github.com/docker/distribution/health"
 	dtestutil "github.com/docker/distribution/testutil"
 	"github.com/docker/distribution/version"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -215,7 +216,10 @@ func TestHTTPHealthCheck(t *testing.T) {
 				if r.Method != http.MethodHead {
 					t.Fatalf("expected HEAD request, got %s", r.Method)
 				}
-				require.Equal(t, test.expectedHeaders, r.Header)
+				// NOTE(prozlach): we can't use require (which internally uses
+				// t.FailNow()) in a goroutine as we may get an undefined
+				// behavior
+				assert.Equal(t, test.expectedHeaders, r.Header)
 				select {
 				case <-stopFailing:
 					w.WriteHeader(http.StatusOK)

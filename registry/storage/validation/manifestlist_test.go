@@ -2,7 +2,6 @@ package validation_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -124,7 +123,7 @@ func TestVerifyManifest_ManifestList_ManifestListWithBlobReferences(t *testing.T
 
 	err = v.Validate(ctx, dml)
 	vErr := &distribution.ErrManifestVerification{}
-	require.True(t, errors.As(err, vErr))
+	require.ErrorAs(t, err, vErr)
 
 	// Ensure each later digest is included in the error with the proper error message.
 	for _, l := range descriptors {

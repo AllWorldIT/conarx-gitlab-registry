@@ -87,7 +87,7 @@ func TestDisabledBlobMetadataLinking(t *testing.T) {
 	blobService := env.repo.Blobs(env.ctx)
 
 	_, err = blobService.Stat(env.ctx, dgst)
-	require.Error(t, err, distribution.ErrBlobUnknown)
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 }
 
 func testFilesystemLayerUpload(t *testing.T, env *env) {
@@ -110,10 +110,12 @@ func testIdempotentUpload(t *testing.T, env *env) {
 	dgst := digest.FromBytes(dockerPayload)
 
 	for i := 0; i < 30; i++ {
-		go func() {
-			testLayerUpload(t, env, bytes.NewReader(dockerPayload), dgst)
-			testLayerLinked(t, env, dgst)
-		}()
+		// NOTE(prozlach): Pararelizing this requires rewriting both functions
+		// to return an error and doing the assertion in the main goroutine.
+		// Otherwise we may get an undefined behavior from require calling
+		// t.FailNow in a goroutine.
+		testLayerUpload(t, env, bytes.NewReader(dockerPayload), dgst)
+		testLayerLinked(t, env, dgst)
 	}
 }
 
@@ -174,7 +176,7 @@ func testLayerUpload(t *testing.T, env *env, layer io.ReadSeeker, dgst digest.Di
 
 	assert.Equal(t, desc.Size, wr.Size(), "blob size and writer size should match")
 
-	assert.Equal(t, desc.MediaType, "application/octet-stream", "blob mediaType should be application/octet-stream")
+	assert.Equal(t, "application/octet-stream", desc.MediaType, "blob mediaType should be application/octet-stream")
 }
 
 func testLayerLinked(t *testing.T, env *env, dgst digest.Digest) {

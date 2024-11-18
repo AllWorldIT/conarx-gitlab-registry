@@ -2,6 +2,7 @@
 ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 GOLANGCI_VERSION ?= v1.59.1
+TESTIFYLINT_VERSION ?= v1.5.2
 DOCSLINT_VERSION ?= registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.20-vale-3.6.1-markdownlint2-0.13.0-lychee-0.15.1
 
 # Used to populate version variable in main package.
@@ -54,6 +55,7 @@ check: lint
 
 lint: ## run golangci-lint, with defaults
 	@echo "$(WHALE) $@"
+	go run github.com/Antonboom/testifylint@${TESTIFYLINT_VERSION} -disable suite-dont-use-pkg ./...
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_VERSION} run
 
 lint-docs: ## run golangci-lint, with defaults
