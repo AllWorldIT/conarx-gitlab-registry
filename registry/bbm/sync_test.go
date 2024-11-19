@@ -653,6 +653,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 					maxJobPerBatch:  defaultMaxJobPerBatch,
 					maxBatchTimeout: defaultMaxBatchTimeout,
 					lockWaitTimeout: defaultLockWaitTimeout,
+					jobTimeout:      defaultJobTimeout,
 				}
 				w.wh = w
 				return w
@@ -669,6 +670,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 					maxJobPerBatch:  defaultMaxJobPerBatch,
 					maxBatchTimeout: defaultMaxBatchTimeout,
 					lockWaitTimeout: defaultLockWaitTimeout,
+					jobTimeout:      defaultJobTimeout,
 				}
 				w.wh = w
 				return w
@@ -685,6 +687,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 					maxJobPerBatch:  defaultMaxJobPerBatch,
 					maxBatchTimeout: defaultMaxBatchTimeout,
 					lockWaitTimeout: defaultLockWaitTimeout,
+					jobTimeout:      defaultJobTimeout,
 				}
 				w.wh = w
 				return w
@@ -701,6 +704,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 					maxJobPerBatch:  10,
 					maxBatchTimeout: defaultMaxBatchTimeout,
 					lockWaitTimeout: defaultLockWaitTimeout,
+					jobTimeout:      defaultJobTimeout,
 				}
 				w.wh = w
 				return w
@@ -717,6 +721,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 					maxJobPerBatch:  defaultMaxJobPerBatch,
 					maxBatchTimeout: 2 * time.Minute,
 					lockWaitTimeout: defaultLockWaitTimeout,
+					jobTimeout:      defaultJobTimeout,
 				}
 				w.wh = w
 				return w
@@ -733,8 +738,26 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 					maxJobPerBatch:  defaultMaxJobPerBatch,
 					maxBatchTimeout: defaultMaxBatchTimeout,
 					lockWaitTimeout: defaultLockWaitTimeout,
+					jobTimeout:      defaultJobTimeout,
 					wh:              wh,
 				}
+				return w
+			}(),
+		},
+		{
+			name: "WithSyncJobTimeout",
+			opts: []SyncWorkerOption{WithJobTimeout(2 * time.Minute)},
+			expectedWorker: func() *SyncWorker {
+				w := &SyncWorker{
+					work:            map[string]Work{},
+					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
+					maxJobAttempt:   defaultMaxJobAttempt,
+					maxJobPerBatch:  defaultMaxJobPerBatch,
+					maxBatchTimeout: defaultMaxBatchTimeout,
+					lockWaitTimeout: defaultLockWaitTimeout,
+					jobTimeout:      2 * time.Minute,
+				}
+				w.wh = w
 				return w
 			}(),
 		},

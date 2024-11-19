@@ -25,6 +25,17 @@ func (s *BackgroundMigrationTestSuite) TestSyncNoBackgroundMigrations() {
 	s.Require().NoError(err)
 }
 
+// TestSyncBackgroundMigrations_JobTimeout tests that the job timeout is adhered to when set.
+func (s *BackgroundMigrationTestSuite) TestSyncNoBackgroundMigrations_JobTimeout() {
+	// Ensure the database is clean
+	m := newMigrator(s.T(), s.db.DB, nil, nil)
+	m.runSchemaMigration(s.T())
+
+	// Start the synchronous background migration process
+	err := bbm.NewSyncWorker(s.db, bbm.WithJobTimeout(0)).Run(context.Background())
+	require.ErrorIs(s.T(), err, context.DeadlineExceeded)
+}
+
 // TestSyncRunSingleFailedJobRecovery tests the recovery of a single failed job in the background migration process.
 func (s *BackgroundMigrationTestSuite) TestSyncRunSingleFailedJobRecovery() {
 	// Insert background migration fixtures
