@@ -21,6 +21,7 @@ type SyncWorker struct {
 	maxJobPerBatch       int
 	maxBatchTimeout      time.Duration
 	lockWaitTimeout      time.Duration
+	jobTimeout           time.Duration
 	wh                   Handler
 	lastRunCompletedBBMs int
 }
@@ -32,6 +33,13 @@ type SyncWorkerOption func(*SyncWorker)
 func WithSyncMaxBatchTimeout(d time.Duration) SyncWorkerOption {
 	return func(a *SyncWorker) {
 		a.maxBatchTimeout = d
+	}
+}
+
+// WithJobTimeout sets the maximum job timeout.
+func WithJobTimeout(d time.Duration) SyncWorkerOption {
+	return func(a *SyncWorker) {
+		a.jobTimeout = d
 	}
 }
 
@@ -87,7 +95,8 @@ func NewSyncWorker(db datastore.Handler, opts ...SyncWorkerOption) *SyncWorker {
 
 const (
 	syncWorkerName         = "registry.bbm.SyncWorker"
-	defaultMaxBatchTimeout = 1 * time.Minute        // Default maximum timeout for a batch
+	defaultMaxBatchTimeout = 10 * time.Minute       // Default maximum timeout for a batch
+	defaultJobTimeout      = 2 * time.Minute        // Default maximum timeout for a migration
 	defaultLockWaitTimeout = 1 * time.Minute        // Default timeout to wait for a lock
 	defaultMaxJobPerBatch  = 5                      // Default maximum number of jobs per batch
 	minDelayPerRun         = 100 * time.Millisecond // Minimum delay between runs
@@ -101,6 +110,9 @@ func (jw *SyncWorker) applyDefaults() {
 	}
 	if jw.maxBatchTimeout == 0 {
 		jw.maxBatchTimeout = defaultMaxBatchTimeout
+	}
+	if jw.jobTimeout == 0 {
+		jw.jobTimeout = defaultJobTimeout
 	}
 	if jw.maxJobAttempt == 0 {
 		jw.maxJobAttempt = defaultMaxJobAttempt
@@ -125,10 +137,6 @@ func (jw *SyncWorker) applyDefaults() {
 
 // Run executes all unfinished background migrations until they are either finished or a job exceeds the maxJobRetry count.
 func (jw *SyncWorker) Run(ctx context.Context) error {
-	// Unpause any paused background migrations so they can be processed by the worker in `run` below
-	if err := datastore.NewBackgroundMigrationStore(jw.db).Resume(ctx); err != nil {
-		return fmt.Errorf("failed to unpause background migrations: %w", err)
-	}
 	return jw.run(ctx)
 }
 
@@ -147,6 +155,7 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 	jw.lastRunCompletedBBMs = 0
 	for {
 		jw.logger = jw.logger.WithFields(log.Fields{"batch_id": correlation.SafeRandomID()})
+		jw.logger.Info(fmt.Sprintf("starting new batch run of %v jobs", jw.maxJobPerBatch))
 		// This loop runs at most `maxJobPerBatch` jobs (or until `maxBatchTimeout` elapses) before committing and releasing the background migration lock.
 		// This ensures efficient use of the acquired lock, reducing the number of times we need to challenge the asynchronous process for the lock,
 		// while also adding a buffer to avoid overwhelming the database.
@@ -167,15 +176,21 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 		defer lockCancel()
 
 		if err = jw.wh.GrabLock(lockCtx, bbmStore); err != nil {
-			return fmt.Errorf("failed to obtain lock: %w", err)
+			jw.logger.WithError(err).Error("failed to obtain lock, terminating batch run")
+			return err
 		}
 
 		for i := 0; i < jw.maxJobPerBatch; i++ {
 			jw.logger = jw.logger.WithFields(log.Fields{correlation.FieldName: correlation.SafeRandomID()})
 
-			job, err := jw.wh.FindJob(ctx, bbmStore)
+			// each job should take at most the lesser of the parent ctx timeout or jobTimeout`.
+			jobCtx, jobCancel := context.WithTimeout(ctx, jw.jobTimeout)
+			defer jobCancel()
+
+			job, err := jw.wh.FindJob(jobCtx, bbmStore)
 			if err != nil {
-				return fmt.Errorf("failed to find job: %w", err)
+				jw.logger.WithError(err).Error("failed to find job, terminating batch run")
+				return err
 			}
 			if job != nil {
 				l := jw.logger.WithFields(log.Fields{
@@ -189,11 +204,12 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 					jobColumnKey:    job.PaginationColumn,
 					jobTableKey:     job.PaginationTable,
 				})
+
 				l.Info("found job, starting execution")
-				err := jw.wh.ExecuteJob(ctx, bbmStore, job)
+				err := jw.wh.ExecuteJob(jobCtx, bbmStore, job)
 				if err != nil {
-					l.WithError(err).Error("failed to execute job")
-					return fmt.Errorf("failed to execute job after %d attempts: %w", jw.maxJobAttempt, err)
+					l.WithError(err).Error("failed to execute job, terminating batch run")
+					return err
 				}
 				l.Info("job completed")
 			} else {
@@ -204,6 +220,7 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 				jw.logger.Info("no more jobs to run")
 				return nil
 			}
+			jobCancel()
 		}
 		// Commit the transaction after processing the batch of jobs
 		if err := tx.Commit(); err != nil {
@@ -218,6 +235,11 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 			Info("released lock, sleeping before next run")
 		time.Sleep(sleep)
 	}
+}
+
+// ResumeEligibleMigrations resumes all paused background migrations.
+func (jw *SyncWorker) ResumeEligibleMigrations(ctx context.Context) error {
+	return datastore.NewBackgroundMigrationStore(jw.db).Resume(ctx)
 }
 
 // FindJob finds the next eligible job to be run.

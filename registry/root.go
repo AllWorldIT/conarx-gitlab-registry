@@ -708,15 +708,33 @@ var BBMRunCmd = &cobra.Command{
 
 		// Set default max job retry if not set, and validate its range
 		if maxBBMJobRetry == nil {
-			*maxBBMJobRetry = 2
+			defaultBBMJobRetry := 2
+			maxBBMJobRetry = &defaultBBMJobRetry
 		} else if *maxBBMJobRetry < 1 || *maxBBMJobRetry > 10 {
 			fmt.Fprintf(os.Stderr, "limit must be greater than 0 and less than 10")
 			os.Exit(1)
 		}
 
 		// Create a new sync worker with the database and max job attempt options, and run it
-		if err := bbm.NewSyncWorker(db, bbm.WithSyncMaxJobAttempt(*maxBBMJobRetry)).Run(dcontext.Background()); err != nil {
-			fmt.Fprintf(os.Stderr, "running background migrations failed: %v", err)
+		wk := bbm.NewSyncWorker(db, bbm.WithSyncMaxJobAttempt(*maxBBMJobRetry))
+
+		// Unpause any paused background migrations so they can be processed by the worker in `run` below
+		err = wk.ResumeEligibleMigrations(dcontext.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to resume background migrations: %v", err)
+			os.Exit(1)
+		}
+
+		retryRunInterval := 10 * time.Second
+		for {
+			if err := wk.Run(dcontext.Background()); err != nil {
+				fmt.Fprintf(os.Stderr, "running background migrations failed: %v\n", err)
+
+				// keep retrying to run at a fixed interval until user stops command.
+				fmt.Fprintf(os.Stdout, "retrying run in %v...\n", retryRunInterval)
+				time.Sleep(retryRunInterval)
+				continue
+			}
 			os.Exit(1)
 		}
 	},
