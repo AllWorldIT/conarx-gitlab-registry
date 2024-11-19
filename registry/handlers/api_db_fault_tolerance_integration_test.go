@@ -210,13 +210,13 @@ func TestDBFaultTolerance_ConnectionRefused_BlobDelete(t *testing.T) {
 
 	// query API with proxy disabled, should fail
 	// create the repo and blob, otherwise the request will halt on the filesystem search, which precedes the DB search
-	args, _ := createRepoWithBlob(t, env)
+	args := createRepoWithBlob(t, env)
 	dbProxy.Disable()
 	assertBlobDeleteResponse(t, env, args.imageName.String(), args.layerDigest, http.StatusServiceUnavailable)
 
 	// query API with proxy re-enabled, should succeed
 	dbProxy.Enable()
-	args, _ = createRepoWithBlob(t, env)
+	args = createRepoWithBlob(t, env)
 	assertBlobDeleteResponse(t, env, args.imageName.String(), args.layerDigest, http.StatusAccepted)
 }
 
@@ -254,7 +254,7 @@ func testDBFaultTolerance_ConnectionRefused_BlobPostMount(t *testing.T, opts ...
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
-	args, _ := createRepoWithBlob(t, env)
+	args := createRepoWithBlob(t, env)
 	destRepo := "foo"
 
 	// query API with proxy disabled, should fall back to starting a regular
@@ -514,13 +514,13 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobDelete(t *testing.T) {
 
 	// query API with timeout, should fail
 	// create the repo and blob, otherwise the request will halt on the filesystem search, which precedes the DB search
-	args, _ := createRepoWithBlob(t, env)
+	args := createRepoWithBlob(t, env)
 	toxic := dbProxy.AddToxic("timeout", toxiproxy.Attributes{"timeout": 2000})
 	assertBlobDeleteResponse(t, env, args.imageName.String(), args.layerDigest, http.StatusServiceUnavailable)
 
 	// query API with no timeout, should succeed
 	dbProxy.RemoveToxic(toxic)
-	args, _ = createRepoWithBlob(t, env)
+	args = createRepoWithBlob(t, env)
 	assertBlobDeleteResponse(t, env, args.imageName.String(), args.layerDigest, http.StatusAccepted)
 }
 
@@ -558,7 +558,7 @@ func testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T, opts ...
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
-	args, _ := createRepoWithBlob(t, env)
+	args := createRepoWithBlob(t, env)
 	destRepo := "foo"
 
 	// query API with timeout, should fall back to starting a regular
@@ -810,7 +810,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobGet(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.Shutdown()
 
-	blobArgs, _ := createRepoWithBlob(t, env)
+	blobArgs := createRepoWithBlob(t, env)
 
 	assertNoDBConnections(t, env)
 
@@ -827,7 +827,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobHead(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.Shutdown()
 
-	blobArgs, _ := createRepoWithBlob(t, env)
+	blobArgs := createRepoWithBlob(t, env)
 
 	assertNoDBConnections(t, env)
 
@@ -844,7 +844,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobDelete(t *testing.T) {
 	env := newTestEnv(t, withDelete)
 	defer env.Shutdown()
 
-	blobArgs, _ := createRepoWithBlob(t, env)
+	blobArgs := createRepoWithBlob(t, env)
 
 	assertNoDBConnections(t, env)
 
@@ -885,7 +885,7 @@ func testDBFaultTolerance_ConnectionLeak_BlobPostMount(t *testing.T, opts ...con
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
-	blobArgs, _ := createRepoWithBlob(t, env)
+	blobArgs := createRepoWithBlob(t, env)
 
 	assertNoDBConnections(t, env)
 
@@ -1027,6 +1027,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestDelete(t *testing.T) {
 	assertNoDBConnections(t, env)
 }
 
+//nolint:unparam //(`open` always receives `1`)
 func assertEventuallyOpenAndInUseDBConnections(t *testing.T, env *testEnv, open, inUse int, deadline time.Duration) {
 	t.Helper()
 	require.Eventually(t, func() bool {

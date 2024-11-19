@@ -53,7 +53,8 @@ func (bs *blobStore) Open(ctx context.Context, dgst digest.Digest) (distribution
 		return nil, err
 	}
 
-	return newFileReader(ctx, bs.driver, path, desc.Size)
+	fr := newFileReader(ctx, bs.driver, path, desc.Size)
+	return fr, nil
 }
 
 // Put stores the content p in the blob store, calculating the digest. If the

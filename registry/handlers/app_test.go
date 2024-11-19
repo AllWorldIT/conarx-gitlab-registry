@@ -643,7 +643,7 @@ func TestGitlabAPI_LogsCFRayID(t *testing.T) {
 
 		// use a logger that writes to a buffer instead of stdout
 		var buf bytes.Buffer
-		ctx = dcontext.WithLogger(ctx, bufferStreamLogger(ctx, &buf))
+		ctx = dcontext.WithLogger(ctx, bufferStreamLogger(&buf))
 
 		app, err := NewApp(ctx, config)
 		require.NoError(t, err)
@@ -709,7 +709,7 @@ func TestDistributionAPI_LogsCFRayID(t *testing.T) {
 
 		// use a logger that writes to a buffer instead of stdout
 		var buf bytes.Buffer
-		ctx = dcontext.WithLogger(ctx, bufferStreamLogger(ctx, &buf))
+		ctx = dcontext.WithLogger(ctx, bufferStreamLogger(&buf))
 
 		app, err := NewApp(ctx, config)
 		require.NoError(t, err)
@@ -736,7 +736,7 @@ func TestDistributionAPI_LogsCFRayID(t *testing.T) {
 	}
 }
 
-func bufferStreamLogger(ctx context.Context, buf *bytes.Buffer) *logrus.Entry {
+func bufferStreamLogger(buf *bytes.Buffer) *logrus.Entry {
 	fields := logrus.Fields{}
 	fields["test"] = true
 	logger := logrus.StandardLogger().WithFields(fields)

@@ -46,6 +46,7 @@ func createRegistry(t *testing.T) distribution.Namespace {
 	return registry
 }
 
+//nolint:unparam //(name always receives "test")
 func makeRepository(t *testing.T, registry distribution.Namespace, name string) distribution.Repository {
 	ctx := context.Background()
 

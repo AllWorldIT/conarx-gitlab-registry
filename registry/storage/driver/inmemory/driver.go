@@ -112,7 +112,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 	return d.reader(ctx, path, offset)
 }
 
-func (d *driver) reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
+func (d *driver) reader(_ context.Context, path string, offset int64) (io.ReadCloser, error) {
 	if offset < 0 {
 		return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
 	}

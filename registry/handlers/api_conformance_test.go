@@ -1695,7 +1695,7 @@ func manifest_Delete_Schema2(t *testing.T, opts ...configOpt) {
 
 		dgst := digest.FromBytes(payload)
 
-		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
+		expectedEventByDigest := buildEventSchema2ManifestDeleteByDigest(repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
 		if env.db == nil {
@@ -1729,7 +1729,7 @@ func manifest_Delete_Schema2_AlreadyDeleted(t *testing.T, opts ...configOpt) {
 
 		dgst := digest.FromBytes(payload)
 
-		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
+		expectedEventByDigest := buildEventSchema2ManifestDeleteByDigest(repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
 		if env.db == nil {
@@ -1769,7 +1769,7 @@ func manifest_Delete_Schema2_Reupload(t *testing.T, opts ...configOpt) {
 
 		dgst := digest.FromBytes(payload)
 
-		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
+		expectedEventByDigest := buildEventSchema2ManifestDeleteByDigest(repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
 		if env.db == nil {
@@ -1870,7 +1870,7 @@ func manifest_Delete_Schema2_ClearsTags(t *testing.T, opts ...configOpt) {
 
 		dgst := digest.FromBytes(payload)
 
-		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
+		expectedEventByDigest := buildEventSchema2ManifestDeleteByDigest(repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
 		if env.db == nil {

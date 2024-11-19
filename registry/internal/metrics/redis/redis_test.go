@@ -73,13 +73,13 @@ func TestNewPoolStatsCollector(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := NewPoolStatsCollector(mock, tt.opts...)
 
-			validateMetric(t, c, hitsName, hitsDesc, "gauge", float64(mock.Hits), tt.expectedLabels)
-			validateMetric(t, c, missesName, missesDesc, "gauge", float64(mock.Misses), tt.expectedLabels)
-			validateMetric(t, c, timeoutsName, timeoutsDesc, "gauge", float64(mock.Timeouts), tt.expectedLabels)
-			validateMetric(t, c, totalConnsName, totalConnsDesc, "gauge", float64(mock.TotalConns), tt.expectedLabels)
-			validateMetric(t, c, idleConnsName, idleConnsDesc, "gauge", float64(mock.IdleConns), tt.expectedLabels)
-			validateMetric(t, c, staleConnsName, staleConnsDesc, "gauge", float64(mock.StaleConns), tt.expectedLabels)
-			validateMetric(t, c, maxConnsName, maxConnsDesc, "gauge", float64(tt.expectedMaxConns), tt.expectedLabels)
+			validateGauge(t, c, hitsName, hitsDesc, float64(mock.Hits), tt.expectedLabels)
+			validateGauge(t, c, missesName, missesDesc, float64(mock.Misses), tt.expectedLabels)
+			validateGauge(t, c, timeoutsName, timeoutsDesc, float64(mock.Timeouts), tt.expectedLabels)
+			validateGauge(t, c, totalConnsName, totalConnsDesc, float64(mock.TotalConns), tt.expectedLabels)
+			validateGauge(t, c, idleConnsName, idleConnsDesc, float64(mock.IdleConns), tt.expectedLabels)
+			validateGauge(t, c, staleConnsName, staleConnsDesc, float64(mock.StaleConns), tt.expectedLabels)
+			validateGauge(t, c, maxConnsName, maxConnsDesc, float64(tt.expectedMaxConns), tt.expectedLabels)
 		})
 	}
 }
@@ -94,7 +94,7 @@ func (l *labelsIter) HasMore() bool {
 	return l.Counter < len(l.Dict)
 }
 
-func validateMetric(t *testing.T, collector prometheus.Collector, name, desc, valueType string, value float64, labels prometheus.Labels) {
+func validateGauge(t *testing.T, collector prometheus.Collector, name, desc string, value float64, labels prometheus.Labels) {
 	t.Helper()
 
 	tmpl := template.New("")
@@ -121,7 +121,7 @@ func validateMetric(t *testing.T, collector prometheus.Collector, name, desc, va
 		Desc:   desc,
 		Labels: &labelsIter{Dict: labels},
 		Value:  value,
-		Type:   valueType,
+		Type:   "gauge",
 	})
 	require.NoError(t, err)
 

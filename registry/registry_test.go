@@ -176,6 +176,7 @@ func requireEnvNotSet(t *testing.T, names ...string) {
 	}
 }
 
+//nolint:unparam //(`name` always receives `"GITLAB_CONTINUOUS_PROFILING"`)
 func requireEnvSet(t *testing.T, name, value string) {
 	t.Helper()
 

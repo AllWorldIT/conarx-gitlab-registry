@@ -32,9 +32,10 @@ type manifestStoreTestEnv struct {
 	tag        string
 }
 
-func newManifestStoreTestEnv(t *testing.T, name reference.Named, tag string, options ...RegistryOption) *manifestStoreTestEnv {
+func newManifestStoreTestEnv(t *testing.T, name reference.Named, options ...RegistryOption) *manifestStoreTestEnv {
 	ctx := context.Background()
 	driver := inmemory.New()
+	tag := "thetag"
 	registry, err := NewRegistry(ctx, driver, options...)
 	if err != nil {
 		t.Fatalf("error creating registry: %v", err)
@@ -73,7 +74,7 @@ func TestManifestStorageV1Unsupported(t *testing.T) {
 
 func testManifestStorage(t *testing.T, schema1Enabled bool, options ...RegistryOption) {
 	repoName, _ := reference.WithName("foo/bar")
-	env := newManifestStoreTestEnv(t, repoName, "thetag", options...)
+	env := newManifestStoreTestEnv(t, repoName, options...)
 	ctx := context.Background()
 	ms, err := env.repository.Manifests(ctx)
 	if err != nil {
@@ -392,9 +393,7 @@ func testOCIManifestStorage(t *testing.T, testname string, includeMediaTypes boo
 	}
 
 	repoName, _ := reference.WithName("foo/bar")
-	env := newManifestStoreTestEnv(t, repoName, "thetag",
-		BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()),
-		EnableDelete, EnableRedirect)
+	env := newManifestStoreTestEnv(t, repoName, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect)
 
 	ctx := context.Background()
 	ms, err := env.repository.Manifests(ctx)
@@ -549,7 +548,7 @@ func TestEmptyManifestContent(t *testing.T) {
 	repoRef, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
 
-	env := newManifestStoreTestEnv(t, repoRef, "thetag")
+	env := newManifestStoreTestEnv(t, repoRef)
 
 	// Create an tag an schema2 manifest.
 	img, err := testutil.UploadRandomSchema2Image(env.repository)

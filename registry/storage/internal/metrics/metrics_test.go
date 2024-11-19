@@ -8,10 +8,11 @@ import (
 
 	"github.com/docker/distribution/metrics"
 	"github.com/prometheus/client_golang/prometheus"
-	testutil "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:unparam //(`d` always receives `10 * time.Millisecond)
 func mockTimeSince(d time.Duration) func() {
 	bkp := timeSince
 	timeSince = func(_ time.Time) time.Duration { return d }

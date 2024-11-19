@@ -121,6 +121,7 @@ func withDBHostAndPort(host string, port int) configOpt {
 	}
 }
 
+//nolint:unparam //(`d` always receives `1 * time.Second`)
 func withDBConnectTimeout(d time.Duration) configOpt {
 	return func(config *configuration.Configuration) {
 		config.Database.ConnectTimeout = d
@@ -964,25 +965,21 @@ func buildEventManifestPull(mediaType, repoPath string, dgst digest.Digest, size
 	}
 }
 
-func buildEventManifestDeleteByDigest(mediaType, repoPath string, dgst digest.Digest) notifications.Event {
-	return buildEventManifestDelete(mediaType, repoPath, "", dgst)
+func buildEventSchema2ManifestDeleteByDigest(repoPath string, dgst digest.Digest) notifications.Event {
+	return buildEventManifestDelete(schema2.MediaTypeManifest, repoPath, "", dgst)
 }
 
 func buildEventManifestDeleteByTag(mediaType, repoPath, tag string, opts ...eventOpt) notifications.Event {
 	return buildEventManifestDelete(mediaType, repoPath, tag, "", opts...)
 }
 
-func buildEventRepositoryRename(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
+func buildEventRepositoryRename(repoTargetPath string, rename notifications.Rename) notifications.Event {
 	event := notifications.Event{
 		Action: "rename",
 		Target: notifications.Target{
 			Repository: repoTargetPath,
 			Rename:     &rename,
 		},
-	}
-
-	for _, opt := range opts {
-		opt(&event)
 	}
 
 	return event
@@ -1161,7 +1158,7 @@ func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopt
 	return resp.Header.Get("Location"), uuid
 }
 
-func doPushLayerRequest(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest.Digest, uploadURLBase string, body io.Reader) *http.Request {
+func doPushLayerRequest(t *testing.T, dgst digest.Digest, uploadURLBase string, body io.Reader) *http.Request {
 	u, err := url.Parse(uploadURLBase)
 	if err != nil {
 		t.Fatalf("unexpected error parsing pushLayer url: %v", err)
@@ -1184,8 +1181,8 @@ func doPushLayerRequest(t *testing.T, ub *urls.Builder, name reference.Named, dg
 
 // doPushLayer pushes the layer content returning the url on success returning
 // the response. If you're only expecting a successful response, use pushLayer.
-func doPushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest.Digest, uploadURLBase string, body io.Reader, requestopts ...requestOpt) (*http.Response, error) {
-	req := doPushLayerRequest(t, ub, name, dgst, uploadURLBase, body)
+func doPushLayer(t *testing.T, dgst digest.Digest, uploadURLBase string, body io.Reader, requestopts ...requestOpt) (*http.Response, error) {
+	req := doPushLayerRequest(t, dgst, uploadURLBase, body)
 	req = newRequest(req, requestopts...)
 	return http.DefaultClient.Do(req)
 }
@@ -1194,7 +1191,7 @@ func doPushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst dige
 func pushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest.Digest, uploadURLBase string, body io.Reader, requestopts ...requestOpt) string {
 	digester := digest.Canonical.Digester()
 
-	resp, err := doPushLayer(t, ub, name, dgst, uploadURLBase, io.TeeReader(body, digester.Hash()), requestopts...)
+	resp, err := doPushLayer(t, dgst, uploadURLBase, io.TeeReader(body, digester.Hash()), requestopts...)
 	if err != nil {
 		t.Fatalf("unexpected error doing push layer request: %v", err)
 	}
@@ -1224,7 +1221,7 @@ func pushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest
 }
 
 func finishUpload(t *testing.T, ub *urls.Builder, name reference.Named, uploadURLBase string, dgst digest.Digest, requestopts ...requestOpt) string {
-	resp, err := doPushLayer(t, ub, name, dgst, uploadURLBase, nil, requestopts...)
+	resp, err := doPushLayer(t, dgst, uploadURLBase, nil, requestopts...)
 	if err != nil {
 		t.Fatalf("unexpected error doing push layer request: %v", err)
 	}
@@ -1291,7 +1288,7 @@ func doPushChunk(t *testing.T, uploadURLBase string, body io.Reader, requestopts
 	return resp, digester.Digest(), err
 }
 
-func pushChunk(t *testing.T, ub *urls.Builder, name reference.Named, uploadURLBase string, body io.Reader, length int64, requestopts ...requestOpt) (string, digest.Digest) {
+func pushChunk(t *testing.T, uploadURLBase string, body io.Reader, length int64, requestopts ...requestOpt) (string, digest.Digest) {
 	resp, dgst, err := doPushChunk(t, uploadURLBase, body, requestopts...)
 	if err != nil {
 		t.Fatalf("unexpected error doing push layer request: %v", err)
@@ -1513,24 +1510,24 @@ func asyncDo(f func()) chan struct{} {
 	return done
 }
 
-func createRepoWithBlob(t *testing.T, env *testEnv) (blobArgs, string) {
+func createRepoWithBlob(t *testing.T, env *testEnv) blobArgs {
 	t.Helper()
 
 	args := makeBlobArgs(t)
 	uploadURLBase, _ := startPushLayer(t, env, args.imageName)
-	blobURL := pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
+	_ = pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
 
-	return args, blobURL
+	return args
 }
 
-func createNamedRepoWithBlob(t *testing.T, env *testEnv, repoName string) (blobArgs, string) {
+func createNamedRepoWithBlob(t *testing.T, env *testEnv, repoName string) blobArgs {
 	t.Helper()
 
 	args := makeBlobArgsWithRepoName(t, repoName)
 	uploadURLBase, _ := startPushLayer(t, env, args.imageName)
-	blobURL := pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
+	_ = pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
 
-	return args, blobURL
+	return args
 }
 
 func assertGetResponse(t *testing.T, url string, expectedStatus int, opts ...requestOpt) {
@@ -1702,11 +1699,11 @@ func assertManifestGetByTagResponse(t *testing.T, env *testEnv, repoName, tagNam
 	assertGetResponse(t, u, expectedStatus, opts...)
 }
 
-func assertManifestHeadByDigestResponse(t *testing.T, env *testEnv, repoName string, m distribution.Manifest, expectedStatus int, opts ...requestOpt) {
+func assertManifestHeadByDigestResponse(t *testing.T, env *testEnv, repoName string, m distribution.Manifest, expectedStatus int) {
 	t.Helper()
 
 	u := buildManifestDigestURL(t, env, repoName, m)
-	assertHeadResponse(t, u, expectedStatus, opts...)
+	assertHeadResponse(t, u, expectedStatus)
 }
 
 func assertManifestHeadByTagResponse(t *testing.T, env *testEnv, repoName, tagName string, expectedStatus int, opts ...requestOpt) {
@@ -1743,7 +1740,7 @@ func assertManifestDeleteResponse(t *testing.T, env *testEnv, repoName string, m
 	assertDeleteResponse(t, u, expectedStatus)
 }
 
-func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagName string, repoPaths []string) {
+func seedMultipleRepositoriesWithTaggedLatestManifest(t *testing.T, env *testEnv, repoPaths []string) {
 	t.Helper()
 
 	wg := new(sync.WaitGroup)
@@ -1758,7 +1755,7 @@ func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagN
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			seedRandomSchema2Manifest(t, env, path, putByTag(tagName))
+			seedRandomSchema2Manifest(t, env, path, putByTag("latest"))
 		}(path)
 	}
 	wg.Wait()
@@ -1923,6 +1920,8 @@ func deleteAccessTokenWithProjectMeta(projectPath, repositoryName string) []*tok
 }
 
 // requireRenameTTLInRange makes sure that the rename operation TTL is within an acceptable range of an expected duration
+//
+//nolint:unparam //(`expectedTTLDuration` always receives `60 * time.Second`)
 func requireRenameTTLInRange(t *testing.T, actualTTL time.Time, expectedTTLDuration time.Duration) {
 	t.Helper()
 	lowerBound := time.Now()

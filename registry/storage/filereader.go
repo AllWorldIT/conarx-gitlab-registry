@@ -36,13 +36,13 @@ type fileReader struct {
 // takes on the size and path that must be determined externally with a stat
 // call. The reader operates optimistically, assuming that the file is already
 // there.
-func newFileReader(ctx context.Context, driver storagedriver.StorageDriver, path string, size int64) (*fileReader, error) {
+func newFileReader(ctx context.Context, driver storagedriver.StorageDriver, path string, size int64) *fileReader {
 	return &fileReader{
 		ctx:    ctx,
 		driver: driver,
 		path:   path,
 		size:   size,
-	}, nil
+	}
 }
 
 func (fr *fileReader) Read(p []byte) (n int, err error) {

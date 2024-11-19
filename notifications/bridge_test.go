@@ -3,6 +3,8 @@ package notifications
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/distribution/reference"
@@ -197,25 +199,14 @@ func createQueueBridgeTestEnv(t *testing.T, fn testSinkFn) *QueueBridge {
 }
 
 func checkDeleted(t *testing.T, action string, event *Event) {
-	if event == nil {
-		t.Fatal("event is nil")
-	}
+	t.Helper()
 
-	if event.Source != source {
-		t.Fatalf("source not equal: %#v != %#v", event.Source, source)
-	}
-
-	if event.Request != request {
-		t.Fatalf("request not equal: %#v != %#v", event.Request, request)
-	}
-
-	if event.Actor != actor {
-		t.Fatalf("request not equal: %#v != %#v", event.Actor, actor)
-	}
-
-	if event.Target.Repository != repo {
-		t.Fatalf("unexpected repository: %q != %q", event.Target.Repository, repo)
-	}
+	require.NotNil(t, event)
+	assert.Equal(t, source, event.Source)
+	assert.Equal(t, request, event.Request)
+	assert.Equal(t, actor, event.Actor)
+	assert.Equal(t, action, event.Action)
+	assert.Equal(t, repo, event.Target.Repository)
 }
 
 func checkRenamed(t *testing.T, action string, rename Rename, event *Event) {
