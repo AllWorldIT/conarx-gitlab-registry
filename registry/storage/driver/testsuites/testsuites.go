@@ -2164,7 +2164,7 @@ func randomFilename(length int) string {
 
 // randomFilenameRange returns a random file with a length between min and max
 // chars long inclusive.
-func randomFilenameRange(min, max int) string {
+func randomFilenameRange(min, max int) string { //nolint:unparam //(min always receives 8)
 	/* #nosec G404 */
 	return randomFilename(min + (rand.Intn(max + 1)))
 }

@@ -351,27 +351,28 @@ func Handler(handler http.Handler) http.Handler {
 // statusResponse completes the request with a response describing the health
 // of the service.
 func statusResponse(w http.ResponseWriter, r *http.Request, status int, checks map[string]string) {
+	l := context.GetLogger(r.Context())
 	p, err := json.Marshal(checks)
 	if err != nil {
-		context.GetLogger(context.Background()).Errorf("error serializing health status: %v", err)
+		l.WithError(err).Error("serializing health status")
 		p, err = json.Marshal(struct {
 			ServerError string `json:"server_error"`
 		}{
 			ServerError: "Could not parse error message",
 		})
-		status = http.StatusInternalServerError
-
 		if err != nil {
-			context.GetLogger(context.Background()).Errorf("error serializing health status failure message: %v", err)
+			l.WithError(err).Error("failed serializing health status")
 			return
 		}
+
+		status = http.StatusInternalServerError
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Length", fmt.Sprint(len(p)))
 	w.WriteHeader(status)
 	if _, err := w.Write(p); err != nil {
-		context.GetLogger(context.Background()).Errorf("error writing health status response body: %v", err)
+		l.WithError(err).Error("writing health status response body")
 	}
 }
 

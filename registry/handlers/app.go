@@ -1589,7 +1589,7 @@ func (app *App) logError(ctx context.Context, r *http.Request, errors errcode.Er
 
 // context constructs the context object for the application. This only be
 // called once per request.
-func (app *App) context(w http.ResponseWriter, r *http.Request) *Context {
+func (app *App) context(_ http.ResponseWriter, r *http.Request) *Context {
 	ctx := r.Context()
 	ctx = dcontext.WithVars(ctx, r)
 	name := dcontext.GetStringValue(ctx, "vars.name")
@@ -1747,7 +1747,7 @@ func distributionAPIBase(dbEnabled bool) http.HandlerFunc {
 
 // apiBase implements a simple yes-man for doing overall checks against the
 // api. This can support auth roundtrips to support docker login.
-func apiBase(w http.ResponseWriter, r *http.Request) {
+func apiBase(w http.ResponseWriter, _ *http.Request) {
 	const emptyJSON = "{}"
 
 	// Provide a simple /v2/ 200 OK response with empty json response.

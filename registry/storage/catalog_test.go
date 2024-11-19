@@ -264,7 +264,7 @@ func TestCatalogWalkError(t *testing.T) {
 
 func BenchmarkPathCompareEqual(b *testing.B) {
 	b.StopTimer()
-	pp := randomPath(100)
+	pp := randomPath()
 	// make a real copy
 	ppb := append([]byte{}, []byte(pp)...)
 	x, y := pp, string(ppb)
@@ -277,7 +277,7 @@ func BenchmarkPathCompareEqual(b *testing.B) {
 
 func BenchmarkPathCompareNotEqual(b *testing.B) {
 	b.StopTimer()
-	x, y := randomPath(100), randomPath(100)
+	x, y := randomPath(), randomPath()
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -287,7 +287,7 @@ func BenchmarkPathCompareNotEqual(b *testing.B) {
 
 func BenchmarkPathCompareNative(b *testing.B) {
 	b.StopTimer()
-	x, y := randomPath(100), randomPath(100)
+	x, y := randomPath(), randomPath()
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -298,7 +298,7 @@ func BenchmarkPathCompareNative(b *testing.B) {
 
 func BenchmarkPathCompareNativeEqual(b *testing.B) {
 	b.StopTimer()
-	pp := randomPath(100)
+	pp := randomPath()
 	x, y := pp, pp
 	b.StartTimer()
 
@@ -313,8 +313,9 @@ var (
 	separatorChars = []byte("._-")
 )
 
-func randomPath(length int64) string {
+func randomPath() string {
 	path := "/"
+	length := int64(100)
 	for int64(len(path)) < length {
 		chunkLength := rand.Int63n(length-int64(len(path))) + 1
 		chunk := randomFilename(chunkLength)

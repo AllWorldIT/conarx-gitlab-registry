@@ -80,7 +80,7 @@ func (bs *blobServer) ServeBlob(ctx context.Context, w http.ResponseWriter, r *h
 		}
 	}
 
-	br, err := newFileReader(ctx, bs.driver, path, desc.Size)
+	br := newFileReader(ctx, bs.driver, path, desc.Size)
 	if err != nil {
 		return nil, err
 	}

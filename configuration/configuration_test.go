@@ -791,7 +791,7 @@ func (suite *ConfigSuite) TestParseEnvMany() {
 	require.NoError(suite.T(), err)
 }
 
-func boolParameterTests(defaultValue bool) []parameterTest {
+func boolParameterTests() []parameterTest {
 	return []parameterTest{
 		{
 			name:  "true",
@@ -805,7 +805,7 @@ func boolParameterTests(defaultValue bool) []parameterTest {
 		},
 		{
 			name: "default",
-			want: strconv.FormatBool(defaultValue),
+			want: strconv.FormatBool(false),
 		},
 	}
 }
@@ -833,7 +833,7 @@ http:
     pprof:
       enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.HTTP.Debug.Pprof.Enabled))
@@ -851,7 +851,7 @@ http:
     tls:
       enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.HTTP.Debug.TLS.Enabled))
@@ -955,7 +955,7 @@ profiling:
   stackdriver:
     enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Profiling.Stackdriver.Enabled))
@@ -1080,7 +1080,7 @@ redis:
   tls:
     enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.TLS.Enabled))
@@ -1097,7 +1097,7 @@ redis:
   tls:
     insecure: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.TLS.Insecure))
@@ -1355,7 +1355,7 @@ storage: inmemory
 database:
   preparedstatements: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Database.PreparedStatements))
@@ -1479,7 +1479,7 @@ database:
   loadbalancing:
     enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Database.LoadBalancing.Enabled))
@@ -1620,7 +1620,7 @@ reporting:
   sentry:
     enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Reporting.Sentry.Enabled))
@@ -1794,7 +1794,7 @@ redis:
   cache:
     enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.Enabled))
@@ -1813,7 +1813,7 @@ redis:
     tls:
       enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.TLS.Enabled))
@@ -1832,7 +1832,7 @@ redis:
     tls:
       insecure: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.TLS.Insecure))
@@ -2056,7 +2056,7 @@ redis:
   ratelimiter:
     enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.Enabled))
@@ -2075,7 +2075,7 @@ redis:
     tls:
       enabled: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Enabled))
@@ -2094,7 +2094,7 @@ redis:
     tls:
       insecure: %s
 `
-	tt := boolParameterTests(false)
+	tt := boolParameterTests()
 
 	validator := func(t *testing.T, want interface{}, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Insecure))

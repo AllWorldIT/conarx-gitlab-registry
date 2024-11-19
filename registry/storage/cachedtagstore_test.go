@@ -50,7 +50,7 @@ func testCachedTagStoreAllHasSameResult(t *testing.T, numTags int) {
 
 	// Populate tagStore with random tags.
 	for i := 0; i < numTags; i++ {
-		_, err := uploadTagWithRandomDigest(ctx, env.ts, strconv.Itoa(i))
+		err := uploadTagWithRandomDigest(ctx, env.ts, strconv.Itoa(i))
 		require.NoErrorf(t, err, "error populating tags: %v", err)
 	}
 
@@ -70,15 +70,14 @@ func testCachedTagStoreAllHasSameResult(t *testing.T, numTags int) {
 
 func TestCachedTagStoreAllIgnoresCorruptTags(t *testing.T) {
 	var (
-		dgst string
-		err  error
-		env  = testTagStore(t)
-		ctx  = context.Background()
-		tag  = "foo"
+		err error
+		env = testTagStore(t)
+		ctx = context.Background()
+		tag = "foo"
 	)
 
 	// populate tagStore with `tag=foo`
-	dgst, err = uploadTagWithRandomDigest(ctx, env.ts, tag)
+	err = uploadTagWithRandomDigest(ctx, env.ts, tag)
 	require.NoError(t, err)
 
 	// retrieve all existing tags
@@ -96,7 +95,7 @@ func TestCachedTagStoreAllIgnoresCorruptTags(t *testing.T) {
 	}
 
 	// corrupt the tag link
-	err = corruptTagDigest(ctx, env.d, tagLinkPathSpec, dgst)
+	err = corruptTagDigest(ctx, env.d, tagLinkPathSpec)
 	require.NoError(t, err)
 
 	// retrieve all existing tags - only keeping the validated tags (e.g keeping tags without broken links)
@@ -127,7 +126,7 @@ func testCachedTagStoreLookupHasSameResults(t *testing.T, numTags int) {
 
 	// Populate tagStore with random tags.
 	for i := 0; i < numTags; i++ {
-		_, err := uploadTagWithRandomDigest(ctx, env.ts, strconv.Itoa(i))
+		err := uploadTagWithRandomDigest(ctx, env.ts, strconv.Itoa(i))
 		require.NoErrorf(t, err, "error populating tags: %v", err)
 	}
 
@@ -164,7 +163,7 @@ func compareLookup(ctx context.Context, t *testing.T, ts distribution.TagService
 	require.ElementsMatch(t, result, cachedResult)
 }
 
-func uploadTagWithRandomDigest(ctx context.Context, ts distribution.TagService, tag string) (string, error) {
+func uploadTagWithRandomDigest(ctx context.Context, ts distribution.TagService, tag string) error {
 	bytes := make([]byte, 0)
 	hash := sha256.New()
 	hash.Write(bytes)
@@ -172,12 +171,12 @@ func uploadTagWithRandomDigest(ctx context.Context, ts distribution.TagService, 
 
 	err := ts.Tag(ctx, tag, distribution.Descriptor{Digest: digest.Digest(dgst)})
 	if err != nil {
-		return dgst, err
+		return err
 	}
-	return dgst, nil
+	return nil
 }
 
-func corruptTagDigest(ctx context.Context, d driver.StorageDriver, tagLinkPathSpec manifestTagCurrentPathSpec, digest string) error {
+func corruptTagDigest(ctx context.Context, d driver.StorageDriver, tagLinkPathSpec manifestTagCurrentPathSpec) error {
 	tagLinkPath, err := pathFor(tagLinkPathSpec)
 	if err != nil {
 		return err

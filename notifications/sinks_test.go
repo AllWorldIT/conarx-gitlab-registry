@@ -30,7 +30,7 @@ func TestBroadcaster(t *testing.T) {
 		sinks...,
 	)
 
-	event := createTestEvent("push", "library/test", "blob")
+	event := createTestEvent("push", "blob")
 	for i := 0; i <= nEvents-1; i++ {
 		if err := b.Write(&event); err != nil {
 			t.Errorf("error writing event: %v", err)
@@ -75,7 +75,7 @@ func TestEventQueue(t *testing.T) {
 		metrics.eventQueueListener(),
 	)
 
-	event := createTestEvent("push", "library/test", "blob")
+	event := createTestEvent("push", "blob")
 	for i := 0; i <= nEvents-1; i++ {
 		if err := eq.Write(&event); err != nil {
 			t.Errorf("error writing event: %v", err)
@@ -107,8 +107,8 @@ func TestEventQueue(t *testing.T) {
 }
 
 func TestIgnoredSink(t *testing.T) {
-	blob := createTestEvent("push", "library/test", "blob")
-	manifest := createTestEvent("pull", "library/test", "manifest")
+	blob := createTestEvent("push", "blob")
+	manifest := createTestEvent("pull", "manifest")
 
 	type testcase struct {
 		ignoreMediaTypes []string
@@ -157,7 +157,7 @@ func TestRetryingSink(t *testing.T) {
 	s := newRetryingSink(flaky, 3, 10*time.Millisecond)
 
 	var wg sync.WaitGroup
-	event := createTestEvent("push", "library/test", "blob")
+	event := createTestEvent("push", "blob")
 	for i := 1; i <= 10; i++ {
 		wg.Add(1)
 		go func() {
@@ -221,7 +221,7 @@ func TestBackoffSink(t *testing.T) {
 			}
 
 			s := newBackoffSink(failing, 10*time.Millisecond, tc.maxRetries)
-			event := createTestEvent("push", "library/test", "blob")
+			event := createTestEvent("push", "blob")
 			err := s.Write(&event)
 			if tc.expectedError {
 				require.Error(t, err)

@@ -1323,9 +1323,8 @@ func TestGitlabAPI_SubRepositoryList(t *testing.T) {
 	repoWithoutTag := "foo/bar/b2"
 
 	require.NoError(t, err)
-	tagName := "latest"
 	// seed repos with the same base path foo/bar with tags
-	seedMultipleRepositoriesWithTaggedManifest(t, env, tagName, sortedReposWithTag)
+	seedMultipleRepositoriesWithTaggedLatestManifest(t, env, sortedReposWithTag)
 	// seed a repo under the same base path foo/bar but without tags
 	seedRandomSchema2Manifest(t, env, repoWithoutTag, putByDigest)
 
@@ -1483,8 +1482,7 @@ func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
 	require.NoError(t, err)
 
 	// seed repos of the same base path foo/bar but with a tagged manifest
-	tagName := "latest"
-	seedMultipleRepositoriesWithTaggedManifest(t, env, tagName, reposWithTag)
+	seedMultipleRepositoriesWithTaggedLatestManifest(t, env, reposWithTag)
 
 	u, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoName)
 	require.NoError(t, err)
@@ -1634,7 +1632,7 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 			t.Cleanup(env.Shutdown)
 
 			// seed repos
-			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+			seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
@@ -1780,7 +1778,7 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 			t.Cleanup(env.Shutdown)
 
 			// seed repos
-			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+			seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
@@ -2123,7 +2121,7 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 	for i := 0; i <= 1000; i++ {
 		nestedRepos = append(nestedRepos, fmt.Sprintf("foo/bar/%d", i))
 	}
-	seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+	seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 	// override registry config/setup to use token based authorization for all proceeding requests
 	tokenProvider := NewAuthTokenProvider(t)
@@ -2313,7 +2311,7 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 			t.Cleanup(env.Shutdown)
 
 			// seed repos
-			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+			seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)

@@ -139,7 +139,7 @@ func (buh *blobUploadHandler) StartBlobUpload(w http.ResponseWriter, r *http.Req
 
 	buh.Upload = upload
 
-	if err := buh.blobUploadResponse(w, r, true); err != nil {
+	if err := buh.blobUploadResponse(w); err != nil {
 		buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 		return
 	}
@@ -155,7 +155,7 @@ func (buh *blobUploadHandler) GetUploadStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := buh.blobUploadResponse(w, r, true); err != nil {
+	if err := buh.blobUploadResponse(w); err != nil {
 		buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 		return
 	}
@@ -198,7 +198,7 @@ func (buh *blobUploadHandler) PatchBlobData(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := buh.blobUploadResponse(w, r, false); err != nil {
+	if err := buh.blobUploadResponse(w); err != nil {
 		buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 		return
 	}
@@ -414,10 +414,8 @@ func (buh *blobUploadHandler) ResumeBlobUpload(ctx *Context, r *http.Request) ht
 
 // blobUploadResponse provides a standard request for uploading blobs and
 // chunk responses. This sets the correct headers but the response status is
-// left to the caller. The fresh argument is used to ensure that new blob
-// uploads always start at a 0 offset. This allows disabling resumable push by
-// always returning a 0 offset on check status.
-func (buh *blobUploadHandler) blobUploadResponse(w http.ResponseWriter, r *http.Request, fresh bool) error {
+// left to the caller.
+func (buh *blobUploadHandler) blobUploadResponse(w http.ResponseWriter) error {
 	buh.State.Name = buh.Repository.Named().Name()
 	buh.State.UUID = buh.Upload.ID()
 	buh.Upload.Close()

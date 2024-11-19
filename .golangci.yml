@@ -145,27 +145,27 @@ linters:
   disable-all: true
   enable:
   # TODO: Tracked in https://gitlab.com/gitlab-org/container-registry/-/issues/1308
-  # - revive
   # - gosec
+  # - revive
   # MRs in flight:
-  # - unparam
-    - gocritic
-    - misspell
-    - unconvert
     - bodyclose
-    - stylecheck
-    - gosimple
-    - staticcheck
+    - copyloopvar
     - depguard
     - dogsled
+    - gocritic
     - gofumpt
     - goimports
+    - gosimple
     - ineffassign
+    - misspell
     - nakedret
+    - staticcheck
+    - stylecheck
     - typecheck
+    - unconvert
+    - unparam
     - unused
     - whitespace
-    - copyloopvar
   # don't enable:
   # - gocognit
   # - goconst

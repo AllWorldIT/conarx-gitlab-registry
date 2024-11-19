@@ -130,30 +130,30 @@ func TestHTTPSink(t *testing.T) {
 			name:       "single_200",
 			statusCode: http.StatusOK,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+				createTestEvent("push", schema1.MediaTypeSignedManifest),
 			},
 		},
 		{
 			name:       "multiple_200",
 			statusCode: http.StatusOK,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
-				createTestEvent("push", "library/test", layerMediaType),
-				createTestEvent("push", "library/test", layerMediaType),
+				createTestEvent("push", schema1.MediaTypeSignedManifest),
+				createTestEvent("push", layerMediaType),
+				createTestEvent("push", layerMediaType),
 			},
 		},
 		{
 			name:       "redirect_307",
 			statusCode: http.StatusTemporaryRedirect,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+				createTestEvent("push", schema1.MediaTypeSignedManifest),
 			},
 		},
 		{
 			name:       "bad_request_400",
 			statusCode: http.StatusBadRequest,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+				createTestEvent("push", schema1.MediaTypeSignedManifest),
 			},
 			failure: true,
 		},
@@ -212,11 +212,11 @@ func TestHTTPSink(t *testing.T) {
 	}
 }
 
-func createTestEvent(action, repo, typ string) Event {
+func createTestEvent(action, mt string) Event {
 	event := createEvent(action)
 
-	event.Target.MediaType = typ
-	event.Target.Repository = repo
+	event.Target.MediaType = mt
+	event.Target.Repository = "library/test"
 
 	return *event
 }
@@ -244,9 +244,9 @@ func TestHTTPSink_Errors(t *testing.T) {
 	defer sink.Close()
 
 	events := []Event{
-		createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
-		createTestEvent("push", "library/test", layerMediaType),
-		createTestEvent("push", "library/test", layerMediaType),
+		createTestEvent("push", schema1.MediaTypeSignedManifest),
+		createTestEvent("push", layerMediaType),
+		createTestEvent("push", layerMediaType),
 	}
 
 	// all events should time out

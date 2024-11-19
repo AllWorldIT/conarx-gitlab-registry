@@ -111,11 +111,7 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 	l := log.GetLogger(log.WithContext(imh))
 	l.Debug("GetImageManifest")
 
-	manifestGetter, err := imh.newManifestGetter(r)
-	if err != nil {
-		imh.Errors = append(imh.Errors, err)
-		return
-	}
+	manifestGetter := imh.newManifestGetter(r)
 
 	var (
 		manifest distribution.Manifest
@@ -180,6 +176,7 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 	// Only rewrite manifests lists when they are being fetched by tag. If they
 	// are being fetched by digest, we can't return something not matching the digest.
 	if imh.Tag != "" && manifestType == manifestlistSchema && !supports(r, manifestlistSchema) {
+		var err error
 		manifest, err = imh.rewriteManifestList(manifestList)
 		if err != nil {
 			switch err := err.(type) {
@@ -285,10 +282,7 @@ func (imh *manifestHandler) rewriteManifestList(manifestList *manifestlist.Deser
 
 	// TODO: We're passing an empty request here to skip etag matching logic.
 	// This should be handled more cleanly.
-	manifestGetter, err := imh.newManifestGetter(&http.Request{})
-	if err != nil {
-		return nil, err
-	}
+	manifestGetter := imh.newManifestGetter(&http.Request{})
 
 	manifest, err := manifestGetter.GetByDigest(imh.Context, manifestDigest)
 	if err != nil {
@@ -302,7 +296,7 @@ func (imh *manifestHandler) rewriteManifestList(manifestList *manifestlist.Deser
 
 var errETagMatches = errors.New("etag matches")
 
-func (imh *manifestHandler) newManifestGetter(req *http.Request) (manifestGetter, error) {
+func (imh *manifestHandler) newManifestGetter(req *http.Request) manifestGetter {
 	if imh.useDatabase {
 		return newDBManifestGetter(
 			imh.App.db.Primary(),
@@ -314,7 +308,7 @@ func (imh *manifestHandler) newManifestGetter(req *http.Request) (manifestGetter
 
 	manifestService, err := imh.Repository.Manifests(imh)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	return newFSManifestGetter(manifestService, imh.Repository.Tags(imh), req)
 }
@@ -338,12 +332,7 @@ type dbManifestGetter struct {
 	req      *http.Request
 }
 
-func newDBManifestGetter(
-	db datastore.Queryer,
-	rcache datastore.RepositoryCache,
-	repoPath string,
-	req *http.Request,
-) (*dbManifestGetter, error) {
+func newDBManifestGetter(db datastore.Queryer, rcache datastore.RepositoryCache, repoPath string, req *http.Request) *dbManifestGetter {
 	var opts []datastore.RepositoryStoreOption
 	if rcache != nil {
 		opts = append(opts, datastore.WithRepositoryCache(rcache))
@@ -352,7 +341,7 @@ func newDBManifestGetter(
 		RepositoryStore: datastore.NewRepositoryStore(db, opts...),
 		repoPath:        repoPath,
 		req:             req,
-	}, nil
+	}
 }
 
 func (g *dbManifestGetter) GetByTag(ctx context.Context, tagName string) (distribution.Manifest, digest.Digest, error) {
@@ -432,16 +421,12 @@ type fsManifestGetter struct {
 	req *http.Request
 }
 
-func newFSManifestGetter(
-	manifestService distribution.ManifestService,
-	tagsService distribution.TagService,
-	r *http.Request,
-) (*fsManifestGetter, error) {
+func newFSManifestGetter(manifestService distribution.ManifestService, tagsService distribution.TagService, r *http.Request) *fsManifestGetter {
 	return &fsManifestGetter{
 		ts:  tagsService,
 		ms:  manifestService,
 		req: r,
-	}, nil
+	}
 }
 
 func (g *fsManifestGetter) GetByTag(ctx context.Context, tagName string) (distribution.Manifest, digest.Digest, error) {

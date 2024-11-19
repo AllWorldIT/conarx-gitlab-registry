@@ -248,10 +248,7 @@ func (bw *blobWriter) validateBlob(ctx context.Context, desc distribution.Descri
 			verifier := desc.Digest.Verifier()
 
 			// Read the file from the backend driver and validate it.
-			fr, err := newFileReader(ctx, bw.driver, bw.path, desc.Size)
-			if err != nil {
-				return distribution.Descriptor{}, err
-			}
+			fr := newFileReader(ctx, bw.driver, bw.path, desc.Size)
 			defer fr.Close()
 
 			tr := io.TeeReader(fr, digester.Hash())

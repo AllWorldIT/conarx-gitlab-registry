@@ -108,7 +108,7 @@ func TestRelativeURL(t *testing.T) {
 	}
 
 	args := makeBlobArgs(t)
-	resp, err := doPushLayer(t, env.builder, ref, args.layerDigest, uploadURLBaseAbs, args.layerFile)
+	resp, err := doPushLayer(t, args.layerDigest, uploadURLBaseAbs, args.layerFile)
 	if err != nil {
 		t.Fatalf("unexpected error doing layer push relative url: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestRelativeURL(t *testing.T) {
 
 	// Complete upload with relative URLs enabled to ensure the final location is relative
 	config.HTTP.RelativeURLs = true
-	resp, err = doPushLayer(t, env.builder, ref, args.layerDigest, uploadURLBaseAbs, args.layerFile)
+	resp, err = doPushLayer(t, args.layerDigest, uploadURLBaseAbs, args.layerFile)
 	if err != nil {
 		t.Fatalf("unexpected error doing layer push relative url: %v", err)
 	}
@@ -236,7 +236,7 @@ func testBlobAPI(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// -----------------------------------------
 	// Do layer push with an empty body and different digest
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
-	resp, err = doPushLayer(t, env.builder, imageName, layerDigest, uploadURLBase, bytes.NewReader([]byte{}))
+	resp, err = doPushLayer(t, layerDigest, uploadURLBase, bytes.NewReader([]byte{}))
 	if err != nil {
 		t.Fatalf("unexpected error doing bad layer push: %v", err)
 	}
@@ -288,7 +288,7 @@ func testBlobAPI(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 
 	layerFile.Seek(0, 0)
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
-	uploadURLBase, dgst := pushChunk(t, env.builder, imageName, uploadURLBase, layerFile, layerLength)
+	uploadURLBase, dgst := pushChunk(t, uploadURLBase, layerFile, layerLength)
 	finishUpload(t, env.builder, imageName, uploadURLBase, dgst)
 
 	// -----------------------------------------
@@ -2252,7 +2252,7 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	// Create and execute API request to continue with the started push (while a project lease is suddenly in effect for "foo/bar")
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 	args := makeBlobArgs(t)
-	req = newRequest(doPushLayerRequest(t, env.builder, args.imageName, args.layerDigest, resp.Header.Get("Location"), args.layerFile), witAuthToken(token))
+	req = newRequest(doPushLayerRequest(t, args.layerDigest, resp.Header.Get("Location"), args.layerFile), witAuthToken(token))
 	// Send request
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2269,7 +2269,7 @@ func TestExistingRenameLease_Prevents_Layer_Delete(t *testing.T) {
 
 	// Seed repository "foo/bar"
 	repoName := "foo/bar"
-	args, _ := createNamedRepoWithBlob(t, env, repoName)
+	args := createNamedRepoWithBlob(t, env, repoName)
 	repository := args.imageName
 
 	env, redisController, tokenProvider := setupValidRenameEnv(t)

@@ -16,7 +16,7 @@ import (
 
 func TestLinkedBlobStoreCreateWithMountFrom(t *testing.T) {
 	fooRepoName, _ := reference.WithName("nm/foo")
-	fooEnv := newManifestStoreTestEnv(t, fooRepoName, "thetag")
+	fooEnv := newManifestStoreTestEnv(t, fooRepoName)
 	ctx := context.Background()
 	stats, err := mockRegistry(t, fooEnv.registry)
 	if err != nil {

@@ -5,11 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/handlers/mocks"
 
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
