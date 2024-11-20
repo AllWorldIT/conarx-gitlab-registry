@@ -97,7 +97,7 @@ While most of these represent valuable features and improvements, they are out o
 
 - **Relative replication lag quarantine:** Selectively routing read requests to quarantined replicas based on their individual replication lag _relative_ to the last write activity of the target repository (see [Primary Sticking](#primary-sticking) for context) would allow us to improve resource utilization during periods of high write activity. However, this represents additional complexity and not including this in the scope for the first iteration does not leave us in a situation worse than we currently are (routing all traffic to the primary);
 
-- **Online garbage collection (GC):** Although [Online GC](online-garbage-collection.md) requires both read and write database operations, it will continue to use the primary exclusively. GC queries occur mostly within transactions, and these require a read/write DB connection regardless. Even if/when that's not the case, online GC is a highly time-sensitive process, which should be guarded from replication lag at all cost.
+- **Online garbage collection (GC):** Although [Online GC](online-garbage-collection.md) requires both read and write database operations, it will continue to use the primary exclusively. GC queries occur mostly within transactions, and these require a read/write DB connection regardless. Even if/when that's not the case, online GC is a highly time-sensitive process, which should be guarded against replication lag at all cost.
 
 ## Solution
 
@@ -270,7 +270,7 @@ sequenceDiagram
   CR->>-C: Response
 ```
 
-***** Ideally, to avoid unnecessary LSN comparisons against replicas, we would keep track of which ones are lagging for a given repository and delete the corresponding primary LSN record as soon as all of them have caught up. In step 1.1.1, if a given replica had caught up, the registry could asynchronously check the LSN difference for all the remaining replicas and delete the record from Redis if (and only if) all of them had caught up too. However, this represents an additional layer of complexity that we can live without on a first iteration.
+Ideally, to avoid unnecessary LSN comparisons against replicas, we would keep track of which ones are lagging for a given repository and delete the corresponding primary LSN record as soon as all of them have caught up. In step 1.1.1, if a given replica had caught up, the registry could asynchronously check the LSN difference for all the remaining replicas and delete the record from Redis if (and only if) all of them had caught up too. However, this represents an additional layer of complexity that we can live without on a first iteration.
 
 Given the above, we will start by applying a fixed TTL of 1 hour to the primary LSN records for each repository in Redis. In the future, the same TTL (maybe with a different duration) will remain in place to shield us from failures in the asynchronous check *or* cases where a repository had no reads for a really long period since the last write. These edge cases could lead to stale records in Redis or unnecessary LSN comparisons.
 
@@ -374,9 +374,9 @@ The Container Registry will generate log entries for each of the following event
 - Changes to the replica list;
 - Expiry of open connections when the replica list changes;
 - Replica added to or removed from the pool based on DNS lookup and probing results;
-- Periodic replication lag checks, indicating the lag values for each replica;
-- Replica quarantined due to exceeding the lag thresholds;
-- Quarantined replica reintegrated into the pool;
+- Periodic replication lag checks, indicating the lag values for each replica. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2);
+- Replica quarantined due to exceeding the lag thresholds. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2);
+- Quarantined replica reintegrated into the pool. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2);
 - Tracking of write operation for each repository in Redis;
 - Read operations, indicating whether the query was routed to the primary or a replica (and which one) and why (e.g. routed to primary due to sticking; routed to replica due to round-robin election). Due to volume, these entries should carry the `DEBUG` log level;
 - Fallbacks of read requests to the primary or a different replica due to the unavailability of replicas.
@@ -385,18 +385,18 @@ The Container Registry will generate log entries for each of the following event
 
 The Container Registry will export the following Prometheus metrics:
 
-| Metric Name                                                 | Type      | Description                                                                                                                                                                                                                                                                         |
-|-------------------------------------------------------------|-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `registry_database_lb_lookup_duration_seconds`              | Histogram | Histogram of latencies for DNS lookups. `error=<true/false>` and `lookup_type=<srv/host>` labels.                                                                                                                                                                                   |
-| `registry_database_lb_pool_size`                            | Gauge     | Current number of replicas in the pool.                                                                                                                                                                                                                                             |
-| `registry_database_lb_pool_status`                          | Gauge     | Status of each replica in the pool. `replica` and `status=<online/quarantined>` labels.                                                                                                                                                                                             |
-| `registry_database_lb_pool_events_total`                    | Counter   | Number of replicas added (`event=replica_added`) to the pool or removed (`event=replica_removed`) based on DNS lookup and probing results. <br />Number of replicas quarantined (`event=replica_quarantined`) or reintegrated (`event=replica_reintegrated`) due to lag thresholds. |
-| `registry_database_lb_lag_bytes`                            | Gauge     | Replication lag in bytes for each replica (identified by a `replica` label).                                                                                                                                                                                                        |
-| `registry_database_lb_lag_seconds`                          | Histogram | Replication lag in seconds for each replica (identified by a `replica` label).                                                                                                                                                                                                      |
-| `registry_database_lb_targets_total`                        | Counter   | A counter for primary and replica target elections during database load balancing. `target_type=<primary/replica>`, `fallback=<true/false>`, and `reason=<selected/no_cache/no_replica/error/not_up_to_date>` labels.                                                               |
-| `registry_database_lb_expired_total`                        | Counter   | Number of expired connections due to changes in the replica list.                                                                                                                                                                                                                   |
-| `registry_database_lb_lsn_cache_operation_duration_seconds` | Histogram | Duration of LSN cache set/get operations. `operation=<set/get>`, `error=<true/false>` labels.                                                                                                                                                                                       |
-| `registry_database_lb_lsn_cache_hits_total`                 | Counter   | Total number of LSN cache hits and misses. `result=<hit/miss>` label.                                                                                                                                                                                                               |
+| Metric Name                                                 | Type      | Description                                                                                                                                                                                                                                                                                                                                                        |
+|-------------------------------------------------------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `registry_database_lb_lookup_duration_seconds`              | Histogram | Histogram of latencies for DNS lookups. `error=<true/false>` and `lookup_type=<srv/host>` labels.                                                                                                                                                                                                                                                                  |
+| `registry_database_lb_pool_size`                            | Gauge     | Current number of replicas in the pool.                                                                                                                                                                                                                                                                                                                            |
+| `registry_database_lb_pool_status`                          | Gauge     | Status of each replica in the pool. `replica` and `status=<online/quarantined>` labels. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2).                                                                                                                                                                                              |
+| `registry_database_lb_pool_events_total`                    | Counter   | Number of replicas added (`event=replica_added`) to the pool or removed (`event=replica_removed`) based on DNS lookup and probing results. <br />Number of replicas quarantined (`event=replica_quarantined`) or reintegrated (`event=replica_reintegrated`) due to lag thresholds (part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2)). |
+| `registry_database_lb_lag_bytes`                            | Gauge     | Replication lag in bytes for each replica (identified by a `replica` label). Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2).                                                                                                                                                                                                         |
+| `registry_database_lb_lag_seconds`                          | Histogram | Replication lag in seconds for each replica (identified by a `replica` label). Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2).                                                                                                                                                                                                       |
+| `registry_database_lb_targets_total`                        | Counter   | A counter for primary and replica target elections during database load balancing. `target_type=<primary/replica>`, `fallback=<true/false>`, and `reason=<selected/no_cache/no_replica/error/not_up_to_date>` labels.                                                                                                                                              |
+| `registry_database_lb_expired_total`                        | Counter   | Number of expired connections due to changes in the replica list. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2).                                                                                                                                                                                                                    |
+| `registry_database_lb_lsn_cache_operation_duration_seconds` | Histogram | Duration of LSN cache set/get operations. `operation=<set/get>`, `error=<true/false>` labels.                                                                                                                                                                                                                                                                      |
+| `registry_database_lb_lsn_cache_hits_total`                 | Counter   | Total number of LSN cache hits and misses. `result=<hit/miss>` label.                                                                                                                                                                                                                                                                                              |
 
 #### Health Check
 
@@ -406,3 +406,35 @@ To ensure the health and availability of the database load balancing mechanism, 
 - List of currently active replicas in the pool, including their individual status (online/quarantined).
 
 The health check endpoint will continue to return a HTTP status code of `200 OK` if the overall status is "healthy", and a `503 Service Unavailable` if the status is "unhealthy". This allows external monitoring systems to easily detect and alert on any issues with the load balancing mechanism.
+
+## Rollout Plan
+
+To minimize impact and risk while enabling faster iteration, this feature will be developed and rolled out in two sequential phases.
+
+This feature will only be officially supported on self-managed instances once it has been fully rolled out on GitLab.com. A third phase may be used to coordinate this effort by then.
+
+### Phase 1
+
+- Minimal Viable Change (MVC) implementation. All documented features except:
+  - [Active replication lag monitoring](#replication-lag);
+  - [Immediate refresh of replicas list in case of network errors](#fault-tolerance);
+  - [Health checking](#health-check).
+- Implementation of the required Distribution (Helm Chart) changes;
+- Rollout on GitLab.com, with only a single registry API endpoint utilizing load balancing. [Get repository details](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/api.md?ref_type=heads#get-repository-details) is the selected endpoint for the following reasons:
+  - Used to query storage usage per GitLab project/group/namespace, which is currently the slowest and most resource intensive query;
+  - Lowest in risk and criticality. It is _not_ part of the image push/pull workflow and is only used internally to display repository details in the GitLab UI;
+  - Low request rate ([source](https://dashboards.gitlab.net/goto/2ucSNn7Ng?orgId=1)).
+
+- Rely on the existing Redis cache instance on GitLab.com for [primary sticking](#primary-sticking).
+
+This phase allows us to see immediate improvements in primary resource saturation while safely deferring the implementation of some features and infrastructure changes to Phase 2.
+
+This is being tracked in [Container Registry: DLB Phase 1 (&14105)](https://gitlab.com/groups/gitlab-org/-/epics/14105).
+
+### Phase 2
+
+- Provisioning and switch to a dedicated Redis Cluster for load balancing on GitLab.com;
+- Implementation of all remaining features not delivered during Phase 1;
+- Gradual rollout for the remaining API endpoints, sequentially and ordered by ascending criticality.
+
+This is being tracked in [Container Registry: DLB Phase 2 (&15998)](https://gitlab.com/groups/gitlab-org/-/epics/15998).
