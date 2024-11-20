@@ -32,9 +32,7 @@ func TestBroadcaster(t *testing.T) {
 
 	event := createTestEvent("push", "blob")
 	for i := 0; i <= nEvents-1; i++ {
-		if err := b.Write(&event); err != nil {
-			t.Errorf("error writing event: %v", err)
-		}
+		require.NoError(t, b.Write(&event), "error writing event")
 	}
 
 	checkClose(t, b)
@@ -45,13 +43,9 @@ func TestBroadcaster(t *testing.T) {
 		ts.mu.Lock()
 		defer ts.mu.Unlock()
 
-		if len(ts.events) != nEvents {
-			t.Fatalf("not all events ended up in testsink: len(testSink) == %d, not %d", len(ts.events), nEvents)
-		}
+		require.Len(t, ts.events, nEvents, "not all events ended up in testsink")
 
-		if !ts.closed {
-			t.Fatalf("sink should have been closed")
-		}
+		require.True(t, ts.closed, "sink should have been closed")
 	}
 }
 
@@ -77,9 +71,7 @@ func TestEventQueue(t *testing.T) {
 
 	event := createTestEvent("push", "blob")
 	for i := 0; i <= nEvents-1; i++ {
-		if err := eq.Write(&event); err != nil {
-			t.Errorf("error writing event: %v", err)
-		}
+		require.NoError(t, eq.Write(&event), "error writing event")
 	}
 
 	checkClose(t, eq)
@@ -89,21 +81,13 @@ func TestEventQueue(t *testing.T) {
 	metrics.Lock()
 	defer metrics.Unlock()
 
-	if len(ts.events) != nEvents {
-		t.Fatalf("events did not make it to the sink: %d != %d", len(ts.events), 1000)
-	}
+	require.Len(t, ts.events, nEvents, "events did not make it to the sink")
 
-	if !ts.closed {
-		t.Fatalf("sink should have been closed")
-	}
+	require.True(t, ts.closed, "sink should have been closed")
 
-	if metrics.Events != nEvents {
-		t.Fatalf("unexpected ingress count: %d != %d", metrics.Events, nEvents)
-	}
+	require.Equal(t, nEvents, metrics.Events, "unexpected ingress count")
 
-	if metrics.Pending != 0 {
-		t.Fatalf("unexpected egress count: %d != %d", metrics.Pending, 0)
-	}
+	require.Equal(t, 0, metrics.Pending, "unexpected egress count")
 }
 
 func TestIgnoredSink(t *testing.T) {
@@ -130,16 +114,12 @@ func TestIgnoredSink(t *testing.T) {
 		ts := &testSink{}
 		s := newIgnoredSink(ts, c.ignoreMediaTypes, c.ignoreActions)
 
-		if err := s.Write(&blob); err != nil {
-			t.Fatalf("error writing blob event: %v", err)
-		}
+		require.NoError(t, s.Write(&blob), "error writing blob event")
 
-		if err := s.Write(&manifest); err != nil {
-			t.Fatalf("error writing blob event: %v", err)
-		}
+		require.NoError(t, s.Write(&manifest), "error writing blob event")
 
 		ts.mu.Lock()
-		require.ElementsMatch(t, ts.events, c.expected)
+		require.ElementsMatch(t, c.expected, ts.events)
 		ts.mu.Unlock()
 
 		s.Close()
@@ -156,30 +136,24 @@ func TestRetryingSink(t *testing.T) {
 	}
 	s := newRetryingSink(flaky, 3, 10*time.Millisecond)
 
-	var wg sync.WaitGroup
 	event := createTestEvent("push", "blob")
+	errCh := make(chan error, 10)
 	for i := 1; i <= 10; i++ {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-			if err := s.Write(&event); err != nil {
-				t.Errorf("error writing event block: %v", err)
-			}
+			errCh <- s.Write(&event)
 		}()
 	}
 
-	wg.Wait()
-	if t.Failed() {
-		t.FailNow()
+	for i := 1; i <= 10; i++ {
+		require.NoErrorf(t, <-errCh, "error writing event %d", i)
 	}
+
 	checkClose(t, s)
 
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
-	if len(ts.events) != 10 {
-		t.Fatalf("events not propagated: %d != %d", len(ts.events), 10)
-	}
+	require.Len(t, ts.events, 10, "events not propagated")
 }
 
 type flakySink struct {
@@ -282,19 +256,11 @@ func (fs *failingSink) Write(event *Event) error {
 }
 
 func checkClose(t *testing.T, sink Sink) {
-	if err := sink.Close(); err != nil {
-		t.Fatalf("unexpected error closing: %v", err)
-	}
+	require.NoError(t, sink.Close(), "unexpected error closing")
 
 	// second close should not crash but should return an error.
-	if err := sink.Close(); err == nil {
-		t.Fatalf("no error on double close")
-	}
+	require.Error(t, sink.Close(), "no error on double close")
 
 	// Write after closed should be an error
-	if err := sink.Write(&Event{}); err == nil {
-		t.Fatalf("write after closed did not have an error")
-	} else if err != ErrSinkClosed {
-		t.Fatalf("error should be ErrSinkClosed")
-	}
+	require.ErrorIs(t, sink.Write(&Event{}), ErrSinkClosed, "write after closed should return ErrSinkClosed")
 }
