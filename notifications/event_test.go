@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/manifest/schema1"
+	"github.com/stretchr/testify/require"
 )
 
 // TestEventJSONFormat provides silly test to detect if the event format or
@@ -102,9 +103,7 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
 	`)
 
 	tm, err := time.Parse(time.RFC3339, time.RFC3339[:len(time.RFC3339)-5])
-	if err != nil {
-		t.Fatalf("error creating time: %v", err)
-	}
+	require.NoError(t, err, "error creating time")
 
 	prototype := Event{
 		Action:    EventActionPush,
@@ -156,10 +155,6 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
 	envelope.Events = append(envelope.Events, manifestPush, layerPush0, layerPush1)
 
 	p, err := json.MarshalIndent(envelope, "", "   ")
-	if err != nil {
-		t.Fatalf("unexpected error marshaling envelope: %v", err)
-	}
-	if string(p) != expected {
-		t.Fatalf("format has changed\n%s\n != \n%s", string(p), expected)
-	}
+	require.NoError(t, err, "unexpected error marshaling envelope")
+	require.Equal(t, expected, string(p), "format has changed")
 }

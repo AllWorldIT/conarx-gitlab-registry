@@ -17,33 +17,28 @@ import (
 	"github.com/docker/distribution/testutil"
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/require"
 )
 
 func TestListener(t *testing.T) {
 	ctx := context.Background()
 	k, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	registry, err := storage.NewRegistry(ctx, inmemory.New(), storage.BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), storage.EnableDelete, storage.EnableRedirect, storage.Schema1SigningKey(k), storage.EnableSchema1)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
+
 	tl := &testListener{
 		ops: make(map[string]int),
 	}
 
 	repoRef, _ := reference.WithName("foo/bar")
 	repository, err := registry.Repository(ctx, repoRef)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 
 	remover, ok := registry.(distribution.RepositoryRemover)
-	if !ok {
-		t.Fatal("registry does not implement RepositoryRemover")
-	}
+	require.True(t, ok, "registry does not implement RepositoryRemover")
+
 	repository, remover = Listen(repository, remover, tl, false)
 
 	// Now take the registry through a number of operations
@@ -60,9 +55,7 @@ func TestListener(t *testing.T) {
 		"repo:delete":     1,
 	}
 
-	if !reflect.DeepEqual(tl.ops, expectedOps) {
-		t.Fatalf("counts do not match:\n%v\n !=\n%v", tl.ops, expectedOps)
-	}
+	require.True(t, reflect.DeepEqual(tl.ops, expectedOps), "counts do not match")
 }
 
 type testListener struct {
@@ -133,27 +126,21 @@ func checkExerciseRepository(t *testing.T, repository distribution.Repository, r
 	blobs := repository.Blobs(ctx)
 	for i := 0; i < 2; i++ {
 		rs, dgst, err := testutil.CreateRandomTarFile()
-		if err != nil {
-			t.Fatalf("error creating test layer: %v", err)
-		}
+		require.NoError(t, err, "error creating test layer")
+
 		blobDigests = append(blobDigests, dgst)
 
 		wr, err := blobs.Create(ctx)
-		if err != nil {
-			t.Fatalf("error creating layer upload: %v", err)
-		}
+		require.NoError(t, err, "error creating layer upload")
 
 		// Use the resumes, as well!
 		wr, err = blobs.Resume(ctx, wr.ID())
-		if err != nil {
-			t.Fatalf("error resuming layer upload: %v", err)
-		}
+		require.NoError(t, err, "error resuming layer upload")
 
 		io.Copy(wr, rs)
 
-		if _, err := wr.Commit(ctx, distribution.Descriptor{Digest: dgst}); err != nil {
-			t.Fatalf("unexpected error finishing upload: %v", err)
-		}
+		_, err = wr.Commit(ctx, distribution.Descriptor{Digest: dgst})
+		require.NoError(t, err, "unexpected error finishing upload")
 
 		m.FSLayers = append(m.FSLayers, schema1.FSLayer{
 			BlobSum: dgst,
@@ -163,67 +150,44 @@ func checkExerciseRepository(t *testing.T, repository distribution.Repository, r
 		})
 
 		// Then fetch the blobs
-		if rc, err := blobs.Open(ctx, dgst); err != nil {
-			t.Fatalf("error fetching layer: %v", err)
-		} else {
-			defer rc.Close()
-		}
+		rc, err := blobs.Open(ctx, dgst)
+		require.NoError(t, err, "error fetching layer")
+		defer rc.Close()
 	}
 
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("unexpected error generating key: %v", err)
-	}
+	require.NoError(t, err, "unexpected error generating key")
 
 	sm, err := schema1.Sign(&m, pk)
-	if err != nil {
-		t.Fatalf("unexpected error signing manifest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error signing manifest")
 
 	manifests, err := repository.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	require.NoError(t, err)
 
 	var digestPut digest.Digest
-	if digestPut, err = manifests.Put(ctx, sm); err != nil {
-		t.Fatalf("unexpected error putting the manifest: %v", err)
-	}
+	digestPut, err = manifests.Put(ctx, sm)
+	require.NoError(t, err, "unexpected error putting the manifest")
 
 	dgst := digest.FromBytes(sm.Canonical)
-	if dgst != digestPut {
-		t.Fatalf("mismatching digest from payload and put")
-	}
+	require.Equal(t, dgst, digestPut, "mismatching digest from payload and put")
 
 	_, err = manifests.Get(ctx, dgst)
-	if err != nil {
-		t.Fatalf("unexpected error fetching manifest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching manifest")
 
 	err = repository.Tags(ctx).Tag(ctx, tag, distribution.Descriptor{Digest: dgst})
-	if err != nil {
-		t.Fatalf("unexpected error tagging manifest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error tagging manifest")
 
 	err = manifests.Delete(ctx, dgst)
-	if err != nil {
-		t.Fatalf("unexpected error deleting blob: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting blob")
 
 	for _, d := range blobDigests {
 		err = blobs.Delete(ctx, d)
-		if err != nil {
-			t.Fatalf("unexpected error deleting blob: %v", err)
-		}
+		require.NoError(t, err, "unexpected error deleting blob")
 	}
 
 	err = repository.Tags(ctx).Untag(ctx, m.Tag)
-	if err != nil {
-		t.Fatalf("unexpected error deleting tag: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting tag")
 
 	err = remover.Remove(ctx, repository.Named())
-	if err != nil {
-		t.Fatalf("unexpected error deleting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting repo")
 }

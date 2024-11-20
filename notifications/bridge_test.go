@@ -3,8 +3,6 @@ package notifications
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/distribution/reference"
@@ -56,9 +54,7 @@ func TestEventBridgeManifestPulled(t *testing.T) {
 	})
 
 	repoRef, _ := reference.WithName(repo)
-	if err := l.ManifestPulled(repoRef, sm); err != nil {
-		t.Fatalf("unexpected error notifying manifest pull: %v", err)
-	}
+	require.NoError(t, l.ManifestPulled(repoRef, sm), "unexpected error notifying manifest pull")
 }
 
 func TestEventBridgeManifestPushed(t *testing.T) {
@@ -69,71 +65,53 @@ func TestEventBridgeManifestPushed(t *testing.T) {
 	})
 
 	repoRef, _ := reference.WithName(repo)
-	if err := l.ManifestPushed(repoRef, sm); err != nil {
-		t.Fatalf("unexpected error notifying manifest pull: %v", err)
-	}
+	require.NoError(t, l.ManifestPushed(repoRef, sm), "unexpected error notifying manifest pull")
 }
 
 func TestEventBridgeManifestPushedWithTag(t *testing.T) {
 	l := createTestEnv(t, func(event *Event) error {
 		checkCommonManifest(t, EventActionPush, event)
-		if event.Target.Tag != "latest" {
-			t.Fatalf("missing or unexpected tag: %#v", event.Target)
-		}
+		require.Equal(t, "latest", event.Target.Tag, "missing or unexpected tag: %#v", event.Target)
 
 		return nil
 	})
 
 	repoRef, _ := reference.WithName(repo)
-	if err := l.ManifestPushed(repoRef, sm, distribution.WithTag(m.Tag)); err != nil {
-		t.Fatalf("unexpected error notifying manifest pull: %v", err)
-	}
+	require.NoError(t, l.ManifestPushed(repoRef, sm, distribution.WithTag(m.Tag)), "unexpected error notifying manifest pull")
 }
 
 func TestEventBridgeManifestPulledWithTag(t *testing.T) {
 	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkCommonManifest(t, EventActionPull, event)
-		if event.Target.Tag != "latest" {
-			t.Fatalf("missing or unexpected tag: %#v", event.Target)
-		}
+		require.Equal(t, "latest", event.Target.Tag, "missing or unexpected tag: %#v", event.Target)
 
 		return nil
 	})
 
 	repoRef, _ := reference.WithName(repo)
-	if err := l.ManifestPulled(repoRef, sm, distribution.WithTag(m.Tag)); err != nil {
-		t.Fatalf("unexpected error notifying manifest pull: %v", err)
-	}
+	require.NoError(t, l.ManifestPulled(repoRef, sm, distribution.WithTag(m.Tag)), "unexpected error notifying manifest pull")
 }
 
 func TestEventBridgeManifestDeleted(t *testing.T) {
 	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkDeleted(t, EventActionDelete, event)
-		if event.Target.Digest != dgst {
-			t.Fatalf("unexpected digest on event target: %q != %q", event.Target.Digest, dgst)
-		}
+		require.Equal(t, event.Target.Digest, dgst, "unexpected digest on event target")
 		return nil
 	})
 
 	repoRef, _ := reference.WithName(repo)
-	if err := l.ManifestDeleted(repoRef, dgst); err != nil {
-		t.Fatalf("unexpected error notifying manifest pull: %v", err)
-	}
+	require.NoError(t, l.ManifestDeleted(repoRef, dgst), "unexpected error notifying manifest pull")
 }
 
 func TestEventBridgeTagDeleted(t *testing.T) {
 	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkDeleted(t, EventActionDelete, event)
-		if event.Target.Tag != m.Tag {
-			t.Fatalf("unexpected tag on event target: %q != %q", event.Target.Tag, m.Tag)
-		}
+		require.Equal(t, event.Target.Tag, m.Tag, "unexpected tag on event target")
 		return nil
 	})
 
 	repoRef, _ := reference.WithName(repo)
-	if err := l.TagDeleted(repoRef, m.Tag); err != nil {
-		t.Fatalf("unexpected error notifying tag deletion: %v", err)
-	}
+	require.NoError(t, l.TagDeleted(repoRef, m.Tag), "unexpected error notifying tag deletion")
 }
 
 func TestEventBridgeRepoRenamed(t *testing.T) {
@@ -159,21 +137,15 @@ func TestEventBridgeRepoDeleted(t *testing.T) {
 	})
 
 	repoRef, _ := reference.WithName(repo)
-	if err := l.RepoDeleted(repoRef); err != nil {
-		t.Fatalf("unexpected error notifying repo deletion: %v", err)
-	}
+	require.NoError(t, l.RepoDeleted(repoRef), "unexpected error notifying repo deletion")
 }
 
 func createTestEnv(t *testing.T, fn testSinkFn) Listener {
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("error generating private key: %v", err)
-	}
+	require.NoError(t, err, "error generating private key")
 
 	sm, err = schema1.Sign(&m, pk)
-	if err != nil {
-		t.Fatalf("error signing manifest: %v", err)
-	}
+	require.NoError(t, err, "error signing manifest")
 
 	payload = sm.Canonical
 	dgst = digest.FromBytes(payload)
@@ -183,14 +155,10 @@ func createTestEnv(t *testing.T, fn testSinkFn) Listener {
 
 func createQueueBridgeTestEnv(t *testing.T, fn testSinkFn) *QueueBridge {
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("error generating private key: %v", err)
-	}
+	require.NoError(t, err, "error generating private key")
 
 	sm, err = schema1.Sign(&m, pk)
-	if err != nil {
-		t.Fatalf("error signing manifest: %v", err)
-	}
+	require.NoError(t, err, "error signing manifest")
 
 	payload = sm.Canonical
 	dgst = digest.FromBytes(payload)
@@ -201,12 +169,12 @@ func createQueueBridgeTestEnv(t *testing.T, fn testSinkFn) *QueueBridge {
 func checkDeleted(t *testing.T, action string, event *Event) {
 	t.Helper()
 
-	require.NotNil(t, event)
-	assert.Equal(t, source, event.Source)
-	assert.Equal(t, request, event.Request)
-	assert.Equal(t, actor, event.Actor)
-	assert.Equal(t, action, event.Action)
-	assert.Equal(t, repo, event.Target.Repository)
+	require.NotNil(t, event, "event is nil")
+	require.Equal(t, event.Source, source, "source not equal")
+	require.Equal(t, event.Request, request, "request not equal")
+	require.Equal(t, event.Actor, actor, "actor not equal")
+	require.Equal(t, event.Action, action, "action not equal")
+	require.Equal(t, event.Target.Repository, repo, "unexpected repository")
 }
 
 func checkRenamed(t *testing.T, action string, rename Rename, event *Event) {
@@ -221,60 +189,28 @@ func checkRenamed(t *testing.T, action string, rename Rename, event *Event) {
 
 func checkCommonManifest(t *testing.T, action string, event *Event) {
 	checkCommon(t, event)
-
-	if event.Action != action {
-		t.Fatalf("unexpected event action: %q != %q", event.Action, action)
-	}
+	require.Equal(t, event.Action, action, "unexpected event action")
 
 	repoRef, _ := reference.WithName(repo)
 	ref, _ := reference.WithDigest(repoRef, dgst)
 	u, err := ub.BuildManifestURL(ref)
-	if err != nil {
-		t.Fatalf("error building expected url: %v", err)
-	}
+	require.NoError(t, err, "error building expected url")
+	require.Equal(t, event.Target.URL, u, "incorrect url passed")
 
-	if event.Target.URL != u {
-		t.Fatalf("incorrect url passed: \n%q != \n%q", event.Target.URL, u)
-	}
-
-	if len(event.Target.References) != len(layers) {
-		t.Fatalf("unexpected number of references %v != %v", len(event.Target.References), len(layers))
-	}
+	require.Equal(t, len(event.Target.References), len(layers), "unexpected number of references")
 	for i, targetReference := range event.Target.References {
-		if targetReference.Digest != layers[i].BlobSum {
-			t.Fatalf("unexpected reference: %q != %q", targetReference.Digest, layers[i].BlobSum)
-		}
+		require.Equal(t, targetReference.Digest, layers[i].BlobSum, "unexpected reference")
 	}
 }
 
 func checkCommon(t *testing.T, event *Event) {
-	if event == nil {
-		t.Fatal("event is nil")
-	}
-
-	if event.Source != source {
-		t.Fatalf("source not equal: %#v != %#v", event.Source, source)
-	}
-
-	if event.Request != request {
-		t.Fatalf("request not equal: %#v != %#v", event.Request, request)
-	}
-
-	if event.Actor != actor {
-		t.Fatalf("request not equal: %#v != %#v", event.Actor, actor)
-	}
-
-	if event.Target.Digest != dgst {
-		t.Fatalf("unexpected digest on event target: %q != %q", event.Target.Digest, dgst)
-	}
-
-	if event.Target.Length != int64(len(payload)) {
-		t.Fatalf("unexpected target length: %v != %v", event.Target.Length, len(payload))
-	}
-
-	if event.Target.Repository != repo {
-		t.Fatalf("unexpected repository: %q != %q", event.Target.Repository, repo)
-	}
+	require.NotNil(t, event, "event is nil")
+	require.Equal(t, event.Source, source, "source not equal")
+	require.Equal(t, event.Request, request, "request not equal")
+	require.Equal(t, event.Actor, actor, "actor not equal")
+	require.Equal(t, event.Target.Digest, dgst, "unexpected digest on event target")
+	require.Equal(t, event.Target.Length, int64(len(payload)), "unexpected target length")
+	require.Equal(t, event.Target.Repository, repo, "unexpected repository")
 }
 
 type testSinkFn func(events *Event) error
