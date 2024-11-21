@@ -496,7 +496,7 @@ func TestBackgroundMigrationStore_Lock(t *testing.T) {
 	require.NoError(t, err)
 	defer tx2.Rollback()
 	s2 := datastore.NewBackgroundMigrationStore(tx2)
-	require.Error(t, s2.Lock(suite.ctx), datastore.ErrBackgroundMigrationLockInUse)
+	require.ErrorIs(t, datastore.ErrBackgroundMigrationLockInUse, s2.Lock(suite.ctx))
 }
 
 func TestBackgroundMigrationStore_ExistsTable(t *testing.T) {
@@ -755,7 +755,7 @@ func TestBackgroundMigrationStore_SyncLock_Timeout(t *testing.T) {
 	timeoutCtx, cncl := context.WithTimeout(suite.ctx, 100*time.Millisecond)
 	defer cncl()
 	err = s2.SyncLock(timeoutCtx)
-	require.Error(t, err, datastore.ErrBackgroundMigrationLockInUse)
+	require.Error(t, err)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 

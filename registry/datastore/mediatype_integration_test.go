@@ -117,7 +117,7 @@ func TestMediaTypeStore_SafeFindOrCreate(t *testing.T) {
 
 	id, err := s.SafeFindOrCreateID(suite.ctx, existingMT)
 	require.NoError(t, err)
-	require.Equal(t, id, 3)
+	require.Equal(t, 3, id)
 
 	// Create a new media type without the feature flag enabled.
 	newMT := "application/bogus.test.media.type.not.real.midi"
@@ -142,7 +142,7 @@ func TestMediaTypeStore_SafeFindOrCreate(t *testing.T) {
 
 	id, err = s.SafeFindOrCreateID(suite.ctx, existingMT)
 	require.NoError(t, err)
-	require.Equal(t, id, 3)
+	require.Equal(t, 3, id)
 
 	// Create a new media type with the feature flag enabled.
 	newMT = "application/fake.media.type.for.testing.rar"

@@ -138,6 +138,9 @@ linters-settings:
     allow-trailing-comment: false
     # Force newlines in end of case at this limit (0 = never).
     force-case-trailing-whitespace: 0
+  testifylint:
+    disable:
+      - suite-dont-use-pkg
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.
@@ -161,6 +164,7 @@ linters:
     - nakedret
     - staticcheck
     - stylecheck
+    - testifylint
     - typecheck
     - unconvert
     - unparam

@@ -33,6 +33,7 @@ import (
 	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -264,10 +265,11 @@ func manifest_Put_Schema2_ByTag_SameDigest_Parallel_IsIdempotent(t *testing.T, o
 			defer wg.Done()
 			resp := putManifest(t, "putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusCreated, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-			require.Equal(t, manifestDigestURL, resp.Header.Get("Location"))
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			// NOTE(prozlach): we can't use require in a goroutine.
+			assert.Equal(t, http.StatusCreated, resp.StatusCode)
+			assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			assert.Equal(t, manifestDigestURL, resp.Header.Get("Location"))
+			assert.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
 		}()
 	}
 
@@ -327,10 +329,11 @@ func manifest_Put_ManifestList_ByTag_SameDigest_Parallel_IsIdempotent(t *testing
 			defer wg.Done()
 			resp := putManifest(t, "putting manifest list by tag no error", manifestListURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusCreated, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-			require.Equal(t, expectedManifestListURL, resp.Header.Get("Location"))
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			// NOTE(prozlach): we can't use require in a goroutine.
+			assert.Equal(t, http.StatusCreated, resp.StatusCode)
+			assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			assert.Equal(t, expectedManifestListURL, resp.Header.Get("Location"))
+			assert.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
 		}()
 	}
 
@@ -1523,7 +1526,7 @@ func manifest_Head_Schema2(t *testing.T, opts ...configOpt) {
 
 			b, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
-			require.Len(t, b, 0, "body should be empty")
+			require.Empty(t, b, "body should be empty")
 
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -2747,11 +2750,11 @@ func blob_Get(t *testing.T, opts ...configOpt) {
 	_, err = buf.ReadFrom(args.layerFile)
 	require.NoError(t, err)
 
-	require.Equal(t, res.Header.Get("Content-Length"), strconv.Itoa(buf.Len()))
-	require.Equal(t, res.Header.Get("Content-Type"), "application/octet-stream")
-	require.Equal(t, res.Header.Get("Docker-Content-Digest"), args.layerDigest.String())
-	require.Equal(t, res.Header.Get("ETag"), fmt.Sprintf(`"%s"`, args.layerDigest))
-	require.Equal(t, res.Header.Get("Cache-Control"), "max-age=31536000")
+	require.Equal(t, strconv.Itoa(buf.Len()), res.Header.Get("Content-Length"))
+	require.Equal(t, "application/octet-stream", res.Header.Get("Content-Type"))
+	require.Equal(t, args.layerDigest.String(), res.Header.Get("Docker-Content-Digest"))
+	require.Equal(t, fmt.Sprintf(`"%s"`, args.layerDigest), res.Header.Get("ETag"))
+	require.Equal(t, "max-age=31536000", res.Header.Get("Cache-Control"))
 
 	// verify response body
 	v := args.layerDigest.Verifier()
@@ -2824,11 +2827,11 @@ func blob_Head(t *testing.T, opts ...configOpt) {
 	_, err = buf.ReadFrom(args.layerFile)
 	require.NoError(t, err)
 
-	require.Equal(t, res.Header.Get("Content-Type"), "application/octet-stream")
-	require.Equal(t, res.Header.Get("Content-Length"), strconv.Itoa(buf.Len()))
-	require.Equal(t, res.Header.Get("Docker-Content-Digest"), args.layerDigest.String())
-	require.Equal(t, res.Header.Get("ETag"), fmt.Sprintf(`"%s"`, args.layerDigest))
-	require.Equal(t, res.Header.Get("Cache-Control"), "max-age=31536000")
+	require.Equal(t, "application/octet-stream", res.Header.Get("Content-Type"))
+	require.Equal(t, strconv.Itoa(buf.Len()), res.Header.Get("Content-Length"))
+	require.Equal(t, args.layerDigest.String(), res.Header.Get("Docker-Content-Digest"))
+	require.Equal(t, fmt.Sprintf(`"%s"`, args.layerDigest), res.Header.Get("ETag"))
+	require.Equal(t, "max-age=31536000", res.Header.Get("Cache-Control"))
 
 	// verify body
 	body, err := io.ReadAll(res.Body)
@@ -3496,7 +3499,7 @@ func catalog_Get_Empty(t *testing.T, opts ...configOpt) {
 	err = dec.Decode(&body)
 	require.NoError(t, err)
 
-	require.Len(t, body.Repositories, 0)
+	require.Empty(t, body.Repositories)
 	require.Empty(t, resp.Header.Get("Link"))
 }
 

@@ -1530,19 +1530,33 @@ func createNamedRepoWithBlob(t *testing.T, env *testEnv, repoName string) blobAr
 	return args
 }
 
+// assertGetResponse and assertGetResponseErr have the same role, the
+// assertGetResponseErr returns an error so that an assertion can be made
+// inside the goroutine whereas assertGetResponse is just a simple/short
+// version
 func assertGetResponse(t *testing.T, url string, expectedStatus int, opts ...requestOpt) {
 	t.Helper()
+	require.NoError(t, assertGetResponseErr(url, expectedStatus, opts...))
+}
 
+func assertGetResponseErr(url string, expectedStatus int, opts ...requestOpt) error {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
-	require.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("create new http request failed: %w", err)
+	}
 	for _, o := range opts {
 		o(req)
 	}
 	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("executing http request failed: %w", err)
+	}
 	defer resp.Body.Close()
 
-	require.Equal(t, expectedStatus, resp.StatusCode)
+	if expectedStatus != resp.StatusCode {
+		return fmt.Errorf("expectedStatus != resp.StatusCode: %d != %d", expectedStatus, resp.StatusCode)
+	}
+	return nil
 }
 
 func assertHeadResponse(t *testing.T, url string, expectedStatus int, opts ...requestOpt) {
@@ -1755,6 +1769,10 @@ func seedMultipleRepositoriesWithTaggedLatestManifest(t *testing.T, env *testEnv
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
+			// go-require: seedRandomSchema2Manifest contains assertions that must only be used in the goroutine running the test function (testifylint)
+			// nolint:testifylint // the `require` assertions are deeply
+			// ingrained/nested, a separate issue and prioritization is
+			// required to fix this. Disabling the linter warning for now.
 			seedRandomSchema2Manifest(t, env, path, putByTag("latest"))
 		}(path)
 	}

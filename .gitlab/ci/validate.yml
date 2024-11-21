@@ -76,7 +76,6 @@ codelint:
     - apt update
     - apt install jq -y
   script:
-    - go run github.com/Antonboom/testifylint@${TESTIFYLINT_VERSION} -disable suite-dont-use-pkg ./...
     # Write the code coverage report to gl-code-quality-report.json
     # and print linting issues to stdout in the format: path/to/file:line description
     - golangci-lint run --out-format code-climate | tee gl-code-quality-report.json | jq -r '.[] | "\(.location.path):\(.location.lines.begin) \(.description)"'
