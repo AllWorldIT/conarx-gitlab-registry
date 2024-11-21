@@ -17,6 +17,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/testutil"
 	htestutil "github.com/docker/distribution/registry/internal/testutil"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -736,7 +737,7 @@ func TestDBFaultTolerance_ConnectionPoolSaturation(t *testing.T) {
 			go func() {
 				// If there are no available connections, database/sql should queue connection requests until they
 				// can be assigned, so all requests should succeed.
-				assertGetResponse(t, u, http.StatusOK)
+				assert.NoError(t, assertGetResponseErr(u, http.StatusOK))
 				wg.Done()
 			}()
 		})

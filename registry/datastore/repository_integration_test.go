@@ -737,7 +737,7 @@ func TestRepositoryStore_SiblingsOf_OnlyChild(t *testing.T) {
 	require.NoError(t, err)
 
 	// see testdata/fixtures/repositories.sql
-	require.Len(t, rr, 0)
+	require.Empty(t, rr)
 }
 
 func TestRepositoryStore_SiblingsOf_NotFound(t *testing.T) {
@@ -1988,12 +1988,12 @@ func TestRepositoryStore_SizeWithDescendants_TopLevel_SetsCacheOnTimeout(t *test
 	redisMock.ExpectSet(redisKey, "true", 24*time.Hour).SetVal("true")
 
 	size, err := s.SizeWithDescendants(suite.ctx, repo)
-	require.NotNil(t, err)
+	require.Error(t, err)
 
 	// make sure the error is not masked
 	var pgErr *pgconn.PgError
 	require.ErrorAs(t, err, &pgErr)
-	require.Equal(t, pgErr.Code, pgerrcode.QueryCanceled)
+	require.Equal(t, pgerrcode.QueryCanceled, pgErr.Code)
 	require.Zero(t, size)
 }
 
@@ -2028,7 +2028,7 @@ func TestRepositoryStore_SizeWithDescendants_NonTopLevel_DoesNotTouchCacheTimeou
 	// make sure the error is not masked
 	var pgErr *pgconn.PgError
 	require.ErrorAs(t, err, &pgErr)
-	require.Equal(t, pgErr.Code, pgerrcode.QueryCanceled)
+	require.Equal(t, pgerrcode.QueryCanceled, pgErr.Code)
 	require.Zero(t, size.Bytes())
 }
 

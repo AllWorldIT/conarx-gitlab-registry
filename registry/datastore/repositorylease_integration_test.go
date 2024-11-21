@@ -101,7 +101,7 @@ func TestRepositoryLeaseStore_RenameLease_FindRenameLeaseByPath(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify the repo lease object in the cache is identical to the one the mock redis server was setup with:
-	require.Equal(t, actualRenameLease, actualRenameLease)
+	require.Equal(t, expectedRepoLease, actualRenameLease)
 }
 
 func TestRepositoryLeaseStore_RenameLease_GetLeaseTTL(t *testing.T) {
@@ -128,7 +128,7 @@ func TestRepositoryLeaseStore_RenameLease_GetLeaseTTL(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify the repo lease TTL in the cache is identical to the one the mock redis server was setup with:
-	require.Equal(t, ttl, expectedTTL)
+	require.Equal(t, expectedTTL, ttl)
 }
 
 func TestRepositoryLeaseStore_RenameLease_GetLeaseTTL_Fails(t *testing.T) {

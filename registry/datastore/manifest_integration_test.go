@@ -4,7 +4,6 @@ package datastore_test
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -669,7 +668,7 @@ func TestManifestStore_Create_InvalidMediaType(t *testing.T) {
 	}
 	err := s.Create(suite.ctx, m)
 	var mtErr datastore.ErrUnknownMediaType
-	require.True(t, errors.As(err, &mtErr))
+	require.ErrorAs(t, err, &mtErr)
 	require.Equal(t, m.MediaType, mtErr.MediaType)
 }
 

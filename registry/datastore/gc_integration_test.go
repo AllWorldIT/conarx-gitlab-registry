@@ -108,7 +108,7 @@ func TestGC_TrackBlobUploads(t *testing.T) {
 	brs := datastore.NewGCBlobTaskStore(suite.db)
 	rr, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 	require.Equal(t, 0, rr[0].ReviewCount)
 	require.Equal(t, b.Digest, rr[0].Digest)
 	require.Equal(t, "blob_upload", rr[0].Event)
@@ -132,7 +132,7 @@ func TestGC_TrackBlobUploads_PostponeReviewOnConflict(t *testing.T) {
 	brs := datastore.NewGCBlobTaskStore(suite.db)
 	rr, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 
 	// re-create blob
 	err = bs.Create(suite.ctx, b)
@@ -143,7 +143,7 @@ func TestGC_TrackBlobUploads_PostponeReviewOnConflict(t *testing.T) {
 	// `gc_track_blob_uploads` trigger/function.
 	rr2, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr2))
+	require.Len(t, rr2, 1)
 	require.Equal(t, rr[0].ReviewCount, rr2[0].ReviewCount)
 	require.Equal(t, rr[0].Digest, rr2[0].Digest)
 	require.Equal(t, "blob_upload", rr[0].Event)
@@ -202,7 +202,7 @@ func TestGC_TrackConfigurationBlobs(t *testing.T) {
 	brs := datastore.NewGCConfigLinkStore(suite.db)
 	rr, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 	require.NotEmpty(t, rr[0].ID)
 	require.Equal(t, r.ID, rr[0].RepositoryID)
 	require.Equal(t, m.ID, rr[0].ManifestID)
@@ -270,7 +270,7 @@ func TestGC_TrackLayerBlobs(t *testing.T) {
 	brs := datastore.NewGCLayerLinkStore(suite.db)
 	ll, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(ll))
+	require.Len(t, ll, 1)
 	require.NotEmpty(t, ll[0].ID)
 	require.Equal(t, r.ID, ll[0].RepositoryID)
 	require.Equal(t, int64(1), ll[0].LayerID)
@@ -334,7 +334,7 @@ func TestGC_TrackManifestUploads(t *testing.T) {
 	brs := datastore.NewGCManifestTaskStore(suite.db)
 	tt, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(tt))
+	require.Len(t, tt, 1)
 	require.Equal(t, r.NamespaceID, tt[0].NamespaceID)
 	require.Equal(t, r.ID, tt[0].RepositoryID)
 	require.Equal(t, m.ID, tt[0].ManifestID)
@@ -418,7 +418,7 @@ func TestGC_TrackDeletedManifests(t *testing.T) {
 	// trigger/function.
 	tt, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(tt))
+	require.Len(t, tt, 1)
 	require.Equal(t, 0, tt[0].ReviewCount)
 	require.Equal(t, b.Digest, tt[0].Digest)
 	require.Equal(t, "manifest_delete", tt[0].Event)
@@ -454,7 +454,7 @@ func TestGC_TrackDeletedManifests_PostponeReviewOnConflict(t *testing.T) {
 	brs := datastore.NewGCBlobTaskStore(suite.db)
 	rr, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 
 	// delete manifest
 	deletedAt := time.Now()
@@ -467,7 +467,7 @@ func TestGC_TrackDeletedManifests_PostponeReviewOnConflict(t *testing.T) {
 	// `gc_track_deleted_manifests` trigger/function.
 	rr2, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr2))
+	require.Len(t, rr2, 1)
 	require.Equal(t, rr[0].ReviewCount, rr2[0].ReviewCount)
 	require.Equal(t, rr[0].Digest, rr2[0].Digest)
 	// We cannot control the random jitter applied when the config blob was first created and then when the manifest was
@@ -574,7 +574,7 @@ func TestGC_TrackDeletedLayers(t *testing.T) {
 	// trigger/function.
 	tt, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(tt))
+	require.Len(t, tt, 1)
 	require.Equal(t, 0, tt[0].ReviewCount)
 	require.Equal(t, b.Digest, tt[0].Digest)
 	require.Equal(t, "layer_delete", tt[0].Event)
@@ -614,7 +614,7 @@ func TestGC_TrackDeletedLayers_PostponeReviewOnConflict(t *testing.T) {
 	brs := datastore.NewGCBlobTaskStore(suite.db)
 	rr, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 
 	// dissociate layer blob
 	err = ms.DissociateLayerBlob(suite.ctx, m, b)
@@ -625,7 +625,7 @@ func TestGC_TrackDeletedLayers_PostponeReviewOnConflict(t *testing.T) {
 	// `gc_track_deleted_layers` trigger/function.
 	rr2, err := brs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr2))
+	require.Len(t, rr2, 1)
 	require.Equal(t, rr[0].ReviewCount, rr2[0].ReviewCount)
 	require.Equal(t, rr[0].Digest, rr2[0].Digest)
 	// We cannot control the random jitter applied when the layer was first associated and then dissociated. This means
@@ -727,7 +727,7 @@ func TestGC_TrackDeletedManifestLists(t *testing.T) {
 	// trigger/function.
 	rr, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 	require.Equal(t, r.ID, rr[0].RepositoryID)
 	require.Equal(t, m.ID, rr[0].ManifestID)
 	require.Equal(t, 0, rr[0].ReviewCount)
@@ -764,7 +764,7 @@ func TestGC_TrackDeletedManifestLists_PostponeReviewOnConflict(t *testing.T) {
 	mrs := datastore.NewGCManifestTaskStore(suite.db)
 	rr, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(rr))
+	require.Len(t, rr, 2)
 
 	// Grab the review record for the child manifest
 	require.Equal(t, m.ID, rr[0].ManifestID)
@@ -779,7 +779,7 @@ func TestGC_TrackDeletedManifestLists_PostponeReviewOnConflict(t *testing.T) {
 	// defaultReviewAfterDelay and [minReviewAfterJitter, maxReviewAfterJitter].
 	rr2, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr2)) // the manifest list delete cascaded and deleted its review record as well
+	require.Len(t, rr2, 1) // the manifest list delete cascaded and deleted its review record as well
 	require.Equal(t, rr[0].RepositoryID, rr2[0].RepositoryID)
 	require.Equal(t, rr[0].ManifestID, rr2[0].ManifestID)
 	require.Equal(t, rr[0].ReviewCount, rr2[0].ReviewCount)
@@ -890,7 +890,7 @@ func TestGC_TrackSwitchedTags(t *testing.T) {
 	// [minReviewAfterJitter, maxReviewAfterJitter] ahead. This is done by the `gc_track_switched_tags` trigger/function.
 	rr, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 	require.Equal(t, r.ID, rr[0].RepositoryID)
 	require.Equal(t, m.ID, rr[0].ManifestID)
 	require.Equal(t, 0, rr[0].ReviewCount)
@@ -927,7 +927,7 @@ func TestGC_TrackSwitchedTags_PostponeReviewOnConflict(t *testing.T) {
 	mrs := datastore.NewGCManifestTaskStore(suite.db)
 	rr, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 
 	// disable other triggers that also insert on gc_manifest_review_queue so that they don't interfere with this test
 	enable, err := testutil.GCTrackManifestUploadsTrigger.Disable(suite.db)
@@ -954,7 +954,7 @@ func TestGC_TrackSwitchedTags_PostponeReviewOnConflict(t *testing.T) {
 	// `gc_track_switched_tags` trigger/function.
 	rr2, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr2))
+	require.Len(t, rr2, 1)
 	require.Equal(t, rr[0].RepositoryID, rr2[0].RepositoryID)
 	require.Equal(t, rr[0].ManifestID, rr2[0].ManifestID)
 	require.Equal(t, 0, rr2[0].ReviewCount)
@@ -1069,7 +1069,7 @@ func TestGC_TrackDeletedTags(t *testing.T) {
 	// `gc_track_deleted_tags` trigger/function.
 	rr, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 	require.Equal(t, r.ID, rr[0].RepositoryID)
 	require.Equal(t, m.ID, rr[0].ManifestID)
 	require.Equal(t, 0, rr[0].ReviewCount)
@@ -1128,7 +1128,7 @@ func TestGC_TrackDeletedTags_MultipleTags(t *testing.T) {
 	// plus [minReviewAfterJitter, maxReviewAfterJitter]. This is done by the `gc_track_deleted_tags` trigger/function.
 	rr, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 	require.Equal(t, r.ID, rr[0].RepositoryID)
 	require.Equal(t, m.ID, rr[0].ManifestID)
 	require.Equal(t, 0, rr[0].ReviewCount)
@@ -1207,7 +1207,7 @@ func TestGC_TrackDeletedTags_PostponeReviewOnConflict(t *testing.T) {
 	mrs := datastore.NewGCManifestTaskStore(suite.db)
 	rr, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr))
+	require.Len(t, rr, 1)
 
 	// delete tag
 	deletedAt := time.Now()
@@ -1219,7 +1219,7 @@ func TestGC_TrackDeletedTags_PostponeReviewOnConflict(t *testing.T) {
 	// defaultReviewAfterDelay and [minReviewAfterJitter, maxReviewAfterJitter].
 	rr2, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rr2))
+	require.Len(t, rr2, 1)
 	require.Equal(t, rr[0].RepositoryID, rr2[0].RepositoryID)
 	require.Equal(t, rr[0].ManifestID, rr2[0].ManifestID)
 	require.Equal(t, 0, rr2[0].ReviewCount)

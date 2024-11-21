@@ -104,9 +104,9 @@ func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
 	err = json.Unmarshal(p, &r)
 	require.NoError(t, err)
 
-	require.Equal(t, r.Name, repoName)
-	require.Equal(t, r.Path, repoPath)
-	require.Equal(t, *r.Size, expectedSize)
+	require.Equal(t, repoName, r.Name)
+	require.Equal(t, repoPath, r.Path)
+	require.Equal(t, expectedSize, *r.Size)
 	require.NotEmpty(t, r.CreatedAt)
 	require.Regexp(t, iso8601MsFormat, r.CreatedAt)
 	require.NotEmpty(t, r.LastPublishedAt)
@@ -135,9 +135,9 @@ func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
 	err = json.Unmarshal(p, &r)
 	require.NoError(t, err)
 
-	require.Equal(t, r.Name, repoName)
-	require.Equal(t, r.Path, repoPath)
-	require.Equal(t, *r.Size, expectedSize)
+	require.Equal(t, repoName, r.Name)
+	require.Equal(t, repoPath, r.Path)
+	require.Equal(t, expectedSize, *r.Size)
 	require.NotEmpty(t, r.CreatedAt)
 	require.Regexp(t, iso8601MsFormat, r.CreatedAt)
 	require.Empty(t, r.UpdatedAt)
@@ -199,7 +199,7 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingBase(t *testing
 
 	require.Equal(t, "bar", r.Name)
 	require.Equal(t, baseRepoPath, r.Path)
-	require.Equal(t, *r.Size, expectedSize)
+	require.Equal(t, expectedSize, *r.Size)
 	require.Empty(t, r.CreatedAt)
 	require.Empty(t, r.UpdatedAt)
 }
@@ -1174,8 +1174,8 @@ func TestGitlabAPI_RepositoryTagsList_FilterReferrersByArtifactType(t *testing.T
 	err = dec.Decode(&list)
 	require.NoError(t, err)
 
-	require.Equal(t, 5, len(list))
-	require.Equal(t, 2, len(list[0].Referrers))
+	require.Len(t, list, 5)
+	require.Len(t, list[0].Referrers, 2)
 	require.Contains(t, list[0].Referrers, handlers.RepositoryTagReferrerResponse{
 		Digest:       digests[1],
 		ArtifactType: artifactType1,
@@ -1222,9 +1222,9 @@ func TestGitlabAPI_RepositoryTagsList_IncludeReferrers(t *testing.T) {
 	for _, tag := range list {
 		m[tag.Name] = tag
 	}
-	require.Equal(t, 2, len(m["apple"].Referrers))
-	require.Equal(t, 0, len(m["apple-sig"].Referrers))
-	require.Equal(t, 0, len(m["banana"].Referrers))
+	require.Len(t, m["apple"].Referrers, 2)
+	require.Empty(t, m["apple-sig"].Referrers)
+	require.Empty(t, m["banana"].Referrers)
 
 	// check ref digests match signature digests
 	_, mb1, err := mfstRef1.Payload()
@@ -1277,9 +1277,9 @@ func TestGitlabAPI_RepositoryTagsList_DoNotIncludeReferrersByDefault(t *testing.
 	for _, tag := range list {
 		m[tag.Name] = tag
 	}
-	require.Equal(t, 0, len(m["apple"].Referrers))
-	require.Equal(t, 0, len(m["apple-sig"].Referrers))
-	require.Equal(t, 0, len(m["banana"].Referrers))
+	require.Empty(t, m["apple"].Referrers)
+	require.Empty(t, m["apple-sig"].Referrers)
+	require.Empty(t, m["banana"].Referrers)
 
 	// no referrers returned if `referrers` param is set to something other than "true"
 	params := url.Values{
@@ -1301,9 +1301,9 @@ func TestGitlabAPI_RepositoryTagsList_DoNotIncludeReferrersByDefault(t *testing.
 	for _, tag := range list {
 		m[tag.Name] = tag
 	}
-	require.Equal(t, 0, len(m["apple"].Referrers))
-	require.Equal(t, 0, len(m["apple-sig"].Referrers))
-	require.Equal(t, 0, len(m["banana"].Referrers))
+	require.Empty(t, m["apple"].Referrers)
+	require.Empty(t, m["apple-sig"].Referrers)
+	require.Empty(t, m["banana"].Referrers)
 }
 
 func TestGitlabAPI_SubRepositoryList(t *testing.T) {
