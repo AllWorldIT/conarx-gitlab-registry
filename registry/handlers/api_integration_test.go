@@ -17,8 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/distribution/registry/storage/driver/inmemory"
-
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/internal/feature"
@@ -31,13 +29,14 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
+	"github.com/docker/distribution/registry/auth/token"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
+	internaltestutil "github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
+	"github.com/docker/distribution/registry/storage/driver/inmemory"
 	"github.com/docker/distribution/testutil"
-
-	internaltestutil "github.com/docker/distribution/registry/internal/testutil"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -2577,6 +2576,386 @@ func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
 			// Try pushing to the repository allegedly undergoing a rename and ensure it is successful.
 			// This signifies that a lease check on the enacted lease is never actioned upon.
 			seedRandomSchema2Manifest(t, env, repoName, putByTag("latest"), withAuthToken(token))
+		})
+	}
+}
+
+// TestManifestAPI_Delete_ProtectedTags verifies that tags can only be deleted if unprotected.
+func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+
+	// Set up authentication provider and test environment with delete permissions
+	tokenProvider := NewAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+	// Create test repository and image tagged `latest`.
+	tag := "latest"
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	pushToken := tokenProvider.TokenWithActions(fullAccessToken(imageName.Name()))
+	seedRandomSchema2Manifest(t, env, imageName.Name(), putByTag(tag), withAuthToken(pushToken))
+	tagRef, err := reference.WithTag(imageName, tag)
+	require.NoError(t, err)
+
+	manifestURL, err := env.builder.BuildManifestURL(tagRef)
+	require.NoError(t, err)
+
+	// Test cases
+	tests := []struct {
+		name           string
+		customTag      string
+		denyPatterns   []string
+		expectedStatus int
+		expectedError  *errcode.ErrorCode
+	}{
+		{
+			name:           "protected tag",
+			denyPatterns:   []string{`^v[0-9]+\.[0-9]+\.[0-9]+$`, "^latest$"},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  &v2.ErrorCodeProtectedTag,
+		},
+		{
+			name:           "unprotected tag",
+			denyPatterns:   []string{"foo", "bar"},
+			expectedStatus: http.StatusAccepted,
+		},
+		{
+			name:           "non-existing protected tag",
+			customTag:      "nonexisting",
+			denyPatterns:   []string{"nonexisting"},
+			expectedStatus: http.StatusNotFound,
+			expectedError:  &v2.ErrorCodeManifestUnknown,
+		},
+		{
+			name:           "non-existing unprotected tag",
+			customTag:      "nonexisting",
+			denyPatterns:   []string{"foo"},
+			expectedStatus: http.StatusNotFound,
+			expectedError:  &v2.ErrorCodeManifestUnknown,
+		},
+		{
+			name:           "pattern count exceeded",
+			denyPatterns:   []string{"a", "b", "c", "d", "e", "f"},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v2.ErrorCodeTagProtectionPatternCount,
+		},
+		{
+			name:           "pattern length exceeded",
+			denyPatterns:   []string{"^iFl12h7joyT83me9Pbfp5GaoO0ihjEs3QFRoKjODsNw7IYMxD8ePi3zLfj20QjfZHtL7RKi9Ew9v2MBhI3YhQFg4LjmNpXYZa2c$"}, // 101 characters
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v2.ErrorCodeInvalidTagProtectionPattern,
+		},
+		{
+			name:           "invalid pattern",
+			denyPatterns:   []string{"^[a-z"},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v2.ErrorCodeInvalidTagProtectionPattern,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create auth token actions with deny access patterns for delete action
+			tokenActions := []*token.ResourceActions{
+				{
+					Type:    "repository",
+					Name:    imageName.Name(),
+					Actions: []string{"delete"},
+					Meta: &token.Meta{
+						TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
+							Delete: tt.denyPatterns,
+						},
+					},
+				},
+			}
+
+			// Send delete request and validate response based on expected status and error codes
+			req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
+			require.NoError(t, err)
+			req = tokenProvider.RequestWithAuthActions(req, tokenActions)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			checkResponse(t, "", resp, tt.expectedStatus)
+
+			if tt.expectedError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			} else {
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				require.Empty(t, body)
+			}
+		})
+	}
+}
+
+// TestManifestAPI_Delete_ProtectedTags_MultipleRepositories tests that the protected tags feature works as expected
+// when handling requests that include a token with access grants for multiple repositories. This is not an expected
+// scenario as tokens with multiple target repositories are only used for cross-repository blob mount requests, not
+// manifest/tag deletes. However, it's technically possible to bypass established registry client tools, obtaining such
+// token from Rails and then manually invoke the registry API with it. So this test exists for peace of mind. Using a
+// separate test instead of an additional test case in TestManifestAPI_Delete_ProtectedTags to avoid increasing the
+// complexity of the expected/realistic test cases and keeping it separate.
+func TestManifestAPI_Delete_ProtectedTags_MultipleRepositories(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+
+	// Create sample repository with an image tagged as `latest`
+	imageName1, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	tag1 := "latest"
+	createRepository(t, env, imageName1.Name(), tag1)
+
+	// Create another sample repository with an image tagged as `stable`
+	imageName2, err := reference.WithName("bar/foo")
+	require.NoError(t, err)
+
+	tag2 := "stable"
+	createRepository(t, env, imageName1.Name(), tag2)
+
+	ref2, err := reference.WithTag(imageName2, tag2)
+	require.NoError(t, err)
+
+	// Prepare auth token and request
+	tokenProvider := NewAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+	tokenActions := []*token.ResourceActions{
+		{
+			Type:    "repository",
+			Name:    imageName1.Name(),
+			Actions: []string{"delete"},
+			Meta: &token.Meta{
+				TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
+					Delete: []string{tag1},
+				},
+			},
+		},
+		{
+			Type:    "repository",
+			Name:    imageName2.Name(),
+			Actions: []string{"delete"},
+			Meta: &token.Meta{
+				TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
+					Delete: []string{tag2},
+				},
+			},
+		},
+	}
+
+	manifestURL, err := env.builder.BuildManifestURL(ref2)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
+	require.NoError(t, err)
+	req = tokenProvider.RequestWithAuthActions(req, tokenActions)
+
+	// Attempt to delete protected tag and ensure it fails with the proper status and error code
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	checkResponse(t, "", resp, http.StatusUnauthorized)
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeProtectedTag)
+}
+
+// TestManifestAPI_Delete_ProtectedTags_ByDigest verifies that a manifest can't be deleted directly if the auth token
+// includes any tag delete deny patterns.
+func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+
+	// Set up authentication provider and test environment with delete permissions
+	tokenProvider := NewAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+	// Create test repository and image
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+	pushToken := tokenProvider.TokenWithActions(fullAccessToken(imageName.Name()))
+	deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), putByDigest, withAuthToken(pushToken))
+	manifestDigestURL := buildManifestDigestURL(t, env, imageName.Name(), deserializedManifest)
+
+	// Test cases
+	tests := []struct {
+		name           string
+		denyPatterns   []string
+		expectedStatus int
+		expectedError  *errcode.ErrorCode
+	}{
+		{
+			name:           "with delete tag protection",
+			denyPatterns:   []string{"doesnotmatter"},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  &v2.ErrorCodeProtectedManifest,
+		},
+		{
+			name:           "without delete tag protection",
+			expectedStatus: http.StatusAccepted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create auth token actions with deny access patterns for delete action
+			tokenActions := []*token.ResourceActions{
+				{
+					Type:    "repository",
+					Name:    imageName.Name(),
+					Actions: []string{"delete"},
+					Meta: &token.Meta{
+						TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
+							Delete: tt.denyPatterns,
+						},
+					},
+				},
+			}
+
+			// Send delete request and validate response based on expected status and error codes
+			req, err := http.NewRequest(http.MethodDelete, manifestDigestURL, nil)
+			require.NoError(t, err)
+			req = tokenProvider.RequestWithAuthActions(req, tokenActions)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			checkResponse(t, "", resp, tt.expectedStatus)
+
+			if tt.expectedError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			} else {
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				require.Empty(t, body)
+			}
+		})
+	}
+}
+
+// TestManifestAPI_Put_ProtectedTags verifies that protected tags can only be created or updated if unprotected.
+func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	// Set up authentication provider and test environment
+	tokenProvider := NewAuthTokenProvider(t)
+	env = newTestEnv(t, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+
+	// Test cases
+	tests := []struct {
+		name           string
+		tag            string
+		existingTag    bool
+		denyPatterns   []string
+		expectedStatus int
+		expectedError  *errcode.ErrorCode
+	}{
+		{
+			name:           "protected tag creation",
+			tag:            "latest",
+			denyPatterns:   []string{`^v[0-9]+\.[0-9]+\.[0-9]+$`, "^latest$"},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  &v2.ErrorCodeProtectedTag,
+		},
+		{
+			name:           "unprotected tag creation",
+			tag:            "latest",
+			denyPatterns:   []string{"foo", "bar"},
+			expectedStatus: http.StatusCreated,
+			expectedError:  nil,
+		},
+		{
+			name:           "protected tag update",
+			tag:            "latest",
+			existingTag:    true,
+			denyPatterns:   []string{`^v[0-9]+\.[0-9]+\.[0-9]+$`, "^latest$"},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  &v2.ErrorCodeProtectedTag,
+		},
+		{
+			name:           "unprotected tag update",
+			tag:            "latest",
+			existingTag:    true,
+			denyPatterns:   []string{"foo", "bar"},
+			expectedStatus: http.StatusCreated,
+			expectedError:  nil,
+		},
+		{
+			name:           "pattern count exceeded",
+			tag:            "latest",
+			denyPatterns:   []string{"a", "b", "c", "d", "e", "f"},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v2.ErrorCodeTagProtectionPatternCount,
+		},
+		{
+			name:           "pattern length exceeded",
+			tag:            "latest",
+			denyPatterns:   []string{"^iFl12h7joyT83me9Pbfp5GaoO0ihjEs3QFRoKjODsNw7IYMxD8ePi3zLfj20QjfZHtL7RKi9Ew9v2MBhI3YhQFg4LjmNpXYZa2c$"}, // 101 characters
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v2.ErrorCodeInvalidTagProtectionPattern,
+		},
+		{
+			name:           "invalid pattern",
+			tag:            "latest",
+			denyPatterns:   []string{"^[a-z"},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  &v2.ErrorCodeInvalidTagProtectionPattern,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Pre-create the repository and tag if it's an update scenario
+			if tt.existingTag {
+				noAuthEnv := newTestEnv(t)
+				t.Cleanup(noAuthEnv.Shutdown)
+				seedRandomSchema2Manifest(t, noAuthEnv, imageName.Name(), putByTag(tt.tag))
+			}
+
+			// Create auth token with deny access patterns for push action
+			tokenActions := []*token.ResourceActions{
+				{
+					Type:    "repository",
+					Name:    imageName.Name(),
+					Actions: []string{"pull", "push"},
+					Meta: &token.Meta{
+						TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
+							Push: tt.denyPatterns,
+						},
+					},
+				},
+			}
+
+			// Seed random layers and generate an image manifest
+			deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), withAuthToken(tokenProvider.TokenWithActions(tokenActions)))
+
+			// Send manifest push request and ensure it responds as expected
+			manifestURL := buildManifestTagURL(t, env, imageName.Name(), tt.tag)
+			req := putManifestRequest(t, "", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			req = tokenProvider.RequestWithAuthActions(req, tokenActions)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			checkResponse(t, "", resp, tt.expectedStatus)
+
+			if tt.expectedError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			} else {
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				require.Empty(t, body)
+			}
 		})
 	}
 }

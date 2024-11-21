@@ -67,6 +67,14 @@ type Meta struct {
 	ProjectID int64 `json:"project_id"`
 	// NamespaceID contains the GitLab root namespace ID of a repository that a token was issued for.
 	NamespaceID int64 `json:"root_namespace_id"`
+	// TagDenyAccessPatterns contains the patterns used to deny access to specific tags.
+	TagDenyAccessPatterns *TagDenyAccessPatterns `json:"tag_deny_access_patterns"`
+}
+
+// TagDenyAccessPatterns stores the patterns used to deny access to specific tags for push and/or delete actions.
+type TagDenyAccessPatterns struct {
+	Push   []string `json:"push,omitempty"`
+	Delete []string `json:"delete,omitempty"`
 }
 
 // Header describes the header section of a JSON Web Token.

@@ -206,4 +206,36 @@ var (
 		longer proceed.`,
 		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
 	})
+
+	// 	ErrorCodeInvalidTagProtectionPattern is returned when a provided tag protection pattern is invalid.
+	ErrorCodeInvalidTagProtectionPattern = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "TAG_PROTECTION_PATTERN_INVALID",
+		Message:        "invalid tag protection pattern",
+		Description:    `The provided tag protection pattern is invalid`,
+		HTTPStatusCode: http.StatusBadRequest,
+	})
+
+	// 	ErrorCodeTagProtectionPatternCount is returned when the number of tag protection patterns exceeds the limit.
+	ErrorCodeTagProtectionPatternCount = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "TAG_PROTECTION_PATTERN_COUNT_LIMIT_EXCEEDED",
+		Message:        "tag protection patterns count limit exceeded",
+		Description:    `The number of tag protection patterns exceed the configured limit`,
+		HTTPStatusCode: http.StatusBadRequest,
+	})
+
+	// 	ErrorCodeProtectedTag is returned when attempting to push or delete a protected tag.
+	ErrorCodeProtectedTag = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "PROTECTED_TAG",
+		Message:        "insufficient permissions to push or delete protected tag",
+		Description:    `Permission denied. Unable to push or delete tag due to configured protection policies.`,
+		HTTPStatusCode: http.StatusUnauthorized,
+	})
+
+	// 	ErrorCodeProtectedManifest is returned when attempting to push or delete a protected tag.
+	ErrorCodeProtectedManifest = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "PROTECTED_MANIFEST",
+		Message:        "insufficient permissions to delete manifest due to tag protection policies",
+		Description:    `Permission denied. Unable to delete manifest due to configured tag protection policies.`,
+		HTTPStatusCode: http.StatusUnauthorized,
+	})
 )
