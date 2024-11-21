@@ -160,7 +160,10 @@ func (fr *fileReader) closeWithErr(err error) error {
 
 	// close and release reader chain
 	if fr.rc != nil {
-		fr.rc.Close()
+		err := fr.rc.Close()
+		if err != nil {
+			return fmt.Errorf("closing file reader: %w", err)
+		}
 	}
 
 	fr.rc = nil
