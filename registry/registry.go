@@ -128,7 +128,9 @@ func NewRegistry(ctx context.Context, config *configuration.Configuration) (*Reg
 	handler = correlation.InjectCorrelationID(handler, correlation.WithPropagation())
 
 	server := &http.Server{
-		Handler: handler,
+		// NOTE(prozlach): prevent slow-loris attack, but be conservative at it
+		ReadHeaderTimeout: 60 * time.Second,
+		Handler:           handler,
 	}
 
 	return &Registry{
@@ -229,7 +231,8 @@ func getTLSConfig(ctx context.Context, config configuration.TLS, http2Disabled b
 	if config.MinimumTLS != "" {
 		dcontext.GetLogger(ctx).WithFields(log.Fields{"minimum_tls": config.MinimumTLS}).Info("restricting minimum TLS version")
 	}
-
+	// https://ssl-config.mozilla.org/#server=go&version=1.23.0&config=intermediate&hsts=false&guideline=5.7
+	// nolint gosec,G402
 	tlsConf := &tls.Config{
 		ClientAuth:               tls.NoClientCert,
 		NextProtos:               nextProtos(http2Disabled),
@@ -238,10 +241,10 @@ func getTLSConfig(ctx context.Context, config configuration.TLS, http2Disabled b
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 		},
 	}
 

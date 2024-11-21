@@ -94,7 +94,10 @@ func MakeSchema2Manifest(repository distribution.Repository, digests []digest.Di
 	blobStore := repository.Blobs(ctx)
 	builder := schema2.NewManifestBuilder(blobStore, schema2.MediaTypeImageConfig, []byte{})
 	for _, digest := range digests {
-		builder.AppendReference(distribution.Descriptor{Digest: digest})
+		err := builder.AppendReference(distribution.Descriptor{Digest: digest})
+		if err != nil {
+			return nil, fmt.Errorf("appending reference: %w", err)
+		}
 	}
 
 	manifest, err := builder.Build(ctx)

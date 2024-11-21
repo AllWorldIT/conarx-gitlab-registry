@@ -98,7 +98,10 @@ func (d *driver) PutContent(ctx context.Context, p string, contents []byte) erro
 	}
 
 	f.truncate()
-	f.WriteAt(contents, 0)
+	_, err = f.WriteAt(contents, 0)
+	if err != nil {
+		return fmt.Errorf("writing contents: %w", err)
+	}
 
 	return nil
 }

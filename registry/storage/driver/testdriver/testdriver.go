@@ -2,6 +2,7 @@ package testdriver
 
 import (
 	"context"
+	"fmt"
 
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
@@ -57,16 +58,25 @@ func (tfw *testFileWriter) Write(p []byte) (int, error) {
 }
 
 func (tfw *testFileWriter) Close() error {
-	tfw.Write(nil)
+	_, err := tfw.Write(nil)
+	if err != nil {
+		return fmt.Errorf("writing test file: %w", err)
+	}
 	return tfw.FileWriter.Close()
 }
 
 func (tfw *testFileWriter) Cancel() error {
-	tfw.Write(nil)
+	_, err := tfw.Write(nil)
+	if err != nil {
+		return fmt.Errorf("writing test file: %w", err)
+	}
 	return tfw.FileWriter.Cancel()
 }
 
 func (tfw *testFileWriter) Commit() error {
-	tfw.Write(nil)
+	_, err := tfw.Write(nil)
+	if err != nil {
+		return fmt.Errorf("writing test file: %w", err)
+	}
 	return tfw.FileWriter.Commit()
 }

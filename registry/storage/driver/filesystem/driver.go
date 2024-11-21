@@ -151,7 +151,8 @@ func (d *driver) PutContent(ctx context.Context, subPath string, contents []byte
 // Reader retrieves an io.ReadCloser for the content stored at "path" with a
 // given byte offset.
 func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
-	file, err := os.OpenFile(d.fullPath(path), os.O_RDONLY, 0o644)
+	// NOTE(prozlach): mode does not matter as we do not pass O_CREATE flag anyway
+	file, err := os.OpenFile(d.fullPath(path), os.O_RDONLY, 0o600)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}

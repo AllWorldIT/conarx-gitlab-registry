@@ -560,7 +560,15 @@ var ImportCmd = &cobra.Command{
 			opts = append(opts, datastore.WithProgressBar)
 		}
 
-		os.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(dynamicMediaTypes))
+		err = os.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(dynamicMediaTypes))
+		if err != nil {
+			fmt.Fprintf(
+				os.Stderr,
+				"failed to set environment variable %s: %v",
+				feature.DynamicMediaTypes.EnvVariable, err,
+			)
+			os.Exit(1)
+		}
 
 		p := datastore.NewImporter(db, registry, opts...)
 

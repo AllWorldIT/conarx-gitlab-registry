@@ -86,7 +86,10 @@ func (g *Client) GetFile(fileName, ref string, pid int) (string, error) {
 		return "", err
 	}
 
-	f.Seek(0, 0)
+	_, err = f.Seek(0, 0)
+	if err != nil {
+		return "", fmt.Errorf("file seek: %w", err)
+	}
 
 	return f.Name(), err
 }
