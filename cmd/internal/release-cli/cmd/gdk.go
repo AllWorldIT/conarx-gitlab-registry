@@ -114,5 +114,5 @@ func init() {
 	rootCmd.AddCommand(gdkCmd)
 
 	gdkCmd.Flags().StringP("gdk-access-token", "", "", "Access token for GDK")
-	gdkCmd.MarkFlagRequired("gdk-access-token")
+	_ = gdkCmd.MarkFlagRequired("gdk-access-token")
 }

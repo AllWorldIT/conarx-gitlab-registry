@@ -181,6 +181,7 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 	// gracefullFinish is used to signal to an upstream processes that a worker has completed any in-flight jobs and the upstream can terminate if needed.
 	gracefullFinish := make(chan struct{})
 	// Create a period that this worker searches and executes work on (use a random jitter of jobIntervalJitterSeconds for obscurity).
+	// nolint: gosec
 	ticker := time.NewTicker(jw.jobInterval + time.Duration(rand.Intn(jobIntervalJitterSeconds))*time.Second)
 
 	go func() {

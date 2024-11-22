@@ -350,6 +350,7 @@ func ReloadFixtures(tb testing.TB, db *datastore.DB, basePath string, tables ...
 	for _, table := range tables {
 		path := filepath.Join(basePath, "testdata", "fixtures", table.seedFileName())
 
+		// nolint: gosec // this is just a testutil
 		query, err := os.ReadFile(path)
 		require.NoErrorf(tb, err, "error reading fixture")
 
@@ -374,6 +375,7 @@ func createGoldenFile(tb testing.TB, path string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		tb.Log("creating .golden file")
 
+		// nolint: gosec // this is just a testutil
 		f, err := os.Create(path)
 		require.NoError(tb, err, "error creating .golden file")
 		require.NoError(tb, f.Close())
@@ -384,6 +386,7 @@ func updateGoldenFile(tb testing.TB, path string, content []byte) {
 	tb.Helper()
 
 	tb.Log("updating .golden file")
+	// nolint: gosec // this is just a testutil
 	err := os.WriteFile(path, content, 0o644)
 	require.NoError(tb, err, "error updating .golden file")
 }
@@ -391,6 +394,7 @@ func updateGoldenFile(tb testing.TB, path string, content []byte) {
 func readGoldenFile(tb testing.TB, path string) []byte {
 	tb.Helper()
 
+	// nolint: gosec // this is just a testutil
 	content, err := os.ReadFile(path)
 	require.NoError(tb, err, "error reading .golden file")
 

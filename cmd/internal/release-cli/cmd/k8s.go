@@ -130,6 +130,6 @@ func init() {
 
 	k8sCmd.Flags().StringVarP(&stage, "stage", "s", "", "Stage in the environment")
 	k8sCmd.Flags().String("k8s-access-token", "", "Access token for K8s")
-	k8sCmd.MarkFlagRequired("k8s-access-token")
-	k8sCmd.MarkFlagRequired("stage")
+	_ = k8sCmd.MarkFlagRequired("k8s-access-token")
+	_ = k8sCmd.MarkFlagRequired("stage")
 }

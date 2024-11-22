@@ -128,6 +128,7 @@ func (a *Agent) Start(ctx context.Context) error {
 	l := a.logger.WithFields(log.Fields{"worker": a.worker.Name()})
 	b := backoffConstructor(a.initialInterval, a.maxBackoff)
 
+	//nolint: gosec // used only for jitter calculation
 	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
 	jitter := time.Duration(r.Intn(startJitterMaxSeconds)) * time.Second
 	l.WithFields(log.Fields{"jitter_s": jitter.Seconds()}).Info("starting online GC agent")

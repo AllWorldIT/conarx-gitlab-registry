@@ -230,6 +230,7 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 		cancel()
 
 		// Randomized delay between `minDelayPerRun` and `maxDelayPerRun`
+		// nolint: gosec
 		sleep := time.Duration(rand.Int63n(int64(maxDelayPerRun-minDelayPerRun))) + minDelayPerRun
 		jw.logger.WithFields(log.Fields{"duration_s": sleep.Seconds()}).
 			Info("released lock, sleeping before next run")

@@ -147,7 +147,7 @@ func (hs *httpSink) run() {
 				}
 				err = fmt.Errorf("%v: response status %v unaccepted", hs, resp.Status)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			hs.errCh <- err
 		}
 	}

@@ -142,7 +142,7 @@ func (d *driver) PutContent(ctx context.Context, subPath string, contents []byte
 	defer writer.Close()
 	_, err = io.Copy(writer, bytes.NewReader(contents))
 	if err != nil {
-		writer.Cancel()
+		_ = writer.Cancel()
 		return err
 	}
 	return writer.Commit()
@@ -163,10 +163,10 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 
 	seekPos, err := file.Seek(offset, io.SeekStart)
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, err
 	} else if seekPos < offset {
-		file.Close()
+		_ = file.Close()
 		return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
 	}
 
@@ -176,10 +176,12 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 func (d *driver) Writer(ctx context.Context, subPath string, append bool) (storagedriver.FileWriter, error) {
 	fullPath := d.fullPath(subPath)
 	parentDir := path.Dir(fullPath)
+	//nolint:gosec // needs some more research so that we do not break anything
 	if err := os.MkdirAll(parentDir, 0o777); err != nil {
 		return nil, err
 	}
 
+	//nolint: gosec
 	fp, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE, 0o666)
 	if err != nil {
 		return nil, err
@@ -190,13 +192,13 @@ func (d *driver) Writer(ctx context.Context, subPath string, append bool) (stora
 	if !append {
 		err := fp.Truncate(0)
 		if err != nil {
-			fp.Close()
+			_ = fp.Close()
 			return nil, err
 		}
 	} else {
 		n, err := fp.Seek(0, io.SeekEnd)
 		if err != nil {
-			fp.Close()
+			_ = fp.Close()
 			return nil, err
 		}
 		offset = n
@@ -230,6 +232,7 @@ func (d *driver) Stat(ctx context.Context, subPath string) (storagedriver.FileIn
 func (d *driver) List(ctx context.Context, subPath string) ([]string, error) {
 	fullPath := d.fullPath(subPath)
 
+	//nolint: gosec
 	dir, err := os.Open(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -266,6 +269,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 		return storagedriver.PathNotFoundError{Path: sourcePath, DriverName: driverName}
 	}
 
+	//nolint:gosec // needs some more research so that we do not break anything
 	if err := os.MkdirAll(path.Dir(dest), 0o755); err != nil {
 		return err
 	}
@@ -304,6 +308,7 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 
 		// delete parent directory as well if empty
 		p := d.fullPath(filepath.Dir(path))
+		//nolint:gosec
 		f, err := os.Open(p)
 		if err != nil {
 			// ignore if not found
@@ -317,11 +322,11 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 		// if err is of type io.EOF than the directory is empty.
 		if _, err = f.Readdir(1); err == io.EOF {
 			if err := os.Remove(p); err != nil {
-				f.Close()
+				_ = f.Close()
 				return count, err
 			}
 		}
-		f.Close()
+		_ = f.Close()
 	}
 	return count, nil
 }
@@ -463,7 +468,7 @@ func (fw *fileWriter) Cancel() error {
 	}
 
 	fw.canceled = true
-	fw.file.Close()
+	_ = fw.file.Close()
 	return os.Remove(fw.file.Name())
 }
 

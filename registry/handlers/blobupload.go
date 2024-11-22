@@ -418,7 +418,7 @@ func (buh *blobUploadHandler) ResumeBlobUpload(ctx *Context, r *http.Request) ht
 func (buh *blobUploadHandler) blobUploadResponse(w http.ResponseWriter) error {
 	buh.State.Name = buh.Repository.Named().Name()
 	buh.State.UUID = buh.Upload.ID()
-	buh.Upload.Close()
+	_ = buh.Upload.Close()
 	buh.State.Offset = buh.Upload.Size()
 	buh.State.StartedAt = buh.Upload.StartedAt()
 

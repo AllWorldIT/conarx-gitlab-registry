@@ -528,6 +528,7 @@ func New(params *DriverParameters) (*Driver, error) {
 	// configure http client
 	httpTransport := http.DefaultTransport.(*http.Transport).Clone()
 	httpTransport.MaxIdleConnsPerHost = 10
+	//nolint: gosec
 	httpTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: params.SkipVerify}
 	awsConfig.WithHTTPClient(&http.Client{
 		Transport: httpTransport,
@@ -1581,7 +1582,7 @@ func (w *writer) Write(p []byte) (int, error) {
 				},
 			})
 		if err != nil {
-			w.driver.S3.AbortMultipartUploadWithContext(
+			_, _ = w.driver.S3.AbortMultipartUploadWithContext(
 				ctx,
 				&s3.AbortMultipartUploadInput{
 					Bucket:   aws.String(w.driver.Bucket),
@@ -1752,7 +1753,7 @@ func (w *writer) Commit() error {
 			},
 		})
 	if err != nil {
-		w.driver.S3.AbortMultipartUploadWithContext(
+		_, _ = w.driver.S3.AbortMultipartUploadWithContext(
 			ctx,
 			&s3.AbortMultipartUploadInput{
 				Bucket:   aws.String(w.driver.Bucket),

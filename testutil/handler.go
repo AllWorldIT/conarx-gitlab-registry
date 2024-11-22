@@ -142,5 +142,5 @@ func (app *testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(response.StatusCode)
 
-	io.Copy(w, bytes.NewReader(response.Body))
+	_, _ = io.Copy(w, bytes.NewReader(response.Body))
 }

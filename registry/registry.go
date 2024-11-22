@@ -56,7 +56,7 @@ var ServeCmd = &cobra.Command{
 		config, err := resolveConfiguration(args)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -273,6 +273,7 @@ func getTLSConfig(ctx context.Context, config configuration.TLS, http2Disabled b
 		pool := x509.NewCertPool()
 
 		for _, ca := range config.ClientCAs {
+			//nolint: gosec
 			caPem, err := os.ReadFile(ca)
 			if err != nil {
 				return nil, err
@@ -539,6 +540,7 @@ func resolveConfiguration(args []string, opts ...configuration.ParseOption) (*co
 		return nil, fmt.Errorf("configuration path unspecified")
 	}
 
+	//nolint: gosec
 	fp, err := os.Open(configurationPath)
 	if err != nil {
 		return nil, err

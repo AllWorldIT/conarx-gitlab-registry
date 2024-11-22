@@ -84,7 +84,7 @@ func TCPChecker(addr string, timeout time.Duration) health.Checker {
 		if err != nil {
 			return errors.New("connection to " + addr + " failed")
 		}
-		conn.Close()
+		_ = conn.Close()
 		return nil
 	})
 }

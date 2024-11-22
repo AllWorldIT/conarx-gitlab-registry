@@ -28,7 +28,7 @@ func WriteTempRootCerts() (certFilePath string, privateKey libtrust.PrivateKey, 
 		Type:  "CERTIFICATE",
 		Bytes: rootCert.Raw,
 	}); err != nil {
-		os.Remove(tempFile.Name())
+		_ = os.Remove(tempFile.Name())
 		return "", nil, err
 	}
 

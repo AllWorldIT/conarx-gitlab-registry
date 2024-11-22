@@ -97,5 +97,5 @@ func (ch challenge) Error() string {
 
 // init registers the silly auth backend.
 func init() {
-	auth.Register("silly", newAccessController)
+	_ = auth.Register("silly", newAccessController)
 }

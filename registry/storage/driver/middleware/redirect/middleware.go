@@ -46,5 +46,6 @@ func (r *redirectStorageMiddleware) URLFor(ctx context.Context, path string, opt
 }
 
 func init() {
+	//nolint: gosec // ignore when backend is already registered
 	storagemiddleware.Register("redirect", storagemiddleware.InitFunc(newRedirectStorageMiddleware))
 }

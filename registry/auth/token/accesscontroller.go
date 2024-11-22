@@ -313,5 +313,5 @@ func injectTagDenyAccessPatterns(ctx context.Context, accesses []*ResourceAction
 
 // init handles registering the token auth backend.
 func init() {
-	auth.Register("token", newAccessController)
+	_ = auth.Register("token", newAccessController)
 }
