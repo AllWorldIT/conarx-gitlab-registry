@@ -132,7 +132,8 @@ var configStruct = Configuration{
 		} `yaml:"http2,omitempty"`
 	}{
 		TLS: TLS{
-			ClientCAs: []string{"/path/to/ca.pem"},
+			ClientCAs:    []string{"/path/to/ca.pem"},
+			CipherSuites: defaultCipherSuites(),
 		},
 		Headers: http.Header{
 			"X-Content-Type-Options": []string{"nosniff"},
@@ -1755,6 +1756,9 @@ func copyConfig(config Configuration) *Configuration {
 	for k, v := range config.HTTP.Headers {
 		configCopy.HTTP.Headers[k] = v
 	}
+
+	configCopy.HTTP.TLS.CipherSuites = make([]string, len(config.HTTP.TLS.CipherSuites))
+	copy(configCopy.HTTP.TLS.CipherSuites, config.HTTP.TLS.CipherSuites)
 
 	return configCopy
 }

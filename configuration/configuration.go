@@ -210,6 +210,9 @@ type TLS struct {
 	// Specifies the lowest TLS version allowed
 	MinimumTLS string `yaml:"minimumtls,omitempty"`
 
+	// Specifies a list of cipher suites allowed
+	CipherSuites []string `yaml:"ciphersuites,omitempty"`
+
 	// LetsEncrypt is used to configuration setting up TLS through
 	// Let's Encrypt instead of manually specifying certificate and
 	// key. If a TLS certificate is specified, the Let's Encrypt
@@ -1130,6 +1133,18 @@ const (
 	defaultDLBReplicaCheckInterval         = 1 * time.Minute
 )
 
+// defaultCipherSuites is here just to make slice "a constant"
+func defaultCipherSuites() []string {
+	return []string{
+		"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+		"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+		"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+		"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+	}
+}
+
 func ApplyDefaults(config *Configuration) {
 	if config.Log.Level == "" {
 		config.Log.Level = defaultLogLevel
@@ -1148,6 +1163,14 @@ func ApplyDefaults(config *Configuration) {
 	}
 	if config.Redis.Addr != "" && config.Redis.Pool.Size == 0 {
 		config.Redis.Pool.Size = 10
+	}
+
+	// If no custom cipher suites are specified in the configuration,
+	// default to a secure set of TLS 1.2 cipher suites. TLS 1.3 cipher
+	// suites are automatically enabled in Go and do not need explicit
+	// configuration.
+	if len(config.HTTP.TLS.CipherSuites) == 0 {
+		config.HTTP.TLS.CipherSuites = defaultCipherSuites()
 	}
 
 	// copy TLS config to debug server when enabled and debug TLS certificate is empty

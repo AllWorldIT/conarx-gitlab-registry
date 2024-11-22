@@ -3,14 +3,21 @@ package registry
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"reflect"
 	"syscall"
 	"testing"
@@ -57,6 +64,13 @@ func setupRegistry() (*Registry, error) {
 	return NewRegistry(context.Background(), config)
 }
 
+type registryTLSConfig struct {
+	cipherSuites    []string
+	certificatePath string
+	privateKeyPath  string
+	certificate     *tls.Certificate
+}
+
 func TestGracefulShutdown(t *testing.T) {
 	tests := []struct {
 		name                string
@@ -90,18 +104,19 @@ func TestGracefulShutdown(t *testing.T) {
 		})
 
 		// run registry server
-		var errchan chan error
+		var errChan chan error
 		go func() {
-			errchan <- registry.ListenAndServe()
+			errChan <- registry.ListenAndServe()
 		}()
-		select {
-		case err = <-errchan:
-			t.Fatalf("Error listening: %v", err)
-		default:
-		}
 
-		// Wait for some unknown random time for server to start listening
-		time.Sleep(3 * time.Second)
+		timer := time.NewTimer(3 * time.Second)
+		defer timer.Stop()
+		select {
+		case err = <-errChan:
+			t.Fatalf("Error listening: %v", err)
+		case <-timer.C:
+			// Wait for some unknown random time for server to start listening
+		}
 
 		// Send quit signal, this does not track to the signals that the registry
 		// is actually configured to listen to since we're interacting with the
@@ -122,12 +137,12 @@ func TestGracefulShutdown_HTTPDrainTimeout(t *testing.T) {
 	}
 
 	// run registry server
-	var errchan chan error
+	var errChan chan error
 	go func() {
-		errchan <- registry.ListenAndServe()
+		errChan <- registry.ListenAndServe()
 	}()
 	select {
-	case err = <-errchan:
+	case err = <-errChan:
 		t.Fatalf("Error listening: %v", err)
 	default:
 	}
@@ -482,4 +497,261 @@ func Test_validate_redirect(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetCipherSuite(t *testing.T) {
+	resp, err := getCipherSuites([]string{"TLS_RSA_WITH_AES_128_CBC_SHA"})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA}, resp)
+
+	resp, err = getCipherSuites([]string{
+		"TLS_RSA_WITH_AES_128_CBC_SHA",
+		"TLS_RSA_WITH_AES_256_CBC_SHA",
+	})
+	require.NoError(t, err)
+	require.ElementsMatch(
+		t,
+		[]uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA, tls.TLS_RSA_WITH_AES_256_CBC_SHA},
+		resp,
+	)
+
+	_, err = getCipherSuites([]string{"TLS_RSA_WITH_AES_128_CBC_SHA", "bad_input"})
+	if err == nil {
+		t.Error("did not return expected error about unknown cipher suite")
+	}
+
+	invalidCipherSuites := []string{
+		"TLS_MARYNA_WITH_BORYNA7",
+		"TLS_RSA_WITH_RC4_128_SHA",
+		"TLS_RSA_WITH_AES_128_CBC_SHA256",
+		"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
+		"TLS_ECDHE_RSA_WITH_RC4_128_SHA",
+		"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
+		"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+	}
+
+	for _, suite := range invalidCipherSuites {
+		_, err = getCipherSuites([]string{suite})
+		require.Error(t, err)
+	}
+}
+
+func buildRegistryTLSConfig(t *testing.T, name string, cipherSuites []string) *registryTLSConfig {
+	t.Helper()
+
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err, "failed to create rsa private key")
+	pub := rsaKey.Public()
+
+	notBefore := time.Now().Add(-10 * time.Second)
+	notAfter := notBefore.Add(5 * time.Minute)
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	require.NoError(t, err, "failed to create serial number")
+
+	cert := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"registry_test"},
+		},
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{"localhost"},
+		IsCA:                  true,
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &cert, &cert, pub, rsaKey)
+	require.NoError(t, err, "failed to create certificate")
+
+	tmpDir := t.TempDir()
+
+	certPath := path.Join(tmpDir, name+".pem")
+	certOut, err := os.Create(certPath)
+	require.NoError(t, err, "failed to create pem")
+	err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	require.NoError(t, err, "failed to write data")
+	err = certOut.Close()
+	require.NoError(t, err, "error closing")
+
+	keyPath := path.Join(tmpDir, name+".key")
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	require.NoErrorf(t, err, "failed to open %s for writing", keyPath)
+
+	privBytes, err := x509.MarshalPKCS8PrivateKey(rsaKey)
+	require.NoError(t, err, "unable to marshal private key")
+	pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
+	require.NoError(t, err, "failed to write data to key.pem")
+	keyOut.Close()
+	require.NoErrorf(t, err, "error closing %s", keyPath)
+
+	tlsCert := tls.Certificate{
+		Certificate: [][]byte{derBytes},
+		PrivateKey:  rsaKey,
+	}
+
+	tlsTestCfg := registryTLSConfig{
+		cipherSuites:    cipherSuites,
+		certificatePath: certPath,
+		privateKeyPath:  keyPath,
+		certificate:     &tlsCert,
+	}
+
+	return &tlsTestCfg
+}
+
+func TestRegistrySupportedCipherSuite(t *testing.T) {
+	name := t.Name()
+	cipherSuites := []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"}
+	serverTLSconfig := buildRegistryTLSConfig(t, name, cipherSuites)
+
+	registry, err := setupRegistry()
+	require.NoError(t, err, "setting up registry")
+	registry.config.HTTP.TLS.CipherSuites = serverTLSconfig.cipherSuites
+	registry.config.HTTP.TLS.Certificate = serverTLSconfig.certificatePath
+	registry.config.HTTP.TLS.Key = serverTLSconfig.privateKeyPath
+
+	// run registry server
+	var errChan chan error
+	go func() {
+		errChan <- registry.ListenAndServe()
+	}()
+
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+	select {
+	case err = <-errChan:
+		t.Fatalf("error listening: %v", err)
+	case <-timer.C:
+		// Wait for some unknown random time for server to start listening
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSHandshakeTimeout: 2 * time.Second,
+			TLSClientConfig: &tls.Config{
+				MaxVersion: tls.VersionTLS12,
+				CipherSuites: []uint16{
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				},
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	resp, err := client.Get(fmt.Sprintf("https://%s/v2/", registry.config.HTTP.Addr))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "{}", string(body))
+
+	// send stop signal
+	quit <- os.Interrupt
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestRegistryUnsupportedCipherSuite(t *testing.T) {
+	name := t.Name()
+	serverTLSconfig := buildRegistryTLSConfig(t, name, []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"})
+
+	registry, err := setupRegistry()
+	require.NoError(t, err)
+	registry.config.HTTP.TLS.CipherSuites = serverTLSconfig.cipherSuites
+	registry.config.HTTP.TLS.Certificate = serverTLSconfig.certificatePath
+	registry.config.HTTP.TLS.Key = serverTLSconfig.privateKeyPath
+
+	// run registry server
+	var errChan chan error
+	go func() {
+		errChan <- registry.ListenAndServe()
+	}()
+
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+	select {
+	case err = <-errChan:
+		t.Fatalf("error listening: %v", err)
+	case <-timer.C:
+		// Wait for some unknown random time for server to start listening
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSHandshakeTimeout: 2 * time.Second,
+			TLSClientConfig: &tls.Config{
+				MaxVersion: tls.VersionTLS12,
+				CipherSuites: []uint16{
+					tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+				},
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	resp, err := client.Get(fmt.Sprintf("https://%s/v2/", registry.config.HTTP.Addr))
+	if err == nil {
+		resp.Body.Close()
+	}
+	require.Error(t, err)
+	require.ErrorContains(t, err, "handshake failure")
+
+	// send stop signal
+	quit <- os.Interrupt
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestRegistryTLS13(t *testing.T) {
+	name := t.Name()
+	serverTLSconfig := buildRegistryTLSConfig(t, name, []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"})
+
+	registry, err := setupRegistry()
+	require.NoError(t, err)
+	// NOTE(prozlach): This test makes sure that cipher suites in tls1.3 mode
+	// are ignored, so we need to define them here:
+	registry.config.HTTP.TLS.CipherSuites = serverTLSconfig.cipherSuites
+	registry.config.HTTP.TLS.Certificate = serverTLSconfig.certificatePath
+	registry.config.HTTP.TLS.Key = serverTLSconfig.privateKeyPath
+
+	// run registry server
+	var errChan chan error
+	go func() {
+		errChan <- registry.ListenAndServe()
+	}()
+
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+	select {
+	case err = <-errChan:
+		t.Fatalf("Error listening: %v", err)
+	case <-timer.C:
+		// Wait for some unknown random time for server to start listening
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSHandshakeTimeout: 2 * time.Second,
+			TLSClientConfig: &tls.Config{
+				MinVersion:         tls.VersionTLS13,
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	resp, err := client.Get(fmt.Sprintf("https://%s/v2/", registry.config.HTTP.Addr))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "{}", string(body))
+
+	// send stop signal
+	quit <- os.Interrupt
+	time.Sleep(100 * time.Millisecond)
 }
