@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -42,6 +43,35 @@ var tlsLookup = map[string]uint16{
 	"":       tls.VersionTLS12,
 	"tls1.2": tls.VersionTLS12,
 	"tls1.3": tls.VersionTLS13,
+}
+
+// a map of TLS cipher suite names to constants in https://golang.org/pkg/crypto/tls/#pkg-constants
+var cipherSuites = map[string]uint16{
+	// These are insecure:
+	// "TLS_RSA_WITH_RC4_128_SHA",
+	// "TLS_RSA_WITH_AES_128_CBC_SHA256",
+	// "TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
+	// "TLS_ECDHE_RSA_WITH_RC4_128_SHA",
+	// "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
+	// "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+
+	// TLS 1.0 - 1.2 cipher suites
+	"TLS_RSA_WITH_3DES_EDE_CBC_SHA":                 tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+	"TLS_RSA_WITH_AES_128_CBC_SHA":                  tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+	"TLS_RSA_WITH_AES_256_CBC_SHA":                  tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+	"TLS_RSA_WITH_AES_128_GCM_SHA256":               tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+	"TLS_RSA_WITH_AES_256_GCM_SHA384":               tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA":          tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+	"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA":          tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+	"TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA":           tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
+	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":            tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+	"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":            tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+	"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":         tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256":       tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":         tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384":       tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256":   tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256": tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
 }
 
 // ServeCmd is a cobra command for running the registry.
@@ -231,21 +261,26 @@ func getTLSConfig(ctx context.Context, config configuration.TLS, http2Disabled b
 	if config.MinimumTLS != "" {
 		dcontext.GetLogger(ctx).WithFields(log.Fields{"minimum_tls": config.MinimumTLS}).Info("restricting minimum TLS version")
 	}
-	// https://ssl-config.mozilla.org/#server=go&version=1.23.0&config=intermediate&hsts=false&guideline=5.7
+
+	var tlsCipherSuites []uint16
+	// configuring cipher suites are no longer supported after the tls1.3.
+	if tlsMinVersion > tls.VersionTLS12 {
+		dcontext.GetLogger(ctx).Warnf("ignoring configured TLS cipher suites as they are not configurable in %s", config.MinimumTLS)
+	} else {
+		tlsCipherSuites, err := getCipherSuites(config.CipherSuites)
+		if err != nil {
+			return nil, fmt.Errorf("parsing cipher suites: %w", err)
+		}
+		dcontext.GetLogger(ctx).Infof("restricting TLS cipher suites to: %s", strings.Join(getCipherSuiteNames(tlsCipherSuites), ","))
+	}
+
 	// nolint gosec,G402
 	tlsConf := &tls.Config{
 		ClientAuth:               tls.NoClientCert,
 		NextProtos:               nextProtos(http2Disabled),
 		MinVersion:               tlsMinVersion,
 		PreferServerCipherSuites: true,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-		},
+		CipherSuites:             tlsCipherSuites,
 	}
 
 	if config.LetsEncrypt.CacheFile != "" {
@@ -679,4 +714,30 @@ func migrationDBFromConfig(config *configuration.Configuration) (*datastore.DB, 
 	}
 
 	return dbFromConfig(&primaryConfig)
+}
+
+// takes a list of cipher suites and converts it to a list of respective tls constants
+// if an empty list is provided, then the defaults will be used
+func getCipherSuites(names []string) ([]uint16, error) {
+	cipherSuiteConsts := make([]uint16, len(names))
+	for i, name := range names {
+		cipherSuiteConst, ok := cipherSuites[name]
+		if !ok {
+			return nil, fmt.Errorf("unknown TLS cipher suite %q specified for http.tls.ciphersuites", name)
+		}
+		cipherSuiteConsts[i] = cipherSuiteConst
+	}
+	return cipherSuiteConsts, nil
+}
+
+// takes a list of cipher suite ids and converts it to a list of respective names
+func getCipherSuiteNames(ids []uint16) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	names := make([]string, len(ids))
+	for i, id := range ids {
+		names[i] = tls.CipherSuiteName(id)
+	}
+	return names
 }

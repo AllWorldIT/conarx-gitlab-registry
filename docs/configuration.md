@@ -228,6 +228,9 @@ http:
         - /path/to/ca.pem
         - /path/to/another/ca.pem
       minimumtls: tls1.2
+      ciphersuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
     prometheus:
       enabled: true
       path: /metrics
@@ -938,6 +941,9 @@ http:
       - /path/to/ca.pem
       - /path/to/another/ca.pem
     minimumtls: tls1.2
+    ciphersuites:
+      - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+      - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
     letsencrypt:
       cachefile: /path/to/cache-file
       email: emailused@letsencrypt.com
@@ -984,6 +990,35 @@ and proxy connections to the registry server.
 | `key`         | yes  | Absolute path to the X.509 private key file.           |
 | `clientcas`   | no   | An array of absolute paths to X.509 CA files.          |
 | `minimumtls`  | no   | Minimum TLS version allowed (tls1.2, tls1.3). Defaults to tls1.2. |
+| `ciphersuites` | no   | Cipher suites allowed. Please see below for allowed values and defaults. In case TLS 1.3 version is chosen, `ciphersuites` is ignored as TLS 1.3 cipher suites are automatically enabled and do not need explicit configuration. |
+
+Available TLS 1.2 cipher suites:
+
+- TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
+- TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+- TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+- TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
+- TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+- TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+- TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+- TLS_RSA_WITH_3DES_EDE_CBC_SHA
+- TLS_RSA_WITH_AES_128_CBC_SHA
+- TLS_RSA_WITH_AES_128_GCM_SHA256
+- TLS_RSA_WITH_AES_256_CBC_SHA
+- TLS_RSA_WITH_AES_256_GCM_SHA384
+
+Default cipher suites selected for secure communication:
+
+- TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+- TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
 
 ### `letsencrypt`
 
