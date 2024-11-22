@@ -624,6 +624,7 @@ func updateOnlineGCSettings(ctx context.Context, db datastore.Queryer, config *c
 	log := dcontext.GetLogger(ctx)
 
 	// execute DB update after a randomized jitter of up to 60 seconds to ease concurrency in clustered environments
+	// nolint: gosec // G404: used only for jitter calculation
 	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
 	jitter := time.Duration(r.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
 
@@ -744,6 +745,7 @@ func startDBReplicaChecking(ctx context.Context, lb datastore.LoadBalancer) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
 	// delay startup using a randomized jitter to ease concurrency in clustered environments
+	// nolint: gosec // G404: used only for jitter calculation
 	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
 	jitter := time.Duration(r.Intn(dlbReplicaCheckJitterMaxSeconds)) * time.Second
 
@@ -1040,6 +1042,8 @@ func (app *App) configureRedisRateLimiter(ctx context.Context, config *configura
 	}
 	if config.Redis.RateLimiter.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
+			// FIXME(prozlach) This requires investigation
+			// nolint: gosec
 			InsecureSkipVerify: config.Redis.RateLimiter.TLS.Insecure,
 		}
 	}
@@ -1096,6 +1100,8 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 	}
 	if config.Redis.Cache.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
+			// FIXME(prozlach) This requires investigation
+			//nolint: gosec
 			InsecureSkipVerify: config.Redis.Cache.TLS.Insecure,
 		}
 	}
@@ -1149,6 +1155,8 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 	}
 	if configuration.Redis.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
+			// FIXME(prozlach) This requires investigation
+			// nolint: gosec
 			InsecureSkipVerify: configuration.Redis.TLS.Insecure,
 		}
 	}
@@ -1986,6 +1994,7 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 	}
 
 	go func() {
+		//nolint: gosec // used only for jitter calculation
 		jitter := time.Duration(rand.Int()%60) * time.Minute
 		log.Infof("Starting upload purge in %s", jitter)
 		time.Sleep(jitter)

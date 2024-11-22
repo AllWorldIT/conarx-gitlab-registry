@@ -82,6 +82,7 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 	}
 
 	// get urlSigner from the file specified in pkPath
+	// nolint: gosec
 	pkBytes, err := os.ReadFile(pkPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read privatekey file: %s", err)
@@ -211,5 +212,6 @@ func (lh *cloudFrontStorageMiddleware) URLFor(ctx context.Context, path string, 
 
 // init registers the cloudfront layerHandler backend.
 func init() {
-	storagemiddleware.Register("cloudfront", storagemiddleware.InitFunc(newCloudFrontStorageMiddleware))
+	//nolint: gosec // ignore when backend is already registered
+	_ = storagemiddleware.Register("cloudfront", storagemiddleware.InitFunc(newCloudFrontStorageMiddleware))
 }

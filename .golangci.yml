@@ -148,9 +148,8 @@ linters:
   disable-all: true
   enable:
   # TODO: Tracked in https://gitlab.com/gitlab-org/container-registry/-/issues/1308
-  # - gosec
   # - revive
-  # MRs in flight:
+    - gosec
     - bodyclose
     - copyloopvar
     - depguard

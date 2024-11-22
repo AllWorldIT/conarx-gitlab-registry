@@ -63,6 +63,7 @@ type prefixEntry struct {
 
 func fetchAWSIPs(url string) (awsIPResponse, error) {
 	var response awsIPResponse
+	// nolint: gosec
 	resp, err := http.Get(url)
 	if err != nil {
 		return response, err

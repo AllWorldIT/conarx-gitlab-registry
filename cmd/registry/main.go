@@ -17,9 +17,9 @@ import (
 )
 
 func init() {
-	maxprocs.Set()
+	_, _ = maxprocs.Set()
 }
 
 func main() {
-	registry.RootCmd.Execute()
+	_ = registry.RootCmd.Execute()
 }

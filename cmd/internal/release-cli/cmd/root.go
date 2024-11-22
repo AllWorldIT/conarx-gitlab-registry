@@ -20,6 +20,6 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVarP(&RegistryToken, "registry-access-token", "", "", "Registry Access Token")
 	rootCmd.PersistentFlags().StringVarP(&SlackWebhookURL, "slack-webhook-url", "", "", "Slack Webhook URL")
-	rootCmd.MarkFlagRequired("registry-access-token")
-	rootCmd.MarkFlagRequired("slack-webhook-url")
+	_ = rootCmd.MarkFlagRequired("registry-access-token")
+	_ = rootCmd.MarkFlagRequired("slack-webhook-url")
 }

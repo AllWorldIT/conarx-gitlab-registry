@@ -131,7 +131,7 @@ var RootCmd = &cobra.Command{
 			version.PrintVersion()
 			return
 		}
-		cmd.Usage()
+		_ = cmd.Usage()
 	},
 }
 
@@ -144,7 +144,7 @@ var GCCmd = &cobra.Command{
 		config, err := resolveConfiguration(args)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -189,6 +189,7 @@ var GCCmd = &cobra.Command{
 		if debugAddr != "" {
 			go func() {
 				dcontext.GetLoggerWithField(ctx, "address", debugAddr).Info("debug server listening")
+				// nolint: gosec // this is just a debug server
 				if err := http.ListenAndServe(debugAddr, nil); err != nil {
 					dcontext.GetLoggerWithField(ctx, "error", err).Fatal("error listening on debug interface")
 				}
@@ -213,7 +214,7 @@ var DBCmd = &cobra.Command{
 	Short: "Manages the registry metadata database",
 	Long:  "Manages the registry metadata database",
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Usage()
+		_ = cmd.Usage()
 	},
 }
 
@@ -223,7 +224,7 @@ var MigrateCmd = &cobra.Command{
 	Short: "Manage migrations",
 	Long:  "Manage migrations",
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Usage()
+		_ = cmd.Usage()
 	},
 }
 
@@ -235,7 +236,7 @@ var MigrateUpCmd = &cobra.Command{
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -288,7 +289,7 @@ var MigrateDownCmd = &cobra.Command{
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -351,7 +352,7 @@ var MigrateVersionCmd = &cobra.Command{
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -384,7 +385,7 @@ var MigrateStatusCmd = &cobra.Command{
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -462,20 +463,20 @@ var ImportCmd = &cobra.Command{
 		// Ensure no more than one step flag is set.
 		if preImport && (importAllRepos || importCommonBlobs) {
 			fmt.Fprint(os.Stderr, "steps two or three can't be used with step one\n")
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
 		if importAllRepos && importCommonBlobs {
 			fmt.Fprint(os.Stderr, "step three can't be used with step two\n")
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
 		config, err := resolveConfiguration(args)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -536,6 +537,7 @@ var ImportCmd = &cobra.Command{
 		if debugAddr != "" {
 			go func() {
 				dcontext.GetLoggerWithField(ctx, "address", debugAddr).Info("debug server listening")
+				// nolint: gosec // this is just a debug server
 				if err := http.ListenAndServe(debugAddr, nil); err != nil {
 					dcontext.GetLogger(ctx).WithError(err).Fatal("error listening on debug interface")
 				}
@@ -596,7 +598,7 @@ var BBMCmd = &cobra.Command{
 	Short: "Manage batched background migrations",
 	Long:  "Manage batched background migrations",
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Usage()
+		_ = cmd.Usage()
 	},
 }
 
@@ -609,7 +611,7 @@ var BBMStatusCmd = &cobra.Command{
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -648,7 +650,7 @@ var BBMPauseCmd = &cobra.Command{
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -676,7 +678,7 @@ var BBMResumeCmd = &cobra.Command{
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 
@@ -704,7 +706,7 @@ var BBMRunCmd = &cobra.Command{
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(1)
 		}
 

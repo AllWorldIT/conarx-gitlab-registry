@@ -655,8 +655,8 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 	)
 	bar := progressbar.NewOptions(total, opts...)
 	defer func() {
-		bar.Finish()
-		bar.Close()
+		_ = bar.Finish()
+		_ = bar.Close()
 	}()
 
 	// Consume the tag lookup details serially. In the ideal case, we only need
@@ -668,7 +668,7 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 		fsTag := tRes.name
 		desc := tRes.desc
 		err := tRes.err
-		bar.Add(1)
+		_ = bar.Add(1)
 
 		l := l.WithFields(log.Fields{"tag_name": fsTag, "count": i, "total": total, "digest": desc.Digest})
 		l.Info("importing tag")
@@ -796,14 +796,14 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 	)
 	bar := progressbar.NewOptions(total, opts...)
 	defer func() {
-		bar.Finish()
-		bar.Close()
+		_ = bar.Finish()
+		_ = bar.Close()
 	}()
 
 	for i, fsTag := range fsTags {
 		l := l.WithFields(log.Fields{"tag_name": fsTag, "count": i + 1})
 		l.Info("processing tag")
-		bar.Add(1)
+		_ = bar.Add(1)
 
 		// read tag details from the filesystem
 		desc, err := tagService.Get(ctx, fsTag)
@@ -1108,7 +1108,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		// A little hacky, but we can use a progress bar to show the overall import
 		// progress by printing the bar with different descriptions. Otherwise, the
 		// progress bars and a regular logger would step over one another.
-		bar.Add(1) // Give the bar some state so we can print it.
+		_ = bar.Add(1) // Give the bar some state so we can print it.
 		imp.printBar(bar, fmt.Sprintf("registry import starting, detailed log written to: %s", filepath.Join(wd, fn)))
 	} else {
 		f = os.Stdout
@@ -1276,13 +1276,13 @@ func (imp *Importer) importBlobs(ctx context.Context) error {
 	)
 	bar := progressbar.NewOptions(-1, opts...)
 	defer func() {
-		bar.Finish()
-		bar.Close()
+		_ = bar.Finish()
+		_ = bar.Close()
 	}()
 
 	if err := imp.registry.Blobs().Enumerate(ctx, func(desc distribution.Descriptor) error {
 		index++
-		bar.Add(1)
+		_ = bar.Add(1)
 		l.WithFields(log.Fields{"digest": desc.Digest, "count": index, "size": desc.Size}).Info("importing blob")
 
 		dbBlob, err := imp.blobStore.FindByDigest(ctx, desc.Digest)

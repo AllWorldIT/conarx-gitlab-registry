@@ -16,7 +16,7 @@ import (
 // CreateRandomTarFile creates a random tarfile, returning it as an
 // io.ReadSeeker along with its digest. An error is returned if there is a
 // problem generating valid content.
-/* #nosec G404 */
+// nolint: gosec //  G404
 func CreateRandomTarFile() (rs io.ReadSeeker, dgst digest.Digest, err error) {
 	nFiles := mrand.Intn(10) + 10
 	target := &bytes.Buffer{}

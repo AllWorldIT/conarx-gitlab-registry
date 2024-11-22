@@ -46,6 +46,7 @@ func generateTempFile(tb testing.TB, filename string, content []byte) *os.File {
 	dir := tb.TempDir()
 	name := filepath.Join(dir, filename)
 
+	//nolint: gosec // this is just a tests utility
 	f, err := os.Create(name)
 	require.NoError(tb, err)
 	defer f.Close()

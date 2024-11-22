@@ -339,7 +339,7 @@ func Handler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		checks := CheckStatus()
 		if len(checks) != 0 {
-			errcode.ServeJSON(w, errcode.ErrorCodeUnavailable.
+			_ = errcode.ServeJSON(w, errcode.ErrorCodeUnavailable.
 				WithDetail("health check failed: please see /debug/health"))
 			return
 		}

@@ -60,6 +60,7 @@ func fetchGoogleIPs(url string) (googleIPResponse, error) {
 	l.WithFields(log.Fields{"url": url}).Debug("fetching list of known Google IPs")
 
 	var response googleIPResponse
+	// nolint: gosec
 	resp, err := http.Get(url)
 	if err != nil {
 		return response, err

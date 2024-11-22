@@ -17,7 +17,7 @@ package gcs
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint: gosec
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -327,6 +327,7 @@ func (d *driver) PutContent(ctx context.Context, path string, contents []byte) e
 	return retry(func() error {
 		wc := d.storageClient.Bucket(d.bucket).Object(d.pathToKey(path)).NewWriter(ctx)
 		wc.ContentType = "application/octet-stream"
+		// nolint: gosec
 		h := md5.New()
 		h.Write(contents)
 		wc.MD5 = h.Sum(nil)
@@ -401,7 +402,7 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 		return nil, err
 	}
 	if err := googleapi.CheckMediaResponse(res); err != nil {
-		res.Body.Close()
+		_ = res.Body.Close()
 		return nil, err
 	}
 	return res, nil
@@ -505,7 +506,7 @@ func putContentsClose(wc *storage.Writer, contents []byte) error {
 		}
 	}
 	if err != nil {
-		//nolint: staticcheck // this needs somre refactoring and deeper check
+		// nolint: staticcheck,gosec // this needs some refactoring and a deeper research
 		wc.CloseWithError(err)
 		return err
 	}
@@ -660,6 +661,7 @@ func retry(req request) error {
 			metrics.StorageRatelimit()
 		}
 
+		//nolint:gosec // this is just a random number for rety backoff
 		time.Sleep(backoff - time.Second + (time.Duration(rand.Int31n(1000)) * time.Millisecond))
 		if i <= 4 {
 			backoff *= 2

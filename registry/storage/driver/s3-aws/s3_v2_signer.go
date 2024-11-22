@@ -24,6 +24,7 @@ package s3
 
 import (
 	"crypto/hmac"
+	//nolint:gosec
 	"crypto/sha1"
 	"encoding/base64"
 	"net/http"
@@ -105,7 +106,7 @@ func Sign(req *request.Request) {
 		Time:        req.Time,
 		Credentials: req.Config.Credentials,
 	}
-	v2.Sign()
+	_ = v2.Sign()
 }
 
 func (v2 *signer) Sign() error {

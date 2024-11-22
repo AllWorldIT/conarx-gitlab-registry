@@ -146,7 +146,7 @@ func (fr *fileReader) reset() {
 		return
 	}
 	if fr.rc != nil {
-		fr.rc.Close()
+		_ = fr.rc.Close()
 		fr.rc = nil
 	}
 }
