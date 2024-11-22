@@ -263,23 +263,6 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 	return storagedriver.WalkFallbackParallel(ctx, d, maxWalkConcurrency, path, f)
 }
 
-// ExistsPath is a performance optimized version of Stat to be used specifically for checking if a given path (not
-// object) exists. For the inmemory driver, which we use for the test suite, this falls back to Stat.
-func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
-	fi, err := d.Stat(ctx, path)
-	if err != nil {
-		if errors.As(err, &storagedriver.PathNotFoundError{}) {
-			return false, nil
-		}
-		return false, err
-	}
-	if fi == nil {
-		return false, nil
-	}
-
-	return true, nil
-}
-
 type writer struct {
 	d         *driver
 	f         *file

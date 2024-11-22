@@ -5,7 +5,6 @@ package gcs
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net/url"
 	"os"
 	"strconv"
@@ -336,71 +335,6 @@ func TestGCSDriverMoveDirectory(t *testing.T) {
 
 	err = driver.Move(ctx, "/parent/dir", "/parent/other")
 	require.Error(t, err, "Moving directory /parent/dir /parent/other should have return a non-nil error")
-}
-
-func TestGCSDriverExistsPath(t *testing.T) {
-	if skipMsg := skipGCS(); skipMsg != "" {
-		t.Skip(skipMsg)
-	}
-
-	root := t.TempDir()
-	d, err := gcsDriverConstructor(root)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-
-	prefix := "/existing/path"
-	path := fmt.Sprintf("%s/data", prefix)
-
-	content := make([]byte, 10)
-	rand.Read(content)
-
-	err = d.PutContent(ctx, path, content)
-	require.NoError(t, err)
-
-	exists, err := d.ExistsPath(ctx, prefix)
-	require.NoError(t, err)
-	require.True(t, exists)
-}
-
-func TestGCSDriverExistsPath_NotFound(t *testing.T) {
-	if skipMsg := skipGCS(); skipMsg != "" {
-		t.Skip(skipMsg)
-	}
-
-	root := t.TempDir()
-	d, err := gcsDriverConstructor(root)
-	require.NoError(t, err)
-
-	exists, err := d.ExistsPath(context.Background(), "/non-existing/path")
-	require.NoError(t, err)
-	require.False(t, exists)
-}
-
-// TestExistsPath_Object asserts that if trying to use ExistsPath with an object path, this does not cause an
-// internal error but rather return false.
-func TestGCSDriverExistsPath_Object(t *testing.T) {
-	if skipMsg := skipGCS(); skipMsg != "" {
-		t.Skip(skipMsg)
-	}
-
-	root := t.TempDir()
-	d, err := gcsDriverConstructor(root)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-
-	path := "/existing/path/object"
-
-	content := make([]byte, 10)
-	rand.Read(content)
-
-	err = d.PutContent(ctx, path, content)
-	require.NoError(t, err)
-
-	exists, err := d.ExistsPath(ctx, path)
-	require.NoError(t, err)
-	require.False(t, exists)
 }
 
 func TestGCSDriver_parseParameters_Bool(t *testing.T) {

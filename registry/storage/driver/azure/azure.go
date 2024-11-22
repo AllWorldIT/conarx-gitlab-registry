@@ -455,10 +455,6 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 	return d.Walk(ctx, path, f)
 }
 
-func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
-	return false, storagedriver.ErrUnsupportedMethod{DriverName: driverName}
-}
-
 // list simulates a filesystem style list in which both files (blobs) and
 // directories (virtual containers) are returned for a given prefix.
 func (d *driver) list(prefix string) ([]string, error) {

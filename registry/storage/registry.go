@@ -416,18 +416,3 @@ func (repo *repository) Blobs(ctx context.Context) distribution.BlobStore {
 		useDatabase:            repo.useDatabase,
 	}
 }
-
-// RepositoryValidator provides an interface for validating repositories.
-type RepositoryValidator interface {
-	// Exists determines whether the repository exists in the storage backend or not.
-	Exists(ctx context.Context) (bool, error)
-}
-
-// Exists determines whether the repository exists in the storage backend or not.
-func (repo *repository) Exists(ctx context.Context) (bool, error) {
-	p, err := pathFor(manifestTagsPathSpec{name: repo.name.Name()})
-	if err != nil {
-		return false, err
-	}
-	return repo.driver.ExistsPath(ctx, p)
-}
