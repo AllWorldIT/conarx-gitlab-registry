@@ -41,7 +41,7 @@ var _ storagedriver.StorageDriver = &cloudFrontStorageMiddleware{}
 //	to S3 directly. "awsregion", only regions listed in awsregion options goes to S3 directly
 //
 // awsregion: a comma separated string of AWS regions.
-func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, options map[string]interface{}) (storagedriver.StorageDriver, error) {
+func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, options map[string]any) (storagedriver.StorageDriver, error) {
 	// parse baseurl
 	base, ok := options["baseurl"]
 	if !ok {
@@ -191,7 +191,7 @@ type S3BucketKeyer interface {
 
 // URLFor attempts to find a url which may be used to retrieve the file at the given path.
 // Returns an error if the file cannot be found.
-func (lh *cloudFrontStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (lh *cloudFrontStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	keyer, ok := lh.StorageDriver.(S3BucketKeyer)
 	if !ok {
 		dcontext.GetLogger(ctx).Warn("the CloudFront middleware does not support this backend storage driver")

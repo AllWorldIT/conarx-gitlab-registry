@@ -1142,7 +1142,7 @@ func TestManifestTagsPaginated(t *testing.T) {
 	tagsList := []string{"tag1", "tag2", "funtag"}
 	var m testutil.RequestResponseMap
 	for i := 0; i < 3; i++ {
-		body, err := json.Marshal(map[string]interface{}{
+		body, err := json.Marshal(map[string]any{
 			"name": "test.example.com/repo/tags/list",
 			"tags": []string{tagsList[i]},
 		})
@@ -1360,7 +1360,7 @@ func TestSanitizeLocation(t *testing.T) {
 			expected:    "https://mwhahaha.com/v2/foo/baasdf?_state=asdfasfdasdfasdf",
 		},
 	} {
-		fatalf := func(format string, args ...interface{}) {
+		fatalf := func(format string, args ...any) {
 			t.Fatalf(testcase.description+": "+format, args...)
 		}
 

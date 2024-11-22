@@ -330,7 +330,7 @@ func TestAccessController(t *testing.T) {
 	issuer := "test-issuer.example.com"
 	service := "test-service.example.com"
 
-	options := map[string]interface{}{
+	options := map[string]any{
 		"realm":          realm,
 		"issuer":         issuer,
 		"service":        service,
@@ -520,7 +520,7 @@ func TestNewAccessControllerPemBlock(t *testing.T) {
 	issuer := "test-issuer.example.com"
 	service := "test-service.example.com"
 
-	options := map[string]interface{}{
+	options := map[string]any{
 		"realm":          realm,
 		"issuer":         issuer,
 		"service":        service,
@@ -601,7 +601,7 @@ func newTestAuthContext(t *testing.T, ctx context.Context, req *http.Request, ac
 	testIssuer := "omnibus-gitlab-issuer"
 	testService := "container_registry"
 
-	options := map[string]interface{}{
+	options := map[string]any{
 		"realm":          testRealm,
 		"issuer":         testIssuer,
 		"service":        testService,

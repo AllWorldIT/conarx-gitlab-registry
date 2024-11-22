@@ -81,7 +81,7 @@ type StorageDriver interface {
 	// the given path, possibly using the given options.
 	// May return an ErrUnsupportedMethod in certain StorageDriver
 	// implementations.
-	URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error)
+	URLFor(ctx context.Context, path string, options map[string]any) (string, error)
 }
 
 // StorageDeleter defines methods that a Storage Driver must implement to delete objects.

@@ -17,20 +17,20 @@ type RedirectMiddlewareSuite struct {
 }
 
 func (suite *RedirectMiddlewareSuite) TestNoConfig() {
-	options := make(map[string]interface{})
+	options := make(map[string]any)
 	_, err := newRedirectStorageMiddleware(nil, options)
 	require.ErrorContains(suite.T(), err, "no baseurl provided")
 }
 
 func (suite *RedirectMiddlewareSuite) TestMissingScheme() {
-	options := make(map[string]interface{})
+	options := make(map[string]any)
 	options["baseurl"] = "example.com"
 	_, err := newRedirectStorageMiddleware(nil, options)
 	require.ErrorContains(suite.T(), err, "no scheme specified for redirect baseurl")
 }
 
 func (suite *RedirectMiddlewareSuite) TestHttpsPort() {
-	options := make(map[string]interface{})
+	options := make(map[string]any)
 	options["baseurl"] = "https://example.com:5443"
 	middleware, err := newRedirectStorageMiddleware(nil, options)
 	require.NoError(suite.T(), err)
@@ -46,7 +46,7 @@ func (suite *RedirectMiddlewareSuite) TestHttpsPort() {
 }
 
 func (suite *RedirectMiddlewareSuite) TestHTTP() {
-	options := make(map[string]interface{})
+	options := make(map[string]any)
 	options["baseurl"] = "http://example.com"
 	middleware, err := newRedirectStorageMiddleware(nil, options)
 	require.NoError(suite.T(), err)

@@ -212,7 +212,7 @@ func (base *Base) Delete(ctx context.Context, path string) error {
 }
 
 // URLFor wraps URLFor of underlying storage driver.
-func (base *Base) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (base *Base) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	ctx, done := dcontext.WithTrace(ctx)
 	defer done("%s.URLFor(%q)", base.Name(), path)
 

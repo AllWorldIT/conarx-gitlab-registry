@@ -3315,7 +3315,7 @@ func TestNewDBLoadBalancer_ReplicaResolveTimeout_ConnectionOpenTimeout(t *testin
 	}
 
 	mockConnector.EXPECT().Open(gomock.Any(), replicaDSN, gomock.Any()).
-		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...interface{}) (*datastore.DB, error) {
+		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...any) (*datastore.DB, error) {
 			// Validate that the context has a deadline and it's ~100ms from now
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
@@ -3544,7 +3544,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 	}
 
 	mockConnector.EXPECT().Open(gomock.Any(), replicaDSN, gomock.Any()).
-		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...interface{}) (*datastore.DB, error) {
+		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...any) (*datastore.DB, error) {
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
 			require.WithinDuration(t, time.Now().Add(datastore.ReplicaResolveTimeout), deadline, datastore.ReplicaResolveTimeout/10)

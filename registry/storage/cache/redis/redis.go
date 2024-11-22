@@ -131,7 +131,7 @@ func (rbds *redisBlobDescriptorService) SetDescriptor(ctx context.Context, dgst 
 }
 
 func (rbds *redisBlobDescriptorService) setDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
-	if err := rbds.client.HMSet(ctx, rbds.blobDescriptorHashKey(dgst), map[string]interface{}{
+	if err := rbds.client.HMSet(ctx, rbds.blobDescriptorHashKey(dgst), map[string]any{
 		"digest": desc.Digest.String(),
 		"size":   desc.Size,
 	}).Err(); err != nil {

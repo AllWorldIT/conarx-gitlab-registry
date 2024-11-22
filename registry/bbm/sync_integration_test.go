@@ -521,7 +521,7 @@ func (s *BackgroundMigrationTestSuite) requireBackgroundMigrations(expected map[
 			var count int
 			err := s.db.QueryRow(qBM, actualBM.ID).Scan(&count)
 			s.Require().NoError(err)
-			s.Require().Equal(0, count, fmt.Sprintf("Expected no background migration jobs for background migration: %d, but found some", actualBM.ID))
+			s.Require().Equalf(0, count, "Expected no background migration jobs for background migration: %d, but found some", actualBM.ID)
 			return
 		} else {
 			// Check the associated jobs
@@ -548,7 +548,7 @@ func (s *BackgroundMigrationTestSuite) requireBackgroundMigrations(expected map[
 				actualJobs = append(actualJobs, job)
 			}
 
-			require.ElementsMatch(s.T(), expectedJobs, actualJobs, fmt.Sprintf("Expected background migration jobs for background migration: %d to match", actualBM.ID))
+			require.ElementsMatchf(s.T(), expectedJobs, actualJobs, "Expected background migration jobs for background migration: %d to match", actualBM.ID)
 		}
 	}
 }

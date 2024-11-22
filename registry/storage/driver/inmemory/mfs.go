@@ -20,6 +20,7 @@ var (
 
 type node interface {
 	name() string
+	//nolint: revive // import-shadowing, unfortunate name, but too much work to change it
 	path() string
 	isdir() bool
 	modtime() time.Time
@@ -35,7 +36,7 @@ type dir struct {
 
 var _ node = &dir{}
 
-func (d *dir) isdir() bool {
+func (*dir) isdir() bool {
 	return true
 }
 
@@ -286,7 +287,7 @@ type file struct {
 
 var _ node = &file{}
 
-func (f *file) isdir() bool {
+func (*file) isdir() bool {
 	return false
 }
 

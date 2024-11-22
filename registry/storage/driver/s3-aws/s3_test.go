@@ -208,25 +208,25 @@ func BenchmarkS3DriverSuite(b *testing.B) {
 }
 
 func TestS3Driver_parseParameters(t *testing.T) {
-	p := map[string]interface{}{
+	p := map[string]any{
 		"region": "us-west-2",
 		"bucket": "test",
 		"v4auth": "true",
 	}
 
-	testFn := func(params map[string]interface{}) (interface{}, error) {
+	testFn := func(params map[string]any) (any, error) {
 		return parseParameters(params)
 	}
 
 	tcs := map[string]struct {
-		parameters      map[string]interface{}
+		parameters      map[string]any
 		paramName       string
 		driverParamName string
 		required        bool
 		nilAllowed      bool
 		emptyAllowed    bool
 		nonTypeAllowed  bool
-		defaultt        interface{}
+		defaultt        any
 	}{
 		"secure": {
 			parameters:      p,
@@ -247,7 +247,7 @@ func TestS3Driver_parseParameters(t *testing.T) {
 			defaultt:        false,
 		},
 		"pathstyle_with_region_endpoint": {
-			parameters: func() map[string]interface{} {
+			parameters: func() map[string]any {
 				pp := dtestutil.CopyMap(p)
 				pp["regionendpoint"] = "region/endpoint"
 
@@ -315,7 +315,7 @@ func TestS3Driver_parseParameters(t *testing.T) {
 			defaultt:       "",
 		},
 		"region_with_regionendpoint": {
-			parameters: func() map[string]interface{} {
+			parameters: func() map[string]any {
 				pp := dtestutil.CopyMap(p)
 				pp["regionendpoint"] = "region/endpoint"
 
@@ -408,45 +408,45 @@ func TestS3Driver_parseParameters(t *testing.T) {
 
 func TestS3DriverFromParameters(t *testing.T) {
 	// Minimal params needed to construct the driver.
-	baseParams := map[string]interface{}{
+	baseParams := map[string]any{
 		"region": "us-west-2",
 		"bucket": "test",
 		"v4auth": "true",
 	}
 
 	tests := []struct {
-		params              map[string]interface{}
+		params              map[string]any
 		wantedForcePathBool bool
 	}{
 		{
-			map[string]interface{}{
+			map[string]any{
 				"pathstyle": "false",
 			}, false,
 		},
 		{
-			map[string]interface{}{
+			map[string]any{
 				"pathstyle": "true",
 			}, true,
 		},
 		{
-			map[string]interface{}{
+			map[string]any{
 				"regionendpoint": "test-endpoint",
 				"pathstyle":      "false",
 			}, false,
 		},
 		{
-			map[string]interface{}{
+			map[string]any{
 				"regionendpoint": "test-endpoint",
 				"pathstyle":      "true",
 			}, true,
 		},
 		{
-			map[string]interface{}{
+			map[string]any{
 				"regionendpoint": "",
 			}, false,
 		},
 		{
-			map[string]interface{}{
+			map[string]any{
 				"regionendpoint": "test-endpoint",
 			}, true,
 		},
@@ -645,7 +645,7 @@ func TestS3DriverURLFor_Expiry(t *testing.T) {
 
 	// custom
 	dt := mock.Now().Add(1 * time.Hour)
-	s, err = d.URLFor(ctx, fp, map[string]interface{}{"expiry": dt})
+	s, err = d.URLFor(ctx, fp, map[string]any{"expiry": dt})
 	require.NoError(t, err)
 
 	u, err = url.Parse(s)
@@ -991,7 +991,7 @@ func TestS3DriverClientTransport(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		params := map[string]interface{}{
+		params := map[string]any{
 			"region":     os.Getenv("AWS_REGION"),
 			"bucket":     os.Getenv("S3_BUCKET"),
 			"skipverify": tc.skipverify,

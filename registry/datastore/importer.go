@@ -1033,7 +1033,7 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 			l.WithError(err).Error("counting table rows")
 		}
 
-		logCounters := make(map[string]interface{}, len(counters))
+		logCounters := make(map[string]any, len(counters))
 		for t, n := range counters {
 			logCounters[t] = n
 		}
@@ -1178,7 +1178,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 			l.WithError(err).Error("counting table rows")
 		}
 
-		logCounters := make(map[string]interface{}, len(counters))
+		logCounters := make(map[string]any, len(counters))
 		for t, n := range counters {
 			logCounters[t] = n
 		}
@@ -1444,7 +1444,7 @@ func (imp *Importer) Import(ctx context.Context, path string) error {
 			l.WithError(err).Error("counting table rows")
 		}
 
-		logCounters := make(map[string]interface{}, len(counters))
+		logCounters := make(map[string]any, len(counters))
 		for t, n := range counters {
 			logCounters[t] = n
 		}
@@ -1535,7 +1535,7 @@ func (imp *Importer) PreImport(ctx context.Context, path string) error {
 			l.WithError(err).Error("counting table rows")
 		}
 
-		logCounters := make(map[string]interface{}, len(counters))
+		logCounters := make(map[string]any, len(counters))
 		for t, n := range counters {
 			logCounters[t] = n
 		}

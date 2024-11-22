@@ -8,7 +8,7 @@
 // An implementation registers its access controller by name with a constructor
 // which accepts an options map for configuring the access controller.
 //
-//	options := map[string]interface{}{"sillySecret": "whysosilly?"}
+//	options := map[string]any{"sillySecret": "whysosilly?"}
 //	accessController, _ := auth.GetAccessController("silly", options)
 //
 // This `accessController` can then be used in a request handler like so:
@@ -132,7 +132,7 @@ type userInfoContext struct {
 	user UserInfo
 }
 
-func (uic userInfoContext) Value(key interface{}) interface{} {
+func (uic userInfoContext) Value(key any) any {
 	switch key {
 	case UserKey:
 		return uic.user
@@ -160,7 +160,7 @@ type resourceContext struct {
 
 type resourceKey struct{}
 
-func (rc resourceContext) Value(key interface{}) interface{} {
+func (rc resourceContext) Value(key any) any {
 	switch key {
 	case resourceKey{}:
 		return rc.resources
@@ -192,7 +192,7 @@ func AuthorizedResources(ctx context.Context) []Resource {
 
 // InitFunc is the type of an AccessController factory function and is used
 // to register the constructor for different AccesController backends.
-type InitFunc func(options map[string]interface{}) (AccessController, error)
+type InitFunc func(options map[string]any) (AccessController, error)
 
 var accessControllers map[string]InitFunc
 
@@ -214,7 +214,7 @@ func Register(name string, initFunc InitFunc) error {
 
 // GetAccessController constructs an AccessController
 // with the given options using the named backend.
-func GetAccessController(name string, options map[string]interface{}) (AccessController, error) {
+func GetAccessController(name string, options map[string]any) (AccessController, error) {
 	if initFunc, exists := accessControllers[name]; exists {
 		return initFunc(options)
 	}

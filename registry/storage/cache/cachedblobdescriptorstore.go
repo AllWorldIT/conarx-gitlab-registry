@@ -22,7 +22,7 @@ type Metrics struct {
 //
 // Usually, this is just a proxy to log.GetLogger.
 type Logger interface {
-	Errorf(format string, args ...interface{})
+	Errorf(format string, args ...any)
 }
 
 // MetricsTracker represents a metric tracker

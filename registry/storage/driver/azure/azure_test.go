@@ -298,14 +298,14 @@ func TestAzureDriverStatRootPath(t *testing.T) {
 }
 
 func TestAzureDriver_parseParameters_Bool(t *testing.T) {
-	p := map[string]interface{}{
+	p := map[string]any{
 		"accountname": "accountName",
 		"accountkey":  "accountKey",
 		"container":   "container",
 		// TODO: add string test cases, if needed?
 	}
 
-	testFn := func(params map[string]interface{}) (interface{}, error) {
+	testFn := func(params map[string]any) (any, error) {
 		return parseParameters(params)
 	}
 
@@ -353,7 +353,7 @@ func TestAzureDriverURLFor_Expiry(t *testing.T) {
 
 	// custom
 	dt = mock.Now().Add(1 * time.Hour)
-	s, err = d.URLFor(ctx, fp, map[string]interface{}{"expiry": dt})
+	s, err = d.URLFor(ctx, fp, map[string]any{"expiry": dt})
 	require.NoError(t, err)
 
 	u, err = url.Parse(s)
@@ -365,45 +365,45 @@ func TestAzureDriverURLFor_Expiry(t *testing.T) {
 func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
 	tests := []struct {
 		name                    string
-		config                  map[string]interface{}
+		config                  map[string]any
 		expectedUseLegacyPrefix bool
 	}{
 		{
 			name:                    "config: legacyrootprefix not set trimlegacyrootprefix not set",
-			config:                  map[string]interface{}{},
+			config:                  map[string]any{},
 			expectedUseLegacyPrefix: false,
 		},
 		{
 			name: "config: legacyrootprefix set trimlegacyrootprefix not set",
-			config: map[string]interface{}{
+			config: map[string]any{
 				paramLegacyRootPrefix: true,
 			},
 			expectedUseLegacyPrefix: true,
 		},
 		{
 			name: "config: legacyrootprefix false trimlegacyrootprefix not set",
-			config: map[string]interface{}{
+			config: map[string]any{
 				paramLegacyRootPrefix: false,
 			},
 			expectedUseLegacyPrefix: false,
 		},
 		{
 			name: "config: legacyrootprefix not set trimlegacyrootprefix true",
-			config: map[string]interface{}{
+			config: map[string]any{
 				paramTrimLegacyRootPrefix: true,
 			},
 			expectedUseLegacyPrefix: false,
 		},
 		{
 			name: "config: legacyrootprefix not set trimlegacyrootprefix false",
-			config: map[string]interface{}{
+			config: map[string]any{
 				paramTrimLegacyRootPrefix: false,
 			},
 			expectedUseLegacyPrefix: true,
 		},
 		{
 			name: "config: legacyrootprefix true trimlegacyrootprefix false",
-			config: map[string]interface{}{
+			config: map[string]any{
 				paramTrimLegacyRootPrefix: false,
 				paramLegacyRootPrefix:     true,
 			},
@@ -411,7 +411,7 @@ func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
 		},
 		{
 			name: "config: legacyrootprefix false trimlegacyrootprefix true",
-			config: map[string]interface{}{
+			config: map[string]any{
 				paramTrimLegacyRootPrefix: true,
 				paramLegacyRootPrefix:     false,
 			},
@@ -430,19 +430,19 @@ func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
 func TestAzureDriverInferRootPrefixConfiguration_Invalid(t *testing.T) {
 	tests := []struct {
 		name                    string
-		config                  map[string]interface{}
+		config                  map[string]any
 		expectedUseLegacyPrefix bool
 	}{
 		{
 			name: "config: legacyrootprefix true trimlegacyrootprefix true",
-			config: map[string]interface{}{
+			config: map[string]any{
 				paramTrimLegacyRootPrefix: true,
 				paramLegacyRootPrefix:     true,
 			},
 		},
 		{
 			name: "config: legacyrootprefix false trimlegacyrootprefix false",
-			config: map[string]interface{}{
+			config: map[string]any{
 				paramTrimLegacyRootPrefix: false,
 				paramLegacyRootPrefix:     false,
 			},

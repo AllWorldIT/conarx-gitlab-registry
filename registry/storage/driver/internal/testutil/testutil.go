@@ -8,15 +8,15 @@ import (
 )
 
 type Opts struct {
-	Defaultt          interface{}
+	Defaultt          any
 	Required          bool
 	NilAllowed        bool
 	EmptyAllowed      bool
 	NonTypeAllowed    bool
 	ParamName         string
 	DriverParamName   string
-	OriginalParams    map[string]interface{}
-	ParseParametersFn func(map[string]interface{}) (interface{}, error)
+	OriginalParams    map[string]any
+	ParseParametersFn func(map[string]any) (any, error)
 }
 
 func AssertByDefaultType(t *testing.T, opts Opts) {
@@ -121,7 +121,7 @@ func TestStringValue(t *testing.T, opts Opts) {
 	}
 }
 
-func AssertParam(t *testing.T, params interface{}, fieldName string, expected interface{}, msgs ...interface{}) {
+func AssertParam(t *testing.T, params any, fieldName string, expected any, msgs ...any) {
 	t.Helper()
 
 	r := reflect.ValueOf(params)
@@ -137,8 +137,8 @@ func AssertParam(t *testing.T, params interface{}, fieldName string, expected in
 	}
 }
 
-func CopyMap(original map[string]interface{}) map[string]interface{} {
-	newMap := make(map[string]interface{})
+func CopyMap(original map[string]any) map[string]any {
+	newMap := make(map[string]any)
 	for k, v := range original {
 		newMap[k] = v
 	}

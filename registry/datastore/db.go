@@ -55,9 +55,9 @@ const (
 
 // Queryer is the common interface to execute queries on a database.
 type Queryer interface {
-	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 // Handler represents a database connection handler.
@@ -288,7 +288,7 @@ type logger struct {
 var logMinifyPattern = regexp.MustCompile(`\s+|\t+|\n+`)
 
 // Log implements the tracelog.Logger interface.
-func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, data map[string]interface{}) {
+func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, data map[string]any) {
 	// silence if debug level is not enabled, unless it's a warn or error
 	if !l.Logger.IsLevelEnabled(logrus.DebugLevel) && level != tracelog.LogLevelWarn && level != tracelog.LogLevelError {
 		return

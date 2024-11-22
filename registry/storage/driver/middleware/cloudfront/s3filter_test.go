@@ -17,7 +17,7 @@ import (
 )
 
 // Rather than pull in all of testify
-func assertEqual(t *testing.T, x, y interface{}) {
+func assertEqual(t *testing.T, x, y any) {
 	if !reflect.DeepEqual(x, y) {
 		t.Errorf("%s: Not equal! Expected='%v', Actual='%v'\n", t.Name(), x, y)
 		t.FailNow()

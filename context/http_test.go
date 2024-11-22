@@ -27,7 +27,7 @@ func TestWithRequest(t *testing.T) {
 	ctx := WithRequest(Background(), &req)
 	for _, testcase := range []struct {
 		key      string
-		expected interface{}
+		expected any
 	}{
 		{
 			key:      "http.request",
@@ -111,7 +111,7 @@ func TestWithRequest_MappedKeys(t *testing.T) {
 	ctx := WithRequest(Background(), &req)
 	for _, testcase := range []struct {
 		key      string
-		expected interface{}
+		expected any
 	}{
 		{
 			key:      "method",
@@ -252,7 +252,7 @@ func TestWithVars(t *testing.T) {
 	ctx := WithVars(Background(), &req)
 	for _, testcase := range []struct {
 		key      string
-		expected interface{}
+		expected any
 	}{
 		{
 			key:      "vars",
@@ -349,7 +349,7 @@ func TestWithCFRayID(t *testing.T) {
 	testcases := []struct {
 		name                 string
 		requestHeaders       map[string]string
-		expectedContextValue interface{}
+		expectedContextValue any
 		expectedCFRayIDKey   CFRayIDKey
 	}{
 		{

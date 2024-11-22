@@ -69,7 +69,7 @@ func TestRegulatorEnterExit(t *testing.T) {
 
 func TestGetLimitFromParameter(t *testing.T) {
 	tests := []struct {
-		Input    interface{}
+		Input    any
 		Expected uint64
 		Min      uint64
 		Default  uint64

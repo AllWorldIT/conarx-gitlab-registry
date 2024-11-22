@@ -172,13 +172,13 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	purgeConfig := uploadPurgeDefaultConfig()
 	if mc, ok := config.Storage["maintenance"]; ok {
 		if v, ok := mc["uploadpurging"]; ok {
-			purgeConfig, ok = v.(map[interface{}]interface{})
+			purgeConfig, ok = v.(map[any]any)
 			if !ok {
 				return nil, fmt.Errorf("uploadpurging config key must contain additional keys")
 			}
 		}
 		if v, ok := mc["readonly"]; ok {
-			readOnly, ok := v.(map[interface{}]interface{})
+			readOnly, ok := v.(map[any]any)
 			if !ok {
 				return nil, fmt.Errorf("readonly config key must contain additional keys")
 			}
@@ -270,7 +270,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	} else {
 		l := log
 		exceptions := config.Storage["redirect"]["exceptions"]
-		if exceptions, ok := exceptions.([]interface{}); ok && len(exceptions) > 0 {
+		if exceptions, ok := exceptions.([]any); ok && len(exceptions) > 0 {
 			s := make([]string, len(exceptions))
 			for i, v := range exceptions {
 				s[i] = fmt.Sprint(v)
@@ -1173,9 +1173,9 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 		registry = expvar.NewMap("registry")
 	}
 
-	registry.(*expvar.Map).Set("redis", expvar.Func(func() interface{} {
+	registry.(*expvar.Map).Set("redis", expvar.Func(func() any {
 		poolStats := app.redis.PoolStats()
-		return map[string]interface{}{
+		return map[string]any{
 			"Config": configuration.Redis,
 			"Active": poolStats.TotalConns - poolStats.IdleConns,
 		}
@@ -1930,8 +1930,8 @@ func applyStorageMiddleware(driver storagedriver.StorageDriver, middlewares []co
 // uploadPurgeDefaultConfig provides a default configuration for upload
 // purging to be used in the absence of configuration in the
 // configuration file
-func uploadPurgeDefaultConfig() map[interface{}]interface{} {
-	config := map[interface{}]interface{}{}
+func uploadPurgeDefaultConfig() map[any]any {
+	config := map[any]any{}
 	config["enabled"] = true
 	config["age"] = "168h"
 	config["interval"] = "24h"
@@ -1945,7 +1945,7 @@ func badPurgeUploadConfig(reason string) error {
 
 // startUploadPurger schedules a goroutine which will periodically
 // check upload directories for old files and delete them
-func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageDriver, log dcontext.Logger, config map[interface{}]interface{}) error {
+func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageDriver, log dcontext.Logger, config map[any]any) error {
 	if config["enabled"] == false {
 		return nil
 	}

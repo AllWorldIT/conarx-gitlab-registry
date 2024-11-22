@@ -53,7 +53,7 @@ func setupRegistry() (*Registry, error) {
 	defer ln.Close()
 	config.HTTP.Addr = ln.Addr().String()
 	config.HTTP.DrainTimeout = time.Duration(10) * time.Second
-	config.Storage = map[string]configuration.Parameters{"inmemory": map[string]interface{}{}}
+	config.Storage = map[string]configuration.Parameters{"inmemory": map[string]any{}}
 	return NewRegistry(context.Background(), config)
 }
 
@@ -401,7 +401,7 @@ func TestConfigureMonitoring(t *testing.T) {
 func Test_validate_redirect(t *testing.T) {
 	tests := []struct {
 		name          string
-		redirect      map[string]interface{}
+		redirect      map[string]any
 		expectedError error
 	}{
 		{
@@ -410,55 +410,55 @@ func Test_validate_redirect(t *testing.T) {
 		},
 		{
 			name:     "no parameters",
-			redirect: map[string]interface{}{},
+			redirect: map[string]any{},
 		},
 		{
 			name: "no disable parameter",
-			redirect: map[string]interface{}{
+			redirect: map[string]any{
 				"expirydelay": 2 * time.Minute,
 			},
 		},
 		{
 			name: "bool disable parameter",
-			redirect: map[string]interface{}{
+			redirect: map[string]any{
 				"disable": true,
 			},
 		},
 		{
 			name: "invalid disable parameter",
-			redirect: map[string]interface{}{
+			redirect: map[string]any{
 				"disable": "true",
 			},
 			expectedError: errors.New("1 error occurred:\n\t* invalid type string for 'storage.redirect.disable' (boolean)\n\n"),
 		},
 		{
 			name: "no expiry delay parameter",
-			redirect: map[string]interface{}{
+			redirect: map[string]any{
 				"disable": true,
 			},
 		},
 		{
 			name: "duration expiry delay parameter",
-			redirect: map[string]interface{}{
+			redirect: map[string]any{
 				"expirydelay": 2 * time.Minute,
 			},
 		},
 		{
 			name: "string expiry delay parameter",
-			redirect: map[string]interface{}{
+			redirect: map[string]any{
 				"expirydelay": "2ms",
 			},
 		},
 		{
 			name: "invalid expiry delay parameter",
-			redirect: map[string]interface{}{
+			redirect: map[string]any{
 				"expirydelay": 1,
 			},
 			expectedError: errors.New("1 error occurred:\n\t* invalid type int for 'storage.redirect.expirydelay' (duration)\n\n"),
 		},
 		{
 			name: "invalid string expiry delay parameter",
-			redirect: map[string]interface{}{
+			redirect: map[string]any{
 				"expirydelay": "2mm",
 			},
 			expectedError: errors.New("1 error occurred:\n\t* \"2mm\" value for 'storage.redirect.expirydelay' is not a valid duration\n\n"),

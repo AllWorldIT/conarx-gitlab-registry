@@ -29,7 +29,7 @@ var (
 
 	// Loggerf can be used to override the default logging destination. Such
 	// log messages in this library should be logged at warning or higher.
-	Loggerf = func(format string, args ...interface{}) {}
+	Loggerf = func(format string, args ...any) {}
 )
 
 // UUID represents a UUID value. UUIDs can be compared and set to other values

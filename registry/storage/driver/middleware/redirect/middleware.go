@@ -17,7 +17,7 @@ type redirectStorageMiddleware struct {
 
 var _ storagedriver.StorageDriver = &redirectStorageMiddleware{}
 
-func newRedirectStorageMiddleware(sd storagedriver.StorageDriver, options map[string]interface{}) (storagedriver.StorageDriver, error) {
+func newRedirectStorageMiddleware(sd storagedriver.StorageDriver, options map[string]any) (storagedriver.StorageDriver, error) {
 	o, ok := options["baseurl"]
 	if !ok {
 		return nil, fmt.Errorf("no baseurl provided")
@@ -40,7 +40,7 @@ func newRedirectStorageMiddleware(sd storagedriver.StorageDriver, options map[st
 	return &redirectStorageMiddleware{StorageDriver: sd, scheme: u.Scheme, host: u.Host}, nil
 }
 
-func (r *redirectStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (r *redirectStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	u := &url.URL{Scheme: r.scheme, Host: r.host, Path: path}
 	return u.String(), nil
 }

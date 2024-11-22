@@ -264,7 +264,7 @@ func (bw *blobWriter) validateBlob(ctx context.Context, desc distribution.Descri
 
 	if !verified {
 		dcontext.GetLoggerWithFields(ctx,
-			map[interface{}]interface{}{
+			map[any]any{
 				"canonical": canonical,
 				"provided":  desc.Digest,
 			}, "canonical", "provided").

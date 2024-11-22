@@ -334,7 +334,7 @@ func configureLogging(ctx context.Context, config *configuration.Configuration) 
 
 	if len(config.Log.Fields) > 0 {
 		// build up the static fields, if present.
-		var fields []interface{}
+		var fields []any
 		for k := range config.Log.Fields {
 			fields = append(fields, k)
 		}

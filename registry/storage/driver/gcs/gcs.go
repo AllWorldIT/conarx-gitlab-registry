@@ -113,7 +113,7 @@ func init() {
 type gcsDriverFactory struct{}
 
 // Create StorageDriver from parameters
-func (factory *gcsDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (factory *gcsDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -143,7 +143,7 @@ type baseEmbed struct {
 // FromParameters constructs a new Driver with a given parameters map
 // Required parameters:
 // - bucket
-func FromParameters(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	params, err := parseParameters(parameters)
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func FromParameters(parameters map[string]interface{}) (storagedriver.StorageDri
 	return New(params)
 }
 
-func parseParameters(parameters map[string]interface{}) (*driverParameters, error) {
+func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	bucket, ok := parameters["bucket"]
 	if !ok || fmt.Sprint(bucket) == "" {
 		return nil, fmt.Errorf("no bucket parameter provided")
@@ -201,12 +201,12 @@ func parseParameters(parameters map[string]interface{}) (*driverParameters, erro
 		}
 		ts = jwtConf.TokenSource(context.Background())
 	} else if credentials, ok := parameters["credentials"]; ok {
-		credentialMap, ok := credentials.(map[interface{}]interface{})
+		credentialMap, ok := credentials.(map[any]any)
 		if !ok {
 			return nil, fmt.Errorf("the credentials were not specified in the correct format")
 		}
 
-		stringMap := map[string]interface{}{}
+		stringMap := map[string]any{}
 		for k, v := range credentialMap {
 			key, ok := k.(string)
 			if !ok {
@@ -959,7 +959,7 @@ var systemClock internal.Clock = clock.New()
 // URLFor returns a URL which may be used to retrieve the content stored at
 // the given path, possibly using the given options.
 // Returns ErrUnsupportedMethod if this driver has no privateKey
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	if d.privateKey == nil {
 		return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 	}

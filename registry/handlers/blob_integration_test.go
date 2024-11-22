@@ -73,7 +73,7 @@ func newEnv(t *testing.T) *env {
 		ctx: context.Background(),
 		config: &configuration.Configuration{
 			Storage: map[string]configuration.Parameters{
-				"delete": map[string]interface{}{
+				"delete": map[string]any{
 					"enabled": true,
 				},
 			},

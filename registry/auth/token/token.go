@@ -315,7 +315,7 @@ func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (li
 	}
 
 	// Check to see if the key includes a certificate chain.
-	x5cVal, ok := pubKey.GetExtendedField("x5c").([]interface{})
+	x5cVal, ok := pubKey.GetExtendedField("x5c").([]any)
 	if !ok {
 		// The JWK should be one of the trusted root keys.
 		if _, trusted := verifyOpts.TrustedKeys[pubKey.KeyID()]; !trusted {

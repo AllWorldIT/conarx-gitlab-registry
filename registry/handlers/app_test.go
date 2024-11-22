@@ -158,7 +158,7 @@ func testConfig() *configuration.Configuration {
 	return &configuration.Configuration{
 		Storage: configuration.Storage{
 			"testdriver": nil,
-			"maintenance": configuration.Parameters{"uploadpurging": map[interface{}]interface{}{
+			"maintenance": configuration.Parameters{"uploadpurging": map[any]any{
 				"enabled": false,
 			}},
 		},
@@ -990,7 +990,7 @@ func TestNewApp_Locks_Errors(t *testing.T) {
 
 	for tn, tc := range tcs {
 		t.Run(tn, func(t *testing.T) {
-			config.Storage["filesystem"] = map[string]interface{}{
+			config.Storage["filesystem"] = map[string]any{
 				"rootdirectory": tc.rootdir,
 			}
 			config.Database.Enabled = tc.databaseEnabled

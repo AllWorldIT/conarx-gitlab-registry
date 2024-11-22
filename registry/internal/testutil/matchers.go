@@ -12,7 +12,7 @@ type IsContextWithDeadline struct {
 }
 
 // Matches implements gomock.Matcher.
-func (m IsContextWithDeadline) Matches(x interface{}) bool {
+func (m IsContextWithDeadline) Matches(x any) bool {
 	ctx, ok := x.(context.Context)
 	if !ok {
 		return false
