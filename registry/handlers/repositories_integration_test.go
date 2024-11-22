@@ -78,7 +78,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Storage: configuration.Storage{
 			"testdriver": configuration.Parameters{},
 			"maintenance": configuration.Parameters{
-				"uploadpurging": map[interface{}]interface{}{"enabled": false},
+				"uploadpurging": map[any]any{"enabled": false},
 			},
 		},
 		GC: configuration.GC{Disabled: true},

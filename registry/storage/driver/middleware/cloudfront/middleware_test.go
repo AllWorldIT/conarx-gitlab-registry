@@ -17,13 +17,13 @@ type CloudfrontMiddlewareSuite struct {
 }
 
 func (suite *CloudfrontMiddlewareSuite) TestNoConfig() {
-	options := make(map[string]interface{})
+	options := make(map[string]any)
 	_, err := newCloudFrontStorageMiddleware(nil, options)
 	require.ErrorContains(suite.T(), err, "no baseurl provided")
 }
 
 func (suite *CloudfrontMiddlewareSuite) TestCloudFrontStorageMiddlewareGenerateKey() {
-	options := make(map[string]interface{})
+	options := make(map[string]any)
 	options["baseurl"] = "example.com"
 
 	privk := `-----BEGIN RSA PRIVATE KEY-----

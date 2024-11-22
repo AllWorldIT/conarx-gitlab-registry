@@ -715,16 +715,16 @@ func (bs *blobs) Put(ctx context.Context, mediaType string, p []byte) (distribut
 	return writer.Commit(ctx, desc)
 }
 
-type optionFunc func(interface{}) error
+type optionFunc func(any) error
 
-func (f optionFunc) Apply(v interface{}) error {
+func (f optionFunc) Apply(v any) error {
 	return f(v)
 }
 
 // WithMountFrom returns a BlobCreateOption which designates that the blob should be
 // mounted from the given canonical reference.
 func WithMountFrom(ref reference.Canonical) distribution.BlobCreateOption {
-	return optionFunc(func(v interface{}) error {
+	return optionFunc(func(v any) error {
 		opts, ok := v.(*distribution.CreateOptions)
 		if !ok {
 			return fmt.Errorf("unexpected options type: %T", v)

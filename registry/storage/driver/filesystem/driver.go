@@ -43,7 +43,7 @@ func init() {
 // filesystemDriverFactory implements the factory.StorageDriverFactory interface
 type filesystemDriverFactory struct{}
 
-func (factory *filesystemDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (factory *filesystemDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -65,7 +65,7 @@ type Driver struct {
 // Optional Parameters:
 // - rootdirectory
 // - maxthreads
-func FromParameters(parameters map[string]interface{}) (*Driver, error) {
+func FromParameters(parameters map[string]any) (*Driver, error) {
 	params, err := fromParametersImpl(parameters)
 	if err != nil || params == nil {
 		return nil, err
@@ -73,7 +73,7 @@ func FromParameters(parameters map[string]interface{}) (*Driver, error) {
 	return New(*params), nil
 }
 
-func fromParametersImpl(parameters map[string]interface{}) (*DriverParameters, error) {
+func fromParametersImpl(parameters map[string]any) (*DriverParameters, error) {
 	var (
 		err           error
 		maxThreads    = defaultMaxThreads
@@ -333,7 +333,7 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 
 // URLFor returns a URL which may be used to retrieve the content stored at the given path.
 // May return an UnsupportedMethodErr in certain StorageDriver implementations.
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 }
 

@@ -48,7 +48,7 @@ type Configuration struct {
 
 		// Fields allows users to specify static string fields to include in
 		// the logger context.
-		Fields map[string]interface{} `yaml:"fields,omitempty"`
+		Fields map[string]any `yaml:"fields,omitempty"`
 	}
 
 	// Loglevel is the level at which registry operations are logged.
@@ -613,7 +613,7 @@ type v0_1Configuration Configuration
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 // Unmarshals a string of the form X.Y into a Version, validating that X and Y can represent unsigned integers
-func (version *Version) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (version *Version) UnmarshalYAML(unmarshal func(any) error) error {
 	var versionString string
 	err := unmarshal(&versionString)
 	if err != nil {
@@ -672,7 +672,7 @@ func (l Loglevel) isValid() bool {
 
 // UnmarshalYAML implements the yaml.Umarshaler interface for Loglevel, parsing it and validating that it represents a
 // valid log level.
-func (l *Loglevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (l *Loglevel) UnmarshalYAML(unmarshal func(any) error) error {
 	var val string
 	err := unmarshal(&val)
 	if err != nil {
@@ -728,7 +728,7 @@ func (out logOutput) isValid() bool {
 
 // UnmarshalYAML implements the yaml.Umarshaler interface for logOutput, parsing it and validating that it represents a
 // valid log output destination.
-func (out *logOutput) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (out *logOutput) UnmarshalYAML(unmarshal func(any) error) error {
 	var val string
 	if err := unmarshal(&val); err != nil {
 		return err
@@ -773,7 +773,7 @@ func (ft logFormat) isValid() bool {
 
 // UnmarshalYAML implements the yaml.Umarshaler interface for logFormat, parsing it and validating that it
 // represents a valid application log output format.
-func (ft *logFormat) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (ft *logFormat) UnmarshalYAML(unmarshal func(any) error) error {
 	var val string
 	if err := unmarshal(&val); err != nil {
 		return err
@@ -818,7 +818,7 @@ func (ft accessLogFormat) isValid() bool {
 
 // UnmarshalYAML implements the yaml.Umarshaler interface for accessLogFormat, parsing it and validating that it
 // represents a valid access log output format.
-func (ft *accessLogFormat) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (ft *accessLogFormat) UnmarshalYAML(unmarshal func(any) error) error {
 	var val string
 	if err := unmarshal(&val); err != nil {
 		return err
@@ -834,7 +834,7 @@ func (ft *accessLogFormat) UnmarshalYAML(unmarshal func(interface{}) error) erro
 }
 
 // Parameters defines a key-value parameters mapping
-type Parameters map[string]interface{}
+type Parameters map[string]any
 
 // Storage defines the configuration for registry object storage
 type Storage map[string]Parameters
@@ -873,13 +873,13 @@ func (storage Storage) Parameters() Parameters {
 }
 
 // setParameter changes the parameter at the provided key to the new value
-func (storage Storage) setParameter(key string, value interface{}) {
+func (storage Storage) setParameter(key string, value any) {
 	storage[storage.Type()][key] = value
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 // Unmarshals a single item map into a Storage or a string into a Storage type with no parameters
-func (storage *Storage) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (storage *Storage) UnmarshalYAML(unmarshal func(any) error) error {
 	var storageMap map[string]Parameters
 	err := unmarshal(&storageMap)
 	if err == nil {
@@ -919,7 +919,7 @@ func (storage *Storage) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // MarshalYAML implements the yaml.Marshaler interface
-func (storage Storage) MarshalYAML() (interface{}, error) {
+func (storage Storage) MarshalYAML() (any, error) {
 	if storage.Parameters() == nil {
 		return storage.Type(), nil
 	}
@@ -944,13 +944,13 @@ func (auth Auth) Parameters() Parameters {
 }
 
 // setParameter changes the parameter at the provided key to the new value
-func (auth Auth) setParameter(key string, value interface{}) {
+func (auth Auth) setParameter(key string, value any) {
 	auth[auth.Type()][key] = value
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 // Unmarshals a single item map into a Storage or a string into a Storage type with no parameters
-func (auth *Auth) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (auth *Auth) UnmarshalYAML(unmarshal func(any) error) error {
 	var m map[string]Parameters
 	err := unmarshal(&m)
 	if err == nil {
@@ -977,7 +977,7 @@ func (auth *Auth) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // MarshalYAML implements the yaml.Marshaler interface
-func (auth Auth) MarshalYAML() (interface{}, error) {
+func (auth Auth) MarshalYAML() (any, error) {
 	if auth.Parameters() == nil {
 		return auth.Type(), nil
 	}
@@ -1086,7 +1086,7 @@ func Parse(rd io.Reader, opts ...ParseOption) (*Configuration, error) {
 		{
 			Version: MajorMinorVersion(0, 1),
 			ParseAs: reflect.TypeOf(v0_1Configuration{}),
-			ConversionFunc: func(c interface{}) (interface{}, error) {
+			ConversionFunc: func(c any) (any, error) {
 				if v0_1, ok := c.(*v0_1Configuration); ok {
 					if v0_1.Log.Level == Loglevel("") {
 						if v0_1.Loglevel != Loglevel("") {

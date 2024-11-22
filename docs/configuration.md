@@ -809,7 +809,7 @@ middleware:
 Each middleware entry has `name` and `options` entries. The `name` must
 correspond to the name under which the middleware registers itself. The
 `options` field is a map that details custom configuration required to
-initialize the middleware. It is treated as a `map[string]interface{}`. As such,
+initialize the middleware. It is treated as a `map[string]any`. As such,
 it supports any interesting structures desired, leaving it up to the middleware
 initialization function to best determine how to handle the specific
 interpretation of the options.

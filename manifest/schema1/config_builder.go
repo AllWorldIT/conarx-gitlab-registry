@@ -278,7 +278,7 @@ func MakeV1ConfigFromConfig(configJSON []byte, v1ID, parentV1ID string, throwawa
 	return json.Marshal(configAsMap)
 }
 
-func rawJSON(value interface{}) *json.RawMessage {
+func rawJSON(value any) *json.RawMessage {
 	jsonval, err := json.Marshal(value)
 	if err != nil {
 		return nil

@@ -177,10 +177,10 @@ func (rs RegistryScope) String() string {
 
 // Logger defines the injectable logging interface, used on TokenHandlers.
 type Logger interface {
-	Debugf(format string, args ...interface{})
+	Debugf(format string, args ...any)
 }
 
-func logDebugf(logger Logger, format string, args ...interface{}) {
+func logDebugf(logger Logger, format string, args ...any) {
 	if logger == nil {
 		return
 	}

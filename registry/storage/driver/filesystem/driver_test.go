@@ -17,7 +17,7 @@ func TestFilesystemDriverSuite(t *testing.T) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return FromParameters(map[string]interface{}{
+			return FromParameters(map[string]any{
 				"rootdirectory": root,
 			})
 		},
@@ -32,7 +32,7 @@ func BenchmarkFilesystemDriverSuite(b *testing.B) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return FromParameters(map[string]interface{}{
+			return FromParameters(map[string]any{
 				"rootdirectory": root,
 			})
 		},
@@ -53,13 +53,13 @@ func BenchmarkFilesystemDriverSuite(b *testing.B) {
 
 func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 	tests := []struct {
-		params   map[string]interface{} // technically the yaml can contain anything
+		params   map[string]any // technically the yaml can contain anything
 		expected DriverParameters
 		pass     bool
 	}{
 		// check we use default threads and root dirs
 		{
-			params: map[string]interface{}{},
+			params: map[string]any{},
 			expected: DriverParameters{
 				RootDirectory: defaultRootDirectory,
 				MaxThreads:    defaultMaxThreads,
@@ -68,14 +68,14 @@ func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 		},
 		// Testing initiation with a string maxThreads which can't be parsed
 		{
-			params: map[string]interface{}{
+			params: map[string]any{
 				"maxthreads": "fail",
 			},
 			expected: DriverParameters{},
 			pass:     false,
 		},
 		{
-			params: map[string]interface{}{
+			params: map[string]any{
 				"maxthreads": "100",
 			},
 			expected: DriverParameters{
@@ -85,7 +85,7 @@ func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 			pass: true,
 		},
 		{
-			params: map[string]interface{}{
+			params: map[string]any{
 				"maxthreads": 100,
 			},
 			expected: DriverParameters{
@@ -96,7 +96,7 @@ func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 		},
 		// check that we use minimum thread counts
 		{
-			params: map[string]interface{}{
+			params: map[string]any{
 				"maxthreads": 1,
 			},
 			expected: DriverParameters{
@@ -193,7 +193,7 @@ func newTempDirDriver(t *testing.T) *Driver {
 
 	rootDir := t.TempDir()
 
-	d, err := FromParameters(map[string]interface{}{
+	d, err := FromParameters(map[string]any{
 		"rootdirectory": rootDir,
 	})
 	require.NoError(t, err)

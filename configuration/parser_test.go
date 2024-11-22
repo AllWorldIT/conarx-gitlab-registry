@@ -43,7 +43,7 @@ func (suite *ParserSuite) TestParserOverwriteIninitializedPoiner() {
 		{
 			Version: "0.1",
 			ParseAs: reflect.TypeOf(config),
-			ConversionFunc: func(c interface{}) (interface{}, error) {
+			ConversionFunc: func(c any) (any, error) {
 				return c, nil
 			},
 		},
@@ -64,7 +64,7 @@ func (suite *ParserSuite) TestParseOverwriteUnininitializedPoiner() {
 		{
 			Version: "0.1",
 			ParseAs: reflect.TypeOf(config),
-			ConversionFunc: func(c interface{}) (interface{}, error) {
+			ConversionFunc: func(c any) (any, error) {
 				return c, nil
 			},
 		},

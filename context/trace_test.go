@@ -64,7 +64,7 @@ func TestWithTrace(t *testing.T) {
 
 type valueTestCase struct {
 	key           string
-	expected      interface{}
+	expected      any
 	notnilorempty bool // just check not empty/not nil
 }
 

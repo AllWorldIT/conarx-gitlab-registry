@@ -234,7 +234,7 @@ type httpRequestContext struct {
 // Value returns a keyed element of the request for use in the context. To get
 // the request itself, query "request". For other components, access them as
 // "request.<component>". For example, r.RequestURI
-func (ctx *httpRequestContext) Value(key interface{}) interface{} {
+func (ctx *httpRequestContext) Value(key any) any {
 	if keyStr, ok := key.(string); ok {
 		if keyStr == "http.request" {
 			return ctx.r
@@ -291,7 +291,7 @@ type httpMappedRequestContext struct {
 // Value returns a keyed element of the request for use in the context. To get
 // the request itself, query "request". For other components, access them as
 // "request.<component>". For example, r.RequestURI
-func (ctx *httpMappedRequestContext) Value(key interface{}) interface{} {
+func (ctx *httpMappedRequestContext) Value(key any) any {
 	if keyStr, ok := key.(string); ok {
 		// retrieve the actual http request key that corresponds to the request field
 		if requestFieldKey, ok := LogRequestFields[keyStr]; ok {
@@ -306,7 +306,7 @@ type muxVarsContext struct {
 	vars map[string]string
 }
 
-func (ctx *muxVarsContext) Value(key interface{}) interface{} {
+func (ctx *muxVarsContext) Value(key any) any {
 	if keyStr, ok := key.(string); ok {
 		if keyStr == "vars" {
 			return ctx.vars
@@ -364,7 +364,7 @@ func (irw *instrumentedResponseWriter) Flush() {
 	}
 }
 
-func (irw *instrumentedResponseWriter) Value(key interface{}) interface{} {
+func (irw *instrumentedResponseWriter) Value(key any) any {
 	if keyStr, ok := key.(string); ok {
 		if keyStr == "http.response" {
 			return irw

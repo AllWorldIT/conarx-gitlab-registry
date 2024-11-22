@@ -5,7 +5,7 @@ import (
 	"strconv"
 )
 
-func Bool(parameters map[string]interface{}, name string, defaultt bool) (bool, error) {
+func Bool(parameters map[string]any, name string, defaultt bool) (bool, error) {
 	switch value := parameters[name].(type) {
 	case string:
 		v, err := strconv.ParseBool(value)

@@ -177,7 +177,7 @@ func init() {
 // s3DriverFactory implements the factory.StorageDriverFactory interface
 type s3DriverFactory struct{}
 
-func (factory *s3DriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (factory *s3DriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -207,7 +207,7 @@ type Driver struct {
 	baseEmbed
 }
 
-func parseLogLevelParam(param interface{}) aws.LogLevelType {
+func parseLogLevelParam(param any) aws.LogLevelType {
 	logLevel := aws.LogOff
 
 	if param != nil {
@@ -247,7 +247,7 @@ func parseLogLevelParam(param interface{}) aws.LogLevelType {
 // - region
 // - bucket
 // - encrypt
-func FromParameters(parameters map[string]interface{}) (*Driver, error) {
+func FromParameters(parameters map[string]any) (*Driver, error) {
 	params, err := parseParameters(parameters)
 	if err != nil {
 		return nil, err
@@ -256,7 +256,7 @@ func FromParameters(parameters map[string]interface{}) (*Driver, error) {
 	return New(params)
 }
 
-func parseParameters(parameters map[string]interface{}) (*DriverParameters, error) {
+func parseParameters(parameters map[string]any) (*DriverParameters, error) {
 	// Providing no values for these is valid in case the user is authenticating
 	// with an IAM on an ec2 instance (in which case the instance credentials will
 	// be summoned when GetAuth is called)
@@ -471,7 +471,7 @@ func parseParameters(parameters map[string]interface{}) (*DriverParameters, erro
 
 // getParameterAsInt64 converts parameters[name] to an int64 value (using
 // default if nil), verifies it is no smaller than min, and returns it.
-func getParameterAsInt64(parameters map[string]interface{}, name string, defaultt, min, max int64) (int64, error) {
+func getParameterAsInt64(parameters map[string]any, name string, defaultt, min, max int64) (int64, error) {
 	rv := defaultt
 	param := parameters[name]
 	switch v := param.(type) {
@@ -1092,7 +1092,7 @@ var systemClock internal.Clock = clock.New()
 
 // URLFor returns a URL which may be used to retrieve the content stored at the given path.
 // May return an UnsupportedMethodErr in certain StorageDriver implementations.
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	methodString := http.MethodGet
 	method, ok := options["method"]
 	if ok {

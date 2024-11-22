@@ -58,7 +58,7 @@ func TestFileReaderSeek(t *testing.T) {
 	// While switching to another driver implementation is not ideal, inmemory
 	// driver should only be used for tests, and the only issue caused by this
 	// change the core library is this test failing.
-	driver, err := filesystem.FromParameters(map[string]interface{}{"rootdirectory": t.TempDir()})
+	driver, err := filesystem.FromParameters(map[string]any{"rootdirectory": t.TempDir()})
 	require.NoError(t, err)
 
 	pattern := "01234567890ab" // prime length block

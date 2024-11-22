@@ -338,13 +338,13 @@ func TestGCSDriverMoveDirectory(t *testing.T) {
 }
 
 func TestGCSDriver_parseParameters_Bool(t *testing.T) {
-	p := map[string]interface{}{
+	p := map[string]any{
 		"bucket":  "bucket",
 		"keyfile": "testdata/key.json",
 		// TODO: add string test cases, if needed?
 	}
 
-	testFn := func(params map[string]interface{}) (interface{}, error) {
+	testFn := func(params map[string]any) (any, error) {
 		return parseParameters(params)
 	}
 
@@ -405,7 +405,7 @@ func TestGCSDriverURLFor_Expiry(t *testing.T) {
 
 	// custom
 	dt = mock.Now().Add(1 * time.Hour)
-	s, err = d.URLFor(ctx, fp, map[string]interface{}{"expiry": dt})
+	s, err = d.URLFor(ctx, fp, map[string]any{"expiry": dt})
 	require.NoError(t, err)
 
 	u, err = url.Parse(s)

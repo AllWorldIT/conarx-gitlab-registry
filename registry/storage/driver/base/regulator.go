@@ -27,7 +27,7 @@ type Regulator struct {
 // concurrent calls given a minimum limit and default.
 //
 // If the parameter supplied is of an invalid type this returns an error.
-func GetLimitFromParameter(param interface{}, min, def uint64) (uint64, error) {
+func GetLimitFromParameter(param any, min, def uint64) (uint64, error) {
 	limit := def
 
 	switch v := param.(type) {
@@ -177,7 +177,7 @@ func (r *Regulator) Delete(ctx context.Context, path string) error {
 // the given path, possibly using the given options.
 // May return an ErrUnsupportedMethod in certain StorageDriver
 // implementations.
-func (r *Regulator) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (r *Regulator) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	r.enter()
 	defer r.exit()
 

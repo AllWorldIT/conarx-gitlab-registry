@@ -29,7 +29,7 @@ import (
 func newFilesystemStorageDriverWithRoot(tb testing.TB, root string) *filesystem.Driver {
 	tb.Helper()
 
-	driver, err := filesystem.FromParameters(map[string]interface{}{
+	driver, err := filesystem.FromParameters(map[string]any{
 		"rootdirectory": path.Join(suite.fixturesPath, "importer", root),
 	})
 	require.NoError(tb, err, "error creating storage driver")

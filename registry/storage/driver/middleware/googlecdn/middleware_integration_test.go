@@ -67,7 +67,7 @@ func newGCSDriver(t *testing.T) (driver.StorageDriver, string) {
 	// generate unique root directory for each test to make them safe for parallel execution
 	root := t.TempDir()
 
-	d, err := gcs.FromParameters(map[string]interface{}{
+	d, err := gcs.FromParameters(map[string]any{
 		"bucket":        os.Getenv("REGISTRY_STORAGE_GCS_BUCKET"),
 		"keyfile":       os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 		"rootdirectory": root,
@@ -99,7 +99,7 @@ func TestURLFor(t *testing.T) {
 	testutil.StubClock(t, &systemClock, clockMock)
 
 	// default behavior
-	cdnDriver, err := newGoogleCDNStorageMiddleware(gcsDriver, map[string]interface{}{
+	cdnDriver, err := newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":    baseURL,
 		"privatekey": keyFile,
 		"keyname":    keyName,
@@ -121,7 +121,7 @@ func TestURLFor(t *testing.T) {
 
 	// custom duration
 	d := 5 * time.Second
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]interface{}{
+	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":    baseURL,
 		"privatekey": keyFile,
 		"keyname":    keyName,
@@ -150,7 +150,7 @@ func TestURLFor(t *testing.T) {
 	)
 	defer srv.Close()
 
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]interface{}{
+	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":      baseURL,
 		"privatekey":   keyFile,
 		"keyname":      keyName,
@@ -183,7 +183,7 @@ func TestURLFor(t *testing.T) {
 	require.Equal(t, expectedURL, cdnURL)
 
 	// IP filter OFF - generate CDN URL even if IP matches
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]interface{}{
+	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":      baseURL,
 		"privatekey":   keyFile,
 		"keyname":      keyName,
@@ -262,7 +262,7 @@ func TestURLFor_Download(t *testing.T) {
 	baseURL := os.Getenv("REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_BASEURL")
 	keyFile := os.Getenv("REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_PRIVATEKEY")
 	keyName := os.Getenv("REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_KEYNAME")
-	opts := map[string]interface{}{
+	opts := map[string]any{
 		"baseurl":    baseURL,
 		"privatekey": keyFile,
 		"keyname":    keyName,

@@ -29,7 +29,7 @@ type isDuration struct {
 }
 
 // Matches implements gomock.Matcher.
-func (m isDuration) Matches(x interface{}) bool {
+func (m isDuration) Matches(x any) bool {
 	d, ok := x.(time.Duration)
 	if !ok {
 		return false

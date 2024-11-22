@@ -18,7 +18,7 @@ func init() {
 // testDriverFactory implements the factory.StorageDriverFactory interface.
 type testDriverFactory struct{}
 
-func (factory *testDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (factory *testDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return New(), nil
 }
 

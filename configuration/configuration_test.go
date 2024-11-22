@@ -25,10 +25,10 @@ var configStruct = Configuration{
 			Disabled  bool            `yaml:"disabled,omitempty"`
 			Formatter accessLogFormat `yaml:"formatter,omitempty"`
 		} `yaml:"accesslog,omitempty"`
-		Level     Loglevel               `yaml:"level,omitempty"`
-		Formatter logFormat              `yaml:"formatter,omitempty"`
-		Output    logOutput              `yaml:"output,omitempty"`
-		Fields    map[string]interface{} `yaml:"fields,omitempty"`
+		Level     Loglevel       `yaml:"level,omitempty"`
+		Formatter logFormat      `yaml:"formatter,omitempty"`
+		Output    logOutput      `yaml:"output,omitempty"`
+		Fields    map[string]any `yaml:"fields,omitempty"`
 	}{
 		AccessLog: struct {
 			Disabled  bool            `yaml:"disabled,omitempty"`
@@ -39,7 +39,7 @@ var configStruct = Configuration{
 		Level:     "info",
 		Formatter: "json",
 		Output:    "stdout",
-		Fields:    map[string]interface{}{"environment": "test"},
+		Fields:    map[string]any{"environment": "test"},
 	},
 	Storage: Storage{
 		"s3": Parameters{
@@ -446,12 +446,12 @@ func (suite *ConfigSuite) TestParseWithoutStorageValidation() {
 type parameterTest struct {
 	name    string
 	value   string
-	want    interface{}
+	want    any
 	wantErr bool
 	err     string
 }
 
-type parameterValidator func(t *testing.T, want interface{}, got *Configuration)
+type parameterValidator func(t *testing.T, want any, got *Configuration)
 
 func testParameter(t *testing.T, yml, envVar string, tests []parameterTest, fn parameterValidator) {
 	t.Helper()
@@ -537,7 +537,7 @@ storage: inmemory
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Log.Level.String())
 	}
 
@@ -576,7 +576,7 @@ storage: inmemory
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Log.Output.String())
 	}
 
@@ -615,7 +615,7 @@ storage: inmemory
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Log.Formatter.String())
 	}
 
@@ -655,7 +655,7 @@ storage: inmemory
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Log.AccessLog.Formatter.String())
 	}
 
@@ -731,10 +731,10 @@ func (suite *ConfigSuite) TestParseExtraneousVars() {
 // TestParseEnvVarImplicitMaps validates that environment variables can set
 // values in maps that don't already exist.
 func (suite *ConfigSuite) TestParseEnvVarImplicitMaps() {
-	readonly := make(map[string]interface{})
+	readonly := make(map[string]any)
 	readonly["enabled"] = true
 
-	maintenance := make(map[string]interface{})
+	maintenance := make(map[string]any)
 	maintenance["readonly"] = readonly
 
 	suite.expectedConfig.Storage["maintenance"] = maintenance
@@ -835,7 +835,7 @@ http:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.HTTP.Debug.Pprof.Enabled))
 	}
 
@@ -853,7 +853,7 @@ http:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.HTTP.Debug.TLS.Enabled))
 	}
 
@@ -871,7 +871,7 @@ http:
 `
 	tt := stringParameterTests("")
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.HTTP.Debug.TLS.Certificate)
 	}
 
@@ -889,7 +889,7 @@ http:
 `
 	tt := stringParameterTests("")
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.HTTP.Debug.TLS.Key)
 	}
 
@@ -907,7 +907,7 @@ http:
 `
 	tt := stringParameterTests("")
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.HTTP.Debug.TLS.MinimumTLS)
 	}
 
@@ -940,7 +940,7 @@ http:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.ElementsMatch(t, want, got.HTTP.Debug.TLS.ClientCAs)
 	}
 
@@ -957,7 +957,7 @@ profiling:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Profiling.Stackdriver.Enabled))
 	}
 
@@ -984,7 +984,7 @@ profiling:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Profiling.Stackdriver.Service)
 	}
 
@@ -1011,7 +1011,7 @@ profiling:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Profiling.Stackdriver.ServiceVersion)
 	}
 
@@ -1038,7 +1038,7 @@ profiling:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Profiling.Stackdriver.ProjectID)
 	}
 
@@ -1065,7 +1065,7 @@ profiling:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Profiling.Stackdriver.KeyFile)
 	}
 
@@ -1082,7 +1082,7 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.TLS.Enabled))
 	}
 
@@ -1099,7 +1099,7 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.TLS.Insecure))
 	}
 
@@ -1130,7 +1130,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Addr)
 	}
 
@@ -1156,7 +1156,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.MainName)
 	}
 
@@ -1183,7 +1183,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Pool.Size)
 	}
 
@@ -1210,7 +1210,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Pool.MaxLifetime)
 	}
 
@@ -1237,7 +1237,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Pool.IdleTimeout)
 	}
 
@@ -1263,7 +1263,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.SSLMode)
 	}
 
@@ -1289,7 +1289,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.SSLCert)
 	}
 
@@ -1315,7 +1315,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.SSLKey)
 	}
 
@@ -1341,7 +1341,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.SSLRootCert)
 	}
 
@@ -1357,7 +1357,7 @@ database:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Database.PreparedStatements))
 	}
 
@@ -1383,7 +1383,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.DrainTimeout)
 	}
 
@@ -1410,7 +1410,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.Pool.MaxIdle)
 	}
 
@@ -1437,7 +1437,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.Pool.MaxOpen)
 	}
 
@@ -1464,7 +1464,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.Pool.MaxLifetime)
 	}
 
@@ -1481,7 +1481,7 @@ database:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Database.LoadBalancing.Enabled))
 	}
 
@@ -1514,7 +1514,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.ElementsMatch(t, want, got.Database.LoadBalancing.Hosts)
 	}
 
@@ -1535,7 +1535,7 @@ database:
 		{name: "custom", value: "nameserver.example.com", want: "nameserver.example.com"},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.LoadBalancing.Nameserver)
 	}
 
@@ -1563,7 +1563,7 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.LoadBalancing.Port)
 	}
 
@@ -1584,7 +1584,7 @@ database:
 		{name: "custom", value: "db-replica-registry.service.consul", want: "db-replica-registry.service.consul"},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.LoadBalancing.Record)
 	}
 
@@ -1605,7 +1605,7 @@ database:
 		{name: "custom", value: "2m", want: 2 * time.Minute},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Database.LoadBalancing.ReplicaCheckInterval)
 	}
 
@@ -1622,7 +1622,7 @@ reporting:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Reporting.Sentry.Enabled))
 	}
 
@@ -1649,7 +1649,7 @@ reporting:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Reporting.Sentry.DSN)
 	}
 
@@ -1676,7 +1676,7 @@ reporting:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Reporting.Sentry.Environment)
 	}
 
@@ -1726,7 +1726,7 @@ func copyConfig(config Configuration) *Configuration {
 	configCopy.Version = MajorMinorVersion(config.Version.Major(), config.Version.Minor())
 	configCopy.Loglevel = config.Loglevel
 	configCopy.Log = config.Log
-	configCopy.Log.Fields = make(map[string]interface{}, len(config.Log.Fields))
+	configCopy.Log.Fields = make(map[string]any, len(config.Log.Fields))
 	for k, v := range config.Log.Fields {
 		configCopy.Log.Fields[k] = v
 	}
@@ -1779,7 +1779,7 @@ validation:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Validation.Manifests.PayloadSizeLimit)
 	}
 
@@ -1796,7 +1796,7 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.Enabled))
 	}
 
@@ -1815,7 +1815,7 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.TLS.Enabled))
 	}
 
@@ -1834,7 +1834,7 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.TLS.Insecure))
 	}
 
@@ -1867,7 +1867,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Cache.Addr)
 	}
 
@@ -1895,7 +1895,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Cache.MainName)
 	}
 
@@ -1925,7 +1925,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Cache.SentinelUsername)
 	}
 
@@ -1954,7 +1954,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Cache.SentinelPassword)
 	}
 
@@ -1983,7 +1983,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Cache.Pool.Size)
 	}
 
@@ -2012,7 +2012,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Cache.Pool.MaxLifetime)
 	}
 
@@ -2041,7 +2041,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.Cache.Pool.IdleTimeout)
 	}
 
@@ -2058,7 +2058,7 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.Enabled))
 	}
 
@@ -2077,7 +2077,7 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Enabled))
 	}
 
@@ -2096,7 +2096,7 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Insecure))
 	}
 
@@ -2129,7 +2129,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.RateLimiter.Addr)
 	}
 
@@ -2157,7 +2157,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.RateLimiter.MainName)
 	}
 
@@ -2186,7 +2186,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.RateLimiter.Pool.Size)
 	}
 
@@ -2215,7 +2215,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.RateLimiter.Pool.MaxLifetime)
 	}
 
@@ -2244,7 +2244,7 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want interface{}, got *Configuration) {
+	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.Redis.RateLimiter.Pool.IdleTimeout)
 	}
 

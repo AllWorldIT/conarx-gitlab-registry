@@ -50,7 +50,7 @@ func copyFullPayload(ctx context.Context, responseWriter http.ResponseWriter, r 
 			// instead of showing 0 for the HTTP status.
 			responseWriter.WriteHeader(499)
 
-			dcontext.GetLoggerWithFields(ctx, map[interface{}]interface{}{
+			dcontext.GetLoggerWithFields(ctx, map[any]any{
 				"error":          err,
 				"copied":         copied,
 				"content_length": r.ContentLength,
@@ -66,7 +66,7 @@ func copyFullPayload(ctx context.Context, responseWriter http.ResponseWriter, r 
 		return err
 	}
 
-	dcontext.GetLoggerWithFields(ctx, map[interface{}]interface{}{
+	dcontext.GetLoggerWithFields(ctx, map[any]any{
 		"copied":         copied,
 		"content_length": r.ContentLength,
 		"action":         action,

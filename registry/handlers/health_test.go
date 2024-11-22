@@ -29,7 +29,7 @@ func TestFileHealthCheck(t *testing.T) {
 	config := &configuration.Configuration{
 		Storage: configuration.Storage{
 			"inmemory": configuration.Parameters{},
-			"maintenance": configuration.Parameters{"uploadpurging": map[interface{}]interface{}{
+			"maintenance": configuration.Parameters{"uploadpurging": map[any]any{
 				"enabled": false,
 			}},
 		},
@@ -100,7 +100,7 @@ func TestTCPHealthCheck(t *testing.T) {
 	config := &configuration.Configuration{
 		Storage: configuration.Storage{
 			"inmemory": configuration.Parameters{},
-			"maintenance": configuration.Parameters{"uploadpurging": map[interface{}]interface{}{
+			"maintenance": configuration.Parameters{"uploadpurging": map[any]any{
 				"enabled": false,
 			}},
 		},
@@ -232,7 +232,7 @@ func TestHTTPHealthCheck(t *testing.T) {
 			config := &configuration.Configuration{
 				Storage: configuration.Storage{
 					"inmemory": configuration.Parameters{},
-					"maintenance": configuration.Parameters{"uploadpurging": map[interface{}]interface{}{
+					"maintenance": configuration.Parameters{"uploadpurging": map[any]any{
 						"enabled": false,
 					}},
 				},

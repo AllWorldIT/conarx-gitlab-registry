@@ -70,12 +70,12 @@ type (
 	}
 )
 
-func (factory *azureDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (factory *azureDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
 // FromParameters constructs a new Driver with a given parameters map.
-func FromParameters(parameters map[string]interface{}) (*Driver, error) {
+func FromParameters(parameters map[string]any) (*Driver, error) {
 	params, err := parseParameters(parameters)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func FromParameters(parameters map[string]interface{}) (*Driver, error) {
 	return New(params)
 }
 
-func parseParameters(parameters map[string]interface{}) (*driverParameters, error) {
+func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	accountName, ok := parameters[paramAccountName]
 	if !ok || fmt.Sprint(accountName) == "" {
 		return nil, fmt.Errorf("no %s parameter provided", paramAccountName)
@@ -421,7 +421,7 @@ var systemClock internal.Clock = clock.New()
 // URLFor returns a publicly accessible URL for the blob stored at given path
 // for specified duration by making use of Azure Storage Shared Access Signatures (SAS).
 // See https://msdn.microsoft.com/en-us/library/azure/ee395415.aspx for more info.
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	expiresTime := systemClock.Now().UTC().Add(20 * time.Minute) // default expiration
 	expires, ok := options["expiry"]
 	if ok {
@@ -625,7 +625,7 @@ func (d *driver) keyToPath(key string) string {
 }
 
 // inferRootPrefixConfiguration determines when to use the azure legacy root prefix or not based on the storage driver configurations
-func inferRootPrefixConfiguration(ac map[string]interface{}) (useLegacyRootPrefix bool, err error) {
+func inferRootPrefixConfiguration(ac map[string]any) (useLegacyRootPrefix bool, err error) {
 	// extract config values
 	_, trimPrefixConfigExist := ac[paramTrimLegacyRootPrefix]
 	_, legacyPrefixConfigExist := ac[paramLegacyRootPrefix]

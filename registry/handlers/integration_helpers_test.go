@@ -85,7 +85,7 @@ func withReadOnly(config *configuration.Configuration) {
 		config.Storage["maintenance"] = configuration.Parameters{}
 	}
 
-	config.Storage["maintenance"]["readonly"] = map[interface{}]interface{}{"enabled": true}
+	config.Storage["maintenance"]["readonly"] = map[any]any{"enabled": true}
 }
 
 func withoutManifestURLValidation(config *configuration.Configuration) {
@@ -216,7 +216,7 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 	config := &configuration.Configuration{
 		Storage: configuration.Storage{
 			"maintenance": configuration.Parameters{
-				"uploadpurging": map[interface{}]interface{}{"enabled": false},
+				"uploadpurging": map[any]any{"enabled": false},
 			},
 		},
 	}
@@ -323,7 +323,7 @@ type schema1PreseededInMemoryDriverFactory struct{}
 // Create returns a shared instance of the inmemory storage driver with a
 // preseeded schema1 manifest. This allows us to test GETs against schema1
 // manifests even though we are unable to PUT schema1 manifests via the API.
-func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	d := inmemory.New()
 
 	unsignedManifest := &schema1.Manifest{
@@ -1052,7 +1052,7 @@ func shuffledCopy(s []string) []string {
 	return shuffled
 }
 
-func putManifestRequest(t *testing.T, msg, url, contentType string, v interface{}) *http.Request {
+func putManifestRequest(t *testing.T, msg, url, contentType string, v any) *http.Request {
 	var body []byte
 
 	switch m := v.(type) {
@@ -1088,7 +1088,7 @@ func putManifestRequest(t *testing.T, msg, url, contentType string, v interface{
 	return req
 }
 
-func putManifest(t *testing.T, msg, url, contentType string, v interface{}, requestopts ...requestOpt) *http.Response {
+func putManifest(t *testing.T, msg, url, contentType string, v any, requestopts ...requestOpt) *http.Response {
 	req := putManifestRequest(t, msg, url, contentType, v)
 	req = newRequest(req, requestopts...)
 
