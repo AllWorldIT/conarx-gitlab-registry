@@ -1233,27 +1233,6 @@ func (d *driver) WalkParallel(ctx context.Context, from string, f storagedriver.
 	return retError
 }
 
-func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
-	prefix := d.pathToDirKey(path)
-	query := &s3.ListObjectsV2Input{
-		Bucket:    aws.String(d.Bucket),
-		Prefix:    aws.String(prefix),
-		Delimiter: aws.String("/"),
-		MaxKeys:   aws.Int64(1),
-	}
-
-	listObjsResponse, err := d.S3.s3.ListObjectsV2(query)
-	if err != nil {
-		return false, err
-	}
-
-	if *listObjsResponse.KeyCount != 0 {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 type walkInfoContainer struct {
 	storagedriver.FileInfoFields
 	prefix *string
@@ -1454,10 +1433,6 @@ func (d *driver) doWalkParallel(parentCtx context.Context, wg *sync.WaitGroup, c
 
 func (d *driver) s3Path(path string) string {
 	return strings.TrimLeft(strings.TrimRight(d.RootDirectory, "/")+path, "/")
-}
-
-func (d *driver) pathToDirKey(path string) string {
-	return strings.TrimSpace(d.s3Path(path)) + "/"
 }
 
 // S3BucketKey returns the s3 bucket key for the given storage driver path.

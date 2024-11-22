@@ -82,10 +82,6 @@ type StorageDriver interface {
 	// May return an ErrUnsupportedMethod in certain StorageDriver
 	// implementations.
 	URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error)
-
-	// ExistsPath is a performance optimized version of Stat to be used specifically for checking
-	// if a given path (not object) exists.
-	ExistsPath(ctx context.Context, path string) (bool, error)
 }
 
 // StorageDeleter defines methods that a Storage Driver must implement to delete objects.

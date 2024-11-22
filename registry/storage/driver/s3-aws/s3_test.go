@@ -978,45 +978,6 @@ func newTempDirDriver(t *testing.T) *Driver {
 	return d
 }
 
-func TestS3DriverExistsPath(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
-		t.Skip(skipMsg)
-	}
-
-	root := t.TempDir()
-	d, err := s3DriverConstructor(root, s3.StorageClassStandard)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-
-	prefix := "/existing/path"
-	path := fmt.Sprintf("%s/data", prefix)
-
-	content := make([]byte, 10)
-	rand.Read(content)
-
-	err = d.PutContent(ctx, path, content)
-	require.NoError(t, err)
-
-	exists, err := d.ExistsPath(ctx, prefix)
-	require.NoError(t, err)
-	require.True(t, exists)
-}
-
-func TestS3DriverExistsPathNotFound(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
-		t.Skip(skipMsg)
-	}
-
-	root := t.TempDir()
-	d, err := s3DriverConstructor(root, s3.StorageClassStandard)
-	require.NoError(t, err)
-
-	exists, err := d.ExistsPath(context.Background(), "/non-existing/path")
-	require.NoError(t, err)
-	require.False(t, exists)
-}
-
 func TestS3DriverClientTransport(t *testing.T) {
 	if skipMsg := skipS3(); skipMsg != "" {
 		t.Skip(skipMsg)
