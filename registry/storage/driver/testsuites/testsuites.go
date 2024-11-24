@@ -378,10 +378,6 @@ func (s *DriverSuite) TestWriteReadStreamsNonUTF8() {
 // TestWriteReadLargeStreams tests that a 5GB file may be written to the storage
 // driver safely.
 func (s *DriverSuite) TestWriteReadLargeStreams() {
-	if testing.Short() {
-		s.T().Skip("Skipping test in short mode")
-	}
-
 	filename := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(filename))
 
@@ -1667,10 +1663,6 @@ func (s *DriverSuite) BenchmarkMarkAndSweep50ImagesKeepUntagged(b *testing.B) {
 func (s *DriverSuite) benchmarkMarkAndSweep(b *testing.B, numImages int, removeUntagged bool) {
 	// Setup for this test takes a long time, even with small numbers of images,
 	// so keep the skip logic here in the sub test.
-	if testing.Short() {
-		b.Skip("Skipping test in short mode")
-	}
-
 	defer s.deletePath(b, firstPart("docker/"))
 
 	for n := 0; n < b.N; n++ {
@@ -1959,9 +1951,6 @@ func (s *DriverSuite) testRemoveManifestsPathBuild(numManifests, numTagsPerManif
 // against the filesystem storage backend only. For safety, the test is skipped when not using the filesystem storage
 // backend. Tweak the method locally to test use cases with different sizes and/or storage drivers.
 func (s *DriverSuite) TestRemoveManifestsPathBuildLargeScale() {
-	if testing.Short() {
-		s.T().Skip("Skipping test in short mode")
-	}
 	if s.StorageDriver.Name() != "filesystem" {
 		s.T().Skipf("Skipping test for the %s driver", s.StorageDriver.Name())
 	}
@@ -1973,10 +1962,6 @@ func (s *DriverSuite) TestRemoveManifestsPathBuildLargeScale() {
 }
 
 func (s *DriverSuite) benchmarkRemoveManifests(b *testing.B, numManifests, numTagsPerManifest int) {
-	if testing.Short() {
-		b.Skip("Skipping test in short mode")
-	}
-
 	defer s.deletePath(b, firstPart("docker/"))
 
 	registry := s.createRegistry(b)

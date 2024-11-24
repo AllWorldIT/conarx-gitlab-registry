@@ -19,14 +19,8 @@ middleware:storage-googlecdn:
   extends: .go-version-matrix
   stage: integration
   variables: &storage-driver-variables
-    TEST_SHORT_FLAG: "-test.short"
     TEST_TIMEOUT: "30m"
-  rules:
-    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
-      variables:
-        TEST_SHORT_FLAG: ""
-    - when: always
-  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE $TEST_SHORT_FLAG
+  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
 
 filesystem:
   <<: *storage-driver-test
@@ -73,7 +67,6 @@ gcs:
   variables:
     <<: *storage-driver-variables
     REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
-    TEST_SHORT_FLAG: "-test.short"
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/gcs"
     TEST_TIMEOUT: "35m"
   before_script:
