@@ -2240,7 +2240,7 @@ func (rr *randReader) Read(p []byte) (int, error) {
 	rr.r -= int64(n)
 
 	if rr.r <= 0 {
-		return 0, io.EOF
+		return n, io.EOF
 	}
 
 	return n, nil
