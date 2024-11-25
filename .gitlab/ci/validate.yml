@@ -111,15 +111,6 @@ modules:download:
       - .GOPATH/pkg/mod/
     policy: push
 
-modules:outdated:
-  stage: validate
-  needs: ['modules:download']
-  allow_failure: true
-  before_script:
-    - go install github.com/psampaz/go-mod-outdated@v0.8.0
-    - export PATH="$PATH:$GOPATH/bin"
-  script: go list -u -m -json all | go-mod-outdated -update -direct -ci
-
 mocks:
   needs: ['modules:download']
   stage: validate
