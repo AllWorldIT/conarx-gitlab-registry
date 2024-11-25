@@ -40,7 +40,7 @@ func newRedirectStorageMiddleware(sd storagedriver.StorageDriver, options map[st
 	return &redirectStorageMiddleware{StorageDriver: sd, scheme: u.Scheme, host: u.Host}, nil
 }
 
-func (r *redirectStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
+func (r *redirectStorageMiddleware) URLFor(_ context.Context, path string, _ map[string]any) (string, error) {
 	u := &url.URL{Scheme: r.scheme, Host: r.host, Path: path}
 	return u.String(), nil
 }

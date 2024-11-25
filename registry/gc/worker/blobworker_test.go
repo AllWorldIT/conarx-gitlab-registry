@@ -551,7 +551,7 @@ func TestBlobWorker_processTask_VacuumUnknownError(t *testing.T) {
 	)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fmt.Errorf("deleting blob from storage: %w", fakeErrorA).Error())
+	require.EqualError(t, res.Err, fmt.Errorf("deleting blob from storage: deleting blob: %w", fakeErrorA).Error())
 	require.True(t, res.Found)
 	require.True(t, res.Dangling)
 	require.Equal(t, bt.Event, res.Event)
@@ -656,7 +656,7 @@ func TestBlobWorker_processTask_VacuumUnknownErrorAndPostponeError(t *testing.T)
 	res := w.processTask(context.Background())
 	expectedErr := multierror.Error{
 		Errors: []error{
-			fmt.Errorf("deleting blob from storage: %w", fakeErrorA),
+			fmt.Errorf("deleting blob from storage: deleting blob: %w", fakeErrorA),
 			fakeErrorB,
 		},
 	}

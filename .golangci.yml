@@ -239,7 +239,7 @@ linters-settings:
         disabled: false
         exclude: [""]
         arguments:
-          - "^[a-z][a-z0-9]{0,}$"
+          - "^[a-z][a-z0-9_]{0,}$"
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#import-shadowing
       - name: import-shadowing
         severity: warning
@@ -303,11 +303,6 @@ linters-settings:
         exclude: [""]
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#redefines-builtin-id
       - name: redefines-builtin-id
-        severity: warning
-        disabled: false
-        exclude: [""]
-      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#redundant-import-alias
-      - name: redundant-import-alias
         severity: warning
         disabled: false
         exclude: [""]

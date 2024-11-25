@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	storageDriver "github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -35,19 +35,19 @@ type syncUploadData struct {
 }
 
 // set the passed uuid's uploadData to data
-func (s *syncUploadData) set(uuid string, data uploadData) {
+func (s *syncUploadData) set(u string, data uploadData) {
 	s.Lock()
 	defer s.Unlock()
 
-	s.members[uuid] = data
+	s.members[u] = data
 }
 
 // get uploadData by uuid
-func (s *syncUploadData) get(uuid string) (uploadData, bool) {
+func (s *syncUploadData) get(u string) (uploadData, bool) {
 	s.Lock()
 	defer s.Unlock()
 
-	up, ok := s.members[uuid]
+	up, ok := s.members[u]
 
 	return up, ok
 }
@@ -55,9 +55,9 @@ func (s *syncUploadData) get(uuid string) (uploadData, bool) {
 // PurgeUploads deletes files from the upload directory
 // created before olderThan.  The list of files deleted and errors
 // encountered are returned
-func PurgeUploads(ctx context.Context, driver storageDriver.StorageDriver, olderThan time.Time, actuallyDelete bool) ([]string, []error) {
+func PurgeUploads(ctx context.Context, sdriver driver.StorageDriver, olderThan time.Time, actuallyDelete bool) ([]string, []error) {
 	logrus.Infof("PurgeUploads starting: olderThan=%s, actuallyDelete=%t", olderThan, actuallyDelete)
-	uploadData, errors := getOutstandingUploads(ctx, driver)
+	uploadData, errors := getOutstandingUploads(ctx, sdriver)
 	var deleted []string
 	for _, uploadData := range uploadData {
 		if uploadData.startedAt.Before(olderThan) {
@@ -65,7 +65,7 @@ func PurgeUploads(ctx context.Context, driver storageDriver.StorageDriver, older
 			logrus.Infof("Upload files in %s have older date (%s) than purge date (%s).  Removing upload directory.",
 				uploadData.containingDir, uploadData.startedAt, olderThan)
 			if actuallyDelete {
-				err = driver.Delete(ctx, uploadData.containingDir)
+				err = sdriver.Delete(ctx, uploadData.containingDir)
 			}
 			if err == nil {
 				deleted = append(deleted, uploadData.containingDir)
@@ -83,7 +83,7 @@ func PurgeUploads(ctx context.Context, driver storageDriver.StorageDriver, older
 // which could be eligible for deletion.  The only reliable way to
 // classify the age of a file is with the date stored in the startedAt
 // file, so gather files by UUID with a date from startedAt.
-func getOutstandingUploads(ctx context.Context, driver storageDriver.StorageDriver) (map[string]uploadData, []error) {
+func getOutstandingUploads(ctx context.Context, sdriver driver.StorageDriver) (map[string]uploadData, []error) {
 	var errors []error
 	uploads := syncUploadData{sync.Mutex{}, make(map[string]uploadData, 0)}
 
@@ -101,12 +101,12 @@ func getOutstandingUploads(ctx context.Context, driver storageDriver.StorageDriv
 		errDone <- struct{}{}
 	}()
 
-	err = driver.WalkParallel(ctx, root, func(fileInfo storageDriver.FileInfo) error {
+	err = sdriver.WalkParallel(ctx, root, func(fileInfo driver.FileInfo) error {
 		filePath := fileInfo.Path()
 		_, file := path.Split(filePath)
 		if (strings.HasPrefix(file, "_") || strings.HasPrefix(file, "hashstates")) && fileInfo.IsDir() && file != "_uploads" {
 			// Reserved directory
-			return storageDriver.ErrSkipDir
+			return driver.ErrSkipDir
 		}
 
 		uuid, isContainingDir := uuidFromPath(filePath)
@@ -122,12 +122,12 @@ func getOutstandingUploads(ctx context.Context, driver storageDriver.StorageDriv
 			ud.containingDir = filePath
 		}
 		if file == "startedat" {
-			if t, err := readStartedAtFile(driver, filePath); err == nil {
-				ud.startedAt = t
-			} else {
+			t, err := readStartedAtFile(sdriver, filePath)
+			if err != nil {
 				errCh <- fmt.Errorf("%s: %s", filePath, err)
 				return nil
 			}
+			ud.startedAt = t
 		}
 
 		uploads.set(uuid, ud)
@@ -146,8 +146,8 @@ func getOutstandingUploads(ctx context.Context, driver storageDriver.StorageDriv
 // uuidFromPath extracts the upload UUID from a given path
 // If the UUID is the last path component, this is the containing
 // directory for all upload files
-func uuidFromPath(path string) (string, bool) {
-	components := strings.Split(path, "/")
+func uuidFromPath(p string) (string, bool) {
+	components := strings.Split(p, "/")
 	for i := len(components) - 1; i >= 0; i-- {
 		if u, err := uuid.Parse(components[i]); err == nil {
 			return u.String(), i == len(components)-1
@@ -157,9 +157,9 @@ func uuidFromPath(path string) (string, bool) {
 }
 
 // readStartedAtFile reads the date from an upload's startedAtFile
-func readStartedAtFile(driver storageDriver.StorageDriver, path string) (time.Time, error) {
+func readStartedAtFile(sdriver driver.StorageDriver, p string) (time.Time, error) {
 	// todo:(richardscothern) - pass in a context
-	startedAtBytes, err := driver.GetContent(context.Background(), path)
+	startedAtBytes, err := sdriver.GetContent(context.Background(), p)
 	if err != nil {
 		return time.Now(), err
 	}

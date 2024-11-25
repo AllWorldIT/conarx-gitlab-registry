@@ -30,7 +30,8 @@ func TestReadKeyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(f.Name())
-	f.Close()
+	err = f.Close()
+	require.NoError(t, err)
 
 	key := `nZtRohdNF9m3cKM24IcK4w==`
 	expected := []byte{

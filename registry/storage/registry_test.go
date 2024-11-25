@@ -22,8 +22,8 @@ func TestNewRegistry_RedirectException(t *testing.T) {
 			wantNonMatchingRepositories: []string{"example-com/alpine", "containers-gov/cool"},
 		},
 		{
-			exceptions:                  []string{},
-			wantMatchingRepositories:    []string{},
+			exceptions:                  make([]string, 0),
+			wantMatchingRepositories:    make([]string, 0),
 			wantNonMatchingRepositories: []string{"example-com/alpine", "gitlab-org/gitlab-build-images", "example-com/best-app", "cloud-internet/rockstar"},
 		},
 	}

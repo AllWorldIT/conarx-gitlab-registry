@@ -44,7 +44,8 @@ func TestSimpleRead(t *testing.T) {
 	defer fr.Close()
 
 	verifier := dgst.Verifier()
-	io.Copy(verifier, fr)
+	_, err = io.Copy(verifier, fr)
+	require.NoError(t, err)
 
 	if !verifier.Verified() {
 		t.Fatalf("unable to verify read data")
@@ -185,7 +186,7 @@ func TestFileReaderNonExistentFile(t *testing.T) {
 
 // TestLayerReadErrors covers the various error return type for different
 // conditions that can arise when reading a layer.
-func TestFileReaderErrors(t *testing.T) {
+func TestFileReaderErrors(_ *testing.T) {
 	// TODO(stevvooe): We need to cover error return types, driven by the
 	// errors returned via the HTTP API. For now, here is an incomplete list:
 	//

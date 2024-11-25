@@ -26,6 +26,7 @@ func (m mockIPRangeHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
+	//nolint: revive // unhandled-error
 	w.Write(bytes)
 }
 
@@ -146,7 +147,8 @@ func TestParsing(t *testing.T) {
 	   }]
 	 }`
 	rawMockHandler := http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
+			//nolint: revive // unhandled-error
 			w.Write([]byte(data))
 		},
 	)
@@ -170,8 +172,9 @@ func TestUpdateCalledRegularly(t *testing.T) {
 
 	updateCount := 0
 	server := httptest.NewServer(http.HandlerFunc(
-		func(rw http.ResponseWriter, req *http.Request) {
+		func(rw http.ResponseWriter, _ *http.Request) {
 			updateCount++
+			//nolint: revive // unhandled-error
 			rw.Write([]byte("ok"))
 		},
 	))
@@ -256,7 +259,7 @@ func TestResponseNotOK(t *testing.T) {
 	t.Parallel()
 
 	mockHandler := http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		},
 	)
@@ -310,8 +313,10 @@ func BenchmarkContainsRandom(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		rand.Read(ipv4[i])
-		rand.Read(ipv6[i])
+		_, err := rand.Read(ipv4[i])
+		require.NoError(b, err)
+		_, err = rand.Read(ipv6[i])
+		require.NoError(b, err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -327,8 +332,10 @@ func BenchmarkContainsProd(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		rand.Read(ipv4[i])
-		rand.Read(ipv6[i])
+		_, err := rand.Read(ipv4[i])
+		require.NoError(b, err)
+		_, err = rand.Read(ipv6[i])
+		require.NoError(b, err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

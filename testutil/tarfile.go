@@ -82,7 +82,7 @@ func CreateRandomTarFile() (rs io.ReadSeeker, dgst digest.Digest, err error) {
 // CreateRandomLayers returns a map of n digests. We don't particularly care
 // about the order of said digests (since they're all random anyway).
 func CreateRandomLayers(n int) (map[digest.Digest]io.ReadSeeker, error) {
-	digestMap := map[digest.Digest]io.ReadSeeker{}
+	digestMap := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < n; i++ {
 		rs, ds, err := CreateRandomTarFile()
 		if err != nil {

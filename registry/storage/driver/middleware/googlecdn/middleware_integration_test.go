@@ -143,9 +143,9 @@ func TestURLFor(t *testing.T) {
 
 	// IP filter ON - generate GCS URL on IP match
 	srv := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			resp := `{"prefixes": [{"ipv4Prefix": "10.0.0.0/24"}]}`
-			fmt.Fprintln(w, resp)
+			_, _ = fmt.Fprintln(w, resp)
 		}),
 	)
 	defer srv.Close()
@@ -298,7 +298,7 @@ func TestURLFor_Download(t *testing.T) {
 			require.Regexp(t, fmt.Sprintf("^%s.*", baseURL), cdnURL)
 			verifyCustomURLParamsExist(t, cdnURL, test.opts)
 
-			//nolint: bodyclose // body is! closed
+			// nolint: bodyclose // body is! closed
 			resp, err = http.Get(cdnURL)
 			require.NoError(t, err)
 			defer resp.Body.Close()

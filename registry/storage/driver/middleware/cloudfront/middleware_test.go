@@ -16,13 +16,13 @@ type CloudfrontMiddlewareSuite struct {
 	suite.Suite
 }
 
-func (suite *CloudfrontMiddlewareSuite) TestNoConfig() {
+func (s *CloudfrontMiddlewareSuite) TestNoConfig() {
 	options := make(map[string]any)
 	_, err := newCloudFrontStorageMiddleware(nil, options)
-	require.ErrorContains(suite.T(), err, "no baseurl provided")
+	require.ErrorContains(s.T(), err, "no baseurl provided")
 }
 
-func (suite *CloudfrontMiddlewareSuite) TestCloudFrontStorageMiddlewareGenerateKey() {
+func (s *CloudfrontMiddlewareSuite) TestCloudFrontStorageMiddlewareGenerateKey() {
 	options := make(map[string]any)
 	options["baseurl"] = "example.com"
 
@@ -44,13 +44,14 @@ pZeMRablbPQdp8/1NyIwimq1VlG0ohQ4P6qhW7E09ZMC
 `
 
 	file, err := os.CreateTemp("", "pkey")
-	require.NoErrorf(suite.T(), err, "File cannot be created")
-	file.WriteString(privk)
+	require.NoErrorf(s.T(), err, "File cannot be created")
+	_, err = file.WriteString(privk)
+	require.NoError(s.T(), err)
 	defer os.Remove(file.Name())
 
 	options["privatekey"] = file.Name()
 	options["keypairid"] = "test"
 	storageDriver, err := newCloudFrontStorageMiddleware(nil, options)
-	require.NoError(suite.T(), err)
-	require.NotNil(suite.T(), storageDriver, "Driver couldnt be initialized")
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), storageDriver, "Driver couldnt be initialized")
 }

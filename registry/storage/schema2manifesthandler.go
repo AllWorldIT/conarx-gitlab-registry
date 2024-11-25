@@ -23,7 +23,7 @@ type schema2ManifestHandler struct {
 
 var _ ManifestHandler = &schema2ManifestHandler{}
 
-func (ms *schema2ManifestHandler) Unmarshal(ctx context.Context, dgst digest.Digest, content []byte) (distribution.Manifest, error) {
+func (ms *schema2ManifestHandler) Unmarshal(_ context.Context, _ digest.Digest, content []byte) (distribution.Manifest, error) {
 	dcontext.GetLogger(ms.ctx).Debug("(*schema2ManifestHandler).Unmarshal")
 
 	m := &schema2.DeserializedManifest{}

@@ -12,11 +12,11 @@ type changingFileSystem struct {
 	keptFiles map[string]bool
 }
 
-func (cfs *changingFileSystem) List(ctx context.Context, path string) ([]string, error) {
+func (cfs *changingFileSystem) List(_ context.Context, _ string) ([]string, error) {
 	return cfs.fileset, nil
 }
 
-func (cfs *changingFileSystem) Stat(ctx context.Context, path string) (FileInfo, error) {
+func (cfs *changingFileSystem) Stat(_ context.Context, path string) (FileInfo, error) {
 	kept, ok := cfs.keptFiles[path]
 	if ok && kept {
 		return &FileInfoInternal{
@@ -35,7 +35,7 @@ func TestWalkFileRemoved(t *testing.T) {
 			"zoidberg": true,
 		},
 	}
-	infos := []FileInfo{}
+	infos := make([]FileInfo, 0)
 	err := WalkFallback(context.Background(), d, "", func(fileInfo FileInfo) error {
 		infos = append(infos, fileInfo)
 		return nil
@@ -59,11 +59,11 @@ var (
 	errDeeplyNestedFile = errors.New("test error: this file is bad")
 )
 
-func (efs *errorFileSystem) List(ctx context.Context, path string) ([]string, error) {
+func (efs *errorFileSystem) List(_ context.Context, _ string) ([]string, error) {
 	return efs.fileSet, nil
 }
 
-func (efs *errorFileSystem) Stat(ctx context.Context, path string) (FileInfo, error) {
+func (efs *errorFileSystem) Stat(_ context.Context, path string) (FileInfo, error) {
 	err, ok := efs.errorFiles[path]
 	if ok {
 		return nil, err
@@ -94,7 +94,7 @@ func TestWalkParallelError(t *testing.T) {
 		},
 	}
 
-	infos := []FileInfo{}
+	infos := make([]FileInfo, 0)
 	err := WalkFallback(context.Background(), d, "", func(fileInfo FileInfo) error {
 		infos = append(infos, fileInfo)
 		return nil

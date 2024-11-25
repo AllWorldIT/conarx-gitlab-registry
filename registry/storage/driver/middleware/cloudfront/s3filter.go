@@ -201,25 +201,31 @@ func parseIPFromRequest(ctx context.Context) (net.IP, error) {
 // eligibleForS3 checks if a request is eligible for using S3 directly
 // Return true only when the IP belongs to a specific aws region and user-agent is docker
 func eligibleForS3(ctx context.Context, awsIPs *awsIPs) bool {
-	if awsIPs != nil && awsIPs.initialized {
-		if addr, err := parseIPFromRequest(ctx); err == nil {
-			request, err := dcontext.GetRequest(ctx)
-			if err != nil {
-				dcontext.GetLogger(ctx).Warnf("the CloudFront middleware cannot parse the request: %s", err)
-			} else {
-				loggerField := map[any]any{
-					"user-client": request.UserAgent(),
-					"ip":          dcontext.RemoteIP(request),
-				}
-				if awsIPs.contains(addr) {
-					dcontext.GetLoggerWithFields(ctx, loggerField).Info("request from the allowed AWS region, skipping CloudFront")
-					return true
-				}
-				dcontext.GetLoggerWithFields(ctx, loggerField).Warn("request not from the allowed AWS region, fallback to CloudFront")
-			}
-		} else {
-			dcontext.GetLogger(ctx).WithError(err).Warn("failed to parse ip address from context, fallback to CloudFront")
-		}
+	if awsIPs == nil || !awsIPs.initialized {
+		return false
 	}
+
+	addr, err := parseIPFromRequest(ctx)
+	if err != nil {
+		dcontext.GetLogger(ctx).WithError(err).Warn("failed to parse ip address from context, fallback to CloudFront")
+		return false
+	}
+
+	request, err := dcontext.GetRequest(ctx)
+	if err != nil {
+		dcontext.GetLogger(ctx).Warnf("the CloudFront middleware cannot parse the request: %s", err)
+		return false
+	}
+
+	loggerField := map[any]any{
+		"user-client": request.UserAgent(),
+		"ip":          dcontext.RemoteIP(request),
+	}
+	if awsIPs.contains(addr) {
+		dcontext.GetLoggerWithFields(ctx, loggerField).Info("request from the allowed AWS region, skipping CloudFront")
+		return true
+	}
+
+	dcontext.GetLoggerWithFields(ctx, loggerField).Warn("request not from the allowed AWS region, fallback to CloudFront")
 	return false
 }

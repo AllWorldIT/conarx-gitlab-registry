@@ -17,7 +17,9 @@ package gcs
 import (
 	"bytes"
 	"context"
-	"crypto/md5" //nolint: gosec
+
+	//nolint: revive,gosec // imports-blocklist
+	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -113,7 +115,7 @@ func init() {
 type gcsDriverFactory struct{}
 
 // Create StorageDriver from parameters
-func (factory *gcsDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
+func (*gcsDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -206,7 +208,7 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 			return nil, fmt.Errorf("the credentials were not specified in the correct format")
 		}
 
-		stringMap := map[string]any{}
+		stringMap := make(map[string]any, 0)
 		for k, v := range credentialMap {
 			key, ok := k.(string)
 			if !ok {
@@ -292,7 +294,7 @@ func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 
 // Implement the storagedriver.StorageDriver interface
 
-func (d *driver) Name() string {
+func (*driver) Name() string {
 	return driverName
 }
 
@@ -329,7 +331,10 @@ func (d *driver) PutContent(ctx context.Context, path string, contents []byte) e
 		wc.ContentType = "application/octet-stream"
 		// nolint: gosec
 		h := md5.New()
-		h.Write(contents)
+		_, err := h.Write(contents)
+		if err != nil {
+			return fmt.Errorf("calculating hash: %w", err)
+		}
 		wc.MD5 = h.Sum(nil)
 
 		if len(contents) == 0 {
@@ -351,23 +356,24 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 	res, err := getObject(d.client, d.bucket, d.pathToKey(path), offset)
 	if err != nil {
 		var gcsErr *googleapi.Error
-		if errors.As(err, &gcsErr) {
-			if gcsErr.Code == http.StatusNotFound {
-				return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
-			}
-
-			if gcsErr.Code == http.StatusRequestedRangeNotSatisfiable {
-				obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
-				if err != nil {
-					return nil, err
-				}
-				if offset == obj.Size {
-					return io.NopCloser(bytes.NewReader([]byte{})), nil
-				}
-				return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
-			}
+		if !errors.As(err, &gcsErr) {
+			return nil, err
 		}
-		return nil, err
+
+		if gcsErr.Code == http.StatusNotFound {
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+		}
+
+		if gcsErr.Code == http.StatusRequestedRangeNotSatisfiable {
+			obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
+			if err != nil {
+				return nil, err
+			}
+			if offset == obj.Size {
+				return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
+			}
+			return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
+		}
 	}
 	if res.Header.Get("Content-Type") == uploadSessionContentType {
 		defer res.Body.Close()
@@ -394,7 +400,7 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 	var res *http.Response
 	err = retry(func() error {
 		var err error
-		//nolint: bodyclose // body is closed bit later in the code
+		// nolint: bodyclose // body is closed bit later in the code
 		res, err = client.Do(req)
 		return err
 	})
@@ -410,7 +416,7 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (d *driver) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
+func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	writer := &writer{
 		client:        d.client,
 		storageClient: d.storageClient,
@@ -419,7 +425,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 		buffer:        make([]byte, d.chunkSize),
 	}
 
-	if append {
+	if doAppend {
 		err := writer.init(path)
 		if err != nil {
 			return nil, err
@@ -959,7 +965,7 @@ var systemClock internal.Clock = clock.New()
 // URLFor returns a URL which may be used to retrieve the content stored at
 // the given path, possibly using the given options.
 // Returns ErrUnsupportedMethod if this driver has no privateKey
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
+func (d *driver) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
 	if d.privateKey == nil {
 		return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 	}

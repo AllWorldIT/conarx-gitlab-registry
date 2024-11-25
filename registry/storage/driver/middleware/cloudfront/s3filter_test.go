@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dcontext "github.com/docker/distribution/context"
+	"github.com/stretchr/testify/require"
 
 	"reflect" // used as a replacement for testify
 )
@@ -28,12 +29,13 @@ type mockIPRangeHandler struct {
 	data awsIPResponse
 }
 
-func (m mockIPRangeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (m mockIPRangeHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	bytes, err := json.Marshal(m.data)
 	if err != nil {
 		w.WriteHeader(500)
 		return
 	}
+	//nolint: revive // unhandled-error
 	w.Write(bytes)
 }
 
@@ -79,7 +81,8 @@ func TestMatchIPV6(t *testing.T) {
 	defer server.Close()
 
 	ips := newAWSIPs(serverIPRanges(server), time.Hour, nil)
-	ips.tryUpdate()
+	err := ips.tryUpdate()
+	require.NoError(t, err)
 	assertEqual(t, true, ips.contains(net.ParseIP("ff00::")))
 	assertEqual(t, 1, len(ips.ipv6))
 	assertEqual(t, 0, len(ips.ipv4))
@@ -95,7 +98,8 @@ func TestMatchIPV4(t *testing.T) {
 	defer server.Close()
 
 	ips := newAWSIPs(serverIPRanges(server), time.Hour, nil)
-	ips.tryUpdate()
+	err := ips.tryUpdate()
+	require.NoError(t, err)
 	assertEqual(t, true, ips.contains(net.ParseIP("192.168.0.0")))
 	assertEqual(t, true, ips.contains(net.ParseIP("192.168.0.1")))
 	assertEqual(t, false, ips.contains(net.ParseIP("192.169.0.0")))
@@ -114,7 +118,8 @@ func TestMatchIPV4_2(t *testing.T) {
 	defer server.Close()
 
 	ips := newAWSIPs(serverIPRanges(server), time.Hour, nil)
-	ips.tryUpdate()
+	err := ips.tryUpdate()
+	require.NoError(t, err)
 	assertEqual(t, true, ips.contains(net.ParseIP("192.168.0.0")))
 	assertEqual(t, true, ips.contains(net.ParseIP("192.168.0.1")))
 	assertEqual(t, false, ips.contains(net.ParseIP("192.169.0.0")))
@@ -133,7 +138,8 @@ func TestMatchIPV4WithRegionMatched(t *testing.T) {
 	defer server.Close()
 
 	ips := newAWSIPs(serverIPRanges(server), time.Hour, []string{"us-east-1"})
-	ips.tryUpdate()
+	err := ips.tryUpdate()
+	require.NoError(t, err)
 	assertEqual(t, true, ips.contains(net.ParseIP("192.168.0.0")))
 	assertEqual(t, true, ips.contains(net.ParseIP("192.168.0.1")))
 	assertEqual(t, false, ips.contains(net.ParseIP("192.169.0.0")))
@@ -152,7 +158,8 @@ func TestMatchIPV4WithRegionMatch_2(t *testing.T) {
 	defer server.Close()
 
 	ips := newAWSIPs(serverIPRanges(server), time.Hour, []string{"us-west-2", "us-east-1"})
-	ips.tryUpdate()
+	err := ips.tryUpdate()
+	require.NoError(t, err)
 	assertEqual(t, true, ips.contains(net.ParseIP("192.168.0.0")))
 	assertEqual(t, true, ips.contains(net.ParseIP("192.168.0.1")))
 	assertEqual(t, false, ips.contains(net.ParseIP("192.169.0.0")))
@@ -171,7 +178,8 @@ func TestMatchIPV4WithRegionNotMatched(t *testing.T) {
 	defer server.Close()
 
 	ips := newAWSIPs(serverIPRanges(server), time.Hour, []string{"us-west-2"})
-	ips.tryUpdate()
+	err := ips.tryUpdate()
+	require.NoError(t, err)
 	assertEqual(t, false, ips.contains(net.ParseIP("192.168.0.0")))
 	assertEqual(t, false, ips.contains(net.ParseIP("192.168.0.1")))
 	assertEqual(t, false, ips.contains(net.ParseIP("192.169.0.0")))
@@ -189,7 +197,8 @@ func TestInvalidData(t *testing.T) {
 	defer server.Close()
 
 	ips := newAWSIPs(serverIPRanges(server), time.Hour, nil)
-	ips.tryUpdate()
+	err := ips.tryUpdate()
+	require.NoError(t, err)
 	assertEqual(t, 1, len(ips.ipv4))
 }
 
@@ -223,7 +232,12 @@ func TestParsing(t *testing.T) {
         "region": "anotherregion",
         "service": "ec2"}]
     }`
-	rawMockHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(data)) })
+	rawMockHandler := http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {
+			// nolint: revive // unhandled-error
+			w.Write([]byte(data))
+		},
+	)
 	t.Parallel()
 	server := httptest.NewServer(rawMockHandler)
 	defer server.Close()
@@ -249,8 +263,9 @@ func TestUpdateCalledRegularly(t *testing.T) {
 
 	updateCount := 0
 	server := httptest.NewServer(http.HandlerFunc(
-		func(rw http.ResponseWriter, req *http.Request) {
+		func(rw http.ResponseWriter, _ *http.Request) {
 			updateCount++
+			// nolint: revive // unhandled-error
 			rw.Write([]byte("ok"))
 		}))
 	defer server.Close()
@@ -372,8 +387,10 @@ func BenchmarkContainsRandom(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		rand.Read(ipv4[i])
-		rand.Read(ipv6[i])
+		_, err := rand.Read(ipv4[i])
+		require.NoError(b, err)
+		_, err = rand.Read(ipv6[i])
+		require.NoError(b, err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -389,8 +406,10 @@ func BenchmarkContainsProd(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		rand.Read(ipv4[i])
-		rand.Read(ipv6[i])
+		_, err := rand.Read(ipv4[i])
+		require.NoError(b, err)
+		_, err = rand.Read(ipv6[i])
+		require.NoError(b, err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

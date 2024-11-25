@@ -34,9 +34,9 @@ type manifestStoreTestEnv struct {
 
 func newManifestStoreTestEnv(t *testing.T, name reference.Named, options ...RegistryOption) *manifestStoreTestEnv {
 	ctx := context.Background()
-	driver := inmemory.New()
+	driverInMemory := inmemory.New()
 	tag := "thetag"
-	registry, err := NewRegistry(ctx, driver, options...)
+	registry, err := NewRegistry(ctx, driverInMemory, options...)
 	if err != nil {
 		t.Fatalf("error creating registry: %v", err)
 	}
@@ -48,7 +48,7 @@ func newManifestStoreTestEnv(t *testing.T, name reference.Named, options ...Regi
 
 	return &manifestStoreTestEnv{
 		ctx:        ctx,
-		driver:     driver,
+		driver:     driverInMemory,
 		registry:   registry,
 		repository: repo,
 		name:       name,
@@ -61,7 +61,7 @@ func TestManifestStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testManifestStorage(t, true, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect, Schema1SigningKey(k), EnableSchema1)
+	testManifestStorageImpl(t, true, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect, Schema1SigningKey(k), EnableSchema1)
 }
 
 func TestManifestStorageV1Unsupported(t *testing.T) {
@@ -69,10 +69,10 @@ func TestManifestStorageV1Unsupported(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testManifestStorage(t, false, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect, Schema1SigningKey(k))
+	testManifestStorageImpl(t, false, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect, Schema1SigningKey(k))
 }
 
-func testManifestStorage(t *testing.T, schema1Enabled bool, options ...RegistryOption) {
+func testManifestStorageImpl(t *testing.T, schema1Enabled bool, options ...RegistryOption) {
 	repoName, _ := reference.WithName("foo/bar")
 	env := newManifestStoreTestEnv(t, repoName, options...)
 	ctx := context.Background()
@@ -91,7 +91,7 @@ func testManifestStorage(t *testing.T, schema1Enabled bool, options ...RegistryO
 
 	// Build up some test layers and add them to the manifest, saving the
 	// readseekers for upload later.
-	testLayers := map[digest.Digest]io.ReadSeeker{}
+	testLayers := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < 2; i++ {
 		rs, dgst, err := testutil.CreateRandomTarFile()
 		if err != nil {
@@ -327,7 +327,6 @@ func testManifestStorage(t *testing.T, schema1Enabled bool, options ...RegistryO
 	}
 	switch err.(type) {
 	case distribution.ErrManifestUnknownRevision:
-		break
 	default:
 		t.Errorf("Unexpected error getting deleted manifest: %s", reflect.ValueOf(err).Type())
 	}
@@ -377,11 +376,11 @@ func testManifestStorage(t *testing.T, schema1Enabled bool, options ...RegistryO
 }
 
 func TestOCIManifestStorage(t *testing.T) {
-	testOCIManifestStorage(t, "includeMediaTypes=true", true)
-	testOCIManifestStorage(t, "includeMediaTypes=false", false)
+	testOCIManifestStorageImpl(t, "includeMediaTypes=true", true)
+	testOCIManifestStorageImpl(t, "includeMediaTypes=false", false)
 }
 
-func testOCIManifestStorage(t *testing.T, testname string, includeMediaTypes bool) {
+func testOCIManifestStorageImpl(t *testing.T, testname string, includeMediaTypes bool) {
 	var imageMediaType string
 	var indexMediaType string
 	if includeMediaTypes {
@@ -404,8 +403,8 @@ func testOCIManifestStorage(t *testing.T, testname string, includeMediaTypes boo
 	// Build a manifest and store it and its layers in the registry
 
 	blobStore := env.repository.Blobs(ctx)
-	builder := ocischema.NewManifestBuilder(blobStore, []byte{}, map[string]string{})
-	err = builder.(*ocischema.Builder).SetMediaType(imageMediaType)
+	manifestBuilder := ocischema.NewManifestBuilder(blobStore, make([]byte, 0), make(map[string]string))
+	err = manifestBuilder.(*ocischema.Builder).SetMediaType(imageMediaType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,28 +429,28 @@ func testOCIManifestStorage(t *testing.T, testname string, includeMediaTypes boo
 			t.Fatalf("%s: unexpected error finishing upload: %v", testname, err)
 		}
 
-		builder.AppendReference(distribution.Descriptor{Digest: dgst})
+		manifestBuilder.AppendReference(distribution.Descriptor{Digest: dgst})
 	}
 
-	manifest, err := builder.Build(ctx)
+	m, err := manifestBuilder.Build(ctx)
 	if err != nil {
 		t.Fatalf("%s: unexpected error generating manifest: %v", testname, err)
 	}
 
 	// before putting the manifest test for proper handling of SchemaVersion
 
-	if manifest.(*ocischema.DeserializedManifest).Manifest.SchemaVersion != 2 {
+	if m.(*ocischema.DeserializedManifest).Manifest.SchemaVersion != 2 {
 		t.Fatalf("%s: unexpected error generating default version for oci manifest", testname)
 	}
-	manifest.(*ocischema.DeserializedManifest).Manifest.SchemaVersion = 0
+	m.(*ocischema.DeserializedManifest).Manifest.SchemaVersion = 0
 
 	var manifestDigest digest.Digest
-	if manifestDigest, err = ms.Put(ctx, manifest); err != nil {
+	if manifestDigest, err = ms.Put(ctx, m); err != nil {
 		if err.Error() != "unrecognized manifest schema version 0" {
 			t.Fatalf("%s: unexpected error putting manifest: %v", testname, err)
 		}
-		manifest.(*ocischema.DeserializedManifest).Manifest.SchemaVersion = 2
-		if manifestDigest, err = ms.Put(ctx, manifest); err != nil {
+		m.(*ocischema.DeserializedManifest).Manifest.SchemaVersion = 2
+		if manifestDigest, err = ms.Put(ctx, m); err != nil {
 			t.Fatalf("%s: unexpected error putting manifest: %v", testname, err)
 		}
 	}
@@ -562,7 +561,7 @@ func TestEmptyManifestContent(t *testing.T) {
 	// the metadata references.
 	blobPath, err := pathFor(blobDataPathSpec{digest: img.ManifestDigest})
 	require.NoError(t, err)
-	env.driver.PutContent(ctx, blobPath, []byte{})
+	env.driver.PutContent(ctx, blobPath, make([]byte, 0))
 
 	manifestService, err := env.repository.Manifests(ctx)
 	require.NoError(t, err)

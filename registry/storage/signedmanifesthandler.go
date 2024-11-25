@@ -24,7 +24,7 @@ type signedManifestHandler struct {
 
 var _ ManifestHandler = &signedManifestHandler{}
 
-func (ms *signedManifestHandler) Unmarshal(ctx context.Context, dgst digest.Digest, content []byte) (distribution.Manifest, error) {
+func (ms *signedManifestHandler) Unmarshal(_ context.Context, _ digest.Digest, content []byte) (distribution.Manifest, error) {
 	log := dcontext.GetLogger(ms.ctx)
 	log.Debug("(*signedManifestHandler).Unmarshal")
 

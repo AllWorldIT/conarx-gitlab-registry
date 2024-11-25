@@ -18,6 +18,7 @@ func createTmpKeyFile(t *testing.T) *os.File {
 	f, err := os.CreateTemp("", "")
 	require.NoError(t, err)
 
+	//nolint: revive // unhandled-error
 	t.Cleanup(func() { os.Remove(f.Name()) })
 
 	key := `c29tZS1zZWNyZXQ=`
@@ -38,7 +39,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 	}{
 		{
 			name:             "no baseurl",
-			options:          map[string]any{},
+			options:          make(map[string]any, 0),
 			expectedError:    true,
 			expectedErrorMsg: "no baseurl provided",
 		},

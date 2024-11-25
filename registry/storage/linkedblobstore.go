@@ -170,12 +170,12 @@ func (lbs *linkedBlobStore) Create(ctx context.Context, options ...distribution.
 		}
 	}
 
-	uuid := uuid.Generate().String()
+	u := uuid.Generate().String()
 	startedAt := time.Now().UTC()
 
-	path, err := pathFor(uploadDataPathSpec{
+	p, err := pathFor(uploadDataPathSpec{
 		name: lbs.repository.Named().Name(),
-		id:   uuid,
+		id:   u,
 	})
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func (lbs *linkedBlobStore) Create(ctx context.Context, options ...distribution.
 
 	startedAtPath, err := pathFor(uploadStartedAtPathSpec{
 		name: lbs.repository.Named().Name(),
-		id:   uuid,
+		id:   u,
 	})
 	if err != nil {
 		return nil, err
@@ -194,7 +194,7 @@ func (lbs *linkedBlobStore) Create(ctx context.Context, options ...distribution.
 		return nil, err
 	}
 
-	return lbs.newBlobUpload(ctx, uuid, path, startedAt, false)
+	return lbs.newBlobUpload(ctx, u, p, startedAt, false)
 }
 
 func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution.BlobWriter, error) {
@@ -222,7 +222,7 @@ func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution
 		return nil, err
 	}
 
-	path, err := pathFor(uploadDataPathSpec{
+	p, err := pathFor(uploadDataPathSpec{
 		name: lbs.repository.Named().Name(),
 		id:   id,
 	})
@@ -230,7 +230,7 @@ func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution
 		return nil, err
 	}
 
-	return lbs.newBlobUpload(ctx, id, path, startedAt, true)
+	return lbs.newBlobUpload(ctx, id, p, startedAt, true)
 }
 
 func (lbs *linkedBlobStore) Delete(ctx context.Context, dgst digest.Digest) error {
@@ -335,8 +335,8 @@ func (lbs *linkedBlobStore) mount(ctx context.Context, sourceRepo reference.Name
 }
 
 // newBlobUpload allocates a new upload controller with the given state.
-func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, uuid, path string, startedAt time.Time, append bool) (distribution.BlobWriter, error) {
-	fw, err := lbs.driver.Writer(ctx, path, append)
+func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, u, p string, startedAt time.Time, doAppend bool) (distribution.BlobWriter, error) {
+	fw, err := lbs.driver.Writer(ctx, p, doAppend)
 	if err != nil {
 		return nil, err
 	}
@@ -344,12 +344,12 @@ func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, uuid, path string
 	bw := &blobWriter{
 		ctx:                    ctx,
 		blobStore:              lbs,
-		id:                     uuid,
+		id:                     u,
 		startedAt:              startedAt,
 		digester:               digest.Canonical.Digester(),
 		fileWriter:             fw,
 		driver:                 lbs.driver,
-		path:                   path,
+		path:                   p,
 		resumableDigestEnabled: lbs.resumableDigestEnabled,
 	}
 
@@ -431,7 +431,7 @@ func (lbs *linkedBlobStatter) Clear(ctx context.Context, dgst digest.Digest) (er
 	return lbs.blobStore.driver.Delete(ctx, blobLinkPath)
 }
 
-func (lbs *linkedBlobStatter) SetDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
+func (*linkedBlobStatter) SetDescriptor(_ context.Context, _ digest.Digest, _ distribution.Descriptor) error {
 	// The canonical descriptor for a blob is set at the commit phase of upload
 	return nil
 }
