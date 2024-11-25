@@ -41,16 +41,16 @@ func withNoExponentialBackoff() backoff.BackOff {
 type noBackoff struct{}
 
 // NextBackOff always returns backoff.Stop to signal the caller not to retry the operation.
-func (n *noBackoff) NextBackOff() time.Duration {
+func (*noBackoff) NextBackOff() time.Duration {
 	return backoff.Stop
 }
 
 // Reset to initial state.
-func (n *noBackoff) Reset() {}
+func (*noBackoff) Reset() {}
 
-func withExponentialBackoff(max int64) wrapperOpt {
-	if max < 0 {
-		max = 0
+func withExponentialBackoff(maximum int64) wrapperOpt {
+	if maximum < 0 {
+		maximum = 0
 	}
 
 	b := backoff.NewExponentialBackOff()
@@ -63,7 +63,7 @@ func withExponentialBackoff(max int64) wrapperOpt {
 	return func(w *s3wrapper) {
 		w.backoff = func() backoff.BackOff {
 			//nolint:gosec // there is no overflow here, max is always positive
-			return backoff.WithMaxRetries(b, uint64(max))
+			return backoff.WithMaxRetries(b, uint64(maximum))
 		}
 	}
 }
@@ -79,9 +79,9 @@ type s3wrapper struct {
 
 type wrapperOpt func(*s3wrapper)
 
-func withRateLimit(max int64, burst int) wrapperOpt {
+func withRateLimit(maximum int64, burst int) wrapperOpt {
 	return func(w *s3wrapper) {
-		w.Limiter = rate.NewLimiter(rate.Limit(max), burst)
+		w.Limiter = rate.NewLimiter(rate.Limit(maximum), burst)
 	}
 }
 
@@ -91,9 +91,9 @@ func withBackoffNotify(n backoff.Notify) wrapperOpt {
 	}
 }
 
-func newS3Wrapper(s3 s3iface.S3API, opts ...wrapperOpt) *s3wrapper {
+func newS3Wrapper(s3API s3iface.S3API, opts ...wrapperOpt) *s3wrapper {
 	w := &s3wrapper{
-		s3:      s3,
+		s3:      s3API,
 		Limiter: rate.NewLimiter(rate.Inf, 0),
 		backoff: withNoExponentialBackoff,
 	}

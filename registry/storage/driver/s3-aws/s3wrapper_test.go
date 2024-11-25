@@ -91,7 +91,7 @@ type mockDeleteObjectsWithContext struct {
 	counter        atomic.Int32
 }
 
-func (m *mockDeleteObjectsWithContext) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteObjectsInput, opts ...request.Option) (*s3.DeleteObjectsOutput, error) {
+func (m *mockDeleteObjectsWithContext) DeleteObjectsWithContext(_ aws.Context, _ *s3.DeleteObjectsInput, _ ...request.Option) (*s3.DeleteObjectsOutput, error) {
 	out := &s3.DeleteObjectsOutput{}
 	if m.counter.Load() < m.failedRequests {
 		out.Errors = []*s3.Error{

@@ -121,6 +121,7 @@ func (d *dir) mkfile(p string) (*file, error) {
 			return nil, errIsDir
 		}
 
+		// nolint: revive // unchecked-type-assertion
 		return n.(*file), nil
 	}
 
@@ -131,6 +132,7 @@ func (d *dir) mkfile(p string) (*file, error) {
 		return nil, fmt.Errorf("mkdirs failed: %w", err)
 	}
 
+	// nolint: revive // unchecked-type-assertion
 	dd := n.(*dir)
 	n = &file{
 		common: common{
@@ -140,6 +142,7 @@ func (d *dir) mkfile(p string) (*file, error) {
 	}
 
 	dd.add(n)
+	// nolint: revive // unchecked-type-assertion
 	return n.(*file), nil
 }
 
@@ -154,11 +157,12 @@ func (d *dir) mkdirs(p string) (*dir, error) {
 		return nil, fmt.Errorf("mkdirs found non-directory element at path %s: %w", n.path(), errIsNotDir)
 	}
 
-	if n.path() == p {
-		return n.(*dir), nil
-	}
-
+	// nolint: revive // unchecked-type-assertion
 	dd := n.(*dir)
+
+	if n.path() == p {
+		return dd, nil
+	}
 
 	relative := strings.Trim(strings.TrimPrefix(p, n.path()), "/")
 

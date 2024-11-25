@@ -558,6 +558,7 @@ func TestS3DriverStorageClass(t *testing.T) {
 	}
 	defer rrDriver.Delete(ctx, rrFilename)
 
+	//nolint: revive // unchecked-type-assertion
 	standardDriverUnwrapped := standardDriver.Base.StorageDriver.(*driver)
 	resp, err := standardDriverUnwrapped.S3.GetObjectWithContext(
 		ctx,
@@ -574,6 +575,7 @@ func TestS3DriverStorageClass(t *testing.T) {
 		t.Fatalf("unexpected storage class for standard file: %v", resp.StorageClass)
 	}
 
+	//nolint: revive // unchecked-type-assertion
 	rrDriverUnwrapped := rrDriver.Base.StorageDriver.(*driver)
 	resp, err = rrDriverUnwrapped.S3.GetObjectWithContext(
 		ctx,
@@ -625,7 +627,7 @@ func TestS3DriverURLFor_Expiry(t *testing.T) {
 	d := newTempDirDriver(t)
 
 	fp := "/foo"
-	err := d.PutContent(ctx, fp, []byte{})
+	err := d.PutContent(ctx, fp, make([]byte, 0))
 	require.NoError(t, err)
 
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
@@ -671,9 +673,10 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 	// An object larger than d's MultipartCopyThresholdSize will cause d.Move() to perform a multipart copy.
 	multipartCopyThresholdSize := d.baseEmbed.Base.StorageDriver.(*driver).MultipartCopyThresholdSize
 	contents := make([]byte, 2*multipartCopyThresholdSize)
-	rand.Read(contents)
+	_, err := rand.Read(contents)
+	require.NoError(t, err)
 
-	err := d.PutContent(ctx, sourcePath, contents)
+	err = d.PutContent(ctx, sourcePath, contents)
 	if err != nil {
 		t.Fatalf("unexpected error creating content: %v", err)
 	}
@@ -700,7 +703,7 @@ type mockDeleteObjectsError struct {
 }
 
 // DeleteObjects mocks a presign expire error while processing a DeleteObjects response.
-func (m *mockDeleteObjectsError) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteObjectsInput, opts ...request.Option) (*s3.DeleteObjectsOutput, error) {
+func (*mockDeleteObjectsError) DeleteObjectsWithContext(_ aws.Context, _ *s3.DeleteObjectsInput, _ ...request.Option) (*s3.DeleteObjectsOutput, error) {
 	return nil, awserr.New(request.ErrCodeInvalidPresignExpire, "failed reading response body", nil)
 }
 
@@ -756,7 +759,7 @@ type mockDeleteObjectsPartialError struct {
 
 // DeleteObjects mocks an S3 DeleteObjects partial error. Half of the objects are successfully deleted, and the other
 // half fails due to an 'AccessDenied' error.
-func (m *mockDeleteObjectsPartialError) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteObjectsInput, opts ...request.Option) (*s3.DeleteObjectsOutput, error) {
+func (*mockDeleteObjectsPartialError) DeleteObjectsWithContext(_ aws.Context, input *s3.DeleteObjectsInput, _ ...request.Option) (*s3.DeleteObjectsOutput, error) {
 	var deleted []*s3.DeletedObject
 	var errored []*s3.Error
 	errCode := "AccessDenied"
@@ -811,11 +814,11 @@ type mockPutObjectWithContextRetryableError struct {
 	s3iface.S3API
 }
 
-func (m *mockPutObjectWithContextRetryableError) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error) {
+func (*mockPutObjectWithContextRetryableError) PutObjectWithContext(_ aws.Context, _ *s3.PutObjectInput, _ ...request.Option) (*s3.PutObjectOutput, error) {
 	return nil, awserr.New(request.ErrCodeRequestError, "expected test failure", nil)
 }
 
-func (m *mockPutObjectWithContextRetryableError) ListObjectsV2PagesWithContext(ctx aws.Context, input *s3.ListObjectsV2Input, f func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error {
+func (*mockPutObjectWithContextRetryableError) ListObjectsV2PagesWithContext(_ aws.Context, _ *s3.ListObjectsV2Input, _ func(*s3.ListObjectsV2Output, bool) bool, _ ...request.Option) error {
 	return awserr.NewRequestFailure(nil, http.StatusInternalServerError, "expected test failure")
 }
 
@@ -828,7 +831,7 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 
 	var retries int
 
-	notifyFn := func(err error, t time.Duration) {
+	notifyFn := func(_ error, _ time.Duration) {
 		retries++
 	}
 
@@ -838,7 +841,7 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 		withBackoffNotify(notifyFn),
 	)
 
-	err := d.PutContent(context.Background(), "/test/file", []byte{})
+	err := d.PutContent(context.Background(), "/test/file", make([]byte, 0))
 	require.Error(t, err)
 	require.Zero(t, retries)
 }
@@ -852,7 +855,7 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 
 	var retries int
 
-	notifyFn := func(err error, t time.Duration) {
+	notifyFn := func(_ error, _ time.Duration) {
 		retries++
 	}
 
@@ -863,7 +866,7 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 		withBackoffNotify(notifyFn),
 	)
 
-	err := d.PutContent(context.Background(), "/test/file", []byte{})
+	err := d.PutContent(context.Background(), "/test/file", make([]byte, 0))
 	require.Error(t, err)
 	require.Zero(t, retries)
 }
@@ -877,7 +880,7 @@ func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
 
 	var retries int
 
-	notifyFn := func(err error, t time.Duration) {
+	notifyFn := func(_ error, _ time.Duration) {
 		retries++
 	}
 
@@ -889,7 +892,7 @@ func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
 	)
 
 	start := time.Now()
-	err := d.PutContent(context.Background(), "/test/file", []byte{})
+	err := d.PutContent(context.Background(), "/test/file", make([]byte, 0))
 	require.Error(t, err)
 	require.Equal(t, defaultMaxRetries, retries)
 	require.WithinDuration(t, time.Now(), start, time.Second*10)
@@ -905,11 +908,11 @@ type mockPutObjectWithContextPermanentError struct {
 	s3iface.S3API
 }
 
-func (m *mockPutObjectWithContextPermanentError) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error) {
+func (*mockPutObjectWithContextPermanentError) PutObjectWithContext(_ aws.Context, _ *s3.PutObjectInput, _ ...request.Option) (*s3.PutObjectOutput, error) {
 	return nil, awserr.New(request.ErrCodeInvalidPresignExpire, "expected test failure", nil)
 }
 
-func (m *mockPutObjectWithContextPermanentError) ListObjectsV2WithContext(ctx aws.Context, input *s3.ListObjectsV2Input, opts ...request.Option) (*s3.ListObjectsV2Output, error) {
+func (*mockPutObjectWithContextPermanentError) ListObjectsV2WithContext(_ aws.Context, _ *s3.ListObjectsV2Input, _ ...request.Option) (*s3.ListObjectsV2Output, error) {
 	return nil, awserr.NewRequestFailure(nil, http.StatusForbidden, "expected test failure")
 }
 
@@ -922,7 +925,7 @@ func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 
 	var retries int
 
-	notifyFn := func(err error, t time.Duration) {
+	notifyFn := func(_ error, _ time.Duration) {
 		retries++
 	}
 
@@ -933,7 +936,7 @@ func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 		withExponentialBackoff(200),
 	)
 
-	err := d.PutContent(context.Background(), "/test/file", []byte{})
+	err := d.PutContent(context.Background(), "/test/file", make([]byte, 0))
 	require.Error(t, err)
 	require.Zero(t, retries)
 
@@ -951,7 +954,7 @@ func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
 
 	var retries int
 
-	notifyFn := func(err error, t time.Duration) {
+	notifyFn := func(_ error, _ time.Duration) {
 		retries++
 	}
 
@@ -1002,6 +1005,7 @@ func TestS3DriverClientTransport(t *testing.T) {
 				t.Fatalf("failed to create driver: %v", err)
 			}
 
+			//nolint: revive // unchecked-type-assertion
 			s3drv := drv.baseEmbed.Base.StorageDriver.(*driver)
 			s3s, ok := s3drv.S3.s3.(*s3.S3)
 			if !ok {

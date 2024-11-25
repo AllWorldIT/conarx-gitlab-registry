@@ -113,10 +113,10 @@ const (
 )
 
 // validRegions maps known s3 region identifiers to region descriptors
-var validRegions = map[string]struct{}{}
+var validRegions = make(map[string]struct{})
 
 // validObjectACLs contains known s3 object Acls
-var validObjectACLs = map[string]struct{}{}
+var validObjectACLs = make(map[string]struct{})
 
 // errMaxListRespExceeded signifies a multi part layer upload has exceeded the allowable maximum size
 var errMaxListRespExceeded = fmt.Errorf("layer parts pages exceeds the maximum of %d allowed", maxListRespLoop)
@@ -177,7 +177,7 @@ func init() {
 // s3DriverFactory implements the factory.StorageDriverFactory interface
 type s3DriverFactory struct{}
 
-func (factory *s3DriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
+func (*s3DriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -266,7 +266,7 @@ func parseParameters(parameters map[string]any) (*DriverParameters, error) {
 	}
 	secretKey := parameters["secretkey"]
 	if secretKey == nil {
-		//#nosec G101 -- This is a false positive
+		// nolint: gosec // G101 -- This is a false positive
 		secretKey = ""
 	}
 
@@ -471,7 +471,7 @@ func parseParameters(parameters map[string]any) (*DriverParameters, error) {
 
 // getParameterAsInt64 converts parameters[name] to an int64 value (using
 // default if nil), verifies it is no smaller than min, and returns it.
-func getParameterAsInt64(parameters map[string]any, name string, defaultt, min, max int64) (int64, error) {
+func getParameterAsInt64(parameters map[string]any, name string, defaultt, minimum, maximum int64) (int64, error) {
 	rv := defaultt
 	param := parameters[name]
 	switch v := param.(type) {
@@ -491,8 +491,8 @@ func getParameterAsInt64(parameters map[string]any, name string, defaultt, min, 
 		return 0, fmt.Errorf("converting value for %s: %#v", name, param)
 	}
 
-	if rv < min || rv > max {
-		return 0, fmt.Errorf("the %s %#v parameter should be a number between %d and %d (inclusive)", name, rv, min, max)
+	if rv < minimum || rv > maximum {
+		return 0, fmt.Errorf("the %s %#v parameter should be a number between %d and %d (inclusive)", name, rv, minimum, maximum)
 	}
 
 	return rv, nil
@@ -606,7 +606,7 @@ func New(params *DriverParameters) (*Driver, error) {
 
 // Implement the storagedriver.StorageDriver interface
 
-func (d *driver) Name() string {
+func (*driver) Name() string {
 	return driverName
 }
 
@@ -795,8 +795,8 @@ func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 		return nil, parseError(opath, err)
 	}
 
-	files := []string{}
-	directories := []string{}
+	files := make([]string, 0)
+	directories := make([]string, 0)
 
 	for {
 		for _, key := range resp.Contents {
@@ -808,21 +808,21 @@ func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 			directories = append(directories, strings.Replace(commonPrefix[0:len(commonPrefix)-1], d.s3Path(""), prefix, 1))
 		}
 
-		if *resp.IsTruncated {
-			resp, err = d.S3.ListObjectsV2WithContext(
-				ctx,
-				&s3.ListObjectsV2Input{
-					Bucket:            aws.String(d.Bucket),
-					Prefix:            aws.String(d.s3Path(path)),
-					Delimiter:         aws.String("/"),
-					MaxKeys:           aws.Int64(listMax),
-					ContinuationToken: resp.NextContinuationToken,
-				})
-			if err != nil {
-				return nil, err
-			}
-		} else {
+		if !*resp.IsTruncated {
 			break
+		}
+
+		resp, err = d.S3.ListObjectsV2WithContext(
+			ctx,
+			&s3.ListObjectsV2Input{
+				Bucket:            aws.String(d.Bucket),
+				Prefix:            aws.String(d.s3Path(path)),
+				Delimiter:         aws.String("/"),
+				MaxKeys:           aws.Int64(listMax),
+				ContinuationToken: resp.NextContinuationToken,
+			})
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -950,13 +950,6 @@ func (d *driver) copy(ctx context.Context, sourcePath, destPath string) error {
 			MultipartUpload: &s3.CompletedMultipartUpload{Parts: completedParts},
 		})
 	return err
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
@@ -1092,7 +1085,7 @@ var systemClock internal.Clock = clock.New()
 
 // URLFor returns a URL which may be used to retrieve the content stored at the given path.
 // May return an UnsupportedMethodErr in certain StorageDriver implementations.
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
+func (d *driver) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
 	methodString := http.MethodGet
 	method, ok := options["method"]
 	if ok {
@@ -1179,7 +1172,7 @@ func (d *driver) WalkParallel(ctx context.Context, from string, f storagedriver.
 	var retError error
 	countChan := make(chan int64)
 	countDone := make(chan struct{})
-	errors := make(chan error)
+	errCh := make(chan error)
 	errDone := make(chan struct{})
 	quit := make(chan struct{})
 
@@ -1197,7 +1190,7 @@ func (d *driver) WalkParallel(ctx context.Context, from string, f storagedriver.
 		var closed bool
 		// Consume all errors to prevent goroutines from blocking and to
 		// report errors from goroutines that were already in progress.
-		for err := range errors {
+		for err := range errCh {
 			// Signal goroutines to quit only once on the first error.
 			if !closed {
 				close(quit)
@@ -1216,13 +1209,13 @@ func (d *driver) WalkParallel(ctx context.Context, from string, f storagedriver.
 	// entire walk to complete without blocking on each doWalkParallel call.
 	var wg sync.WaitGroup
 
-	d.doWalkParallel(ctx, &wg, countChan, quit, errors, d.s3Path(path), prefix, f)
+	d.doWalkParallel(ctx, &wg, countChan, quit, errCh, d.s3Path(path), prefix, f)
 
 	wg.Wait()
 
 	// Ensure that all object counts have been totaled before continuing.
 	close(countChan)
-	close(errors)
+	close(errCh)
 	<-countDone
 	<-errDone
 
@@ -1275,7 +1268,7 @@ func (d *driver) doWalk(parentCtx context.Context, objectCount *int64, path, pre
 	ctx, done := dcontext.WithTrace(parentCtx)
 	defer done("s3aws.ListObjectsV2Pages(%s)", path)
 
-	listObjectErr := d.S3.ListObjectsV2PagesWithContext(ctx, listObjectsInput, func(objects *s3.ListObjectsV2Output, lastPage bool) bool {
+	listObjectErr := d.S3.ListObjectsV2PagesWithContext(ctx, listObjectsInput, func(objects *s3.ListObjectsV2Output, _ bool) bool {
 		var count int64
 		// KeyCount was introduced with version 2 of the GET Bucket operation in S3.
 		// Some S3 implementations don't support V2 now, so we fall back to manual
@@ -1320,9 +1313,8 @@ func (d *driver) doWalk(parentCtx context.Context, objectCount *int64, path, pre
 			if err == storagedriver.ErrSkipDir {
 				if walkInfo.IsDir() {
 					continue
-				} else {
-					break
 				}
+				break
 			} else if err != nil {
 				retError = err
 				return false
@@ -1349,7 +1341,7 @@ func (d *driver) doWalk(parentCtx context.Context, objectCount *int64, path, pre
 	return nil
 }
 
-func (d *driver) doWalkParallel(parentCtx context.Context, wg *sync.WaitGroup, countChan chan<- int64, quit <-chan struct{}, errors chan<- error, path, prefix string, f storagedriver.WalkFn) {
+func (d *driver) doWalkParallel(parentCtx context.Context, wg *sync.WaitGroup, countChan chan<- int64, quit <-chan struct{}, errCh chan<- error, path, prefix string, f storagedriver.WalkFn) {
 	listObjectsInput := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(d.Bucket),
 		Prefix:    aws.String(path),
@@ -1360,7 +1352,7 @@ func (d *driver) doWalkParallel(parentCtx context.Context, wg *sync.WaitGroup, c
 	ctx, done := dcontext.WithTrace(parentCtx)
 	defer done("s3aws.ListObjectsV2Pages(%s)", path)
 
-	listObjectErr := d.S3.ListObjectsV2PagesWithContext(ctx, listObjectsInput, func(objects *s3.ListObjectsV2Output, lastPage bool) bool {
+	listObjectErr := d.S3.ListObjectsV2PagesWithContext(ctx, listObjectsInput, func(objects *s3.ListObjectsV2Output, _ bool) bool {
 		select {
 		// The walk was canceled, return to stop requests for pages and prevent gorountines from leaking.
 		case <-quit:
@@ -1415,11 +1407,11 @@ func (d *driver) doWalkParallel(parentCtx context.Context, wg *sync.WaitGroup, c
 					}
 
 					if err != nil {
-						errors <- err
+						errCh <- err
 					}
 
 					if wInfo.IsDir() {
-						d.doWalkParallel(ctx, wg, countChan, quit, errors, *wInfo.prefix, prefix, f)
+						d.doWalkParallel(ctx, wg, countChan, quit, errCh, *wInfo.prefix, prefix, f)
 					}
 				}()
 			}
@@ -1428,7 +1420,7 @@ func (d *driver) doWalkParallel(parentCtx context.Context, wg *sync.WaitGroup, c
 	})
 
 	if listObjectErr != nil {
-		errors <- listObjectErr
+		errCh <- listObjectErr
 	}
 }
 
@@ -1466,7 +1458,7 @@ func (d *driver) getSSEKMSKeyID() *string {
 	return nil
 }
 
-func (d *driver) getContentType() *string {
+func (*driver) getContentType() *string {
 	return aws.String("application/octet-stream")
 }
 
@@ -1557,13 +1549,16 @@ func (w *writer) Write(p []byte) (int, error) {
 				},
 			})
 		if err != nil {
-			_, _ = w.driver.S3.AbortMultipartUploadWithContext(
+			_, errIn := w.driver.S3.AbortMultipartUploadWithContext(
 				ctx,
 				&s3.AbortMultipartUploadInput{
 					Bucket:   aws.String(w.driver.Bucket),
 					Key:      aws.String(w.key),
 					UploadId: aws.String(w.uploadID),
 				})
+			if errIn != nil {
+				return 0, fmt.Errorf("aborting upload failed while handling error %w: %w", err, errIn)
+			}
 			return 0, err
 		}
 
@@ -1646,6 +1641,7 @@ func (w *writer) Write(p []byte) (int, error) {
 				n += neededBytes
 				p = p[neededBytes:]
 				err := w.flushPart()
+				//nolint: revive // max-control-nesting: control flow nesting exceeds 3
 				if err != nil {
 					w.size += int64(n)
 					return n, err
@@ -1728,13 +1724,16 @@ func (w *writer) Commit() error {
 			},
 		})
 	if err != nil {
-		_, _ = w.driver.S3.AbortMultipartUploadWithContext(
+		_, errIn := w.driver.S3.AbortMultipartUploadWithContext(
 			ctx,
 			&s3.AbortMultipartUploadInput{
 				Bucket:   aws.String(w.driver.Bucket),
 				Key:      aws.String(w.key),
 				UploadId: aws.String(w.uploadID),
 			})
+		if errIn != nil {
+			return fmt.Errorf("aborting upload failed while handling error %w: %w", err, errIn)
+		}
 		return err
 	}
 	return nil

@@ -59,7 +59,7 @@ func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 	}{
 		// check we use default threads and root dirs
 		{
-			params: map[string]any{},
+			params: make(map[string]any, 0),
 			expected: DriverParameters{
 				RootDirectory: defaultRootDirectory,
 				MaxThreads:    defaultMaxThreads,

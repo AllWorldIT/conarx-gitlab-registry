@@ -25,7 +25,7 @@ func TestLinkedBlobStoreCreateWithMountFrom(t *testing.T) {
 
 	// Build up some test layers and add them to the manifest, saving the
 	// readseekers for upload later.
-	testLayers := map[digest.Digest]io.ReadSeeker{}
+	testLayers := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < 2; i++ {
 		rs, dgst, err := testutil.CreateRandomTarFile()
 		if err != nil {

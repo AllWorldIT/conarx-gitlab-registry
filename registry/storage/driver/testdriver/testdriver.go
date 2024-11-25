@@ -18,7 +18,7 @@ func init() {
 // testDriverFactory implements the factory.StorageDriverFactory interface.
 type testDriverFactory struct{}
 
-func (factory *testDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
+func (*testDriverFactory) Create(_ map[string]any) (storagedriver.StorageDriver, error) {
 	return New(), nil
 }
 
@@ -45,8 +45,8 @@ func New() *TestDriver {
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (td *TestDriver) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
-	fw, err := td.StorageDriver.Writer(ctx, path, append)
+func (td *TestDriver) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
+	fw, err := td.StorageDriver.Writer(ctx, path, doAppend)
 	return &testFileWriter{FileWriter: fw}, err
 }
 

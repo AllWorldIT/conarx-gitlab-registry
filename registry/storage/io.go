@@ -12,8 +12,8 @@ const (
 	maxBlobGetSize = 4 << 20
 )
 
-func getContent(ctx context.Context, driver driver.StorageDriver, p string) ([]byte, error) {
-	r, err := driver.Reader(ctx, p, 0)
+func getContent(ctx context.Context, sdriver driver.StorageDriver, p string) ([]byte, error) {
+	r, err := sdriver.Reader(ctx, p, 0)
 	if err != nil {
 		return nil, err
 	}

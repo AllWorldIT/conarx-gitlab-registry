@@ -36,7 +36,7 @@ import (
 // iso8601MsFormat is a regular expression to validate ISO8601 timestamps with millisecond precision.
 var iso8601MsFormat = regexp.MustCompile(`^(?:[0-9]{4}-[0-9]{2}-[0-9]{2})?(?:[ T][0-9]{2}:[0-9]{2}:[0-9]{2})?(?:[.][0-9]{3})`)
 
-func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
+func testGitlabAPIRepositoryGet(t *testing.T, opts ...configOpt) {
 	t.Helper()
 
 	env := newTestEnv(t, opts...)
@@ -156,12 +156,12 @@ func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
 }
 
 func TestGitlabAPI_Repository_Get(t *testing.T) {
-	testGitlabApiRepositoryGet(t)
+	testGitlabAPIRepositoryGet(t)
 }
 
 func TestGitlabAPI_Repository_Get_WithCentralRepositoryCache(t *testing.T) {
 	srv := testutil.RedisServer(t)
-	testGitlabApiRepositoryGet(t, withRedisCache(srv.Addr()))
+	testGitlabAPIRepositoryGet(t, withRedisCache(srv.Addr()))
 }
 
 func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingBase(t *testing.T) {
@@ -223,7 +223,7 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingTopLevel(t *tes
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
+func testGitlabAPIRepositoryTagsList(t *testing.T, opts ...configOpt) {
 	t.Helper()
 
 	env := newTestEnv(t, opts...)
@@ -601,7 +601,7 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 			name:                "filtered by the exact name - not found",
 			queryParams:         url.Values{"name_exact": []string{"bogumil"}},
 			expectedStatus:      http.StatusOK,
-			expectedOrderedTags: []string{},
+			expectedOrderedTags: make([]string, 0),
 		},
 		{
 			name:           "filtered both by the exact name and partial name",
@@ -724,11 +724,11 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 
 func TestGitlabAPI_RepositoryTagsList_WithCentralRepositoryCache(t *testing.T) {
 	srv := testutil.RedisServer(t)
-	testGitlabApiRepositoryTagsList(t, withRedisCache(srv.Addr()))
+	testGitlabAPIRepositoryTagsList(t, withRedisCache(srv.Addr()))
 }
 
 func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
-	testGitlabApiRepositoryTagsList(t)
+	testGitlabAPIRepositoryTagsList(t)
 }
 
 // TestGitlabAPI_RepositoryTagsList_PublishedAt is similar to TestGitlabAPI_RepositoryTagsList but
@@ -951,14 +951,14 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 
 // assertLinkHeaderForPublishedAt formats the expected links according to the response we want from the
 // repositories tags list endpoint with the escaped base64 encoded pagination marker.
-func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expectedLast, path, sort string) {
+func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expectedLast, p, sortOrder string) {
 	t.Helper()
 
 	if expectedBefore == "" && expectedLast == "" {
 		require.Empty(t, gotLink, "Link header should not exist: %s", gotLink)
 	}
 
-	linkBase := fmt.Sprintf(`</gitlab/v1/repositories/%s/tags/list/`, path)
+	linkBase := fmt.Sprintf(`</gitlab/v1/repositories/%s/tags/list/`, p)
 	gotPreviousLink := ""
 	gotNextLink := ""
 	links := strings.Split(gotLink, ",")
@@ -979,7 +979,7 @@ func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expec
 
 	if expectedBefore != "" {
 		require.NotEmpty(t, gotPreviousLink, "previous link")
-		expectedPreviousLink := fmt.Sprintf("%s?before=%s&n=2&sort=%s>; rel=\"previous\"", linkBase, expectedBefore, sort)
+		expectedPreviousLink := fmt.Sprintf("%s?before=%s&n=2&sort=%s>; rel=\"previous\"", linkBase, expectedBefore, sortOrder)
 		require.Equal(t, expectedPreviousLink, gotPreviousLink)
 	} else {
 		require.Empty(t, gotPreviousLink)
@@ -987,7 +987,7 @@ func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expec
 
 	if expectedLast != "" {
 		require.NotEmpty(t, gotNextLink, "next link")
-		expectedNextLink := fmt.Sprintf("%s?last=%s&n=2&sort=%s>; rel=\"next\"", linkBase, expectedLast, sort)
+		expectedNextLink := fmt.Sprintf("%s?last=%s&n=2&sort=%s>; rel=\"next\"", linkBase, expectedLast, sortOrder)
 		require.Equal(t, expectedNextLink, gotNextLink)
 	} else {
 		require.Empty(t, gotNextLink)
@@ -1007,7 +1007,8 @@ func TestGitlabAPI_RepositoryTagsList_DefaultPageSize(t *testing.T) {
 	tags := make([]string, 0, 101)
 	for i := 0; i <= 100; i++ {
 		b := make([]byte, 10)
-		rand.Read(b)
+		_, err := rand.Read(b)
+		require.NoError(t, err)
 		tags = append(tags, fmt.Sprintf("%x", b)[:10])
 	}
 
@@ -1383,7 +1384,7 @@ func TestGitlabAPI_SubRepositoryList(t *testing.T) {
 			name:              "last page",
 			queryParams:       url.Values{"last": []string{"foo/bar/b/c"}, "n": []string{"4"}},
 			expectedStatus:    http.StatusOK,
-			expectedRepoPaths: []string{},
+			expectedRepoPaths: make([]string, 0),
 		},
 		{
 			name:           "zero page size",
@@ -1544,7 +1545,7 @@ func TestGitlabAPI_SubRepositoryList_EmptyTagRepository(t *testing.T) {
 	err = dec.Decode(&body)
 	require.NoError(t, err)
 	require.NotNil(t, body)
-	require.ElementsMatch(t, body, []*handlers.RepositoryAPIResponse{})
+	require.ElementsMatch(t, body, make([]*handlers.RepositoryAPIResponse, 0))
 }
 
 func TestGitlabAPI_SubRepositoryList_NonExistentRepository(t *testing.T) {
@@ -1575,8 +1576,8 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 	// create an auth token provider
 	tokenProvider := NewAuthTokenProvider(t)
 
-	// generate one full access auth token for all tests
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	// generate one full access auth actionsToken for all tests
+	actionsToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	tt := []struct {
 		name               string
@@ -1646,7 +1647,7 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthToken(req, token)
+			req = tokenProvider.RequestWithAuthToken(req, actionsToken)
 
 			// make request
 			resp, err := http.DefaultClient.Do(req)
@@ -1685,8 +1686,8 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 
 	// create an auth token provider
 	tokenProvider := NewAuthTokenProvider(t)
-	// generate one full access auth token for all tests
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	// generate one full access auth actionsToken for all tests
+	actionsToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	notifCfg := configuration.Notifications{
 		FanoutTimeout: 3 * time.Second,
@@ -1796,7 +1797,7 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthToken(req, token)
+			req = tokenProvider.RequestWithAuthToken(req, actionsToken)
 
 			// execute request
 			resp, err := http.DefaultClient.Do(req)
@@ -2378,6 +2379,7 @@ func TestGitlabAPI_404WithDatabaseDisabled(t *testing.T) {
 	for _, u := range urls {
 		resp, err := http.Get(u)
 		require.NoError(t, err)
+		//nolint: revive // defer
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
 		require.Equal(t, strings.TrimPrefix(version.Version, "v"), resp.Header.Get("Gitlab-Container-Registry-Version"))

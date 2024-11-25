@@ -136,41 +136,42 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 	// parse iprangesurl
 	ipRangesURL := defaultIPRangesURL
 	if i, ok := options["iprangesurl"]; ok {
-		if iprangeurl, ok := i.(string); ok {
-			ipRangesURL = iprangeurl
-		} else {
+		iprangeurl, ok := i.(string)
+		if !ok {
 			return nil, fmt.Errorf("iprangesurl must be a string")
 		}
+		ipRangesURL = iprangeurl
 	}
 
 	// parse ipfilteredby
 	var awsIPs *awsIPs
 	if i, ok := options["ipfilteredby"]; ok {
-		if ipFilteredBy, ok := i.(string); ok {
-			switch strings.ToLower(strings.TrimSpace(ipFilteredBy)) {
-			case "", "none":
-				awsIPs = nil
-			case "aws":
-				awsIPs = newAWSIPs(ipRangesURL, updateFrequency, nil)
-			case "awsregion":
-				var awsRegion []string
-				if i, ok := options["awsregion"]; ok {
-					if regions, ok := i.(string); ok {
-						for _, awsRegions := range strings.Split(regions, ",") {
-							awsRegion = append(awsRegion, strings.ToLower(strings.TrimSpace(awsRegions)))
-						}
-						awsIPs = newAWSIPs(ipRangesURL, updateFrequency, awsRegion)
-					} else {
-						return nil, fmt.Errorf("awsRegion must be a comma separated string of valid aws regions")
-					}
-				} else {
-					return nil, fmt.Errorf("awsRegion is not defined")
-				}
-			default:
-				return nil, fmt.Errorf("ipfilteredby only allows a string the following value: none|aws|awsregion")
-			}
-		} else {
+		ipFilteredBy, ok := i.(string)
+		if !ok {
 			return nil, fmt.Errorf("ipfilteredby only allows a string with the following value: none|aws|awsregion")
+		}
+
+		switch strings.ToLower(strings.TrimSpace(ipFilteredBy)) {
+		case "", "none":
+			awsIPs = nil
+		case "aws":
+			awsIPs = newAWSIPs(ipRangesURL, updateFrequency, nil)
+		case "awsregion":
+			var awsRegion []string
+			i, ok := options["awsregion"]
+			if !ok {
+				return nil, fmt.Errorf("awsRegion is not defined")
+			}
+			regions, ok := i.(string)
+			if !ok {
+				return nil, fmt.Errorf("awsRegion must be a comma separated string of valid aws regions")
+			}
+			for _, awsRegions := range strings.Split(regions, ",") {
+				awsRegion = append(awsRegion, strings.ToLower(strings.TrimSpace(awsRegions)))
+			}
+			awsIPs = newAWSIPs(ipRangesURL, updateFrequency, awsRegion)
+		default:
+			return nil, fmt.Errorf("ipfilteredby only allows a string the following value: none|aws|awsregion")
 		}
 	}
 

@@ -62,8 +62,8 @@ func WalkFallback(ctx context.Context, driver StorageDriver, from string, f Walk
 // directories in their own goroutines
 func WalkFallbackParallel(ctx context.Context, driver StorageDriver, maxConcurrency uint64, from string, f WalkFn) error {
 	var retError error
-	errors := make(chan error)
-	quit := make(chan struct{})
+	errCh := make(chan error)
+	quitCh := make(chan struct{})
 	errDone := make(chan struct{})
 
 	// Limit the number of active walk goroutines to maxConcurrency.
@@ -75,10 +75,10 @@ func WalkFallbackParallel(ctx context.Context, driver StorageDriver, maxConcurre
 		var closed bool
 		// Consume all errors to prevent goroutines from blocking and to
 		// report errors from goroutines that were already in progress.
-		for err := range errors {
+		for err := range errCh {
 			// Signal goroutines to quit only once on the first error.
 			if !closed {
-				close(quit)
+				close(quitCh)
 				closed = true
 			}
 
@@ -94,10 +94,10 @@ func WalkFallbackParallel(ctx context.Context, driver StorageDriver, maxConcurre
 	// entire walk to complete without blocking on each doWalk call.
 	var wg sync.WaitGroup
 
-	doWalkParallel(ctx, driver, semaphore, &wg, quit, errors, from, f)
+	doWalkParallel(ctx, driver, semaphore, &wg, quitCh, errCh, from, f)
 
 	wg.Wait()
-	close(errors)
+	close(errCh)
 	<-errDone
 
 	return retError

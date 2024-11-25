@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createRegistry(tb testing.TB, driver driver.StorageDriver) distribution.Namespace {
+func createRegistry(tb testing.TB, sdriver driver.StorageDriver) distribution.Namespace {
 	tb.Helper()
 	ctx := context.Background()
 
@@ -25,7 +25,7 @@ func createRegistry(tb testing.TB, driver driver.StorageDriver) distribution.Nam
 	require.NoError(tb, err)
 
 	options := []RegistryOption{EnableDelete, Schema1SigningKey(k), EnableSchema1}
-	registry, err := NewRegistry(ctx, driver, options...)
+	registry, err := NewRegistry(ctx, sdriver, options...)
 	require.NoError(tb, err)
 
 	return registry
@@ -246,18 +246,20 @@ func TestDeletionHasEffect(t *testing.T) {
 	}
 }
 
-func getAnyKey(digests map[digest.Digest]io.ReadSeeker) (d digest.Digest) {
-	for d = range digests {
-		break
+func getAnyKey(digests map[digest.Digest]io.ReadSeeker) digest.Digest {
+	for d := range digests {
+		return d
 	}
-	return
+
+	return ""
 }
 
-func getKeys(digests map[digest.Digest]io.ReadSeeker) (ds []digest.Digest) {
+func getKeys(digests map[digest.Digest]io.ReadSeeker) []digest.Digest {
+	ds := make([]digest.Digest, 0, len(digests))
 	for d := range digests {
 		ds = append(ds, d)
 	}
-	return
+	return ds
 }
 
 func TestDeletionWithSharedLayer(t *testing.T) {
@@ -600,10 +602,11 @@ func TestFailWhenDatabaseInUse(t *testing.T) {
 
 	// Manually engage the database in use lock.
 	dbLock := DatabaseInUseLocker{Driver: inmemoryDriver}
-	dbLock.Lock(ctx)
+	err := dbLock.Lock(ctx)
+	require.NoError(t, err)
 
 	// Run GC
-	err := MarkAndSweep(ctx, inmemoryDriver, registry, GCOpts{
+	err = MarkAndSweep(ctx, inmemoryDriver, registry, GCOpts{
 		DryRun:         false,
 		RemoveUntagged: false,
 	})

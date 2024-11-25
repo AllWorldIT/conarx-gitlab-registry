@@ -118,9 +118,9 @@ func TestAPIConformance(t *testing.T) {
 		tags_Get_EmptyRepository,
 		tags_Get_RepositoryNotFound,
 
-		catalog_Get,
-		catalog_Get_Empty,
-		catalog_Get_TooLarge,
+		catalogGet,
+		catalogGetEmpty,
+		catalogGetTooLarge,
 	}
 
 	type envOpt struct {
@@ -3340,8 +3340,8 @@ type catalogAPIResponse struct {
 	Repositories []string `json:"repositories"`
 }
 
-// catalog_Get tests the /v2/_catalog endpoint
-func catalog_Get(t *testing.T, opts ...configOpt) {
+// catalogGet tests the /v2/_catalog endpoint
+func catalogGet(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3481,7 +3481,7 @@ func catalog_Get(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func catalog_Get_Empty(t *testing.T, opts ...configOpt) {
+func catalogGetEmpty(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3503,7 +3503,7 @@ func catalog_Get_Empty(t *testing.T, opts ...configOpt) {
 	require.Empty(t, resp.Header.Get("Link"))
 }
 
-func catalog_Get_TooLarge(t *testing.T, opts ...configOpt) {
+func catalogGetTooLarge(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 

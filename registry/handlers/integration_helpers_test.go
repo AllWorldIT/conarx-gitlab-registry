@@ -100,9 +100,9 @@ func withSillyAuth(config *configuration.Configuration) {
 	config.Auth["silly"] = configuration.Parameters{"realm": "test-realm", "service": "test-service"}
 }
 
-func withFSDriver(path string) configOpt {
+func withFSDriver(p string) configOpt {
 	return func(config *configuration.Configuration) {
-		config.Storage["filesystem"] = configuration.Parameters{"rootdirectory": path}
+		config.Storage["filesystem"] = configuration.Parameters{"rootdirectory": p}
 	}
 }
 
@@ -1852,16 +1852,16 @@ type authTokenProvider struct {
 func NewAuthTokenProvider(t *testing.T) *authTokenProvider {
 	t.Helper()
 
-	path, privKey, err := internaltestutil.WriteTempRootCerts()
+	p, privKey, err := internaltestutil.WriteTempRootCerts()
 	t.Cleanup(func() {
-		err := os.Remove(path)
+		err := os.Remove(p)
 		require.NoError(t, err)
 	})
 	require.NoError(t, err)
 
 	return &authTokenProvider{
 		t:          t,
-		certPath:   path,
+		certPath:   p,
 		privateKey: privKey,
 	}
 }
@@ -1887,9 +1887,9 @@ func (a *authTokenProvider) RequestWithAuthActions(r *http.Request, tra []*token
 
 // RequestWithAuthToken wraps a request with a bearer authorization header
 // using a provided token string
-func (a *authTokenProvider) RequestWithAuthToken(r *http.Request, token string) *http.Request {
+func (*authTokenProvider) RequestWithAuthToken(r *http.Request, t string) *http.Request {
 	clonedReq := r.Clone(r.Context())
-	clonedReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+	clonedReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", t))
 	return clonedReq
 }
 
@@ -1981,9 +1981,9 @@ func releaseProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath str
 
 type requestOpt func(r *http.Request)
 
-func witAuthToken(token string) requestOpt {
+func witAuthToken(t string) requestOpt {
 	return func(r *http.Request) {
-		r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+		r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", t))
 	}
 }
 

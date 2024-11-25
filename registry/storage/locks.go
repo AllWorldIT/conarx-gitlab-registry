@@ -113,7 +113,7 @@ func (l *DatabaseInUseLocker) Unlock(ctx context.Context) error {
 	return l.Driver.Delete(ctx, path)
 }
 
-func (l *DatabaseInUseLocker) path() (string, error) {
+func (*DatabaseInUseLocker) path() (string, error) {
 	return pathFor(lockFilePathSpec{name: "database-in-use"})
 }
 
@@ -191,7 +191,7 @@ func (l *FilesystemInUseLocker) Unlock(ctx context.Context) error {
 	return l.Driver.Delete(ctx, path)
 }
 
-func (l *FilesystemInUseLocker) path() (string, error) {
+func (*FilesystemInUseLocker) path() (string, error) {
 	return pathFor(lockFilePathSpec{name: "filesystem-in-use"})
 }
 

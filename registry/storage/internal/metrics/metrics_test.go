@@ -28,7 +28,7 @@ func TestBlobDownload(t *testing.T) {
 	BlobDownload(true, 2048)
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_storage_blob_download_bytes A histogram of blob download sizes for the storage backend.
 # TYPE registry_storage_blob_download_bytes histogram
 registry_storage_blob_download_bytes_bucket{redirect="false",le="524288"} 1
@@ -78,9 +78,10 @@ registry_storage_blob_download_bytes_bucket{redirect="true",le="+Inf"} 2
 registry_storage_blob_download_bytes_sum{redirect="true"} 3072
 registry_storage_blob_download_bytes_count{redirect="true"} 2
 `)
+	require.NoError(t, err)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, blobDownloadBytesName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -92,15 +93,16 @@ func TestCDNRedirect(t *testing.T) {
 	CDNRedirect("storage", true, "ip")
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_storage_cdn_redirects_total A counter of CDN redirections for blob downloads.
 # TYPE registry_storage_cdn_redirects_total counter
 registry_storage_cdn_redirects_total{backend="cdn",bypass="false",bypass_reason=""} 1
 registry_storage_cdn_redirects_total{backend="storage",bypass="true",bypass_reason="ip"} 1
 `)
+	require.NoError(t, err)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, cdnRedirectTotalName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -111,14 +113,15 @@ func TestStorageLimit(t *testing.T) {
 	StorageRatelimit()
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_storage_rate_limit_total A counter of requests to the storage driver that hit a rate limit.
 # TYPE registry_storage_rate_limit_total counter
 registry_storage_rate_limit_total 1
 `)
+	require.NoError(t, err)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, rateLimitStorageName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -131,7 +134,7 @@ func TestBlobUpload(t *testing.T) {
 	BlobUpload(2048)
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_storage_blob_upload_bytes A histogram of new blob upload bytes for the storage backend.
 # TYPE registry_storage_blob_upload_bytes histogram
 registry_storage_blob_upload_bytes_bucket{le="524288"} 3
@@ -158,8 +161,9 @@ registry_storage_blob_upload_bytes_bucket{le="+Inf"} 3
 registry_storage_blob_upload_bytes_sum 3584
 registry_storage_blob_upload_bytes_count 3
 `)
+	require.NoError(t, err)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, blobUploadBytesName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }

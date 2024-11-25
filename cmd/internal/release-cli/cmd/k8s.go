@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -17,29 +18,29 @@ var stage string
 var k8sCmd = &cobra.Command{
 	Use:   "k8s",
 	Short: "Manage K8s Workloads release",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		var suffix string
 
 		version := os.Getenv("CI_COMMIT_TAG")
 		if version == "" {
-			log.Fatal("Version is empty. Aborting.")
+			return errors.New("version is empty")
 		}
 
 		reviewerIDs := utils.ParseReviewerIDs(os.Getenv("MR_REVIWER_IDS"))
 
 		accessTokenK8s, err := cmd.Flags().GetString("k8s-access-token")
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("fetching access token flag: %w", err)
 		}
 
 		accessTokenRegistry, err := cmd.Flags().GetString("registry-access-token")
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("fetching registry access token: %w", err)
 		}
 
-		webhookUrl, err := cmd.Flags().GetString("slack-webhook-url")
+		webhookURL, err := cmd.Flags().GetString("slack-webhook-url")
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("fetching slack webhook url: %w", err)
 		}
 
 		labels := &gitlab.LabelOptions{
@@ -56,14 +57,13 @@ var k8sCmd = &cobra.Command{
 		case "gstg-pre":
 			suffix = "_gstg_pre"
 		default:
-			log.Fatalf("unknown stage supplied: %q", stage)
+			return fmt.Errorf("unknown stage supplied: %q", stage)
 		}
 		newCmd := fmt.Sprintf("%s%s", cmd.Use, suffix)
 
 		release, err := readConfig(newCmd, version)
 		if err != nil {
-			log.Fatalf("Error reading config: %v", err)
-			return
+			return fmt.Errorf("reading config: %w", err)
 		}
 
 		k8sClient := client.NewClient(accessTokenK8s)
@@ -71,57 +71,57 @@ var k8sCmd = &cobra.Command{
 
 		exists, err := k8sClient.BranchExists(release.ProjectID, release.BranchName)
 		if err != nil {
-			log.Printf("Error checking if branch exists: %v", err)
+			return fmt.Errorf("checking if branch exists: %w", err)
 		}
 
 		if exists {
-			log.Printf("Branch %s already exists. Aborting.", release.BranchName)
-			return
+			return fmt.Errorf("branch %s already exists", release.BranchName)
 		}
 
 		branch, err := k8sClient.CreateBranch(release.ProjectID, release.BranchName, release.Ref)
 		if err != nil {
-			log.Fatalf("Failed to create branch: %v", err)
+			return fmt.Errorf("creating branch: %w", err)
 		}
 
 		desc, err := registryClient.GetChangelog(version)
 		if err != nil {
-			log.Fatalf("Failed to get changelog: %v", err)
+			return fmt.Errorf("getting changelog: %w", err)
 		}
 
 		for i := range release.Paths {
 			fileName, err := k8sClient.GetFile(release.Paths[i], release.Ref, release.ProjectID)
 			if err != nil {
-				log.Fatalf("Failed to get the file: %v", err)
+				return fmt.Errorf("getting the file: %w", err)
 			}
 
 			fileChange, err := utils.UpdateFileInK8s(fileName, stage, version)
 			if err != nil {
-				log.Fatalf("Failed to update file: %v", err)
+				return fmt.Errorf("updating the file: %w", err)
 			}
 			_, err = k8sClient.CreateCommit(release.ProjectID, fileChange, release.Paths[i], release.CommitMessage, branch)
 			if err != nil {
-				log.Fatalf("Failed to create commit: %v", err)
+				return fmt.Errorf("creating the commit: %w", err)
 			}
 		}
 
 		mr, err := k8sClient.CreateMergeRequest(release.ProjectID, branch, desc, release.Ref, release.MRTitle, labels, reviewerIDs)
 		if err != nil {
 			msg := fmt.Sprintf("%s release: Failed to create K8s Workloads version bump MR (%s): %s", version, stage, err.Error())
-			err = slack.SendSlackNotification(webhookUrl, msg)
+			err = slack.SendSlackNotification(webhookURL, msg)
 			if err != nil {
 				log.Printf("Failed to send error notification to Slack: %v", err)
 			}
-			log.Fatal(msg)
+			return errors.New(msg)
 		}
 
 		msg := fmt.Sprintf("%s release: K8s Workloads version bump MR (%s): %s", version, stage, mr.WebURL)
-		err = slack.SendSlackNotification(webhookUrl, msg)
+		err = slack.SendSlackNotification(webhookURL, msg)
 		if err != nil {
 			log.Printf("Failed to send notification to Slack: %v", err)
 		}
 
 		log.Println(msg)
+		return nil
 	},
 }
 

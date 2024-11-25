@@ -76,7 +76,7 @@ func init() {
 			Help:      blobUploadBytesDesc,
 			Buckets:   buckets,
 		},
-		[]string{},
+		make([]string, 0),
 	)
 
 	cdnRedirectTotal = prometheus.NewCounterVec(

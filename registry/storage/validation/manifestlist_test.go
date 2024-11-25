@@ -57,7 +57,7 @@ func TestVerifyManifest_ManifestList_InvalidSchemaVersion(t *testing.T) {
 	registry := createRegistry(t)
 	repo := makeRepository(t, registry, "test")
 
-	descriptors := []manifestlist.ManifestDescriptor{}
+	descriptors := make([]manifestlist.ManifestDescriptor, 0)
 
 	dml, err := manifestlist.FromDescriptors(descriptors)
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestVerifyManifest_ManifestList_ReferenceLimits(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			descriptors := []manifestlist.ManifestDescriptor{}
+			descriptors := make([]manifestlist.ManifestDescriptor, 0)
 
 			// Create a random manifest for each of the specified manifests.
 			for i := 0; i < tt.manifests; i++ {

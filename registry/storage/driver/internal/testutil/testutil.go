@@ -82,8 +82,10 @@ func TestStringValue(t *testing.T, opts Opts) {
 
 	value := "value"
 	if opts.Required {
+		//nolint: revive // unchecked-type-assertion
 		value = params[opts.ParamName].(string)
 	} else if opts.Defaultt != nil && opts.Defaultt.(string) != "" {
+		//nolint: revive // unchecked-type-assertion
 		value = opts.Defaultt.(string)
 	}
 

@@ -22,7 +22,7 @@ type manifestListHandler struct {
 
 var _ ManifestHandler = &manifestListHandler{}
 
-func (ms *manifestListHandler) Unmarshal(ctx context.Context, dgst digest.Digest, content []byte) (distribution.Manifest, error) {
+func (ms *manifestListHandler) Unmarshal(_ context.Context, _ digest.Digest, content []byte) (distribution.Manifest, error) {
 	dcontext.GetLogger(ms.ctx).Debug("(*manifestListHandler).Unmarshal")
 
 	m := &manifestlist.DeserializedManifestList{}
