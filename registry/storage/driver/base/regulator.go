@@ -27,7 +27,7 @@ type Regulator struct {
 // concurrent calls given a minimum limit and default.
 //
 // If the parameter supplied is of an invalid type this returns an error.
-func GetLimitFromParameter(param any, min, def uint64) (uint64, error) {
+func GetLimitFromParameter(param any, minimum, def uint64) (uint64, error) {
 	limit := def
 
 	switch v := param.(type) {
@@ -45,7 +45,7 @@ func GetLimitFromParameter(param any, min, def uint64) (uint64, error) {
 		if val > 0 {
 			limit = uint64(val)
 		} else {
-			limit = min
+			limit = minimum
 		}
 	case uint, uint32:
 		limit = reflect.ValueOf(v).Convert(reflect.TypeOf(param)).Uint()
@@ -55,8 +55,8 @@ func GetLimitFromParameter(param any, min, def uint64) (uint64, error) {
 		return 0, fmt.Errorf("invalid value '%#v'", param)
 	}
 
-	if limit < min {
-		return min, nil
+	if limit < minimum {
+		return minimum, nil
 	}
 
 	return limit, nil
@@ -129,11 +129,11 @@ func (r *Regulator) Reader(ctx context.Context, path string, offset int64) (io.R
 // location designated by the given path.
 // May be used to resume writing a stream by providing a nonzero offset.
 // The offset must be no larger than the CurrentSize for this path.
-func (r *Regulator) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
+func (r *Regulator) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	r.enter()
 	defer r.exit()
 
-	return r.StorageDriver.Writer(ctx, path, append)
+	return r.StorageDriver.Writer(ctx, path, doAppend)
 }
 
 // Stat retrieves the FileInfo for the given path, including the current

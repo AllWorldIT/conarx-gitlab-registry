@@ -58,7 +58,7 @@ func (rs *RepositoryStats) IncrementPushCount(ctx context.Context, r *models.Rep
 
 // key generates a valid Redis key string for a given repository stats object. The used key format is described in
 // https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
-func (rs *RepositoryStats) key(path, op string) string {
+func (*RepositoryStats) key(path, op string) string {
 	nsPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()
 	return fmt.Sprintf("registry:api:{repository:%s:%s}:%s", nsPrefix, hex, op)

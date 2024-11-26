@@ -137,7 +137,7 @@ func newMapBlobDescriptorCache() *mapBlobDescriptorCache {
 	}
 }
 
-func (mbdc *mapBlobDescriptorCache) Stat(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
+func (mbdc *mapBlobDescriptorCache) Stat(_ context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
 	if err := dgst.Validate(); err != nil {
 		return distribution.Descriptor{}, err
 	}
@@ -153,7 +153,7 @@ func (mbdc *mapBlobDescriptorCache) Stat(ctx context.Context, dgst digest.Digest
 	return desc, nil
 }
 
-func (mbdc *mapBlobDescriptorCache) Clear(ctx context.Context, dgst digest.Digest) error {
+func (mbdc *mapBlobDescriptorCache) Clear(_ context.Context, dgst digest.Digest) error {
 	mbdc.mu.Lock()
 	defer mbdc.mu.Unlock()
 
@@ -161,7 +161,7 @@ func (mbdc *mapBlobDescriptorCache) Clear(ctx context.Context, dgst digest.Diges
 	return nil
 }
 
-func (mbdc *mapBlobDescriptorCache) SetDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
+func (mbdc *mapBlobDescriptorCache) SetDescriptor(_ context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
 	if err := dgst.Validate(); err != nil {
 		return err
 	}

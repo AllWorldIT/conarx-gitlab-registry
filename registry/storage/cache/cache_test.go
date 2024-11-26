@@ -91,14 +91,14 @@ func TestCacheError(t *testing.T) {
 
 func newTestStatter() *testStatter {
 	return &testStatter{
-		stats: []digest.Digest{},
-		sets:  map[digest.Digest][]distribution.Descriptor{},
+		stats: make([]digest.Digest, 0),
+		sets:  make(map[digest.Digest][]distribution.Descriptor),
 	}
 }
 
 func newErrTestStatter(err error) *testStatter {
 	return &testStatter{
-		sets: map[digest.Digest][]distribution.Descriptor{},
+		sets: make(map[digest.Digest][]distribution.Descriptor),
 		err:  err,
 	}
 }
@@ -109,7 +109,7 @@ type testStatter struct {
 	err   error
 }
 
-func (s *testStatter) Stat(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
+func (s *testStatter) Stat(_ context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
 	if s.err != nil {
 		return distribution.Descriptor{}, s.err
 	}
@@ -121,11 +121,11 @@ func (s *testStatter) Stat(ctx context.Context, dgst digest.Digest) (distributio
 	return distribution.Descriptor{}, distribution.ErrBlobUnknown
 }
 
-func (s *testStatter) SetDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
+func (s *testStatter) SetDescriptor(_ context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
 	s.sets[dgst] = append(s.sets[dgst], desc)
 	return s.err
 }
 
-func (s *testStatter) Clear(ctx context.Context, dgst digest.Digest) error {
+func (s *testStatter) Clear(_ context.Context, _ digest.Digest) error {
 	return s.err
 }

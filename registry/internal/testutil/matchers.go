@@ -22,7 +22,7 @@ func (m IsContextWithDeadline) Matches(x any) bool {
 		return false
 	}
 
-	return d == m.Deadline
+	return d.Equal(m.Deadline)
 }
 
 // String implements gomock.Matcher.

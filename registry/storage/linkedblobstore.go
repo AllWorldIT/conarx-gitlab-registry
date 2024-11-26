@@ -335,8 +335,8 @@ func (lbs *linkedBlobStore) mount(ctx context.Context, sourceRepo reference.Name
 }
 
 // newBlobUpload allocates a new upload controller with the given state.
-func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, u, p string, startedAt time.Time, doAppend bool) (distribution.BlobWriter, error) {
-	fw, err := lbs.driver.Writer(ctx, p, doAppend)
+func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, u, targetPath string, startedAt time.Time, doAppend bool) (distribution.BlobWriter, error) {
+	fw, err := lbs.driver.Writer(ctx, targetPath, doAppend)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +349,7 @@ func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, u, p string, star
 		digester:               digest.Canonical.Digester(),
 		fileWriter:             fw,
 		driver:                 lbs.driver,
-		path:                   p,
+		path:                   targetPath,
 		resumableDigestEnabled: lbs.resumableDigestEnabled,
 	}
 

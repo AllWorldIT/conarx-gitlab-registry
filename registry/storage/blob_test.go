@@ -191,7 +191,6 @@ func TestSimpleBlobUpload(t *testing.T) {
 
 	switch err {
 	case distribution.ErrBlobUnknown:
-		break
 	default:
 		t.Errorf("Unexpected error type stat-ing deleted manifest: %#v", err)
 	}
@@ -203,7 +202,6 @@ func TestSimpleBlobUpload(t *testing.T) {
 
 	switch err {
 	case distribution.ErrBlobUnknown:
-		break
 	default:
 		t.Errorf("Unexpected error type getting deleted manifest: %#v", err)
 	}
@@ -486,7 +484,6 @@ func TestBlobMount(t *testing.T) {
 
 	switch err {
 	case distribution.ErrBlobUnknown:
-		break
 	default:
 		t.Errorf("Unexpected error type stat-ing deleted manifest: %#v", err)
 	}
@@ -504,7 +501,6 @@ func TestBlobMount(t *testing.T) {
 
 	switch err {
 	case distribution.ErrBlobUnknown:
-		break
 	default:
 		t.Errorf("Unexpected error type stat-ing deleted manifest: %#v", err)
 	}
@@ -525,7 +521,7 @@ func TestLayerUploadZeroLength(t *testing.T) {
 	}
 	bs := repository.Blobs(ctx)
 
-	simpleUpload(t, bs, []byte{}, digestSha256Empty)
+	simpleUpload(t, bs, make([]byte, 0), digestSha256Empty)
 }
 
 func simpleUpload(t *testing.T, bs distribution.BlobIngester, blob []byte, expectedDigest digest.Digest) {

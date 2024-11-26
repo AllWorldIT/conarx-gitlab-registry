@@ -15,12 +15,12 @@ import (
 )
 
 // tagsDispatcher constructs the tags handler api endpoint.
-func tagsDispatcher(ctx *Context, r *http.Request) http.Handler {
+func tagsDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	tagsHandler := &tagsHandler{
 		Context: ctx,
 	}
 	h := handlers.MethodHandler{
-		http.MethodGet: http.HandlerFunc(tagsHandler.GetTags),
+		http.MethodGet: http.HandlerFunc(tagsHandler.HandleGetTags),
 	}
 	return h
 }
@@ -80,8 +80,8 @@ func dbGetTags(
 	return tags, moreEntries, nil
 }
 
-// GetTags returns a json list of tags for a specific image name.
-func (th *tagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
+// HandleGetTags returns a json list of tags for a specific image name.
+func (th *tagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// Pagination headers are currently only supported by the metadata database backend

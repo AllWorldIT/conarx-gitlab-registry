@@ -370,7 +370,7 @@ func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
 	}{
 		{
 			name:                    "config: legacyrootprefix not set trimlegacyrootprefix not set",
-			config:                  map[string]any{},
+			config:                  make(map[string]any, 0),
 			expectedUseLegacyPrefix: false,
 		},
 		{

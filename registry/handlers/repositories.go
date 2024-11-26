@@ -41,7 +41,7 @@ func repositoryDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	}
 
 	return handlers.MethodHandler{
-		http.MethodGet:   http.HandlerFunc(repositoryHandler.GetRepository),
+		http.MethodGet:   http.HandlerFunc(repositoryHandler.HandleGetRepository),
 		http.MethodPatch: http.HandlerFunc(repositoryHandler.RenameRepository),
 	}
 }
@@ -141,8 +141,8 @@ func isQueryParamTypeInt(value string) (int, bool) {
 	return i, err == nil
 }
 
-func isQueryParamIntValueInBetween(value, min, max int) bool {
-	return value >= min && value <= max
+func isQueryParamIntValueInBetween(value, minimum, maximum int) bool {
+	return value >= minimum && value <= maximum
 }
 
 func queryParamValueMatchesPattern(value string, pattern *regexp.Regexp) bool {
@@ -184,9 +184,9 @@ func replacePathName(originPath, newName string) string {
 // extractDryRunQueryParamValue extracts a valid `dry_run` query parameter value from `url`.
 // when no `dry_run` key is found it returns flase by default, when a key is found the function
 // returns the value of the key or returns an error if the vaues are neither "true" or "false".
-func extractDryRunQueryParamValue(url url.Values) (dryRun bool, err error) {
-	if url.Has(dryRunParamKey) {
-		dryRun, err = queryParamDryRunValue(url.Get(dryRunParamKey))
+func extractDryRunQueryParamValue(urlValues url.Values) (dryRun bool, err error) {
+	if urlValues.Has(dryRunParamKey) {
+		dryRun, err = queryParamDryRunValue(urlValues.Get(dryRunParamKey))
 	}
 	return dryRun, err
 }
@@ -200,7 +200,7 @@ const (
 	sizePrecisionUntagged = "untagged"
 )
 
-func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request) {
+func (h *repositoryHandler) HandleGetRepository(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"path": h.Repository.Named().Name()})
 	l.Debug("GetRepository")
 
@@ -287,6 +287,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 			if err != nil {
 				var pgErr *pgconn.PgError
 				// if this same query has timed out in the last 24h OR times out now, fallback to estimation
+				// nolint: revive // max-control-nesting
 				if errors.Is(err, datastore.ErrSizeHasTimedOut) || (errors.As(err, &pgErr) && pgErr.Code == pgerrcode.QueryCanceled) {
 					size, err = store.EstimatedSizeWithDescendants(ctx, repo)
 					precision = sizePrecisionUntagged
@@ -332,7 +333,7 @@ func repositoryTagsDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	}
 
 	return handlers.MethodHandler{
-		http.MethodGet: http.HandlerFunc(repositoryTagsHandler.GetTags),
+		http.MethodGet: http.HandlerFunc(repositoryTagsHandler.HandleGetTags),
 	}
 }
 
@@ -497,10 +498,10 @@ func getSortOrderParams(sortP string) (string, datastore.SortOrder) {
 	return sortP, datastore.OrderAsc
 }
 
-// GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
+// HandleGetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution tags list API. `n` is capped
 // to 100 entries by default.
-func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
+func (h *repositoryTagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
 	filters, err := filterParamsFromRequest(r)
 	if err != nil {
 		h.Errors = append(h.Errors, err)
@@ -512,14 +513,14 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 		opts = append(opts, datastore.WithRepositoryCache(h.GetRepoCache()))
 	}
 	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
-	path := h.Repository.Named().Name()
-	repo, err := rStore.FindByPath(h.Context, path)
+	p := h.Repository.Named().Name()
+	repo, err := rStore.FindByPath(h.Context, p)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
 	if repo == nil {
-		h.Errors = append(h.Errors, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": path}))
+		h.Errors = append(h.Errors, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": p}))
 		return
 	}
 
@@ -618,14 +619,14 @@ func subRepositoriesDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	}
 
 	return handlers.MethodHandler{
-		http.MethodGet: http.HandlerFunc(subRepositoriesHandler.GetSubRepositories),
+		http.MethodGet: http.HandlerFunc(subRepositoriesHandler.HandleGetSubRepositories),
 	}
 }
 
-// GetSubRepositories retrieves a list of repositories for a given repository base path. This includes support for marker-based pagination
+// HandleGetSubRepositories retrieves a list of repositories for a given repository base path. This includes support for marker-based pagination
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution catalog list API. `n` can not exceed 1000.
 // if no `n` query parameter is specified the default of `100` is used.
-func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *http.Request) {
+func (h *subRepositoriesHandler) HandleGetSubRepositories(w http.ResponseWriter, r *http.Request) {
 	filters, err := filterParamsFromRequest(r)
 	if err != nil {
 		h.Errors = append(h.Errors, err)
@@ -633,8 +634,8 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 	}
 
 	// extract the repository name to create the a preliminary repository
-	path := h.Repository.Named().Name()
-	repo := &models.Repository{Path: path}
+	p := h.Repository.Named().Name()
+	repo := &models.Repository{Path: p}
 
 	// try to find the namespaceid for the repo if it exists
 	topLevelPathSegment := repo.TopLevelPathSegment()
@@ -893,12 +894,12 @@ func executeRenameOperation(ctx context.Context, tx datastore.Transactor, repo *
 }
 
 // inferRepository infers a repository object (using the `path` argument) from either the repository store or the namesapce store
-func inferRepository(context context.Context, path string, rStore datastore.RepositoryStore, nStore datastore.NamespaceStore) (*models.Repository, bool, error) {
+func inferRepository(ctx context.Context, repositoryPath string, rStore datastore.RepositoryStore, nStore datastore.NamespaceStore) (*models.Repository, bool, error) {
 	// find the base repository for the path to be renamed (if it exists)
 	// if the base path does not exist we still need to update the subrepositories
 	// of the path (if they exist)
 	var renameOriginRepo bool
-	repo, err := rStore.FindByPath(context, path)
+	repo, err := rStore.FindByPath(ctx, repositoryPath)
 	if err != nil {
 		return nil, renameOriginRepo, err
 	}
@@ -910,11 +911,11 @@ func inferRepository(context context.Context, path string, rStore datastore.Repo
 	// if a base repository was not found we infer a repository using the paths namespace
 	if repo == nil {
 		// build a preliminary repository object
-		repo = &models.Repository{Path: path}
+		repo = &models.Repository{Path: repositoryPath}
 		topLevelPathSegment := repo.TopLevelPathSegment()
 
 		// find the repository namespace and update the preliminary repository object
-		namespace, err := nStore.FindByName(context, topLevelPathSegment)
+		namespace, err := nStore.FindByName(ctx, topLevelPathSegment)
 		if err != nil {
 			return nil, renameOriginRepo, err
 		}

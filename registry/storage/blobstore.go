@@ -48,19 +48,19 @@ func (bs *blobStore) Open(ctx context.Context, dgst digest.Digest) (distribution
 		return nil, err
 	}
 
-	path, err := bs.path(desc.Digest)
+	p, err := bs.path(desc.Digest)
 	if err != nil {
 		return nil, err
 	}
 
-	fr := newFileReader(ctx, bs.driver, path, desc.Size)
+	fr := newFileReader(ctx, bs.driver, p, desc.Size)
 	return fr, nil
 }
 
 // Put stores the content p in the blob store, calculating the digest. If the
 // content is already present, only the digest will be returned. This should
 // only be used for small objects, such as manifests. This implemented as a convenience for other Put implementations
-func (bs *blobStore) Put(ctx context.Context, mediaType string, p []byte) (distribution.Descriptor, error) {
+func (bs *blobStore) Put(ctx context.Context, _ string, p []byte) (distribution.Descriptor, error) {
 	dgst := digest.FromBytes(p)
 	desc, err := bs.statter.Stat(ctx, dgst)
 	if err == nil {
@@ -123,7 +123,7 @@ func (bs *blobStore) Enumerate(ctx context.Context, ingester func(descriptor dis
 
 // path returns the canonical path for the blob identified by digest. The blob
 // may or may not exist.
-func (bs *blobStore) path(dgst digest.Digest) (string, error) {
+func (*blobStore) path(dgst digest.Digest) (string, error) {
 	bp, err := pathFor(blobDataPathSpec{
 		digest: dgst,
 	})
@@ -136,15 +136,15 @@ func (bs *blobStore) path(dgst digest.Digest) (string, error) {
 
 // link links the path to the provided digest by writing the digest into the
 // target file. Caller must ensure that the blob actually exists.
-func (bs *blobStore) link(ctx context.Context, path string, dgst digest.Digest) error {
+func (bs *blobStore) link(ctx context.Context, targetPath string, dgst digest.Digest) error {
 	// The contents of the "link" file are the exact string contents of the
 	// digest, which is specified in that package.
-	return bs.driver.PutContent(ctx, path, []byte(dgst))
+	return bs.driver.PutContent(ctx, targetPath, []byte(dgst))
 }
 
 // readlink returns the linked digest at path.
-func (bs *blobStore) readlink(ctx context.Context, path string) (digest.Digest, error) {
-	content, err := bs.driver.GetContent(ctx, path)
+func (bs *blobStore) readlink(ctx context.Context, targetPath string) (digest.Digest, error) {
+	content, err := bs.driver.GetContent(ctx, targetPath)
 	if err != nil {
 		return "", err
 	}
@@ -167,14 +167,14 @@ var _ distribution.BlobDescriptorService = &blobStatter{}
 // in the main blob store. If this method returns successfully, there is
 // strong guarantee that the blob exists and is available.
 func (bs *blobStatter) Stat(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
-	path, err := pathFor(blobDataPathSpec{
+	p, err := pathFor(blobDataPathSpec{
 		digest: dgst,
 	})
 	if err != nil {
 		return distribution.Descriptor{}, err
 	}
 
-	fi, err := bs.driver.Stat(ctx, path)
+	fi, err := bs.driver.Stat(ctx, p)
 	if err != nil {
 		if errors.As(err, new(driver.PathNotFoundError)) {
 			return distribution.Descriptor{}, distribution.ErrBlobUnknown
@@ -187,7 +187,7 @@ func (bs *blobStatter) Stat(ctx context.Context, dgst digest.Digest) (distributi
 		// NOTE(stevvooe): This represents a corruption situation. Somehow, we
 		// calculated a blob path and then detected a directory. We log the
 		// error and then error on the side of not knowing about the blob.
-		dcontext.GetLogger(ctx).Warnf("blob path should not be a directory: %q", path)
+		dcontext.GetLogger(ctx).Warnf("blob path should not be a directory: %q", p)
 		return distribution.Descriptor{}, distribution.ErrBlobUnknown
 	}
 
@@ -202,10 +202,10 @@ func (bs *blobStatter) Stat(ctx context.Context, dgst digest.Digest) (distributi
 	}, nil
 }
 
-func (bs *blobStatter) Clear(ctx context.Context, dgst digest.Digest) error {
+func (*blobStatter) Clear(_ context.Context, _ digest.Digest) error {
 	return distribution.ErrUnsupported
 }
 
-func (bs *blobStatter) SetDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
+func (*blobStatter) SetDescriptor(_ context.Context, _ digest.Digest, _ distribution.Descriptor) error {
 	return distribution.ErrUnsupported
 }

@@ -914,7 +914,7 @@ func (storage *Storage) UnmarshalYAML(unmarshal func(any) error) error {
 	var storageType string
 	err = unmarshal(&storageType)
 	if err == nil {
-		*storage = Storage{storageType: Parameters{}}
+		*storage = Storage{storageType: make(Parameters)}
 		return nil
 	}
 
@@ -972,7 +972,7 @@ func (auth *Auth) UnmarshalYAML(unmarshal func(any) error) error {
 	var authType string
 	err = unmarshal(&authType)
 	if err == nil {
-		*auth = Auth{authType: Parameters{}}
+		*auth = Auth{authType: make(Parameters)}
 		return nil
 	}
 
