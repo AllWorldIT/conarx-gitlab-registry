@@ -26,7 +26,7 @@ import (
 	"crypto/hmac"
 	"fmt"
 
-	//nolint: revive,gosec // imports-blocklist
+	// nolint: revive,gosec // imports-blocklist
 	"crypto/sha1"
 	"encoding/base64"
 	"net/http"

@@ -528,7 +528,7 @@ func New(params *DriverParameters) (*Driver, error) {
 	// configure http client
 	httpTransport := http.DefaultTransport.(*http.Transport).Clone()
 	httpTransport.MaxIdleConnsPerHost = 10
-	//nolint: gosec
+	// nolint: gosec
 	httpTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: params.SkipVerify}
 	awsConfig.WithHTTPClient(&http.Client{
 		Transport: httpTransport,
@@ -1641,7 +1641,7 @@ func (w *writer) Write(p []byte) (int, error) {
 				n += neededBytes
 				p = p[neededBytes:]
 				err := w.flushPart()
-				//nolint: revive // max-control-nesting: control flow nesting exceeds 3
+				// nolint: revive // max-control-nesting: control flow nesting exceeds 3
 				if err != nil {
 					w.size += int64(n)
 					return n, err

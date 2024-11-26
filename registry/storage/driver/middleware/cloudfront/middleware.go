@@ -213,6 +213,6 @@ func (lh *cloudFrontStorageMiddleware) URLFor(ctx context.Context, path string, 
 
 // init registers the cloudfront layerHandler backend.
 func init() {
-	//nolint: gosec // ignore when backend is already registered
+	// nolint: gosec // ignore when backend is already registered
 	_ = storagemiddleware.Register("cloudfront", storagemiddleware.InitFunc(newCloudFrontStorageMiddleware))
 }

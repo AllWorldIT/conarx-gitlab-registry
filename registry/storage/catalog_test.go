@@ -293,7 +293,7 @@ func BenchmarkPathCompareNative(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		c := x < y
-		//nolint: revive // bool-literal-in-expr
+		// nolint: revive // bool-literal-in-expr
 		_ = c && false
 	}
 }
@@ -306,7 +306,7 @@ func BenchmarkPathCompareNativeEqual(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		c := x < y
-		//nolint: revive // bool-literal-in-expr
+		// nolint: revive // bool-literal-in-expr
 		_ = c && false
 	}
 }

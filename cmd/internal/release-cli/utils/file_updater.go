@@ -21,7 +21,7 @@ func UpdateFileInGDK(fileName, version string) ([]byte, error) {
 }
 
 func updateFileWithScanner(fileName, stage, newVersion string) ([]byte, error) {
-	//nolint: gosec
+	// nolint: gosec
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func updateFileWithScanner(fileName, stage, newVersion string) ([]byte, error) {
 	}
 
 	output := strings.Join(outputLines, "\n") + "\n"
-	//nolint: gosec
+	// nolint: gosec
 	err = os.WriteFile(fileName, []byte(output), 0o644)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func updateFileWithScanner(fileName, stage, newVersion string) ([]byte, error) {
 }
 
 func updateFileWithRegex(fileName, version, pattern string) ([]byte, error) {
-	//nolint:gosec
+	// nolint:gosec
 	f, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, err
@@ -81,13 +81,13 @@ func updateFileWithRegex(fileName, version, pattern string) ([]byte, error) {
 		return fmt.Sprintf("%s:%s", prefix, version)
 	})
 
-	//nolint: gosec
+	// nolint: gosec
 	err = os.WriteFile(fileName, []byte(output), 0o644)
 	if err != nil {
 		return nil, err
 	}
 
-	//nolint: gosec
+	// nolint: gosec
 	updatedFile, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, err

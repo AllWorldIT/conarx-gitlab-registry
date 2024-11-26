@@ -3233,8 +3233,8 @@ func manifestDeleteTagNotificationWithAuth(t *testing.T, opts ...configOpt) {
 	ref, err := reference.WithTag(imageName, tag)
 	checkErr(t, err, "building tag reference")
 
-	tokenProvider := NewAuthTokenProvider(t)
-	opts = append(opts, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	opts = append(opts, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// override registry config/setup to use token based authorization for all proceeding requests
 	env = newTestEnv(t, opts...)
@@ -3246,7 +3246,7 @@ func manifestDeleteTagNotificationWithAuth(t *testing.T, opts ...configOpt) {
 	require.NoError(t, err)
 
 	// attach authourization header to request
-	req = tokenProvider.RequestWithAuthActions(req, deleteAccessToken("foo/bar"))
+	req = tokenProvider.requestWithAuthActions(req, deleteAccessToken("foo/bar"))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

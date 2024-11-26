@@ -176,12 +176,12 @@ func (d *driver) Reader(_ context.Context, targetPath string, offset int64) (io.
 func (d *driver) Writer(_ context.Context, subPath string, doAppend bool) (storagedriver.FileWriter, error) {
 	fullPath := d.fullPath(subPath)
 	parentDir := path.Dir(fullPath)
-	//nolint:gosec // needs some more research so that we do not break anything
+	// nolint:gosec // needs some more research so that we do not break anything
 	if err := os.MkdirAll(parentDir, 0o777); err != nil {
 		return nil, err
 	}
 
-	//nolint: gosec
+	// nolint: gosec
 	fp, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE, 0o666)
 	if err != nil {
 		return nil, err
@@ -232,7 +232,7 @@ func (d *driver) Stat(_ context.Context, subPath string) (storagedriver.FileInfo
 func (d *driver) List(_ context.Context, subPath string) ([]string, error) {
 	fullPath := d.fullPath(subPath)
 
-	//nolint: gosec
+	// nolint: gosec
 	dir, err := os.Open(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -269,7 +269,7 @@ func (d *driver) Move(_ context.Context, sourcePath, destPath string) error {
 		return storagedriver.PathNotFoundError{Path: sourcePath, DriverName: driverName}
 	}
 
-	//nolint:gosec // needs some more research so that we do not break anything
+	// nolint:gosec // needs some more research so that we do not break anything
 	if err := os.MkdirAll(path.Dir(dest), 0o755); err != nil {
 		return err
 	}

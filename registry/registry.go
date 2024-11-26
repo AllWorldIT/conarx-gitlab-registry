@@ -307,7 +307,7 @@ func getTLSConfig(ctx context.Context, config configuration.TLS, http2Disabled b
 		pool := x509.NewCertPool()
 
 		for _, ca := range config.ClientCAs {
-			//nolint: gosec
+			// nolint: gosec
 			caPem, err := os.ReadFile(ca)
 			if err != nil {
 				return nil, err
@@ -537,7 +537,7 @@ func panicHandler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				//nolint: revive // deep-exit
+				// nolint: revive // deep-exit
 				log.Panic(fmt.Sprintf("%v", err))
 			}
 		}()
@@ -575,7 +575,7 @@ func resolveConfiguration(args []string, opts ...configuration.ParseOption) (*co
 		return nil, fmt.Errorf("configuration path unspecified")
 	}
 
-	//nolint: gosec
+	// nolint: gosec
 	fp, err := os.Open(configurationPath)
 	if err != nil {
 		return nil, err
@@ -647,7 +647,7 @@ func validate(config *configuration.Configuration) error {
 
 			// conflict: user explicitly enabled legacyrootprefix but also enabled trimlegacyrootprefix (or disabled both).
 			if legacyPrefixIsBool && trimLegacyPrefixIsBool {
-				//nolint: revive // max-control-nesting
+				// nolint: revive // max-control-nesting
 				if legacyPrefix == trimLegacyPrefix {
 					errs = multierror.Append(fmt.Errorf("storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be %v", legacyPrefix))
 				}

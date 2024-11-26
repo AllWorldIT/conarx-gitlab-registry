@@ -977,7 +977,7 @@ func (app *App) configureEvents(registryConfig *configuration.Configuration) {
 		dcontext.GetLogger(app).Infof("configuring endpoint %v (%v), timeout=%s, headers=%v", endpoint.Name, endpoint.URL, endpoint.Timeout, endpoint.Headers)
 		endpoint := notifications.NewEndpoint(endpoint.Name, endpoint.URL, notifications.EndpointConfig{
 			Timeout: endpoint.Timeout,
-			//nolint: staticcheck // needs more thorough investigation and fix
+			// nolint: staticcheck // needs more thorough investigation and fix
 			Threshold:         endpoint.Threshold,
 			MaxRetries:        endpoint.MaxRetries,
 			Backoff:           endpoint.Backoff,
@@ -1105,7 +1105,7 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 	if config.Redis.Cache.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
 			// FIXME(prozlach) This requires investigation
-			//nolint: gosec
+			// nolint: gosec
 			InsecureSkipVerify: config.Redis.Cache.TLS.Insecure,
 		}
 	}
@@ -1997,7 +1997,7 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 	}
 
 	go func() {
-		//nolint: gosec // used only for jitter calculation
+		// nolint: gosec // used only for jitter calculation
 		jitter := time.Duration(rand.Int()%60) * time.Minute
 		log.Infof("Starting upload purge in %s", jitter)
 		time.Sleep(jitter)

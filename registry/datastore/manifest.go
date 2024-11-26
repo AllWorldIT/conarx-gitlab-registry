@@ -294,7 +294,7 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 			return fmt.Errorf("mapping config media type: %w", err)
 		}
 		configMediaTypeID.Valid = true
-		//nolint: gosec // underlying table uses `smallint` (2 bytes)
+		// nolint: gosec // underlying table uses `smallint` (2 bytes)
 		configMediaTypeID.Int32 = int32(id)
 		configPayload = &m.Configuration.Payload
 	}
@@ -361,7 +361,7 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 			return fmt.Errorf("mapping config media type: %w", err)
 		}
 		configMediaTypeID.Valid = true
-		//nolint: gosec // underlying table uses `smallint` (2 bytes)
+		// nolint: gosec // underlying table uses `smallint` (2 bytes)
 		configMediaTypeID.Int32 = int32(id)
 		configPayload = &m.Configuration.Payload
 	}

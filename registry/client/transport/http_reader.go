@@ -216,7 +216,7 @@ func (hrs *httpReadSeeker) reader() (io.Reader, error) {
 			return nil, fmt.Errorf("could not parse start of range in Content-Range header: %s", contentRange)
 		}
 
-		//nolint: gosec
+		// nolint: gosec
 		if startByte != uint64(hrs.readerOffset) {
 			return nil, fmt.Errorf("received Content-Range starting at offset %d instead of requested %d", startByte, hrs.readerOffset)
 		}
@@ -238,7 +238,7 @@ func (hrs *httpReadSeeker) reader() (io.Reader, error) {
 				return nil, fmt.Errorf("range in Content-Range stops before the end of the content: %s", contentRange)
 			}
 
-			//nolint: gosec
+			// nolint: gosec
 			hrs.size = int64(size)
 		}
 	case resp.StatusCode == http.StatusOK:

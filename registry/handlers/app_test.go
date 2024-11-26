@@ -819,7 +819,7 @@ func TestStatusRecordingResponseWriter(t *testing.T) {
 			srw.Write([]byte(bodyContent))
 
 			assert.Equal(t, tt.expectedCode, srw.statusCode)
-			//nolint: bodyclose // not required here
+			// nolint: bodyclose // not required here
 			assert.Equal(t, tt.expectedCode, recorder.Result().StatusCode)
 			assert.Equal(t, tt.expectedBody, recorder.Body.String())
 		})

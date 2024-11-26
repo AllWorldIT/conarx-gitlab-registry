@@ -151,7 +151,7 @@ func (imh *manifestHandler) HandleGetManifest(w http.ResponseWriter, r *http.Req
 	} else if _, isOCImanifest := m.(*ocischema.DeserializedManifest); isOCImanifest {
 		manifestType = ociImageManifestSchema
 	} else if isManifestList {
-		//nolint: revive // max-control-nesting
+		// nolint: revive // max-control-nesting
 		if manifestList.MediaType == manifestlist.MediaTypeManifestList {
 			manifestType = manifestlistSchema
 		} else if manifestList.MediaType == v1.MediaTypeImageIndex || manifestList.MediaType == "" {
@@ -1001,12 +1001,12 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 			if subject.Digest.String() != "" {
 				// Fetch subject_id from digest
 				dbSubject, err := rStore.FindManifestByDigest(imh.Context, dbRepo, subject.Digest)
-				//nolint: revive // max-control-nesting
+				// nolint: revive // max-control-nesting
 				if err != nil {
 					return err
 				}
 
-				//nolint: revive // max-control-nesting
+				// nolint: revive // max-control-nesting
 				if dbSubject == nil {
 					// in case something happened to the referenced manifest after validation
 					return distribution.ErrManifestBlobUnknown{Digest: subject.Digest}
