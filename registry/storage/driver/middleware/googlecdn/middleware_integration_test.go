@@ -113,7 +113,7 @@ func TestURLFor(t *testing.T) {
 		baseURL+root+objectPath,
 		keyName,
 		keyBytes,
-		systemClock.Now().Add(defaultDuration),
+		clockMock.Now().Add(defaultDuration),
 	)
 
 	require.NoError(t, err)
