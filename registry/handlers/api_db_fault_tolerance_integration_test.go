@@ -239,15 +239,18 @@ func TestDBFaultTolerance_ConnectionRefused_BlobPut(t *testing.T) {
 	assertBlobPutResponse(t, env, args.imageName.String(), args.layerDigest, args.layerFile, http.StatusCreated)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionRefused_BlobPostMount(t *testing.T) {
-	testDBFaultTolerance_ConnectionRefused_BlobPostMount(t)
+	testDBFaultTolerance_ConnectionRefused_BlobPostMountImpl(t)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionRefused_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
-	testDBFaultTolerance_ConnectionRefused_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
+	testDBFaultTolerance_ConnectionRefused_BlobPostMountImpl(t, withRedisCache(htestutil.RedisServer(t).Addr()))
 }
 
-func testDBFaultTolerance_ConnectionRefused_BlobPostMount(t *testing.T, opts ...configOpt) {
+// nolint: revive // var-naming - I do not see any other way to make this name readable
+func testDBFaultTolerance_ConnectionRefused_BlobPostMountImpl(t *testing.T, opts ...configOpt) {
 	dbProxy := newDBProxy(t)
 	defer dbProxy.Delete()
 
@@ -543,14 +546,17 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobPut(t *testing.T) {
 	assertBlobPutResponse(t, env, args.imageName.String(), args.layerDigest, args.layerFile, http.StatusCreated)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T) {
 	testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionTimeout_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
 	testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T, opts ...configOpt) {
 	dbProxy := newDBProxy(t)
 	defer dbProxy.Delete()
@@ -874,15 +880,18 @@ func TestDBFaultTolerance_ConnectionLeak_BlobPut(t *testing.T) {
 	assertNoDBConnections(t, env)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionLeak_BlobPostMount(t *testing.T) {
-	testDBFaultTolerance_ConnectionLeak_BlobPostMount(t)
+	testDBFaultTolerance_ConnectionLeak_BlobPostMountImpl(t)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionLeak_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
-	testDBFaultTolerance_ConnectionLeak_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
+	testDBFaultTolerance_ConnectionLeak_BlobPostMountImpl(t, withRedisCache(htestutil.RedisServer(t).Addr()))
 }
 
-func testDBFaultTolerance_ConnectionLeak_BlobPostMount(t *testing.T, opts ...configOpt) {
+// nolint: revive // var-naming - I do not see any other way to make this name readable
+func testDBFaultTolerance_ConnectionLeak_BlobPostMountImpl(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
