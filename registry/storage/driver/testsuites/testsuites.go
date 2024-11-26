@@ -217,11 +217,11 @@ func (s *DriverSuite) TestValidPaths() {
 	}
 }
 
-func (s *DriverSuite) deletePath(t require.TestingT, p string) {
+func (s *DriverSuite) deletePath(t require.TestingT, targetPath string) {
 	// NOTE(prozlach): We want to make sure that we do not do an accidental
 	// retry of the Delete call, hence it is outside of the
 	// require.EventuallyWithT block.
-	err := s.StorageDriver.Delete(s.ctx, p)
+	err := s.StorageDriver.Delete(s.ctx, targetPath)
 	if err != nil {
 		if !errors.As(err, new(storagedriver.PathNotFoundError)) {
 			// Handover the termination of the execution to require.NoError call
@@ -235,7 +235,7 @@ func (s *DriverSuite) deletePath(t require.TestingT, p string) {
 	require.EventuallyWithT(
 		t,
 		func(c *assert.CollectT) {
-			paths, _ := s.StorageDriver.List(s.ctx, p)
+			paths, _ := s.StorageDriver.List(s.ctx, targetPath)
 			assert.Empty(c, paths)
 		},
 		4200*time.Millisecond,

@@ -70,7 +70,7 @@ type (
 	}
 )
 
-func (factory *azureDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
+func (*azureDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -156,17 +156,17 @@ func New(params *driverParameters) (*Driver, error) {
 }
 
 // Implement the storagedriver.StorageDriver interface.
-func (d *driver) Name() string {
+func (*driver) Name() string {
 	return driverName
 }
 
-// GetContent retrieves the content stored at "path" as a []byte.
-func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
-	blobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(path))
+// GetContent retrieves the content stored at "targetPath" as a []byte.
+func (d *driver) GetContent(_ context.Context, targetPath string) ([]byte, error) {
+	blobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(targetPath))
 	blob, err := blobRef.Get(nil)
 	if err != nil {
 		if is404(err) {
-			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+			return nil, storagedriver.PathNotFoundError{Path: targetPath, DriverName: driverName}
 		}
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 }
 
 // PutContent stores the []byte content at a location designated by "path".
-func (d *driver) PutContent(ctx context.Context, path string, contents []byte) error {
+func (d *driver) PutContent(_ context.Context, path string, contents []byte) error {
 	// max size for block blobs uploaded via single "Put Blob" for version after "2016-05-31"
 	// https://docs.microsoft.com/en-us/rest/api/storageservices/put-blob#remarks
 	const limit = 256 * 1024 * 1024
@@ -214,7 +214,7 @@ func (d *driver) PutContent(ctx context.Context, path string, contents []byte) e
 
 // Reader retrieves an io.ReadCloser for the content stored at "path" with a
 // given byte offset.
-func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
+func (d *driver) Reader(_ context.Context, path string, offset int64) (io.ReadCloser, error) {
 	blobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(path))
 	if ok, err := blobRef.Exists(); err != nil {
 		return nil, err
@@ -247,7 +247,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (d *driver) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
+func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	blobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(path))
 	blobExists, err := blobRef.Exists()
 	if err != nil {
@@ -255,7 +255,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 	}
 	var size int64
 	if blobExists {
-		if append {
+		if doAppend {
 			err = blobRef.GetProperties(nil)
 			if err != nil {
 				return nil, err
@@ -269,7 +269,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 			}
 		}
 	} else {
-		if append {
+		if doAppend {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 		err = blobRef.PutAppendBlob(nil)
@@ -283,7 +283,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 
 // Stat retrieves the FileInfo for the given path, including the current size
 // in bytes and the creation time.
-func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
+func (d *driver) Stat(_ context.Context, path string) (storagedriver.FileInfo, error) {
 	// If we try to get "/" as a blob, pathToKey will return "" when no root
 	// directory is specified and we are not in legacy path mode, which causes
 	// Azure to return a **400** when that object doesn't exist. So we need to
@@ -292,9 +292,11 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 	if path != "/" {
 		blobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(path))
 		// Check if the path is a blob
-		if ok, err := blobRef.Exists(); err != nil {
+		ok, err := blobRef.Exists()
+		if err != nil {
 			return nil, err
-		} else if ok {
+		}
+		if ok {
 			err = blobRef.GetProperties(nil)
 			if err != nil {
 				return nil, err
@@ -332,7 +334,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 }
 
 // List returns a list of objects that are direct descendants of the given path.
-func (d *driver) List(ctx context.Context, path string) ([]string, error) {
+func (d *driver) List(_ context.Context, path string) ([]string, error) {
 	prefix := d.pathToDirKey(path)
 
 	// If we aren't using a particular root directory, we should not add the extra
@@ -341,7 +343,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 		prefix = d.pathToKey(path)
 	}
 
-	list, err := d.list(prefix)
+	list, err := d.listImpl(prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +356,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 
 // Move moves an object stored at sourcePath to destPath, removing the original
 // object.
-func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
+func (d *driver) Move(_ context.Context, sourcePath, destPath string) error {
 	srcBlobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(sourcePath))
 	sourceBlobURL := srcBlobRef.GetURL()
 	destBlobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(destPath))
@@ -370,7 +372,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 }
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
-func (d *driver) Delete(ctx context.Context, path string) error {
+func (d *driver) Delete(_ context.Context, path string) error {
 	blobRef := d.client.GetContainerReference(d.container).GetBlobReference(d.pathToKey(path))
 	ok, err := blobRef.DeleteIfExists(nil)
 	if err != nil {
@@ -421,7 +423,7 @@ var systemClock internal.Clock = clock.New()
 // URLFor returns a publicly accessible URL for the blob stored at given path
 // for specified duration by making use of Azure Storage Shared Access Signatures (SAS).
 // See https://msdn.microsoft.com/en-us/library/azure/ee395415.aspx for more info.
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
+func (d *driver) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
 	expiresTime := systemClock.Now().UTC().Add(20 * time.Minute) // default expiration
 	expires, ok := options["expiry"]
 	if ok {
@@ -455,9 +457,9 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 	return d.Walk(ctx, path, f)
 }
 
-// list simulates a filesystem style list in which both files (blobs) and
+// listImpl simulates a filesystem style listImpl in which both files (blobs) and
 // directories (virtual containers) are returned for a given prefix.
-func (d *driver) list(prefix string) ([]string, error) {
+func (d *driver) listImpl(prefix string) ([]string, error) {
 	return d.listWithDelimter(prefix, "/")
 }
 
@@ -467,7 +469,7 @@ func (d *driver) listBlobs(prefix string) ([]string, error) {
 }
 
 func (d *driver) listWithDelimter(prefix, delimiter string) ([]string, error) {
-	out := []string{}
+	out := make([]string, 0)
 	marker := ""
 	containerRef := d.client.GetContainerReference(d.container)
 	for {

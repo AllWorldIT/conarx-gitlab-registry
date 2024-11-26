@@ -87,11 +87,12 @@ func makeRepo(ctx context.Context, t *testing.T, name string, reg distribution.N
 		t.Fatalf("failed to upload layers: %v", err)
 	}
 
-	getKeys := func(digests map[digest.Digest]io.ReadSeeker) (ds []digest.Digest) {
+	getKeys := func(digests map[digest.Digest]io.ReadSeeker) []digest.Digest {
+		dgst := make([]digest.Digest, 0, len(digests))
 		for d := range digests {
-			ds = append(ds, d)
+			dgst = append(dgst, d)
 		}
-		return
+		return dgst
 	}
 
 	manifest, err := testutil.MakeSchema1Manifest(getKeys(layers))
@@ -248,7 +249,7 @@ func newBadListDriver() *badListDriver {
 	return &badListDriver{StorageDriver: inmemory.New()}
 }
 
-func (d *badListDriver) List(ctx context.Context, path string) ([]string, error) {
+func (*badListDriver) List(_ context.Context, _ string) ([]string, error) {
 	return nil, fmt.Errorf("List error")
 }
 
@@ -265,8 +266,8 @@ func TestCatalogWalkError(t *testing.T) {
 func BenchmarkPathCompareEqual(b *testing.B) {
 	b.StopTimer()
 	pp := randomPath()
-	// make a real copy
-	ppb := append([]byte{}, []byte(pp)...)
+	ppb := make([]byte, len(pp))
+	copy(ppb, pp)
 	x, y := pp, string(ppb)
 
 	b.StartTimer()
@@ -292,6 +293,7 @@ func BenchmarkPathCompareNative(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		c := x < y
+		//nolint: revive // bool-literal-in-expr
 		_ = c && false
 	}
 }
@@ -304,6 +306,7 @@ func BenchmarkPathCompareNativeEqual(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		c := x < y
+		//nolint: revive // bool-literal-in-expr
 		_ = c && false
 	}
 }

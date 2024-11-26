@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -166,10 +167,13 @@ func compareLookup(ctx context.Context, t *testing.T, ts distribution.TagService
 func uploadTagWithRandomDigest(ctx context.Context, ts distribution.TagService, tag string) error {
 	bytes := make([]byte, 0)
 	hash := sha256.New()
-	hash.Write(bytes)
+	_, err := hash.Write(bytes)
+	if err != nil {
+		return fmt.Errorf("calculating hash: %w", err)
+	}
 	dgst := "sha256:" + hex.EncodeToString(hash.Sum(nil))
 
-	err := ts.Tag(ctx, tag, distribution.Descriptor{Digest: digest.Digest(dgst)})
+	err = ts.Tag(ctx, tag, distribution.Descriptor{Digest: digest.Digest(dgst)})
 	if err != nil {
 		return err
 	}

@@ -248,12 +248,14 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 				tmpPort := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_PORT")
 				record := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_RECORD")
 
+				//nolint: revive // max-control-nesting
 				if nameserver == "" || tmpPort == "" || record == "" {
 					panic("REGISTRY_DATABASE_LOADBALANCING_NAMESERVER, " +
 						"REGISTRY_DATABASE_LOADBALANCING_PORT and REGISTRY_DATABASE_LOADBALANCING_RECORD required for " +
 						"enabling DB load balancing with service discovery")
 				}
 				port, err := strconv.Atoi(tmpPort)
+				//nolint: revive // max-control-nesting
 				if err != nil {
 					panic(fmt.Sprintf("invalid REGISTRY_DATABASE_LOADBALANCING_PORT: %q", tmpPort))
 				}
@@ -264,7 +266,7 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 					Port:       port,
 					Record:     record,
 				}
-			} else if hosts := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_HOSTS"); hosts != "" {
+			} else if hosts := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_HOSTS"); hosts != "" { //nolint: revive // max-control-nesting
 				config.Database.LoadBalancing = configuration.DatabaseLoadBalancing{
 					Enabled: true,
 					Hosts:   strings.Split(hosts, ","),
@@ -323,7 +325,7 @@ type schema1PreseededInMemoryDriverFactory struct{}
 // Create returns a shared instance of the inmemory storage driver with a
 // preseeded schema1 manifest. This allows us to test GETs against schema1
 // manifests even though we are unable to PUT schema1 manifests via the API.
-func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
+func (*schema1PreseededInMemoryDriverFactory) Create(_ map[string]any) (storagedriver.StorageDriver, error) {
 	d := inmemory.New()
 
 	unsignedManifest := &schema1.Manifest{
@@ -332,7 +334,7 @@ func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[stri
 		},
 		Name:    preseededSchema1RepoPath,
 		Tag:     preseededSchema1TagName,
-		History: []schema1.History{},
+		History: make([]schema1.History, 0),
 	}
 
 	pk, err := libtrust.GenerateECP256PrivateKey()
@@ -526,11 +528,11 @@ func putByTag(tagName string) manifestOptsFunc {
 	}
 }
 
-func putByDigest(t *testing.T, env *testEnv, opts *manifestOpts) {
+func putByDigest(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 	opts.putManifest = true
 }
 
-func withAssertNotification(t *testing.T, env *testEnv, opts *manifestOpts) {
+func withAssertNotification(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 	opts.assertNotification = true
 }
 
@@ -539,20 +541,20 @@ func withoutMediaType(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 }
 
 func withArtifactType(at string) manifestOptsFunc {
-	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
+	return func(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 		opts.artifactType = at
 	}
 }
 
 func withSubject(subject subjectManifest) manifestOptsFunc {
-	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
+	return func(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 		opts.subjectManifest = subject
 	}
 }
 
-func withAuthToken(token string) manifestOptsFunc {
-	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
-		opts.authToken = token
+func withAuthToken(t string) manifestOptsFunc {
+	return func(_ *testing.T, _ *testEnv, opts *manifestOpts) {
+		opts.authToken = t
 	}
 }
 

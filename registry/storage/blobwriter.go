@@ -324,7 +324,7 @@ func (bw *blobWriter) moveBlob(ctx context.Context, desc distribution.Descriptor
 			// prevent this horrid thing, we employ the hack of only allowing
 			// to this happen for the digest of an empty blob.
 			if desc.Digest == digestSha256Empty {
-				return bw.blobStore.driver.PutContent(ctx, blobPath, []byte{})
+				return bw.blobStore.driver.PutContent(ctx, blobPath, make([]byte, 0))
 			}
 
 			// We let this fail during the move below.

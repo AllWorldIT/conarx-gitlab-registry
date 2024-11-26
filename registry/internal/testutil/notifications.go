@@ -33,7 +33,7 @@ func NewNotificationServer(t *testing.T, databaseEnabled bool) *NotificationServ
 
 	ns := &NotificationServer{
 		mu:              &sync.Mutex{},
-		receivedEvents:  []notifications.Event{},
+		receivedEvents:  make([]notifications.Event, 0),
 		databaseEnabled: databaseEnabled,
 	}
 
@@ -128,7 +128,7 @@ func (ns *NotificationServer) AssertEventNotification(t *testing.T, expectedEven
 	t.Errorf("expected event did not match any received events")
 }
 
-func (ns *NotificationServer) validateManifestPush(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
+func (*NotificationServer) validateManifestPush(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
 	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
@@ -167,7 +167,7 @@ func (ns *NotificationServer) validateManifestPush(t *testing.T, expectedEvent, 
 }
 
 // validateManifestDelete only action, repository and tag are part of the received event
-func (ns *NotificationServer) validateManifestDelete(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
+func (*NotificationServer) validateManifestDelete(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
 	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
@@ -201,7 +201,7 @@ func (ns *NotificationServer) validateManifestDelete(t *testing.T, expectedEvent
 	return nil
 }
 
-func (ns *NotificationServer) validateManifestPull(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
+func (*NotificationServer) validateManifestPull(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
 	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")

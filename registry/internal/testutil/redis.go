@@ -32,10 +32,10 @@ func redisClient(tb testing.TB) redis.UniversalClient {
 	return redis.NewClient(&redis.Options{Addr: srv.Addr()})
 }
 
-// redisCache creates a new Redis cache for testing. If a client is not provided, a server/client pair is created
+// redisCacheImpl creates a new Redis cache for testing. If a client is not provided, a server/client pair is created
 // using redisClient. A client can be provided when wanting to use a specific client, such as for mocking purposes. A
 // global TTL for cached objects can be specific (defaults to no TTL).
-func redisCache(tb testing.TB, client redis.UniversalClient, ttl time.Duration) *iredis.Cache {
+func redisCacheImpl(tb testing.TB, client redis.UniversalClient, ttl time.Duration) *iredis.Cache {
 	tb.Helper()
 
 	if client == nil {
@@ -50,7 +50,7 @@ func redisCache(tb testing.TB, client redis.UniversalClient, ttl time.Duration) 
 func RedisCache(tb testing.TB, ttl time.Duration) *iredis.Cache {
 	tb.Helper()
 
-	return redisCache(tb, redisClient(tb), ttl)
+	return redisCacheImpl(tb, redisClient(tb), ttl)
 }
 
 // RedisCacheMock is similar to RedisCache but here we use a redismock client. A global TTL for cached objects can be
@@ -58,7 +58,7 @@ func RedisCache(tb testing.TB, ttl time.Duration) *iredis.Cache {
 func RedisCacheMock(tb testing.TB, ttl time.Duration) (*iredis.Cache, redismock.ClientMock) {
 	client, mock := redismock.NewClientMock()
 
-	return redisCache(tb, client, ttl), mock
+	return redisCacheImpl(tb, client, ttl), mock
 }
 
 // NewRedisCacheController creates a new Redis cache using a new miniredis server and redis client. A global TTL for
@@ -68,7 +68,7 @@ func NewRedisCacheController(tb testing.TB, ttl time.Duration) RedisCacheControl
 
 	srv := RedisServer(tb)
 	return RedisCacheController{
-		redisCache(tb, redis.NewClient(&redis.Options{Addr: srv.Addr()}), ttl),
+		redisCacheImpl(tb, redis.NewClient(&redis.Options{Addr: srv.Addr()}), ttl),
 		srv,
 	}
 }

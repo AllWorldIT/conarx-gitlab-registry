@@ -71,6 +71,10 @@ func init() {
 	BBMCmd.AddCommand(BBMResumeCmd)
 	BBMCmd.AddCommand(BBMRunCmd)
 	BBMRunCmd.Flags().VarP(nullableInt{&maxBBMJobRetry}, "max-job-retry", "r", "Set the maximum number of job retry attempts (default 2, must be between 1 and 10)")
+
+	RootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+		return fmt.Errorf("%w\n\n%s", err, c.UsageString())
+	})
 }
 
 // Command flag vars
@@ -108,7 +112,7 @@ func (f nullableInt) String() string {
 	return strconv.Itoa(**f.ptr)
 }
 
-func (f nullableInt) Type() string {
+func (nullableInt) Type() string {
 	return "int"
 }
 
@@ -123,10 +127,12 @@ func (f nullableInt) Set(s string) error {
 
 // RootCmd is the main command for the 'registry' binary.
 var RootCmd = &cobra.Command{
-	Use:   "registry",
-	Short: "`registry`",
-	Long:  "`registry`",
-	Run: func(cmd *cobra.Command, args []string) {
+	Use:           "registry",
+	Short:         "`registry`",
+	Long:          "`registry`",
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	Run: func(cmd *cobra.Command, _ []string) {
 		if showVersion {
 			version.PrintVersion()
 			return
@@ -140,50 +146,43 @@ var GCCmd = &cobra.Command{
 	Use:   "garbage-collect <config>",
 	Short: "`garbage-collect` deletes layers not referenced by any manifests",
 	Long:  "`garbage-collect` deletes layers not referenced by any manifests",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		if config.Database.Enabled {
-			fmt.Fprintf(os.Stderr, "the garbage-collect command is not compatible with database metadata, please use online garbage collection instead")
-			os.Exit(1)
+			return errors.New("the garbage-collect command is not compatible with database metadata, please use online garbage collection instead")
 		}
 
 		maxParallelManifestGets := 1
 		parameters := config.Storage.Parameters()
-		if parameters[parallelwalkKey] == true {
+		if v, ok := (parameters[parallelwalkKey]).(bool); ok && v {
 			maxParallelManifestGets = 10
 		}
 
 		driver, err := factory.Create(config.Storage.Type(), parameters)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct %s driver: %v", config.Storage.Type(), err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct %s driver: %w", config.Storage.Type(), err)
 		}
 
 		ctx := dcontext.Background()
 		ctx, err = configureLogging(ctx, config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "unable to configure logging with config: %s", err)
-			os.Exit(1)
+			return fmt.Errorf("unable to configure logging with config: %w", err)
 		}
 
 		logrus.Debugf("getting a maximum of %d manifests in parallel per repository during the mark phase", maxParallelManifestGets)
 
 		k, err := libtrust.GenerateECP256PrivateKey()
 		if err != nil {
-			fmt.Fprint(os.Stderr, err)
-			os.Exit(1)
+			return fmt.Errorf("generating ECP256 private key: %w", err)
 		}
 
 		registry, err := storage.NewRegistry(ctx, driver, storage.Schema1SigningKey(k))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct registry: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct registry: %w", err)
 		}
 
 		if debugAddr != "" {
@@ -202,9 +201,9 @@ var GCCmd = &cobra.Command{
 			MaxParallelManifestGets: maxParallelManifestGets,
 		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to garbage collect: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to garbage collect: %w", err)
 		}
+		return nil
 	},
 }
 
@@ -213,8 +212,8 @@ var DBCmd = &cobra.Command{
 	Use:   "database",
 	Short: "Manages the registry metadata database",
 	Long:  "Manages the registry metadata database",
-	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Usage()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Usage()
 	},
 }
 
@@ -223,8 +222,8 @@ var MigrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Manage migrations",
 	Long:  "Manage migrations",
-	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Usage()
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return cmd.Usage()
 	},
 }
 
@@ -232,26 +231,22 @@ var MigrateUpCmd = &cobra.Command{
 	Use:   "up",
 	Short: "Apply up migrations",
 	Long:  "Apply up migrations",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		if maxNumMigrations == nil {
 			var all int
 			maxNumMigrations = &all
 		} else if *maxNumMigrations < 1 {
-			fmt.Fprintf(os.Stderr, "limit must be greater than or equal to 1")
-			os.Exit(1)
+			return errors.New("limit must be greater than or equal to 1")
 		}
 
 		db, err := migrationDBFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		m := migrations.NewMigrator(db)
@@ -261,23 +256,22 @@ var MigrateUpCmd = &cobra.Command{
 
 		plan, err := m.UpNPlan(*maxNumMigrations)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to prepare Up plan: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to prepare Up plan: %w", err)
 		}
 
 		if len(plan) > 0 {
-			fmt.Println(strings.Join(plan, "\n"))
+			_, _ = fmt.Println(strings.Join(plan, "\n"))
 		}
 
 		if !dryRun {
 			start := time.Now()
 			mr, err := m.UpN(*maxNumMigrations)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to run database migrations: %v", err)
-				os.Exit(1)
+				return fmt.Errorf("failed to run database migrations: %w", err)
 			}
 			fmt.Printf("OK: applied %d migrations and %d background migrations in %.3fs\n", mr.AppliedCount, mr.AppliedBBMCount, time.Since(start).Seconds())
 		}
+		return nil
 	},
 }
 
@@ -285,61 +279,55 @@ var MigrateDownCmd = &cobra.Command{
 	Use:   "down",
 	Short: "Apply down migrations",
 	Long:  "Apply down migrations",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		if maxNumMigrations == nil {
 			var all int
 			maxNumMigrations = &all
 		} else if *maxNumMigrations < 1 {
-			fmt.Fprintf(os.Stderr, "limit must be greater than or equal to 1")
-			os.Exit(1)
+			return errors.New("limit must be greater than or equal to 1")
 		}
 
 		db, err := migrationDBFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		m := migrations.NewMigrator(db)
 		plan, err := m.DownNPlan(*maxNumMigrations)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to prepare Down plan: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to prepare Down plan: %w", err)
 		}
 
 		if len(plan) > 0 {
-			fmt.Println(strings.Join(plan, "\n"))
+			_, _ = fmt.Println(strings.Join(plan, "\n"))
 		}
 
 		if !dryRun && len(plan) > 0 {
 			if !force {
 				var response string
-				fmt.Print("Preparing to apply the above down migrations. Are you sure? [y/N] ")
+				_, _ = fmt.Print("Preparing to apply the above down migrations. Are you sure? [y/N] ")
 				_, err := fmt.Scanln(&response)
 				if err != nil && errors.Is(err, io.EOF) {
-					fmt.Fprintf(os.Stderr, "failed to scan user input: %v", err)
-					os.Exit(1)
+					return fmt.Errorf("failed to scan user input: %w", err)
 				}
 				if !regexp.MustCompile(`(?i)^y(es)?$`).MatchString(response) {
-					return
+					return nil
 				}
 			}
 
 			start := time.Now()
 			n, err := m.DownN(*maxNumMigrations)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to run database migrations: %v", err)
-				os.Exit(1)
+				return fmt.Errorf("failed to run database migrations: %w", err)
 			}
 			fmt.Printf("OK: applied %d migrations in %.3fs\n", n, time.Since(start).Seconds())
 		}
+		return nil
 	},
 }
 
@@ -348,31 +336,28 @@ var MigrateVersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show current migration version",
 	Long:  "Show current migration version",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		db, err := migrationDBFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		m := migrations.NewMigrator(db)
 		v, err := m.Version()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to detect database version: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to detect database version: %w", err)
 		}
 		if v == "" {
 			v = "Unknown"
 		}
 
 		fmt.Printf("%s\n", v)
+		return nil
 	},
 }
 
@@ -381,25 +366,21 @@ var MigrateStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show migration status",
 	Long:  "Show migration status",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		db, err := migrationDBFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		m := migrations.NewMigrator(db)
 		statuses, err := m.Status()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to detect database status: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to detect database status: %w", err)
 		}
 
 		if upToDateCheck {
@@ -412,8 +393,11 @@ var MigrateStatusCmd = &cobra.Command{
 					}
 				}
 			}
-			fmt.Println(upToDate)
-			return
+			_, err = fmt.Println(upToDate)
+			if err != nil {
+				return fmt.Errorf("printing line: %w", err)
+			}
+			return nil
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
@@ -449,6 +433,7 @@ var MigrateStatusCmd = &cobra.Command{
 		}
 
 		table.Render()
+		return nil
 	},
 }
 
@@ -459,79 +444,65 @@ var ImportCmd = &cobra.Command{
 	Long: "Import filesystem metadata into the database.\n" +
 		"Untagged manifests are not imported.\n " +
 		"This tool can not be used with the parallelwalk storage configuration enabled.",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		// Ensure no more than one step flag is set.
 		if preImport && (importAllRepos || importCommonBlobs) {
-			fmt.Fprint(os.Stderr, "steps two or three can't be used with step one\n")
-			_ = cmd.Usage()
-			os.Exit(1)
+			return errors.New("steps two or three can't be used with step one")
 		}
 
 		if importAllRepos && importCommonBlobs {
-			fmt.Fprint(os.Stderr, "step three can't be used with step two\n")
-			_ = cmd.Usage()
-			os.Exit(1)
+			return errors.New("step three can't be used with step two")
 		}
 
 		config, err := resolveConfiguration(args)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		if tagConcurrency != nil && (*tagConcurrency < 1 || *tagConcurrency > 5) {
-			fmt.Fprintf(os.Stderr, "tag-concurrency must be between 1 and 5")
-			os.Exit(1)
+			return errors.New("tag-concurrency must be between 1 and 5")
 		}
 
 		parameters := config.Storage.Parameters()
-		if parameters[parallelwalkKey] == true {
+		if (parameters[parallelwalkKey]).(bool) {
 			parameters[parallelwalkKey] = false
 			logrus.Info("the 'parallelwalk' configuration parameter has been disabled")
 		}
 
 		driver, err := factory.Create(config.Storage.Type(), parameters)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct %s driver: %v", config.Storage.Type(), err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct %s driver: %w", config.Storage.Type(), err)
 		}
 
 		ctx := dcontext.Background()
 		ctx, err = configureLogging(ctx, config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "unable to configure logging with config: %s", err)
-			os.Exit(1)
+			return fmt.Errorf("unable to configure logging with config: %w", err)
 		}
 
 		k, err := libtrust.GenerateECP256PrivateKey()
 		if err != nil {
-			fmt.Fprint(os.Stderr, err)
-			os.Exit(1)
+			return fmt.Errorf("generatibng ECP256 private key")
 		}
 
 		registry, err := storage.NewRegistry(ctx, driver, storage.Schema1SigningKey(k))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct registry: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct registry: %w", err)
 		}
 
 		db, err := dbFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		m := migrations.NewMigrator(db)
 		pending, err := m.HasPending()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to check database migrations status: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to check database migrations status: %w", err)
 		}
 		if pending {
-			fmt.Fprintf(os.Stderr, "there are pending database migrations, use the 'registry database migrate' CLI "+
+			return errors.New("there are pending database migrations, use the 'registry database migrate' CLI " +
 				"command to check and apply them")
-			os.Exit(1)
 		}
 
 		if debugAddr != "" {
@@ -553,8 +524,7 @@ var ImportCmd = &cobra.Command{
 		}
 		if tagConcurrency != nil {
 			if config.Storage.Type() != "gcs" {
-				fmt.Fprintf(os.Stderr, "the tag concurrency option is only compatible with a gcs backed registry storage")
-				os.Exit(1)
+				return errors.New("the tag concurrency option is only compatible with a gcs backed registry storage")
 			}
 			opts = append(opts, datastore.WithTagConcurrency(*tagConcurrency))
 		}
@@ -564,12 +534,8 @@ var ImportCmd = &cobra.Command{
 
 		err = os.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(dynamicMediaTypes))
 		if err != nil {
-			fmt.Fprintf(
-				os.Stderr,
-				"failed to set environment variable %s: %v",
-				feature.DynamicMediaTypes.EnvVariable, err,
-			)
-			os.Exit(1)
+			return fmt.Errorf("failed to set environment variable %s: %w",
+				feature.DynamicMediaTypes.EnvVariable, err)
 		}
 
 		p := datastore.NewImporter(db, registry, opts...)
@@ -586,9 +552,9 @@ var ImportCmd = &cobra.Command{
 		}
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to import metadata: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to import metadata: %w", err)
 		}
+		return nil
 	},
 }
 
@@ -597,8 +563,8 @@ var BBMCmd = &cobra.Command{
 	Use:   "background-migrate <config> {status|pause|run}",
 	Short: "Manage batched background migrations",
 	Long:  "Manage batched background migrations",
-	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Usage()
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return cmd.Usage()
 	},
 }
 
@@ -607,25 +573,21 @@ var BBMStatusCmd = &cobra.Command{
 	Use:   "status <config>",
 	Short: "Show the current status of all batched background migrations",
 	Long:  "Show the current status of all batched background migrations.",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		db, err := migrationDBFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		bbmw := bbm.NewWorker(nil, bbm.WithDB(db))
 		bbMigrations, err := bbmw.AllMigrations(dcontext.Background())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to fetch background migrations: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to fetch background migrations: %w", err)
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
@@ -638,6 +600,7 @@ var BBMStatusCmd = &cobra.Command{
 		}
 
 		table.Render()
+		return nil
 	},
 }
 
@@ -646,26 +609,23 @@ var BBMPauseCmd = &cobra.Command{
 	Use:   "pause <config>",
 	Short: "Pause all running or active batched background migrations",
 	Long:  "Pause all running or active batched background migrations",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		db, err := migrationDBFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		bbmw := bbm.NewWorker(nil, bbm.WithDB(db))
 		err = bbmw.PauseEligibleMigrations(dcontext.Background())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to pause background migrations: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to pause background migrations: %w", err)
 		}
+		return nil
 	},
 }
 
@@ -674,26 +634,23 @@ var BBMResumeCmd = &cobra.Command{
 	Use:   "resume",
 	Short: "Resume all paused batched background migrations",
 	Long:  "Resume all paused batched background migrations",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		db, err := migrationDBFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		bbmw := bbm.NewWorker(nil, bbm.WithDB(db))
 		err = bbmw.ResumeEligibleMigrations(dcontext.Background())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to resume background migrations: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to resume background migrations: %w", err)
 		}
+		return nil
 	},
 }
 
@@ -702,18 +659,15 @@ var BBMRunCmd = &cobra.Command{
 	Use:   "run <config> [--max-job-retry <n>]",
 	Short: "Run all unfinished batched background migrations",
 	Long:  "Run all unfinished batched background migrations",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		db, err := migrationDBFromConfig(config)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to construct database connection: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
 		// Set default max job retry if not set, and validate its range
@@ -721,8 +675,7 @@ var BBMRunCmd = &cobra.Command{
 			defaultBBMJobRetry := 2
 			maxBBMJobRetry = &defaultBBMJobRetry
 		} else if *maxBBMJobRetry < 1 || *maxBBMJobRetry > 10 {
-			fmt.Fprintf(os.Stderr, "limit must be greater than 0 and less than 10")
-			os.Exit(1)
+			return errors.New("limit must be greater than 0 and less than 10")
 		}
 
 		// Create a new sync worker with the database and max job attempt options, and run it
@@ -731,21 +684,22 @@ var BBMRunCmd = &cobra.Command{
 		// Unpause any paused background migrations so they can be processed by the worker in `run` below
 		err = wk.ResumeEligibleMigrations(dcontext.Background())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to resume background migrations: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to resume background migrations: %w", err)
 		}
 
 		retryRunInterval := 10 * time.Second
 		for {
-			if err := wk.Run(dcontext.Background()); err != nil {
-				fmt.Fprintf(os.Stderr, "running background migrations failed: %v\n", err)
+			err := wk.Run(dcontext.Background())
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "running background migrations failed: %v\n", err)
 
 				// keep retrying to run at a fixed interval until user stops command.
-				fmt.Fprintf(os.Stdout, "retrying run in %v...\n", retryRunInterval)
+				_, _ = fmt.Fprintf(os.Stdout, "retrying run in %v...\n", retryRunInterval)
 				time.Sleep(retryRunInterval)
 				continue
 			}
-			os.Exit(1)
+			break
 		}
+		return nil
 	},
 }

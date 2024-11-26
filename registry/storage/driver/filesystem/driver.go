@@ -117,9 +117,9 @@ func (*driver) Name() string {
 	return driverName
 }
 
-// GetContent retrieves the content stored at "path" as a []byte.
-func (d *driver) GetContent(ctx context.Context, p string) ([]byte, error) {
-	rc, err := d.Reader(ctx, p, 0)
+// GetContent retrieves the content stored at "targetPath" as a []byte.
+func (d *driver) GetContent(ctx context.Context, targetPath string) ([]byte, error) {
+	rc, err := d.Reader(ctx, targetPath, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -148,14 +148,14 @@ func (d *driver) PutContent(ctx context.Context, subPath string, contents []byte
 	return writer.Commit()
 }
 
-// Reader retrieves an io.ReadCloser for the content stored at "path" with a
+// Reader retrieves an io.ReadCloser for the content stored at "targetPath" with a
 // given byte offset.
-func (d *driver) Reader(_ context.Context, p string, offset int64) (io.ReadCloser, error) {
+func (d *driver) Reader(_ context.Context, targetPath string, offset int64) (io.ReadCloser, error) {
 	// NOTE(prozlach): mode does not matter as we do not pass O_CREATE flag anyway
-	file, err := os.OpenFile(d.fullPath(p), os.O_RDONLY, 0o600)
+	file, err := os.OpenFile(d.fullPath(targetPath), os.O_RDONLY, 0o600)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, storagedriver.PathNotFoundError{Path: p, DriverName: driverName}
+			return nil, storagedriver.PathNotFoundError{Path: targetPath, DriverName: driverName}
 		}
 
 		return nil, err
@@ -167,7 +167,7 @@ func (d *driver) Reader(_ context.Context, p string, offset int64) (io.ReadClose
 		return nil, err
 	} else if seekPos < offset {
 		_ = file.Close()
-		return nil, storagedriver.InvalidOffsetError{Path: p, Offset: offset, DriverName: driverName}
+		return nil, storagedriver.InvalidOffsetError{Path: targetPath, Offset: offset, DriverName: driverName}
 	}
 
 	return file, nil
@@ -337,18 +337,18 @@ func (*driver) URLFor(_ context.Context, _ string, _ map[string]any) (string, er
 	return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 }
 
-// Walk traverses a filesystem defined within driver, starting
-// from the given path, calling f on each file
-func (d *driver) Walk(ctx context.Context, p string, f storagedriver.WalkFn) error {
-	return storagedriver.WalkFallback(ctx, d, p, f)
+// Walk traverses a filesystem defined within driver, starting from the given
+// path, calling f on each file
+func (d *driver) Walk(ctx context.Context, targetPath string, f storagedriver.WalkFn) error {
+	return storagedriver.WalkFallback(ctx, d, targetPath, f)
 }
 
 // WalkParallel traverses a filesystem defined within driver in parallel, starting
 // from the given path, calling f on each file.
-func (d *driver) WalkParallel(ctx context.Context, p string, f storagedriver.WalkFn) error {
+func (d *driver) WalkParallel(ctx context.Context, targetPath string, f storagedriver.WalkFn) error {
 	// TODO: Verify that this driver can reliably handle parallel workloads before
 	// using storagedriver.WalkFallbackParallel
-	return d.Walk(ctx, p, f)
+	return d.Walk(ctx, targetPath, f)
 }
 
 // fullPath returns the absolute path of a key within the Driver's storage.

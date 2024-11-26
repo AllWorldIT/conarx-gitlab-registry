@@ -10,6 +10,7 @@ import (
 func TestRegulatorEnterExit(t *testing.T) {
 	const limit = 500
 
+	// nolint: revive // unchecked-type-assertion
 	r := NewRegulator(nil, limit).(*Regulator)
 
 	for try := 0; try < 50; try++ {

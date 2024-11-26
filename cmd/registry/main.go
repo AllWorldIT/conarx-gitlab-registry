@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/docker/distribution/registry"
 	_ "github.com/docker/distribution/registry/auth/silly"
 	_ "github.com/docker/distribution/registry/auth/token"
@@ -21,5 +24,9 @@ func init() {
 }
 
 func main() {
-	_ = registry.RootCmd.Execute()
+	err := registry.RootCmd.Execute()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

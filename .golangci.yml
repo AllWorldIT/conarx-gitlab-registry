@@ -351,13 +351,6 @@ linters-settings:
         severity: warning
         disabled: false
         exclude: [""]
-      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#unchecked-type-assertion
-      - name: unchecked-type-assertion
-        severity: warning
-        disabled: false
-        exclude: [""]
-        arguments:
-          - acceptIgnoredAssertionResult: true
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#unconditional-recursion
       - name: unconditional-recursion
         severity: warning
@@ -538,7 +531,6 @@ linters:
   enable:
   # TODO: Tracked in https://gitlab.com/gitlab-org/container-registry/-/issues/1308
   # - revive
-    - gosec
     - bodyclose
     - copyloopvar
     - depguard
@@ -546,6 +538,7 @@ linters:
     - gocritic
     - gofumpt
     - goimports
+    - gosec
     - gosimple
     - ineffassign
     - misspell

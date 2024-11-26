@@ -85,12 +85,12 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 	return io.ReadAll(rc)
 }
 
-// PutContent stores the []byte content at a location designated by "path".
-func (d *driver) PutContent(_ context.Context, p string, contents []byte) error {
+// PutContent stores the []byte content at a location designated by "targetPath".
+func (d *driver) PutContent(_ context.Context, targetPath string, contents []byte) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
-	normalized := normalize(p)
+	normalized := normalize(targetPath)
 
 	f, err := d.root.mkfile(normalized)
 	if err != nil {

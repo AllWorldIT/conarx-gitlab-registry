@@ -73,7 +73,7 @@ func (t storageType) MediaType() string {
 
 // manifestDispatcher takes the request context and builds the
 // appropriate handler for handling manifest requests.
-func manifestDispatcher(ctx *Context, r *http.Request) http.Handler {
+func manifestDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	manifestHandler := &manifestHandler{
 		Context: ctx,
 	}
@@ -87,13 +87,13 @@ func manifestDispatcher(ctx *Context, r *http.Request) http.Handler {
 	}
 
 	mhandler := handlers.MethodHandler{
-		http.MethodGet:  http.HandlerFunc(manifestHandler.GetManifest),
-		http.MethodHead: http.HandlerFunc(manifestHandler.GetManifest),
+		http.MethodGet:  http.HandlerFunc(manifestHandler.HandleGetManifest),
+		http.MethodHead: http.HandlerFunc(manifestHandler.HandleGetManifest),
 	}
 
 	if !ctx.readOnly {
 		mhandler[http.MethodPut] = http.HandlerFunc(manifestHandler.PutManifest)
-		mhandler[http.MethodDelete] = http.HandlerFunc(manifestHandler.DeleteManifest)
+		mhandler[http.MethodDelete] = http.HandlerFunc(manifestHandler.HandleDeleteManifest)
 	}
 
 	return checkOngoingRename(mhandler, ctx)
@@ -108,22 +108,22 @@ type manifestHandler struct {
 	Digest digest.Digest
 }
 
-// GetManifest fetches the image manifest from the storage backend, if it exists.
-func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) {
+// HandleGetManifest fetches the image manifest from the storage backend, if it exists.
+func (imh *manifestHandler) HandleGetManifest(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(imh))
 	l.Debug("GetImageManifest")
 
 	manifestGetter := imh.newManifestGetter(r)
 
 	var (
-		manifest distribution.Manifest
-		getErr   error
+		m      distribution.Manifest
+		getErr error
 	)
 
 	if imh.Tag != "" {
-		manifest, imh.Digest, getErr = manifestGetter.GetByTag(imh.Context, imh.Tag)
+		m, imh.Digest, getErr = manifestGetter.GetByTag(imh.Context, imh.Tag)
 	} else {
-		manifest, getErr = manifestGetter.GetByDigest(imh.Context, imh.Digest)
+		m, getErr = manifestGetter.GetByDigest(imh.Context, imh.Digest)
 	}
 	if getErr != nil {
 		switch {
@@ -144,13 +144,14 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 
 	// determine the type of the returned manifest
 	manifestType := manifestSchema1
-	_, isSchema2 := manifest.(*schema2.DeserializedManifest)
-	manifestList, isManifestList := manifest.(*manifestlist.DeserializedManifestList)
+	_, isSchema2 := m.(*schema2.DeserializedManifest)
+	manifestList, isManifestList := m.(*manifestlist.DeserializedManifestList)
 	if isSchema2 {
 		manifestType = manifestSchema2
-	} else if _, isOCImanifest := manifest.(*ocischema.DeserializedManifest); isOCImanifest {
+	} else if _, isOCImanifest := m.(*ocischema.DeserializedManifest); isOCImanifest {
 		manifestType = ociImageManifestSchema
 	} else if isManifestList {
+		//nolint: revive // max-control-nesting
 		if manifestList.MediaType == manifestlist.MediaTypeManifestList {
 			manifestType = manifestlistSchema
 		} else if manifestList.MediaType == v1.MediaTypeImageIndex || manifestList.MediaType == "" {
@@ -179,7 +180,7 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 	// are being fetched by digest, we can't return something not matching the digest.
 	if imh.Tag != "" && manifestType == manifestlistSchema && !supports(r, manifestlistSchema) {
 		var err error
-		manifest, err = imh.rewriteManifestList(manifestList)
+		m, err = imh.rewriteManifestList(manifestList)
 		if err != nil {
 			switch err := err.(type) {
 			case distribution.ErrManifestUnknownRevision:
@@ -193,13 +194,13 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	ct, p, err := manifest.Payload()
+	ct, p, err := m.Payload()
 	if err != nil {
 		imh.Errors = append(imh.Errors, errcode.FromUnknownError(err))
 		return
 	}
 
-	if err := imh.queueBridge.ManifestPulled(imh.Repository.Named(), manifest, distribution.WithTagOption{Tag: imh.Tag}); err != nil {
+	if err := imh.queueBridge.ManifestPulled(imh.Repository.Named(), m, distribution.WithTagOption{Tag: imh.Tag}); err != nil {
 		l.WithError(err).Error("dispatching manifest pull to queue")
 	}
 	w.Header().Set("Content-Type", ct)
@@ -215,7 +216,7 @@ func (imh *manifestHandler) GetManifest(w http.ResponseWriter, r *http.Request) 
 			"size_bytes":      len(p),
 			"digest":          imh.Digest,
 			"tag_name":        imh.Tag,
-			"reference_count": len(manifest.References()),
+			"reference_count": len(m.References()),
 		}).Info("manifest downloaded")
 	}
 }
@@ -286,14 +287,14 @@ func (imh *manifestHandler) rewriteManifestList(manifestList *manifestlist.Deser
 	// This should be handled more cleanly.
 	manifestGetter := imh.newManifestGetter(&http.Request{})
 
-	manifest, err := manifestGetter.GetByDigest(imh.Context, manifestDigest)
+	m, err := manifestGetter.GetByDigest(imh.Context, manifestDigest)
 	if err != nil {
 		return nil, err
 	}
 
 	imh.Digest = manifestDigest
 
-	return manifest, nil
+	return m, nil
 }
 
 var errETagMatches = errors.New("etag matches")
@@ -373,12 +374,12 @@ func (g *dbManifestGetter) GetByTag(ctx context.Context, tagName string) (distri
 		return nil, dbManifest.Digest, errETagMatches
 	}
 
-	manifest, err := dbManifestToManifest(dbManifest)
+	m, err := dbManifestToManifest(dbManifest)
 	if err != nil {
 		return nil, "", err
 	}
 
-	return manifest, dbManifest.Digest, nil
+	return m, dbManifest.Digest, nil
 }
 
 func (g *dbManifestGetter) GetByDigest(ctx context.Context, dgst digest.Digest) (distribution.Manifest, error) {
@@ -498,7 +499,7 @@ func (p *fsManifestWriter) Tag(imh *manifestHandler, _ distribution.Manifest, ta
 
 type dbManifestWriter struct{}
 
-func (p *dbManifestWriter) Put(imh *manifestHandler, mfst distribution.Manifest) error {
+func (*dbManifestWriter) Put(imh *manifestHandler, mfst distribution.Manifest) error {
 	_, payload, err := mfst.Payload()
 	if err != nil {
 		return err
@@ -512,9 +513,10 @@ func (p *dbManifestWriter) Put(imh *manifestHandler, mfst distribution.Manifest)
 	return err
 }
 
-func (p *dbManifestWriter) Tag(imh *manifestHandler, mfst distribution.Manifest, tag string, _ distribution.Descriptor) error {
+func (p *dbManifestWriter) Tag(imh *manifestHandler, mfst distribution.Manifest, _ string, _ distribution.Descriptor) error {
 	repoName := imh.Repository.Named().Name()
 
+	// nolint: revive // early-return
 	if err := dbTagManifest(imh, imh.db.Primary(), imh.GetRepoCache(), imh.Digest, imh.Tag, repoName); err != nil {
 		if errors.Is(err, datastore.ErrManifestNotFound) {
 			// If online GC was already reviewing the manifest that we want to tag, and that manifest had no
@@ -640,7 +642,7 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	mediaType := r.Header.Get("Content-Type")
-	manifest, desc, err := distribution.UnmarshalManifest(mediaType, jsonBuf.Bytes())
+	m, desc, err := distribution.UnmarshalManifest(mediaType, jsonBuf.Bytes())
 	if err != nil {
 		imh.Errors = append(imh.Errors, v2.ErrorCodeManifestInvalid.WithDetail(err.Error()))
 		return
@@ -671,13 +673,13 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 		l.Debug("Putting a Docker Manifest!")
 	}
 
-	manifestList, isManifestList := manifest.(*manifestlist.DeserializedManifestList)
+	manifestList, isManifestList := m.(*manifestlist.DeserializedManifestList)
 
 	if isManifestList {
 		logIfManifestListInvalid(imh, manifestList, http.MethodPut)
 	}
 
-	if err := imh.applyResourcePolicy(manifest); err != nil {
+	if err := imh.applyResourcePolicy(m); err != nil {
 		imh.Errors = append(imh.Errors, err)
 		return
 	}
@@ -688,20 +690,20 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err = manifestWriter.Put(imh, manifest); err != nil {
+	if err = manifestWriter.Put(imh, m); err != nil {
 		imh.appendPutError(err)
 		return
 	}
 
 	// Tag this manifest
 	if imh.Tag != "" {
-		if err = manifestWriter.Tag(imh, manifest, imh.Tag, desc); err != nil {
+		if err = manifestWriter.Tag(imh, m, imh.Tag, desc); err != nil {
 			imh.appendPutError(err)
 			return
 		}
 	}
 
-	if err := imh.queueBridge.ManifestPushed(imh.Repository.Named(), manifest, distribution.WithTagOption{Tag: imh.Tag}); err != nil {
+	if err := imh.queueBridge.ManifestPushed(imh.Repository.Named(), m, distribution.WithTagOption{Tag: imh.Tag}); err != nil {
 		l.WithError(err).Error("dispatching manifest push to listener")
 	}
 
@@ -730,7 +732,7 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 		"size_bytes":      desc.Size,
 		"digest":          desc.Digest,
 		"tag_name":        imh.Tag,
-		"reference_count": len(manifest.References()),
+		"reference_count": len(m.References()),
 	}).Info("manifest uploaded")
 }
 
@@ -781,8 +783,8 @@ func (imh *manifestHandler) appendPutError(err error) {
 	}
 }
 
-func dbPutManifest(imh *manifestHandler, manifest distribution.Manifest, payload []byte) error {
-	switch reqManifest := manifest.(type) {
+func dbPutManifest(imh *manifestHandler, m distribution.Manifest, payload []byte) error {
+	switch reqManifest := m.(type) {
 	case *schema2.DeserializedManifest:
 		return dbPutManifestSchema2(imh, reqManifest, payload)
 	case *ocischema.DeserializedManifest:
@@ -882,7 +884,7 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 	return nil
 }
 
-func dbPutManifestOCI(imh *manifestHandler, manifest *ocischema.DeserializedManifest, payload []byte) error {
+func dbPutManifestOCI(imh *manifestHandler, m *ocischema.DeserializedManifest, payload []byte) error {
 	var opts []datastore.RepositoryStoreOption
 	if imh.GetRepoCache() != nil {
 		opts = append(opts, datastore.WithRepositoryCache(imh.GetRepoCache()))
@@ -898,14 +900,14 @@ func dbPutManifestOCI(imh *manifestHandler, manifest *ocischema.DeserializedMani
 		imh.App.manifestURLs,
 	)
 
-	if err := v.Validate(imh, manifest); err != nil {
+	if err := v.Validate(imh, m); err != nil {
 		return err
 	}
 
-	return dbPutManifestV2(imh, manifest, payload, false)
+	return dbPutManifestV2(imh, m, payload, false)
 }
 
-func dbPutManifestSchema2(imh *manifestHandler, manifest *schema2.DeserializedManifest, payload []byte) error {
+func dbPutManifestSchema2(imh *manifestHandler, m *schema2.DeserializedManifest, payload []byte) error {
 	var opts []datastore.RepositoryStoreOption
 	if imh.GetRepoCache() != nil {
 		opts = append(opts, datastore.WithRepositoryCache(imh.GetRepoCache()))
@@ -921,11 +923,11 @@ func dbPutManifestSchema2(imh *manifestHandler, manifest *schema2.DeserializedMa
 		imh.App.manifestURLs,
 	)
 
-	if err := v.Validate(imh.Context, manifest); err != nil {
+	if err := v.Validate(imh.Context, m); err != nil {
 		return err
 	}
 
-	return dbPutManifestV2(imh, manifest, payload, false)
+	return dbPutManifestV2(imh, m, payload, false)
 }
 
 func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload []byte, nonConformant bool) error {
@@ -999,10 +1001,12 @@ func dbPutManifestV2(imh *manifestHandler, mfst distribution.ManifestV2, payload
 			if subject.Digest.String() != "" {
 				// Fetch subject_id from digest
 				dbSubject, err := rStore.FindManifestByDigest(imh.Context, dbRepo, subject.Digest)
+				//nolint: revive // max-control-nesting
 				if err != nil {
 					return err
 				}
 
+				//nolint: revive // max-control-nesting
 				if dbSubject == nil {
 					// in case something happened to the referenced manifest after validation
 					return distribution.ErrManifestBlobUnknown{Digest: subject.Digest}
@@ -1250,14 +1254,14 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 
 // applyResourcePolicy checks whether the resource class matches what has
 // been authorized and allowed by the policy configuration.
-func (imh *manifestHandler) applyResourcePolicy(manifest distribution.Manifest) error {
+func (imh *manifestHandler) applyResourcePolicy(m distribution.Manifest) error {
 	allowedClasses := imh.App.Config.Policy.Repository.Classes
 	if len(allowedClasses) == 0 {
 		return nil
 	}
 
 	var class string
-	switch m := manifest.(type) {
+	switch m := m.(type) {
 	case *schema2.DeserializedManifest:
 		switch m.Config().MediaType {
 		case schema2.MediaTypeImageConfig:
@@ -1526,8 +1530,8 @@ func (imh *manifestHandler) deleteManifest() error {
 	return nil
 }
 
-// DeleteManifest removes the manifest with the given digest or the tag with the given name from the registry.
-func (imh *manifestHandler) DeleteManifest(w http.ResponseWriter, _ *http.Request) {
+// HandleDeleteManifest removes the manifest with the given digest or the tag with the given name from the registry.
+func (imh *manifestHandler) HandleDeleteManifest(w http.ResponseWriter, _ *http.Request) {
 	if !deleteEnabled(imh.App.Config) {
 		imh.Errors = append(imh.Errors, errcode.ErrorCodeUnsupported)
 		return

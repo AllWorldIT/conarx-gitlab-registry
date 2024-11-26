@@ -79,20 +79,18 @@ var ServeCmd = &cobra.Command{
 	Use:   "serve <config>",
 	Short: "`serve` stores and distributes Docker images",
 	Long:  "`serve` stores and distributes Docker images.",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		// setup context
 		ctx := dcontext.WithVersion(dcontext.Background(), version.Version)
 
 		config, err := resolveConfiguration(args)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			_ = cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		registry, err := NewRegistry(ctx, config)
 		if err != nil {
-			log.Fatalln(err)
+			return fmt.Errorf("creating new registry instance: %w", err)
 		}
 
 		go func() {
@@ -111,8 +109,9 @@ var ServeCmd = &cobra.Command{
 		fips.Check()
 
 		if err = registry.ListenAndServe(); err != nil {
-			log.Fatalln(err)
+			return fmt.Errorf("running http server: %w", err)
 		}
+		return nil
 	},
 }
 
@@ -209,16 +208,16 @@ func (registry *Registry) ListenAndServe() error {
 	case err := <-serveErr:
 		return err
 	case s := <-quit:
-		log := log.WithFields(log.Fields{
+		l := log.WithFields(log.Fields{
 			"quit_signal":            s.String(),
 			"http_drain_timeout":     registry.config.HTTP.DrainTimeout,
 			"database_drain_timeout": registry.config.Database.DrainTimeout,
 		})
-		log.Info("attempting to stop server gracefully...")
+		l.Info("attempting to stop server gracefully...")
 
 		// shutdown the server with a grace period of configured timeout
 		if registry.config.HTTP.DrainTimeout != 0 {
-			log.Info("draining http connections")
+			l.Info("draining http connections")
 			ctx, cancel := context.WithTimeout(context.Background(), registry.config.HTTP.DrainTimeout)
 			defer cancel()
 			if err := registry.server.Shutdown(ctx); err != nil {
@@ -227,7 +226,7 @@ func (registry *Registry) ListenAndServe() error {
 		}
 
 		if registry.config.Database.Enabled {
-			log.Info("closing database connections")
+			l.Info("closing database connections")
 
 			ctx := context.Background()
 			var cancel context.CancelFunc
@@ -243,7 +242,7 @@ func (registry *Registry) ListenAndServe() error {
 			}
 		}
 
-		log.Info("graceful shutdown successful")
+		l.Info("graceful shutdown successful")
 		return nil
 	}
 }
@@ -538,6 +537,7 @@ func panicHandler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
+				//nolint: revive // deep-exit
 				log.Panic(fmt.Sprintf("%v", err))
 			}
 		}()
@@ -609,6 +609,7 @@ func validate(config *configuration.Configuration) error {
 			switch val := v.(type) {
 			case time.Duration:
 			case string:
+				// nolint: revive // max-control-nesting
 				if _, err := time.ParseDuration(val); err != nil {
 					errs = multierror.Append(fmt.Errorf("%q value for 'storage.redirect.expirydelay' is not a valid duration", val))
 				}
@@ -646,6 +647,7 @@ func validate(config *configuration.Configuration) error {
 
 			// conflict: user explicitly enabled legacyrootprefix but also enabled trimlegacyrootprefix (or disabled both).
 			if legacyPrefixIsBool && trimLegacyPrefixIsBool {
+				//nolint: revive // max-control-nesting
 				if legacyPrefix == trimLegacyPrefix {
 					errs = multierror.Append(fmt.Errorf("storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be %v", legacyPrefix))
 				}

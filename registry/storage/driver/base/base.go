@@ -137,15 +137,15 @@ func (base *Base) Reader(ctx context.Context, path string, offset int64) (io.Rea
 }
 
 // Writer wraps Writer of underlying storage driver.
-func (base *Base) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
+func (base *Base) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	ctx, done := dcontext.WithTrace(ctx)
-	defer done("%s.Writer(%q, %v)", base.Name(), path, append)
+	defer done("%s.Writer(%q, %v)", base.Name(), path, doAppend)
 
 	if !storagedriver.PathRegexp.MatchString(path) {
 		return nil, storagedriver.InvalidPathError{Path: path, DriverName: base.StorageDriver.Name()}
 	}
 
-	writer, e := base.StorageDriver.Writer(ctx, path, append)
+	writer, e := base.StorageDriver.Writer(ctx, path, doAppend)
 	return writer, base.setDriverName(e)
 }
 

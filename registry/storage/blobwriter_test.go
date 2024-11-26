@@ -80,7 +80,7 @@ func TestDisabledBlobMetadataLinking(t *testing.T) {
 	layer, dgst, err := testutil.CreateRandomTarFile()
 	require.NoError(t, err)
 
-	testLayerUpload(t, env, layer, dgst)
+	testLayerUploadImpl(t, env, layer, dgst)
 
 	// Test that blob is **not** linked to the repository after a successful
 	// upload to content addressible storage.
@@ -94,7 +94,7 @@ func testFilesystemLayerUpload(t *testing.T, env *env) {
 	layer, dgst, err := testutil.CreateRandomTarFile()
 	require.NoError(t, err)
 
-	testLayerUpload(t, env, layer, dgst)
+	testLayerUploadImpl(t, env, layer, dgst)
 	testLayerLinked(t, env, dgst)
 }
 
@@ -114,7 +114,7 @@ func testIdempotentUpload(t *testing.T, env *env) {
 		// to return an error and doing the assertion in the main goroutine.
 		// Otherwise we may get an undefined behavior from require calling
 		// t.FailNow in a goroutine.
-		testLayerUpload(t, env, bytes.NewReader(dockerPayload), dgst)
+		testLayerUploadImpl(t, env, bytes.NewReader(dockerPayload), dgst)
 		testLayerLinked(t, env, dgst)
 	}
 }
@@ -130,7 +130,7 @@ func testDockerConfigurationPaylodUpload(t *testing.T, env *env) {
 
 	dgst := digest.FromBytes(dockerPayload)
 
-	testLayerUpload(t, env, bytes.NewReader(dockerPayload), dgst)
+	testLayerUploadImpl(t, env, bytes.NewReader(dockerPayload), dgst)
 	testLayerLinked(t, env, dgst)
 }
 
@@ -138,7 +138,7 @@ func testHelmConfigurationPaylodUpload(t *testing.T, env *env) {
 	helmPayload := `{"name":"e-helm","version":"latest","description":"Sample Helm Chart","apiVersion":"v2","appVersion":"1.16.0","type":"application"}`
 	dgst := digest.FromString(helmPayload)
 
-	testLayerUpload(t, env, strings.NewReader(helmPayload), dgst)
+	testLayerUploadImpl(t, env, strings.NewReader(helmPayload), dgst)
 	testLayerLinked(t, env, dgst)
 }
 
@@ -146,7 +146,7 @@ func testMalformedPayloadUpload(t *testing.T, env *env) {
 	malformedPayload := `{"invalid":"json",`
 	dgst := digest.FromString(malformedPayload)
 
-	testLayerUpload(t, env, strings.NewReader(malformedPayload), dgst)
+	testLayerUploadImpl(t, env, strings.NewReader(malformedPayload), dgst)
 	testLayerLinked(t, env, dgst)
 }
 
@@ -154,11 +154,11 @@ func testUnformattedPayloadUpload(t *testing.T, env *env) {
 	unformattedPayload := "unformatted string"
 	dgst := digest.FromString(unformattedPayload)
 
-	testLayerUpload(t, env, strings.NewReader(unformattedPayload), dgst)
+	testLayerUploadImpl(t, env, strings.NewReader(unformattedPayload), dgst)
 	testLayerLinked(t, env, dgst)
 }
 
-func testLayerUpload(t *testing.T, env *env, layer io.ReadSeeker, dgst digest.Digest) {
+func testLayerUploadImpl(t *testing.T, env *env, layer io.ReadSeeker, dgst digest.Digest) {
 	blobService := env.repo.Blobs(env.ctx)
 	wr, err := blobService.Create(env.ctx)
 	require.NoError(t, err)

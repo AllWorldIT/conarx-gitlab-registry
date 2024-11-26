@@ -60,7 +60,7 @@ func setupRegistry() (*Registry, error) {
 	defer ln.Close()
 	config.HTTP.Addr = ln.Addr().String()
 	config.HTTP.DrainTimeout = time.Duration(10) * time.Second
-	config.Storage = map[string]configuration.Parameters{"inmemory": map[string]any{}}
+	config.Storage = map[string]configuration.Parameters{"inmemory": make(map[string]any)}
 	return NewRegistry(context.Background(), config)
 }
 
@@ -155,7 +155,8 @@ func TestGracefulShutdown_HTTPDrainTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Fprintf(conn, "GET /v2/ ")
+	_, err = fmt.Fprintf(conn, "GET /v2/ ")
+	require.NoError(t, err)
 
 	// send stop signal
 	quit <- os.Interrupt
@@ -168,7 +169,8 @@ func TestGracefulShutdown_HTTPDrainTimeout(t *testing.T) {
 	}
 
 	// make sure earlier request is not disconnected and response can be received
-	fmt.Fprintf(conn, "HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+	_, err = fmt.Fprintf(conn, "HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+	require.NoError(t, err)
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -425,7 +427,7 @@ func Test_validate_redirect(t *testing.T) {
 		},
 		{
 			name:     "no parameters",
-			redirect: map[string]any{},
+			redirect: make(map[string]any),
 		},
 		{
 			name: "no disable parameter",
@@ -444,6 +446,7 @@ func Test_validate_redirect(t *testing.T) {
 			redirect: map[string]any{
 				"disable": "true",
 			},
+			// nolint: revive // error-strings
 			expectedError: errors.New("1 error occurred:\n\t* invalid type string for 'storage.redirect.disable' (boolean)\n\n"),
 		},
 		{
@@ -469,6 +472,7 @@ func Test_validate_redirect(t *testing.T) {
 			redirect: map[string]any{
 				"expirydelay": 1,
 			},
+			// nolint: revive // error-strings
 			expectedError: errors.New("1 error occurred:\n\t* invalid type int for 'storage.redirect.expirydelay' (duration)\n\n"),
 		},
 		{
@@ -476,6 +480,7 @@ func Test_validate_redirect(t *testing.T) {
 			redirect: map[string]any{
 				"expirydelay": "2mm",
 			},
+			// nolint: revive // error-strings
 			expectedError: errors.New("1 error occurred:\n\t* \"2mm\" value for 'storage.redirect.expirydelay' is not a valid duration\n\n"),
 		},
 	}
@@ -483,7 +488,7 @@ func Test_validate_redirect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &configuration.Configuration{
-				Storage: map[string]configuration.Parameters{},
+				Storage: make(map[string]configuration.Parameters),
 			}
 
 			if tt.redirect != nil {
