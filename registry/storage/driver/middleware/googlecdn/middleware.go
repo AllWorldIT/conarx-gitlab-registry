@@ -194,7 +194,7 @@ func (lh *googleCDNStorageMiddleware) URLFor(ctx context.Context, path string, o
 	fullURL := lh.baseURL + keyer.GCSBucketKey(path)
 
 	// sign the url
-	fullURL, err := lh.urlSigner.Sign(fullURL, time.Now().Add(lh.duration))
+	fullURL, err := lh.urlSigner.Sign(fullURL, systemClock.Now().Add(lh.duration))
 	if err != nil {
 		return fullURL, err
 	}
