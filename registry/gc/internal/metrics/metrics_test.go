@@ -36,7 +36,7 @@ func TestWorkerRun(t *testing.T) {
 	report(false, true, errors.New("foo"), "tag_delete")
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_gc_run_duration_seconds A histogram of latencies for online GC worker runs.
 # TYPE registry_gc_run_duration_seconds histogram
 registry_gc_run_duration_seconds_bucket{dangling="false",error="false",event="blob_upload",noop="true",worker="foo",le="0.005"} 0
@@ -102,10 +102,11 @@ registry_gc_runs_total{dangling="true",error="false",event="manifest_delete",noo
 registry_gc_runs_total{dangling="true",error="true",event="tag_delete",noop="false",worker="foo"} 1
 registry_gc_runs_total{dangling="true",error="true",event="tag_switch",noop="true",worker="foo"} 2
 `)
+	require.NoError(t, err)
 	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, runDurationName)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, runTotalName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName, totalFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -131,7 +132,7 @@ func TestBlobDatabaseDelete(t *testing.T) {
 	report(nil)
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_gc_delete_duration_seconds A histogram of latencies for artifact deletions during online GC.
 # TYPE registry_gc_delete_duration_seconds histogram
 registry_gc_delete_duration_seconds_bucket{artifact="blob",backend="database",error="false",le="0.005"} 0
@@ -166,10 +167,11 @@ registry_gc_delete_duration_seconds_count{artifact="blob",backend="database",err
 # TYPE registry_gc_deletes_total counter
 registry_gc_deletes_total{artifact="blob",backend="database"} 2
 `)
+	require.NoError(t, err)
 	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, deleteDurationName)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, deleteTotalName)
 
-	err := testutil.GatherAndCompare(reg, &expected, durationFullName, totalFullName)
+	err = testutil.GatherAndCompare(reg, &expected, durationFullName, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -195,7 +197,7 @@ func TestBlobStorageDelete(t *testing.T) {
 	report(nil)
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_gc_delete_duration_seconds A histogram of latencies for artifact deletions during online GC.
 # TYPE registry_gc_delete_duration_seconds histogram
 registry_gc_delete_duration_seconds_bucket{artifact="blob",backend="storage",error="false",le="0.005"} 0
@@ -230,10 +232,11 @@ registry_gc_delete_duration_seconds_count{artifact="blob",backend="storage",erro
 # TYPE registry_gc_deletes_total counter
 registry_gc_deletes_total{artifact="blob",backend="storage"} 2
 `)
+	require.NoError(t, err)
 	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, deleteDurationName)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, deleteTotalName)
 
-	err := testutil.GatherAndCompare(reg, &expected, durationFullName, totalFullName)
+	err = testutil.GatherAndCompare(reg, &expected, durationFullName, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -259,7 +262,7 @@ func TestManifestDelete(t *testing.T) {
 	report(nil)
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_gc_delete_duration_seconds A histogram of latencies for artifact deletions during online GC.
 # TYPE registry_gc_delete_duration_seconds histogram
 registry_gc_delete_duration_seconds_bucket{artifact="manifest",backend="database",error="false",le="0.005"} 0
@@ -294,10 +297,11 @@ registry_gc_delete_duration_seconds_count{artifact="manifest",backend="database"
 # TYPE registry_gc_deletes_total counter
 registry_gc_deletes_total{artifact="manifest",backend="database"} 2
 `)
+	require.NoError(t, err)
 	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, deleteDurationName)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, deleteTotalName)
 
-	err := testutil.GatherAndCompare(reg, &expected, durationFullName, totalFullName)
+	err = testutil.GatherAndCompare(reg, &expected, durationFullName, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -307,15 +311,16 @@ func TestStorageDeleteBytes(t *testing.T) {
 	StorageDeleteBytes(1, "bar")
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_gc_storage_deleted_bytes_total A counter for bytes deleted from storage during online GC.
 # TYPE registry_gc_storage_deleted_bytes_total counter
 registry_gc_storage_deleted_bytes_total{media_type="bar"} 1
 registry_gc_storage_deleted_bytes_total{media_type="foo"} 444
 `)
+	require.NoError(t, err)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, storageDeleteBytesTotalName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -325,15 +330,16 @@ func TestReviewPostpone(t *testing.T) {
 	ReviewPostpone("bar")
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_gc_postpones_total A counter for online GC review postpones.
 # TYPE registry_gc_postpones_total counter
 registry_gc_postpones_total{worker="bar"} 1
 registry_gc_postpones_total{worker="foo"} 2
 `)
+	require.NoError(t, err)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, postponeTotalName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -343,7 +349,7 @@ func TestWorkerSleep(t *testing.T) {
 	WorkerSleep("bar", 100*time.Hour)
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_gc_sleep_duration_seconds A histogram of sleep durations between online GC worker runs.
 # TYPE registry_gc_sleep_duration_seconds histogram
 registry_gc_sleep_duration_seconds_bucket{worker="bar",le="0.5"} 0
@@ -385,8 +391,9 @@ registry_gc_sleep_duration_seconds_bucket{worker="foo",le="+Inf"} 2
 registry_gc_sleep_duration_seconds_sum{worker="foo"} 10.01
 registry_gc_sleep_duration_seconds_count{worker="foo"} 2
 `)
+	require.NoError(t, err)
 	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, sleepDurationName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName)
 	require.NoError(t, err)
 }
