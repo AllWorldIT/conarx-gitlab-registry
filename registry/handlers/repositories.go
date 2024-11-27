@@ -202,7 +202,7 @@ const (
 
 func (h *repositoryHandler) HandleGetRepository(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"path": h.Repository.Named().Name()})
-	l.Debug("GetRepository")
+	l.Debug("HandleGetRepository")
 
 	var withSize bool
 	sizeVal := sizeQueryParamValue(r)

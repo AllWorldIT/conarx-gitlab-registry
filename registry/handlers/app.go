@@ -182,6 +182,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			if !ok {
 				return nil, fmt.Errorf("readonly config key must contain additional keys")
 			}
+			// nolint: revive // max-control-nesting
 			if readOnlyEnabled, ok := readOnly["enabled"]; ok {
 				app.readOnly, ok = readOnlyEnabled.(bool)
 				if !ok {
@@ -317,6 +318,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			app.manifestURLs.Allow = regexp.MustCompile("^$")
 			options = append(options, storage.ManifestURLsAllowRegexp(app.manifestURLs.Allow))
 		} else {
+			// nolint: revive // max-control-nesting
 			if len(config.Validation.Manifests.URLs.Allow) > 0 {
 				for i, s := range config.Validation.Manifests.URLs.Allow {
 					// Validate via compilation.
@@ -329,6 +331,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				app.manifestURLs.Allow = regexp.MustCompile(strings.Join(config.Validation.Manifests.URLs.Allow, "|"))
 				options = append(options, storage.ManifestURLsAllowRegexp(app.manifestURLs.Allow))
 			}
+			// nolint: revive // max-control-nesting
 			if len(config.Validation.Manifests.URLs.Deny) > 0 {
 				for i, s := range config.Validation.Manifests.URLs.Deny {
 					// Validate via compilation.
@@ -402,6 +405,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			}),
 		}
 
+		// nolint: revive // max-control-nesting
 		if config.Database.LoadBalancing.Enabled {
 			if app.redisCache == nil {
 				return nil, errors.New("redis cache required for enabling database load balancing")
@@ -961,10 +965,10 @@ func (app *App) registerGitlab(route v1.Route, dispatch dispatchFunc) {
 }
 
 // configureEvents prepares the event sink for action.
-func (app *App) configureEvents(configuration *configuration.Configuration) {
+func (app *App) configureEvents(registryConfig *configuration.Configuration) {
 	// Configure all of the endpoint sinks.
 	var sinks []notifications.Sink
-	for _, endpoint := range configuration.Notifications.Endpoints {
+	for _, endpoint := range registryConfig.Notifications.Endpoints {
 		if endpoint.Disabled {
 			dcontext.GetLogger(app).Infof("endpoint %s disabled, skipping", endpoint.Name)
 			continue
@@ -989,7 +993,7 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 	// TODO: replace broadcaster with a new worker that will consume events from the queue
 	// https://gitlab.com/gitlab-org/container-registry/-/issues/765
 	app.events.sink = notifications.NewBroadcaster(
-		configuration.Notifications.FanoutTimeout,
+		registryConfig.Notifications.FanoutTimeout,
 		sinks...,
 	)
 	app.registerShutdownFunc(
@@ -1008,10 +1012,10 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 	// Populate registry event source
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = configuration.HTTP.Addr
+		hostname = registryConfig.HTTP.Addr
 	} else {
 		// try to pick the port off the config
-		_, port, err := net.SplitHostPort(configuration.HTTP.Addr)
+		_, port, err := net.SplitHostPort(registryConfig.HTTP.Addr)
 		if err == nil {
 			hostname = net.JoinHostPort(hostname, port)
 		}
@@ -1136,32 +1140,32 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 	return nil
 }
 
-func (app *App) configureRedis(configuration *configuration.Configuration) {
-	if configuration.Redis.Addr == "" {
+func (app *App) configureRedis(registryConfig *configuration.Configuration) {
+	if registryConfig.Redis.Addr == "" {
 		return
 	}
 
 	opts := &redis.UniversalOptions{
-		Addrs:           strings.Split(configuration.Redis.Addr, ","),
-		DB:              configuration.Redis.DB,
-		Username:        configuration.Redis.Username,
-		Password:        configuration.Redis.Password,
-		DialTimeout:     configuration.Redis.DialTimeout,
-		ReadTimeout:     configuration.Redis.ReadTimeout,
-		WriteTimeout:    configuration.Redis.WriteTimeout,
-		PoolSize:        configuration.Redis.Pool.Size,
-		ConnMaxLifetime: configuration.Redis.Pool.MaxLifetime,
-		MasterName:      configuration.Redis.MainName,
+		Addrs:           strings.Split(registryConfig.Redis.Addr, ","),
+		DB:              registryConfig.Redis.DB,
+		Username:        registryConfig.Redis.Username,
+		Password:        registryConfig.Redis.Password,
+		DialTimeout:     registryConfig.Redis.DialTimeout,
+		ReadTimeout:     registryConfig.Redis.ReadTimeout,
+		WriteTimeout:    registryConfig.Redis.WriteTimeout,
+		PoolSize:        registryConfig.Redis.Pool.Size,
+		ConnMaxLifetime: registryConfig.Redis.Pool.MaxLifetime,
+		MasterName:      registryConfig.Redis.MainName,
 	}
-	if configuration.Redis.TLS.Enabled {
+	if registryConfig.Redis.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
 			// FIXME(prozlach) This requires investigation
 			// nolint: gosec
-			InsecureSkipVerify: configuration.Redis.TLS.Insecure,
+			InsecureSkipVerify: registryConfig.Redis.TLS.Insecure,
 		}
 	}
-	if configuration.Redis.Pool.IdleTimeout > 0 {
-		opts.ConnMaxIdleTime = configuration.Redis.Pool.IdleTimeout
+	if registryConfig.Redis.Pool.IdleTimeout > 0 {
+		opts.ConnMaxIdleTime = registryConfig.Redis.Pool.IdleTimeout
 	}
 	// NewUniversalClient will take care of returning the appropriate client type (simple or sentinel) depending on the
 	// configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
@@ -1176,7 +1180,7 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 	registry.(*expvar.Map).Set("redis", expvar.Func(func() any {
 		poolStats := app.redis.PoolStats()
 		return map[string]any{
-			"Config": configuration.Redis,
+			"Config": registryConfig.Redis,
 			"Active": poolStats.TotalConns - poolStats.IdleConns,
 		}
 	}))
@@ -1186,13 +1190,13 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 
 // configureSecret creates a random secret if a secret wasn't included in the
 // configuration.
-func (app *App) configureSecret(configuration *configuration.Configuration) error {
-	if configuration.HTTP.Secret == "" {
+func (app *App) configureSecret(registryConfig *configuration.Configuration) error {
+	if registryConfig.HTTP.Secret == "" {
 		var secretBytes [randomSecretSize]byte
 		if _, err := cryptorand.Read(secretBytes[:]); err != nil {
 			return fmt.Errorf("could not generate random bytes for HTTP secret: %w", err)
 		}
-		configuration.HTTP.Secret = string(secretBytes[:])
+		registryConfig.HTTP.Secret = string(secretBytes[:])
 		dcontext.GetLogger(app).Warn("No HTTP secret provided - generated random secret. This may cause problems with uploads if multiple registries are behind a load-balancer. To provide a shared secret, fill in http.secret in the configuration file or set the REGISTRY_HTTP_SECRET environment variable.")
 	}
 	return nil
@@ -1271,7 +1275,7 @@ func (app *App) initMetaRouter() error {
 
 	h := dbAssertionhandler{dbEnabled: app.Config.Database.Enabled}
 
-	app.registerGitlab(v1.Base, h.wrap(func(ctx *Context, r *http.Request) http.Handler {
+	app.registerGitlab(v1.Base, h.wrap(func(*Context, *http.Request) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			apiBase(w, r)
 		})
@@ -1329,8 +1333,8 @@ type dbAssertionhandler struct{ dbEnabled bool }
 func (h dbAssertionhandler) wrap(child func(ctx *Context, r *http.Request) http.Handler) func(ctx *Context, r *http.Request) http.Handler {
 	// Return a 404, signaling that the database is disabled and GitLab v1 API features are not available.
 	if !h.dbEnabled {
-		return func(ctx *Context, r *http.Request) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return func(*Context, *http.Request) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Gitlab-Container-Registry-Version", strings.TrimPrefix(version.Version, "v"))
 				w.WriteHeader(http.StatusNotFound)
 			})
@@ -1546,8 +1550,8 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 	})
 }
 
-func (app *App) logError(ctx context.Context, r *http.Request, errors errcode.Errors) {
-	for _, e := range errors {
+func (*App) logError(ctx context.Context, r *http.Request, errs errcode.Errors) {
+	for _, e := range errs {
 		var code errcode.ErrorCode
 		var message, detail string
 
@@ -1601,7 +1605,7 @@ func (app *App) context(_ http.ResponseWriter, r *http.Request) *Context {
 	ctx := r.Context()
 	ctx = dcontext.WithVars(ctx, r)
 	name := dcontext.GetStringValue(ctx, "vars.name")
-	//nolint: staticcheck // SA1029: should not use built-in type string as key for value
+	// nolint: staticcheck,revive // SA1029: should not use built-in type string as key for value
 	ctx = context.WithValue(ctx, "root_repo", strings.Split(name, "/")[0])
 	ctx = dcontext.WithLogger(ctx, dcontext.GetLogger(ctx,
 		"root_repo",
@@ -1610,7 +1614,7 @@ func (app *App) context(_ http.ResponseWriter, r *http.Request) *Context {
 		"vars.digest",
 		"vars.uuid"))
 
-	context := &Context{
+	appContext := &Context{
 		App:     app,
 		Context: ctx,
 	}
@@ -1619,20 +1623,20 @@ func (app *App) context(_ http.ResponseWriter, r *http.Request) *Context {
 		// A "host" item in the configuration takes precedence over
 		// X-Forwarded-Proto and X-Forwarded-Host headers, and the
 		// hostname in the request.
-		context.urlBuilder = urls.NewBuilder(&app.httpHost, false)
+		appContext.urlBuilder = urls.NewBuilder(&app.httpHost, false)
 	} else {
-		context.urlBuilder = urls.NewBuilderFromRequest(r, app.Config.HTTP.RelativeURLs)
+		appContext.urlBuilder = urls.NewBuilderFromRequest(r, app.Config.HTTP.RelativeURLs)
 	}
 
-	return context
+	return appContext
 }
 
 // authorized checks if the request can proceed with access to the requested
 // repository. If it succeeds, the context may access the requested
 // repository. An error will be returned if access is not available.
-func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Context) error {
-	dcontext.GetLogger(context).Debug("authorizing request")
-	repo := getName(context)
+func (app *App) authorized(w http.ResponseWriter, r *http.Request, appContext *Context) error {
+	dcontext.GetLogger(appContext).Debug("authorizing request")
+	repo := getName(appContext)
 
 	if app.accessController == nil {
 		return nil // access controller is not enabled.
@@ -1650,7 +1654,7 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 		accessRecords, err, errCode = appendRepositoryNamespaceAccessRecords(accessRecords, r)
 		if err != nil {
 			if err := errcode.ServeJSON(w, errCode); err != nil {
-				dcontext.GetLogger(context).Errorf("error serving error json: %v (from %v)", err, context.Errors)
+				dcontext.GetLogger(appContext).Errorf("error serving error json: %v (from %v)", err, appContext.Errors)
 			}
 			return fmt.Errorf("error creating access records: %w", err)
 		}
@@ -1670,14 +1674,14 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 			// that mistake elsewhere in the code, allowing any operation to
 			// proceed.
 			if err := errcode.ServeJSON(w, errcode.ErrorCodeUnauthorized); err != nil {
-				dcontext.GetLogger(context).Errorf("error serving error json: %v (from %v)", err, context.Errors)
+				dcontext.GetLogger(appContext).Errorf("error serving error json: %v (from %v)", err, appContext.Errors)
 			}
 			return fmt.Errorf("forbidden: no repository name")
 		}
 		accessRecords = appendCatalogAccessRecord(accessRecords, r)
 	}
 
-	ctx, err := app.accessController.Authorized(context.Context, accessRecords...)
+	ctx, err := app.accessController.Authorized(appContext.Context, accessRecords...)
 	if err != nil {
 		switch err := err.(type) {
 		case auth.Challenge:
@@ -1685,14 +1689,14 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 			err.SetHeaders(r, w)
 
 			if err := errcode.ServeJSON(w, errcode.ErrorCodeUnauthorized.WithDetail(accessRecords)); err != nil {
-				dcontext.GetLogger(context).Errorf("error serving error json: %v (from %v)", err, context.Errors)
+				dcontext.GetLogger(appContext).Errorf("error serving error json: %v (from %v)", err, appContext.Errors)
 			}
 		default:
 			// This condition is a potential security problem either in
 			// the configuration or whatever is backing the access
 			// controller. Just return a bad request with no information
 			// to avoid exposure. The request should not proceed.
-			dcontext.GetLogger(context).Errorf("error checking authorization: %v", err)
+			dcontext.GetLogger(appContext).Errorf("error checking authorization: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
 		}
 
@@ -1700,7 +1704,7 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 	}
 
 	dcontext.GetLogger(ctx, auth.UserNameKey, auth.UserTypeKey, auth.ResourceProjectPathsKey).Info("authorized request")
-	context.Context = ctx
+	appContext.Context = ctx
 	return nil
 }
 
@@ -1728,7 +1732,7 @@ func (app *App) queueBridge(ctx *Context, r *http.Request) *notifications.QueueB
 }
 
 // nameRequired returns true if the route requires a name.
-func (app *App) nameRequired(r *http.Request) bool {
+func (*App) nameRequired(r *http.Request) bool {
 	route := mux.CurrentRoute(r)
 	if route == nil {
 		return true
@@ -1764,7 +1768,7 @@ func apiBase(w http.ResponseWriter, _ *http.Request) {
 
 	w.Header().Set("Gitlab-Container-Registry-Version", strings.TrimPrefix(version.Version, "v"))
 
-	fmt.Fprint(w, emptyJSON)
+	_, _ = fmt.Fprint(w, emptyJSON)
 }
 
 // appendAccessRecords checks the method and adds the appropriate Access records to the records list.
@@ -1931,7 +1935,7 @@ func applyStorageMiddleware(driver storagedriver.StorageDriver, middlewares []co
 // purging to be used in the absence of configuration in the
 // configuration file
 func uploadPurgeDefaultConfig() map[any]any {
-	config := map[any]any{}
+	config := make(map[any]any)
 	config["enabled"] = true
 	config["age"] = "168h"
 	config["interval"] = "24h"
@@ -1946,7 +1950,7 @@ func badPurgeUploadConfig(reason string) error {
 // startUploadPurger schedules a goroutine which will periodically
 // check upload directories for old files and delete them
 func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageDriver, log dcontext.Logger, config map[any]any) error {
-	if config["enabled"] == false {
+	if v, ok := (config["enabled"]).(bool); ok && !v {
 		return nil
 	}
 
@@ -1984,13 +1988,12 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 
 	var dryRunBool bool
 	dryRun, ok := config["dryrun"]
-	if ok {
-		dryRunBool, ok = dryRun.(bool)
-		if !ok {
-			return badPurgeUploadConfig("cannot parse dryrun")
-		}
-	} else {
+	if !ok {
 		return badPurgeUploadConfig("dryrun missing")
+	}
+	dryRunBool, ok = dryRun.(bool)
+	if !ok {
+		return badPurgeUploadConfig("cannot parse dryrun")
 	}
 
 	go func() {
@@ -2086,8 +2089,8 @@ func repositoryFromContextWithRegistry(ctx *Context, w http.ResponseWriter, regi
 func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *configuration.Configuration) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
-	// register all work functions with worker
-	worker, err := bbm.RegisterWork(bbm.AllWork(),
+	// register all work functions with bbmWorker
+	bbmWorker, err := bbm.RegisterWork(bbm.AllWork(),
 		bbm.WithDB(db),
 		bbm.WithLogger(dlog.GetLogger(dlog.WithContext(ctx))),
 		bbm.WithJobInterval(config.Database.BackgroundMigrations.JobInterval),
@@ -2105,7 +2108,7 @@ func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *co
 	go bbmListenForShutdown(ctx, sigChan, doneCh)
 
 	// start looking for background migrations
-	gracefulFinish, err := worker.ListenForBackgroundMigration(ctx, doneCh)
+	gracefulFinish, err := bbmWorker.ListenForBackgroundMigration(ctx, doneCh)
 	if err != nil {
 		l.WithError(err).Error("background migration worker exited abruptly")
 	}
