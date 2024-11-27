@@ -46,12 +46,12 @@ import (
 func TestBlobAPI(t *testing.T) {
 	env1 := newTestEnv(t)
 	args := makeBlobArgs(t)
-	testBlobAPI(t, env1, args)
+	testBlobAPIImpl(t, env1, args)
 	env1.Shutdown()
 
 	env2 := newTestEnv(t, withDelete)
 	args = makeBlobArgs(t)
-	testBlobAPI(t, env2, args)
+	testBlobAPIImpl(t, env2, args)
 	env2.Shutdown()
 }
 
@@ -86,7 +86,7 @@ func TestBlobDelete(t *testing.T) {
 	defer env.Shutdown()
 
 	args := makeBlobArgs(t)
-	env = testBlobAPI(t, env, args)
+	env = testBlobAPIImpl(t, env, args)
 	testBlobDelete(t, env, args)
 }
 
@@ -183,7 +183,7 @@ func TestBlobDeleteDisabled(t *testing.T) {
 	checkResponse(t, "status of disabled delete", resp, http.StatusMethodNotAllowed)
 }
 
-func testBlobAPI(t *testing.T, env *testEnv, args blobArgs) *testEnv {
+func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	imageName := args.imageName
 	layerFile := args.layerFile
 	layerDigest := args.layerDigest
@@ -235,7 +235,7 @@ func testBlobAPI(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// -----------------------------------------
 	// Do layer push with an empty body and different digest
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
-	resp, err = doPushLayer(t, layerDigest, uploadURLBase, bytes.NewReader([]byte{}))
+	resp, err = doPushLayer(t, layerDigest, uploadURLBase, bytes.NewReader(make([]byte, 0)))
 	if err != nil {
 		t.Fatalf("unexpected error doing bad layer push: %v", err)
 	}
@@ -246,13 +246,13 @@ func testBlobAPI(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 
 	// -----------------------------------------
 	// Do layer push with an empty body and correct digest
-	zeroDigest, err := digest.FromReader(bytes.NewReader([]byte{}))
+	zeroDigest, err := digest.FromReader(bytes.NewReader(make([]byte, 0)))
 	if err != nil {
 		t.Fatalf("unexpected error digesting empty buffer: %v", err)
 	}
 
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
-	pushLayer(t, env.builder, imageName, zeroDigest, uploadURLBase, bytes.NewReader([]byte{}))
+	pushLayer(t, env.builder, imageName, zeroDigest, uploadURLBase, bytes.NewReader(make([]byte, 0)))
 
 	// -----------------------------------------
 	// Do layer push with an empty body and correct digest
@@ -270,14 +270,16 @@ func testBlobAPI(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// ------------------------------------------
 	// Now, actually do successful upload.
 	layerLength, _ := layerFile.Seek(0, io.SeekEnd)
-	layerFile.Seek(0, io.SeekStart)
+	_, err = layerFile.Seek(0, io.SeekStart)
+	require.NoError(t, err)
 
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
 	pushLayer(t, env.builder, imageName, layerDigest, uploadURLBase, layerFile)
 
 	// ------------------------------------------
 	// Now, push just a chunk
-	layerFile.Seek(0, 0)
+	_, err = layerFile.Seek(0, 0)
+	require.NoError(t, err)
 
 	canonicalDigester := digest.Canonical.Digester()
 	if _, err := io.Copy(canonicalDigester.Hash(), layerFile); err != nil {
@@ -285,7 +287,8 @@ func testBlobAPI(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	}
 	canonicalDigest := canonicalDigester.Digest()
 
-	layerFile.Seek(0, 0)
+	_, err = layerFile.Seek(0, 0)
+	require.NoError(t, err)
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
 	uploadURLBase, dgst := pushChunk(t, uploadURLBase, layerFile, layerLength)
 	finishUpload(t, env.builder, imageName, uploadURLBase, dgst)

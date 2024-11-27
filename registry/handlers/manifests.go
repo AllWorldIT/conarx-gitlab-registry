@@ -111,7 +111,7 @@ type manifestHandler struct {
 // HandleGetManifest fetches the image manifest from the storage backend, if it exists.
 func (imh *manifestHandler) HandleGetManifest(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(imh))
-	l.Debug("GetImageManifest")
+	l.Debug("HandleGetImageManifest")
 
 	manifestGetter := imh.newManifestGetter(r)
 

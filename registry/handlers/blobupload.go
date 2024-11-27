@@ -21,15 +21,15 @@ import (
 
 // blobUploadDispatcher constructs and returns the blob upload handler for the
 // given request context.
-func blobUploadDispatcher(ctx *Context, r *http.Request) http.Handler {
+func blobUploadDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	buh := &blobUploadHandler{
 		Context: ctx,
 		UUID:    getUploadUUID(ctx),
 	}
 
 	handler := handlers.MethodHandler{
-		http.MethodGet:  http.HandlerFunc(buh.GetUploadStatus),
-		http.MethodHead: http.HandlerFunc(buh.GetUploadStatus),
+		http.MethodGet:  http.HandlerFunc(buh.HandleGetUploadStatus),
+		http.MethodHead: http.HandlerFunc(buh.HandleGetUploadStatus),
 	}
 
 	if !ctx.readOnly {
@@ -115,19 +115,22 @@ func (buh *blobUploadHandler) StartBlobUpload(w http.ResponseWriter, r *http.Req
 
 	blobs := buh.Repository.Blobs(buh)
 	upload, err := blobs.Create(buh, options...)
+	// nolint: revive // max-control-nesting
 	if err != nil {
 		var ebm distribution.ErrBlobMounted
 		switch {
 		case errors.As(err, &ebm):
 			if buh.useDatabase {
-				if err = dbMountBlob(buh.Context, rStore, ebm.From.Name(), buh.Repository.Named().Name(), ebm.Descriptor.Digest); err != nil {
-					e := fmt.Errorf("failed to mount blob in database: %w", err)
+				errIn := dbMountBlob(buh.Context, rStore, ebm.From.Name(), buh.Repository.Named().Name(), ebm.Descriptor.Digest)
+				if errIn != nil {
+					e := fmt.Errorf("failed to mount blob in database: %w", errIn)
 					buh.Errors = append(buh.Errors, errcode.FromUnknownError(e))
 					return
 				}
 			}
-			if err = buh.writeBlobCreatedHeaders(w, ebm.Descriptor); err != nil {
-				buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
+			errIn := buh.writeBlobCreatedHeaders(w, ebm.Descriptor)
+			if errIn != nil {
+				buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(errIn))
 			}
 		case errors.Is(err, distribution.ErrUnsupported):
 			buh.Errors = append(buh.Errors, errcode.ErrorCodeUnsupported)
@@ -148,8 +151,8 @@ func (buh *blobUploadHandler) StartBlobUpload(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// GetUploadStatus returns the status of a given upload, identified by id.
-func (buh *blobUploadHandler) GetUploadStatus(w http.ResponseWriter, r *http.Request) {
+// HandleGetUploadStatus returns the status of a given upload, identified by id.
+func (buh *blobUploadHandler) HandleGetUploadStatus(w http.ResponseWriter, _ *http.Request) {
 	if buh.Upload == nil {
 		buh.Errors = append(buh.Errors, v2.ErrorCodeBlobUploadUnknown)
 		return
@@ -334,7 +337,7 @@ func (buh *blobUploadHandler) PutBlobUploadComplete(w http.ResponseWriter, r *ht
 }
 
 // CancelBlobUpload cancels an in-progress upload of a blob.
-func (buh *blobUploadHandler) CancelBlobUpload(w http.ResponseWriter, r *http.Request) {
+func (buh *blobUploadHandler) CancelBlobUpload(w http.ResponseWriter, _ *http.Request) {
 	if buh.Upload == nil {
 		buh.Errors = append(buh.Errors, v2.ErrorCodeBlobUploadUnknown)
 		return
@@ -352,7 +355,7 @@ func (buh *blobUploadHandler) CancelBlobUpload(w http.ResponseWriter, r *http.Re
 func (buh *blobUploadHandler) ResumeBlobUpload(ctx *Context, r *http.Request) http.Handler {
 	state, err := hmacKey(ctx.Config.HTTP.Secret).unpackUploadState(r.FormValue("_state"))
 	if err != nil {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			log.GetLogger(log.WithContext(ctx)).WithError(err).Info("error resolving upload")
 			buh.Errors = append(buh.Errors, v2.ErrorCodeBlobUploadInvalid.WithDetail(err))
 		})
@@ -360,7 +363,7 @@ func (buh *blobUploadHandler) ResumeBlobUpload(ctx *Context, r *http.Request) ht
 	buh.State = state
 
 	if state.Name != ctx.Repository.Named().Name() {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
 				"state_name": state.Name,
 				"repository": buh.Repository.Named().Name(),
@@ -370,7 +373,7 @@ func (buh *blobUploadHandler) ResumeBlobUpload(ctx *Context, r *http.Request) ht
 	}
 
 	if state.UUID != buh.UUID {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
 				"state_uuid":  state.UUID,
 				"upload_uuid": buh.UUID,
@@ -384,12 +387,12 @@ func (buh *blobUploadHandler) ResumeBlobUpload(ctx *Context, r *http.Request) ht
 	if err != nil {
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Error("error resolving upload")
 		if err == distribution.ErrBlobUploadUnknown {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 				buh.Errors = append(buh.Errors, v2.ErrorCodeBlobUploadUnknown.WithDetail(err))
 			})
 		}
 
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			buh.Errors = append(buh.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 		})
 	}
@@ -404,7 +407,7 @@ func (buh *blobUploadHandler) ResumeBlobUpload(ctx *Context, r *http.Request) ht
 				"upload_size":  size,
 				"state_offset": buh.State.Offset,
 			}).Error("upload resumed at wrong offset")
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 				buh.Errors = append(buh.Errors, v2.ErrorCodeResumableBlobUploadInvalid.WithDetail(err))
 			})
 		}

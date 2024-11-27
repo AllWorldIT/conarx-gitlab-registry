@@ -70,7 +70,7 @@ func TestAppDistribtionDispatcher(t *testing.T) {
 	}
 
 	varCheckingDispatcher := func(expectedVars map[string]string) dispatchFunc {
-		return func(ctx *Context, r *http.Request) http.Handler {
+		return func(ctx *Context, _ *http.Request) http.Handler {
 			// Always checks the same name context
 			if ctx.Repository.Named().Name() != getName(ctx) {
 				t.Fatalf("unexpected name: %q != %q", ctx.Repository.Named().Name(), "foo/bar")
@@ -93,7 +93,7 @@ func TestAppDistribtionDispatcher(t *testing.T) {
 				}
 			}
 
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})
 		}
@@ -148,7 +148,8 @@ func TestAppDistribtionDispatcher(t *testing.T) {
 		resp, err := http.Get(u.String())
 		require.NoError(t, err)
 
-		resp.Body.Close()
+		err = resp.Body.Close()
+		require.NoError(t, err)
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	}
@@ -252,42 +253,42 @@ func TestAppendAccessRecords(t *testing.T) {
 		Action:   "delete",
 	}
 
-	records := []auth.Access{}
+	records := make([]auth.Access, 0)
 	result := appendAccessRecords(records, http.MethodGet, repo)
 	expectedResult := []auth.Access{expectedPullRecord}
 	if ok := reflect.DeepEqual(result, expectedResult); !ok {
 		t.Fatalf("Actual access record differs from expected")
 	}
 
-	records = []auth.Access{}
+	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodHead, repo)
 	expectedResult = []auth.Access{expectedPullRecord}
 	if ok := reflect.DeepEqual(result, expectedResult); !ok {
 		t.Fatalf("Actual access record differs from expected")
 	}
 
-	records = []auth.Access{}
+	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodPost, repo)
 	expectedResult = []auth.Access{expectedPullRecord, expectedPushRecord}
 	if ok := reflect.DeepEqual(result, expectedResult); !ok {
 		t.Fatalf("Actual access record differs from expected")
 	}
 
-	records = []auth.Access{}
+	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodPut, repo)
 	expectedResult = []auth.Access{expectedPullRecord, expectedPushRecord}
 	if ok := reflect.DeepEqual(result, expectedResult); !ok {
 		t.Fatalf("Actual access record differs from expected")
 	}
 
-	records = []auth.Access{}
+	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodPatch, repo)
 	expectedResult = []auth.Access{expectedPullRecord, expectedPushRecord}
 	if ok := reflect.DeepEqual(result, expectedResult); !ok {
 		t.Fatalf("Actual access record differs from expected")
 	}
 
-	records = []auth.Access{}
+	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodDelete, repo)
 	expectedResult = []auth.Access{expectedDeleteRecord}
 	if ok := reflect.DeepEqual(result, expectedResult); !ok {
@@ -437,7 +438,7 @@ func mockSettingsStore(tb testing.TB, ctrl *gomock.Controller) {
 
 	storeMock = dmocks.NewMockGCSettingsStore(ctrl)
 	bkp := gcSettingsStoreConstructor
-	gcSettingsStoreConstructor = func(db datastore.Queryer) datastore.GCSettingsStore { return storeMock }
+	gcSettingsStoreConstructor = func(datastore.Queryer) datastore.GCSettingsStore { return storeMock }
 
 	tb.Cleanup(func() { gcSettingsStoreConstructor = bkp })
 }
@@ -649,15 +650,16 @@ func TestGitlabAPI_LogsCFRayID(t *testing.T) {
 		require.NoError(t, err)
 
 		server := httptest.NewServer(app)
+		// nolint: revive // defer
 		defer server.Close()
 
 		builder, err := urls.NewBuilderFromString(server.URL, false)
 		require.NoError(t, err)
 
-		url, err := builder.BuildGitlabV1BaseURL()
+		baseURL, err := builder.BuildGitlabV1BaseURL()
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequest(http.MethodGet, baseURL, nil)
 		require.NoError(t, err)
 		for headerKey, headerVal := range test.headers {
 			req.Header.Add(headerKey, headerVal)
@@ -665,6 +667,7 @@ func TestGitlabAPI_LogsCFRayID(t *testing.T) {
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
+		// nolint: revive // defer
 		defer resp.Body.Close()
 		test.checkContains(buf)
 	}
@@ -715,15 +718,16 @@ func TestDistributionAPI_LogsCFRayID(t *testing.T) {
 		require.NoError(t, err)
 
 		server := httptest.NewServer(app)
+		// nolint: revive // defer
 		defer server.Close()
 
 		builder, err := urls.NewBuilderFromString(server.URL, false)
 		require.NoError(t, err)
 
-		url, err := builder.BuildBaseURL()
+		baseURL, err := builder.BuildBaseURL()
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequest(http.MethodGet, baseURL, nil)
 		require.NoError(t, err)
 		for headerKey, headerVal := range test.headers {
 			req.Header.Add(headerKey, headerVal)
@@ -731,6 +735,7 @@ func TestDistributionAPI_LogsCFRayID(t *testing.T) {
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
+		// nolint: revive // defer
 		defer resp.Body.Close()
 		test.checkContains(buf)
 	}
@@ -857,8 +862,8 @@ func TestRecordLSNMiddleware(t *testing.T) {
 	require.NoError(t, err)
 
 	testDispatcher := func(expectedStatus int) dispatchFunc {
-		return func(ctx *Context, r *http.Request) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return func(*Context, *http.Request) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(expectedStatus)
 			})
 		}

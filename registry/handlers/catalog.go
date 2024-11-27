@@ -29,13 +29,13 @@ const (
 	maximumReturnEntriesUpperLimit = 1000
 )
 
-func catalogDispatcher(ctx *Context, r *http.Request) http.Handler {
+func catalogDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	catalogHandler := &catalogHandler{
 		Context: ctx,
 	}
 
 	return handlers.MethodHandler{
-		http.MethodGet: http.HandlerFunc(catalogHandler.GetCatalog),
+		http.MethodGet: http.HandlerFunc(catalogHandler.HandleGetCatalog),
 	}
 }
 
@@ -71,7 +71,7 @@ func dbGetCatalog(ctx context.Context, db datastore.Queryer, filters datastore.F
 	return repos, moreEntries, nil
 }
 
-func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
+func (ch *catalogHandler) HandleGetCatalog(w http.ResponseWriter, r *http.Request) {
 	moreEntries := true
 
 	q := r.URL.Query()

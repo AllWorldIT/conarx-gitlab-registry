@@ -55,7 +55,8 @@ func TestFileHealthCheck(t *testing.T) {
 	)
 
 	healthRegistry := health.NewRegistry()
-	app.RegisterHealthChecks(healthRegistry)
+	err = app.RegisterHealthChecks(healthRegistry)
+	require.NoError(t, err)
 
 	// Wait for health check to happen
 	<-time.After(2 * interval)
@@ -68,7 +69,8 @@ func TestFileHealthCheck(t *testing.T) {
 		t.Fatal(`did not get "file exists" result for health check`)
 	}
 
-	os.Remove(tmpfile.Name())
+	err = os.Remove(tmpfile.Name())
+	require.NoError(t, err)
 
 	<-time.After(2 * interval)
 	if len(healthRegistry.CheckStatus()) != 0 {
@@ -127,7 +129,8 @@ func TestTCPHealthCheck(t *testing.T) {
 	)
 
 	healthRegistry := health.NewRegistry()
-	app.RegisterHealthChecks(healthRegistry)
+	err = app.RegisterHealthChecks(healthRegistry)
+	require.NoError(t, err)
 
 	// Wait for health check to happen
 	<-time.After(2 * interval)
@@ -136,7 +139,8 @@ func TestTCPHealthCheck(t *testing.T) {
 		t.Fatal("expected 0 items in health check results")
 	}
 
-	ln.Close()
+	err = ln.Close()
+	require.NoError(t, err)
 	<-time.After(2 * interval)
 
 	// Health check should now fail
