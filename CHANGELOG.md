@@ -1,3 +1,37 @@
+## [4.14.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.13.0-gitlab...v4.14.0-gitlab) (2024-11-27)
+
+### ✨ Features ✨
+
+* add option to configure TLS ciphers ([38a3e89](https://gitlab.com/gitlab-org/container-registry/commit/38a3e89ad9b984630b7542ae17d918500ec53d73))
+* **bbm:** add timing columns for bbm start and finish ([6ed457d](https://gitlab.com/gitlab-org/container-registry/commit/6ed457da6338c42c3e485c8970808c7124b7e617))
+* change DB LB replica list update log entry fields ([ff6af11](https://gitlab.com/gitlab-org/container-registry/commit/ff6af11db5ff2bb5a1d003fc7d6a93210a069be2))
+* implement tag protection feature ([e596e75](https://gitlab.com/gitlab-org/container-registry/commit/e596e75d029554735ebde35acba83e4660d2f04a))
+
+### 🐛 Bug Fixes 🐛
+
+* **bbm:** do not terminate run on transient failures ([0fa69cf](https://gitlab.com/gitlab-org/container-registry/commit/0fa69cfddb9b31af79d5843ccc6358c185183b53))
+* **bbm:** record retrieval for ranges below batch size ([ac86e54](https://gitlab.com/gitlab-org/container-registry/commit/ac86e549722027c71d01c06fc8d07feb06a7b197))
+* consolidate log key for DB replica address ([5edfe6c](https://gitlab.com/gitlab-org/container-registry/commit/5edfe6c55eedd12fb4610f9a957fc4f923c70143))
+* **gc/worker:** ignore conn closed error ([e2b1390](https://gitlab.com/gitlab-org/container-registry/commit/e2b13909d4763694b1d10c58b5aaa032592a5e21))
+* implement proper shutdown of container-registry healthchecks ([1522302](https://gitlab.com/gitlab-org/container-registry/commit/1522302a24fef77c0c41b50439a1bbd76b163890))
+* make http check send a custom user agent ([0ac5855](https://gitlab.com/gitlab-org/container-registry/commit/0ac585512bdc214e5056b57e8fea74260b5cad99))
+* minor security issues/bugs pointed out by gosec linter ([2636f56](https://gitlab.com/gitlab-org/container-registry/commit/2636f56715c3502f00b4ca292f78db459ae2e983))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.47.0 ([782eb9d](https://gitlab.com/gitlab-org/container-registry/commit/782eb9d2ec40e8d33378d0ebc61a31ba579ed29a))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.17.1 ([7a5ae49](https://gitlab.com/gitlab-org/container-registry/commit/7a5ae49aef600355fd96a6b53f092b6a5de35513))
+* **deps:** update module github.com/stretchr/testify to v1.10.0 ([aa1ca72](https://gitlab.com/gitlab-org/container-registry/commit/aa1ca72ea9f1265af9fed5e43d2d613ecd198c56))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.113.0 ([6e88fbe](https://gitlab.com/gitlab-org/container-registry/commit/6e88fbed527cb285e045032b5afe5c19bcbfc48d))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.114.0 ([cc8343c](https://gitlab.com/gitlab-org/container-registry/commit/cc8343cd8dbb096f2e618cf4941d1d1fb0798c4f))
+* **deps:** update module golang.org/x/crypto to v0.29.0 ([334149a](https://gitlab.com/gitlab-org/container-registry/commit/334149aeebd6d520ee3add4b40139ea81e86d28f))
+* **deps:** update module golang.org/x/oauth2 to v0.24.0 ([b3c6a75](https://gitlab.com/gitlab-org/container-registry/commit/b3c6a75800f8831ba74682f0a0d128f3a9bebdfb))
+* **deps:** update module golang.org/x/time to v0.8.0 ([4909774](https://gitlab.com/gitlab-org/container-registry/commit/49097748ba128278cd967179a4c3cdc9b08c3a39))
+* **deps:** update module google.golang.org/api to v0.205.0 ([a99cae0](https://gitlab.com/gitlab-org/container-registry/commit/a99cae063f8b175d75d1e10820b8df37b21b9b0f))
+* **deps:** update module google.golang.org/api to v0.206.0 ([3c02bc0](https://gitlab.com/gitlab-org/container-registry/commit/3c02bc0622c373a779f9374227c7e4dd0a69a27e))
+* **deps:** update module google.golang.org/api to v0.207.0 ([8873aa0](https://gitlab.com/gitlab-org/container-registry/commit/8873aa0c09f8299bcfa89bcb92abad56d1c50282))
+* **deps:** update module google.golang.org/api to v0.209.0 ([dd0af23](https://gitlab.com/gitlab-org/container-registry/commit/dd0af2396b236960675418c2b00335f2a6c3d88c))
+
 ## [4.13.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.12.0-gitlab...v4.13.0-gitlab) (2024-11-04)
 
 ### ✨ Features ✨
