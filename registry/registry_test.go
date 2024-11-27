@@ -110,6 +110,7 @@ func TestGracefulShutdown(t *testing.T) {
 		}()
 
 		timer := time.NewTimer(3 * time.Second)
+		// nolint: revive // defer
 		defer timer.Stop()
 		select {
 		case err = <-errChan:
@@ -193,7 +194,7 @@ func requireEnvNotSet(t *testing.T, names ...string) {
 	}
 }
 
-//nolint:unparam //(`name` always receives `"GITLAB_CONTINUOUS_PROFILING"`)
+// nolint:unparam //(`name` always receives `"GITLAB_CONTINUOUS_PROFILING"`)
 func requireEnvSet(t *testing.T, name, value string) {
 	t.Helper()
 
@@ -291,10 +292,10 @@ func freeLnAddr(t *testing.T) net.Addr {
 	return addr
 }
 
-func assertMonitoringResponse(t *testing.T, scheme, addr, path string, expectedStatus int) {
+func assertMonitoringResponse(t *testing.T, scheme, addr, targetPath string, expectedStatus int) {
 	t.Helper()
 
-	u := url.URL{Scheme: scheme, Host: addr, Path: path}
+	u := url.URL{Scheme: scheme, Host: addr, Path: targetPath}
 
 	c := &http.Client{Timeout: 100 * time.Millisecond, Transport: http.DefaultTransport.(*http.Transport).Clone()}
 	if scheme == "https" {
@@ -305,7 +306,7 @@ func assertMonitoringResponse(t *testing.T, scheme, addr, path string, expectedS
 	req, err := c.Get(u.String())
 	require.NoError(t, err)
 	defer req.Body.Close()
-	require.Equal(t, expectedStatus, req.StatusCode, path)
+	require.Equal(t, expectedStatus, req.StatusCode, targetPath)
 }
 
 func TestConfigureMonitoring(t *testing.T) {
@@ -587,9 +588,9 @@ func buildRegistryTLSConfig(t *testing.T, name string, cipherSuites []string) *r
 
 	privBytes, err := x509.MarshalPKCS8PrivateKey(rsaKey)
 	require.NoError(t, err, "unable to marshal private key")
-	pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
+	err = pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
 	require.NoError(t, err, "failed to write data to key.pem")
-	keyOut.Close()
+	err = keyOut.Close()
 	require.NoErrorf(t, err, "error closing %s", keyPath)
 
 	tlsCert := tls.Certificate{
@@ -700,7 +701,7 @@ func TestRegistryUnsupportedCipherSuite(t *testing.T) {
 
 	resp, err := client.Get(fmt.Sprintf("https://%s/v2/", registry.config.HTTP.Addr))
 	if err == nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 	require.Error(t, err)
 	require.ErrorContains(t, err, "handshake failure")

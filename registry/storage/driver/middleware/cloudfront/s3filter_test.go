@@ -35,7 +35,7 @@ func (m mockIPRangeHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
-	//nolint: revive // unhandled-error
+	// nolint: revive // unhandled-error
 	w.Write(bytes)
 }
 

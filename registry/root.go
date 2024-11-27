@@ -212,7 +212,7 @@ var DBCmd = &cobra.Command{
 	Use:   "database",
 	Short: "Manages the registry metadata database",
 	Long:  "Manages the registry metadata database",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		return cmd.Usage()
 	},
 }

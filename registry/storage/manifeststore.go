@@ -99,7 +99,7 @@ func (ms *manifestStore) Get(ctx context.Context, dgst digest.Digest, _ ...distr
 
 			// First see if it looks like an image index
 			res, err := ms.manifestListHandler.Unmarshal(ctx, dgst, content)
-			//nolint: revive // unchecked-type-assertion
+			// nolint: revive // unchecked-type-assertion
 			resIndex := res.(*manifestlist.DeserializedManifestList)
 			if err == nil && resIndex.Manifests != nil {
 				return resIndex, nil

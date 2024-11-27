@@ -20,7 +20,7 @@ var (
 
 type node interface {
 	name() string
-	//nolint: revive // import-shadowing, unfortunate name, but too much work to change it
+	// nolint: revive // import-shadowing, unfortunate name, but too much work to change it
 	path() string
 	isdir() bool
 	modtime() time.Time

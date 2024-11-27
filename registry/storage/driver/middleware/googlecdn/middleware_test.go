@@ -18,7 +18,7 @@ func createTmpKeyFile(t *testing.T) *os.File {
 	f, err := os.CreateTemp("", "")
 	require.NoError(t, err)
 
-	//nolint: revive // unhandled-error
+	// nolint: revive // unhandled-error
 	t.Cleanup(func() { os.Remove(f.Name()) })
 
 	key := `c29tZS1zZWNyZXQ=`

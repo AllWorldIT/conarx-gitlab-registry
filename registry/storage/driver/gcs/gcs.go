@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"context"
 
-	//nolint: revive,gosec // imports-blocklist
+	// nolint: revive,gosec // imports-blocklist
 	"crypto/md5"
 	"encoding/json"
 	"errors"
@@ -667,7 +667,7 @@ func retry(req request) error {
 			metrics.StorageRatelimit()
 		}
 
-		//nolint:gosec // this is just a random number for rety backoff
+		// nolint:gosec // this is just a random number for rety backoff
 		time.Sleep(backoff - time.Second + (time.Duration(rand.Int31n(1000)) * time.Millisecond))
 		if i <= 4 {
 			backoff *= 2

@@ -26,7 +26,7 @@ func (m mockIPRangeHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
-	//nolint: revive // unhandled-error
+	// nolint: revive // unhandled-error
 	w.Write(bytes)
 }
 
@@ -148,7 +148,7 @@ func TestParsing(t *testing.T) {
 	 }`
 	rawMockHandler := http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
-			//nolint: revive // unhandled-error
+			// nolint: revive // unhandled-error
 			w.Write([]byte(data))
 		},
 	)
@@ -174,7 +174,7 @@ func TestUpdateCalledRegularly(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(
 		func(rw http.ResponseWriter, _ *http.Request) {
 			updateCount++
-			//nolint: revive // unhandled-error
+			// nolint: revive // unhandled-error
 			rw.Write([]byte("ok"))
 		},
 	))

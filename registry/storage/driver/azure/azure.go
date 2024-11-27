@@ -234,7 +234,7 @@ func (d *driver) Reader(_ context.Context, path string, offset int64) (io.ReadCl
 
 	resp, err := blobRef.GetRange(&azure.GetBlobRangeOptions{
 		Range: &azure.BlobRange{
-			//nolint: gosec // offset is always non-negative, there will be no overflow
+			// nolint: gosec // offset is always non-negative, there will be no overflow
 			Start: uint64(offset),
 			End:   0,
 		},

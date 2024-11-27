@@ -1574,10 +1574,10 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 	require.NoError(t, err)
 
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 
 	// generate one full access auth actionsToken for all tests
-	actionsToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	actionsToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	tt := []struct {
 		name               string
@@ -1637,7 +1637,7 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
-			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 			// create and execute test request
 			u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, test.queryParams)
@@ -1647,7 +1647,7 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthToken(req, actionsToken)
+			req = tokenProvider.requestWithAuthToken(req, actionsToken)
 
 			// make request
 			resp, err := http.DefaultClient.Do(req)
@@ -1685,9 +1685,9 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 	require.NoError(t, err)
 
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 	// generate one full access auth actionsToken for all tests
-	actionsToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	actionsToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	notifCfg := configuration.Notifications{
 		FanoutTimeout: 3 * time.Second,
@@ -1783,7 +1783,7 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
-			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps())}
+			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps())}
 			if test.notificationEnabled {
 				opts = append(opts, withWebhookNotifications(notifCfg))
 			}
@@ -1797,7 +1797,7 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthToken(req, actionsToken)
+			req = tokenProvider.requestWithAuthToken(req, actionsToken)
 
 			// execute request
 			resp, err := http.DefaultClient.Do(req)
@@ -1856,11 +1856,11 @@ func TestGitlabAPI_RenameRepository_WithoutRedis(t *testing.T) {
 
 func TestGitlabAPI_RenameRepository_Namespace_Empty(t *testing.T) {
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 
 	// config/setup to use token based
 	// authorization for all proceeding requests
-	env := newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	env := newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 
@@ -1875,7 +1875,7 @@ func TestGitlabAPI_RenameRepository_Namespace_Empty(t *testing.T) {
 	require.NoError(t, err)
 
 	// attach authourization header to request
-	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	req = tokenProvider.requestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -1900,11 +1900,11 @@ func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagname))
 
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 
 	// override config/setup to use token based
 	// authorization for all proceeding requests
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// rename a non existing path (i.e. a path with no associated repositories or sub repositories)
 	// under the seeded namespace "foo/bar"
@@ -1919,7 +1919,7 @@ func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
 	require.NoError(t, err)
 
 	// attach authourization header to request
-	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	req = tokenProvider.requestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -1948,8 +1948,8 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
 	// override registry config/setup to use token based authorization for all proceeding requests
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"true"}})
@@ -1957,7 +1957,7 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
+	fiirstReq = tokenProvider.requestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "foo" in "foo/foo" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"true"}})
@@ -1965,7 +1965,7 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
+	secondReq = tokenProvider.requestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -2007,8 +2007,8 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
 	// override registry config/setup to use token based authorization for all proceeding requests
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"true"}})
@@ -2016,7 +2016,7 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
+	fiirstReq = tokenProvider.requestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "zag" in "foo/bar/zag" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"true"}})
@@ -2024,7 +2024,7 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
+	secondReq = tokenProvider.requestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -2071,8 +2071,8 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
 	// override registry config/setup to use token based authorization for all proceeding requests
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"false"}})
@@ -2080,7 +2080,7 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
+	fiirstReq = tokenProvider.requestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "foo" in "foo/foo" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"false"}})
@@ -2088,7 +2088,7 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
+	secondReq = tokenProvider.requestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -2125,8 +2125,8 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 	seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 	// override registry config/setup to use token based authorization for all proceeding requests
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// create and execute test request
 	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, url.Values{"dry_run": []string{"false"}})
@@ -2136,7 +2136,7 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	// attach authourization header to request
-	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	req = tokenProvider.requestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2156,14 +2156,14 @@ func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
 	t.Cleanup(env.Shutdown)
 
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 
 	// seed repo
 	seedRandomSchema2Manifest(t, env, baseRepoName.Name(), putByTag("latest"))
 
 	// override test config/setup to use token based authorization for all proceeding requests
 	srv := testutil.RedisServer(t)
-	env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	requestBody := []byte(`{ "name" : "not-bar" }`)
 
@@ -2197,7 +2197,7 @@ func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthActions(req, test.tokenActions)
+			req = tokenProvider.requestWithAuthActions(req, test.tokenActions)
 
 			// make request
 			resp, err := http.DefaultClient.Do(req)
@@ -2217,7 +2217,7 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 	require.NoError(t, err)
 	newNamespace := "foo/foo"
 
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 	notifCfg := configuration.Notifications{
 		FanoutTimeout: 3 * time.Second,
 		Endpoints: []configuration.Endpoint{
@@ -2316,7 +2316,7 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
-			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps())}
+			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps())}
 			if test.notificationEnabled {
 				opts = append(opts, withWebhookNotifications(notifCfg))
 			}
@@ -2330,7 +2330,7 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthActions(req, test.tokenActions)
+			req = tokenProvider.requestWithAuthActions(req, test.tokenActions)
 
 			// make request
 			resp, err := http.DefaultClient.Do(req)
@@ -2379,7 +2379,7 @@ func TestGitlabAPI_404WithDatabaseDisabled(t *testing.T) {
 	for _, u := range urls {
 		resp, err := http.Get(u)
 		require.NoError(t, err)
-		//nolint: revive // defer
+		// nolint: revive // defer
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
 		require.Equal(t, strings.TrimPrefix(version.Version, "v"), resp.Header.Get("Gitlab-Container-Registry-Version"))

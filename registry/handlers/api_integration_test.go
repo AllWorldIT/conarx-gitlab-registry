@@ -2240,7 +2240,7 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
 	// Generate an Auth token with push and pull access to the base repository "foo/bar"
-	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
+	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
 
 	// Create and execute API request to start blob upload (while project lease is in effect for "foo/bar")
 	req := newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(testToken))
@@ -2290,8 +2290,8 @@ func TestExistingRenameLease_Prevents_Layer_Delete(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repository.Name(), 1*time.Hour)
 
-	// Generate an Auth testToken with delete access to the base repository "foo/bar"
-	testToken := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth token with delete access to the base repository "foo/bar"
+	testToken := tokenProvider.tokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request to delete a blob (while project lease is in effect for "foo/bar")
 	ref, err := reference.WithDigest(repository, args.layerDigest)
@@ -2330,8 +2330,8 @@ func TestExistingRenameLease_Prevents_Manifest_Push(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth testToken with push and pull access to the base repository "foo/bar"
-	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth token with push and pull access to the base repository "foo/bar"
+	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request upload manifest (while project lease is in effect for "foo/bar")
 	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
@@ -2365,8 +2365,8 @@ func TestExistingRenameLeaseExpires_Eventually_Allows_Manifest_Push(t *testing.T
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth testToken with push and pull access to the base repository "foo/bar"
-	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth token with push and pull access to the base repository "foo/bar"
+	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request upload a manifest (while project lease is in effect for "foo/bar")
 	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
@@ -2409,8 +2409,8 @@ func TestExistingRenameLease_Prevents_Manifest_Delete(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth testToken with delete access to the base repository "foo/bar"
-	testToken := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth token with delete access to the base repository "foo/bar"
+	testToken := tokenProvider.tokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request delete a manifest (while project lease is in effect for "foo/bar")
 	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
@@ -2446,8 +2446,8 @@ func TestExistingRenameLease_Prevents_Tag_Delete(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth testToken with delete access to the base repository "foo/bar"
-	testToken := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth token with delete access to the base repository "foo/bar"
+	testToken := tokenProvider.tokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request to delete tag (while project lease is in effect for "foo/bar")
 	ref, err := reference.WithTag(repository, "latest")
@@ -2488,8 +2488,8 @@ func TestExistingRenameLease_Allows_Reads(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth testToken with full access to the base repository "foo/bar"
-	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth token with full access to the base repository "foo/bar"
+	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// try reading from repository ongoing rename
 	assertManifestGetByDigestResponse(t, env, repository.Name(), deserializedManifest, http.StatusOK, witAuthToken(testToken))
@@ -2510,9 +2510,9 @@ func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
 	createNamedRepoWithBlob(t, env, repoName)
 
 	// create a token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 	// Generate an Auth token with full access to the base repository "foo/bar"
-	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
+	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
 
 	tt := []struct {
 		name                 string
@@ -2578,7 +2578,7 @@ func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
 
 			// Use token based authorization for all proceeding requests.
 			// Token based authorization is required for checking for an ongoing rename during push & delete operations.
-			env = newTestEnv(t, append(opts, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))...)
+			env = newTestEnv(t, append(opts, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))...)
 
 			// Shutdown redis cache before making a request
 			if test.redisEnabled && test.redisUnReachable {
@@ -2597,15 +2597,15 @@ func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
 	t.Cleanup(env.Shutdown)
 
 	// Set up authentication provider and test environment with delete permissions
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// Create test repository and image tagged `latest`.
 	tag := "latest"
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
 
-	pushToken := tokenProvider.TokenWithActions(fullAccessToken(imageName.Name()))
+	pushToken := tokenProvider.tokenWithActions(fullAccessToken(imageName.Name()))
 	seedRandomSchema2Manifest(t, env, imageName.Name(), putByTag(tag), withAuthToken(pushToken))
 	tagRef, err := reference.WithTag(imageName, tag)
 	require.NoError(t, err)
@@ -2685,7 +2685,7 @@ func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
 			// Send delete request and validate response based on expected status and error codes
 			req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
 			require.NoError(t, err)
-			req = tokenProvider.RequestWithAuthActions(req, tokenActions)
+			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
@@ -2733,8 +2733,8 @@ func TestManifestAPI_Delete_ProtectedTags_MultipleRepositories(t *testing.T) {
 	require.NoError(t, err)
 
 	// Prepare auth token and request
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	tokenActions := []*token.ResourceActions{
 		{
@@ -2764,7 +2764,7 @@ func TestManifestAPI_Delete_ProtectedTags_MultipleRepositories(t *testing.T) {
 
 	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
 	require.NoError(t, err)
-	req = tokenProvider.RequestWithAuthActions(req, tokenActions)
+	req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 	// Attempt to delete protected tag and ensure it fails with the proper status and error code
 	resp, err := http.DefaultClient.Do(req)
@@ -2782,13 +2782,13 @@ func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
 	t.Cleanup(env.Shutdown)
 
 	// Set up authentication provider and test environment with delete permissions
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// Create test repository and image
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
-	pushToken := tokenProvider.TokenWithActions(fullAccessToken(imageName.Name()))
+	pushToken := tokenProvider.tokenWithActions(fullAccessToken(imageName.Name()))
 	deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), putByDigest, withAuthToken(pushToken))
 	manifestDigestURL := buildManifestDigestURL(t, env, imageName.Name(), deserializedManifest)
 
@@ -2830,7 +2830,7 @@ func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
 			// Send delete request and validate response based on expected status and error codes
 			req, err := http.NewRequest(http.MethodDelete, manifestDigestURL, nil)
 			require.NoError(t, err)
-			req = tokenProvider.RequestWithAuthActions(req, tokenActions)
+			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
@@ -2858,8 +2858,8 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up authentication provider and test environment
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// Test cases
 	tests := []struct {
@@ -2947,12 +2947,12 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 			}
 
 			// Seed random layers and generate an image manifest
-			deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), withAuthToken(tokenProvider.TokenWithActions(tokenActions)))
+			deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), withAuthToken(tokenProvider.tokenWithActions(tokenActions)))
 
 			// Send manifest push request and ensure it responds as expected
 			manifestURL := buildManifestTagURL(t, env, imageName.Name(), tt.tag)
 			req := putManifestRequest(t, "", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
-			req = tokenProvider.RequestWithAuthActions(req, tokenActions)
+			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)

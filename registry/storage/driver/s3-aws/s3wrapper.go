@@ -62,7 +62,7 @@ func withExponentialBackoff(maximum int64) wrapperOpt {
 
 	return func(w *s3wrapper) {
 		w.backoff = func() backoff.BackOff {
-			//nolint:gosec // there is no overflow here, max is always positive
+			// nolint:gosec // there is no overflow here, max is always positive
 			return backoff.WithMaxRetries(b, uint64(maximum))
 		}
 	}

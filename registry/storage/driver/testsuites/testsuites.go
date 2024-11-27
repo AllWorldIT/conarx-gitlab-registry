@@ -207,7 +207,7 @@ func (s *DriverSuite) TestValidPaths() {
 
 	for _, filename := range validFiles {
 		err := s.StorageDriver.PutContent(s.ctx, filename, contents)
-		//nolint: revive // defer
+		// nolint: revive // defer
 		defer s.deletePath(s.T(), firstPart(filename))
 		require.NoError(s.T(), err)
 
@@ -260,7 +260,7 @@ func (s *DriverSuite) TestInvalidPaths() {
 		err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 		// only delete if file was successfully written
 		if err == nil {
-			//nolint: revive // defer
+			// nolint: revive // defer
 			defer s.deletePath(s.T(), firstPart(filename))
 		}
 		require.Error(s.T(), err)
@@ -1571,7 +1571,7 @@ func (s *DriverSuite) BenchmarkDelete50Files(b *testing.B) {
 func (s *DriverSuite) benchmarkDelete(b *testing.B, numFiles int64) {
 	for i := 0; i < b.N; i++ {
 		parentDir := randomPath(4, 12)
-		//nolint: revive// defer
+		// nolint: revive// defer
 		defer s.deletePath(b, firstPart(parentDir))
 
 		b.StopTimer()
@@ -1604,7 +1604,7 @@ func (s *DriverSuite) BenchmarkWalkParallelNop500Files(b *testing.B) {
 func (s *DriverSuite) benchmarkWalkParallel(b *testing.B, numFiles int, f storagedriver.WalkFn) {
 	for i := 0; i < b.N; i++ {
 		rootDirectory := "/" + randomFilenameRange(8, 8)
-		//nolint: revive // defer
+		// nolint: revive // defer
 		defer s.deletePath(b, rootDirectory)
 
 		b.StopTimer()
@@ -2156,7 +2156,7 @@ func randomFilename(length int) string {
 
 // randomFilenameRange returns a random file with a length between min and max
 // chars long inclusive.
-func randomFilenameRange(minimum, maximum int) string { //nolint:unparam //(min always receives 8)
+func randomFilenameRange(minimum, maximum int) string { // nolint:unparam //(min always receives 8)
 	/* #nosec G404 */
 	return randomFilename(minimum + (rand.Intn(maximum + 1)))
 }

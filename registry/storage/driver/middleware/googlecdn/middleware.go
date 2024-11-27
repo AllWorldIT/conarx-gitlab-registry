@@ -209,6 +209,6 @@ func (lh *googleCDNStorageMiddleware) URLFor(ctx context.Context, path string, o
 
 // init registers the Google CDN middleware.
 func init() {
-	//nolint: gosec // ignore when backend is already registered
+	// nolint: gosec // ignore when backend is already registered
 	_ = storagemiddleware.Register("googlecdn", newGoogleCDNStorageMiddleware)
 }

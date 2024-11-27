@@ -558,7 +558,7 @@ func TestS3DriverStorageClass(t *testing.T) {
 	}
 	defer rrDriver.Delete(ctx, rrFilename)
 
-	//nolint: revive // unchecked-type-assertion
+	// nolint: revive // unchecked-type-assertion
 	standardDriverUnwrapped := standardDriver.Base.StorageDriver.(*driver)
 	resp, err := standardDriverUnwrapped.S3.GetObjectWithContext(
 		ctx,
@@ -575,7 +575,7 @@ func TestS3DriverStorageClass(t *testing.T) {
 		t.Fatalf("unexpected storage class for standard file: %v", resp.StorageClass)
 	}
 
-	//nolint: revive // unchecked-type-assertion
+	// nolint: revive // unchecked-type-assertion
 	rrDriverUnwrapped := rrDriver.Base.StorageDriver.(*driver)
 	resp, err = rrDriverUnwrapped.S3.GetObjectWithContext(
 		ctx,
@@ -1005,7 +1005,7 @@ func TestS3DriverClientTransport(t *testing.T) {
 				t.Fatalf("failed to create driver: %v", err)
 			}
 
-			//nolint: revive // unchecked-type-assertion
+			// nolint: revive // unchecked-type-assertion
 			s3drv := drv.baseEmbed.Base.StorageDriver.(*driver)
 			s3s, ok := s3drv.S3.s3.(*s3.S3)
 			if !ok {

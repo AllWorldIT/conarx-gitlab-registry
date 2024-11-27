@@ -601,7 +601,7 @@ func newBackoffSink(sink Sink, initialInterval time.Duration, maxRetries int) *b
 	return &backoffSink{
 		doneCh: make(chan struct{}),
 		sink:   sink,
-		//nolint: gosec
+		// nolint: gosec
 		backoff: backoff.WithMaxRetries(b, uint64(maxRetries)),
 	}
 }

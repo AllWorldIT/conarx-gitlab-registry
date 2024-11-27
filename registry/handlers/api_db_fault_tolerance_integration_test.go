@@ -1037,7 +1037,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestDelete(t *testing.T) {
 	assertNoDBConnections(t, env)
 }
 
-//nolint:unparam //(`open` always receives `1`)
+// nolint:unparam //(`open` always receives `1`)
 func assertEventuallyOpenAndInUseDBConnections(t *testing.T, env *testEnv, open, inUse int, deadline time.Duration) {
 	t.Helper()
 	require.Eventually(t, func() bool {

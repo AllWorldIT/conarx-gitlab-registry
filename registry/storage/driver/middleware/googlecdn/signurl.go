@@ -16,7 +16,7 @@ package googlecdn
 
 import (
 	"crypto/hmac"
-	//nolint: gosec,revive // needs investigation
+	// nolint: gosec,revive // needs investigation
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
