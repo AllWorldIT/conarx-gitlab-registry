@@ -87,7 +87,7 @@ func TestBlobDelete(t *testing.T) {
 
 	args := makeBlobArgs(t)
 	env = testBlobAPIImpl(t, env, args)
-	testBlobDelete(t, env, args)
+	testBlobDeleteImpl(t, env, args)
 }
 
 func TestRelativeURL(t *testing.T) {
@@ -296,7 +296,8 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// -----------------------------------------
 	// Push a chunk with unordered content range
 
-	layerFile.Seek(0, io.SeekStart)
+	_, err = layerFile.Seek(0, io.SeekStart)
+	require.NoError(t, err)
 
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
 	resp, _, err = doPushChunk(t, uploadURLBase, layerFile, witContentRangeHeader("8-30"))
@@ -336,7 +337,8 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 
 	// Verify the body
 	verifier := layerDigest.Verifier()
-	io.Copy(verifier, resp.Body)
+	_, err = io.Copy(verifier, resp.Body)
+	require.NoError(t, err)
 
 	if !verifier.Verified() {
 		t.Fatalf("response body did not pass verification")
@@ -401,7 +403,7 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	return env
 }
 
-func testBlobDelete(t *testing.T, env *testEnv, args blobArgs) {
+func testBlobDeleteImpl(t *testing.T, env *testEnv, args blobArgs) {
 	// Upload a layer
 	imageName := args.imageName
 	layerFile := args.layerFile
@@ -458,12 +460,14 @@ func testBlobDelete(t *testing.T, env *testEnv, args blobArgs) {
 
 	// ----------------
 	// Reupload previously deleted blob
-	layerFile.Seek(0, io.SeekStart)
+	_, err = layerFile.Seek(0, io.SeekStart)
+	require.NoError(t, err)
 
 	uploadURLBase, _ := startPushLayer(t, env, imageName)
 	pushLayer(t, env.builder, imageName, layerDigest, uploadURLBase, layerFile)
 
-	layerFile.Seek(0, io.SeekStart)
+	_, err = layerFile.Seek(0, io.SeekStart)
+	require.NoError(t, err)
 	canonicalDigester := digest.Canonical.Digester()
 	if _, err := io.Copy(canonicalDigester.Hash(), layerFile); err != nil {
 		t.Fatalf("error copying to digest: %v", err)
@@ -589,7 +593,7 @@ const (
 	repositoryWithGenericStorageError = "genericstorageerr"
 )
 
-func (factory *storageManifestErrDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
+func (*storageManifestErrDriverFactory) Create(_ map[string]any) (storagedriver.StorageDriver, error) {
 	// Initialize the mock driver
 	errGenericStorage := errors.New("generic storage error")
 	return &mockErrorDriver{
@@ -633,7 +637,7 @@ type mockErrorDriver struct {
 	returnErrs []mockErrorMapping
 }
 
-func (dr *mockErrorDriver) GetContent(ctx context.Context, path string) ([]byte, error) {
+func (dr *mockErrorDriver) GetContent(_ context.Context, path string) ([]byte, error) {
 	for _, returns := range dr.returnErrs {
 		if strings.Contains(path, returns.pathMatch) {
 			return returns.content, returns.err
@@ -928,7 +932,7 @@ func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentIn
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	manifest := &schema2.Manifest{
+	testManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -939,17 +943,17 @@ func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentIn
 	cfgPayload, cfgDesc := schema2Config()
 	uploadURLBase, _ := startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Create and push up 2 random layers to an unrelated repo so that they are
 	// present within the database, but not associated with the manifest's repository.
 	// Then push them to the normal repository with the database disabled.
-	manifest.Layers = make([]distribution.Descriptor, 2)
+	testManifest.Layers = make([]distribution.Descriptor, 2)
 
 	fakeRepoRef, err := reference.WithName("fakerepo")
 	require.NoError(t, err)
 
-	for i := range manifest.Layers {
+	for i := range testManifest.Layers {
 		rs, dgst, size := createRandomSmallLayer()
 
 		// Save the layer content as pushLayer exhausts the io.ReadSeeker
@@ -968,14 +972,14 @@ func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentIn
 		// Enable the database again so that reads first check the database.
 		env.config.Database.Enabled = true
 
-		manifest.Layers[i] = distribution.Descriptor{
+		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: schema2.MediaTypeLayer,
 			Size:      size,
 		}
 	}
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	// Build URLs.
@@ -1402,14 +1406,16 @@ func TestManifestAPI_Put_OCIImageIndexByTagManifestsNotPresentInDatabase(t *test
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinations(t *testing.T) {
 	tt := []struct{ withRedisCache bool }{{withRedisCache: true}, {withRedisCache: false}}
 	for _, test := range tt {
-		testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinations(t, test.withRedisCache)
+		testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinationsImpl(t, test.withRedisCache)
 	}
 }
 
-func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinations(t *testing.T, redisCacheEnabled bool) {
+// nolint: revive // var-naming - I do not see any other way to make this name readable
+func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinationsImpl(t *testing.T, redisCacheEnabled bool) {
 	var opts []configOpt
 
 	if redisCacheEnabled {
@@ -1612,14 +1618,16 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 	}
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombinations(t *testing.T) {
 	tt := []struct{ withRedisCache bool }{{withRedisCache: true}, {withRedisCache: false}}
 	for _, test := range tt {
-		testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombinations(t, test.withRedisCache)
+		testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombinationsImpl(t, test.withRedisCache)
 	}
 }
 
-func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombinations(t *testing.T, redisCacheEnabled bool) {
+// nolint: revive // var-naming - I do not see any other way to make this name readable
+func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombinationsImpl(t *testing.T, redisCacheEnabled bool) {
 	var opts []configOpt
 
 	if redisCacheEnabled {
@@ -1821,18 +1829,18 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 
 // TODO: Misc testing that's not currently covered by TestManifestAPI
 // https://gitlab.com/gitlab-org/container-registry/-/issues/143
-func TestManifestAPI_Get_UnknownSchema(t *testing.T) {}
-func TestManifestAPI_Put_UnknownSchema(t *testing.T) {}
+func TestManifestAPI_Get_UnknownSchema(_ *testing.T) {}
+func TestManifestAPI_Put_UnknownSchema(_ *testing.T) {}
 
-func TestManifestAPI_Get_UnknownMediaType(t *testing.T) {}
-func TestManifestAPI_Put_UnknownMediaType(t *testing.T) {}
+func TestManifestAPI_Get_UnknownMediaType(_ *testing.T) {}
+func TestManifestAPI_Put_UnknownMediaType(_ *testing.T) {}
 
-func TestManifestAPI_Put_ReuseTagManifestToManifestList(t *testing.T)     {}
-func TestManifestAPI_Put_ReuseTagManifestListToManifest(t *testing.T)     {}
-func TestManifestAPI_Put_ReuseTagManifestListToManifestList(t *testing.T) {}
+func TestManifestAPI_Put_ReuseTagManifestToManifestList(_ *testing.T)     {}
+func TestManifestAPI_Put_ReuseTagManifestListToManifest(_ *testing.T)     {}
+func TestManifestAPI_Put_ReuseTagManifestListToManifestList(_ *testing.T) {}
 
-func TestManifestAPI_Put_DigestReadOnly(t *testing.T) {}
-func TestManifestAPI_Put_TagReadOnly(t *testing.T)    {}
+func TestManifestAPI_Put_DigestReadOnly(_ *testing.T) {}
+func TestManifestAPI_Put_TagReadOnly(_ *testing.T)    {}
 
 // TODO: re-enable these tests? https://gitlab.com/gitlab-org/container-registry/-/issues/1395
 // nolint: unused
@@ -2020,7 +2028,7 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	imageName := args.imageName
 	dgst := args.dgst
-	manifest := args.manifest
+	testManifest := args.manifest
 
 	ref, _ := reference.WithDigest(imageName, dgst)
 	manifestDigestURL, _ := env.builder.BuildManifestURL(ref)
@@ -2053,7 +2061,7 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 
 	// --------------------
 	// Re-upload manifest by digest
-	resp = putManifest(t, "putting manifest", manifestDigestURL, args.mediaType, manifest)
+	resp = putManifest(t, "putting manifest", manifestDigestURL, args.mediaType, testManifest)
 	defer resp.Body.Close()
 	checkResponse(t, "putting manifest", resp, http.StatusCreated)
 	checkHeaders(t, resp, http.Header{
@@ -2089,7 +2097,7 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	tag := "atag"
 	tagRef, _ := reference.WithTag(imageName, tag)
 	manifestTagURL, _ := env.builder.BuildManifestURL(tagRef)
-	resp = putManifest(t, "putting manifest by tag", manifestTagURL, args.mediaType, manifest)
+	resp = putManifest(t, "putting manifest by tag", manifestTagURL, args.mediaType, testManifest)
 	defer resp.Body.Close()
 	checkResponse(t, "putting manifest by tag", resp, http.StatusCreated)
 	checkHeaders(t, resp, http.Header{
@@ -2232,10 +2240,10 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
 	// Generate an Auth token with push and pull access to the base repository "foo/bar"
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
+	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
 
 	// Create and execute API request to start blob upload (while project lease is in effect for "foo/bar")
-	req := newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(token))
+	req := newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2245,7 +2253,7 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	releaseProjectLease(t, redisController.Cache, repoName)
 
 	// Start another layer push with the project lease no longer in place for "foo/bar"
-	req = newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(token))
+	req = newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(testToken))
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -2254,7 +2262,7 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	// Create and execute API request to continue with the started push (while a project lease is suddenly in effect for "foo/bar")
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 	args := makeBlobArgs(t)
-	req = newRequest(doPushLayerRequest(t, args.layerDigest, resp.Header.Get("Location"), args.layerFile), witAuthToken(token))
+	req = newRequest(doPushLayerRequest(t, args.layerDigest, resp.Header.Get("Location"), args.layerFile), witAuthToken(testToken))
 	// Send request
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2282,8 +2290,8 @@ func TestExistingRenameLease_Prevents_Layer_Delete(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repository.Name(), 1*time.Hour)
 
-	// Generate an Auth token with delete access to the base repository "foo/bar"
-	token := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth testToken with delete access to the base repository "foo/bar"
+	testToken := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request to delete a blob (while project lease is in effect for "foo/bar")
 	ref, err := reference.WithDigest(repository, args.layerDigest)
@@ -2292,7 +2300,7 @@ func TestExistingRenameLease_Prevents_Layer_Delete(t *testing.T) {
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodDelete, blobDigestURL, nil)
 	require.NoError(t, err)
-	req = newRequest(req, witAuthToken(token))
+	req = newRequest(req, witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2322,12 +2330,12 @@ func TestExistingRenameLease_Prevents_Manifest_Push(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth token with push and pull access to the base repository "foo/bar"
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth testToken with push and pull access to the base repository "foo/bar"
+	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request upload manifest (while project lease is in effect for "foo/bar")
 	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
-	req := newRequest(putManifestRequest(t, "putting manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest), witAuthToken(token))
+	req := newRequest(putManifestRequest(t, "putting manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest), witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2357,12 +2365,12 @@ func TestExistingRenameLeaseExpires_Eventually_Allows_Manifest_Push(t *testing.T
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth token with push and pull access to the base repository "foo/bar"
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth testToken with push and pull access to the base repository "foo/bar"
+	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request upload a manifest (while project lease is in effect for "foo/bar")
 	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
-	req := newRequest(putManifestRequest(t, "putting manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest), witAuthToken(token))
+	req := newRequest(putManifestRequest(t, "putting manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest), witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2401,14 +2409,14 @@ func TestExistingRenameLease_Prevents_Manifest_Delete(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth token with delete access to the base repository "foo/bar"
-	token := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth testToken with delete access to the base repository "foo/bar"
+	testToken := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request delete a manifest (while project lease is in effect for "foo/bar")
 	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
 	req, err := http.NewRequest(http.MethodDelete, manifestDigestURL, nil)
 	require.NoError(t, err)
-	req = newRequest(req, witAuthToken(token))
+	req = newRequest(req, witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2438,8 +2446,8 @@ func TestExistingRenameLease_Prevents_Tag_Delete(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth token with delete access to the base repository "foo/bar"
-	token := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth testToken with delete access to the base repository "foo/bar"
+	testToken := tokenProvider.TokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request to delete tag (while project lease is in effect for "foo/bar")
 	ref, err := reference.WithTag(repository, "latest")
@@ -2448,7 +2456,7 @@ func TestExistingRenameLease_Prevents_Tag_Delete(t *testing.T) {
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
 	require.NoError(t, err)
-	req = newRequest(req, witAuthToken(token))
+	req = newRequest(req, witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2480,15 +2488,15 @@ func TestExistingRenameLease_Allows_Reads(t *testing.T) {
 	// of an existing project lease while avoiding race-conditions/flakiness in the test.
 	acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
 
-	// Generate an Auth token with full access to the base repository "foo/bar"
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
+	// Generate an Auth testToken with full access to the base repository "foo/bar"
+	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// try reading from repository ongoing rename
-	assertManifestGetByDigestResponse(t, env, repository.Name(), deserializedManifest, http.StatusOK, witAuthToken(token))
-	assertManifestGetByTagResponse(t, env, repository.Name(), tag, http.StatusOK, witAuthToken(token))
-	assertManifestHeadByTagResponse(t, env, repository.Name(), tag, http.StatusOK, witAuthToken(token))
-	assertBlobGetResponse(t, env, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(token))
-	assertBlobHeadResponse(t, env, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(token))
+	assertManifestGetByDigestResponse(t, env, repository.Name(), deserializedManifest, http.StatusOK, witAuthToken(testToken))
+	assertManifestGetByTagResponse(t, env, repository.Name(), tag, http.StatusOK, witAuthToken(testToken))
+	assertManifestHeadByTagResponse(t, env, repository.Name(), tag, http.StatusOK, witAuthToken(testToken))
+	assertBlobGetResponse(t, env, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(testToken))
+	assertBlobHeadResponse(t, env, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(testToken))
 }
 
 func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
@@ -2504,7 +2512,7 @@ func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
 	// create a token provider
 	tokenProvider := NewAuthTokenProvider(t)
 	// Generate an Auth token with full access to the base repository "foo/bar"
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
+	testToken := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
 
 	tt := []struct {
 		name                 string
@@ -2578,7 +2586,7 @@ func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
 			}
 			// Try pushing to the repository allegedly undergoing a rename and ensure it is successful.
 			// This signifies that a lease check on the enacted lease is never actioned upon.
-			seedRandomSchema2Manifest(t, env, repoName, putByTag("latest"), withAuthToken(token))
+			seedRandomSchema2Manifest(t, env, repoName, putByTag("latest"), withAuthToken(testToken))
 		})
 	}
 }

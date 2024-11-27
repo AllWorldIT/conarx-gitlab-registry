@@ -132,12 +132,12 @@ var RootCmd = &cobra.Command{
 	Long:          "`registry`",
 	SilenceErrors: true,
 	SilenceUsage:  true,
-	Run: func(cmd *cobra.Command, _ []string) {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		if showVersion {
 			version.PrintVersion()
-			return
+			return nil
 		}
-		_ = cmd.Usage()
+		return cmd.Usage()
 	},
 }
 
