@@ -58,7 +58,7 @@ type repositoryLeaseStore struct {
 }
 
 // NewRepositoryLeaseStore builds a new repositoryLeaseStore.
-func NewRepositoryLeaseStore(opts ...RepositoryLeaseStoreOption) *repositoryLeaseStore {
+func NewRepositoryLeaseStore(opts ...RepositoryLeaseStoreOption) RepositoryLeaseStore {
 	rlStore := &repositoryLeaseStore{cache: &noOpRepositoryLeaseCache{}}
 
 	for _, o := range opts {
@@ -82,23 +82,23 @@ type noOpRepositoryLeaseCache struct{}
 
 // NewNoOpRepositoryLeaseCache creates a new non-operational cache for a repository lease object.
 // This implementation does nothing and returns nothing for all its methods.
-func NewNoOpRepositoryLeaseCache() *noOpRepositoryLeaseCache {
+func NewNoOpRepositoryLeaseCache() RepositoryLeaseCache {
 	return &noOpRepositoryLeaseCache{}
 }
 
-func (n *noOpRepositoryLeaseCache) Get(ctx context.Context, path string, leaseType models.LeaseType) (*models.RepositoryLease, error) {
+func (*noOpRepositoryLeaseCache) Get(_ context.Context, _ string, _ models.LeaseType) (*models.RepositoryLease, error) {
 	return nil, nil
 }
 
-func (n *noOpRepositoryLeaseCache) Set(ctx context.Context, lease *models.RepositoryLease, ttl time.Duration) error {
+func (*noOpRepositoryLeaseCache) Set(_ context.Context, _ *models.RepositoryLease, _ time.Duration) error {
 	return nil
 }
 
-func (n *noOpRepositoryLeaseCache) TTL(ctx context.Context, lease *models.RepositoryLease) (time.Duration, error) {
+func (*noOpRepositoryLeaseCache) TTL(_ context.Context, _ *models.RepositoryLease) (time.Duration, error) {
 	return 0, nil
 }
 
-func (n *noOpRepositoryLeaseCache) Invalidate(ctx context.Context, path string) error {
+func (*noOpRepositoryLeaseCache) Invalidate(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -108,13 +108,13 @@ type centralRepositoryLeaseCache struct {
 }
 
 // NewCentralRepositoryLeaseCache creates an interface for the centralized repository object cache backed by Redis.
-func NewCentralRepositoryLeaseCache(cache *iredis.Cache) *centralRepositoryLeaseCache {
+func NewCentralRepositoryLeaseCache(cache *iredis.Cache) RepositoryLeaseCache {
 	return &centralRepositoryLeaseCache{cache}
 }
 
 // key generates a valid Redis key string for a given repository lease object. The used key format is described in
 // https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
-func (c *centralRepositoryLeaseCache) key(path string) string {
+func (*centralRepositoryLeaseCache) key(path string) string {
 	nsPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()
 	return fmt.Sprintf("registry:api:{repository-lease:%s:%s}", nsPrefix, hex)

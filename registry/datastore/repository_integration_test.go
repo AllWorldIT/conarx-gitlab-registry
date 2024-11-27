@@ -1729,7 +1729,7 @@ func TestRepositoryStore_Size_WithCentralRepositoryCache(t *testing.T) {
 	require.False(t, expectedRepoSizeFromDB.Cached())
 }
 
-func testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testing.T, estimate bool) {
+func testRepositoryStoreSizeWithDescendantsWithCentralRepositoryCacheImpl(t *testing.T, estimate bool) {
 	t.Helper()
 	reloadManifestFixtures(t)
 
@@ -1778,11 +1778,11 @@ func testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testi
 }
 
 func TestRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testing.T) {
-	testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t, false)
+	testRepositoryStoreSizeWithDescendantsWithCentralRepositoryCacheImpl(t, false)
 }
 
 func TestRepositoryStore_EstimatedSizeWithDescendants_WithCentralRepositoryCache(t *testing.T) {
-	testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t, true)
+	testRepositoryStoreSizeWithDescendantsWithCentralRepositoryCacheImpl(t, true)
 }
 
 // This comment describes the repository size calculation in detail, explaining the results of the
@@ -2587,7 +2587,7 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 			name:         "before 1st returns empty list",
 			limit:        1,
 			beforeName:   "1.0.0",
-			expectedTags: []*models.TagDetail{},
+			expectedTags: make([]*models.TagDetail, 0),
 		},
 		{
 			name:         "before nth",

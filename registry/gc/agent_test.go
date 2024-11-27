@@ -158,7 +158,7 @@ func stubBackoff(tb testing.TB, m *mocks.MockBackoff) {
 	tb.Helper()
 
 	bkp := backoffConstructor
-	backoffConstructor = func(initInterval, maxInterval time.Duration) internal.Backoff {
+	backoffConstructor = func(_, _ time.Duration) internal.Backoff {
 		return m
 	}
 	tb.Cleanup(func() { backoffConstructor = bkp })

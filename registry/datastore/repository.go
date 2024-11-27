@@ -136,7 +136,7 @@ type repositoryStore struct {
 }
 
 // NewRepositoryStore builds a new repositoryStore.
-func NewRepositoryStore(db Queryer, opts ...RepositoryStoreOption) *repositoryStore {
+func NewRepositoryStore(db Queryer, opts ...RepositoryStoreOption) RepositoryStore {
 	rStore := &repositoryStore{db: db, cache: &noOpRepositoryCache{}}
 
 	for _, o := range opts {
@@ -234,27 +234,27 @@ type noOpRepositoryCache struct{}
 
 // NewNoOpRepositoryCache creates a new non-operational cache for a repository object.
 // This implementation does nothing and returns nothing for all its methods.
-func NewNoOpRepositoryCache() *noOpRepositoryCache {
+func NewNoOpRepositoryCache() RepositoryCache {
 	return &noOpRepositoryCache{}
 }
 
-func (n *noOpRepositoryCache) Get(context.Context, string) *models.Repository                  { return nil }
-func (n *noOpRepositoryCache) Set(context.Context, *models.Repository)                         {}
-func (n *noOpRepositoryCache) InvalidateSize(context.Context, *models.Repository)              {}
-func (n *noOpRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
-func (n *noOpRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
+func (*noOpRepositoryCache) Get(context.Context, string) *models.Repository                  { return nil }
+func (*noOpRepositoryCache) Set(context.Context, *models.Repository)                         {}
+func (*noOpRepositoryCache) InvalidateSize(context.Context, *models.Repository)              {}
+func (*noOpRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
+func (*noOpRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
 	return false
 }
-func (n *noOpRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
-func (n *noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
+func (*noOpRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
+func (*noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
 	return false, 0
 }
 
-func (n *noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
+func (*noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
-func (n *noOpRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
-func (n *noOpRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
+func (*noOpRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
+func (*noOpRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
 	return "", nil
 }
 
@@ -266,7 +266,7 @@ type singleRepositoryCache struct {
 
 // NewSingleRepositoryCache creates a new local in-memory cache for a single repository object. This implementation is
 // not thread-safe. Deprecated in favor of NewCentralRepositoryCache.
-func NewSingleRepositoryCache() *singleRepositoryCache {
+func NewSingleRepositoryCache() RepositoryCache {
 	return &singleRepositoryCache{}
 }
 
@@ -293,35 +293,35 @@ func (c *singleRepositoryCache) InvalidateSize(_ context.Context, r *models.Repo
 // SizeWithDescendantsTimedOut is a noop. We're phasing out the singleRepositoryCache cache implementation in favor of
 // the centralRepositoryCache one, and the only place where we'll be making use of the related functionality (estimated
 // size), the GitLab V1 API repositories handler, is explicitly making use of the latter.
-func (c *singleRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
+func (*singleRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
 
 // HasSizeWithDescendantsTimedOut is a noop. We're phasing out the singleRepositoryCache cache implementation in favor
 // of the centralRepositoryCache one, and the only place where we'll be making use of the related functionality
 // (estimated size), the GitLab V1 API repositories handler, is explicitly making use of the latter.
-func (c *singleRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
+func (*singleRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
 	return false
 }
 
 // SetSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor of
 // the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
-func (c *singleRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
+func (*singleRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
 
 // GetSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor of
 // the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
-func (c *singleRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
+func (*singleRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
 	return false, 0
 }
 
 // InvalidateRootSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor
 // of the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
-func (c *singleRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
+func (*singleRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
 // SetLSN is a noop as this functionality depends on Redis.
-func (c *singleRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
+func (*singleRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
 
 // GetLSN is a noop as this functionality depends on Redis.
-func (c *singleRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
+func (*singleRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
 	return "", nil
 }
 
@@ -331,13 +331,13 @@ type centralRepositoryCache struct {
 }
 
 // NewCentralRepositoryCache creates an interface for the centralized repository object cache backed by Redis.
-func NewCentralRepositoryCache(cache *iredis.Cache) *centralRepositoryCache {
+func NewCentralRepositoryCache(cache *iredis.Cache) RepositoryCache {
 	return &centralRepositoryCache{cache}
 }
 
 // key generates a valid Redis key string for a given repository object. The used key format is described in
 // https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
-func (c *centralRepositoryCache) key(path string) string {
+func (*centralRepositoryCache) key(path string) string {
 	nsPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()
 	return fmt.Sprintf("registry:db:{repository:%s:%s}", nsPrefix, hex)
@@ -592,6 +592,7 @@ func (s *repositoryStore) FindByPath(ctx context.Context, path string) (*models.
 		return cached, nil
 	}
 
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_by_path")()
 	q := `SELECT
 			id,
@@ -622,6 +623,7 @@ func (s *repositoryStore) FindByPath(ctx context.Context, path string) (*models.
 
 // FindAll finds all repositories.
 func (s *repositoryStore) FindAll(ctx context.Context) (models.Repositories, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_all")()
 	q := `SELECT
 			id,
@@ -648,6 +650,7 @@ func (s *repositoryStore) FindAll(ctx context.Context) (models.Repositories, err
 // lexicographically sorted. These constraints exists to preserve the existing API behavior (when doing a filesystem
 // walk based pagination).
 func (s *repositoryStore) FindAllPaginated(ctx context.Context, filters FilterParams) (models.Repositories, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_all_paginated")()
 	q := `SELECT
 			r.id,
@@ -681,6 +684,7 @@ func (s *repositoryStore) FindAllPaginated(ctx context.Context, filters FilterPa
 
 // FindDescendantsOf finds all descendants of a given repository.
 func (s *repositoryStore) FindDescendantsOf(ctx context.Context, id int64) (models.Repositories, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_descendants_of")()
 	q := `WITH RECURSIVE descendants AS (
 			SELECT
@@ -725,6 +729,7 @@ func (s *repositoryStore) FindDescendantsOf(ctx context.Context, id int64) (mode
 
 // FindAncestorsOf finds all ancestors of a given repository.
 func (s *repositoryStore) FindAncestorsOf(ctx context.Context, id int64) (models.Repositories, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_ancestors_of")()
 	q := `WITH RECURSIVE ancestors AS (
 			SELECT
@@ -769,6 +774,7 @@ func (s *repositoryStore) FindAncestorsOf(ctx context.Context, id int64) (models
 
 // FindSiblingsOf finds all siblings of a given repository.
 func (s *repositoryStore) FindSiblingsOf(ctx context.Context, id int64) (models.Repositories, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_siblings_of")()
 	q := `SELECT
 			siblings.id,
@@ -795,6 +801,7 @@ func (s *repositoryStore) FindSiblingsOf(ctx context.Context, id int64) (models.
 
 // Tags finds all tags of a given repository.
 func (s *repositoryStore) Tags(ctx context.Context, r *models.Repository) (models.Tags, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_tags")()
 	q := `SELECT
 			id,
@@ -823,6 +830,7 @@ func (s *repositoryStore) Tags(ctx context.Context, r *models.Repository) (model
 // `filters.LastEntry`. Finally, tags are lexicographically sorted. These constraints exists to preserve the existing API behavior
 // (when doing a filesystem walk based pagination).
 func (s *repositoryStore) TagsPaginated(ctx context.Context, r *models.Repository, filters FilterParams) (models.Tags, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_tags_paginated")()
 	q := `SELECT
 			id,
@@ -932,7 +940,7 @@ func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *mode
 	var err error
 
 	if len(artifactTypes) > 0 {
-		ats, errInner := s.mediaTypeIds(ctx, artifactTypes)
+		ats, errInner := s.mediaTypeIDs(ctx, artifactTypes)
 		if errInner != nil {
 			return errInner
 		}
@@ -1003,6 +1011,7 @@ func sqlPartialMatch(value string) string {
 // Optionally, it is possible to pass a string to be used as a partial match filter for tag names using `filters.Name` and exact match using
 // `filters.ExactName`. The search is not filtered if both of these values are empty.
 func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_tags_detail_paginated")()
 
 	q, args, err := tagsDetailPaginatedQuery(r, filters)
@@ -1027,7 +1036,7 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 	return tags, nil
 }
 
-func (s *repositoryStore) mediaTypeIds(ctx context.Context, types []string) ([]string, error) {
+func (s *repositoryStore) mediaTypeIDs(ctx context.Context, types []string) ([]string, error) {
 	if len(types) == 0 {
 		return nil, nil
 	}
@@ -1168,9 +1177,8 @@ func getPublishedAtQuery(qb *QueryBuilder, filters FilterParams) error {
 		return qb.WrapIntoSubqueryOf(
 			fmt.Sprintf(`SELECT * FROM (%%s) AS tags ORDER BY tags.%s DESC`, filters.OrderBy),
 		)
-	} else {
-		return qb.Build(f(greaterThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
 	}
+	return qb.Build(f(greaterThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
 }
 
 func getLastEntryQuery(qb *QueryBuilder, filters FilterParams) error {
@@ -1193,12 +1201,11 @@ func getLastEntryQuery(qb *QueryBuilder, filters FilterParams) error {
 			formatTagFilterWithPublishedAt(comparisonOperator, orderDirection),
 			filters.PublishedAt, filters.LastEntry, filters.MaxEntries,
 		)
-	} else {
-		return qb.Build(
-			formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection),
-			filters.LastEntry, filters.MaxEntries,
-		)
 	}
+	return qb.Build(
+		formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection),
+		filters.LastEntry, filters.MaxEntries,
+	)
 }
 
 func getBeforeEntryQuery(qb *QueryBuilder, filters FilterParams) error {
@@ -1273,6 +1280,7 @@ func formatTagFilterWithPublishedAt(comparisonSign string, sortOrder SortOrder) 
 // pagination). Optionally, it is possible to pass a string to be used as a partial match filter for tag names using `filters.Name`.
 // The search is not filtered if this value is an empty string.
 func (s *repositoryStore) HasTagsAfterName(ctx context.Context, r *models.Repository, filters FilterParams) (bool, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_tags_count_after_name")()
 
 	qb := NewQueryBuilder()
@@ -1330,6 +1338,7 @@ func (s *repositoryStore) HasTagsBeforeName(ctx context.Context, r *models.Repos
 		return false, nil
 	}
 
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_tags_count_before_name")()
 
 	qb := NewQueryBuilder()
@@ -1377,6 +1386,7 @@ func (s *repositoryStore) HasTagsBeforeName(ctx context.Context, r *models.Repos
 
 // ManifestTags finds all tags of a given repository manifest.
 func (s *repositoryStore) ManifestTags(ctx context.Context, r *models.Repository, m *models.Manifest) (models.Tags, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_manifest_tags")()
 	q := `SELECT
 			id,
@@ -1403,6 +1413,7 @@ func (s *repositoryStore) ManifestTags(ctx context.Context, r *models.Repository
 
 // Count counts all repositories.
 func (s *repositoryStore) Count(ctx context.Context) (int, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_count")()
 	q := "SELECT COUNT(*) FROM repositories"
 	var count int
@@ -1420,6 +1431,7 @@ func (s *repositoryStore) Count(ctx context.Context) (int, error) {
 // repositories will always be those with a path lexicographically after lastPath. These constraints exists to preserve
 // the existing API behavior (when doing a filesystem walk based pagination).
 func (s *repositoryStore) CountAfterPath(ctx context.Context, path string) (int, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_count_after_path")()
 	q := `SELECT
 			COUNT(*)
@@ -1445,6 +1457,7 @@ func (s *repositoryStore) CountAfterPath(ctx context.Context, path string) (int,
 
 // CountPathSubRepositories counts all sub repositories of a repository path (including the base repository).
 func (s *repositoryStore) CountPathSubRepositories(ctx context.Context, topLevelNamespaceID int64, path string) (int, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_count_sub_repositories")()
 
 	q := "SELECT COUNT(*) FROM repositories WHERE top_level_namespace_id = $1 AND (path = $2 OR path LIKE $3)"
@@ -1458,6 +1471,7 @@ func (s *repositoryStore) CountPathSubRepositories(ctx context.Context, topLevel
 
 // Manifests finds all manifests associated with a repository.
 func (s *repositoryStore) Manifests(ctx context.Context, r *models.Repository) (models.Manifests, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_manifests")()
 	q := `SELECT
 			m.id,
@@ -1496,6 +1510,7 @@ func (s *repositoryStore) Manifests(ctx context.Context, r *models.Repository) (
 
 // FindManifestByDigest finds a manifest by digest within a repository.
 func (s *repositoryStore) FindManifestByDigest(ctx context.Context, r *models.Repository, d digest.Digest) (*models.Manifest, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_manifest_by_digest")()
 
 	dgst, err := NewDigest(d)
@@ -1508,6 +1523,7 @@ func (s *repositoryStore) FindManifestByDigest(ctx context.Context, r *models.Re
 
 // FindManifestByTagName finds a manifest by tag name within a repository.
 func (s *repositoryStore) FindManifestByTagName(ctx context.Context, r *models.Repository, tagName string) (*models.Manifest, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_manifest_by_tag_name")()
 	q := `SELECT
 			m.id,
@@ -1546,6 +1562,7 @@ func (s *repositoryStore) FindManifestByTagName(ctx context.Context, r *models.R
 
 // Blobs finds all blobs associated with the repository.
 func (s *repositoryStore) Blobs(ctx context.Context, r *models.Repository) (models.Blobs, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_blobs")()
 	q := `SELECT
 			mt.media_type,
@@ -1571,6 +1588,7 @@ func (s *repositoryStore) Blobs(ctx context.Context, r *models.Repository) (mode
 
 // FindBlob finds a blob by digest within a repository.
 func (s *repositoryStore) FindBlob(ctx context.Context, r *models.Repository, d digest.Digest) (*models.Blob, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_blob")()
 	q := `SELECT
 			mt.media_type,
@@ -1597,6 +1615,7 @@ func (s *repositoryStore) FindBlob(ctx context.Context, r *models.Repository, d 
 
 // ExistsBlob finds if a blob with a given digest exists within a repository.
 func (s *repositoryStore) ExistsBlob(ctx context.Context, r *models.Repository, d digest.Digest) (bool, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_exists_blob")()
 	q := `SELECT
 			EXISTS (
@@ -1625,6 +1644,7 @@ func (s *repositoryStore) ExistsBlob(ctx context.Context, r *models.Repository, 
 
 // Create saves a new repository.
 func (s *repositoryStore) Create(ctx context.Context, r *models.Repository) error {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_create")()
 
 	q := `INSERT INTO repositories (top_level_namespace_id, name, path, parent_id)
@@ -1644,6 +1664,7 @@ func (s *repositoryStore) Create(ctx context.Context, r *models.Repository) erro
 
 // FindTagByName finds a tag by name within a repository.
 func (s *repositoryStore) FindTagByName(ctx context.Context, r *models.Repository, name string) (*models.Tag, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_tag_by_name")()
 	q := `SELECT
 			id,
@@ -1672,6 +1693,7 @@ func (s *repositoryStore) Size(ctx context.Context, r *models.Repository) (Repos
 	if r.Size != nil {
 		return RepositorySize{bytes: *r.Size}, nil
 	}
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_size")()
 
 	q := `SELECT
@@ -1724,6 +1746,7 @@ func (s *repositoryStore) Size(ctx context.Context, r *models.Repository) (Repos
 // topLevelSizeWithDescendants is an optimization for SizeWithDescendants when the target repository is a top-level
 // repository. This allows using an optimized SQL query for this specific scenario.
 func (s *repositoryStore) topLevelSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_size_with_descendants_top_level")()
 
 	q := `SELECT
@@ -1783,6 +1806,7 @@ func (s *repositoryStore) topLevelSizeWithDescendants(ctx context.Context, r *mo
 // nonTopLevelSizeWithDescendants is an optimization for SizeWithDescendants when the target repository is not a
 // top-level repository. This allows using an optimized SQL query for this specific scenario.
 func (s *repositoryStore) nonTopLevelSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_size_with_descendants")()
 
 	q := `SELECT
@@ -1908,6 +1932,7 @@ func (s *repositoryStore) SizeWithDescendants(ctx context.Context, r *models.Rep
 // estimateTopLevelSizeWithDescendants is a significantly faster alternative to topLevelSizeWithDescendants which does
 // not exclude unreferenced layers. Therefore, the measured size should be considered an estimate.
 func (s *repositoryStore) estimateTopLevelSizeWithDescendants(ctx context.Context, r *models.Repository) (int64, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_size_with_descendants_top_level_estimate")()
 
 	q := `SELECT
@@ -1969,6 +1994,7 @@ func (s *repositoryStore) CreateOrFind(ctx context.Context, r *models.Repository
 		r.NamespaceID = n.ID
 	}
 
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_create_or_find")()
 
 	// First, check if the repository already exists, this avoids incrementing the repositories.id sequence
@@ -2033,6 +2059,7 @@ func (s *repositoryStore) CreateByPath(ctx context.Context, path string, opts ..
 		return nil, fmt.Errorf("finding or creating namespace: %w", err)
 	}
 
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_create_by_path")()
 	r := &models.Repository{NamespaceID: n.ID, Name: repositoryName(path), Path: path}
 
@@ -2062,6 +2089,7 @@ func (s *repositoryStore) CreateOrFindByPath(ctx context.Context, path string, o
 		return nil, fmt.Errorf("finding or creating namespace: %w", err)
 	}
 
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_create_or_find_by_path")()
 	r := &models.Repository{NamespaceID: n.ID, Name: repositoryName(path), Path: path}
 
@@ -2080,6 +2108,7 @@ func (s *repositoryStore) CreateOrFindByPath(ctx context.Context, path string, o
 
 // Update updates an existing repository.
 func (s *repositoryStore) Update(ctx context.Context, r *models.Repository) error {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_update")()
 	q := `UPDATE
 			repositories
@@ -2106,6 +2135,7 @@ func (s *repositoryStore) Update(ctx context.Context, r *models.Repository) erro
 
 // LinkBlob links a blob to a repository. It does nothing if already linked.
 func (s *repositoryStore) LinkBlob(ctx context.Context, r *models.Repository, d digest.Digest) error {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_link_blob")()
 	q := `INSERT INTO repository_blobs (top_level_namespace_id, repository_id, blob_digest)
 			VALUES ($1, $2, decode($3, 'hex'))
@@ -2126,6 +2156,7 @@ func (s *repositoryStore) LinkBlob(ctx context.Context, r *models.Repository, d 
 // UnlinkBlob unlinks a blob from a repository. It does nothing if not linked. A boolean is returned to denote whether
 // the link was deleted or not. This avoids the need for a separate preceding `SELECT` to find if it exists.
 func (s *repositoryStore) UnlinkBlob(ctx context.Context, r *models.Repository, d digest.Digest) (bool, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_unlink_blob")()
 	q := "DELETE FROM repository_blobs WHERE top_level_namespace_id = $1 AND repository_id = $2 AND blob_digest = decode($3, 'hex')"
 
@@ -2149,6 +2180,7 @@ func (s *repositoryStore) UnlinkBlob(ctx context.Context, r *models.Repository, 
 // DeleteTagByName deletes a tag by name within a repository. A boolean is returned to denote whether the tag was
 // deleted or not. This avoids the need for a separate preceding `SELECT` to find if it exists.
 func (s *repositoryStore) DeleteTagByName(ctx context.Context, r *models.Repository, name string) (bool, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_delete_tag_by_name")()
 	q := "DELETE FROM tags WHERE top_level_namespace_id = $1 AND repository_id = $2 AND name = $3"
 
@@ -2171,6 +2203,7 @@ func (s *repositoryStore) DeleteTagByName(ctx context.Context, r *models.Reposit
 // or not. This avoids the need for a separate preceding `SELECT` to find if it exists. A manifest cannot be deleted if
 // it is referenced by a manifest list.
 func (s *repositoryStore) DeleteManifest(ctx context.Context, r *models.Repository, d digest.Digest) (bool, error) {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_delete_manifest")()
 	q := "DELETE FROM manifests WHERE top_level_namespace_id = $1 AND repository_id = $2 AND digest = decode($3, 'hex')"
 
@@ -2210,6 +2243,7 @@ func (s *repositoryStore) FindPaginatedRepositoriesForPath(ctx context.Context, 
 		filters.LastEntry = lexicographicallyBeforePath(r.Path)
 	}
 
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_find_paginated_repositories_for_path")()
 	q := `SELECT  
 			id,
@@ -2242,6 +2276,7 @@ func (s *repositoryStore) FindPaginatedRepositoriesForPath(ctx context.Context, 
 // my-group/my-sub-group/new-repo-name, where the `newPath` argument is `my-group/my-sub-group/new-repo-name`.
 // This does not change the base repository's path however.
 func (s *repositoryStore) RenamePathForSubRepositories(ctx context.Context, topLevelNamespaceID int64, oldPath, newPath string) error {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_rename_sub_repositories_path")()
 
 	q := "UPDATE repositories SET path = REPLACE(path, $1, $2) WHERE top_level_namespace_id = $3 AND path LIKE $4"
@@ -2256,6 +2291,7 @@ func (s *repositoryStore) RenamePathForSubRepositories(ctx context.Context, topL
 // This must always be followed by `RenamePathForSubRepositories` to make sure sub-repositories starting with
 // the `oldPath`of the repository are also updated to start with the `newPath`.
 func (s *repositoryStore) Rename(ctx context.Context, r *models.Repository, newPath, newName string) error {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_rename")()
 
 	q := "UPDATE repositories SET path = $1, name = $2 WHERE top_level_namespace_id = $3 AND path = $4 RETURNING updated_at"
@@ -2275,6 +2311,7 @@ func (s *repositoryStore) Rename(ctx context.Context, r *models.Repository, newP
 // UpdateLastPublishedAt updates the timestamp of the last tag published to the repository. This is the greatest value
 // between the tag created at and published at timestamps.
 func (s *repositoryStore) UpdateLastPublishedAt(ctx context.Context, r *models.Repository, t *models.Tag) error {
+	// nolint: revive // defer
 	defer metrics.InstrumentQuery("repository_update_last_published_at")()
 	q := `UPDATE
 			repositories

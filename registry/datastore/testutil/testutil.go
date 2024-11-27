@@ -417,12 +417,12 @@ func CompareWithGoldenFile(tb testing.TB, path string, actual []byte, create, up
 	require.Equal(tb, string(expected), string(actual), "does not match .golden file")
 }
 
-type redisClient struct {
+type RedisClient struct {
 	redis redis.UniversalClient
 }
 
 // FlushCache Removes all cached data in the cache
-func (r *redisClient) FlushCache() error {
+func (r *RedisClient) FlushCache() error {
 	if err := r.redis.FlushAll(context.Background()).Err(); err != nil {
 		return fmt.Errorf("flushing redis cache: %w", err)
 	}
@@ -430,7 +430,7 @@ func (r *redisClient) FlushCache() error {
 }
 
 // NewRedisClientFromConfig generates a new redis cache client based on configuration settings.
-func NewRedisClientFromConfig(config *configuration.Configuration) (*redisClient, error) {
+func NewRedisClientFromConfig(config *configuration.Configuration) (*RedisClient, error) {
 	opts := &redis.UniversalOptions{
 		Addrs:    strings.Split(config.Redis.Cache.Addr, ","),
 		DB:       config.Redis.Cache.DB,
@@ -444,5 +444,5 @@ func NewRedisClientFromConfig(config *configuration.Configuration) (*redisClient
 	if cmd := redis.Ping(pingCtx); cmd.Err() != nil {
 		return nil, cmd.Err()
 	}
-	return &redisClient{redis}, nil
+	return &RedisClient{redis}, nil
 }

@@ -149,7 +149,7 @@ func injectCorrelationID(ctx context.Context, logger log.Logger) context.Context
 
 func exponentialBackoff(i int) time.Duration {
 	base := 5 * time.Minute
-	max := 24 * time.Hour
+	maximum := 24 * time.Hour
 
 	// Protect against unit underflow.
 	if i < 0 {
@@ -158,7 +158,7 @@ func exponentialBackoff(i int) time.Duration {
 
 	// avoid int64 overflow
 	if i > 24 {
-		return max
+		return maximum
 	}
 
 	backoff := base * time.Duration(1<<uint(i))
@@ -166,8 +166,8 @@ func exponentialBackoff(i int) time.Duration {
 	switch {
 	case backoff < base:
 		return base
-	case backoff > max:
-		return max
+	case backoff > maximum:
+		return maximum
 	default:
 		return backoff
 	}

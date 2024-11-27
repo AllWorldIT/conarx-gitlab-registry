@@ -152,6 +152,7 @@ func (a *Agent) Start(ctx context.Context) error {
 
 			report := metrics.WorkerRun(a.worker.Name())
 			res := a.worker.Run(wCtx)
+			// nolint: revive // max-control-nesting
 			if res.Err != nil {
 				l.WithError(res.Err).Error("failed run")
 
