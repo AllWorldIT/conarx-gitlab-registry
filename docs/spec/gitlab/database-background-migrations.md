@@ -54,7 +54,7 @@ CREATE TABLE batched_background_migrations (
 - `finished_at`: Timestamp when the migration was successfully completed.
 - `min_value`: Starting row `id` eligible for migration.
 - `max_value`: Stopping row `id` eligible for migration. Used to exclude newly introduced records after a given point.
-- `batch_size`: Number of rows that should be migrated per batch.
+- `batch_size`: Number of rows that should be migrated per batch. A good starting point is usually 100,000.
 - `status`: The current state of the migration (see table below).
 - `job_signature_name`: The key that corresponds to a registry function that will be executed for each batch of the migration.
 - `table_name`: The table the migration is run on. Must follow the format `<schema>.<table>`.
@@ -394,6 +394,92 @@ When a new migration is introduced that depends on a background migration that h
 1. **Version downgrade and asynchronous completion**: Downgrade the registry to a version prior to when the background migration was marked as required. This allows the asynchronous process to complete the background migration.
 
 It's worth noting that fresh registry installations can execute and finalize their background migrations as part of the regular migration process using `migrate up`, avoiding these issues.
+
+## Debugging
+
+When a background migration encounters issues or fails, the reason for the failure is typically logged in the registry's log stream. Additional details regarding the failure can also be extracted from the `background_migrations` and/or `background_migration_jobs` tables. These tables provide high-level information about the migration's progress, which can be useful for troubleshooting.
+
+**Timing Information**: The timing columns in both the `background_migrations` and `background_migration_jobs` tables are invaluable for troubleshooting performance and diagnosing issues. Each table includes several timestamp fields—such as `created_at`, `started_at`, `finished_at`, and `updated_at` which can help you track how long the migration or individual jobs have been running. For more details on the meaning of each of these columns in the context of the respective tables, refer to the column definitions in the [migration section](#migrations).
+
+**Job and Migration**: Both tables also include a `status` field that indicates the current state of the migration or job. Checking the `status` field helps you determine whether a migration is still ongoing, completed, or encountered a failure. If the migration is marked as `failed`, you'll need to investigate further using the other available fields to understand why it failed. For a full explanation of the possible status values, refer to the definition of the `status` column in the [migration section](#migrations).
+
+**Failure Diagnostics:** One of the most important fields to check when debugging failed migrations is the `failure_error_code`, which is present in both the `background_migrations` and `background_migration_jobs` tables. This field provides a specific error code that explains the reason for the failure. By checking the `failure_error_code`, you can quickly pinpoint the root cause of a failure. For example, if the error code is `1`, this indicates that there is an issue with the table definition, whereas `4` would suggest that the job has retried too many times without success, requiring manual intervention or adjustment of retry settings. All possible error codes are detailed in the [migration section's](#migrations) definition of the `failure_error_code` column.
+
+**Attempt and Batch Information**: The `attempts` field in the `background_migration_jobs` table tracks how many times a job has been retried. If a job is repeatedly failing and retrying, it may indicate an underlying issue with the data, the migration logic, or the system configuration. By examining the number of attempts, you can determine if the failure is due to repeated retries and decide whether to adjust the migration parameters, such as retry limits, batch size, or job logic. 
+Additionally, the `min_value` and `max_value` fields in both the `background_migrations` and `background_migration_jobs` tables specify the range of records being processed by the migration or each job. If a migration fails during a specific range of records, these values can help you identify the problematic data. If multiple jobs fail in the same record range, this could indicate a data issue or a problem with the specific batch that needs to be addressed.
+
+By carefully reviewing the `status`, timing, `failure_error_code`, `attempts`, and batch range fields, you can gather crucial insights into why a migration or job has failed and make informed decisions on how to resolve the issue, whether that involves adjusting batch sizes, correcting table or column references, or addressing any underlying data issues.
+
+## Performance Testing Guide
+
+When introducing new background migrations, it’s essential to assess how they will perform on a production-scale database. This ensures that the migration process runs efficiently and does not introduce any unforeseen bottlenecks or performance issues. The following guide will take you through the process of testing your background migration on a database clone, gathering performance data, and preparing a detailed report.
+
+Before running a background migration on a live production/staging database, it’s critical to test the migration in a controlled environment. To do this you will need to:
+
+1. Procure a clone of the production registry Database Lab Instance (`gitlab-production-registry`) database in [postgres.ai](https://console.postgres.ai/gitlab/gitlab-production-registry/instances). Once Procured take note of your chosen `username` `password` and the SSH command to connect your local port to the database instance.
+    - If you are following this process for the first time, you may need to request the necessary access permissions to clone the database and connect to it from your local setup. To obtain the correct access, follow the instructions in the [Database Lab Access documentation](https://docs.gitlab.com/ee/development/database/database_lab.html#access-the-console-with-psql). You'll need to create an access request similar to the example provided here: [Example Access Request](https://gitlab.com/gitlab-com/team-member-epics/access-requests/-/issues/32379).
+
+1. Start up a local port forwarding connection to the cloned Postgres instance from your local. The specific command to run will have been issued to you in 1 (after cloning the database in postgres.ai) and should look something like: `ssh -NTML 6000:localhost:6000 lab-registry-01-db-db-lab.c.gitlab-db-lab.internal`.
+
+1. Build the registry with the background migration(s) you want to test. You can run `make bin/registry` from the root of the container-registry repository branch that contains your change to build the binary.
+
+1. Edit your `./config/filesystem.yaml` to be able to connect to the cloned database using the credentials obtained in 1, the port forwarded-to in 2, and disable unnecessary background processes like online GC:
+
+    ``` yaml
+    database:
+      enabled: true
+      host: localhost
+      port: 6000 # selected port forwarded to postgres instance used in 2.
+      user: "registry" # username of cloned instance obtained in 1.
+      password: "registrypassword" # password of cloned instance obtained in 1.
+      dbname: "gitlabhq_registry_dblab"
+      sslmode: "disable"
+      backgroundmigrations:
+        enabled: true
+        jobinterval: 10s # Set this to the job interval used on Gitlab.com
+    gc:
+        disabled: true  # Disable garbage collection for this test
+    ```
+
+1. Apply any necessary schema changes (e.g., new indexes, tables) `./bin/registry database migrate up ./config/filesystem.yml`.
+
+1. Start the registry and confirm that background migration jobs are running `./bin/registry serve ./config/filesystem.yml`. You should be able to see log entries referencing the background migration runs.
+
+1. Use [`psql`](https://www.postgresql.org/docs/current/app-psql.html) (or any database tool of your choice), to connect to the database and check that the table selected for migration has some processed records as expected.
+
+1. Use [`pg_activity`](https://github.com/dalibo/pg_activity) (or any database tool of your choice) to monitor server activity and SQL queries are expected.
+
+1. Background migrations may take hours or days to complete depending on the batch size, frequency of the job runs, size of the database and queries being executed. While we do not need to wait for the background migration to run to completion we should allow the migration to run for at least 1 hour. This allows some time to gather enough data to estimate how long the full migration would take. After an hour (or more), stop the migration and collect key metrics: 
+    - Total records processed in migrating table.
+    - Total existing records in migrating table.
+    - Number of jobs completed.
+    - Records processed per job (i.e. `batch_size`)
+    - Records migrated per hour.
+    - Extrapolated total migration time if the migration was to run to completion on the migrating table.
+    - Note any errors or potential issues with the migration.
+1. Prepare and add a report (of the format below) as a comment on the MR introducing the changes:
+
+```markdown
+**Migration on {{Table-Name}} Table**
+
+**Run Settings**
+- **Batch size**: X
+- **Job interval**: X seconds
+
+- **Run time**: X hours, XX minutes
+- **Jobs completed**: XXX
+- **Records migrated per job**: XXX,XXX records
+- **Total records migrated**: XX,XXX,XXX records
+- **Migration rate**: XX,XXX,XXXX records/hour
+- **Total records in table**: XXX,XXX,XXX records
+
+**Extrapolated Migration Time**:
+- Estimated time to migrate entire table: XX.X hours (~X days)
+
+**Other Notes**:
+ - Observed errors/issues ...
+ - etc..
+```
 
 ## Out of scope of first iteration
 
