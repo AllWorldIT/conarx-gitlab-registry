@@ -114,10 +114,6 @@ database:
     nameserver: localhost
     port: 8600
     record: db-replica-registry.service.consul
-    recordcheckinterval: 1m
-    disconnecttimeout: 2m
-    maxreplicalagtime: 1m
-    maxreplicalagbytes: 8388608
     replicacheckinterval: 1m
 ```
 
@@ -127,10 +123,6 @@ database:
 | `nameserver`           | No       | The nameserver to use for looking up the DNS record.                                                                                                                                                           | `localhost`      |
 | `port`                 | No       | The port of the nameserver.                                                                                                                                                                                    | `8600`           |
 | `record`               | Yes      | The `SRV` record to look up. This option is required for service discovery to work.                                                                                                                            |                  |
-| `recordcheckinterval`  | No       | The minimum amount of time between checking the DNS record.                                                                                                                                                    | `1m`             |
-| `disconnecttimeout`    | No       | The amount of time after which an old connection is closed, after the list of hosts was updated.                                                                                                               | `2m`             |
-| `maxreplicalagbytes`   | No       | The amount of data (in bytes) a replica is allowed to lag behind before being quarantined.                                                                                                                     | `8388608` (8MiB) |
-| `maxreplicalagtime`    | No       | The maximum amount of time a replica is allowed to lag behind before being quarantined.                                                                                                                        | `1m`             |
 | `replicacheckinterval` | No       | The minimum amount of time between checking the status of a replica.                                                                                                                                           | `1m`             |
 
 We'll refer to each of these configuration parameters and their purpose in the following sections.
@@ -167,11 +159,11 @@ See [RFC 2782](https://datatracker.ietf.org/doc/html/rfc2782) for more details a
 
 To ensure fault tolerance, the Container Registry will:
 
-- Periodically (`recordcheckinterval`) refresh the list of resolved replica addresses asynchronously to maintain up-to-date information;
+- Periodically (`replicacheckinterval`) refresh the list of resolved replica addresses asynchronously to maintain up-to-date information;
 
 - Trigger an immediate refresh of the replica list in case of network/connectivity errors, as these might indicate events such as a cluster failover;
 
-- Gracefully expire open connections (`disconnecttimeout`) if the list of hosts changes, ensuring that stale connections are closed;
+- Gracefully expire open connections if the list of hosts changes, ensuring that stale connections are closed;
 
 - Fallback to the primary server if all replicas are unavailable or unresponsive. This also relates to [Primary Sticking](#primary-sticking).
 
@@ -217,11 +209,13 @@ sequenceDiagram
 
 To avoid stale reads, the Container Registry will:
 
-- After a successful API write request for repository `R`, check the [Log Sequence Number (LSN)](https://www.postgresql.org/docs/14/wal-internals.html) for the Primary ([`pg_current_wal_insert_lsn`](https://www.postgresql.org/docs/14/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)) and record it in Redis, associated with `R` with a TTL*****.
+- After a successful API write request for repository `R`, check the [Log Sequence Number (LSN)](https://www.postgresql.org/docs/14/wal-internals.html) for the Primary ([`pg_current_wal_insert_lsn`](https://www.postgresql.org/docs/14/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)) and conditionally update it in Redis, associated with `R` with a TTL.
 
   The LSN represents the current write-ahead log (WAL) insert location, and can be used to determine if and how far apart primary and replicas are in terms of data replication.
 
   This strategy leverages the fact that the target repository path is part of every write API request's path. Therefore, it's possible to univocally determine the target repository for each write request.
+
+  The comparison and conditional update of LSN records in Redis is done atomically using a Lua script to avoid race conditions. LSNs in PostgreSQL are represented as `X/Y` strings, where `X` is the major part (higher order bits) and `Y` is the minor part (lower order bits) in hexadecimal. For proper comparison, the script converts both the current and new LSNs into 64-bit numeric values before comparing them, and only updates if the new LSN is greater or new.
 
 - When serving an API read request for `R`, check the LSN of the candidate replica ([`pg_last_wal_replay_lsn`](https://www.postgresql.org/docs/14/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)) and compare it ([`pg_wal_lsn_diff`](https://www.postgresql.org/docs/14/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)) with the previously recorded primary LSN for `R`. This can be done in a single query against the replica.
 

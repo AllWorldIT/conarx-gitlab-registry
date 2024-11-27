@@ -12,6 +12,8 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	maintestutil "github.com/docker/distribution/testutil"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
@@ -549,7 +551,20 @@ func TestManifestStore_References(t *testing.T) {
 			CreatedAt: testutil.ParseTimestamp(t, "2020-03-02 17:50:26.461745", local),
 		},
 	}
-	require.Equal(t, expected, mm)
+
+	// Loop through each manifest and compare their attributes. We do this as opposed to using require.Equal as that can
+	// lead to flaky time comparisons in CI. By doing this we can rely on Time.Equal which is the best comparison
+	// mechanism as explained in https://pkg.go.dev/time#Time.
+	for i, manifest := range expected {
+		require.Equal(t, manifest.ID, mm[i].ID)
+		require.Equal(t, manifest.NamespaceID, mm[i].NamespaceID)
+		require.Equal(t, manifest.RepositoryID, mm[i].RepositoryID)
+		require.Equal(t, manifest.TotalSize, mm[i].TotalSize)
+		require.Equal(t, manifest.SchemaVersion, mm[i].SchemaVersion)
+		require.Equal(t, manifest.MediaType, mm[i].MediaType)
+		require.Equal(t, manifest.Digest, mm[i].Digest)
+		require.True(t, manifest.CreatedAt.Equal(mm[i].CreatedAt))
+	}
 }
 
 func TestManifestStore_References_None(t *testing.T) {
@@ -986,7 +1001,12 @@ func TestManifestStore_DeleteManifest_FailsIfReferencedInList(t *testing.T) {
 	}
 
 	dgst, err := s.Delete(suite.ctx, m.NamespaceID, m.RepositoryID, m.ID)
-	require.EqualError(t, err, fmt.Errorf("deleting manifest: %w", datastore.ErrManifestReferencedInList).Error())
+	require.ErrorIs(t, err, datastore.ErrManifestReferencedInList)
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, err, &pgErr)
+	require.Equal(t, pgerrcode.ForeignKeyViolation, pgErr.Code)
+	require.Equal(t, "manifest_references", pgErr.TableName)
+	require.ErrorContains(t, err, fmt.Sprintf("deleting manifest ID %d", m.ID))
 	require.Nil(t, dgst)
 
 	// make sure the manifest was not deleted

@@ -47,6 +47,10 @@ type Namespace interface {
 
 	// BlobStatter returns a BlobStatter to control
 	BlobStatter() BlobStatter
+
+	// Lockers returns file lockers used to protect a registry's metadata
+	// from running in the incorrect mode (filesystem vs database).
+	Lockers() Lockers
 }
 
 // RepositoryEnumerator describes an operation to enumerate repositories
@@ -107,4 +111,20 @@ type Repository interface {
 
 	// Tags returns a reference to this repositories tag service
 	Tags(ctx context.Context) TagService
+}
+
+// Lockers returns file lockers used to protect a registry's metadata
+// from running in the incorrect mode (filesystem vs database).
+type Lockers interface {
+	// DBLock creates the database-in-use lockfile in the storage driver
+	DBLock(ctx context.Context) error
+	// DBUnlock removes the database-in-use lockfile in the storage driver
+	DBUnlock(ctx context.Context) error
+	// DBIsLocked returns whether the registry is using the database-in-use lockfile
+	DBIsLocked(ctx context.Context) (bool, error)
+
+	// FSLock creates the filesystem-in-use file in the storage driver
+	FSLock(ctx context.Context) error
+	// FSUnlock removes the filesystem-in-use file in the storage driver
+	FSUnlock(ctx context.Context) error
 }

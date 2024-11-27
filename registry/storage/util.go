@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
@@ -28,12 +29,10 @@ const (
 // the given driver.
 func exists(ctx context.Context, drv driver.StorageDriver, path string) (bool, error) {
 	if _, err := drv.Stat(ctx, path); err != nil {
-		switch err := err.(type) {
-		case driver.PathNotFoundError:
+		if errors.As(err, new(driver.PathNotFoundError)) {
 			return false, nil
-		default:
-			return false, err
 		}
+		return false, err
 	}
 
 	return true, nil

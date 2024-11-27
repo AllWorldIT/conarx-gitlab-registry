@@ -33,6 +33,7 @@ var (
 	errNegativeTestingDelay = errors.New("negative testing delay")
 	errManifestSkip         = errors.New("the manifest is invalid and its (pre)import should be skipped")
 	errTagsTableNotEmpty    = errors.New("tags table is not empty")
+	errDBLocked             = errors.New("database-in-use lockfile exists")
 	commonBarOptions        = []progressbar.Option{
 		progressbar.OptionSetElapsedTime(true),
 		progressbar.OptionShowCount(),
@@ -1314,9 +1315,45 @@ func (imp *Importer) importBlobs(ctx context.Context) error {
 	return nil
 }
 
-func (imp *Importer) importAllRepositories(ctx context.Context) error {
+func (imp *Importer) handleLockers(ctx context.Context, err error) error {
+	if !feature.EnforceLockfiles.Enabled() {
+		return nil
+	}
+
+	if err != nil || imp.dryRun {
+		if err := imp.RestoreLockfiles(ctx); err != nil {
+			return fmt.Errorf("could not restore lockfiles: %w", err)
+		}
+		return nil
+	}
+
+	// Once we have finished importing all tags, we need to release the
+	// `filesystem-in-use` lockfile in order for the registry to boot in
+	// database mode.
+	if err := imp.registry.Lockers().FSUnlock(ctx); err != nil {
+		return fmt.Errorf("could not unlock filesystem-in-use lockfile: %w", err)
+	}
+
+	// Additionally, we need to lock the `database-in-use` lockfile
+	// to prevent the registry starting in filesystem mode again.
+	if err := imp.registry.Lockers().DBLock(ctx); err != nil {
+		return fmt.Errorf("could not lock database-in-use lockfile: %w", err)
+	}
+
+	return nil
+}
+
+func (imp *Importer) importAllRepositories(ctx context.Context) (err error) {
 	var tx Transactor
-	var err error
+	defer func() {
+		if lockErr := imp.handleLockers(ctx, err); lockErr != nil {
+			if err != nil {
+				err = fmt.Errorf("%s: %w", err, lockErr)
+			} else {
+				err = lockErr
+			}
+		}
+	}()
 
 	isTagsTableEmpty, err := imp.isTagsTableEmpty(ctx)
 	if err != nil {
@@ -1515,6 +1552,33 @@ func (imp *Importer) PreImport(ctx context.Context, path string) error {
 
 	t := time.Since(start).Seconds()
 	l.WithFields(log.Fields{"duration_s": t}).Info("pre-import complete")
+
+	return nil
+}
+
+// RestoreLockfiles restores the original state of the lockfiles by unlocking the database
+// and locking the filesystem
+func (imp *Importer) RestoreLockfiles(ctx context.Context) error {
+	dbLocked, err := imp.registry.Lockers().DBIsLocked(ctx)
+	if err != nil {
+		return err
+	}
+
+	// We should not restore lock files if the importer runs with the --dry-run option, and
+	// the database-in-use lockfile already exists since the importer only locks the database
+	// after import completion. This check will help to prevent a scenario
+	// where an admin runs the importer again for whatever reason.
+	if imp.dryRun && dbLocked {
+		return errDBLocked
+	}
+
+	if err := imp.registry.Lockers().DBUnlock(ctx); err != nil {
+		return err
+	}
+
+	if err := imp.registry.Lockers().FSLock(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }

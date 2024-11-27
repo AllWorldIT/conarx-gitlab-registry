@@ -106,20 +106,26 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
 		t.Fatalf("error creating time: %v", err)
 	}
 
-	var prototype Event
-	prototype.Action = EventActionPush
-	prototype.Timestamp = tm
-	prototype.Actor.Name = "test-actor"
-	prototype.Actor.UserType = "test-user-type"
-	prototype.Request.ID = "asdfasdf"
-	prototype.Request.Addr = "client.local"
-	prototype.Request.Host = "registrycluster.local"
-	prototype.Request.Method = "PUT"
-	prototype.Request.UserAgent = "test/0.1"
-	prototype.Source.Addr = "hostname.local:port"
+	prototype := Event{
+		Action:    EventActionPush,
+		Timestamp: tm,
+		Actor: ActorRecord{
+			Name:     "test-actor",
+			UserType: "test-user-type",
+		},
+		Request: RequestRecord{
+			ID:        "asdfasdf",
+			Addr:      "client.local",
+			Host:      "registrycluster.local",
+			Method:    "PUT",
+			UserAgent: "test/0.1",
+		},
+		Source: SourceRecord{
+			Addr: "hostname.local:port",
+		},
+	}
 
-	var manifestPush Event
-	manifestPush = prototype
+	manifestPush := prototype
 	manifestPush.ID = "asdf-asdf-asdf-asdf-0"
 	manifestPush.Target.Digest = "sha256:0123456789abcdef0"
 	manifestPush.Target.Length = 1
@@ -128,8 +134,7 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
 	manifestPush.Target.Repository = "library/test"
 	manifestPush.Target.URL = "http://example.com/v2/library/test/manifests/latest"
 
-	var layerPush0 Event
-	layerPush0 = prototype
+	layerPush0 := prototype
 	layerPush0.ID = "asdf-asdf-asdf-asdf-1"
 	layerPush0.Target.Digest = "sha256:3b3692957d439ac1928219a83fac91e7bf96c153725526874673ae1f2023f8d5"
 	layerPush0.Target.Length = 2
@@ -138,8 +143,7 @@ func TestEventEnvelopeJSONFormat(t *testing.T) {
 	layerPush0.Target.Repository = "library/test"
 	layerPush0.Target.URL = "http://example.com/v2/library/test/manifests/latest"
 
-	var layerPush1 Event
-	layerPush1 = prototype
+	layerPush1 := prototype
 	layerPush1.ID = "asdf-asdf-asdf-asdf-2"
 	layerPush1.Target.Digest = "sha256:3b3692957d439ac1928219a83fac91e7bf96c153725526874673ae1f2023f8d6"
 	layerPush1.Target.Length = 3

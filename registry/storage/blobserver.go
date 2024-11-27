@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -60,8 +61,8 @@ func (bs *blobServer) ServeBlob(ctx context.Context, w http.ResponseWriter, r *h
 		// Currently only the cofigured driver's name can be inferred. Example: using `gcs` storage driver the redirect url's provider
 		// should be either the driver itself (e.g `gcs`) OR a pre-configured redirect middleware (e.g `googlecdn`)
 		redirectURL, err := bs.driver.URLFor(ctx, path, opts)
-		switch err.(type) {
-		case nil:
+		switch {
+		case err == nil:
 			// Redirect to storage URL.
 			http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 			redirect = true
@@ -71,7 +72,7 @@ func (bs *blobServer) ServeBlob(ctx context.Context, w http.ResponseWriter, r *h
 			}
 			return &meta.Blob{StorageBackend: bs.driver.Name(), Redirected: redirect}, nil
 
-		case driver.ErrUnsupportedMethod:
+		case errors.As(err, new(driver.ErrUnsupportedMethod)):
 			// Fallback to serving the content directly.
 		default:
 			// Some unexpected error.

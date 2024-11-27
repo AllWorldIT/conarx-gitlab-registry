@@ -1,3 +1,66 @@
+## [4.13.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.12.0-gitlab...v4.13.0-gitlab) (2024-11-04)
+
+### ✨ Features ✨
+
+* **notifications:** add rename repository event notifier ([11950c1](https://gitlab.com/gitlab-org/container-registry/commit/11950c12c70de8fb4c479cbb365ee2cdf12e9459))
+
+### 🐛 Bug Fixes 🐛
+
+* **bbm:** ensure bbm query comply to pgx simple protocol implementation ([f097738](https://gitlab.com/gitlab-org/container-registry/commit/f09773871f6c01bf62105ea8c4fb6a7397d2eb1a))
+* **bbm:** wait for shutdown signal asynchronously ([4ab392a](https://gitlab.com/gitlab-org/container-registry/commit/4ab392a76369e2bc316893bb8e177b992845d6ad))
+* ensure DB LB replica resolution timeout does not prevent app startup ([6ff9db8](https://gitlab.com/gitlab-org/container-registry/commit/6ff9db8c2318305b1ca1afb5cc5ae6a985e9ab4f))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.46.0 ([c9bb58f](https://gitlab.com/gitlab-org/container-registry/commit/c9bb58fc4b7dc8c38f43e9bde700d24702b84129))
+* **deps:** update module google.golang.org/api to v0.204.0 ([cbb92e5](https://gitlab.com/gitlab-org/container-registry/commit/cbb92e5ffe0a2a903d8230ff9447a3c7a69be436))
+
+## [4.12.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.11.0-gitlab...v4.12.0-gitlab) (2024-10-29)
+
+### ✨ Features ✨
+
+* **api:** log tag override events ([0ffc35a](https://gitlab.com/gitlab-org/container-registry/commit/0ffc35ae727e490f021fd4337abd46b344d9542e))
+* temporarily bump DB load balancing DNS timeout ([d3de2a3](https://gitlab.com/gitlab-org/container-registry/commit/d3de2a31a8245a48017b3bfcfb6738bc5efa9533))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.45.0 ([fc19527](https://gitlab.com/gitlab-org/container-registry/commit/fc1952719cddd0410826242438136ec0996040fb))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.17.0 ([54a31fa](https://gitlab.com/gitlab-org/container-registry/commit/54a31faa1a63f860e4c84b04d1d1f2b77f271e66))
+* **deps:** update module go.uber.org/mock to v0.5.0 ([1b09600](https://gitlab.com/gitlab-org/container-registry/commit/1b096004d5aa4d093967df26dc703b9bfa075ff7))
+* update module github.com/aws/aws-sdk-go to v1.55.5 ([b1565ab](https://gitlab.com/gitlab-org/container-registry/commit/b1565ab45bbbb7f45fcd7d18d8e4def1d3fde72c))
+* update module google.golang.org/api to v0.203.0 ([9d990f8](https://gitlab.com/gitlab-org/container-registry/commit/9d990f8a97a1b35ebafd986c2b01492c2c84a7ee))
+
+## [4.11.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.10.0-gitlab...v4.11.0-gitlab) (2024-10-21)
+
+### ✨ Features ✨
+
+* add filesystem lock file ([dbdd7ba](https://gitlab.com/gitlab-org/container-registry/commit/dbdd7bafebfd8eb2e69a006939ab034b46c5a997))
+* add manifest ID to FK violation error message ([12f7b1a](https://gitlab.com/gitlab-org/container-registry/commit/12f7b1ad00f3e99defb9721e33d0f931216efd79))
+* gracefully handle DLB replica resolve/connection failures ([14aeb62](https://gitlab.com/gitlab-org/container-registry/commit/14aeb62eb4c8f826682a5df56a88d25c4ac35bd6))
+
+### 🐛 Bug Fixes 🐛
+
+* ensure consistency of DLB primary LSN records ([42da9b1](https://gitlab.com/gitlab-org/container-registry/commit/42da9b13765b7860827216b66fedfb7785c5c14e))
+* fix path traversal for inmemory storage ([f8951ec](https://gitlab.com/gitlab-org/container-registry/commit/f8951ec144bd2cab0295a9ba941830767d130814))
+
+### ⚙️ Build ⚙️
+
+* add gdk build dependencies for asdf ([8c93d76](https://gitlab.com/gitlab-org/container-registry/commit/8c93d76a95f90d95390ea80256d73e3a22552bd7))
+* **deps:** update module cloud.google.com/go/storage to v1.44.0 ([637bdbb](https://gitlab.com/gitlab-org/container-registry/commit/637bdbbdcda058d5e6e5572f8262a4b91d9bf2d3))
+* **deps:** update module github.com/getsentry/sentry-go to v0.29.1 ([df968f0](https://gitlab.com/gitlab-org/container-registry/commit/df968f058748d750a0c1605a228b497a3ea8a30e))
+* **deps:** update module github.com/prometheus/client_golang to v1.20.5 ([6d4bd3f](https://gitlab.com/gitlab-org/container-registry/commit/6d4bd3f6311002cf5aa914bda982b2d5295a8a3e))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.6.2 ([d40ec8f](https://gitlab.com/gitlab-org/container-registry/commit/d40ec8f56a3dd1eca5b53a52f9bf9796c088289e))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.7.0 ([500f98b](https://gitlab.com/gitlab-org/container-registry/commit/500f98bcad306718df1018ea9c80915bf3b51c91))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.16.1 ([0405c6e](https://gitlab.com/gitlab-org/container-registry/commit/0405c6e494a8535eaefe24e586cdd84b55b5e8b8))
+* **deps:** update module github.com/shopify/toxiproxy/v2 to v2.11.0 ([0b1621d](https://gitlab.com/gitlab-org/container-registry/commit/0b1621dea4ed56a2b4bdcab36ae9190ac503081b))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.110.0 ([156e38b](https://gitlab.com/gitlab-org/container-registry/commit/156e38bc153d20ea1bfb93aaa17740ea19f121c2))
+* **deps:** update module github.com/xanzy/go-gitlab to v0.112.0 ([9448fc0](https://gitlab.com/gitlab-org/container-registry/commit/9448fc07ff8c9d04966940a39c712001fe5ceb1c))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.21.2 ([ec08f8d](https://gitlab.com/gitlab-org/container-registry/commit/ec08f8d9ebfac50e50e7aa1cc95c91f4630f594c))
+* **deps:** update module golang.org/x/crypto to v0.28.0 ([37f68d6](https://gitlab.com/gitlab-org/container-registry/commit/37f68d612cf41ad4e73e2a67cd7677128b2eda09))
+* **deps:** update module golang.org/x/time to v0.7.0 ([cdc3201](https://gitlab.com/gitlab-org/container-registry/commit/cdc3201a9c4526cc162c6ac4133142c6a028a327))
+* **deps:** update module google.golang.org/api to v0.200.0 ([466e2ea](https://gitlab.com/gitlab-org/container-registry/commit/466e2ead363ada430233192ac9a78a6402995a10))
+* **deps:** update module google.golang.org/api to v0.201.0 ([e83cb2a](https://gitlab.com/gitlab-org/container-registry/commit/e83cb2a0444ced5909cc5e466cd7c9913fd66e28))
+
 ## [4.10.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.9.0-gitlab...v4.10.0-gitlab) (2024-10-3)
 
 

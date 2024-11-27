@@ -34,6 +34,7 @@ type registry struct {
 	manifestsPayloadSizeLimit    int
 	driver                       storagedriver.StorageDriver
 	db                           datastore.LoadBalancer
+	lockers                      *lockers
 	redirectExceptions           []*regexp.Regexp
 }
 
@@ -201,6 +202,10 @@ func NewRegistry(ctx context.Context, driver storagedriver.StorageDriver, option
 		statter:                statter,
 		resumableDigestEnabled: true,
 		driver:                 driver,
+		lockers: &lockers{
+			FS: &FilesystemInUseLocker{Driver: driver},
+			DB: &DatabaseInUseLocker{Driver: driver},
+		},
 	}
 
 	for _, option := range options {
@@ -357,6 +362,11 @@ func (repo *repository) Manifests(ctx context.Context, options ...distribution.M
 	}
 
 	return ms, nil
+}
+
+// Lockers returns the lockers for this registry.
+func (reg *registry) Lockers() distribution.Lockers {
+	return reg.lockers
 }
 
 // Blobs returns an instance of the BlobStore. Instantiation is cheap and

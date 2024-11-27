@@ -16,9 +16,7 @@ import (
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
-	gocache "github.com/eko/gocache/lib/v4/cache"
-	"github.com/eko/gocache/lib/v4/marshaler"
-	libstore "github.com/eko/gocache/lib/v4/store"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
@@ -329,15 +327,12 @@ func (c *singleRepositoryCache) GetLSN(context.Context, *models.Repository) (str
 
 // centralRepositoryCache is the interface for the centralized repository object cache backed by Redis.
 type centralRepositoryCache struct {
-	// cache provides access to the raw gocache interface
-	cache *gocache.Cache[any]
-	// marshaler provides access to a MessagePack backed marshaling interface
-	marshaler *marshaler.Marshaler
+	cache *iredis.Cache
 }
 
 // NewCentralRepositoryCache creates an interface for the centralized repository object cache backed by Redis.
-func NewCentralRepositoryCache(cache *gocache.Cache[any]) *centralRepositoryCache {
-	return &centralRepositoryCache{cache, marshaler.New(cache)}
+func NewCentralRepositoryCache(cache *iredis.Cache) *centralRepositoryCache {
+	return &centralRepositoryCache{cache}
 }
 
 // key generates a valid Redis key string for a given repository object. The used key format is described in
@@ -364,18 +359,12 @@ func (c *centralRepositoryCache) Get(ctx context.Context, path string) *models.R
 	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	tmp, err := c.marshaler.Get(getCtx, c.key(path), new(models.Repository))
-	if err != nil {
+	var repo models.Repository
+	if err := c.cache.UnmarshalGet(getCtx, c.key(path), &repo); err != nil {
 		// a wrapped redis.Nil is returned when the key is not found in Redis
 		if !errors.Is(err, redis.Nil) {
 			l.WithError(err).Error("failed to read repository from cache")
 		}
-		return nil
-	}
-
-	repo, ok := tmp.(*models.Repository)
-	if !ok {
-		l.Warn("failed to unmarshal repository from cache")
 		return nil
 	}
 
@@ -386,7 +375,7 @@ func (c *centralRepositoryCache) Get(ctx context.Context, path string) *models.R
 		return nil
 	}
 
-	return repo
+	return &repo
 }
 
 // Set implements RepositoryCache.
@@ -397,7 +386,7 @@ func (c *centralRepositoryCache) Set(ctx context.Context, r *models.Repository) 
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	if err := c.marshaler.Set(setCtx, c.key(r.Path), r); err != nil {
+	if err := c.cache.MarshalSet(setCtx, c.key(r.Path), r); err != nil {
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to write repository to cache")
 	}
 }
@@ -413,7 +402,7 @@ func (c *centralRepositoryCache) SizeWithDescendantsTimedOut(ctx context.Context
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	if err := c.cache.Set(setCtx, c.sizeWithDescendantsTimedOutKey(r.Path), "true", libstore.WithExpiration(sizeTimedOutKeyTTL)); err != nil {
+	if err := c.cache.Set(setCtx, c.sizeWithDescendantsTimedOutKey(r.Path), "true", iredis.WithTTL(sizeTimedOutKeyTTL)); err != nil {
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to create size with descendants timeout key in cache")
 	}
 }
@@ -443,7 +432,7 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 	defer cancel()
 
 	r.Size = nil
-	if err := c.marshaler.Set(inValCtx, c.key(r.Path), r); err != nil {
+	if err := c.cache.MarshalSet(inValCtx, c.key(r.Path), r); err != nil {
 		detail := "failed to invalidate repository size in cache for repo: " + r.Path
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn(detail)
 		err := fmt.Errorf("%q: %q", detail, err)
@@ -468,7 +457,7 @@ func (c *centralRepositoryCache) SetSizeWithDescendants(ctx context.Context, r *
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	if err := c.marshaler.Set(setCtx, c.sizeWithDescendantsKey(r.Path), size, libstore.WithExpiration(sizeWithDescendantsKeyTTL)); err != nil {
+	if err := c.cache.MarshalSet(setCtx, c.sizeWithDescendantsKey(r.Path), size, iredis.WithTTL(sizeWithDescendantsKeyTTL)); err != nil {
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to create size with descendants key in cache")
 	}
 }
@@ -478,8 +467,8 @@ func (c *centralRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *
 	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
-	v, err := c.marshaler.Get(getCtx, c.sizeWithDescendantsKey(r.Path), new(int64))
-	if err != nil {
+	var size int64
+	if err := c.cache.UnmarshalGet(getCtx, c.sizeWithDescendantsKey(r.Path), &size); err != nil {
 		// a wrapped redis.Nil is returned when the key is not found in Redis
 		if !errors.Is(err, redis.Nil) {
 			log.GetLogger(log.WithContext(ctx)).WithError(err).Error("failed to read size with descendants key from cache")
@@ -487,14 +476,7 @@ func (c *centralRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *
 		return false, 0
 	}
 
-	size, ok := v.(*int64)
-	if !ok {
-		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"type": fmt.Sprintf("%T", v)}).
-			Error("size with descendants cache key has invalid value type")
-		return false, 0
-	}
-
-	return true, *size
+	return true, size
 }
 
 // lsnKey generates a valid Redis key string for the cached primary database Log Sequence Number (LSN) for a
@@ -503,13 +485,52 @@ func (c *centralRepositoryCache) lsnKey(path string) string {
 	return fmt.Sprintf("%s:lsn", c.key(path))
 }
 
+// This Lua script atomically updates a PostgreSQL Log Sequence Number (LSN) stored in Redis. It compares the new LSN
+// with the existing LSN (if any) in Redis and only updates if the new LSN is greater or new.
+// See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-load-balancing.md#primary-sticking
+//
+// Conversion process (based on how PostgreSQL represents LSNs using its XLogRecPtr type):
+// 1. Split the LSN into major and minor parts using string manipulation;
+// 2. Convert the major and minor parts from hexadecimal to decimal;
+// 3. The final numeric representation is calculated as: (major_part * 2^32) + minor_part.
+//
+// Inputs:
+// KEYS[1]  - The Redis key where the LSN is stored.
+// ARGV[1]  - The new LSN to compare, in 'X/Y' format (hexadecimal).
+// ARGV[2]  - The TTL (in seconds) to set on the Redis key if the LSN is updated.
+var lsnUpdateScript = redis.NewScript(`
+local key, new_lsn, ttl = KEYS[1], ARGV[1], tonumber(ARGV[2])
+local current_lsn = redis.call('GET', key)
+
+if not current_lsn then
+    return redis.call('SET', key, new_lsn, 'EX', ttl)
+end
+
+local function parse_lsn(lsn)
+    local slash_pos = string.find(lsn, '/')
+    local major_part = tonumber(string.sub(lsn, 1, slash_pos - 1), 16)
+    local minor_part = tonumber(string.sub(lsn, slash_pos + 1), 16)
+    return (major_part * 2^32) + minor_part
+end
+
+if parse_lsn(new_lsn) > parse_lsn(current_lsn) then
+    return redis.call('SET', key, new_lsn, 'EX', ttl)
+end
+
+return false
+`)
+
 // SetLSN implements RepositoryCache.
 func (c *centralRepositoryCache) SetLSN(ctx context.Context, r *models.Repository, lsn string) error {
 	setCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
 	report := metrics.LSNCacheSet()
-	err := c.cache.Set(setCtx, c.lsnKey(r.Path), lsn, libstore.WithExpiration(lsnKeyTTL))
+	_, err := c.cache.RunScript(setCtx, lsnUpdateScript, []string{c.lsnKey(r.Path)}, []any{lsn, lsnKeyTTL.Seconds()})
+	// ignore a redis.Nil error, which is the result of returning false from the script (no update occurred)
+	if errors.Is(err, redis.Nil) {
+		err = nil
+	}
 	report(err)
 
 	return err
@@ -521,7 +542,7 @@ func (c *centralRepositoryCache) GetLSN(ctx context.Context, r *models.Repositor
 	defer cancel()
 
 	report := metrics.LSNCacheGet()
-	v, err := c.cache.Get(getCtx, c.lsnKey(r.Path))
+	lsn, err := c.cache.Get(getCtx, c.lsnKey(r.Path))
 	report(err)
 	if err != nil {
 		// a wrapped redis.Nil is returned when the key is not found in Redis
@@ -529,11 +550,6 @@ func (c *centralRepositoryCache) GetLSN(ctx context.Context, r *models.Repositor
 			return "", fmt.Errorf("failed to read LSN key from cache: %w", err)
 		}
 		return "", nil
-	}
-
-	lsn, ok := v.(string)
-	if !ok {
-		return "", fmt.Errorf("LSN cache key has invalid value type: %T", v)
 	}
 
 	return lsn, nil

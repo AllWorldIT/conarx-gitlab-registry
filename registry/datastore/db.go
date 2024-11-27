@@ -30,7 +30,6 @@ import (
 
 const (
 	driverName                  = "pgx"
-	dnsTimeout                  = 2 * time.Second
 	defaultReplicaCheckInterval = 1 * time.Minute
 
 	HostTypePrimary = "primary"
@@ -43,6 +42,15 @@ const (
 	// primary database to avoid further processing delays. The current 100ms value is a starting point/educated guess
 	// that matches the one used in GitLab Rails (https://gitlab.com/gitlab-org/gitlab/-/merge_requests/159633).
 	upToDateReplicaTimeout = 100 * time.Millisecond
+
+	// ReplicaResolveTimeout sets a global limit on wait time for resolving replicas in load balancing, covering both DNS
+	// lookups and connection attempts for all identified replicas.
+	ReplicaResolveTimeout = 2 * time.Second
+
+	// InitReplicaResolveTimeout is a stricter limit used only during startup in NewDBLoadBalancer, taking precedence over
+	// ReplicaResolveTimeout. A quick failure here prevents startup delays, allowing asynchronous retries in
+	// StartReplicaChecking. While these timeouts are currently similar, they remain separate to allow independent tuning.
+	InitReplicaResolveTimeout = 1 * time.Second
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -505,11 +513,13 @@ func (r *dnsResolver) LookupHost(ctx context.Context, host string) ([]string, er
 
 // NewDNSResolver creates a new dnsResolver for the specified nameserver, port, and record.
 func NewDNSResolver(nameserver string, port int, record string) DNSResolver {
+	dialer := &net.Dialer{}
+
 	return &dnsResolver{
 		resolver: &net.Resolver{
 			PreferGo: true,
-			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				return net.DialTimeout("tcp", fmt.Sprintf("%s:%d", nameserver, port), dnsTimeout)
+			Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return dialer.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", nameserver, port))
 			},
 		},
 		record: record,
@@ -517,9 +527,6 @@ func NewDNSResolver(nameserver string, port int, record string) DNSResolver {
 }
 
 func resolveHosts(ctx context.Context, resolver DNSResolver) ([]*net.TCPAddr, error) {
-	ctx, cancel := context.WithTimeout(ctx, dnsTimeout)
-	defer cancel()
-
 	srvs, err := resolver.LookupSRV(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error resolving DNS SRV record: %w", err)
@@ -577,6 +584,9 @@ func (lb *DBLoadBalancer) metricsCollector(db *DB, hostType string) *sqlmetrics.
 func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 	lb.replicaMutex.Lock()
 	defer lb.replicaMutex.Unlock()
+
+	ctx, cancel := context.WithTimeout(ctx, ReplicaResolveTimeout)
+	defer cancel()
 
 	var result *multierror.Error
 	l := lb.logger(ctx)
@@ -717,10 +727,13 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 	}
 }
 
-// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections.
+// NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections. An error is returned if failed
+// to connect to the primary server. Failures to connect to replica server(s) are handled gracefully, that is, logged,
+// reported and ignored. This is to prevent halting the app start, as it can function with the primary server only.
+// DBLoadBalancer.StartReplicaChecking can be used to periodically refresh the list of replicas, potentially leading to
+// the self-healing of transient connection failures during this initialization.
 func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*DBLoadBalancer, error) {
 	config := applyOptions(opts)
-	var result *multierror.Error
 
 	lb := &DBLoadBalancer{
 		active:                config.loadBalancing.active,
@@ -738,23 +751,23 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
 	if err != nil {
-		result = multierror.Append(result, fmt.Errorf("failed to open primary database connection: %w", err))
+		return nil, fmt.Errorf("failed to open primary database connection: %w", err)
 	}
 	lb.primary = primary
 
 	// Conditionally register metrics for the primary database handle
-	if lb.metricsEnabled && primary != nil {
+	if lb.metricsEnabled {
 		lb.promRegisterer.MustRegister(lb.metricsCollector(primary, HostTypePrimary))
 	}
 
 	if lb.active {
-		if err := lb.ResolveReplicas(ctx); err != nil {
-			result = multierror.Append(result, err)
-		}
-	}
+		ctx, cancel := context.WithTimeout(ctx, InitReplicaResolveTimeout)
+		defer cancel()
 
-	if result.ErrorOrNil() != nil {
-		return nil, result.ErrorOrNil()
+		if err := lb.ResolveReplicas(ctx); err != nil {
+			lb.logger(ctx).WithError(err).Error("failed to resolve database load balancing replicas")
+			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		}
 	}
 
 	return lb, nil

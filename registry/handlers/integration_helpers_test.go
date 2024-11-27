@@ -42,6 +42,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/migrations"
 	datastoretestutil "github.com/docker/distribution/registry/datastore/testutil"
 	registryhandlers "github.com/docker/distribution/registry/handlers"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	internaltestutil "github.com/docker/distribution/registry/internal/testutil"
 	rtestutil "github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
@@ -51,8 +52,6 @@ import (
 	_ "github.com/docker/distribution/registry/storage/driver/testdriver"
 	"github.com/docker/distribution/testutil"
 	"github.com/docker/libtrust"
-
-	gocache "github.com/eko/gocache/lib/v4/cache"
 	gorillahandlers "github.com/gorilla/handlers"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -975,6 +974,26 @@ func buildEventManifestDeleteByDigest(mediaType, repoPath string, dgst digest.Di
 
 func buildEventManifestDeleteByTag(mediaType, repoPath, tag string, opts ...eventOpt) notifications.Event {
 	return buildEventManifestDelete(mediaType, repoPath, tag, "", opts...)
+}
+
+func buildEventRepositoryRenamed(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
+	return buildEventRepositoryRename(repoTargetPath, rename, opts...)
+}
+
+func buildEventRepositoryRename(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
+	event := notifications.Event{
+		Action: "rename",
+		Target: notifications.Target{
+			Repository: repoTargetPath,
+			Rename:     &rename,
+		},
+	}
+
+	for _, opt := range opts {
+		opt(&event)
+	}
+
+	return event
 }
 
 type eventOpt func(event *notifications.Event)
@@ -1949,7 +1968,7 @@ func requireRenameTTLInRange(t *testing.T, actualTTL time.Time, expectedTTLDurat
 }
 
 // acquireProjectLease enacts a project lease for `projectPath` in the `redisCache` for time `TTL` duration
-func acquireProjectLease(t *testing.T, redisCache *gocache.Cache[any], projectPath string, TTL time.Duration) {
+func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath string, TTL time.Duration) {
 	t.Helper()
 	// enact a lease on the project path which will be used to block all
 	// write operations to the existing repositories in the given GitLab project.
@@ -1968,7 +1987,7 @@ func acquireProjectLease(t *testing.T, redisCache *gocache.Cache[any], projectPa
 }
 
 // releaseProjectLease releases an existing project lease for `projectPath` in the `redisCache`
-func releaseProjectLease(t *testing.T, redisCache *gocache.Cache[any], projectPath string) {
+func releaseProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath string) {
 	t.Helper()
 	plStore, err := datastore.NewProjectLeaseStore(datastore.NewCentralProjectLeaseCache(redisCache))
 	require.NoError(t, err)

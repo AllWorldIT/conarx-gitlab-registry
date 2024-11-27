@@ -214,13 +214,13 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 		name         string
 		primaryDSN   *datastore.DSN
 		replicaHosts []string
-		expectedErrs []string
+		expectedErr  string
 	}{
 		{
 			name:         "primary connection fails",
 			primaryDSN:   &datastore.DSN{Host: "fail_primary"},
 			replicaHosts: []string{"replica1"},
-			expectedErrs: []string{"failed to open primary database connection: primary connection failed"},
+			expectedErr:  "failed to open primary database connection: primary connection failed",
 		},
 		{
 			name:       "one replica connection fails",
@@ -229,7 +229,6 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 				"replica1",
 				"fail_replica2",
 			},
-			expectedErrs: []string{`failed to open replica "fail_replica2:5432" database connection: replica connection failed`},
 		},
 		{
 			name:       "multiple replica connections fail",
@@ -238,10 +237,6 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 				"fail_replica1",
 				"fail_replica2",
 			},
-			expectedErrs: []string{
-				`failed to open replica "fail_replica1:5432" database connection: replica connection failed`,
-				`failed to open replica "fail_replica2:5432" database connection: replica connection failed`,
-			},
 		},
 		{
 			name:       "primary and replica connections fail",
@@ -249,10 +244,7 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 			replicaHosts: []string{
 				"fail_replica2",
 			},
-			expectedErrs: []string{
-				`failed to open primary database connection: primary connection failed`,
-				`failed to open replica "fail_replica2:1234" database connection: replica connection failed`,
-			},
+			expectedErr: "failed to open primary database connection: primary connection failed",
 		},
 	}
 
@@ -264,15 +256,12 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 				datastore.WithConnector(mockConnector),
 				datastore.WithFixedHosts(tt.replicaHosts),
 			)
-			require.Nil(t, lb)
-
-			var errs *multierror.Error
-			require.ErrorAs(t, err, &errs)
-			require.NotNil(t, errs)
-			require.Len(t, errs.Errors, len(tt.expectedErrs))
-
-			for _, expectedErr := range tt.expectedErrs {
-				require.Contains(t, errs.Error(), expectedErr)
+			if tt.expectedErr != "" {
+				require.Nil(t, lb)
+				require.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NotNil(t, lb)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -370,7 +359,7 @@ func TestNewDBLoadBalancer_WithServiceDiscovery(t *testing.T) {
 	require.NoError(t, replicaMock2.ExpectationsWereMet())
 }
 
-func TestNewDBLoadBalancer_WithServiceDiscovery_SRVLookupError(t *testing.T) {
+func TestDBLoadBalancer_ResolveReplicas_SRVLookupError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
@@ -379,7 +368,8 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_SRVLookupError(t *testing.T) {
 	// Mock the expected DNS lookups with an error
 	mockResolver.EXPECT().
 		LookupSRV(gomock.Any()).
-		Return(nil, fmt.Errorf("DNS SRV lookup error"))
+		Return(nil, fmt.Errorf("DNS SRV lookup error")).
+		Times(2)
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -398,20 +388,23 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_SRVLookupError(t *testing.T) {
 	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).AnyTimes()
 
 	// Create the load balancer with the service discovery option
-	_, err = datastore.NewDBLoadBalancer(
+	lb, err := datastore.NewDBLoadBalancer(
 		context.Background(),
 		primaryDSN,
 		datastore.WithConnector(mockConnector),
 		datastore.WithServiceDiscovery(mockResolver),
 	)
-	require.Error(t, err)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	err = lb.ResolveReplicas(context.Background())
 	require.ErrorContains(t, err, "error resolving DNS SRV record: DNS SRV lookup error")
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
 }
 
-func TestNewDBLoadBalancer_WithServiceDiscovery_HostLookupError(t *testing.T) {
+func TestDBLoadBalancer_ResolveReplicas_HostLookupError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
@@ -422,12 +415,14 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_HostLookupError(t *testing.T) {
 		LookupSRV(gomock.Any()).
 		Return([]*net.SRV{
 			{Target: "srv1.example.com", Port: 6432},
-		}, nil)
+		}, nil).
+		Times(2)
 
 	// Mock the expected host lookup with an error
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv1.example.com").
-		Return(nil, fmt.Errorf("DNS host lookup error"))
+		Return(nil, fmt.Errorf("DNS host lookup error")).
+		Times(2)
 
 	primaryMockDB, primaryMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -446,13 +441,16 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_HostLookupError(t *testing.T) {
 	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).Return(&datastore.DB{DB: primaryMockDB}, nil).AnyTimes()
 
 	// Create the load balancer with the service discovery option
-	_, err = datastore.NewDBLoadBalancer(
+	lb, err := datastore.NewDBLoadBalancer(
 		context.Background(),
 		primaryDSN,
 		datastore.WithConnector(mockConnector),
 		datastore.WithServiceDiscovery(mockResolver),
 	)
-	require.Error(t, err)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	err = lb.ResolveReplicas(context.Background())
 	require.ErrorContains(t, err, `error resolving host "srv1.example.com" address: DNS host lookup error`)
 
 	// Verify mock expectations
@@ -520,23 +518,15 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 		name           string
 		primaryDSN     *datastore.DSN
 		mockExpectFunc func()
-		expectedErrors []string
+		expectedErr    string
 	}{
 		{
 			name:       "primary connection fails",
 			primaryDSN: failPrimaryDSN,
 			mockExpectFunc: func() {
 				mockConnector.EXPECT().Open(gomock.Any(), failPrimaryDSN, gomock.Any()).Return(nil, fmt.Errorf("primary connection failed"))
-				replica1MockDB, _, err := sqlmock.New()
-				require.NoError(t, err)
-				defer replica1MockDB.Close()
-				replica2MockDB, _, err := sqlmock.New()
-				require.NoError(t, err)
-				defer replica2MockDB.Close()
-				mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(&datastore.DB{DB: replica1MockDB}, nil)
-				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB}, nil)
 			},
-			expectedErrors: []string{"failed to open primary database connection: primary connection failed"},
+			expectedErr: "failed to open primary database connection: primary connection failed",
 		},
 		{
 			name:       "one replica connection fails",
@@ -552,7 +542,6 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 				defer replica2MockDB.Close()
 				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(&datastore.DB{DB: replica2MockDB}, nil)
 			},
-			expectedErrors: []string{`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`},
 		},
 		{
 			name:       "multiple replica connections fail",
@@ -565,24 +554,14 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 				mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(nil, fmt.Errorf("failed to open replica 1"))
 				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(nil, fmt.Errorf("failed to open replica 2"))
 			},
-			expectedErrors: []string{
-				`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`,
-				`failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`,
-			},
 		},
 		{
 			name:       "primary and replica connections fail",
 			primaryDSN: failPrimaryDSN,
 			mockExpectFunc: func() {
 				mockConnector.EXPECT().Open(gomock.Any(), failPrimaryDSN, gomock.Any()).Return(nil, fmt.Errorf("primary connection failed"))
-				mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).Return(nil, fmt.Errorf("failed to open replica 1"))
-				mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).Return(nil, fmt.Errorf("failed to open replica 2"))
 			},
-			expectedErrors: []string{
-				`failed to open primary database connection: primary connection failed`,
-				`failed to open replica "192.168.1.1:6432" database connection: failed to open replica 1`,
-				`failed to open replica "192.168.1.2:6433" database connection: failed to open replica 2`,
-			},
+			expectedErr: "failed to open primary database connection: primary connection failed",
 		},
 	}
 
@@ -596,16 +575,12 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 				datastore.WithConnector(mockConnector),
 				datastore.WithServiceDiscovery(mockResolver),
 			)
-			require.Error(t, err)
-			require.Nil(t, lb)
-
-			var errs *multierror.Error
-			require.ErrorAs(t, err, &errs)
-			require.NotNil(t, errs)
-			require.Len(t, errs.Errors, len(tt.expectedErrors))
-
-			for _, expectedErr := range tt.expectedErrors {
-				require.Contains(t, errs.Error(), expectedErr)
+			if tt.expectedErr != "" {
+				require.Nil(t, lb)
+				require.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NotNil(t, lb)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -962,11 +937,7 @@ func TestNewDBLoadBalancer_MetricsCollection_Replicas(t *testing.T) {
 			}
 
 			_, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
-			if tt.openReplica1Succeeds && tt.openReplica2Succeeds {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-			}
+			require.NoError(t, err)
 
 			// Verify registered metrics
 			metricCount, err := testutil.GatherAndCount(reg)
@@ -3200,4 +3171,421 @@ func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewDBLoadBalancer_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	// Setup primary DB connection to succeed
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+
+	// Mock the SRV lookup during replica resolution to validate context deadline of ~100ms and simulate a
+	// context.DeadlineExceeded error returned by the resolver.
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		DoAndReturn(func(ctx context.Context) ([]string, error) {
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.WithinDuration(t, time.Now().Add(datastore.InitReplicaResolveTimeout), deadline, datastore.InitReplicaResolveTimeout/10)
+			return nil, context.DeadlineExceeded
+		}).
+		Times(1)
+
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+	)
+
+	// Ensure no error on load balancer creation and that the replica list is empty and primary is set
+	require.NoError(t, err)
+	require.Equal(t, lb.Primary().DB, primaryMockDB)
+	require.Empty(t, lb.Replicas())
+}
+
+func TestNewDBLoadBalancer_ReplicaResolveTimeout_HostLookupTimeout(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	// Setup primary DB connection to succeed
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+
+	// Mock the SRV lookup to succeed
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+		}, nil).
+		Times(1)
+
+	// Mock the Host lookup to validate context deadline is ~100ms and simulate context.DeadlineExceeded
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		DoAndReturn(func(ctx context.Context, host string) ([]string, error) {
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.WithinDuration(t, time.Now().Add(datastore.InitReplicaResolveTimeout), deadline, datastore.InitReplicaResolveTimeout/10)
+			return nil, context.DeadlineExceeded
+		}).
+		Times(1)
+
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+	)
+
+	// Ensure no error on load balancer creation and that the replica list is empty and primary is set
+	require.NoError(t, err)
+	require.Equal(t, lb.Primary().DB, primaryMockDB)
+	require.Empty(t, lb.Replicas())
+}
+
+func TestNewDBLoadBalancer_ReplicaResolveTimeout_ConnectionOpenTimeout(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	// Setup primary DB connection to succeed
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+
+	// Mock the SRV lookup to succeed and return one replica target
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+		}, nil).
+		Times(1)
+
+	// Mock the Host lookup to succeed, returning a valid IP for the SRV target
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		Return([]string{"192.168.1.10"}, nil).
+		Times(1)
+
+	// Mock the connection open attempt for the replica to validate the context deadline and return DeadlineExceeded
+	replicaDSN := &datastore.DSN{
+		Host:     "192.168.1.10",
+		Port:     6432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	mockConnector.EXPECT().Open(gomock.Any(), replicaDSN, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...interface{}) (*datastore.DB, error) {
+			// Validate that the context has a deadline and it's ~100ms from now
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.WithinDuration(t, time.Now().Add(datastore.InitReplicaResolveTimeout), deadline, datastore.InitReplicaResolveTimeout/10)
+			return nil, context.DeadlineExceeded
+		}).
+		Times(1)
+
+	// Initialize the load balancer
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+	)
+
+	// Ensure no error on load balancer creation and that the replica list is empty and primary is set
+	require.NoError(t, err)
+	require.Equal(t, lb.Primary().DB, primaryMockDB)
+	require.Empty(t, lb.Replicas())
+}
+
+func TestStartReplicaChecking_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	// Mock successful primary connection
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+
+	// Mock failed DNS lookup to interrupt the replica resolution that occurs during NewDBLoadBalancer
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return(nil, errors.New("some error")).
+		Times(1)
+
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+		datastore.WithReplicaCheckInterval(50*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	// Mock the SRV lookup to validate context deadline is ~200ms and simulate context.DeadlineExceeded
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		DoAndReturn(func(ctx context.Context) ([]string, error) {
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.WithinDuration(t, time.Now().Add(datastore.ReplicaResolveTimeout), deadline, datastore.ReplicaResolveTimeout/10)
+			return nil, context.DeadlineExceeded
+		}).
+		Times(1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := lb.StartReplicaChecking(ctx)
+		require.Error(t, err, context.Canceled)
+	}()
+
+	// Wait just enough time for the replicas to be refreshed once
+	time.Sleep(60 * time.Millisecond)
+
+	// Cancel the context to stop the refreshing
+	cancel()
+	wg.Wait()
+
+	// Ensure replica list is empty
+	require.Empty(t, lb.Replicas())
+}
+
+func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	// Mock successful primary connection
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+
+	// Mock failed DNS lookup to interrupt the replica resolution that occurs during NewDBLoadBalancer
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return(nil, errors.New("some error")).
+		Times(1)
+
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+		datastore.WithReplicaCheckInterval(50*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	// Initial SRV lookup setup to succeed
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+		}, nil).
+		Times(1)
+
+	// Mock the Host lookup to validate context deadline is ~200ms and simulate context.DeadlineExceeded
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		DoAndReturn(func(ctx context.Context, host string) ([]string, error) {
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.WithinDuration(t, time.Now().Add(datastore.ReplicaResolveTimeout), deadline, datastore.ReplicaResolveTimeout/10)
+			return nil, context.DeadlineExceeded
+		}).
+		Times(1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := lb.StartReplicaChecking(ctx)
+		require.Error(t, err, context.Canceled)
+	}()
+
+	// Wait just enough time for the replicas to be refreshed once
+	time.Sleep(60 * time.Millisecond)
+
+	// Cancel the context to stop the refreshing
+	cancel()
+	wg.Wait()
+
+	// Ensure replica list is empty
+	require.Empty(t, lb.Replicas())
+}
+
+func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	// Mock successful primary connection
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+
+	// Mock failed DNS lookup to interrupt the replica resolution that occurs during NewDBLoadBalancer
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return(nil, errors.New("some error")).
+		Times(1)
+
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+		datastore.WithReplicaCheckInterval(50*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	// Mock the SRV lookup to succeed and return one replica target
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return([]*net.SRV{
+			{Target: "srv1.example.com", Port: 6432},
+		}, nil).
+		Times(1)
+
+	// Mock the Host lookup to succeed, returning a valid IP for the SRV target
+	mockResolver.EXPECT().
+		LookupHost(gomock.Any(), "srv1.example.com").
+		Return([]string{"192.168.1.10"}, nil).
+		Times(1)
+
+	// Mock the replica connection open to validate context deadline is ~200ms and simulate context.DeadlineExceeded
+	replicaDSN := &datastore.DSN{
+		Host:     "192.168.1.10",
+		Port:     6432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	mockConnector.EXPECT().Open(gomock.Any(), replicaDSN, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...interface{}) (*datastore.DB, error) {
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.WithinDuration(t, time.Now().Add(datastore.ReplicaResolveTimeout), deadline, datastore.ReplicaResolveTimeout/10)
+			return nil, context.DeadlineExceeded
+		}).
+		Times(1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := lb.StartReplicaChecking(ctx)
+		require.Error(t, err, context.Canceled)
+	}()
+
+	// Wait just enough time for the replicas to be refreshed once
+	time.Sleep(60 * time.Millisecond)
+
+	// Cancel the context to stop the refreshing
+	cancel()
+	wg.Wait()
+
+	// Ensure replica list is empty
+	require.Empty(t, lb.Replicas())
 }

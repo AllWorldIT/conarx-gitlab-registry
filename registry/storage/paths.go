@@ -139,10 +139,7 @@ func pathFor(spec pathSpec) (string, error) {
 
 		return path.Join(append(append(repoPrefix, v.name, "_manifests", "revisions"), components...)...), nil
 	case manifestRevisionLinkPathSpec:
-		root, err := pathFor(manifestRevisionPathSpec{
-			name:     v.name,
-			revision: v.revision,
-		})
+		root, err := pathFor(manifestRevisionPathSpec(v))
 		if err != nil {
 			return "", err
 		}
@@ -160,31 +157,21 @@ func pathFor(spec pathSpec) (string, error) {
 
 		return path.Join(root, v.tag), nil
 	case manifestTagCurrentPathSpec:
-		root, err := pathFor(manifestTagPathSpec{
-			name: v.name,
-			tag:  v.tag,
-		})
+		root, err := pathFor(manifestTagPathSpec(v))
 		if err != nil {
 			return "", err
 		}
 
 		return path.Join(root, "current", "link"), nil
 	case manifestTagIndexPathSpec:
-		root, err := pathFor(manifestTagPathSpec{
-			name: v.name,
-			tag:  v.tag,
-		})
+		root, err := pathFor(manifestTagPathSpec(v))
 		if err != nil {
 			return "", err
 		}
 
 		return path.Join(root, "index"), nil
 	case manifestTagIndexEntryLinkPathSpec:
-		root, err := pathFor(manifestTagIndexEntryPathSpec{
-			name:     v.name,
-			tag:      v.tag,
-			revision: v.revision,
-		})
+		root, err := pathFor(manifestTagIndexEntryPathSpec(v))
 		if err != nil {
 			return "", err
 		}

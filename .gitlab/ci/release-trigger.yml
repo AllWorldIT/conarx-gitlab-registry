@@ -1,0 +1,29 @@
+stages:
+  - main
+
+dry-run:
+  image: node:lts
+  stage: main
+  needs: []
+  variables:
+    GIT_COMMITTER_EMAIL: $GITLAB_TOKEN_EMAIL
+  script:
+    - make release-tools
+    - npx semantic-release --dry-run
+  #NOTE(prozlach): Specifying rules is necessary to make child-pipelines work
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+
+cut:
+  image: node:lts
+  stage: main
+  needs: [ "dry-run" ]
+  variables:
+    GIT_COMMITTER_EMAIL: $GITLAB_TOKEN_EMAIL
+  script:
+    - make release-tools
+    - npx semantic-release
+  #NOTE(prozlach): Specifying rules is necessary to make child-pipelines work
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+      when: manual

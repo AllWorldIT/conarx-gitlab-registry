@@ -93,6 +93,15 @@ func (qb *QueueBridge) TagDeleted(repo reference.Named, tag string) error {
 	return qb.sink.Write(event)
 }
 
+// RepoRenamed creates and queues the related event with the repository rename details.
+func (qb *QueueBridge) RepoRenamed(repo reference.Named, rename Rename) error {
+	event := qb.createEvent(EventActionRename)
+	event.Target.Repository = repo.Name()
+	event.Target.Rename = &rename
+
+	return qb.sink.Write(event)
+}
+
 func (qb *QueueBridge) createManifestEvent(action string, repo reference.Named, sm distribution.Manifest) (*Event, error) {
 	event := qb.createEvent(action)
 	event.Target.Repository = repo.Name()

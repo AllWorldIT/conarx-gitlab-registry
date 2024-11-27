@@ -19,11 +19,11 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
-	"gopkg.in/check.v1"
 
 	dcontext "github.com/docker/distribution/context"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
@@ -31,62 +31,38 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 )
 
-// Hook up gocheck into the "go test" runner.
-func Test(t *testing.T) { check.TestingT(t) }
-
 var (
-	gcsDriverConstructor func(rootDirectory string) (storagedriver.StorageDriver, error)
-	skipGCS              func() string
+	bucket       = os.Getenv("REGISTRY_STORAGE_GCS_BUCKET")
+	credentials  = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	parallelWalk = os.Getenv("GCS_PARALLEL_WALK")
 )
 
 const maxConcurrency = 10
 
-func init() {
-	bucket := os.Getenv("REGISTRY_STORAGE_GCS_BUCKET")
-	credentials := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	parallelWalk := os.Getenv("GCS_PARALLEL_WALK")
-
-	// Skip GCS storage driver tests if environment variable parameters are not provided
-	skipGCS = func() string {
-		if bucket == "" || credentials == "" {
-			return "The following environment variables must be set to enable these tests: REGISTRY_STORAGE_GCS_BUCKET, GOOGLE_APPLICATION_CREDENTIALS"
-		}
-		return ""
-	}
-
-	if skipGCS() != "" {
-		return
-	}
-
-	root, err := os.MkdirTemp("", "driver-")
-	if err != nil {
-		panic(err)
-	}
-	defer os.Remove(root)
-
+func gcsDriverConstructor(rootDirectory string) (storagedriver.StorageDriver, error) {
 	ctx := context.Background()
 	creds, err := google.FindDefaultCredentials(ctx, storage.ScopeFullControl)
 	if err != nil {
-		panic(fmt.Sprintf("Error reading default credentials: %s", err))
+		return nil, fmt.Errorf("Error reading default credentials: %w", err)
 	}
 
 	ts := creds.TokenSource
 	jwtConfig, err := google.JWTConfigFromJSON(creds.JSON)
 	if err != nil {
-		panic(fmt.Sprintf("Error reading JWT config: %s", err))
+		return nil, fmt.Errorf("Error reading JWT config: %w", err)
 	}
 	email := jwtConfig.Email
 	if email == "" {
-		panic("Error reading JWT config : missing client_email property")
+		return nil, fmt.Errorf("Error reading JWT config : missing client_email property")
 	}
 	privateKey := jwtConfig.PrivateKey
 	if len(privateKey) == 0 {
-		panic("Error reading JWT config : missing private_key property")
+		return nil, fmt.Errorf("Error reading JWT config : missing private_key property")
 	}
 
 	storageClient, err := storage.NewClient(dcontext.Background(), option.WithTokenSource(ts))
 	if err != nil {
-		panic(fmt.Sprintf("Error creating storage client: %s", err))
+		return nil, fmt.Errorf("Error creating storage client: %w", err)
 	}
 
 	var parallelWalkBool bool
@@ -94,35 +70,86 @@ func init() {
 	if parallelWalk != "" {
 		parallelWalkBool, err = strconv.ParseBool(parallelWalk)
 		if err != nil {
-			panic(fmt.Sprintf("Error parsing parallelwalk: %v", err))
+			return nil, fmt.Errorf("Error parsing parallelwalk: %w", err)
 		}
 	}
 
-	gcsDriverConstructor = func(rootDirectory string) (storagedriver.StorageDriver, error) {
-		parameters := &driverParameters{
-			bucket:         bucket,
-			rootDirectory:  rootDirectory,
-			email:          email,
-			privateKey:     privateKey,
-			client:         oauth2.NewClient(dcontext.Background(), ts),
-			storageClient:  storageClient,
-			chunkSize:      defaultChunkSize,
-			maxConcurrency: maxConcurrency,
-			parallelWalk:   parallelWalkBool,
-		}
-
-		return New(parameters)
+	parameters := &driverParameters{
+		bucket:         bucket,
+		rootDirectory:  rootDirectory,
+		email:          email,
+		privateKey:     privateKey,
+		client:         oauth2.NewClient(dcontext.Background(), ts),
+		storageClient:  storageClient,
+		chunkSize:      defaultChunkSize,
+		maxConcurrency: maxConcurrency,
+		parallelWalk:   parallelWalkBool,
 	}
 
-	testsuites.RegisterSuite(func() (storagedriver.StorageDriver, error) {
-		return gcsDriverConstructor(root)
-	}, skipGCS)
+	return New(parameters)
+}
+
+func skipGCS() string {
+	if bucket == "" || credentials == "" {
+		return "The following environment variables must be set to enable these tests: REGISTRY_STORAGE_GCS_BUCKET, GOOGLE_APPLICATION_CREDENTIALS"
+	}
+	return ""
+}
+
+func TestGCSDriverSuite(t *testing.T) {
+	root, err := os.MkdirTemp("", "gcsdriver-test-")
+	require.NoError(t, err)
+
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
+	}
+
+	ts := testsuites.NewDriverSuite(
+		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return gcsDriverConstructor(root)
+		},
+		func() error {
+			return os.Remove(root)
+		},
+	)
+	suite.Run(t, ts)
+}
+
+func BenchmarkGCSDriverSuite(b *testing.B) {
+	root, err := os.MkdirTemp("", "gcsdriver-bench-")
+	require.NoError(b, err)
+
+	if skipMsg := skipGCS(); skipMsg != "" {
+		b.Skip(skipMsg)
+	}
+
+	ts := testsuites.NewDriverSuite(
+		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return gcsDriverConstructor(root)
+		},
+		func() error {
+			return os.Remove(root)
+		},
+	)
+
+	ts.SetupSuiteWithB(b)
+	b.Cleanup(func() { ts.TearDownSuiteWithB(b) })
+
+	// NOTE(prozlach): This is a method of embedded function, we need to pass
+	// the reference to "outer" struct directly
+	benchmarks := ts.EnumerateBenchmarks()
+
+	for _, benchmark := range benchmarks {
+		b.Run(benchmark.Name, benchmark.Func)
+	}
 }
 
 // Test Committing a FileWriter without having called Write
-func TestCommitEmpty(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverCommitEmpty(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	driver := newTempDirDriver(t)
@@ -164,9 +191,9 @@ func TestCommitEmpty(t *testing.T) {
 
 // Test Committing a FileWriter after having written exactly
 // defaultChunksize bytes.
-func TestCommit(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverCommit(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	driver := newTempDirDriver(t)
@@ -211,9 +238,9 @@ func TestCommit(t *testing.T) {
 	}
 }
 
-func TestRetry(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverRetry(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	assertError := func(expected string, observed error) {
@@ -248,9 +275,9 @@ func TestRetry(t *testing.T) {
 	assertError("error", err)
 }
 
-func TestEmptyRootList(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverEmptyRootList(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	rootedDriver := newTempDirDriver(t)
@@ -294,9 +321,9 @@ func TestEmptyRootList(t *testing.T) {
 }
 
 // Test subpaths are included properly
-func TestSubpathList(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverSubpathList(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	rootedDriver := newTempDirDriver(t)
@@ -339,9 +366,9 @@ func TestSubpathList(t *testing.T) {
 }
 
 // TestMoveDirectory checks that moving a directory returns an error.
-func TestMoveDirectory(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverMoveDirectory(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	driver := newTempDirDriver(t)
@@ -366,9 +393,9 @@ func TestMoveDirectory(t *testing.T) {
 	}
 }
 
-func TestExistsPath(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverExistsPath(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	root := t.TempDir()
@@ -391,9 +418,9 @@ func TestExistsPath(t *testing.T) {
 	require.True(t, exists)
 }
 
-func TestExistsPath_NotFound(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverExistsPath_NotFound(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	root := t.TempDir()
@@ -407,9 +434,9 @@ func TestExistsPath_NotFound(t *testing.T) {
 
 // TestExistsPath_Object asserts that if trying to use ExistsPath with an object path, this does not cause an
 // internal error but rather return false.
-func TestExistsPath_Object(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverExistsPath_Object(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	root := t.TempDir()
@@ -431,7 +458,7 @@ func TestExistsPath_Object(t *testing.T) {
 	require.False(t, exists)
 }
 
-func Test_parseParameters_Bool(t *testing.T) {
+func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 	p := map[string]interface{}{
 		"bucket":  "bucket",
 		"keyfile": "testdata/key.json",
@@ -463,9 +490,9 @@ func newTempDirDriver(tb testing.TB) storagedriver.StorageDriver {
 	return d
 }
 
-func TestURLFor_Expiry(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverURLFor_Expiry(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	ctx := context.Background()
@@ -512,9 +539,9 @@ func TestURLFor_Expiry(t *testing.T) {
 	require.GreaterOrEqual(t, expected, actual, "actual 'X-Goog-Expires' param is greater than expected")
 }
 
-func TestURLFor_AdditionalQueryParams(t *testing.T) {
-	if skipGCS() != "" {
-		t.Skip(skipGCS())
+func TestGCSDriverURLFor_AdditionalQueryParams(t *testing.T) {
+	if skipMsg := skipGCS(); skipMsg != "" {
+		t.Skip(skipMsg)
 	}
 
 	ctx := context.Background()
@@ -554,7 +581,7 @@ func TestURLFor_AdditionalQueryParams(t *testing.T) {
 	require.EqualValues(t, fmt.Sprintf("%v", opts["size_bytes"]), u.Query().Get(customGitlabGoogleObjectSizeParam))
 }
 
-func TestCustomParams(t *testing.T) {
+func TestGCSDriverCustomParams(t *testing.T) {
 	tests := []struct {
 		name              string
 		opt               map[string]any

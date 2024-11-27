@@ -16,7 +16,7 @@ import (
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 	"github.com/stretchr/testify/require"
-	. "gopkg.in/check.v1"
+	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -32,12 +32,8 @@ var (
 	container   string
 	realm       string
 
-	azureDriverConstructor func(rootDirectory string) (*Driver, error)
-	skipCheck              func() string
+	missing []string
 )
-
-// Hook up gocheck into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
 
 func init() {
 	config := []struct {
@@ -50,47 +46,86 @@ func init() {
 		{envRealm, &realm},
 	}
 
-	missing := []string{}
+	missing = make([]string, 0)
 	for _, v := range config {
 		*v.value = os.Getenv(v.env)
 		if *v.value == "" {
 			missing = append(missing, v.env)
 		}
 	}
-
-	root, err := os.MkdirTemp("", "driver-")
-	if err != nil {
-		panic(err)
-	}
-	defer os.Remove(root)
-
-	azureDriverConstructor = func(rootDirectory string) (*Driver, error) {
-		params := &driverParameters{
-			accountName:          accountName,
-			accountKey:           accountKey,
-			container:            container,
-			realm:                realm,
-			root:                 rootDirectory,
-			trimLegacyRootPrefix: true,
-		}
-
-		return New(params)
-	}
-
-	// Skip Azure storage driver tests if environment variable parameters are not provided
-	skipCheck = func() string {
-		if len(missing) > 0 {
-			return fmt.Sprintf("Must set %s environment variables to run Azure tests", strings.Join(missing, ", "))
-		}
-		return ""
-	}
-
-	testsuites.RegisterSuite(func() (storagedriver.StorageDriver, error) {
-		return azureDriverConstructor(root)
-	}, skipCheck)
 }
 
-func TestPathToKey(t *testing.T) {
+func azureDriverConstructor(rootDirectory string) (*Driver, error) {
+	params := &driverParameters{
+		accountName:          accountName,
+		accountKey:           accountKey,
+		container:            container,
+		realm:                realm,
+		root:                 rootDirectory,
+		trimLegacyRootPrefix: true,
+	}
+
+	return New(params)
+}
+
+func skipCheck() string {
+	if len(missing) > 0 {
+		return fmt.Sprintf("Must set %s environment variables to run Azure tests", strings.Join(missing, ", "))
+	}
+	return ""
+}
+
+func TestAzureDriverSuite(t *testing.T) {
+	root, err := os.MkdirTemp("", "azuredriver-test-")
+	require.NoError(t, err)
+
+	if skipMsg := skipCheck(); skipMsg != "" {
+		t.Skip(skipMsg)
+	}
+
+	ts := testsuites.NewDriverSuite(
+		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return azureDriverConstructor(root)
+		},
+		func() error {
+			return os.Remove(root)
+		},
+	)
+	suite.Run(t, ts)
+}
+
+func BenchmarkAzureDriverSuite(b *testing.B) {
+	root, err := os.MkdirTemp("", "azuredriver-bench-")
+	require.NoError(b, err)
+
+	if skipMsg := skipCheck(); skipMsg != "" {
+		b.Skip(skipMsg)
+	}
+
+	ts := testsuites.NewDriverSuite(
+		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return azureDriverConstructor(root)
+		},
+		func() error {
+			return os.Remove(root)
+		},
+	)
+
+	ts.SetupSuiteWithB(b)
+	b.Cleanup(func() { ts.TearDownSuiteWithB(b) })
+
+	// NOTE(prozlach): This is a method of embedded function, we need to pass
+	// the reference to "outer" struct directly
+	benchmarks := ts.EnumerateBenchmarks()
+
+	for _, benchmark := range benchmarks {
+		b.Run(benchmark.Name, benchmark.Func)
+	}
+}
+
+func TestAzureDriverPathToKey(t *testing.T) {
 	tests := []struct {
 		name          string
 		rootDirectory string
@@ -196,7 +231,7 @@ func TestPathToKey(t *testing.T) {
 	}
 }
 
-func TestStatRootPath(t *testing.T) {
+func TestAzureDriverStatRootPath(t *testing.T) {
 	if skipCheck() != "" {
 		t.Skip(skipCheck())
 	}
@@ -268,7 +303,7 @@ func TestStatRootPath(t *testing.T) {
 	}
 }
 
-func Test_parseParameters_Bool(t *testing.T) {
+func TestAzureDriver_parseParameters_Bool(t *testing.T) {
 	p := map[string]interface{}{
 		"accountname": "accountName",
 		"accountkey":  "accountKey",
@@ -291,7 +326,7 @@ func Test_parseParameters_Bool(t *testing.T) {
 	dtestutil.AssertByDefaultType(t, opts)
 }
 
-func TestURLFor_Expiry(t *testing.T) {
+func TestAzureDriverURLFor_Expiry(t *testing.T) {
 	if skipCheck() != "" {
 		t.Skip(skipCheck())
 	}
@@ -333,7 +368,7 @@ func TestURLFor_Expiry(t *testing.T) {
 	require.Equal(t, expected, u.Query().Get(param))
 }
 
-func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
+func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
 	tests := []struct {
 		name                    string
 		config                  map[string]interface{}
@@ -398,7 +433,7 @@ func TestInferRootPrefixConfiguration_Valid(t *testing.T) {
 	}
 }
 
-func TestInferRootPrefixConfiguration_Invalid(t *testing.T) {
+func TestAzureDriverInferRootPrefixConfiguration_Invalid(t *testing.T) {
 	tests := []struct {
 		name                    string
 		config                  map[string]interface{}

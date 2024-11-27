@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 
@@ -31,8 +32,7 @@ func (bs *blobStore) Get(ctx context.Context, dgst digest.Digest) ([]byte, error
 
 	p, err := getContent(ctx, bs.driver, bp)
 	if err != nil {
-		switch err.(type) {
-		case driver.PathNotFoundError:
+		if errors.As(err, new(driver.PathNotFoundError)) {
 			return nil, distribution.ErrBlobUnknown
 		}
 
@@ -185,12 +185,11 @@ func (bs *blobStatter) Stat(ctx context.Context, dgst digest.Digest) (distributi
 
 	fi, err := bs.driver.Stat(ctx, path)
 	if err != nil {
-		switch err := err.(type) {
-		case driver.PathNotFoundError:
+		if errors.As(err, new(driver.PathNotFoundError)) {
 			return distribution.Descriptor{}, distribution.ErrBlobUnknown
-		default:
-			return distribution.Descriptor{}, err
 		}
+
+		return distribution.Descriptor{}, err
 	}
 
 	if fi.IsDir() {

@@ -499,7 +499,7 @@ func (s *manifestStore) Delete(ctx context.Context, namespaceID, repositoryID, i
 		case errors.Is(err, sql.ErrNoRows):
 			return nil, nil
 		case errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation && pgErr.TableName == "manifest_references":
-			return nil, fmt.Errorf("deleting manifest: %w", ErrManifestReferencedInList)
+			return nil, fmt.Errorf("deleting manifest ID %d: %w: %w", id, ErrManifestReferencedInList, pgErr)
 		default:
 			return nil, fmt.Errorf("deleting manifest: %w", err)
 		}

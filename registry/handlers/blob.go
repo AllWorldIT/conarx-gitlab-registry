@@ -5,14 +5,12 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/docker/distribution"
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/log"
-
-	"github.com/docker/distribution/registry/datastore"
-
-	"github.com/docker/distribution"
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
+	"github.com/docker/distribution/registry/datastore"
 	"github.com/gorilla/handlers"
 	"github.com/opencontainers/go-digest"
 )

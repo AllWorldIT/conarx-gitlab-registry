@@ -65,44 +65,32 @@ The release documentation can be found [here](https://gitlab.com/gitlab-org/cont
 
 ### 3. Update
 
-**Note:** Version bumps for CNG, Omnibus and GDK are triggered at the "same" time.
-Only the Charts and K8s Workloads bumps need to wait for the CNG one.
 
-**Note:** According to the [Distribution Team Merge Request Handling](https://about.gitlab.com/handbook/engineering/development/enablement/distribution/merge_requests.html#assigning-merge-requests) documentation, we should not assign merge requests to an individual.
-
-1. Version bump for the [CNG](https://gitlab.com/gitlab-org/build/CNG/-/merge_requests) is automatically done using the internal `release-cli`.
-   1. [ ] Make sure all pipelines associated with the MR ran to completion.
-   1. [ ] Request a maintainer review from `@gitlab-org/maintainers/container-registry`.
-   1· For the maintainer review of the CNG bump, a maintainer should check the CNG MR to make sure:
-      - [ ] The MR is targeting the `master` branch.
-      - [ ] The MR has a green pipeline on GitLab.com.
-1. Version bump for [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit/-/merge_requests) is automatically done using the internal `release-cli`.
+1. The version bump for [CNG](https://gitlab.com/gitlab-org/build/CNG) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
+   1. [ ] Check for the renovate MR [here](https://gitlab.com/gitlab-org/build/CNG/-/merge_requests?scope=all&state=opened&label_name[]=automation%3Abot-authored&search=container-registry). Once the MR is created:
+      1. [ ] Mark it as related to this release issue.
+      1. [ ] Either request a review from `@gitlab-org/maintainers/container-registry` to speed up the process, or just let the bot pick a Distribution reviewer. If reviewing the MR, make sure:
+         - [ ] The MR is targeting the `master` branch.
+         - [ ] The MR has a green pipeline on GitLab.com.
+1. The version bump for [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit/-/merge_requests) is automatically done using the internal `release-cli`.
    - [ ] Assign to the reviewer suggested by reviewer roulette
-1. Version bump MR in [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests) is automatically done using the internal `release-cli`.
-   - [ ] Assign to the reviewer suggested by reviewer roulette
-1. [ ] Version bump in [Charts](https://gitlab.com/groups/gitlab-org/charts/-/merge_requests) is automatically done using the internal `release-cli`.
-   - [ ] Assign to the reviewer suggested by reviewer roulette
-1. Version bumps in [K8s Workloads](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com/-/merge_requests) need to be done manually for now as CI is broken.
-   1. When opening this MR manually please give it the title "Bump Container Registry to [version] ([environment(s)])".
+1. The version bump for [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
+    1. [ ] Check for the renovate MR [here](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests?scope=all&state=opened&label_name[]=automation%3Abot-authored&search=container-registry). Once the MR is created:
+        1. [ ] Mark it as related to this release issue;
+        1. [ ] Let the bot pick a Distribution reviewer.
+1. The version bump for [Charts](https://gitlab.com/gitlab-org/charts/gitlab) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
+    1. [ ] Check for the renovate MR [here](https://gitlab.com/gitlab-org/charts/gitlab/-/merge_requests?scope=all&state=opened&label_name[]=automation%3Abot-authored&search=container-registry). Once the MR is created:
+        1. [ ] Mark it as related to this release issue;
+        1. [ ] Let the bot pick a Distribution reviewer.
+1. Version bumps in [K8s Workloads](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com) need to be done manually for now as CI is broken. The MR title should be "Bump Container Registry to [version] ([environment(s)])".
+   1. [ ] Wait for the CNG version bump to be merged.
    1. [ ] Check MRs included in the release for the labels ~high-risk-change, ~cannot-rollback.
       - [ ] If they exist, add the same label to each deployment stage.
       - [ ] Follow the [potentially risky deployments](#potentially-risky-deployments) instructions.
-   1. Each environment needs to be deployed and confirmed working in the order listed below, before merging the next MR.
-      1. To see the version deployed in each environment, look at [Container Registry version chart in Grafana](https://dashboards.gitlab.net/goto/F44DoeCIg?orgId=1)
+   1. Each environment needs to be deployed and confirmed working in the order listed below, before merging the next MR. To see the version deployed in each environment, look at the [versions chart in Grafana](https://dashboards.gitlab.net/goto/F44DoeCIg?orgId=1)
       1. [ ] Version bump for Pre-Production and Staging.
       1. [ ] Version bump for Production Canary.
       1. [ ] Version bump for Production Main Stage.
-
-<details>
-<summary><b>Documentation/resources</b></summary>
-
-  1. Version bump in [CNG](https://gitlab.com/gitlab-org/build/CNG) is automatically done using the internal `release-cli`.
-     An MR should be found open on the [CNG MR page](https://gitlab.com/gitlab-org/build/CNG/-/merge_requests) after manually triggering the `version-bump:cng` job.
-     If opening this MR manually please give it the title "Bump Container Registry to [version]".
-  1. If you encounter any issues when merging CNG MR, request help by following the [distribution MR workflow](https://about.gitlab.com/handbook/engineering/development/enablement/systems/distribution/merge_requests.html).
-  1. If opening MR for Omnibus manually, please give it the title "Bump Container Registry to [version]".
-
-</details>
 
 #### Potentially risky deployments
 

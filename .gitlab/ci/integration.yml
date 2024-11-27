@@ -26,7 +26,7 @@ middleware:storage-googlecdn:
       variables:
         TEST_SHORT_FLAG: ""
     - when: always
-  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE -args -check.v $TEST_SHORT_FLAG
+  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE $TEST_SHORT_FLAG
 
 filesystem:
   <<: *storage-driver-test
@@ -41,7 +41,7 @@ inmemory:
     PACKAGE: 'github.com/docker/distribution/registry/storage/driver/inmemory'
     # Always run short tests for in-memory driver or we might run out of memory
     # and cause a flaky test https://gitlab.com/gitlab-org/container-registry/-/issues/1177
-  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE -args -check.v -test.short
+  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE -test.short
 
 s3-aws:
   <<: *storage-driver-test

@@ -16,6 +16,7 @@ import (
 
 	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/notifications"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
 	v1 "github.com/docker/distribution/registry/api/gitlab/v1"
@@ -23,8 +24,7 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
-	gocache "github.com/eko/gocache/lib/v4/cache"
-
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/gorilla/handlers"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -791,10 +791,27 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		isPathOriginRepo: renameOriginRepo,
 	}
 
-	err = handleRenameStoreOperation(h.Context, w, rsp, h.App.redisCache, h.db.Primary())
+	renamed, err := handleRenameStoreOperation(h.Context, w, rsp, h.App.redisCache, h.db.Primary())
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
+	}
+
+	// send notification for completed rename.
+	if renamed {
+		renameType := notifications.NameRename
+		if isRenameNamespaceRequest {
+			renameType = notifications.NamespaceRename
+		}
+
+		if err := h.queueBridge.RepoRenamed(h.Repository.Named(),
+			notifications.Rename{
+				Type: renameType,
+				From: repo.Path,
+				To:   newPath,
+			}); err != nil {
+			l.WithError(err).Error("dispatching repo rename event to queue")
+		}
 	}
 }
 
@@ -1126,16 +1143,19 @@ type renameStoreParams struct {
 }
 
 // handleRenameStoreOperation procures the necessary lease on repositories, executes the rename request in our datastore and writes the appropriate response headers.
-func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo renameStoreParams, cache *gocache.Cache[any], db *datastore.DB) error {
+func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo renameStoreParams, cache *iredis.Cache, db *datastore.DB) (bool, error) {
 	// create a repository lease store
-	var opts []datastore.RepositoryLeaseStoreOption
+	var (
+		opts      []datastore.RepositoryLeaseStoreOption
+		isRenamed bool
+	)
 	opts = append(opts, datastore.WithRepositoryLeaseCache(datastore.NewCentralRepositoryLeaseCache(cache)))
 	rlstore := datastore.NewRepositoryLeaseStore(opts...)
 
 	// verify a valid rename lease exists or create one if one can be created
 	lease, err := enforceRenameLease(ctx, rlstore, repo.newPath, repo.source.Path)
 	if err != nil {
-		return errcode.FromUnknownError(err)
+		return isRenamed, errcode.FromUnknownError(err)
 	}
 
 	// set a time limit for the rename operation query (both dry-run and real run)
@@ -1146,7 +1166,7 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 		// selects the lower of `defaultDryRunRenameOperationTimeout` and the TTL of the lease
 		repositoryRenameOperationTTL, err = getDynamicRenameOperationTTL(ctx, rlstore, lease)
 		if err != nil {
-			return errcode.FromUnknownError(err)
+			return isRenamed, errcode.FromUnknownError(err)
 		}
 	}
 
@@ -1155,12 +1175,12 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 		// write operations to the existing repositories in the given GitLab project.
 		plStore, err := datastore.NewProjectLeaseStore(datastore.NewCentralProjectLeaseCache(cache))
 		if err != nil {
-			return errcode.FromUnknownError(err)
+			return isRenamed, errcode.FromUnknownError(err)
 		}
 		// this lease expires in less than  repositoryRenameOperationTTL + 1 second.
 		// where repositoryRenameOperationTTL is at most 5 seconds.
 		if err := plStore.Set(ctx, repo.source.Path, (repositoryRenameOperationTTL + 1*time.Second)); err != nil {
-			return errcode.FromUnknownError(err)
+			return isRenamed, errcode.FromUnknownError(err)
 		}
 		defer func() {
 			if err := plStore.Invalidate(ctx, repo.source.Path); err != nil {
@@ -1175,21 +1195,22 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 	defer cancel()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return errcode.FromUnknownError(fmt.Errorf("failed to create database transaction: %w", err))
+		return isRenamed, errcode.FromUnknownError(fmt.Errorf("failed to create database transaction: %w", err))
 	}
 	defer tx.Rollback()
 
 	// run the rename operation in a transaction
 	if err = executeRenameOperation(txCtx, tx, repo.source, repo.isPathOriginRepo, repo.newPath, repo.newName); err != nil {
-		return errcode.FromUnknownError(err)
+		return isRenamed, errcode.FromUnknownError(err)
 	}
 
 	// only commit the transaction if the request was not a dry-run
 	if !repo.isDryRun {
 		if err := tx.Commit(); err != nil {
-			return errcode.FromUnknownError(fmt.Errorf("failed to commit database transaction: %w", err))
+			return isRenamed, errcode.FromUnknownError(fmt.Errorf("failed to commit database transaction: %w", err))
 		}
 		w.WriteHeader(http.StatusNoContent)
+		isRenamed = true
 
 		// When a lease fails to be destroyed after it is no longer needed it should not impact the response to the caller.
 		// The lease will eventually expire regardless, but we still need to record these failed cases.
@@ -1202,11 +1223,11 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 
 		repositoryRenameOperationTTL, err = rlstore.GetTTL(ctx, lease)
 		if err != nil {
-			return errcode.FromUnknownError(err)
+			return isRenamed, errcode.FromUnknownError(err)
 		}
 		if err := json.NewEncoder(w).Encode(&RenameRepositoryAPIResponse{TTL: time.Now().Add(repositoryRenameOperationTTL).UTC()}); err != nil {
-			return errcode.FromUnknownError(err)
+			return isRenamed, errcode.FromUnknownError(err)
 		}
 	}
-	return nil
+	return isRenamed, nil
 }

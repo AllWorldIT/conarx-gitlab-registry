@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/docker/distribution/registry/storage/driver/inmemory"
 	"io"
 	"net/http"
 	"net/url"
@@ -587,6 +588,9 @@ func (factory *storageManifestErrDriverFactory) Create(parameters map[string]int
 	// Initialize the mock driver
 	errGenericStorage := errors.New("generic storage error")
 	return &mockErrorDriver{
+		//  We need a working driver to check for lock files existence
+		// as it is needed when creating a new handlers.App
+		StorageDriver: inmemory.New(),
 		returnErrs: []mockErrorMapping{
 			{
 				pathMatch: fmt.Sprintf("%s/_manifests/tags", repositoryWithManifestNotFound),
@@ -683,12 +687,13 @@ func testManifestWithStorageError(t *testing.T, env *testEnv, imageName referenc
 func TestManifestAPI_Get_Schema2NotInDatabase(t *testing.T) {
 	skipDatabaseNotEnabled(t)
 
-	rootDir := t.TempDir()
+	rootDir1 := t.TempDir()
+	rootDir2 := t.TempDir()
 
-	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir1))
 	defer env1.Shutdown()
 
-	env2 := newTestEnv(t, withFSDriver(rootDir))
+	env2 := newTestEnv(t, withFSDriver(rootDir2))
 	defer env2.Shutdown()
 
 	tagName := "schema2"
@@ -740,12 +745,13 @@ func TestManifestAPI_Get_Schema2NotInDatabase(t *testing.T) {
 func TestManifestAPI_Put_Schema2WritesNoFilesystemBlobLinkMetadata(t *testing.T) {
 	skipDatabaseNotEnabled(t)
 
-	rootDir := t.TempDir()
+	rootDir1 := t.TempDir()
+	rootDir2 := t.TempDir()
 
-	env1 := newTestEnv(t, withFSDriver(rootDir))
+	env1 := newTestEnv(t, withFSDriver(rootDir1))
 	defer env1.Shutdown()
 
-	env2 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	env2 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir2))
 	defer env2.Shutdown()
 
 	tagName := "schema2"
@@ -1242,12 +1248,13 @@ func TestManifestAPI_Delete_Schema2ManifestNotInDatabase(t *testing.T) {
 
 	// Setup
 
-	rootDir := t.TempDir()
+	rootDir1 := t.TempDir()
+	rootDir2 := t.TempDir()
 
-	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir1))
 	defer env1.Shutdown()
 
-	env2 := newTestEnv(t, withDelete, withFSDriver(rootDir))
+	env2 := newTestEnv(t, withDelete, withFSDriver(rootDir2))
 	defer env2.Shutdown()
 
 	tagName := "schema2deletetag"
@@ -1364,12 +1371,13 @@ func TestManifestAPI_Put_OCIImageIndexByTagManifestsNotPresentInDatabase(t *test
 
 	// Setup
 
-	rootDir := t.TempDir()
+	rootDir1 := t.TempDir()
+	rootDir2 := t.TempDir()
 
-	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir1))
 	defer env1.Shutdown()
 
-	env2 := newTestEnv(t, withFSDriver(rootDir))
+	env2 := newTestEnv(t, withFSDriver(rootDir2))
 	defer env2.Shutdown()
 
 	tagName := "ociindexmissingmanifeststag"

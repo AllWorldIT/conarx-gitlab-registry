@@ -32,14 +32,13 @@ func WalkFallback(ctx context.Context, driver StorageDriver, from string, f Walk
 	for _, child := range children {
 		fileInfo, err := driver.Stat(ctx, child)
 		if err != nil {
-			switch err.(type) {
-			case PathNotFoundError:
+			if errors.As(err, new(PathNotFoundError)) {
 				// repository was removed in between listing and enumeration. Ignore it.
 				logrus.WithField("path", child).Infof("ignoring deleted path")
 				continue
-			default:
-				return err
 			}
+
+			return err
 		}
 		err = f(fileInfo)
 		if err == nil && fileInfo.IsDir() {
@@ -103,7 +102,7 @@ func WalkFallbackParallel(ctx context.Context, driver StorageDriver, maxConcurre
 	return retError
 }
 
-func doWalkParallel(ctx context.Context, driver StorageDriver, semaphore chan struct{}, wg *sync.WaitGroup, quit <-chan struct{}, errors chan<- error, from string, f WalkFn) {
+func doWalkParallel(ctx context.Context, driver StorageDriver, semaphore chan struct{}, wg *sync.WaitGroup, quit <-chan struct{}, errorsCh chan<- error, from string, f WalkFn) {
 	select {
 	// The walk was canceled, return to stop requests for pages and prevent gorountines from leaking.
 	case <-quit:
@@ -111,7 +110,7 @@ func doWalkParallel(ctx context.Context, driver StorageDriver, semaphore chan st
 	default:
 		children, err := driver.List(ctx, from)
 		if err != nil {
-			errors <- err
+			errorsCh <- err
 			return
 		}
 
@@ -133,15 +132,14 @@ func doWalkParallel(ctx context.Context, driver StorageDriver, semaphore chan st
 
 				fileInfo, err := driver.Stat(ctx, c)
 				if err != nil {
-					switch err.(type) {
-					case PathNotFoundError:
+					if errors.As(err, new(PathNotFoundError)) {
 						// repository was removed in between listing and enumeration. Ignore it.
 						logrus.WithField("path", c).Infof("ignoring deleted path")
 						goto ReleaseSemaphoreAndReturn
-					default:
-						errors <- err
-						goto ReleaseSemaphoreAndReturn
 					}
+
+					errorsCh <- err
+					goto ReleaseSemaphoreAndReturn
 				}
 
 				err = f(fileInfo)
@@ -151,7 +149,7 @@ func doWalkParallel(ctx context.Context, driver StorageDriver, semaphore chan st
 					// Release the semaphore now to pass it to the next call to
 					// doWalkParallel and prevent deadlock.
 					<-semaphore
-					doWalkParallel(ctx, driver, semaphore, wg, quit, errors, c, f)
+					doWalkParallel(ctx, driver, semaphore, wg, quit, errorsCh, c, f)
 					return
 				}
 
@@ -160,13 +158,12 @@ func doWalkParallel(ctx context.Context, driver StorageDriver, semaphore chan st
 					if err == ErrSkipDir && fileInfo.IsDir() {
 						goto ReleaseSemaphoreAndReturn
 					}
-					errors <- err
+					errorsCh <- err
 				}
 
 			ReleaseSemaphoreAndReturn:
 				// Release the semaphore, signaling a free spot for another goroutine.
 				<-semaphore
-				return
 			}()
 		}
 	}

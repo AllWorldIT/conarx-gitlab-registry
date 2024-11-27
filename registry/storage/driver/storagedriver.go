@@ -212,3 +212,7 @@ type Error struct {
 func (err Error) Error() string {
 	return fmt.Sprintf("%s: %s", err.DriverName, err.Enclosed)
 }
+
+func (err Error) Unwrap() error {
+	return err.Enclosed
+}

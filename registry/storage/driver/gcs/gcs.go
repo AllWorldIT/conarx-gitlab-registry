@@ -308,7 +308,7 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 		return err
 	})
 	if err == storage.ErrObjectNotExist {
-		return nil, storagedriver.PathNotFoundError{Path: path}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if err != nil {
 		return nil, err
@@ -353,7 +353,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 		var gcsErr *googleapi.Error
 		if errors.As(err, &gcsErr) {
 			if gcsErr.Code == http.StatusNotFound {
-				return nil, storagedriver.PathNotFoundError{Path: path}
+				return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 			}
 
 			if gcsErr.Code == http.StatusRequestedRangeNotSatisfiable {
@@ -364,14 +364,14 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 				if offset == int64(obj.Size) {
 					return io.NopCloser(bytes.NewReader([]byte{})), nil
 				}
-				return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset}
+				return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
 			}
 		}
 		return nil, err
 	}
 	if res.Header.Get("Content-Type") == uploadSessionContentType {
 		defer res.Body.Close()
-		return nil, storagedriver.PathNotFoundError{Path: path}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	return res.Body, nil
 }
@@ -622,7 +622,7 @@ func (w *writer) init(path string) error {
 	}
 	defer res.Body.Close()
 	if res.Header.Get("Content-Type") != uploadSessionContentType {
-		return storagedriver.PathNotFoundError{Path: path}
+		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	offset, err := strconv.ParseInt(res.Header.Get("X-Goog-Meta-Offset"), 10, 64)
 	if err != nil {
@@ -681,7 +681,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 	obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
 	if err == nil {
 		if obj.ContentType == uploadSessionContentType {
-			return nil, storagedriver.PathNotFoundError{Path: path}
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 		fi = storagedriver.FileInfoFields{
 			Path:    path,
@@ -705,7 +705,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 
 	attrs, err := it.Next()
 	if err == iterator.Done {
-		return nil, storagedriver.PathNotFoundError{Path: path}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if err != nil {
 		return nil, err
@@ -763,7 +763,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 	if path != "/" && len(list) == 0 {
 		// Treat empty response as missing directory, since we don't actually
 		// have directories in Google Cloud Storage.
-		return nil, storagedriver.PathNotFoundError{Path: path}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	return list, nil
 }
@@ -776,7 +776,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 		var gerr *googleapi.Error
 		if errors.As(err, &gerr) {
 			if gerr.Code == http.StatusNotFound {
-				return storagedriver.PathNotFoundError{Path: sourcePath}
+				return storagedriver.PathNotFoundError{Path: sourcePath, DriverName: driverName}
 			}
 		}
 		return err
@@ -844,7 +844,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 	}
 	err = storageDeleteObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
 	if err == storage.ErrObjectNotExist {
-		return storagedriver.PathNotFoundError{Path: path}
+		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	return err
 }
@@ -960,7 +960,7 @@ var systemClock internal.Clock = clock.New()
 // Returns ErrUnsupportedMethod if this driver has no privateKey
 func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
 	if d.privateKey == nil {
-		return "", storagedriver.ErrUnsupportedMethod{}
+		return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 	}
 
 	name := d.pathToKey(path)
@@ -969,7 +969,7 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]int
 	if ok {
 		methodString, ok = method.(string)
 		if !ok || (methodString != http.MethodGet && methodString != http.MethodHead) {
-			return "", storagedriver.ErrUnsupportedMethod{}
+			return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 		}
 	}
 

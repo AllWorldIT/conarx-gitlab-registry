@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -103,9 +104,8 @@ func (ch *catalogHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 		repos = make([]string, filters.MaxEntries)
 
 		filled, err = ch.App.registry.Repositories(ch.Context, repos, filters.LastEntry)
-		_, pathNotFound := err.(driver.PathNotFoundError)
 
-		if err == io.EOF || pathNotFound {
+		if errors.Is(err, io.EOF) || errors.As(err, new(driver.PathNotFoundError)) {
 			moreEntries = false
 		} else if err != nil {
 			ch.Errors = append(ch.Errors, errcode.ErrorCodeUnknown.WithDetail(err))

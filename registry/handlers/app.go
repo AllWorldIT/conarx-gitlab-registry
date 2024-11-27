@@ -47,6 +47,7 @@ import (
 	"github.com/docker/distribution/registry/gc/worker"
 	"github.com/docker/distribution/registry/internal"
 	redismetrics "github.com/docker/distribution/registry/internal/metrics/redis"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	registrymiddleware "github.com/docker/distribution/registry/middleware/registry"
 	repositorymiddleware "github.com/docker/distribution/registry/middleware/repository"
 	"github.com/docker/distribution/registry/storage"
@@ -57,9 +58,6 @@ import (
 	storagemiddleware "github.com/docker/distribution/registry/storage/driver/middleware"
 	"github.com/docker/distribution/registry/storage/validation"
 	"github.com/docker/distribution/version"
-	gocache "github.com/eko/gocache/lib/v4/cache"
-	libstore "github.com/eko/gocache/lib/v4/store"
-	redisstore "github.com/eko/gocache/store/redis/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/go-multierror"
@@ -84,6 +82,15 @@ const defaultDBCheckTimeout = 5 * time.Second
 
 // redisCacheTTL is the global expiry duration for objects cached in Redis.
 const redisCacheTTL = 6 * time.Hour
+
+var (
+	// ErrFilesystemInUse is returned when the registry attempts to start with an existing filesystem-in-use lockfile
+	// and the database is also enabled.
+	ErrFilesystemInUse = errors.New(`registry filesystem metadata in use, please import data before enabling the database, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#existing-registries`)
+	// ErrDatabaseInUse is returned when the registry attempts to start with an existing database-in-use lockfile
+	// and the database is disabled.
+	ErrDatabaseInUse = errors.New(`registry metadata database in use, please enable the database https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html`)
+)
 
 // App is a global registry application object. Shared resources can be placed
 // on this object that will be accessible from all requests. Any writable
@@ -121,8 +128,8 @@ type App struct {
 	manifestRefLimit         int
 	manifestPayloadSizeLimit int
 
-	// redisCache is the interface for manipulating cached data on Redis.
-	redisCache *gocache.Cache[any]
+	// redisCache is the abstraction for manipulating cached data on Redis.
+	redisCache *iredis.Cache
 }
 
 // NewApp takes a configuration and returns a configured app, ready to serve
@@ -332,8 +339,24 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		options = append(options, storage.ManifestPayloadSizeLimit(app.manifestPayloadSizeLimit))
 	}
 
+	fsLocker := storage.FilesystemInUseLocker{Driver: app.driver}
+	dbLocker := storage.DatabaseInUseLocker{Driver: app.driver}
 	// Connect to the metadata database, if enabled.
 	if config.Database.Enabled {
+		// Temporary measure to enforce lock files while all the implementation is done
+		// Seehttps://gitlab.com/gitlab-org/container-registry/-/issues/1335
+		if feature.EnforceLockfiles.Enabled() {
+			fsLocked, err := fsLocker.IsLocked(ctx)
+			if err != nil {
+				log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+				return nil, err
+			}
+
+			if fsLocked {
+				return nil, ErrFilesystemInUse
+			}
+		}
+
 		log.Info("using the metadata database")
 
 		if config.GC.Disabled {
@@ -440,16 +463,37 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		// Now that we've started the database successfully, lock the filesystem
 		// to signal that this object storage needs to be managed by the database.
-		dbLock := storage.DatabaseInUseLocker{Driver: app.driver}
-		if err := dbLock.Lock(app.Context); err != nil {
-			// Right now, the server doesn't make use of this lock, only the offline
-			// garbage collector reads this file, so we are fee to log a warning
-			// and move on with spinning up the application.
-			log.WithError(err).Warn("failed to mark filesystem for database only usage, continuing")
+		if feature.EnforceLockfiles.Enabled() {
+			if err := dbLocker.Lock(app.Context); err != nil {
+				log.WithError(err).Error("failed to mark filesystem for database only usage, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+				return nil, err
+			}
 		}
+
 		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
 			startBackgroundMigrations(app.Context, app.db.Primary(), config)
 		}
+	} else {
+		if feature.EnforceLockfiles.Enabled() {
+			dbLocked, err := dbLocker.IsLocked(ctx)
+			if err != nil {
+				log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+				return nil, err
+			}
+
+			if dbLocked {
+				return nil, ErrDatabaseInUse
+			}
+		}
+
+		// Lock the filesystem metadata to prevent
+		// accidental start up of the registry in database mode
+		// before an import has been completed.
+		if err := fsLocker.Lock(app.Context); err != nil {
+			log.WithError(err).Error("failed to mark filesystem only usage, continuing")
+			return nil, err
+		}
+		log.Info("registry filesystem metadata in use")
 	}
 
 	// configure storage caches
@@ -734,7 +778,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 		storageDriverCheck := func() error {
 			_, err := app.driver.Stat(app, "/") // "/" should always exist
-			if _, ok := err.(storagedriver.PathNotFoundError); ok {
+			if errors.As(err, new(storagedriver.PathNotFoundError)) {
 				err = nil // pass this through, backend is responding, but this path doesn't exist.
 			}
 			return err
@@ -1025,8 +1069,7 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 		return cmd.Err()
 	}
 
-	redisStore := redisstore.NewRedis(redisClient, libstore.WithExpiration(redisCacheTTL))
-	app.redisCache = gocache.New[any](redisStore)
+	app.redisCache = iredis.NewCache(redisClient, iredis.WithDefaultTTL(redisCacheTTL))
 
 	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis cache configured successfully")
 
@@ -1423,6 +1466,7 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 			}
 
 			ctx.Repository = repository
+			ctx.queueBridge = app.queueBridge(ctx, r)
 		}
 
 		dispatch(ctx, r).ServeHTTP(w, r)
@@ -2025,11 +2069,13 @@ func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *co
 	if err != nil {
 		l.WithError(err).Error("background migration worker exited abruptly")
 	}
-	l.Info("Background migration worker is running")
+	l.Info("background migration worker is running")
 
-	// wait for the worker to acknowledge that it is safe to exit.
-	<-gracefulFinish
-	l.Info("Background migration worker stopped")
+	go func() {
+		// wait for the worker to acknowledge that it is safe to exit.
+		<-gracefulFinish
+		l.Info("background migration worker stopped gracefully")
+	}()
 }
 
 func bbmListenForShutdown(ctx context.Context, c chan os.Signal, doneCh chan struct{}) {
