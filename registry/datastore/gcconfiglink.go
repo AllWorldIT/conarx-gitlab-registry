@@ -8,13 +8,13 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 )
 
-type gcConfigLinkStore struct {
+type GCConfigLinkStore struct {
 	db Queryer
 }
 
-// NewGCConfigLinkStore builds a new gcConfigLinkStore.
-func NewGCConfigLinkStore(db Queryer) *gcConfigLinkStore {
-	return &gcConfigLinkStore{db: db}
+// NewGCConfigLinkStore builds a new GCConfigLinkStore.
+func NewGCConfigLinkStore(db Queryer) *GCConfigLinkStore {
+	return &GCConfigLinkStore{db: db}
 }
 
 func scanFullGCConfigLinks(rows *sql.Rows) ([]*models.GCConfigLink, error) {
@@ -46,7 +46,7 @@ func scanFullGCConfigLinks(rows *sql.Rows) ([]*models.GCConfigLink, error) {
 }
 
 // FindAll finds all GC configuration links.
-func (s *gcConfigLinkStore) FindAll(ctx context.Context) ([]*models.GCConfigLink, error) {
+func (s *GCConfigLinkStore) FindAll(ctx context.Context) ([]*models.GCConfigLink, error) {
 	q := `SELECT
 			id,
 			top_level_namespace_id,
@@ -64,7 +64,7 @@ func (s *gcConfigLinkStore) FindAll(ctx context.Context) ([]*models.GCConfigLink
 }
 
 // Count counts all GC configuration links.
-func (s *gcConfigLinkStore) Count(ctx context.Context) (int, error) {
+func (s *GCConfigLinkStore) Count(ctx context.Context) (int, error) {
 	q := "SELECT COUNT(*) FROM gc_blobs_configurations"
 	var count int
 

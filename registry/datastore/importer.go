@@ -781,7 +781,7 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 	}
 
 	total := len(fsTags)
-	doneManifests := map[digest.Digest]struct{}{}
+	doneManifests := make(map[digest.Digest]struct{}, 0)
 
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": dbRepo.Path, "total": total})
 	l.Info("processing tags")
@@ -878,6 +878,7 @@ func (imp *Importer) preImportManifest(ctx context.Context, fsRepo distribution.
 				l.WithError(err).Warn("skipping manifest import")
 				return err
 			default:
+				// nolint: revive // max-control-nesting
 				if shouldRetryManifestPreImport(err) {
 					return imp.retryImportManifestWithBackoff(l, fsRepo, fsManifest, dbRepo, dgst)
 				}
@@ -1015,12 +1016,12 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 	l.Info("starting metadata import")
 
 	if imp.importDanglingBlobs {
-		if err := imp.importBlobs(ctx); err != nil {
+		if err := imp.importBlobsImpl(ctx); err != nil {
 			return fmt.Errorf("importing blobs: %w", err)
 		}
 	}
 
-	if err := imp.importAllRepositories(ctx); err != nil {
+	if err := imp.importAllRepositoriesImpl(ctx); err != nil {
 		return err
 	}
 
@@ -1150,7 +1151,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		start := time.Now()
 		imp.printBar(bar, "step two: import tags")
 
-		if err := imp.importAllRepositories(ctx); err != nil {
+		if err := imp.importAllRepositoriesImpl(ctx); err != nil {
 			return fmt.Errorf("importing all repositories: %w", err)
 		}
 
@@ -1161,7 +1162,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		start := time.Now()
 		imp.printBar(bar, "step three: import blobs")
 
-		if err := imp.importBlobs(ctx); err != nil {
+		if err := imp.importBlobsImpl(ctx); err != nil {
 			return fmt.Errorf("importing blobs: %w", err)
 		}
 
@@ -1260,7 +1261,7 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 	})
 }
 
-func (imp *Importer) importBlobs(ctx context.Context) error {
+func (imp *Importer) importBlobsImpl(ctx context.Context) error {
 	var index int
 	start := time.Now()
 	l := log.GetLogger(log.WithContext(ctx))
@@ -1335,7 +1336,7 @@ func (imp *Importer) handleLockers(ctx context.Context, err error) error {
 	return nil
 }
 
-func (imp *Importer) importAllRepositories(ctx context.Context) (err error) {
+func (imp *Importer) importAllRepositoriesImpl(ctx context.Context) (err error) {
 	var tx Transactor
 	defer func() {
 		if lockErr := imp.handleLockers(ctx, err); lockErr != nil {
@@ -1569,7 +1570,7 @@ func (imp *Importer) RestoreLockfiles(ctx context.Context) error {
 	}
 
 	if err := imp.registry.Lockers().FSLock(ctx); err != nil {
-		return err
+		return fmt.Errorf("creating the filesystem-in-use file in the storage driver: %w", err)
 	}
 
 	return nil
@@ -1587,5 +1588,5 @@ func (imp *Importer) printBar(b *progressbar.ProgressBar, s ...string) {
 		b.Describe(s[0])
 	}
 
-	fmt.Println(b)
+	_, _ = fmt.Println(b)
 }

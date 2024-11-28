@@ -20,7 +20,7 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/storage"
-	storageDriver "github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/docker/libtrust"
 	"github.com/stretchr/testify/require"
@@ -29,15 +29,15 @@ import (
 func newFilesystemStorageDriverWithRoot(tb testing.TB, root string) *filesystem.Driver {
 	tb.Helper()
 
-	driver, err := filesystem.FromParameters(map[string]any{
+	sdriver, err := filesystem.FromParameters(map[string]any{
 		"rootdirectory": path.Join(suite.fixturesPath, "importer", root),
 	})
 	require.NoError(tb, err, "error creating storage driver")
 
-	return driver
+	return sdriver
 }
 
-func newRegistry(tb testing.TB, driver storageDriver.StorageDriver) distribution.Namespace {
+func newRegistry(tb testing.TB, sdriver driver.StorageDriver) distribution.Namespace {
 	tb.Helper()
 
 	// load custom key to be used for manifest signing, ensuring that we have reproducible signatures
@@ -50,7 +50,7 @@ func newRegistry(tb testing.TB, driver storageDriver.StorageDriver) distribution
 	k, err := libtrust.FromCryptoPrivateKey(privateKey)
 	require.NoErrorf(tb, err, "error loading signature key")
 
-	registry, err := storage.NewRegistry(suite.ctx, driver, storage.Schema1SigningKey(k), storage.EnableSchema1)
+	registry, err := storage.NewRegistry(suite.ctx, sdriver, storage.Schema1SigningKey(k), storage.EnableSchema1)
 	require.NoError(tb, err, "error creating registry")
 
 	return registry
@@ -89,8 +89,8 @@ func newImporter(t *testing.T, db *datastore.DB, opts ...datastore.ImporterOptio
 func newImporterWithRoot(t *testing.T, db *datastore.DB, root string, opts ...datastore.ImporterOption) *datastore.Importer {
 	t.Helper()
 
-	driver := newFilesystemStorageDriverWithRoot(t, root)
-	registry := newRegistry(t, driver)
+	sdriver := newFilesystemStorageDriverWithRoot(t, root)
+	registry := newRegistry(t, sdriver)
 
 	imp := datastore.NewImporter(db, registry, opts...)
 
@@ -333,20 +333,20 @@ type lastTagErrorDriver struct {
 	*filesystem.Driver
 }
 
-func (d *lastTagErrorDriver) GetContent(ctx context.Context, path string) ([]byte, error) {
+func (d *lastTagErrorDriver) GetContent(ctx context.Context, targetPath string) ([]byte, error) {
 	tagLinkFile := "/docker/registry/v2/repositories/last-tag-error/_manifests/tags/2.1.1/current/link"
-	if path == tagLinkFile {
-		return []byte{}, errors.New("test tag details read error")
+	if targetPath == tagLinkFile {
+		return make([]byte, 0), errors.New("test tag details read error")
 	}
 
-	return d.Driver.GetContent(ctx, path)
+	return d.Driver.GetContent(ctx, targetPath)
 }
 
 func TestImporter_Import_LastTagError(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
-	driver := &lastTagErrorDriver{newFilesystemStorageDriverWithRoot(t, "last-tag-error")}
-	registry := newRegistry(t, driver)
+	sdriver := &lastTagErrorDriver{newFilesystemStorageDriverWithRoot(t, "last-tag-error")}
+	registry := newRegistry(t, sdriver)
 
 	imp := datastore.NewImporter(suite.db, registry)
 	err := imp.Import(suite.ctx, "last-tag-error")

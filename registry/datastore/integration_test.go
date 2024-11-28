@@ -60,7 +60,7 @@ func (s *testSuite) teardown() error {
 		return err
 	}
 	if err := s.db.Close(); err != nil {
-		return err
+		return fmt.Errorf("closing database: %w", err)
 	}
 
 	return nil
