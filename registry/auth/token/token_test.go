@@ -298,7 +298,7 @@ func writeTempRootCerts(rootKeys []libtrust.PrivateKey) (filename string, err er
 			Type:  "CERTIFICATE",
 			Bytes: cert.Raw,
 		}); err != nil {
-			os.Remove(tempFile.Name())
+			_ = os.Remove(tempFile.Name())
 			return "", err
 		}
 	}
@@ -405,7 +405,7 @@ func TestAccessController(t *testing.T) {
 	// 3. Supply a token with insufficient access.
 	token, err = makeTestToken(
 		issuer, service,
-		[]*ResourceActions{}, // No access specified.
+		make([]*ResourceActions, 0), // No access specified.
 		rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
 	)
 	if err != nil {
@@ -595,7 +595,7 @@ func newTestAuthContext(t *testing.T, ctx context.Context, req *http.Request, ac
 
 	rootCertBundleFilename, err := writeTempRootCerts(rootKeys)
 	require.NoError(t, err)
-	t.Cleanup(func() { os.Remove(rootCertBundleFilename) })
+	t.Cleanup(func() { _ = os.Remove(rootCertBundleFilename) })
 
 	testRealm := "https://gitlab.com/jwt/auth"
 	testIssuer := "omnibus-gitlab-issuer"

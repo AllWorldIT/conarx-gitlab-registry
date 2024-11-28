@@ -32,7 +32,7 @@ func TestRouter(t *testing.T) {
 		{
 			RouteName:  RouteNameBase,
 			RequestURI: "/v2/",
-			Vars:       map[string]string{},
+			Vars:       make(map[string]string),
 		},
 		{
 			RouteName:  RouteNameManifest,
@@ -269,6 +269,7 @@ func checkTestRouter(t *testing.T, testCases []routeTestCase, prefix string, dee
 			t.Fatalf("error issuing get request: %v", err)
 		}
 
+		// nolint: revive // defer
 		defer resp.Body.Close()
 
 		if testcase.StatusCode == 0 {

@@ -54,7 +54,7 @@ func (cf CheckFunc) Check() error {
 
 // Shutdown is a noop, just to fulfill the interface as the functions that are
 // using this do not need shutting down.
-func (cf CheckFunc) Shutdown() {
+func (CheckFunc) Shutdown() {
 }
 
 // Updater implements a health check that is explicitly set.

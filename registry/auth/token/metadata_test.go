@@ -116,6 +116,7 @@ func TestWithEgressMetadata(t *testing.T) {
 			// Test fallback to parent context for an unknown key
 			fallbackKey := "unknown.key"
 			fallbackValue := "fallback"
+			// nolint: revive // context-keys-type
 			parentCtx := context.WithValue(ctx, fallbackKey, fallbackValue)
 			egressCtxWithFallback := WithEgressMetadata(parentCtx, tt.accesses)
 			val, ok := egressCtxWithFallback.Value(fallbackKey).(string)

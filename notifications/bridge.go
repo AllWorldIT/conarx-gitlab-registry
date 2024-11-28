@@ -56,15 +56,15 @@ func NewRequestRecord(id string, r *http.Request) RequestRecord {
 	}
 }
 
-func (b *bridge) ManifestPushed(repo reference.Named, sm distribution.Manifest, options ...distribution.ManifestServiceOption) error {
+func (*bridge) ManifestPushed(_ reference.Named, _ distribution.Manifest, _ ...distribution.ManifestServiceOption) error {
 	return nil
 }
 
-func (b *bridge) ManifestPulled(repo reference.Named, sm distribution.Manifest, options ...distribution.ManifestServiceOption) error {
+func (*bridge) ManifestPulled(_ reference.Named, _ distribution.Manifest, _ ...distribution.ManifestServiceOption) error {
 	return nil
 }
 
-func (b *bridge) ManifestDeleted(repo reference.Named, dgst digest.Digest) error {
+func (*bridge) ManifestDeleted(_ reference.Named, _ digest.Digest) error {
 	return nil
 }
 
@@ -89,7 +89,7 @@ func (b *bridge) BlobDeleted(repo reference.Named, dgst digest.Digest) error {
 	return b.createBlobDeleteEventAndWrite(EventActionDelete, repo, dgst)
 }
 
-func (b *bridge) TagDeleted(repo reference.Named, tag string) error {
+func (*bridge) TagDeleted(_ reference.Named, _ string) error {
 	return nil
 }
 

@@ -62,47 +62,47 @@ type testListener struct {
 	ops map[string]int
 }
 
-func (tl *testListener) ManifestPushed(repo reference.Named, m distribution.Manifest, options ...distribution.ManifestServiceOption) error {
+func (tl *testListener) ManifestPushed(_ reference.Named, _ distribution.Manifest, _ ...distribution.ManifestServiceOption) error {
 	tl.ops["manifest:push"]++
 	return nil
 }
 
-func (tl *testListener) ManifestPulled(repo reference.Named, m distribution.Manifest, options ...distribution.ManifestServiceOption) error {
+func (tl *testListener) ManifestPulled(_ reference.Named, _ distribution.Manifest, _ ...distribution.ManifestServiceOption) error {
 	tl.ops["manifest:pull"]++
 	return nil
 }
 
-func (tl *testListener) ManifestDeleted(repo reference.Named, d digest.Digest) error {
+func (tl *testListener) ManifestDeleted(_ reference.Named, _ digest.Digest) error {
 	tl.ops["manifest:delete"]++
 	return nil
 }
 
-func (tl *testListener) BlobPushed(repo reference.Named, desc distribution.Descriptor) error {
+func (tl *testListener) BlobPushed(_ reference.Named, _ distribution.Descriptor) error {
 	tl.ops["layer:push"]++
 	return nil
 }
 
-func (tl *testListener) BlobPulled(repo reference.Named, desc distribution.Descriptor, meta *meta.Blob) error {
+func (tl *testListener) BlobPulled(_ reference.Named, _ distribution.Descriptor, _ *meta.Blob) error {
 	tl.ops["layer:pull"]++
 	return nil
 }
 
-func (tl *testListener) BlobMounted(repo reference.Named, desc distribution.Descriptor, fromRepo reference.Named) error {
+func (tl *testListener) BlobMounted(_ reference.Named, _ distribution.Descriptor, _ reference.Named) error {
 	tl.ops["layer:mount"]++
 	return nil
 }
 
-func (tl *testListener) BlobDeleted(repo reference.Named, d digest.Digest) error {
+func (tl *testListener) BlobDeleted(_ reference.Named, _ digest.Digest) error {
 	tl.ops["layer:delete"]++
 	return nil
 }
 
-func (tl *testListener) TagDeleted(repo reference.Named, tag string) error {
+func (tl *testListener) TagDeleted(_ reference.Named, _ string) error {
 	tl.ops["tag:delete"]++
 	return nil
 }
 
-func (tl *testListener) RepoDeleted(repo reference.Named) error {
+func (tl *testListener) RepoDeleted(_ reference.Named) error {
 	tl.ops["repo:delete"]++
 	return nil
 }
@@ -137,7 +137,8 @@ func checkExerciseRepository(t *testing.T, repository distribution.Repository, r
 		wr, err = blobs.Resume(ctx, wr.ID())
 		require.NoError(t, err, "error resuming layer upload")
 
-		io.Copy(wr, rs)
+		_, err = io.Copy(wr, rs)
+		require.NoError(t, err)
 
 		_, err = wr.Commit(ctx, distribution.Descriptor{Digest: dgst})
 		require.NoError(t, err, "unexpected error finishing upload")
@@ -152,6 +153,7 @@ func checkExerciseRepository(t *testing.T, repository distribution.Repository, r
 		// Then fetch the blobs
 		rc, err := blobs.Open(ctx, dgst)
 		require.NoError(t, err, "error fetching layer")
+		// nolint: revive // defer
 		defer rc.Close()
 	}
 

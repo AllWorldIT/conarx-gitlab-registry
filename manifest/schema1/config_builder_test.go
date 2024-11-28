@@ -13,28 +13,29 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/require"
 )
 
 type mockBlobService struct {
 	descriptors map[digest.Digest]distribution.Descriptor
 }
 
-func (bs *mockBlobService) Stat(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
+func (bs *mockBlobService) Stat(_ context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
 	if descriptor, ok := bs.descriptors[dgst]; ok {
 		return descriptor, nil
 	}
 	return distribution.Descriptor{}, distribution.ErrBlobUnknown
 }
 
-func (bs *mockBlobService) Get(ctx context.Context, dgst digest.Digest) ([]byte, error) {
+func (*mockBlobService) Get(_ context.Context, _ digest.Digest) ([]byte, error) {
 	panic("not implemented")
 }
 
-func (bs *mockBlobService) Open(ctx context.Context, dgst digest.Digest) (distribution.ReadSeekCloser, error) {
+func (*mockBlobService) Open(_ context.Context, _ digest.Digest) (distribution.ReadSeekCloser, error) {
 	panic("not implemented")
 }
 
-func (bs *mockBlobService) Put(ctx context.Context, mediaType string, p []byte) (distribution.Descriptor, error) {
+func (bs *mockBlobService) Put(_ context.Context, mediaType string, p []byte) (distribution.Descriptor, error) {
 	d := distribution.Descriptor{
 		Digest:    digest.FromBytes(p),
 		Size:      int64(len(p)),
@@ -44,11 +45,11 @@ func (bs *mockBlobService) Put(ctx context.Context, mediaType string, p []byte) 
 	return d, nil
 }
 
-func (bs *mockBlobService) Create(ctx context.Context, options ...distribution.BlobCreateOption) (distribution.BlobWriter, error) {
+func (*mockBlobService) Create(_ context.Context, _ ...distribution.BlobCreateOption) (distribution.BlobWriter, error) {
 	panic("not implemented")
 }
 
-func (bs *mockBlobService) Resume(ctx context.Context, id string) (distribution.BlobWriter, error) {
+func (*mockBlobService) Resume(_ context.Context, _ string) (distribution.BlobWriter, error) {
 	panic("not implemented")
 }
 
@@ -70,7 +71,8 @@ func TestEmptyTar(t *testing.T) {
 	if err != io.EOF {
 		t.Fatal("read did not return io.EOF")
 	}
-	gzipReader.Close()
+	err = gzipReader.Close()
+	require.NoError(t, err)
 	for _, b := range decompressed[:1024] {
 		if b != 0 {
 			t.Fatal("nonzero byte in decompressed tar")

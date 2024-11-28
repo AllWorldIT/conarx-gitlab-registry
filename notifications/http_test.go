@@ -110,7 +110,7 @@ func TestHTTPSink(t *testing.T) {
 			if err != nil {
 				return
 			}
-			c.Close()
+			_ = c.Close()
 		}
 	}()
 

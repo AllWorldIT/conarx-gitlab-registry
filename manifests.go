@@ -83,17 +83,17 @@ type ManifestBuilder interface {
 // ManifestService describes operations on image manifests.
 type ManifestService interface {
 	// Exists returns true if the manifest exists.
-	Exists(ctx context.Context, dgst digest.Digest) (bool, error)
+	Exists(context.Context, digest.Digest) (bool, error)
 
 	// Get retrieves the manifest specified by the given digest
-	Get(ctx context.Context, dgst digest.Digest, options ...ManifestServiceOption) (Manifest, error)
+	Get(context.Context, digest.Digest, ...ManifestServiceOption) (Manifest, error)
 
 	// Put creates or updates the given manifest returning the manifest digest
-	Put(ctx context.Context, manifest Manifest, options ...ManifestServiceOption) (digest.Digest, error)
+	Put(context.Context, Manifest, ...ManifestServiceOption) (digest.Digest, error)
 
 	// Delete removes the manifest specified by the given digest. Deleting
 	// a manifest that doesn't exist will return ErrManifestNotFound
-	Delete(ctx context.Context, dgst digest.Digest) error
+	Delete(context.Context, digest.Digest) error
 }
 
 // ManifestEnumerator enables iterating over manifests
@@ -114,7 +114,7 @@ func ManifestMediaTypes() (mediaTypes []string) {
 			mediaTypes = append(mediaTypes, t)
 		}
 	}
-	return
+	return mediaTypes
 }
 
 // UnmarshalFunc implements manifest unmarshalling a given MediaType
