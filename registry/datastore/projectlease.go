@@ -16,39 +16,39 @@ import (
 var errLeasePathIsEmpty = errors.New("project lease path can not be empty")
 
 // ProjectLeaseStore is used to manage access to a project lease resource in the cache
-type projectLeaseStore struct {
-	*centralProjectLeaseCache
+type ProjectLeaseStore struct {
+	*CentralProjectLeaseCache
 }
 
 // NewProjectLeaseStore builds a new projectLeaseStore.
-func NewProjectLeaseStore(cache *centralProjectLeaseCache) (*projectLeaseStore, error) {
+func NewProjectLeaseStore(cache *CentralProjectLeaseCache) (*ProjectLeaseStore, error) {
 	if cache == nil {
 		return nil, errors.New("cache can not be empty")
 	}
-	rlStore := &projectLeaseStore{cache}
+	rlStore := &ProjectLeaseStore{cache}
 	return rlStore, nil
 }
 
-// centralProjectLeaseCache is the interface for the centralized project lease cache backed by Redis.
-type centralProjectLeaseCache struct {
+// CentralProjectLeaseCache is the interface for the centralized project lease cache backed by Redis.
+type CentralProjectLeaseCache struct {
 	cache *iredis.Cache
 }
 
 // NewCentralProjectLeaseCache creates an interface for the centralized project lease cache backed by Redis.
-func NewCentralProjectLeaseCache(cache *iredis.Cache) *centralProjectLeaseCache {
-	return &centralProjectLeaseCache{cache}
+func NewCentralProjectLeaseCache(cache *iredis.Cache) *CentralProjectLeaseCache {
+	return &CentralProjectLeaseCache{cache}
 }
 
 // key generates a valid Redis key string for a given project lease object. The used key format is described in
 // https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
-func (c *centralProjectLeaseCache) key(path string) string {
+func (*CentralProjectLeaseCache) key(path string) string {
 	groupPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()
 	return fmt.Sprintf("registry:api:{project-lease:%s:%s}", groupPrefix, hex)
 }
 
 // Exists checks if a project lease exists in the cache.
-func (c *centralProjectLeaseCache) Exists(ctx context.Context, path string) (bool, error) {
+func (c *CentralProjectLeaseCache) Exists(ctx context.Context, path string) (bool, error) {
 	getCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 
@@ -64,7 +64,7 @@ func (c *centralProjectLeaseCache) Exists(ctx context.Context, path string) (boo
 }
 
 // Set a project lease in the cache.
-func (c *centralProjectLeaseCache) Set(ctx context.Context, path string, ttl time.Duration) error {
+func (c *CentralProjectLeaseCache) Set(ctx context.Context, path string, ttl time.Duration) error {
 	if path == "" {
 		return errLeasePathIsEmpty
 	}
@@ -75,7 +75,7 @@ func (c *centralProjectLeaseCache) Set(ctx context.Context, path string, ttl tim
 }
 
 // Invalidate the lease for a given project path in the cache.
-func (c *centralProjectLeaseCache) Invalidate(ctx context.Context, path string) error {
+func (c *CentralProjectLeaseCache) Invalidate(ctx context.Context, path string) error {
 	invalCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
 	defer cancel()
 

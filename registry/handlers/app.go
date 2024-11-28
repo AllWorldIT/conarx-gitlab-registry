@@ -453,7 +453,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
-		m := migrations.NewMigrator(db.Primary(), migrations.SkipPostDeployment)
+		m := migrations.NewMigrator(db.Primary(), migrations.SkipPostDeployment())
 		pending, err := m.HasPending()
 		if err != nil {
 			return nil, fmt.Errorf("failed to check database migrations status: %w", err)

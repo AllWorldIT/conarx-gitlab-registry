@@ -38,7 +38,7 @@ type Migrator interface {
 	Down() (int, error)
 }
 
-type migrator struct {
+type MigratorImpl struct {
 	db         *sql.DB
 	migrations []*Migration
 
@@ -46,12 +46,16 @@ type migrator struct {
 	bbmWorker          *bbm.SyncWorker
 }
 
-func NewMigrator(dsdb *datastore.DB, opts ...MigratorOption) *migrator {
+// NewMigrator creates new Migrator.
+// NOTE(prozlach): we can not use interface here because in some cases the code
+// is accessing private fields of the pacakge/object. This would need a deeper
+// cleanup to make the API clean.
+func NewMigrator(dsdb *datastore.DB, opts ...MigratorOption) *MigratorImpl {
 	var db *sql.DB
 	if dsdb != nil {
 		db = dsdb.DB
 	}
-	m := &migrator{
+	m := &MigratorImpl{
 		db:         db,
 		migrations: allMigrations,
 		bbmWorker:  bbm.NewSyncWorker(dsdb),
@@ -66,31 +70,39 @@ func NewMigrator(dsdb *datastore.DB, opts ...MigratorOption) *migrator {
 
 // MigratorOption enables the creation of functional options for the
 // configuration of the migrator.
-type MigratorOption func(m *migrator)
+type MigratorOption func(m *MigratorImpl)
 
 // Source allows the migrator to use an alternative source of migrations, used
 // for testing.
-func Source(a []*Migration) func(m *migrator) {
-	return func(m *migrator) {
+func Source(a []*Migration) MigratorOption {
+	return func(m *MigratorImpl) {
 		m.migrations = a
 	}
 }
 
 // WithBBMWorker allows the migrator to use an alternative BBM worker, used
 // for testing.
-func WithBBMWorker(w *bbm.SyncWorker) func(m *migrator) {
-	return func(m *migrator) {
+func WithBBMWorker(w *bbm.SyncWorker) MigratorOption {
+	return func(m *MigratorImpl) {
 		m.bbmWorker = w
 	}
 }
 
 // SkipPostDeployment configures the migration to not apply postdeployment migrations.
-func SkipPostDeployment(m *migrator) {
-	m.skipPostDeployment = true
+func SkipPostDeployment() MigratorOption {
+	return func(m *MigratorImpl) {
+		m.skipPostDeployment = true
+	}
+}
+
+// Reconfigure is used to change the configuration of an existing Migrator
+// using given config option.
+func (m *MigratorImpl) Reconfigure(f MigratorOption) {
+	f(m)
 }
 
 // Version returns the current applied migration version (if any).
-func (m *migrator) Version() (string, error) {
+func (m *MigratorImpl) Version() (string, error) {
 	records, err := migrate.GetMigrationRecords(m.db, dialect)
 	if err != nil {
 		return "", err
@@ -103,7 +115,7 @@ func (m *migrator) Version() (string, error) {
 }
 
 // LatestVersion identifies the version of the most recent migration in the repository (if any).
-func (m *migrator) LatestVersion() (string, error) {
+func (m *MigratorImpl) LatestVersion() (string, error) {
 	all, err := m.eligibleMigrations()
 	if err != nil {
 		return "", err
@@ -115,7 +127,7 @@ func (m *migrator) LatestVersion() (string, error) {
 	return all[len(all)-1].Id, nil
 }
 
-func (m *migrator) migrate(direction migrate.MigrationDirection, limit int) (int, error) {
+func (m *MigratorImpl) migrate(direction migrate.MigrationDirection, limit int) (int, error) {
 	src, err := m.eligibleMigrationSource()
 	if err != nil {
 		return 0, err
@@ -125,49 +137,49 @@ func (m *migrator) migrate(direction migrate.MigrationDirection, limit int) (int
 }
 
 // Up applies all pending up migrations. Returns the number of applied migrations and background migrations.
-func (m *migrator) Up() (MigrationResult, error) {
+func (m *MigratorImpl) Up() (MigrationResult, error) {
 	return m.migrateUpWithBBMCheck(0)
 }
 
 // UpN applies up to n pending up migrations. All pending migrations will be applied if n is 0.  Returns the number of
 // applied migrations and background migrations.
-func (m *migrator) UpN(n int) (MigrationResult, error) {
+func (m *MigratorImpl) UpN(n int) (MigrationResult, error) {
 	return m.migrateUpWithBBMCheck(n)
 }
 
 // UpNPlan plans up to n pending up migrations and returns the ordered list of migration IDs. All pending migrations
 // will be planned if n is 0.
-func (m *migrator) UpNPlan(n int) ([]string, error) {
+func (m *MigratorImpl) UpNPlan(n int) ([]string, error) {
 	return m.plan(migrate.Up, n)
 }
 
 // Down applies all pending down migrations.  Returns the number of applied migrations.
-func (m *migrator) Down() (int, error) {
+func (m *MigratorImpl) Down() (int, error) {
 	return m.migrate(migrate.Down, 0)
 }
 
 // DownN applies up to n pending down migrations. All migrations will be applied if n is 0.  Returns the number of
 // applied migrations.
-func (m *migrator) DownN(n int) (int, error) {
+func (m *MigratorImpl) DownN(n int) (int, error) {
 	return m.migrate(migrate.Down, n)
 }
 
 // DownNPlan plans up to n pending down migrations and returns the ordered list of migration IDs. All pending migrations
 // will be planned if n is 0.
-func (m *migrator) DownNPlan(n int) ([]string, error) {
+func (m *MigratorImpl) DownNPlan(n int) ([]string, error) {
 	return m.plan(migrate.Down, n)
 }
 
-// migrationStatus represents the status of a migration. Unknown will be set to true if a migration was applied but is
+// MigrationStatus represents the status of a migration. Unknown will be set to true if a migration was applied but is
 // not known by the current build.
-type migrationStatus struct {
+type MigrationStatus struct {
 	Unknown        bool
 	PostDeployment bool
 	AppliedAt      *time.Time
 }
 
 // Status returns the status of all migrations, indexed by migration ID.
-func (m *migrator) Status() (map[string]*migrationStatus, error) {
+func (m *MigratorImpl) Status() (map[string]*MigrationStatus, error) {
 	applied, err := migrate.GetMigrationRecords(m.db, dialect)
 	if err != nil {
 		return nil, err
@@ -177,9 +189,9 @@ func (m *migrator) Status() (map[string]*migrationStatus, error) {
 		return nil, err
 	}
 
-	statuses := make(map[string]*migrationStatus, len(applied))
+	statuses := make(map[string]*MigrationStatus, len(applied))
 	for _, k := range known {
-		statuses[k.Id] = &migrationStatus{}
+		statuses[k.Id] = &MigrationStatus{}
 
 		if mig := m.FindMigrationByID(k.Id); mig != nil && mig.PostDeployment {
 			statuses[k.Id].PostDeployment = true
@@ -188,7 +200,7 @@ func (m *migrator) Status() (map[string]*migrationStatus, error) {
 
 	for _, m := range applied {
 		if _, ok := statuses[m.Id]; !ok {
-			statuses[m.Id] = &migrationStatus{Unknown: true}
+			statuses[m.Id] = &MigrationStatus{Unknown: true}
 		}
 
 		statuses[m.Id].AppliedAt = &m.AppliedAt
@@ -198,7 +210,7 @@ func (m *migrator) Status() (map[string]*migrationStatus, error) {
 }
 
 // HasPending determines whether all known migrations are applied or not.
-func (m *migrator) HasPending() (bool, error) {
+func (m *MigratorImpl) HasPending() (bool, error) {
 	records, err := migrate.GetMigrationRecords(m.db, dialect)
 	if err != nil {
 		return false, err
@@ -218,7 +230,7 @@ func (m *migrator) HasPending() (bool, error) {
 	return false, nil
 }
 
-func (m *migrator) plan(direction migrate.MigrationDirection, limit int) ([]string, error) {
+func (m *MigratorImpl) plan(direction migrate.MigrationDirection, limit int) ([]string, error) {
 	src, err := m.eligibleMigrationSource()
 	if err != nil {
 		return nil, err
@@ -237,11 +249,11 @@ func (m *migrator) plan(direction migrate.MigrationDirection, limit int) ([]stri
 	return result, nil
 }
 
-func (m *migrator) allMigrations() ([]*migrate.Migration, error) {
+func (m *MigratorImpl) allMigrations() ([]*migrate.Migration, error) {
 	return m.allMigrationSource().FindMigrations()
 }
 
-func (m *migrator) allMigrationSource() *migrate.MemoryMigrationSource {
+func (m *MigratorImpl) allMigrationSource() *migrate.MemoryMigrationSource {
 	src := &migrate.MemoryMigrationSource{}
 
 	for _, migration := range m.migrations {
@@ -251,7 +263,7 @@ func (m *migrator) allMigrationSource() *migrate.MemoryMigrationSource {
 	return src
 }
 
-func (m *migrator) eligibleMigrations() ([]*migrate.Migration, error) {
+func (m *MigratorImpl) eligibleMigrations() ([]*migrate.Migration, error) {
 	src, err := m.eligibleMigrationSource()
 	if err != nil {
 		return nil, err
@@ -260,7 +272,7 @@ func (m *migrator) eligibleMigrations() ([]*migrate.Migration, error) {
 	return src.FindMigrations()
 }
 
-func (m *migrator) eligibleMigrationSource() (*migrate.MemoryMigrationSource, error) {
+func (m *MigratorImpl) eligibleMigrationSource() (*migrate.MemoryMigrationSource, error) {
 	src := &migrate.MemoryMigrationSource{}
 
 	records, err := migrate.GetMigrationRecords(m.db, dialect)
@@ -293,7 +305,7 @@ func migrationApplied(records []*migrate.MigrationRecord, id string) bool {
 	return false
 }
 
-func (m *migrator) FindMigrationByID(id string) *Migration {
+func (m *MigratorImpl) FindMigrationByID(id string) *Migration {
 	for _, mig := range m.migrations {
 		if mig.Id == id {
 			return mig
@@ -306,7 +318,7 @@ func (m *migrator) FindMigrationByID(id string) *Migration {
 // It verifies Batched Background Migration (BBM) dependencies before each migration.
 // Returns the number of applied schema migrations, background migrations or an error if any step fails,
 // including when required BBMs are incomplete.
-func (m *migrator) migrateUpWithBBMCheck(max int) (MigrationResult, error) {
+func (m *MigratorImpl) migrateUpWithBBMCheck(maximum int) (MigrationResult, error) {
 	var mr MigrationResult
 	// Initialize a new store to manage background migrations
 	bbmStore := datastore.NewBackgroundMigrationStore(m.db)
@@ -349,7 +361,7 @@ func (m *migrator) migrateUpWithBBMCheck(max int) (MigrationResult, error) {
 	// Iterate through each migration, applying them if necessary
 	for _, migration := range sortedMigrations {
 		// Stop if we reach the specified 'max' number of migrations
-		if max != 0 && mr.AppliedCount == max {
+		if maximum != 0 && mr.AppliedCount == maximum {
 			break
 		}
 
@@ -361,17 +373,18 @@ func (m *migrator) migrateUpWithBBMCheck(max int) (MigrationResult, error) {
 		// Ensure all Batched Background Migrations (BBMs) are completed before applying migration
 		if err := m.ensureBBMsComplete(ctx, bbmStore, localMigrationsMap[migration.Id]); err != nil {
 			// Apply incomplete BBMs during new installations
-			if errors.Is(err, ErrBBMNotComplete) && newInstall {
-				// Run the BBM worker
-				if err := m.bbmWorker.Run(ctx); err != nil {
-					return mr, err
-				}
-				// Increment the count of finished BBMs
-				mr.AppliedBBMCount += m.bbmWorker.FinishedMigrationCount()
-			} else {
+			if !errors.Is(err, ErrBBMNotComplete) || !newInstall {
 				// Return the error if it's not a new installation and there are incomplete BBMs
 				return mr, err
 			}
+
+			// Run the BBM worker
+			if err := m.bbmWorker.Run(ctx); err != nil {
+				return mr, err
+			}
+
+			// Increment the count of finished BBMs
+			mr.AppliedBBMCount += m.bbmWorker.FinishedMigrationCount()
 		}
 
 		// Apply the migration
@@ -388,7 +401,7 @@ func (m *migrator) migrateUpWithBBMCheck(max int) (MigrationResult, error) {
 }
 
 // ensureBBMsComplete checks if all required Batched Background Migrations (BBMs) are complete for a schema migration.
-func (m *migrator) ensureBBMsComplete(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, migration *Migration) error {
+func (*MigratorImpl) ensureBBMsComplete(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, migration *Migration) error {
 	// If no BBMs are required, return early
 	if len(migration.RequiredBBMs) == 0 {
 		return nil
@@ -407,7 +420,7 @@ func (m *migrator) ensureBBMsComplete(ctx context.Context, bbmStore datastore.Ba
 }
 
 // applyMigration executes a single migration in the 'Up' direction.
-func (m *migrator) applyMigration(src *migrate.MemoryMigrationSource, migration *migrate.Migration) error {
+func (m *MigratorImpl) applyMigration(src *migrate.MemoryMigrationSource, migration *migrate.Migration) error {
 	// Execute the migration and move the database schema "Up"
 	_, err := migrate.ExecVersion(m.db, dialect, src, migrate.Up, migration.VersionInt())
 	if err != nil {

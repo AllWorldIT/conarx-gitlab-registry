@@ -200,7 +200,7 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 
 	// Mock Open function to return errors based on host matching
 	mockConnector.EXPECT().Open(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, dsn *datastore.DSN, opts ...datastore.Option) (*datastore.DB, error) {
+		func(_ context.Context, dsn *datastore.DSN, _ ...datastore.Option) (*datastore.DB, error) {
 			if dsn.Host == "fail_primary" {
 				return nil, errors.New("primary connection failed")
 			} else if match, _ := regexp.MatchString(`fail_replica\d*`, dsn.Host); match {
@@ -1429,7 +1429,7 @@ func TestDBLoadBalancer_ResolveReplicas_CloseRemoved(t *testing.T) {
 	// Repeat with replica 1 gone but this time simulate a close error to make sure it's handled properly
 	mockResolver.EXPECT().
 		LookupSRV(gomock.Any()).
-		Return([]*net.SRV{}, nil).
+		Return(make([]*net.SRV, 0), nil).
 		Times(1)
 
 	fakeErr := errors.New("foo")
@@ -2316,7 +2316,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 			require.NoError(t, err)
 
 			// Search for relevant matching labels
-			labelsFound := map[string]string{}
+			labelsFound := make(map[string]string, 0)
 			for _, m := range metrics {
 				for _, metric := range m.GetMetric() {
 					var hostType, hostAddr string
@@ -3019,9 +3019,9 @@ func TestQueryBuilder_Build(t *testing.T) {
 		{
 			name:           "empty query",
 			query:          "",
-			args:           []any{},
+			args:           make([]any, 0),
 			expectedSQL:    "",
-			expectedParams: []any{},
+			expectedParams: make([]any, 0),
 		},
 		{
 			name:           "single placeholder",
@@ -3061,9 +3061,9 @@ func TestQueryBuilder_Build(t *testing.T) {
 		{
 			name:           "query without arguments",
 			query:          "SELECT * FROM users WHERE id = 10",
-			args:           []any{},
+			args:           make([]any, 0),
 			expectedSQL:    "SELECT * FROM users WHERE id = 10",
-			expectedParams: []any{},
+			expectedParams: make([]any, 0),
 		},
 		{
 			name:           "query with multiple newlines",
@@ -3245,7 +3245,7 @@ func TestNewDBLoadBalancer_ReplicaResolveTimeout_HostLookupTimeout(t *testing.T)
 	// Mock the Host lookup to validate context deadline is ~100ms and simulate context.DeadlineExceeded
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv1.example.com").
-		DoAndReturn(func(ctx context.Context, host string) ([]string, error) {
+		DoAndReturn(func(ctx context.Context, _ string) ([]string, error) {
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
 			require.WithinDuration(t, time.Now().Add(datastore.InitReplicaResolveTimeout), deadline, datastore.InitReplicaResolveTimeout/10)
@@ -3315,7 +3315,7 @@ func TestNewDBLoadBalancer_ReplicaResolveTimeout_ConnectionOpenTimeout(t *testin
 	}
 
 	mockConnector.EXPECT().Open(gomock.Any(), replicaDSN, gomock.Any()).
-		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...any) (*datastore.DB, error) {
+		DoAndReturn(func(ctx context.Context, _ *datastore.DSN, _ ...any) (*datastore.DB, error) {
 			// Validate that the context has a deadline and it's ~100ms from now
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
@@ -3455,7 +3455,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing
 	// Mock the Host lookup to validate context deadline is ~200ms and simulate context.DeadlineExceeded
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv1.example.com").
-		DoAndReturn(func(ctx context.Context, host string) ([]string, error) {
+		DoAndReturn(func(ctx context.Context, _ string) ([]string, error) {
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
 			require.WithinDuration(t, time.Now().Add(datastore.ReplicaResolveTimeout), deadline, datastore.ReplicaResolveTimeout/10)
@@ -3544,7 +3544,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 	}
 
 	mockConnector.EXPECT().Open(gomock.Any(), replicaDSN, gomock.Any()).
-		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...any) (*datastore.DB, error) {
+		DoAndReturn(func(ctx context.Context, _ *datastore.DSN, _ ...any) (*datastore.DB, error) {
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
 			require.WithinDuration(t, time.Now().Add(datastore.ReplicaResolveTimeout), deadline, datastore.ReplicaResolveTimeout/10)

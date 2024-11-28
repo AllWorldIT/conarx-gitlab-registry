@@ -47,7 +47,7 @@ func TestMigrator_Version_NoMigrations(t *testing.T) {
 	defer cleanupDB(t, db)
 
 	// Create migrator with an empty migration source.
-	m := migrations.NewMigrator(db, migrations.Source([]*migrations.Migration{}))
+	m := migrations.NewMigrator(db, migrations.Source(make([]*migrations.Migration, 0)))
 
 	v, err := m.Version()
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestMigrator_LatestVersion_NoMigrations(t *testing.T) {
 	defer cleanupDB(t, db)
 
 	// Create migrator with an empty migration source.
-	m := migrations.NewMigrator(db, migrations.Source([]*migrations.Migration{}))
+	m := migrations.NewMigrator(db, migrations.Source(make([]*migrations.Migration, 0)))
 	v, err := m.LatestVersion()
 	require.NoError(t, err)
 	require.Empty(t, v)
@@ -107,7 +107,7 @@ func TestMigrator_Up_ApplyPostDeploymentMigrations(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 
 	migs := testmigrations.NonPostDeployment()
@@ -154,7 +154,7 @@ func TestMigrator_Up_SkipPostDeployment(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 
 	migs := testmigrations.NonPostDeployment()
@@ -219,7 +219,7 @@ func TestMigrator_UpN_SkipPostDeployment(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 
 	// apply all non postdeployment migrations except the last two
@@ -300,7 +300,7 @@ func TestMigrator_UpNPlan_SkipPostDeployment(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 
 	migs := testmigrations.NonPostDeployment()
@@ -362,7 +362,7 @@ func TestMigrator_Down_SkipPostDeployment(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 	_, err = m.Up()
 	require.NoError(t, err)
@@ -391,7 +391,7 @@ func TestMigrator_Down_SkipPostDeployment_ExistingPostDeployments(t *testing.T) 
 
 	// Configure migrator to skip postdeployment migrations, down migrations
 	// should ignore this and operate on all applied migrations.
-	migrations.SkipPostDeployment(m)
+	m.Reconfigure(migrations.SkipPostDeployment())
 
 	count, err := m.Down()
 	require.NoError(t, err)
@@ -451,7 +451,7 @@ func TestMigrator_DownN_SkipPostDeployment(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 	_, err = m.Up()
 	require.NoError(t, err)
@@ -538,7 +538,7 @@ func TestMigrator_DownNPlan_SkipPostDeploymnet(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 	_, err = m.Up()
 	require.NoError(t, err)
@@ -712,7 +712,7 @@ func TestMigrator_HasPending_No_SkipPostDeployment(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 	_, err = m.Up()
 	require.NoError(t, err)
@@ -747,7 +747,7 @@ func TestMigrator_HasPending_Yes_PendingPostDeployment(t *testing.T) {
 	m := migrations.NewMigrator(
 		db,
 		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment,
+		migrations.SkipPostDeployment(),
 	)
 	_, err = m.Up()
 	require.NoError(t, err)
@@ -762,8 +762,8 @@ func TestMigrator_HasPending_Yes_PendingPostDeployment(t *testing.T) {
 // clenaupOpts provides functional options for cleaning up the database.
 type clenaupOpts func(*datastore.DB)
 
-// WithCleanupBBM wipes the entire batched_background_migrations and batched_background_migration_jobs tables.
-func WithCleanupBBM(t *testing.T) clenaupOpts {
+// withCleanupBBM wipes the entire batched_background_migrations and batched_background_migration_jobs tables.
+func withCleanupBBM(t *testing.T) clenaupOpts {
 	return func(db *datastore.DB) {
 		_, err := db.DB.Exec("DROP TABLE IF EXISTS batched_background_migration_jobs CASCADE")
 		require.NoError(t, err)
@@ -788,7 +788,7 @@ func TestMigrator_Up_WithEnforcedBBM(t *testing.T) {
 	// Initialize a new database connection from environment variables
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
-	defer cleanupDB(t, db, WithCleanupBBM(t))
+	defer cleanupDB(t, db, withCleanupBBM(t))
 
 	// Create a new migrator instance with enforced batched background migrations
 	m := migrations.NewMigrator(db, migrations.Source(testmigrations.AllWithEnforcedBBMMigrations()))
@@ -828,16 +828,27 @@ func TestMigrator_Up_NewInstall_WithEnforcedBBM(t *testing.T) {
 	// Set up a test database and ensure cleanup after the test
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
-	defer cleanupDB(t, db, WithCleanupBBM(t))
+	defer cleanupDB(t, db, withCleanupBBM(t))
 
 	// Create a new migrator with enforced BBM migrations and a custom BBM worker
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.AllWithEnforcedBBMMigrations()), migrations.WithBBMWorker(bbm.NewSyncWorker(db, bbm.WithWorkMap(
-		map[string]bbm.Work{
-			"signatureName": {
-				Name: "signatureName",
-				Do:   func(_ context.Context, _ datastore.Handler, _, _ string, _, _, limit int) error { return nil },
-			},
-		}))))
+	m := migrations.NewMigrator(db,
+		migrations.Source(
+			testmigrations.AllWithEnforcedBBMMigrations(),
+		),
+		migrations.WithBBMWorker(
+			bbm.NewSyncWorker(
+				db,
+				bbm.WithWorkMap(
+					map[string]bbm.Work{
+						"signatureName": {
+							Name: "signatureName",
+							Do:   func(_ context.Context, _ datastore.Handler, _, _ string, _, _, _ int) error { return nil },
+						},
+					},
+				),
+			),
+		),
+	)
 	all := testmigrations.AllWithEnforcedBBMMigrations()
 
 	// Attempt to run all migrations in a new installation scenario
@@ -865,7 +876,7 @@ func TestMigrator_Up_WithUnEnforcedBBM(t *testing.T) {
 	// Set up a test database and ensure cleanup after the test
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
-	defer cleanupDB(t, db, WithCleanupBBM(t))
+	defer cleanupDB(t, db, withCleanupBBM(t))
 
 	// Create a new migrator with unenforced BBM migrations
 	m := migrations.NewMigrator(db, migrations.Source(testmigrations.AllWithUnEnforcedBBMMigrations()))

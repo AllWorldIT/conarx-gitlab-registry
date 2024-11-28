@@ -148,7 +148,7 @@ linters-settings:
         disabled: false
         exclude: [""]
         arguments:
-          - ["call-chain", "loop"]
+          - ["loop"]
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#dot-imports
       - name: dot-imports
         severity: warning

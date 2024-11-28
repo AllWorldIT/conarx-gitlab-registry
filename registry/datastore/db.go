@@ -260,11 +260,11 @@ func WithPreparedStatements(b bool) Option {
 }
 
 func applyOptions(input []Option) opts {
-	log := logrus.New()
-	log.SetOutput(io.Discard)
+	l := logrus.New()
+	l.SetOutput(io.Discard)
 
 	config := opts{
-		logger: logrus.NewEntry(log),
+		logger: logrus.NewEntry(l),
 		pool:   &PoolConfig{},
 		loadBalancing: &LoadBalancingConfig{
 			connector:            NewConnector(),
@@ -293,7 +293,7 @@ func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, dat
 	if !l.Logger.IsLevelEnabled(logrus.DebugLevel) && level != tracelog.LogLevelWarn && level != tracelog.LogLevelError {
 		return
 	}
-	var log *logrus.Entry
+	var configuredLogger *logrus.Entry
 	if data != nil {
 		// minify SQL statement, if any
 		if _, ok := data["sql"]; ok {
@@ -314,25 +314,25 @@ func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, dat
 			data["row_count"] = data["rowCount"]
 			delete(data, "rowCount")
 		}
-		log = l.WithFields(data)
+		configuredLogger = l.WithFields(data)
 	} else {
-		log = l.Entry
+		configuredLogger = l.Entry
 	}
 
 	switch level {
 	case tracelog.LogLevelTrace:
-		log.Trace(msg)
+		configuredLogger.Trace(msg)
 	case tracelog.LogLevelDebug:
-		log.Debug(msg)
+		configuredLogger.Debug(msg)
 	case tracelog.LogLevelInfo:
-		log.Info(msg)
+		configuredLogger.Info(msg)
 	case tracelog.LogLevelWarn:
-		log.Warn(msg)
+		configuredLogger.Warn(msg)
 	case tracelog.LogLevelError:
-		log.Error(msg)
+		configuredLogger.Error(msg)
 	default:
 		// this should never happen, but if it does, something went wrong and we need to notice it
-		log.WithField("invalid_log_level", level).Error(msg)
+		configuredLogger.WithField("invalid_log_level", level).Error(msg)
 	}
 }
 
@@ -351,7 +351,7 @@ func NewConnector() Connector {
 }
 
 // Open opens a new database connection with the given DSN and options.
-func (c *sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, error) {
+func (*sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, error) {
 	config := applyOptions(opts)
 	pgxConfig, err := pgx.ParseConfig(dsn.String())
 	if err != nil {
@@ -561,7 +561,7 @@ func resolveHosts(ctx context.Context, resolver DNSResolver) ([]*net.TCPAddr, er
 // by the database load balancer component. Instead of relying on a fixed log.Logger instance, this method allows
 // retrieving and extending a base logger embedded in the input context (if any) to preserve relevant key/value
 // pairs introduced upstream (such as a correlation ID, present when calling from the API handlers).
-func (lb *DBLoadBalancer) logger(ctx context.Context) log.Logger {
+func (*DBLoadBalancer) logger(ctx context.Context) log.Logger {
 	return log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
 		"component": "registry.datastore.DBLoadBalancer",
 	})
@@ -999,9 +999,9 @@ func (qb *QueryBuilder) WrapIntoSubqueryOf(outerQuery string) error {
 		return fmt.Errorf("outerQuery must contain exactly one %%s placeholder. Query: %v", outerQuery)
 	}
 
-	newSql := strings.Builder{}
-	_, _ = fmt.Fprintf(&newSql, outerQuery, qb.sql.String())
-	qb.sql = newSql
+	newSQL := strings.Builder{}
+	_, _ = fmt.Fprintf(&newSQL, outerQuery, qb.sql.String())
+	qb.sql = newSQL
 
 	return nil
 }

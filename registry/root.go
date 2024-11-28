@@ -249,10 +249,11 @@ var MigrateUpCmd = &cobra.Command{
 			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
-		m := migrations.NewMigrator(db)
+		opts := make([]migrations.MigratorOption, 0)
 		if skipPostDeployment {
-			migrations.SkipPostDeployment(m)
+			opts = append(opts, migrations.SkipPostDeployment())
 		}
+		m := migrations.NewMigrator(db, opts...)
 
 		plan, err := m.UpNPlan(*maxNumMigrations)
 		if err != nil {
