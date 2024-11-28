@@ -91,7 +91,7 @@ func (ac authChallenge) Error() string {
 }
 
 // Status returns the HTTP Response Status Code for this authChallenge.
-func (ac authChallenge) Status() int {
+func (authChallenge) Status() int {
 	return http.StatusUnauthorized
 }
 

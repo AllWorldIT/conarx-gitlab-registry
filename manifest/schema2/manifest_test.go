@@ -50,9 +50,9 @@ func makeTestManifest(mediaType string) Manifest {
 }
 
 func TestManifest(t *testing.T) {
-	manifest := makeTestManifest(MediaTypeManifest)
+	testManifest := makeTestManifest(MediaTypeManifest)
 
-	deserialized, err := FromStruct(manifest)
+	deserialized, err := FromStruct(testManifest)
 	if err != nil {
 		t.Fatalf("error creating DeserializedManifest: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestManifest(t *testing.T) {
 
 	// Check that the canonical field is the same as json.MarshalIndent
 	// with these parameters.
-	p, err := json.MarshalIndent(&manifest, "", "   ")
+	p, err := json.MarshalIndent(&testManifest, "", "   ")
 	if err != nil {
 		t.Fatalf("error marshaling manifest: %v", err)
 	}
@@ -120,9 +120,9 @@ func TestManifest(t *testing.T) {
 }
 
 func mediaTypeTest(t *testing.T, mediaType string, shouldError bool) {
-	manifest := makeTestManifest(mediaType)
+	testManifest := makeTestManifest(mediaType)
 
-	deserialized, err := FromStruct(manifest)
+	deserialized, err := FromStruct(testManifest)
 	if err != nil {
 		t.Fatalf("error creating DeserializedManifest: %v", err)
 	}
@@ -163,16 +163,16 @@ func TestMediaTypes(t *testing.T) {
 }
 
 func TestTotalSize(t *testing.T) {
-	manifest := makeTestManifest(MediaTypeManifest)
+	testManifest := makeTestManifest(MediaTypeManifest)
 
-	deserialized, err := FromStruct(manifest)
+	deserialized, err := FromStruct(testManifest)
 	require.NoError(t, err)
 
 	_, payload, err := deserialized.Payload()
 	require.NoError(t, err)
 
 	var refSize int64
-	for _, ref := range manifest.References() {
+	for _, ref := range testManifest.References() {
 		refSize += ref.Size
 	}
 

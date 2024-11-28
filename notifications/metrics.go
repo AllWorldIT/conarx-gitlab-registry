@@ -92,7 +92,7 @@ func (emsl *endpointMetricsHTTPStatusListener) failure(status int, event *Event)
 	eventsCounter.WithValues("Failures", event.Action, event.artifact(), emsl.Endpoint).Inc(1)
 }
 
-func (emsl *endpointMetricsHTTPStatusListener) err(event *Event) {
+func (emsl *endpointMetricsHTTPStatusListener) err(_ *Event) {
 	emsl.safeMetrics.Lock()
 	defer emsl.safeMetrics.Unlock()
 	emsl.Errors++
@@ -117,7 +117,7 @@ func (eqc *endpointMetricsEventQueueListener) ingress(event *Event) {
 	pendingGauge.Inc(1)
 }
 
-func (eqc *endpointMetricsEventQueueListener) egress(event *Event) {
+func (eqc *endpointMetricsEventQueueListener) egress(_ *Event) {
 	eqc.Lock()
 	defer eqc.Unlock()
 	eqc.Pending--

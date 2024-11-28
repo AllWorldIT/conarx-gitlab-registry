@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	errorCodeToDescriptors = map[ErrorCode]ErrorDescriptor{}
-	idToDescriptors        = map[string]ErrorDescriptor{}
-	groupToDescriptors     = map[string][]ErrorDescriptor{}
+	errorCodeToDescriptors = make(map[ErrorCode]ErrorDescriptor)
+	idToDescriptors        = make(map[string]ErrorDescriptor)
+	groupToDescriptors     = make(map[string][]ErrorDescriptor)
 )
 
 var (
@@ -131,7 +131,7 @@ func (a byValue) Less(i, j int) bool { return a[i].Value < a[j].Value }
 
 // GetGroupNames returns the list of Error group names that are registered
 func GetGroupNames() []string {
-	keys := []string{}
+	keys := make([]string, 0)
 
 	for k := range groupToDescriptors {
 		keys = append(keys, k)
@@ -150,7 +150,7 @@ func GetErrorCodeGroup(name string) []ErrorDescriptor {
 // GetErrorAllDescriptors returns a slice of all ErrorDescriptors that are
 // registered, irrespective of what group they're in
 func GetErrorAllDescriptors() []ErrorDescriptor {
-	result := []ErrorDescriptor{}
+	result := make([]ErrorDescriptor, 0)
 
 	for _, group := range GetGroupNames() {
 		result = append(result, GetErrorCodeGroup(group)...)

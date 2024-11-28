@@ -121,9 +121,9 @@ func TestEventBridgeRepoRenamed(t *testing.T) {
 		From: repo,
 	}
 
-	l := createQueueBridgeTestEnv(t, func(event *Event) (err error) {
+	l := createQueueBridgeTestEnv(t, func(event *Event) error {
 		checkRenamed(t, EventActionRename, rename, event)
-		return
+		return nil
 	})
 
 	repoRef, _ := reference.WithName(repo)
@@ -219,7 +219,7 @@ func (tsf testSinkFn) Write(events *Event) error {
 	return tsf(events)
 }
 
-func (tsf testSinkFn) Close() error { return nil }
+func (testSinkFn) Close() error { return nil }
 
 func mustUB(ub *urls.Builder, err error) *urls.Builder {
 	if err != nil {

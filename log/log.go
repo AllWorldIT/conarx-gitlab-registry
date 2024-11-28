@@ -82,10 +82,10 @@ type logOptions struct {
 	writer io.Writer
 }
 
-type logOpt func(o *logOptions)
+type LogOpt func(o *logOptions)
 
 // WithContext returns the logger from the current context, if present.
-func WithContext(ctx context.Context) logOpt {
+func WithContext(ctx context.Context) LogOpt {
 	return func(o *logOptions) {
 		o.ctx = ctx
 	}
@@ -96,20 +96,20 @@ func WithContext(ctx context.Context) logOpt {
 // interface, any key argument passed to GetLogger will be passed to fmt.Sprint
 // when expanded as a logging key field. If context keys are integer constants,
 // for example, its recommended that a String method is implemented.
-func WithKeys(keys ...any) logOpt {
+func WithKeys(keys ...any) LogOpt {
 	return func(o *logOptions) {
 		o.keys = keys
 	}
 }
 
-func WithWriter(w io.Writer) logOpt {
+func WithWriter(w io.Writer) LogOpt {
 	return func(o *logOptions) {
 		o.writer = w
 	}
 }
 
 // GetLogger returns a Logger based on a logrus Entry.
-func GetLogger(opts ...logOpt) Logger {
+func GetLogger(opts ...LogOpt) Logger {
 	cfg := &logOptions{ctx: context.Background()}
 	for _, o := range opts {
 		o(cfg)

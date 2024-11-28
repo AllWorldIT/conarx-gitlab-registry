@@ -79,8 +79,8 @@ func TestManifest(t *testing.T) {
    }
 }`)
 
-	manifest := makeTestManifest(v1.MediaTypeImageManifest)
-	deserialized, err := FromStruct(manifest)
+	testManifest := makeTestManifest(v1.MediaTypeImageManifest)
+	deserialized, err := FromStruct(testManifest)
 	if err != nil {
 		t.Fatalf("error creating DeserializedManifest: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestManifest(t *testing.T) {
 
 	// Check that the canonical field is the same as json.MarshalIndent
 	// with these parameters.
-	p, err := json.MarshalIndent(&manifest, "", "   ")
+	p, err := json.MarshalIndent(&testManifest, "", "   ")
 	if err != nil {
 		t.Fatalf("error marshaling manifest: %v", err)
 	}
@@ -188,9 +188,9 @@ func TestManifestWithSubject(t *testing.T) {
    }
 }`)
 
-	manifest := makeTestManifestWithSubject(v1.MediaTypeImageManifest)
+	testManifest := makeTestManifestWithSubject(v1.MediaTypeImageManifest)
 
-	deserialized, err := FromStruct(manifest)
+	deserialized, err := FromStruct(testManifest)
 	require.NoError(t, err)
 
 	mediaType, canonical, _ := deserialized.Payload()
@@ -239,9 +239,9 @@ func TestManifestWithArtifactType(t *testing.T) {
    }
 }`)
 
-	manifest := makeTestManifestWithArtifactType(v1.MediaTypeImageManifest, "application/vnd.dev.cosign.artifact.sbom.v1+json")
+	testManifest := makeTestManifestWithArtifactType(v1.MediaTypeImageManifest, "application/vnd.dev.cosign.artifact.sbom.v1+json")
 
-	deserialized, err := FromStruct(manifest)
+	deserialized, err := FromStruct(testManifest)
 	require.NoError(t, err)
 
 	mediaType, canonical, _ := deserialized.Payload()
@@ -253,9 +253,9 @@ func TestManifestWithArtifactType(t *testing.T) {
 }
 
 func mediaTypeTest(t *testing.T, mediaType string, shouldError bool) {
-	manifest := makeTestManifest(mediaType)
+	testManifest := makeTestManifest(mediaType)
 
-	deserialized, err := FromStruct(manifest)
+	deserialized, err := FromStruct(testManifest)
 	if err != nil {
 		t.Fatalf("error creating DeserializedManifest: %v", err)
 	}
@@ -296,9 +296,9 @@ func TestMediaTypes(t *testing.T) {
 }
 
 func TestTotalSize(t *testing.T) {
-	manifest := makeTestManifest(v1.MediaTypeImageManifest)
+	testManifest := makeTestManifest(v1.MediaTypeImageManifest)
 
-	deserialized, err := FromStruct(manifest)
+	deserialized, err := FromStruct(testManifest)
 	require.NoError(t, err)
 
 	_, payload, err := deserialized.Payload()
@@ -313,9 +313,9 @@ func TestTotalSize(t *testing.T) {
 }
 
 func TestTotalSizeWithSubject(t *testing.T) {
-	manifest := makeTestManifestWithSubject(v1.MediaTypeImageManifest)
+	testManifest := makeTestManifestWithSubject(v1.MediaTypeImageManifest)
 
-	deserialized, err := FromStruct(manifest)
+	deserialized, err := FromStruct(testManifest)
 	require.NoError(t, err)
 
 	_, payload, err := deserialized.Payload()

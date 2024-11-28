@@ -50,7 +50,7 @@ func TestReferences(t *testing.T) {
 					Digest:    digest.FromString("OCI Manifest 2"),
 				},
 			},
-			expectedBlobs: []distribution.Descriptor{},
+			expectedBlobs: make([]distribution.Descriptor, 0),
 		},
 		{
 			name: "Buildx Cache Manifest",
@@ -77,7 +77,7 @@ func TestReferences(t *testing.T) {
 					},
 				},
 			},
-			expectedManifests: []distribution.Descriptor{},
+			expectedManifests: make([]distribution.Descriptor, 0),
 			expectedBlobs: []distribution.Descriptor{
 				{
 					MediaType: v1.MediaTypeImageLayer,
@@ -365,7 +365,7 @@ func TestOCIManifestFromBuildkitIndex(t *testing.T) {
 						SchemaVersion: 2,
 						MediaType:     v1.MediaTypeImageIndex,
 					},
-					Manifests: []manifestlist.ManifestDescriptor{},
+					Manifests: make([]manifestlist.ManifestDescriptor, 0),
 				},
 			},
 			wantErr: true,

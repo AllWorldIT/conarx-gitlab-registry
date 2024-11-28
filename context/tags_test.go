@@ -78,6 +78,7 @@ func Test_tagDenyAccessPatternsContext_Value(t *testing.T) {
 	}
 
 	// Base context with an unrelated key-value pair
+	// nolint: revive // context-keys-type
 	baseCtx := context.WithValue(context.Background(), "unrelatedKey", "unrelatedValue")
 
 	// Create context with tag deny access patterns added

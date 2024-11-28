@@ -55,7 +55,7 @@ func TestHealthHandler(t *testing.T) {
 	)
 
 	// protect an http server
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 

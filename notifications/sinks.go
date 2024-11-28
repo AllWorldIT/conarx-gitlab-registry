@@ -158,6 +158,7 @@ loop:
 
 		inner:
 			for {
+				// nolint: revive // max-control-nesting
 				select {
 				case <-b.doneCh:
 					timer := time.NewTimer(b.fanoutTimeout)
@@ -475,6 +476,7 @@ func (rs *retryingSink) run() {
 
 main:
 	for {
+		// nolint: revive // max-control-nesting
 		select {
 		case <-rs.doneCh:
 			return

@@ -71,6 +71,7 @@ type Work struct {
 // The `Work.name` must correspond to the value in `batched_background_migrations.job_signature_name` column for the specific the background migration,
 // otherwise the migration will fail to run with an `ErrWorkFunctionNotFound` when picked up.
 func AllWork() []Work {
+	// nolint: revive // enforce-slice-style
 	return []Work{
 		// {Name: "ExampleNameThatMatchesTheJobSignatureNameColumn", Do: ExampleDoFunction}
 	}
@@ -78,7 +79,7 @@ func AllWork() []Work {
 
 // RegisterWork registers all known work functions to the Background Migration worker.
 func RegisterWork(work []Work, opts ...WorkerOption) (*Worker, error) {
-	workMap := map[string]Work{}
+	workMap := make(map[string]Work, 0)
 	for _, val := range work {
 		if _, found := workMap[val.Name]; found {
 			return nil, fmt.Errorf("can not have work with the same name %s", val.Name)
@@ -356,35 +357,35 @@ func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigr
 	// if we haven't run all jobs for the Background Migration at least once first find and exhaust all new jobs before considering failed/retryable jobs.
 	if !done {
 		return findNewJob(ctx, bbmStore, bbm)
-	} else {
-		job, err = findRetryableJobs(ctx, bbmStore, bbm)
-		if err != nil {
-			return nil, err
-		}
-		if job != nil {
-			l := l.WithFields(log.Fields{
-				jobIDKey:        job.ID,
-				jobBBMIDKey:     job.BBMID,
-				jobNameKey:      job.JobName,
-				jobAttemptsKey:  job.Attempts,
-				jobStartIDKey:   job.StartID,
-				jobEndIDKey:     job.EndID,
-				jobBatchSizeKey: job.BatchSize,
-				jobStatusKey:    job.Status.String(),
-				jobColumnKey:    job.PaginationColumn,
-				jobTableKey:     job.PaginationTable,
-			})
-
-			// check that the selected job does not exceed the configured `MaxJobAttempt`
-			if job.Attempts >= jw.maxJobAttempt {
-				l.WithError(ErrMaxJobAttemptsReached).Error("marking background migration as failed due to job failure")
-				bbm.ErrorCode = models.JobExceedsMaxAttemptBBMErrCode
-				bbm.Status = models.BackgroundMigrationFailed
-				return nil, bbmStore.UpdateStatus(ctx, bbm)
-			}
-		}
-		return job, nil
 	}
+
+	job, err = findRetryableJobs(ctx, bbmStore, bbm)
+	if err != nil {
+		return nil, err
+	}
+	if job != nil {
+		l := l.WithFields(log.Fields{
+			jobIDKey:        job.ID,
+			jobBBMIDKey:     job.BBMID,
+			jobNameKey:      job.JobName,
+			jobAttemptsKey:  job.Attempts,
+			jobStartIDKey:   job.StartID,
+			jobEndIDKey:     job.EndID,
+			jobBatchSizeKey: job.BatchSize,
+			jobStatusKey:    job.Status.String(),
+			jobColumnKey:    job.PaginationColumn,
+			jobTableKey:     job.PaginationTable,
+		})
+
+		// check that the selected job does not exceed the configured `MaxJobAttempt`
+		if job.Attempts >= jw.maxJobAttempt {
+			l.WithError(ErrMaxJobAttemptsReached).Error("marking background migration as failed due to job failure")
+			bbm.ErrorCode = models.JobExceedsMaxAttemptBBMErrCode
+			bbm.Status = models.BackgroundMigrationFailed
+			return nil, bbmStore.UpdateStatus(ctx, bbm)
+		}
+	}
+	return job, nil
 }
 
 // ExecuteJob attempts to execute the function associated with a Background Migration job from the job's start-end range.
@@ -403,19 +404,19 @@ func (jw *Worker) ExecuteJob(ctx context.Context, bbmStore datastore.BackgroundM
 			job.Status = models.BackgroundMigrationFailed
 			job.ErrorCode = models.UnknownBBMErrorCode
 			return bbmStore.UpdateJobStatus(ctx, job)
-		} else {
-			job.Status = models.BackgroundMigrationFinished
 		}
+
+		job.Status = models.BackgroundMigrationFinished
 		return bbmStore.UpdateJobStatus(ctx, job)
-	} else {
-		job.Status = models.BackgroundMigrationFailed
-		job.ErrorCode = models.InvalidJobSignatureBBMErrCode
-		err := bbmStore.UpdateJobStatus(ctx, job)
-		if err != nil {
-			return err
-		}
-		return ErrWorkFunctionNotFound
 	}
+
+	job.Status = models.BackgroundMigrationFailed
+	job.ErrorCode = models.InvalidJobSignatureBBMErrCode
+	err = bbmStore.UpdateJobStatus(ctx, job)
+	if err != nil {
+		return err
+	}
+	return ErrWorkFunctionNotFound
 }
 
 // AllMigrations returns all background migrations.
@@ -536,7 +537,7 @@ func validateMigration(ctx context.Context, bbmStore datastore.BackgroundMigrati
 	}
 
 	if err := bbmStore.ValidateMigrationTableAndColumn(ctx, bbm.TargetTable, bbm.TargetColumn); err != nil {
-		return err
+		return fmt.Errorf("validating migration: %w", err)
 	}
 	return nil
 }

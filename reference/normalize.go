@@ -58,7 +58,10 @@ func ParseNormalizedNamed(s string) (Named, error) {
 // splitDockerDomain splits a repository name to domain and remotename string.
 // If no valid domain is found, the default domain is used. Repository name
 // needs to be already validated before.
-func splitDockerDomain(name string) (domain, remainder string) {
+func splitDockerDomain(name string) (string, string) {
+	var domain string
+	var remainder string
+
 	i := strings.IndexRune(name, '/')
 	if i == -1 || (!strings.ContainsAny(name[:i], ".:") && name[:i] != "localhost") {
 		domain, remainder = defaultDomain, name
@@ -71,7 +74,7 @@ func splitDockerDomain(name string) (domain, remainder string) {
 	if domain == defaultDomain && !strings.ContainsRune(remainder, '/') {
 		remainder = officialRepoName + "/" + remainder
 	}
-	return
+	return domain, remainder
 }
 
 // familiarizeName returns a shortened version of the name familiar

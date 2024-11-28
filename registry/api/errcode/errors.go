@@ -183,7 +183,7 @@ func ParseErrorCode(value string) ErrorCode {
 // for use within the application.
 type Errors []error
 
-var _ error = Errors{}
+var _ error = make(Errors, 0)
 
 func (errs Errors) Error() string {
 	switch len(errs) {

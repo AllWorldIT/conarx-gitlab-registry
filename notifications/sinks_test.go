@@ -41,6 +41,7 @@ func TestBroadcaster(t *testing.T) {
 	for _, sink := range sinks {
 		ts := sink.(*testSink)
 		ts.mu.Lock()
+		// nolint: revive // defer
 		defer ts.mu.Unlock()
 
 		require.Len(t, ts.events, nEvents, "not all events ended up in testsink")
@@ -122,7 +123,8 @@ func TestIgnoredSink(t *testing.T) {
 		require.ElementsMatch(t, c.expected, ts.events)
 		ts.mu.Unlock()
 
-		s.Close()
+		err := s.Close()
+		require.NoError(t, err)
 	}
 }
 

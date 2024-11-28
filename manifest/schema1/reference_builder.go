@@ -40,7 +40,7 @@ func NewReferenceManifestBuilder(pk libtrust.PrivateKey, ref reference.Named, ar
 	}
 }
 
-func (mb *referenceManifestBuilder) Build(ctx context.Context) (distribution.Manifest, error) {
+func (mb *referenceManifestBuilder) Build(_ context.Context) (distribution.Manifest, error) {
 	m := mb.Manifest
 	if len(m.FSLayers) == 0 {
 		return nil, errors.New("cannot build manifest with zero layers or history")

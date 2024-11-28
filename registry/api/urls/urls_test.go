@@ -184,7 +184,7 @@ func TestBuilder(t *testing.T) {
 			}
 
 			for _, testCase := range makeBuilderTestCases(builder) {
-				url, err := testCase.build()
+				testURL, err := testCase.build()
 				expectedErr := testCase.expectedErr
 				if !reflect.DeepEqual(expectedErr, err) {
 					t.Fatalf("%s: Expecting %v but got error %v", testCase.description, expectedErr, err)
@@ -198,8 +198,8 @@ func TestBuilder(t *testing.T) {
 					expectedURL = root + expectedURL
 				}
 
-				if url != expectedURL {
-					t.Fatalf("%s: %q != %q", testCase.description, url, expectedURL)
+				if testURL != expectedURL {
+					t.Fatalf("%s: %q != %q", testCase.description, testURL, expectedURL)
 				}
 			}
 		}
@@ -224,7 +224,7 @@ func TestBuilderWithPrefix(t *testing.T) {
 			}
 
 			for _, testCase := range makeBuilderTestCases(builder) {
-				url, err := testCase.build()
+				testURL, err := testCase.build()
 				expectedErr := testCase.expectedErr
 				if !reflect.DeepEqual(expectedErr, err) {
 					t.Fatalf("%s: Expecting %v but got error %v", testCase.description, expectedErr, err)
@@ -237,8 +237,8 @@ func TestBuilderWithPrefix(t *testing.T) {
 				if !relative {
 					expectedURL = root[0:len(root)-1] + expectedURL
 				}
-				if url != expectedURL {
-					t.Fatalf("%s: %q != %q", testCase.description, url, expectedURL)
+				if testURL != expectedURL {
+					t.Fatalf("%s: %q != %q", testCase.description, testURL, expectedURL)
 				}
 			}
 		}
