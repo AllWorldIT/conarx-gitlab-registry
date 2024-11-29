@@ -202,7 +202,7 @@ func TestSyncWorker_ExecuteJob_Errors(t *testing.T) {
 				JobName: "non_existent_job",
 			},
 			setupMocks: func(ctrl *gomock.Controller) (*SyncWorker, datastore.BackgroundMigrationStore) {
-				worker := NewSyncWorker(nil, WithWorkMap(map[string]Work{}))
+				worker := NewSyncWorker(nil, WithWorkMap(make(map[string]Work, 0)))
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				return worker, bbmStoreMock
 			},
@@ -624,7 +624,7 @@ func TestSyncWorker_Run(t *testing.T) {
 			test := test
 			t.Parallel()
 			worker := test.setupMocks(gomock.NewController(t))
-			err := worker.run(context.TODO())
+			err := worker.runImpl(context.TODO())
 			if test.expectErr {
 				require.Error(t, err)
 			} else {
@@ -664,7 +664,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncLogger(log.GetLogger().WithFields(log.Fields{"test": "value"}))},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            map[string]Work{},
+					work:            make(map[string]Work, 0),
 					logger:          log.GetLogger().WithFields(log.Fields{"test": "value", componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -681,7 +681,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncMaxJobAttempt(5)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            map[string]Work{},
+					work:            make(map[string]Work, 0),
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   5,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -698,7 +698,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncMaxJobPerBatch(10)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            map[string]Work{},
+					work:            make(map[string]Work, 0),
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  10,
@@ -715,7 +715,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncMaxBatchTimeout(2 * time.Minute)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            map[string]Work{},
+					work:            make(map[string]Work, 0),
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -732,7 +732,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncHandler(wh)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            map[string]Work{},
+					work:            make(map[string]Work, 0),
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -749,7 +749,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithJobTimeout(2 * time.Minute)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            map[string]Work{},
+					work:            make(map[string]Work, 0),
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  defaultMaxJobPerBatch,

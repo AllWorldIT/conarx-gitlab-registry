@@ -74,7 +74,7 @@ type BackgroundMigrationStore interface {
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
-func NewBackgroundMigrationStore(db Queryer) *backgroundMigrationStore {
+func NewBackgroundMigrationStore(db Queryer) BackgroundMigrationStore {
 	return &backgroundMigrationStore{db: db}
 }
 
