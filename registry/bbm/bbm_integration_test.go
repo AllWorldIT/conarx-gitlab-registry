@@ -193,14 +193,14 @@ func (s *BackgroundMigrationTestSuite) SetupTest() {
 }
 
 // bbmToSchemaMigratorRecord creates a schema migration record for a bbm entry.
-func bbmToSchemaMigratorRecord(bbm models.BackgroundMigration) ([]string, []string) {
+func bbmToSchemaMigratorRecord(bm models.BackgroundMigration) ([]string, []string) {
 	return []string{
 			fmt.Sprintf(`INSERT INTO batched_background_migrations ("name", "min_value", "max_value", "batch_size", "status", "job_signature_name", "table_name", "column_name")
-				VALUES ('%s', %d, %d,  %d, %d, '%s', '%s', '%s')`, bbm.Name, bbm.StartID, bbm.EndID, bbm.BatchSize, models.BackgroundMigrationActive, bbm.JobName, bbm.TargetTable, bbm.TargetColumn),
+				VALUES ('%s', %d, %d,  %d, %d, '%s', '%s', '%s')`, bm.Name, bm.StartID, bm.EndID, bm.BatchSize, models.BackgroundMigrationActive, bm.JobName, bm.TargetTable, bm.TargetColumn),
 		},
 		[]string{
-			fmt.Sprintf(`DELETE FROM batched_background_migration_jobs WHERE batched_background_migration_id IN (SELECT id FROM batched_background_migrations WHERE name = '%s')`, bbm.Name),
-			fmt.Sprintf(`DELETE FROM batched_background_migrations WHERE "name" = '%s'`, bbm.Name),
+			fmt.Sprintf(`DELETE FROM batched_background_migration_jobs WHERE batched_background_migration_id IN (SELECT id FROM batched_background_migrations WHERE name = '%s')`, bm.Name),
+			fmt.Sprintf(`DELETE FROM batched_background_migrations WHERE "name" = '%s'`, bm.Name),
 		}
 }
 
@@ -269,10 +269,11 @@ func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigration(workerCount 
 	// assert the background migration runs to completion asynchronously
 	s.requireBBMEventually(expectedBBM, 20*time.Second, 100*time.Millisecond)
 	s.requireBBMJobsFinally(expectedBBM.Name, expectedBBMJobs)
-	s.requireMigrationLogicComplete(func(db *datastore.DB) (exists bool, err error) {
+	s.requireMigrationLogicComplete(func(db *datastore.DB) (bool, error) {
+		var exists bool
 		query := fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s WHERE %s BETWEEN $1 AND $2)", expectedBBM.TargetTable, targetBBMNewColumn)
-		err = db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
-		return
+		err := db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
+		return exists, err
 	})
 }
 
@@ -343,7 +344,7 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobSignatur
 	}
 
 	s.testAsyncBackgroundMigrationExpected(expectedBBM, nil,
-		[]bbm.Work{}, bbm.WithJobInterval(100*time.Millisecond), bbm.WithDB(s.db))
+		make([]bbm.Work, 0), bbm.WithJobInterval(100*time.Millisecond), bbm.WithDB(s.db))
 }
 
 // Test_AsyncBackgroundMigration_JobExceedsRetryAttempt_Failed tests that if a background migration is introduced and its
@@ -383,15 +384,15 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobExceedsR
 		},
 	}
 
-	DoFunc := func(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, limit int) error {
+	doFunc := func(_ context.Context, _ datastore.Handler, _, _ string, _, _, _ int) error {
 		return errAnError
 	}
 	s.testAsyncBackgroundMigrationExpected(expectedBBM, expectedBBMJobs,
-		[]bbm.Work{{Name: expectedBBM.JobName, Do: DoFunc}}, bbm.WithJobInterval(100*time.Millisecond), bbm.WithDB(s.db), bbm.WithDB(s.db), bbm.WithMaxJobAttempt(2))
+		[]bbm.Work{{Name: expectedBBM.JobName, Do: doFunc}}, bbm.WithJobInterval(100*time.Millisecond), bbm.WithDB(s.db), bbm.WithDB(s.db), bbm.WithMaxJobAttempt(2))
 }
 
 // CopyIDColumnInTestTableToNewIDColumn is the job function that is executed for a background migration with a `job_signature_name` column value of `CopyIDColumnInTestTableToNewIDColumn`
-func CopyIDColumnInTestTableToNewIDColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, limit int) error {
+func CopyIDColumnInTestTableToNewIDColumn(ctx context.Context, db datastore.Handler, _, paginationColumn string, paginationAfter, paginationBefore, _ int) error {
 	fmt.Printf(`Copying from column id to new_id,  Starting from id %d to %d on column %s`, paginationAfter, paginationBefore, paginationColumn)
 	q := fmt.Sprintf(`UPDATE %s SET %s = %s WHERE id >= $1 AND id <= $2`, targetBBMTable, targetBBMNewColumn, targetBBMColumn)
 	_, err := db.ExecContext(ctx, q, paginationAfter, paginationBefore)
@@ -476,7 +477,7 @@ func (s *BackgroundMigrationTestSuite) requireBBMJobsFinally(bbmName string, exp
 
 	defer rows.Close()
 
-	actualJobs := []models.BackgroundMigrationJob{}
+	actualJobs := make([]models.BackgroundMigrationJob, 0)
 	for rows.Next() {
 		bbmj := new(models.BackgroundMigrationJob)
 		err = rows.Scan(&bbmj.ID, &bbmj.BBMID, &bbmj.StartID, &bbmj.EndID, &bbmj.Status, &bbmj.Attempts, &bbmj.ErrorCode)

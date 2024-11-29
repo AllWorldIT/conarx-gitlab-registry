@@ -18,10 +18,10 @@ var portMap = map[string]string{
 
 // canonicalAddr returns url.Host but always with a ":port" suffix
 // FROM: http://golang.org/src/net/http/transport.go
-func canonicalAddr(url *url.URL) string {
-	addr := url.Host
+func canonicalAddr(inputURL *url.URL) string {
+	addr := inputURL.Host
 	if !hasPort(addr) {
-		return addr + ":" + portMap[url.Scheme]
+		return addr + ":" + portMap[inputURL.Scheme]
 	}
 	return addr
 }

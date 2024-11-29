@@ -41,23 +41,23 @@ func TestAuthChallengeParse(t *testing.T) {
 }
 
 func TestAuthChallengeNormalization(t *testing.T) {
-	testAuthChallengeNormalization(t, "reg.EXAMPLE.com")
-	testAuthChallengeNormalization(t, "bɿɒʜɔiɿ-ɿɘƚƨim-ƚol-ɒ-ƨʞnɒʜƚ.com")
-	testAuthChallengeNormalization(t, "reg.example.com:80")
+	testAuthChallengeNormalizationImpl(t, "reg.EXAMPLE.com")
+	testAuthChallengeNormalizationImpl(t, "bɿɒʜɔiɿ-ɿɘƚƨim-ƚol-ɒ-ƨʞnɒʜƚ.com")
+	testAuthChallengeNormalizationImpl(t, "reg.example.com:80")
 	testAuthChallengeConcurrent(t, "reg.EXAMPLE.com")
 }
 
-func testAuthChallengeNormalization(t *testing.T, host string) {
+func testAuthChallengeNormalizationImpl(t *testing.T, host string) {
 	scm := NewSimpleManager()
 
-	url, err := url.Parse(fmt.Sprintf("http://%s/v2/", host))
+	registryURL, err := url.Parse(fmt.Sprintf("http://%s/v2/", host))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	resp := &http.Response{
 		Request: &http.Request{
-			URL: url,
+			URL: registryURL,
 		},
 		Header:     make(http.Header),
 		StatusCode: http.StatusUnauthorized,
@@ -69,7 +69,7 @@ func testAuthChallengeNormalization(t *testing.T, host string) {
 		t.Fatal(err)
 	}
 
-	lowered := *url
+	lowered := *registryURL
 	lowered.Host = strings.ToLower(lowered.Host)
 	lowered.Host = canonicalAddr(&lowered)
 	c, err := scm.GetChallenges(lowered)
@@ -85,14 +85,14 @@ func testAuthChallengeNormalization(t *testing.T, host string) {
 func testAuthChallengeConcurrent(t *testing.T, host string) {
 	scm := NewSimpleManager()
 
-	url, err := url.Parse(fmt.Sprintf("http://%s/v2/", host))
+	registryURL, err := url.Parse(fmt.Sprintf("http://%s/v2/", host))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	resp := &http.Response{
 		Request: &http.Request{
-			URL: url,
+			URL: registryURL,
 		},
 		Header:     make(http.Header),
 		StatusCode: http.StatusUnauthorized,
@@ -111,7 +111,7 @@ func testAuthChallengeConcurrent(t *testing.T, host string) {
 	}()
 	go func() {
 		defer s.Done()
-		lowered := *url
+		lowered := *registryURL
 		lowered.Host = strings.ToLower(lowered.Host)
 		for k := 0; k < 200; k++ {
 			_, err := scm.GetChallenges(lowered)

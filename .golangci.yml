@@ -110,11 +110,6 @@ linters-settings:
         severity: warning
         disabled: false
         exclude: [""]
-      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#confusing-results
-      - name: confusing-results
-        severity: warning
-        disabled: false
-        exclude: [""]
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#constant-logical-expr
       - name: constant-logical-expr
         severity: warning

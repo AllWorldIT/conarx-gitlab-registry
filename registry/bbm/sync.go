@@ -124,7 +124,7 @@ func (jw *SyncWorker) applyDefaults() {
 		jw.lockWaitTimeout = defaultLockWaitTimeout
 	}
 	if jw.work == nil {
-		workMap := map[string]Work{}
+		workMap := make(map[string]Work, 0)
 		for _, val := range AllWork() {
 			workMap[val.Name] = val
 		}
@@ -137,10 +137,10 @@ func (jw *SyncWorker) applyDefaults() {
 
 // Run executes all unfinished background migrations until they are either finished or a job exceeds the maxJobRetry count.
 func (jw *SyncWorker) Run(ctx context.Context) error {
-	return jw.run(ctx)
+	return jw.runImpl(ctx)
 }
 
-// run executes the main loop for processing synchronous background migration jobs. It performs the following steps:
+// runImpl executes the main loop for processing synchronous background migration jobs. It performs the following steps:
 // 1. Starts a new transaction and acquires a distributed lock.
 // 2. Processes up to `maxJobPerBatch` jobs or until `maxBatchTimeout` elapses.
 // 3. For each job:
@@ -151,7 +151,7 @@ func (jw *SyncWorker) Run(ctx context.Context) error {
 // 4. After processing the batch, commits the transaction and releases the lock.
 // 5. Waits for a random duration between `minDelayPerRun` and `maxDelayPerRun` before starting the next iteration.
 // This method continues running until all jobs are processed or an error occurs.
-func (jw *SyncWorker) run(ctx context.Context) error {
+func (jw *SyncWorker) runImpl(ctx context.Context) error {
 	jw.lastRunCompletedBBMs = 0
 	for {
 		jw.logger = jw.logger.WithFields(log.Fields{"batch_id": correlation.SafeRandomID()})
@@ -160,6 +160,7 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 		// This ensures efficient use of the acquired lock, reducing the number of times we need to challenge the asynchronous process for the lock,
 		// while also adding a buffer to avoid overwhelming the database.
 		ctx, cancel := context.WithTimeout(ctx, jw.maxBatchTimeout)
+		// nolint: revive // defer
 		defer cancel()
 
 		// Start a transaction to run the background migration
@@ -167,12 +168,14 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create database transaction: %w", err)
 		}
+		// nolint: revive // defer
 		defer tx.Rollback()
 
 		bbmStore := datastore.NewBackgroundMigrationStore(tx)
 
 		// Grab distributed lock
 		lockCtx, lockCancel := context.WithTimeout(ctx, jw.lockWaitTimeout)
+		// nolint: revive // defer
 		defer lockCancel()
 
 		if err = jw.wh.GrabLock(lockCtx, bbmStore); err != nil {
@@ -185,6 +188,7 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 
 			// each job should take at most the lesser of the parent ctx timeout or jobTimeout`.
 			jobCtx, jobCancel := context.WithTimeout(ctx, jw.jobTimeout)
+			// nolint: revive // defer
 			defer jobCancel()
 
 			job, err := jw.wh.FindJob(jobCtx, bbmStore)
@@ -192,6 +196,7 @@ func (jw *SyncWorker) run(ctx context.Context) error {
 				jw.logger.WithError(err).Error("failed to find job, terminating batch run")
 				return err
 			}
+			// nolint: revive // max-control-nesting
 			if job != nil {
 				l := jw.logger.WithFields(log.Fields{
 					jobIDKey:        job.ID,
@@ -266,6 +271,7 @@ func (jw *SyncWorker) FindJob(ctx context.Context, bbmStore datastore.Background
 				bbm.ErrorCode = models.NullErrCode
 				bbm.Status = models.BackgroundMigrationRunning
 
+				// nolint: revive // max-control-nesting
 				if err = bbmStore.UpdateStatus(ctx, bbm); err != nil {
 					jw.logger.WithError(err).Error("failed to update status of background migration")
 					return nil, fmt.Errorf("failed to update status of background migration: %w", err)
@@ -287,6 +293,7 @@ func (jw *SyncWorker) FindJob(ctx context.Context, bbmStore datastore.Background
 				jw.logger.Info("found running/active migration without jobs, setting it to finished")
 				bbm.ErrorCode = models.NullErrCode
 				bbm.Status = models.BackgroundMigrationFinished
+				// nolint: revive // max-control-nesting
 				if err = bbmStore.UpdateStatus(ctx, bbm); err != nil {
 					jw.logger.WithError(err).Error("failed to update status of background migration")
 					return nil, fmt.Errorf("failed to update status of background migration: %w", err)
@@ -367,13 +374,12 @@ func (jw *SyncWorker) ExecuteJob(ctx context.Context, bbmStore datastore.Backgro
 		for i := 0; i < jw.maxJobAttempt; i++ {
 			jw.logger.WithFields(log.Fields{"sync_attempt": i + 1}).Info("executing job")
 			err := work.Do(ctx, jw.db, job.PaginationTable, job.PaginationColumn, job.StartID, job.EndID, job.BatchSize)
-			if err != nil {
-				jw.logger.WithError(err).Error("failed executing job, retrying")
-			} else {
+			if err == nil {
 				jw.logger.Info("job execution completed successfully, updating job status")
 				job.Status = models.BackgroundMigrationFinished
 				return bbmStore.UpdateJobStatus(ctx, job)
 			}
+			jw.logger.WithError(err).Error("failed executing job, retrying")
 		}
 	} else {
 		jw.logger.WithFields(log.Fields{"job_name": job.JobName}).Error("job function not found in work map")

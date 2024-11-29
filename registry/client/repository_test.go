@@ -560,11 +560,11 @@ func newRandomSchemaV1Manifest(name reference.Named, tag string, blobCount int) 
 	return sm, digest.FromBytes(sm.Canonical), sm.Canonical
 }
 
-func addTestManifestWithEtag(repo reference.Named, reference string, content []byte, m *testutil.RequestResponseMap, dgst string) {
+func addTestManifestWithEtag(repo reference.Named, referenceName string, content []byte, m *testutil.RequestResponseMap, dgst string) {
 	actualDigest := digest.FromBytes(content)
 	getReqWithEtag := testutil.Request{
 		Method: http.MethodGet,
-		Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+		Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		Headers: http.Header(map[string][]string{
 			"If-None-Match": {fmt.Sprintf(`"%s"`, dgst)},
 		}),
@@ -574,7 +574,7 @@ func addTestManifestWithEtag(repo reference.Named, reference string, content []b
 	if actualDigest.String() == dgst {
 		getRespWithEtag = testutil.Response{
 			StatusCode: http.StatusNotModified,
-			Body:       []byte{},
+			Body:       make([]byte, 0),
 			Headers: http.Header(map[string][]string{
 				"Content-Length": {"0"},
 				"Last-Modified":  {time.Now().Add(-1 * time.Second).Format(time.ANSIC)},
@@ -603,11 +603,11 @@ func contentDigestString(mediatype string, content []byte) string {
 	return digest.Canonical.FromBytes(content).String()
 }
 
-func addTestManifest(repo reference.Named, reference, mediatype string, content []byte, m *testutil.RequestResponseMap) {
+func addTestManifest(repo reference.Named, referenceName, mediatype string, content []byte, m *testutil.RequestResponseMap) {
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodGet,
-			Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusOK,
@@ -623,7 +623,7 @@ func addTestManifest(repo reference.Named, reference, mediatype string, content 
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodHead,
-			Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusOK,
@@ -637,11 +637,11 @@ func addTestManifest(repo reference.Named, reference, mediatype string, content 
 	})
 }
 
-func addTestManifestWithoutDigestHeader(repo reference.Named, reference, mediatype string, content []byte, m *testutil.RequestResponseMap) {
+func addTestManifestWithoutDigestHeader(repo reference.Named, referenceName, mediatype string, content []byte, m *testutil.RequestResponseMap) {
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodGet,
-			Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusOK,
@@ -656,7 +656,7 @@ func addTestManifestWithoutDigestHeader(repo reference.Named, reference, mediaty
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodHead,
-			Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusOK,
@@ -728,13 +728,13 @@ func TestV1ManifestFetch(t *testing.T) {
 		t.Fatal("Manifest does not exist")
 	}
 
-	manifest, err := ms.Get(ctx, dgst)
+	testManifest, err := ms.Get(ctx, dgst)
 	if err != nil {
 		t.Fatal(err)
 	}
-	v1manifest, ok := manifest.(*schema1.SignedManifest)
+	v1manifest, ok := testManifest.(*schema1.SignedManifest)
 	if !ok {
-		t.Fatalf("Unexpected manifest type from Get: %T", manifest)
+		t.Fatalf("Unexpected manifest type from Get: %T", testManifest)
 	}
 
 	if err := checkEqualManifest(v1manifest, m1); err != nil {
@@ -742,13 +742,13 @@ func TestV1ManifestFetch(t *testing.T) {
 	}
 
 	var contentDigest digest.Digest
-	manifest, err = ms.Get(ctx, dgst, distribution.WithTag("latest"), ReturnContentDigest(&contentDigest))
+	testManifest, err = ms.Get(ctx, dgst, distribution.WithTag("latest"), ReturnContentDigest(&contentDigest))
 	if err != nil {
 		t.Fatal(err)
 	}
-	v1manifest, ok = manifest.(*schema1.SignedManifest)
+	v1manifest, ok = testManifest.(*schema1.SignedManifest)
 	if !ok {
-		t.Fatalf("Unexpected manifest type from Get: %T", manifest)
+		t.Fatalf("Unexpected manifest type from Get: %T", testManifest)
 	}
 
 	if err = checkEqualManifest(v1manifest, m1); err != nil {
@@ -803,7 +803,7 @@ func TestManifestFetchWithAccept(t *testing.T) {
 	repo, _ := reference.WithName("test.example.com/repo")
 	_, dgst, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
 	headers := make(chan []string, 1)
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	s := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
 		headers <- req.Header["Accept"]
 	}))
 	defer close(headers)
@@ -827,7 +827,7 @@ func TestManifestFetchWithAccept(t *testing.T) {
 		sort bool
 	}{
 		{
-			mediaTypes: []string{},
+			mediaTypes: make([]string, 0),
 			expect:     distribution.ManifestMediaTypes(),
 			sort:       true,
 		},

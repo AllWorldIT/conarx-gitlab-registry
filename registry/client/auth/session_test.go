@@ -12,6 +12,7 @@ import (
 	"github.com/docker/distribution/registry/client/auth/challenge"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/docker/distribution/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 // An implementation of clock for providing fake time data.
@@ -89,11 +90,11 @@ func (tcs *testCredentialStore) Basic(*url.URL) (string, string) {
 	return tcs.username, tcs.password
 }
 
-func (tcs *testCredentialStore) RefreshToken(u *url.URL, service string) string {
+func (tcs *testCredentialStore) RefreshToken(_ *url.URL, service string) string {
 	return tcs.refreshTokens[service]
 }
 
-func (tcs *testCredentialStore) SetRefreshToken(u *url.URL, service, token string) {
+func (tcs *testCredentialStore) SetRefreshToken(_ *url.URL, service, token string) {
 	if tcs.refreshTokens != nil {
 		tcs.refreshTokens[service] = token
 	}
@@ -204,7 +205,8 @@ func TestEndpointAuthorizeToken(t *testing.T) {
 		t.Fatalf("Error sending get request: %s", err)
 	}
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusUnauthorized)
@@ -302,7 +304,8 @@ func TestEndpointAuthorizeRefreshToken(t *testing.T) {
 		t.Fatalf("Error sending get request: %s", err)
 	}
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
@@ -333,7 +336,8 @@ func TestEndpointAuthorizeRefreshToken(t *testing.T) {
 		t.Fatalf("Error sending get request: %s", err)
 	}
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusUnauthorized)
@@ -365,7 +369,8 @@ func TestEndpointAuthorizeRefreshToken(t *testing.T) {
 		t.Fatalf("Error sending get request: %s", err)
 	}
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusUnauthorized)
@@ -445,7 +450,8 @@ func TestEndpointAuthorizeV2RefreshToken(t *testing.T) {
 		t.Fatalf("Error sending get request: %s", err)
 	}
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
@@ -522,7 +528,8 @@ func TestEndpointAuthorizeTokenBasic(t *testing.T) {
 		t.Fatalf("Error sending get request: %s", err)
 	}
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
@@ -658,6 +665,7 @@ func TestEndpointAuthorizeTokenBasicWithExpiresIn(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error sending get request: %s", err)
 		}
+		// nolint: revive // defer
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusAccepted {
@@ -675,7 +683,8 @@ func TestEndpointAuthorizeTokenBasicWithExpiresIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error sending get request: %s", err)
 	}
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
 	}
@@ -813,6 +822,7 @@ func TestEndpointAuthorizeTokenBasicWithExpiresInAndIssuedAt(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error sending get request: %s", err)
 		}
+		// nolint: revive // defer
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusAccepted {
@@ -830,7 +840,8 @@ func TestEndpointAuthorizeTokenBasicWithExpiresInAndIssuedAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error sending get request: %s", err)
 	}
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
 	}
@@ -879,7 +890,8 @@ func TestEndpointAuthorizeBasic(t *testing.T) {
 		t.Fatalf("Error sending get request: %s", err)
 	}
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
 
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)

@@ -142,7 +142,7 @@ func ResponseChallenges(resp *http.Response) []Challenge {
 }
 
 func parseAuthHeader(header http.Header) []Challenge {
-	challenges := []Challenge{}
+	challenges := make([]Challenge, 0)
 	for _, h := range header[http.CanonicalHeaderKey("WWW-Authenticate")] {
 		v, p := parseValueAndParams(h)
 		if v != "" {
@@ -152,11 +152,11 @@ func parseAuthHeader(header http.Header) []Challenge {
 	return challenges
 }
 
-func parseValueAndParams(header string) (value string, params map[string]string) {
-	params = make(map[string]string)
+func parseValueAndParams(header string) (string, map[string]string) {
+	params := make(map[string]string)
 	value, s := expectToken(header)
 	if value == "" {
-		return
+		return value, params
 	}
 	value = strings.ToLower(value)
 	s = "," + skipSpace(s)
@@ -164,21 +164,21 @@ func parseValueAndParams(header string) (value string, params map[string]string)
 		var pkey string
 		pkey, s = expectToken(skipSpace(s[1:]))
 		if pkey == "" {
-			return
+			return value, params
 		}
 		if !strings.HasPrefix(s, "=") {
-			return
+			return value, params
 		}
 		var pvalue string
 		pvalue, s = expectTokenOrQuoted(s[1:])
 		if pvalue == "" {
-			return
+			return value, params
 		}
 		pkey = strings.ToLower(pkey)
 		params[pkey] = pvalue
 		s = skipSpace(s)
 	}
-	return
+	return value, params
 }
 
 func skipSpace(s string) (rest string) {
@@ -214,7 +214,8 @@ func expectTokenOrQuoted(s string) (value, rest string) {
 			p := make([]byte, len(s)-1)
 			j := copy(p, s[:i])
 			escape := true
-			for i += 1; i < len(s); i++ {
+			// nolint: revive //max-control-nesting
+			for i++; i < len(s); i++ {
 				b := s[i]
 				switch {
 				case escape:

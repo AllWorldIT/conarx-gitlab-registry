@@ -92,10 +92,12 @@ func (s *BackgroundMigrationTestSuite) TestSyncRunSingleFailedJobRecovery() {
 	// Assert the background migration runs to completion
 	s.requireBBMFinally(expectedBBM.Name, expectedBBM)
 	s.requireBBMJobsFinally(expectedBBM.Name, expectedBBMJobs)
-	s.requireMigrationLogicComplete(func(db *datastore.DB) (exists bool, err error) {
+	s.requireMigrationLogicComplete(func(db *datastore.DB) (bool, error) {
+		var exists bool
+
 		query := fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s WHERE %s BETWEEN $1 AND $2)", expectedBBM.TargetTable, targetBBMNewColumn)
-		err = db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
-		return
+		err := db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
+		return exists, err
 	})
 }
 
@@ -217,10 +219,12 @@ func (s *BackgroundMigrationTestSuite) TestSyncRunMultipleFailedJobRecovery() {
 	// Assert the background migration runs to completion
 	s.requireBBMFinally(expectedBBM.Name, expectedBBM)
 	s.requireBBMJobsFinally(expectedBBM.Name, expectedBBMJobs)
-	s.requireMigrationLogicComplete(func(db *datastore.DB) (exists bool, err error) {
+	s.requireMigrationLogicComplete(func(db *datastore.DB) (bool, error) {
+		var exists bool
+
 		query := fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s WHERE %s BETWEEN $1 AND $2)", expectedBBM.TargetTable, targetBBMNewColumn)
-		err = db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
-		return
+		err := db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
+		return exists, err
 	})
 }
 
@@ -358,10 +362,12 @@ func (s *BackgroundMigrationTestSuite) testSyncRunSingleActiveRunningBBM(status 
 	// Assert the background migration runs to completion
 	s.requireBBMFinally(expectedBBM.Name, expectedBBM)
 	s.requireBBMJobsFinally(expectedBBM.Name, expectedBBMJobs)
-	s.requireMigrationLogicComplete(func(db *datastore.DB) (exists bool, err error) {
+	s.requireMigrationLogicComplete(func(db *datastore.DB) (bool, error) {
+		var exists bool
+
 		query := fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s WHERE %s BETWEEN $1 AND $2)", expectedBBM.TargetTable, targetBBMNewColumn)
-		err = db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
-		return
+		err := db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
+		return exists, err
 	})
 }
 
@@ -523,9 +529,10 @@ func (s *BackgroundMigrationTestSuite) requireBackgroundMigrations(expected map[
 			s.Require().NoError(err)
 			s.Require().Equalf(0, count, "Expected no background migration jobs for background migration: %d, but found some", actualBM.ID)
 			return
-		} else {
-			// Check the associated jobs
-			qJobs := `SELECT
+		}
+
+		// Check the associated jobs
+		qJobs := `SELECT
 						batched_background_migration_id,
 						min_value,
 						max_value,
@@ -536,20 +543,20 @@ func (s *BackgroundMigrationTestSuite) requireBackgroundMigrations(expected map[
 					WHERE
 						batched_background_migration_id = $1`
 
-			rows, err := s.db.Query(qJobs, actualBM.ID)
+		rows, err := s.db.Query(qJobs, actualBM.ID)
+		s.Require().NoError(err)
+		// nolint: revive // defer
+		defer rows.Close()
+
+		var actualJobs []models.BackgroundMigrationJob
+		for rows.Next() {
+			job := models.BackgroundMigrationJob{}
+			err := rows.Scan(&job.BBMID, &job.StartID, &job.EndID, &job.Status, &job.Attempts)
 			s.Require().NoError(err)
-			defer rows.Close()
-
-			var actualJobs []models.BackgroundMigrationJob
-			for rows.Next() {
-				job := models.BackgroundMigrationJob{}
-				err := rows.Scan(&job.BBMID, &job.StartID, &job.EndID, &job.Status, &job.Attempts)
-				s.Require().NoError(err)
-				actualJobs = append(actualJobs, job)
-			}
-
-			require.ElementsMatchf(s.T(), expectedJobs, actualJobs, "Expected background migration jobs for background migration: %d to match", actualBM.ID)
+			actualJobs = append(actualJobs, job)
 		}
+
+		require.ElementsMatchf(s.T(), expectedJobs, actualJobs, "Expected background migration jobs for background migration: %d to match", actualBM.ID)
 	}
 }
 
@@ -585,14 +592,14 @@ func (s *BackgroundMigrationTestSuite) requireBBMFinally(bbmName string, expecte
 }
 
 // generateBBMFixtures creates schema migration records for background migration entries.
-func generateBBMFixtures(bbms map[models.BackgroundMigration][]models.BackgroundMigrationJob) ([]string, []string) {
+func generateBBMFixtures(bms map[models.BackgroundMigration][]models.BackgroundMigrationJob) ([]string, []string) {
 	var up []string
 	var down []string
 
-	for bbm, jobs := range bbms {
+	for bm, jobs := range bms {
 		up = append(up,
 			fmt.Sprintf(`INSERT INTO batched_background_migrations ("id", "name", "min_value", "max_value", "batch_size", "status", "job_signature_name", "table_name", "column_name")
-				VALUES ('%d','%s', %d, %d,  %d, %d, '%s', '%s', '%s')`, bbm.ID, bbm.Name, bbm.StartID, bbm.EndID, bbm.BatchSize, bbm.Status, bbm.JobName, bbm.TargetTable, bbm.TargetColumn))
+				VALUES ('%d','%s', %d, %d,  %d, %d, '%s', '%s', '%s')`, bm.ID, bm.Name, bm.StartID, bm.EndID, bm.BatchSize, bm.Status, bm.JobName, bm.TargetTable, bm.TargetColumn))
 
 		for _, job := range jobs {
 			up = append(up,
@@ -602,8 +609,8 @@ func generateBBMFixtures(bbms map[models.BackgroundMigration][]models.Background
 
 		down = append(down,
 			[]string{
-				fmt.Sprintf(`DELETE FROM batched_background_migration_jobs WHERE batched_background_migration_id IN (SELECT id FROM batched_background_migrations WHERE name = '%s')`, bbm.Name),
-				fmt.Sprintf(`DELETE FROM batched_background_migrations WHERE "name" = '%s'`, bbm.Name),
+				fmt.Sprintf(`DELETE FROM batched_background_migration_jobs WHERE batched_background_migration_id IN (SELECT id FROM batched_background_migrations WHERE name = '%s')`, bm.Name),
+				fmt.Sprintf(`DELETE FROM batched_background_migrations WHERE "name" = '%s'`, bm.Name),
 			}...)
 	}
 

@@ -26,7 +26,7 @@ func (v APIVersion) String() string {
 // APIVersions gets the API versions out of an HTTP response using the provided
 // version header as the key for the HTTP header.
 func APIVersions(resp *http.Response, versionHeader string) []APIVersion {
-	versions := []APIVersion{}
+	versions := make([]APIVersion, 0)
 	if versionHeader != "" {
 		for _, supportedVersions := range resp.Header[http.CanonicalHeaderKey(versionHeader)] {
 			for _, version := range strings.Fields(supportedVersions) {

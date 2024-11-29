@@ -207,10 +207,10 @@ func (realClock) Now() time.Time { return time.Now() }
 
 // NewTokenHandler creates a new AuthenicationHandler which supports
 // fetching tokens from a remote token server.
-func NewTokenHandler(transport http.RoundTripper, creds CredentialStore, scope string, actions ...string) AuthenticationHandler {
+func NewTokenHandler(httpTransport http.RoundTripper, creds CredentialStore, scope string, actions ...string) AuthenticationHandler {
 	// Create options...
 	return NewTokenHandlerWithOptions(TokenHandlerOptions{
-		Transport:   transport,
+		Transport:   httpTransport,
 		Credentials: creds,
 		Scopes: []Scope{
 			RepositoryScope{
@@ -245,7 +245,7 @@ func (th *tokenHandler) client() *http.Client {
 	}
 }
 
-func (th *tokenHandler) Scheme() string {
+func (*tokenHandler) Scheme() string {
 	return "bearer"
 }
 
@@ -522,7 +522,7 @@ func (*basicHandler) Scheme() string {
 	return "basic"
 }
 
-func (bh *basicHandler) AuthorizeRequest(req *http.Request, params map[string]string) error {
+func (bh *basicHandler) AuthorizeRequest(req *http.Request, _ map[string]string) error {
 	if bh.creds != nil {
 		username, password := bh.creds.Basic(req.URL)
 		if username != "" && password != "" {
