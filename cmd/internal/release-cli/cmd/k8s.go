@@ -66,8 +66,14 @@ var k8sCmd = &cobra.Command{
 			return fmt.Errorf("reading config: %w", err)
 		}
 
-		k8sClient := client.NewClient(accessTokenK8s)
-		registryClient := client.NewClient(accessTokenRegistry)
+		k8sClient, err := client.NewClient(accessTokenK8s)
+		if err != nil {
+			return err
+		}
+		registryClient, err := client.NewClient(accessTokenRegistry)
+		if err != nil {
+			return err
+		}
 
 		exists, err := k8sClient.BranchExists(release.ProjectID, release.BranchName)
 		if err != nil {
@@ -126,7 +132,7 @@ var k8sCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(k8sCmd)
+	RootCmd.AddCommand(k8sCmd)
 
 	k8sCmd.Flags().StringVarP(&stage, "stage", "s", "", "Stage in the environment")
 	k8sCmd.Flags().String("k8s-access-token", "", "Access token for K8s")

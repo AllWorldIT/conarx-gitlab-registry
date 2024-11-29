@@ -529,8 +529,7 @@ linters:
   # inverted configuration with `enable-all` and `disable` is not scalable during updates of golangci-lint
   disable-all: true
   enable:
-  # TODO: Tracked in https://gitlab.com/gitlab-org/container-registry/-/issues/1308
-  # - revive
+    - revive
     - bodyclose
     - copyloopvar
     - depguard

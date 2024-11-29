@@ -23,7 +23,7 @@ type tagDenyAccessPatternsContext struct {
 }
 
 // Value implements context.Context.
-func (c tagDenyAccessPatternsContext) Value(key interface{}) interface{} {
+func (c tagDenyAccessPatternsContext) Value(key any) any {
 	switch key {
 	case tagDenyAccessPatternsKey:
 		return c.patterns

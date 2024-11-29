@@ -11,9 +11,8 @@ import (
 func UpdateFileInK8s(fileName, stage, version string) ([]byte, error) {
 	if stage == "gstg-pre" {
 		return updateFileWithRegex(fileName, " "+version, `registry_version: v[0-9\.]+-gitlab`)
-	} else {
-		return updateFileWithScanner(fileName, stage, version)
 	}
+	return updateFileWithScanner(fileName, stage, version)
 }
 
 func UpdateFileInGDK(fileName, version string) ([]byte, error) {

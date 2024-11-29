@@ -265,36 +265,36 @@ type ConfigSuite struct {
 	expectedConfig *Configuration
 }
 
-func (suite *ConfigSuite) SetupTest() {
+func (s *ConfigSuite) SetupTest() {
 	os.Clearenv()
-	suite.expectedConfig = copyConfig(configStruct)
+	s.expectedConfig = copyConfig(configStruct)
 }
 
 // TestMarshalRoundtrip validates that configStruct can be marshaled and
 // unmarshaled without changing any parameters
-func (suite *ConfigSuite) TestMarshalRoundtrip() {
-	configBytes, err := yaml.Marshal(suite.expectedConfig)
-	require.NoError(suite.T(), err)
+func (s *ConfigSuite) TestMarshalRoundtrip() {
+	configBytes, err := yaml.Marshal(s.expectedConfig)
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader(configBytes))
-	suite.T().Log(string(configBytes))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	s.T().Log(string(configBytes))
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseSimple validates that configYamlV0_1 can be parsed into a struct
 // matching configStruct
-func (suite *ConfigSuite) TestParseSimple() {
+func (s *ConfigSuite) TestParseSimple() {
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseInmemory validates that configuration yaml with storage provided as
 // a string can be parsed into a Configuration struct with no storage parameters
-func (suite *ConfigSuite) TestParseInmemory() {
-	suite.expectedConfig.Storage = Storage{"inmemory": Parameters{}}
-	suite.expectedConfig.Database = Database{
+func (s *ConfigSuite) TestParseInmemory() {
+	s.expectedConfig.Storage = Storage{"inmemory": Parameters{}}
+	s.expectedConfig.Database = Database{
 		Enabled: true,
 		BackgroundMigrations: BackgroundMigrations{
 			Enabled:       true,
@@ -302,146 +302,161 @@ func (suite *ConfigSuite) TestParseInmemory() {
 			JobInterval:   1 * time.Minute,
 		},
 	}
-	suite.expectedConfig.Reporting = Reporting{}
-	suite.expectedConfig.Log.Fields = nil
+	s.expectedConfig.Reporting = Reporting{}
+	s.expectedConfig.Log.Fields = nil
 
 	config, err := Parse(bytes.NewReader([]byte(inmemoryConfigYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseIncomplete validates that an incomplete yaml configuration cannot
 // be parsed without providing environment variables to fill in the missing
 // components.
-func (suite *ConfigSuite) TestParseIncomplete() {
+func (s *ConfigSuite) TestParseIncomplete() {
 	incompleteConfigYaml := "version: 0.1"
 	_, err := Parse(bytes.NewReader([]byte(incompleteConfigYaml)))
-	require.Error(suite.T(), err)
+	require.Error(s.T(), err)
 
-	suite.expectedConfig.Log.Fields = nil
-	suite.expectedConfig.Storage = Storage{"filesystem": Parameters{"rootdirectory": "/tmp/testroot"}}
-	suite.expectedConfig.Database = Database{}
-	suite.expectedConfig.Auth = Auth{"silly": Parameters{"realm": "silly"}}
-	suite.expectedConfig.Reporting = Reporting{}
-	suite.expectedConfig.Notifications = Notifications{}
-	suite.expectedConfig.HTTP.Headers = nil
+	s.expectedConfig.Log.Fields = nil
+	s.expectedConfig.Storage = Storage{"filesystem": Parameters{"rootdirectory": "/tmp/testroot"}}
+	s.expectedConfig.Database = Database{}
+	s.expectedConfig.Auth = Auth{"silly": Parameters{"realm": "silly"}}
+	s.expectedConfig.Reporting = Reporting{}
+	s.expectedConfig.Notifications = Notifications{}
+	s.expectedConfig.HTTP.Headers = nil
 
 	// Note: this also tests that REGISTRY_STORAGE and
 	// REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY can be used together
-	os.Setenv("REGISTRY_STORAGE", "filesystem")
-	os.Setenv("REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY", "/tmp/testroot")
-	os.Setenv("REGISTRY_AUTH", "silly")
-	os.Setenv("REGISTRY_AUTH_SILLY_REALM", "silly")
+	err = os.Setenv("REGISTRY_STORAGE", "filesystem")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY", "/tmp/testroot")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_AUTH", "silly")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_AUTH_SILLY_REALM", "silly")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(incompleteConfigYaml)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseWithSameEnvStorage validates that providing environment variables
 // that match the given storage type will only include environment-defined
 // parameters and remove yaml-defined parameters
-func (suite *ConfigSuite) TestParseWithSameEnvStorage() {
-	suite.expectedConfig.Storage = Storage{"s3": Parameters{"region": "us-east-1"}}
+func (s *ConfigSuite) TestParseWithSameEnvStorage() {
+	s.expectedConfig.Storage = Storage{"s3": Parameters{"region": "us-east-1"}}
 
-	os.Setenv("REGISTRY_STORAGE", "s3")
-	os.Setenv("REGISTRY_STORAGE_S3_REGION", "us-east-1")
+	err := os.Setenv("REGISTRY_STORAGE", "s3")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_STORAGE_S3_REGION", "us-east-1")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseWithDifferentEnvStorageParams validates that providing environment variables that change
 // and add to the given storage parameters will change and add parameters to the parsed
 // Configuration struct
-func (suite *ConfigSuite) TestParseWithDifferentEnvStorageParams() {
-	suite.expectedConfig.Storage.setParameter("region", "us-west-1")
-	suite.expectedConfig.Storage.setParameter("secure", true)
-	suite.expectedConfig.Storage.setParameter("newparam", "some Value")
+func (s *ConfigSuite) TestParseWithDifferentEnvStorageParams() {
+	s.expectedConfig.Storage.setParameter("region", "us-west-1")
+	s.expectedConfig.Storage.setParameter("secure", true)
+	s.expectedConfig.Storage.setParameter("newparam", "some Value")
 
-	os.Setenv("REGISTRY_STORAGE_S3_REGION", "us-west-1")
-	os.Setenv("REGISTRY_STORAGE_S3_SECURE", "true")
-	os.Setenv("REGISTRY_STORAGE_S3_NEWPARAM", "some Value")
+	err := os.Setenv("REGISTRY_STORAGE_S3_REGION", "us-west-1")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_STORAGE_S3_SECURE", "true")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_STORAGE_S3_NEWPARAM", "some Value")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseWithDifferentEnvStorageType validates that providing an environment variable that
 // changes the storage type will be reflected in the parsed Configuration struct
-func (suite *ConfigSuite) TestParseWithDifferentEnvStorageType() {
-	suite.expectedConfig.Storage = Storage{"inmemory": Parameters{}}
+func (s *ConfigSuite) TestParseWithDifferentEnvStorageType() {
+	s.expectedConfig.Storage = Storage{"inmemory": Parameters{}}
 
-	os.Setenv("REGISTRY_STORAGE", "inmemory")
+	err := os.Setenv("REGISTRY_STORAGE", "inmemory")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseWithDifferentEnvStorageTypeAndParams validates that providing an environment variable
 // that changes the storage type will be reflected in the parsed Configuration struct and that
 // environment storage parameters will also be included
-func (suite *ConfigSuite) TestParseWithDifferentEnvStorageTypeAndParams() {
-	suite.expectedConfig.Storage = Storage{"filesystem": Parameters{}}
-	suite.expectedConfig.Storage.setParameter("rootdirectory", "/tmp/testroot")
+func (s *ConfigSuite) TestParseWithDifferentEnvStorageTypeAndParams() {
+	s.expectedConfig.Storage = Storage{"filesystem": Parameters{}}
+	s.expectedConfig.Storage.setParameter("rootdirectory", "/tmp/testroot")
 
-	os.Setenv("REGISTRY_STORAGE", "filesystem")
-	os.Setenv("REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY", "/tmp/testroot")
+	err := os.Setenv("REGISTRY_STORAGE", "filesystem")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY", "/tmp/testroot")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseWithSameEnvLoglevel validates that providing an environment variable defining the log
 // level to the same as the one provided in the yaml will not change the parsed Configuration struct
-func (suite *ConfigSuite) TestParseWithSameEnvLoglevel() {
-	os.Setenv("REGISTRY_LOGLEVEL", "info")
+func (s *ConfigSuite) TestParseWithSameEnvLoglevel() {
+	err := os.Setenv("REGISTRY_LOGLEVEL", "info")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseWithDifferentEnvLoglevel validates that providing an environment variable defining the
 // log level will override the value provided in the yaml document
-func (suite *ConfigSuite) TestParseWithDifferentEnvLoglevel() {
-	suite.expectedConfig.Log.Level = "error"
+func (s *ConfigSuite) TestParseWithDifferentEnvLoglevel() {
+	s.expectedConfig.Log.Level = "error"
 
-	os.Setenv("REGISTRY_LOG_LEVEL", "error")
+	err := os.Setenv("REGISTRY_LOG_LEVEL", "error")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseInvalidLoglevel validates that the parser will fail to parse a
 // configuration if the loglevel is malformed
-func (suite *ConfigSuite) TestParseInvalidLoglevel() {
+func (s *ConfigSuite) TestParseInvalidLoglevel() {
 	invalidConfigYaml := "version: 0.1\nloglevel: derp\nstorage: inmemory"
 	_, err := Parse(bytes.NewReader([]byte(invalidConfigYaml)))
-	require.Error(suite.T(), err)
+	require.Error(s.T(), err)
 
-	os.Setenv("REGISTRY_LOGLEVEL", "derp")
+	err = os.Setenv("REGISTRY_LOGLEVEL", "derp")
+	require.NoError(s.T(), err)
 
 	_, err = Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.Error(suite.T(), err)
+	require.Error(s.T(), err)
 }
 
 // TestParseWithoutStorageValidation validates that the parser will not fail to parse a configuration if a storage
 // driver was not set but WithoutStorageValidation was passed as an option.
-func (suite *ConfigSuite) TestParseWithoutStorageValidation() {
+func (s *ConfigSuite) TestParseWithoutStorageValidation() {
 	configYaml := "version: 0.1"
 
 	_, err := Parse(bytes.NewReader([]byte(configYaml)))
-	require.Error(suite.T(), err)
-	require.ErrorContains(suite.T(), err, "no storage configuration provided")
+	require.Error(s.T(), err)
+	require.ErrorContains(s.T(), err, "no storage configuration provided")
 
 	_, err = Parse(bytes.NewReader([]byte(configYaml)), WithoutStorageValidation())
-	require.NoError(suite.T(), err)
+	require.NoError(s.T(), err)
 }
 
 type parameterTest struct {
@@ -664,7 +679,7 @@ storage: inmemory
 }
 
 // TestParseWithDifferentEnvDatabase validates that environment variables properly override database parameters
-func (suite *ConfigSuite) TestParseWithDifferentEnvDatabase() {
+func (s *ConfigSuite) TestParseWithDifferentEnvDatabase() {
 	expected := Database{
 		Enabled:  true,
 		Host:     "127.0.0.1",
@@ -687,109 +702,132 @@ func (suite *ConfigSuite) TestParseWithDifferentEnvDatabase() {
 			ReplicaCheckInterval: 1 * time.Minute,
 		},
 	}
-	suite.expectedConfig.Database = expected
+	s.expectedConfig.Database = expected
 
-	os.Setenv("REGISTRY_DATABASE_DISABLE", strconv.FormatBool(expected.Enabled))
-	os.Setenv("REGISTRY_DATABASE_HOST", expected.Host)
-	os.Setenv("REGISTRY_DATABASE_PORT", strconv.Itoa(expected.Port))
-	os.Setenv("REGISTRY_DATABASE_USER", expected.User)
-	os.Setenv("REGISTRY_DATABASE_PASSWORD", expected.Password)
-	os.Setenv("REGISTRY_DATABASE_DBNAME", expected.DBName)
-	os.Setenv("REGISTRY_DATABASE_SSLMODE", expected.SSLMode)
+	err := os.Setenv("REGISTRY_DATABASE_DISABLE", strconv.FormatBool(expected.Enabled))
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_DATABASE_HOST", expected.Host)
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_DATABASE_PORT", strconv.Itoa(expected.Port))
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_DATABASE_USER", expected.User)
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_DATABASE_PASSWORD", expected.Password)
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_DATABASE_DBNAME", expected.DBName)
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_DATABASE_SSLMODE", expected.SSLMode)
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseInvalidVersion validates that the parser will fail to parse a newer configuration
 // version than the CurrentVersion
-func (suite *ConfigSuite) TestParseInvalidVersion() {
-	suite.expectedConfig.Version = MajorMinorVersion(CurrentVersion.Major(), CurrentVersion.Minor()+1)
-	configBytes, err := yaml.Marshal(suite.expectedConfig)
-	require.NoError(suite.T(), err)
+func (s *ConfigSuite) TestParseInvalidVersion() {
+	s.expectedConfig.Version = MajorMinorVersion(CurrentVersion.Major(), CurrentVersion.Minor()+1)
+	configBytes, err := yaml.Marshal(s.expectedConfig)
+	require.NoError(s.T(), err)
 	_, err = Parse(bytes.NewReader(configBytes))
-	require.Error(suite.T(), err)
+	require.Error(s.T(), err)
 }
 
 // TestParseExtraneousVars validates that environment variables referring to
 // nonexistent variables don't cause side effects.
-func (suite *ConfigSuite) TestParseExtraneousVars() {
-	suite.expectedConfig.Reporting.Sentry.Environment = "test"
+func (s *ConfigSuite) TestParseExtraneousVars() {
+	s.expectedConfig.Reporting.Sentry.Environment = "test"
 
 	// A valid environment variable
-	os.Setenv("REGISTRY_REPORTING_SENTRY_ENVIRONMENT", "test")
+	err := os.Setenv("REGISTRY_REPORTING_SENTRY_ENVIRONMENT", "test")
+	require.NoError(s.T(), err)
 
 	// Environment variables which shouldn't set config items
-	os.Setenv("REGISTRY_DUCKS", "quack")
-	os.Setenv("REGISTRY_REPORTING_ASDF", "ghjk")
+	err = os.Setenv("REGISTRY_DUCKS", "quack")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_REPORTING_ASDF", "ghjk")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseEnvVarImplicitMaps validates that environment variables can set
 // values in maps that don't already exist.
-func (suite *ConfigSuite) TestParseEnvVarImplicitMaps() {
+func (s *ConfigSuite) TestParseEnvVarImplicitMaps() {
 	readonly := make(map[string]any)
 	readonly["enabled"] = true
 
 	maintenance := make(map[string]any)
 	maintenance["readonly"] = readonly
 
-	suite.expectedConfig.Storage["maintenance"] = maintenance
+	s.expectedConfig.Storage["maintenance"] = maintenance
 
-	os.Setenv("REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED", "true")
+	err := os.Setenv("REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED", "true")
+	require.NoError(s.T(), err)
 
 	config, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), suite.expectedConfig, config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), s.expectedConfig, config)
 }
 
 // TestParseEnvWrongTypeMap validates that incorrectly attempting to unmarshal a
 // string over existing map fails.
-func (suite *ConfigSuite) TestParseEnvWrongTypeMap() {
-	os.Setenv("REGISTRY_STORAGE_S3", "somestring")
+func (s *ConfigSuite) TestParseEnvWrongTypeMap() {
+	err := os.Setenv("REGISTRY_STORAGE_S3", "somestring")
+	require.NoError(s.T(), err)
 
-	_, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.Error(suite.T(), err)
+	_, err = Parse(bytes.NewReader([]byte(configYamlV0_1)))
+	require.Error(s.T(), err)
 }
 
 // TestParseEnvWrongTypeStruct validates that incorrectly attempting to
 // unmarshal a string into a struct fails.
-func (suite *ConfigSuite) TestParseEnvWrongTypeStruct() {
-	os.Setenv("REGISTRY_STORAGE_LOG", "somestring")
+func (s *ConfigSuite) TestParseEnvWrongTypeStruct() {
+	err := os.Setenv("REGISTRY_STORAGE_LOG", "somestring")
+	require.NoError(s.T(), err)
 
-	_, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.Error(suite.T(), err)
+	_, err = Parse(bytes.NewReader([]byte(configYamlV0_1)))
+	require.Error(s.T(), err)
 }
 
 // TestParseEnvWrongTypeSlice validates that incorrectly attempting to
 // unmarshal a string into a slice fails.
-func (suite *ConfigSuite) TestParseEnvWrongTypeSlice() {
-	os.Setenv("REGISTRY_HTTP_TLS_CLIENTCAS", "somestring")
+func (s *ConfigSuite) TestParseEnvWrongTypeSlice() {
+	err := os.Setenv("REGISTRY_HTTP_TLS_CLIENTCAS", "somestring")
+	require.NoError(s.T(), err)
 
-	_, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.Error(suite.T(), err)
+	_, err = Parse(bytes.NewReader([]byte(configYamlV0_1)))
+	require.Error(s.T(), err)
 }
 
 // TestParseEnvMany tests several environment variable overrides.
 // The result is not checked - the goal of this test is to detect panics
 // from misuse of reflection.
-func (suite *ConfigSuite) TestParseEnvMany() {
-	os.Setenv("REGISTRY_VERSION", "0.1")
-	os.Setenv("REGISTRY_LOG_LEVEL", "debug")
-	os.Setenv("REGISTRY_LOG_FORMATTER", "json")
-	os.Setenv("REGISTRY_LOG_FIELDS", "abc: xyz")
-	os.Setenv("REGISTRY_LOGLEVEL", "debug")
-	os.Setenv("REGISTRY_STORAGE", "s3")
-	os.Setenv("REGISTRY_AUTH_PARAMS", "param1: value1")
-	os.Setenv("REGISTRY_AUTH_PARAMS_VALUE2", "value2")
-	os.Setenv("REGISTRY_AUTH_PARAMS_VALUE2", "value2")
+func (s *ConfigSuite) TestParseEnvMany() {
+	err := os.Setenv("REGISTRY_VERSION", "0.1")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_LOG_LEVEL", "debug")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_LOG_FORMATTER", "json")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_LOG_FIELDS", "abc: xyz")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_LOGLEVEL", "debug")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_STORAGE", "s3")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_AUTH_PARAMS", "param1: value1")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_AUTH_PARAMS_VALUE2", "value2")
+	require.NoError(s.T(), err)
+	err = os.Setenv("REGISTRY_AUTH_PARAMS_VALUE2", "value2")
+	require.NoError(s.T(), err)
 
-	_, err := Parse(bytes.NewReader([]byte(configYamlV0_1)))
-	require.NoError(suite.T(), err)
+	_, err = Parse(bytes.NewReader([]byte(configYamlV0_1)))
+	require.NoError(s.T(), err)
 }
 
 func boolParameterTests() []parameterTest {
@@ -933,7 +971,7 @@ http:
 		{
 			name:  "empty",
 			value: "[]",
-			want:  []string{},
+			want:  make([]string, 0),
 		},
 		{
 			name: "default",
@@ -1511,7 +1549,7 @@ database:
 		},
 		{
 			name: "default",
-			want: []string{},
+			want: make([]string, 0),
 		},
 	}
 
@@ -1716,9 +1754,9 @@ func checkStructs(t require.TestingT, rt reflect.Type, structsChecked map[string
 
 // TestValidateConfigStruct makes sure that the config struct has no members
 // with yaml tags that would be ambiguous to the environment variable parser.
-func (suite *ConfigSuite) TestValidateConfigStruct() {
+func (s *ConfigSuite) TestValidateConfigStruct() {
 	structsChecked := make(map[string]struct{})
-	checkStructs(suite.T(), reflect.TypeOf(Configuration{}), structsChecked)
+	checkStructs(s.T(), reflect.TypeOf(Configuration{}), structsChecked)
 }
 
 func copyConfig(config Configuration) *Configuration {
@@ -1748,7 +1786,7 @@ func copyConfig(config Configuration) *Configuration {
 		configCopy.Auth.setParameter(k, v)
 	}
 
-	configCopy.Notifications = Notifications{Endpoints: []Endpoint{}}
+	configCopy.Notifications = Notifications{Endpoints: make([]Endpoint, 0)}
 	configCopy.Notifications.Endpoints = append(configCopy.Notifications.Endpoints, config.Notifications.Endpoints...)
 	configCopy.Notifications.FanoutTimeout = config.Notifications.FanoutTimeout
 
