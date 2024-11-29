@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -17,13 +16,13 @@ type Client struct {
 	client *gitlab.Client
 }
 
-func NewClient(accessToken string) *Client {
+func NewClient(accessToken string) (*Client, error) {
 	gtlb, err := gitlab.NewClient(accessToken)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		return nil, fmt.Errorf("creating client: %w", err)
 	}
 
-	return &Client{client: gtlb}
+	return &Client{client: gtlb}, nil
 }
 
 func (g *Client) CreateBranch(projectID int, branchName, ref string) (*gitlab.Branch, error) {

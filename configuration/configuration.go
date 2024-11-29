@@ -624,11 +624,11 @@ func (version *Version) UnmarshalYAML(unmarshal func(any) error) error {
 	}
 
 	newVersion := Version(versionString)
-	if _, err := newVersion.major(); err != nil {
+	if _, err := newVersion.majorImpl(); err != nil {
 		return err
 	}
 
-	if _, err := newVersion.minor(); err != nil {
+	if _, err := newVersion.minorImpl(); err != nil {
 		return err
 	}
 

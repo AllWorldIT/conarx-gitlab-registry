@@ -24,7 +24,7 @@ func MajorMinorVersion(major, minor uint) Version {
 	return Version(fmt.Sprintf("%d.%d", major, minor))
 }
 
-func (version Version) major() (uint, error) {
+func (version Version) majorImpl() (uint, error) {
 	majorPart := strings.Split(string(version), ".")[0]
 	major, err := strconv.ParseUint(majorPart, 10, 0)
 	return uint(major), err
@@ -32,11 +32,11 @@ func (version Version) major() (uint, error) {
 
 // Major returns the major version portion of a Version
 func (version Version) Major() uint {
-	major, _ := version.major()
+	major, _ := version.majorImpl()
 	return major
 }
 
-func (version Version) minor() (uint, error) {
+func (version Version) minorImpl() (uint, error) {
 	minorPart := strings.Split(string(version), ".")[1]
 	minor, err := strconv.ParseUint(minorPart, 10, 0)
 	return uint(minor), err
@@ -44,7 +44,7 @@ func (version Version) minor() (uint, error) {
 
 // Minor returns the minor version portion of a Version
 func (version Version) Minor() uint {
-	minor, _ := version.minor()
+	minor, _ := version.minorImpl()
 	return minor
 }
 

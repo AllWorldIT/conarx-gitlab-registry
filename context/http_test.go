@@ -172,7 +172,7 @@ func (trw *testResponseWriter) Write(p []byte) (n int, err error) {
 
 	n = len(p)
 	trw.written += int64(n)
-	return
+	return n, err
 }
 
 func (trw *testResponseWriter) WriteHeader(status int) {
@@ -318,7 +318,8 @@ func TestRemoteAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsp.Body.Close()
+	err = rsp.Body.Close()
+	require.NoError(t, err)
 
 	// RemoteAddr in X-Real-Ip
 	getReq, err := http.NewRequest(http.MethodGet, backend.URL, nil)
@@ -333,7 +334,8 @@ func TestRemoteAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsp.Body.Close()
+	err = rsp.Body.Close()
+	require.NoError(t, err)
 
 	// Valid X-Real-Ip and invalid X-Forwarded-For
 	getReq.Header["X-forwarded-for"] = []string{"1.2.3"}
@@ -342,7 +344,8 @@ func TestRemoteAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsp.Body.Close()
+	err = rsp.Body.Close()
+	require.NoError(t, err)
 }
 
 func TestWithCFRayID(t *testing.T) {
@@ -364,7 +367,7 @@ func TestWithCFRayID(t *testing.T) {
 		},
 		{
 			name:                 "a request without a CF-ray header",
-			requestHeaders:       map[string]string{},
+			requestHeaders:       make(map[string]string),
 			expectedContextValue: nil,
 		},
 	}
@@ -380,7 +383,7 @@ func TestWithCFRayID(t *testing.T) {
 }
 
 func generateRequestWithHeaders(headers map[string]string) *http.Request {
-	var header http.Header = map[string][]string{}
+	var header http.Header = make(map[string][]string)
 	for key, val := range headers {
 		header.Add(key, val)
 	}
