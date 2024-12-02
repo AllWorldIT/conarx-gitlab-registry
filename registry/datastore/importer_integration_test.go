@@ -64,11 +64,11 @@ func overrideDynamicData(tb testing.TB, actual []byte) []byte {
 	tb.Helper()
 
 	// the created_at timestamps for all entities change with every test run
-	re := regexp.MustCompile(`"created_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d*\+\d{2}:\d{2}"`)
+	re := regexp.MustCompile(`"created_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
 	actual = re.ReplaceAllLiteral(actual, []byte(`"created_at":"2020-04-15T12:04:28.95584"`))
 
 	// the review_after timestamps for the GC review queue entities change with every test run
-	re = regexp.MustCompile(`"review_after":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d*\+\d{2}:\d{2}"`)
+	re = regexp.MustCompile(`"review_after":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
 	actual = re.ReplaceAllLiteral(actual, []byte(`"review_after":"2020-04-16T12:04:28.95584"`))
 
 	// schema 1 manifests have `signature` and `protected` attributes that changes with every test run
@@ -102,8 +102,6 @@ func newImporterWithRoot(t *testing.T, db *datastore.DB, root string, opts ...da
 
 // Dump each table as JSON and compare the output against reference snapshots (.golden files)
 func validateImport(t *testing.T, db *datastore.DB) {
-	t.Helper()
-
 	for _, tt := range testutil.AllTables {
 		t.Run(string(tt), func(t *testing.T) {
 			actual, err := tt.DumpAsJSON(suite.ctx, db)
