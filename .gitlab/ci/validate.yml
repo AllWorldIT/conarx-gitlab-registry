@@ -137,7 +137,12 @@ mocks:
     REGISTRY_DATABASE_DBNAME: "registry"
     REGISTRY_DATABASE_SSLMODE: "disable"
   services:
-    - name: postgres:${PG_VERSION}-alpine
+    # NOTE(prozlach): PostgreSQL 14 alpine images started crashing (SIGSEGV)
+    # around version 14.14 (Nov 2024). While alpine versions have this issue,
+    # bookworm versions remain stable. PostgreSQL 14 support needed until
+    # GitLab 18 release (May 2025). More details:
+    # https://gitlab.com/gitlab-org/container-registry/-/issues/1420#note_2233736983
+    - name: postgres:${PG_VERSION}-bookworm
       alias: "db"
   before_script:
     - "echo 'version: 0.1' > config.yml"
