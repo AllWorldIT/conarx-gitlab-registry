@@ -1,10 +1,9 @@
 package storage
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"io"
-	"reflect"
 	"testing"
 
 	"github.com/docker/distribution"
@@ -37,14 +36,10 @@ func newManifestStoreTestEnv(t *testing.T, name reference.Named, options ...Regi
 	driverInMemory := inmemory.New()
 	tag := "thetag"
 	registry, err := NewRegistry(ctx, driverInMemory, options...)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 
 	repo, err := registry.Repository(ctx, name)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 
 	return &manifestStoreTestEnv{
 		ctx:        ctx,
@@ -58,17 +53,13 @@ func newManifestStoreTestEnv(t *testing.T, name reference.Named, options ...Regi
 
 func TestManifestStorage(t *testing.T) {
 	k, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	testManifestStorageImpl(t, true, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect, Schema1SigningKey(k), EnableSchema1)
 }
 
 func TestManifestStorageV1Unsupported(t *testing.T) {
 	k, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	testManifestStorageImpl(t, false, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect, Schema1SigningKey(k))
 }
 
@@ -77,9 +68,7 @@ func testManifestStorageImpl(t *testing.T, schema1Enabled bool, options ...Regis
 	env := newManifestStoreTestEnv(t, repoName, options...)
 	ctx := context.Background()
 	ms, err := env.repository.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	m := schema1.Manifest{
 		Versioned: manifest.Versioned{
@@ -94,9 +83,7 @@ func testManifestStorageImpl(t *testing.T, schema1Enabled bool, options ...Regis
 	testLayers := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < 2; i++ {
 		rs, dgst, err := testutil.CreateRandomTarFile()
-		if err != nil {
-			t.Fatalf("unexpected error generating test layer file")
-		}
+		require.NoError(t, err, "unexpected error generating test layer file")
 
 		testLayers[dgst] = rs
 		m.FSLayers = append(m.FSLayers, schema1.FSLayer{
@@ -108,271 +95,167 @@ func testManifestStorageImpl(t *testing.T, schema1Enabled bool, options ...Regis
 	}
 
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("unexpected error generating private key: %v", err)
-	}
+	require.NoError(t, err, "unexpected error generating private key")
 
 	sm, merr := schema1.Sign(&m, pk)
-	if merr != nil {
-		t.Fatalf("error signing manifest: %v", err)
-	}
+	require.NoError(t, merr, "error signing manifest")
 
 	_, err = ms.Put(ctx, sm)
-	if err == nil {
-		t.Fatalf("expected errors putting manifest with full verification")
-	}
+	require.Error(t, err, "expected errors putting manifest with full verification")
 
 	// If schema1 is not enabled, do a short version of this test, just checking
 	// if we get the right error when we Put
 	if !schema1Enabled {
-		if err != distribution.ErrSchemaV1Unsupported {
-			t.Fatalf("got the wrong error when schema1 is disabled: %s", err)
-		}
+		require.ErrorIs(t, err, distribution.ErrSchemaV1Unsupported, "got the wrong error when schema1 is disabled")
 		return
 	}
 
 	switch err := err.(type) {
 	case distribution.ErrManifestVerification:
-		if len(err) != 2 {
-			t.Fatalf("expected 2 verification errors: %#v", err)
-		}
+		require.Len(t, err, 2, "expected 2 verification errors")
 
 		for _, err := range err {
-			if _, ok := err.(distribution.ErrManifestBlobUnknown); !ok {
-				t.Fatalf("unexpected error type: %v", err)
-			}
+			_, ok := err.(distribution.ErrManifestBlobUnknown)
+			require.True(t, ok, "unexpected error type")
 		}
 	default:
-		t.Fatalf("unexpected error verifying manifest: %v", err)
+		require.FailNow(t, fmt.Sprintf("unexpected error verifying manifest: %v", err))
 	}
 
 	// Now, upload the layers that were missing!
 	for dgst, rs := range testLayers {
 		wr, err := env.repository.Blobs(env.ctx).Create(env.ctx)
-		if err != nil {
-			t.Fatalf("unexpected error creating test upload: %v", err)
-		}
+		require.NoError(t, err, "unexpected error creating test upload")
 
-		if _, err := io.Copy(wr, rs); err != nil {
-			t.Fatalf("unexpected error copying to upload: %v", err)
-		}
+		_, err = io.Copy(wr, rs)
+		require.NoError(t, err, "unexpected error copying to upload")
 
-		if _, err := wr.Commit(env.ctx, distribution.Descriptor{Digest: dgst}); err != nil {
-			t.Fatalf("unexpected error finishing upload: %v", err)
-		}
+		_, err = wr.Commit(env.ctx, distribution.Descriptor{Digest: dgst})
+		require.NoError(t, err, "unexpected error finishing upload")
 	}
 
 	var manifestDigest digest.Digest
-	if manifestDigest, err = ms.Put(ctx, sm); err != nil {
-		t.Fatalf("unexpected error putting manifest: %v", err)
-	}
+	manifestDigest, err = ms.Put(ctx, sm)
+	require.NoError(t, err, "unexpected error putting manifest")
 
 	exists, err := ms.Exists(ctx, manifestDigest)
-	if err != nil {
-		t.Fatalf("unexpected error checking manifest existence: %#v", err)
-	}
+	require.NoError(t, err, "unexpected error checking manifest existence")
 
-	if !exists {
-		t.Fatalf("manifest should exist")
-	}
+	require.True(t, exists, "manifest should exist")
 
 	fromStore, err := ms.Get(ctx, manifestDigest)
-	if err != nil {
-		t.Fatalf("unexpected error fetching manifest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching manifest")
 
 	fetchedManifest, ok := fromStore.(*schema1.SignedManifest)
-	if !ok {
-		t.Fatalf("unexpected manifest type from signedstore")
-	}
+	require.True(t, ok, "unexpected manifest type from signedstore")
 
-	if !bytes.Equal(fetchedManifest.Canonical, sm.Canonical) {
-		t.Fatalf("fetched payload does not match original payload: %q != %q", fetchedManifest.Canonical, sm.Canonical)
-	}
+	require.Equal(t, sm.Canonical, fetchedManifest.Canonical, "fetched payload does not match original payload")
 
 	_, pl, err := fetchedManifest.Payload()
-	if err != nil {
-		t.Fatalf("error getting payload %#v", err)
-	}
+	require.NoError(t, err, "error getting payload")
 
 	fetchedJWS, err := libtrust.ParsePrettySignature(pl, "signatures")
-	if err != nil {
-		t.Fatalf("unexpected error parsing jws: %v", err)
-	}
+	require.NoError(t, err, "unexpected error parsing jws")
 
 	payload, err := fetchedJWS.Payload()
-	if err != nil {
-		t.Fatalf("unexpected error extracting payload: %v", err)
-	}
+	require.NoError(t, err, "unexpected error extracting payload")
 
 	// Now that we have a payload, take a moment to check that the manifest is
 	// return by the payload digest.
 
 	dgst := digest.FromBytes(payload)
 	exists, err = ms.Exists(ctx, dgst)
-	if err != nil {
-		t.Fatalf("error checking manifest existence by digest: %v", err)
-	}
+	require.NoError(t, err, "error checking manifest existence by digest")
 
-	if !exists {
-		t.Fatalf("manifest %s should exist", dgst)
-	}
+	require.True(t, exists, "manifest %s should exist", dgst)
 
 	fetchedByDigest, err := ms.Get(ctx, dgst)
-	if err != nil {
-		t.Fatalf("unexpected error fetching manifest by digest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching manifest by digest")
 
 	byDigestManifest, ok := fetchedByDigest.(*schema1.SignedManifest)
-	if !ok {
-		t.Fatalf("unexpected manifest type from signedstore")
-	}
+	require.True(t, ok, "unexpected manifest type from signedstore")
 
-	if !bytes.Equal(byDigestManifest.Canonical, fetchedManifest.Canonical) {
-		t.Fatalf("fetched manifest not equal: %q != %q", byDigestManifest.Canonical, fetchedManifest.Canonical)
-	}
+	require.Equal(t, fetchedManifest.Canonical, byDigestManifest.Canonical, "fetched manifest not equal")
 
 	sigs, err := fetchedJWS.Signatures()
-	if err != nil {
-		t.Fatalf("unable to extract signatures: %v", err)
-	}
+	require.NoError(t, err, "unable to extract signatures")
 
-	if len(sigs) != 1 {
-		t.Fatalf("unexpected number of signatures: %d != %d", len(sigs), 1)
-	}
+	require.Len(t, sigs, 1, "unexpected number of signatures")
 
 	// Now, push the same manifest with a different key
 	pk2, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("unexpected error generating private key: %v", err)
-	}
+	require.NoError(t, err, "unexpected error generating private key")
 
 	sm2, err := schema1.Sign(&m, pk2)
-	if err != nil {
-		t.Fatalf("unexpected error signing manifest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error signing manifest")
 	_, pl, err = sm2.Payload()
-	if err != nil {
-		t.Fatalf("error getting payload %#v", err)
-	}
+	require.NoError(t, err, "error getting payload")
 
 	jws2, err := libtrust.ParsePrettySignature(pl, "signatures")
-	if err != nil {
-		t.Fatalf("error parsing signature: %v", err)
-	}
+	require.NoError(t, err, "error parsing signature")
 
 	sigs2, err := jws2.Signatures()
-	if err != nil {
-		t.Fatalf("unable to extract signatures: %v", err)
-	}
+	require.NoError(t, err, "unable to extract signatures")
 
-	if len(sigs2) != 1 {
-		t.Fatalf("unexpected number of signatures: %d != %d", len(sigs2), 1)
-	}
+	require.Len(t, sigs2, 1, "unexpected number of signatures")
 
-	if manifestDigest, err = ms.Put(ctx, sm2); err != nil {
-		t.Fatalf("unexpected error putting manifest: %v", err)
-	}
+	manifestDigest, err = ms.Put(ctx, sm2)
+	require.NoError(t, err, "unexpected error putting manifest")
 
 	fromStore, err = ms.Get(ctx, manifestDigest)
-	if err != nil {
-		t.Fatalf("unexpected error fetching manifest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching manifest")
 
 	fetched, ok := fromStore.(*schema1.SignedManifest)
-	if !ok {
-		t.Fatalf("unexpected type from signed manifeststore : %T", fetched)
-	}
+	require.True(t, ok, "unexpected type from signed manifeststore")
 
-	if _, err := schema1.Verify(fetched); err != nil {
-		t.Fatalf("unexpected error verifying manifest: %v", err)
-	}
+	_, err = schema1.Verify(fetched)
+	require.NoError(t, err, "unexpected error verifying manifest")
 
 	_, pl, err = fetched.Payload()
-	if err != nil {
-		t.Fatalf("error getting payload %#v", err)
-	}
+	require.NoError(t, err, "error getting payload")
 
 	receivedJWS, err := libtrust.ParsePrettySignature(pl, "signatures")
-	if err != nil {
-		t.Fatalf("unexpected error parsing jws: %v", err)
-	}
+	require.NoError(t, err, "unexpected error parsing jws")
 
 	receivedPayload, err := receivedJWS.Payload()
-	if err != nil {
-		t.Fatalf("unexpected error extracting received payload: %v", err)
-	}
+	require.NoError(t, err, "unexpected error extracting received payload")
 
-	if !bytes.Equal(receivedPayload, payload) {
-		t.Fatalf("payloads are not equal")
-	}
+	require.Equal(t, payload, receivedPayload, "payloads are not equal")
 
 	// Test deleting manifests
 	err = ms.Delete(ctx, dgst)
-	if err != nil {
-		t.Fatalf("unexpected an error deleting manifest by digest: %v", err)
-	}
+	require.NoError(t, err, "unexpected an error deleting manifest by digest")
 
 	exists, err = ms.Exists(ctx, dgst)
-	if err != nil {
-		t.Fatalf("Error querying manifest existence")
-	}
-	if exists {
-		t.Errorf("Deleted manifest should not exist")
-	}
+	require.NoError(t, err, "error querying manifest existence")
+	require.False(t, exists, "deleted manifest should not exist")
 
 	deletedManifest, err := ms.Get(ctx, dgst)
-	if err == nil {
-		t.Errorf("Unexpected success getting deleted manifest")
-	}
-	switch err.(type) {
-	case distribution.ErrManifestUnknownRevision:
-	default:
-		t.Errorf("Unexpected error getting deleted manifest: %s", reflect.ValueOf(err).Type())
-	}
+	require.Error(t, err, "unexpected success getting deleted manifest")
+	require.IsType(t, distribution.ErrManifestUnknownRevision{}, err, "unexpected error getting deleted manifest")
 
-	if deletedManifest != nil {
-		t.Errorf("Deleted manifest get returned non-nil")
-	}
+	require.Nil(t, deletedManifest, "deleted manifest get returned non-nil")
 
 	// Re-upload should restore manifest to a good state
 	_, err = ms.Put(ctx, sm)
-	if err != nil {
-		t.Errorf("Error re-uploading deleted manifest")
-	}
+	require.NoError(t, err, "error re-uploading deleted manifest")
 
 	exists, err = ms.Exists(ctx, dgst)
-	if err != nil {
-		t.Fatalf("Error querying manifest existence")
-	}
-	if !exists {
-		t.Errorf("Restored manifest should exist")
-	}
+	require.NoError(t, err, "error querying manifest existence")
+	require.True(t, exists, "restored manifest should exist")
 
 	deletedManifest, err = ms.Get(ctx, dgst)
-	if err != nil {
-		t.Errorf("Unexpected error getting manifest")
-	}
-	if deletedManifest == nil {
-		t.Errorf("Deleted manifest get returned non-nil")
-	}
+	require.NoError(t, err, "unexpected error getting manifest")
+	require.NotNil(t, deletedManifest, "deleted manifest get returned non-nil")
 
 	r, err := NewRegistry(ctx, env.driver, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableRedirect)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 	repo, err := r.Repository(ctx, env.name)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 	ms, err = repo.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	err = ms.Delete(ctx, dgst)
-	if err == nil {
-		t.Errorf("Unexpected success deleting while disabled")
-	}
+	require.Error(t, err, "unexpected success deleting while disabled")
 }
 
 func TestOCIManifestStorage(t *testing.T) {
@@ -396,71 +279,53 @@ func testOCIManifestStorageImpl(t *testing.T, testname string, includeMediaTypes
 
 	ctx := context.Background()
 	ms, err := env.repository.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoErrorf(t, err, "%s: unexpected error", testname)
 
 	// Build a manifest and store it and its layers in the registry
 
 	blobStore := env.repository.Blobs(ctx)
 	manifestBuilder := ocischema.NewManifestBuilder(blobStore, make([]byte, 0), make(map[string]string))
 	err = manifestBuilder.(*ocischema.Builder).SetMediaType(imageMediaType)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoErrorf(t, err, "%s: unexpected error", testname)
 
 	// Add some layers
 	for i := 0; i < 2; i++ {
 		rs, dgst, err := testutil.CreateRandomTarFile()
-		if err != nil {
-			t.Fatalf("%s: unexpected error generating test layer file", testname)
-		}
+		require.NoErrorf(t, err, "%s: unexpected error generating test layer file", testname)
 
 		wr, err := env.repository.Blobs(env.ctx).Create(env.ctx)
-		if err != nil {
-			t.Fatalf("%s: unexpected error creating test upload: %v", testname, err)
-		}
+		require.NoErrorf(t, err, "%s: unexpected error creating test upload", testname)
 
-		if _, err := io.Copy(wr, rs); err != nil {
-			t.Fatalf("%s: unexpected error copying to upload: %v", testname, err)
-		}
+		_, err = io.Copy(wr, rs)
+		require.NoErrorf(t, err, "%s: unexpected error copying to upload", testname)
 
-		if _, err := wr.Commit(env.ctx, distribution.Descriptor{Digest: dgst}); err != nil {
-			t.Fatalf("%s: unexpected error finishing upload: %v", testname, err)
-		}
+		_, err = wr.Commit(env.ctx, distribution.Descriptor{Digest: dgst})
+		require.NoErrorf(t, err, "%s: unexpected error finishing upload", testname)
 
 		manifestBuilder.AppendReference(distribution.Descriptor{Digest: dgst})
 	}
 
 	m, err := manifestBuilder.Build(ctx)
-	if err != nil {
-		t.Fatalf("%s: unexpected error generating manifest: %v", testname, err)
-	}
+	require.NoErrorf(t, err, "%s: unexpected error generating manifest", testname)
 
 	// before putting the manifest test for proper handling of SchemaVersion
 
-	if m.(*ocischema.DeserializedManifest).Manifest.SchemaVersion != 2 {
-		t.Fatalf("%s: unexpected error generating default version for oci manifest", testname)
-	}
+	require.Equalf(t, 2, m.(*ocischema.DeserializedManifest).Manifest.SchemaVersion, "%s: unexpected error generating default version for oci manifest", testname)
 	m.(*ocischema.DeserializedManifest).Manifest.SchemaVersion = 0
 
 	var manifestDigest digest.Digest
-	if manifestDigest, err = ms.Put(ctx, m); err != nil {
-		if err.Error() != "unrecognized manifest schema version 0" {
-			t.Fatalf("%s: unexpected error putting manifest: %v", testname, err)
-		}
+	manifestDigest, err = ms.Put(ctx, m)
+	if err != nil {
+		require.EqualError(t, err, "unrecognized manifest schema version 0", "%s: unexpected error putting manifest", testname)
 		m.(*ocischema.DeserializedManifest).Manifest.SchemaVersion = 2
-		if manifestDigest, err = ms.Put(ctx, m); err != nil {
-			t.Fatalf("%s: unexpected error putting manifest: %v", testname, err)
-		}
+		manifestDigest, err = ms.Put(ctx, m)
+		require.NoErrorf(t, err, "%s: unexpected error putting manifest", testname)
 	}
 
 	// Also create an image index that contains the manifest
 
 	descriptor, err := env.registry.BlobStatter().Stat(ctx, manifestDigest)
-	if err != nil {
-		t.Fatalf("%s: unexpected error getting manifest descriptor", testname)
-	}
+	require.NoErrorf(t, err, "%s: unexpected error getting manifest descriptor", testname)
 	descriptor.MediaType = v1.MediaTypeImageManifest
 
 	platformSpec := manifestlist.PlatformSpec{
@@ -476,68 +341,42 @@ func testOCIManifestStorageImpl(t *testing.T, testname string, includeMediaTypes
 	}
 
 	imageIndex, err := manifestlist.FromDescriptorsWithMediaType(manifestDescriptors, indexMediaType)
-	if err != nil {
-		t.Fatalf("%s: unexpected error creating image index: %v", testname, err)
-	}
+	require.NoErrorf(t, err, "%s: unexpected error creating image index", testname)
 
-	var indexDigest digest.Digest
-	if indexDigest, err = ms.Put(ctx, imageIndex); err != nil {
-		t.Fatalf("%s: unexpected error putting image index: %v", testname, err)
-	}
+	indexDigest, err := ms.Put(ctx, imageIndex)
+	require.NoErrorf(t, err, "%s: unexpected error putting image index", testname)
 
 	// Now check that we can retrieve the manifest
 
 	fromStore, err := ms.Get(ctx, manifestDigest)
-	if err != nil {
-		t.Fatalf("%s: unexpected error fetching manifest: %v", testname, err)
-	}
+	require.NoErrorf(t, err, "%s: unexpected error fetching manifest", testname)
 
 	fetchedManifest, ok := fromStore.(*ocischema.DeserializedManifest)
-	if !ok {
-		t.Fatalf("%s: unexpected type for fetched manifest", testname)
-	}
+	require.Truef(t, ok, "%s: unexpected type for fetched manifest", testname)
 
-	if fetchedManifest.MediaType != imageMediaType {
-		t.Fatalf("%s: unexpected MediaType for result, %s", testname, fetchedManifest.MediaType)
-	}
+	require.Equalf(t, fetchedManifest.MediaType, imageMediaType, "%s: unexpected MediaType for result, %s", testname, fetchedManifest.MediaType)
 
-	if fetchedManifest.SchemaVersion != ocischema.SchemaVersion.SchemaVersion {
-		t.Fatalf("%s: unexpected schema version for result, %d", testname, fetchedManifest.SchemaVersion)
-	}
+	require.Equalf(t, fetchedManifest.SchemaVersion, ocischema.SchemaVersion.SchemaVersion, "%s: unexpected schema version for result, %d", testname, fetchedManifest.SchemaVersion)
 
 	payloadMediaType, _, err := fromStore.Payload()
-	if err != nil {
-		t.Fatalf("%s: error getting payload %v", testname, err)
-	}
+	require.NoError(t, err, "%s: error getting payload", testname)
 
-	if payloadMediaType != v1.MediaTypeImageManifest {
-		t.Fatalf("%s: unexpected MediaType for manifest payload, %s", testname, payloadMediaType)
-	}
+	require.Equalf(t, v1.MediaTypeImageManifest, payloadMediaType, "%s: unexpected MediaType for manifest payload, %s", testname, payloadMediaType)
 
 	// and the image index
 
 	fromStore, err = ms.Get(ctx, indexDigest)
-	if err != nil {
-		t.Fatalf("%s: unexpected error fetching image index: %v", testname, err)
-	}
+	require.NoErrorf(t, err, "%s: unexpected error fetching image index", testname)
 
 	fetchedIndex, ok := fromStore.(*manifestlist.DeserializedManifestList)
-	if !ok {
-		t.Fatalf("%s: unexpected type for fetched manifest", testname)
-	}
+	require.Truef(t, ok, "%s: unexpected type for fetched manifest", testname)
 
-	if fetchedIndex.MediaType != indexMediaType {
-		t.Fatalf("%s: unexpected MediaType for result, %s", testname, fetchedManifest.MediaType)
-	}
+	require.Equalf(t, fetchedIndex.MediaType, indexMediaType, "%s: unexpected MediaType for result, %s", testname, fetchedManifest.MediaType)
 
 	payloadMediaType, _, err = fromStore.Payload()
-	if err != nil {
-		t.Fatalf("%s: error getting payload %v", testname, err)
-	}
+	require.NoErrorf(t, err, "%s: error getting payload", testname)
 
-	if payloadMediaType != v1.MediaTypeImageIndex {
-		t.Fatalf("%s: unexpected MediaType for index payload, %s", testname, payloadMediaType)
-	}
+	require.Equalf(t, v1.MediaTypeImageIndex, payloadMediaType, "%s: unexpected MediaType for index payload, %s", testname, payloadMediaType)
 }
 
 // Storing empty manifests are not an expected behavior of the registry, but
@@ -600,12 +439,8 @@ func TestLinkPathFuncs(t *testing.T) {
 		},
 	} {
 		p, err := testcase.linkPathFn(testcase.repo, testcase.digest)
-		if err != nil {
-			t.Fatalf("unexpected error calling linkPathFn(pm, %q, %q): %v", testcase.repo, testcase.digest, err)
-		}
+		require.NoErrorf(t, err, "unexpected error calling linkPathFn(pm, %q, %q): %v", testcase.repo, testcase.digest, err)
 
-		if p != testcase.expected {
-			t.Fatalf("incorrect path returned: %q != %q", p, testcase.expected)
-		}
+		require.Equal(t, testcase.expected, p, "incorrect path returned")
 	}
 }
