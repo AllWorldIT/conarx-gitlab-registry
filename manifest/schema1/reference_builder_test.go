@@ -8,6 +8,8 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func makeSignedManifest(t *testing.T, pk libtrust.PrivateKey, refs []Reference) *SignedManifest {
@@ -30,17 +32,13 @@ func makeSignedManifest(t *testing.T, pk libtrust.PrivateKey, refs []Reference) 
 	}
 
 	signedManifest, err := Sign(u, pk)
-	if err != nil {
-		t.Fatalf("unexpected error signing manifest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error signing manifest")
 	return signedManifest
 }
 
 func TestReferenceBuilder(t *testing.T) {
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("unexpected error generating private key: %v", err)
-	}
+	require.NoError(t, err, "unexpected error generating private key")
 
 	r1 := Reference{
 		Digest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -56,53 +54,30 @@ func TestReferenceBuilder(t *testing.T) {
 	handCrafted := makeSignedManifest(t, pk, []Reference{r1, r2})
 
 	ref, err := reference.WithName(handCrafted.Manifest.Name)
-	if err != nil {
-		t.Fatalf("could not parse reference: %v", err)
-	}
+	require.NoError(t, err, "could not parse reference")
 	ref, err = reference.WithTag(ref, handCrafted.Manifest.Tag)
-	if err != nil {
-		t.Fatalf("could not add tag: %v", err)
-	}
+	require.NoError(t, err, "could not add tag")
 
 	b := NewReferenceManifestBuilder(pk, ref, handCrafted.Manifest.Architecture)
 	_, err = b.Build(context.Background())
-	if err == nil {
-		t.Fatal("Expected error building zero length manifest")
-	}
+	require.Error(t, err, "expected error building zero length manifest")
 
-	err = b.AppendReference(r1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = b.AppendReference(r2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, b.AppendReference(r1))
+	require.NoError(t, b.AppendReference(r2))
 
 	refs := b.References()
-	if len(refs) != 2 {
-		t.Fatalf("Unexpected reference count : %d != %d", 2, len(refs))
-	}
+	require.Len(t, refs, 2, "unexpected reference count")
 
 	// Ensure ordering
-	if refs[0].Digest != r2.Digest {
-		t.Fatalf("Unexpected reference : %v", refs[0])
-	}
+	require.Equal(t, r2.Digest, refs[0].Digest, "unexpected reference")
 
 	m, err := b.Build(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	built, ok := m.(*SignedManifest)
-	if !ok {
-		t.Fatalf("unexpected type from Build() : %T", built)
-	}
+	require.True(t, ok, "unexpected type from Build()")
 
 	d1 := digest.FromBytes(built.Canonical)
 	d2 := digest.FromBytes(handCrafted.Canonical)
-	if d1 != d2 {
-		t.Errorf("mismatching canonical JSON")
-	}
+	assert.Equal(t, d2, d1, "mismatching canonical JSON")
 }
