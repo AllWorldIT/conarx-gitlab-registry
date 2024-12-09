@@ -13,6 +13,7 @@ import (
 	rediscache "github.com/docker/distribution/registry/storage/cache/redis"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 )
 
 func isEligible(t *testing.T) {
@@ -32,9 +33,7 @@ func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
 		db = 0
 	} else {
 		i, err := strconv.Atoi(s)
-		if err != nil {
-			t.Fatalf("error parsing 'REDIS_DB' environment variable: %v", err)
-		}
+		require.NoError(t, err, "error parsing 'REDIS_DB' environment variable")
 		db = i
 	}
 
@@ -52,9 +51,7 @@ func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
 func flushDB(t *testing.T, client redis.UniversalClient) {
 	t.Helper()
 
-	if err := client.FlushDB(context.Background()).Err(); err != nil {
-		t.Fatalf("unexpected error flushing redis db: %v", err)
-	}
+	require.NoError(t, client.FlushDB(context.Background()).Err(), "unexpected error flushing redis db")
 }
 
 // TestRedisLayerInfoCache exercises a live redis instance using the cache
