@@ -2,7 +2,6 @@ package notifications
 
 import (
 	"io"
-	"reflect"
 	"testing"
 
 	"github.com/docker/distribution"
@@ -55,7 +54,7 @@ func TestListener(t *testing.T) {
 		"repo:delete":     1,
 	}
 
-	require.True(t, reflect.DeepEqual(tl.ops, expectedOps), "counts do not match")
+	require.Equal(t, expectedOps, tl.ops, "counts do not match")
 }
 
 type testListener struct {
