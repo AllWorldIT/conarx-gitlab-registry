@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
-	"reflect"
 	"testing"
 
 	"github.com/docker/distribution"
@@ -13,6 +12,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,33 +57,19 @@ func TestEmptyTar(t *testing.T) {
 	// Confirm that gzippedEmptyTar expands to 1024 NULL bytes.
 	var decompressed [2048]byte
 	gzipReader, err := gzip.NewReader(bytes.NewReader(gzippedEmptyTar))
-	if err != nil {
-		t.Fatalf("NewReader returned error: %v", err)
-	}
+	require.NoError(t, err, "NewReader returned error")
 	n, _ := gzipReader.Read(decompressed[:])
-	if n != 1024 {
-		t.Fatalf("read returned %d bytes; expected 1024", n)
-	}
+	require.Equal(t, 1024, n, "read returned unexpected number of bytes")
 	n, err = gzipReader.Read(decompressed[1024:])
-	if n != 0 {
-		t.Fatalf("read returned %d bytes; expected 0", n)
-	}
-	if err != io.EOF {
-		t.Fatal("read did not return io.EOF")
-	}
+	require.Zero(t, n, "read returned unexpected number of bytes")
+	require.ErrorIs(t, io.EOF, err, "read did not return io.EOF")
 	err = gzipReader.Close()
 	require.NoError(t, err)
-	for _, b := range decompressed[:1024] {
-		if b != 0 {
-			t.Fatal("nonzero byte in decompressed tar")
-		}
-	}
+	require.ElementsMatch(t, [1024]byte{}, decompressed[:1024], "nonzero byte in decompressed tar")
 
 	// Confirm that digestSHA256EmptyTar is the digest of gzippedEmptyTar.
 	dgst := digest.FromBytes(gzippedEmptyTar)
-	if dgst != digestSHA256GzippedEmptyTar {
-		t.Fatalf("digest mismatch for empty tar: expected %s got %s", digestSHA256GzippedEmptyTar, dgst)
-	}
+	require.Equal(t, digestSHA256GzippedEmptyTar, dgst, "digest mismatch for empty tar")
 }
 
 func TestConfigBuilder(t *testing.T) {
@@ -194,54 +180,34 @@ func TestConfigBuilder(t *testing.T) {
 	}
 
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("could not generate key for testing: %v", err)
-	}
+	require.NoError(t, err, "could not generate key for testing")
 
 	bs := &mockBlobService{descriptors: make(map[digest.Digest]distribution.Descriptor)}
 
 	ref, err := reference.WithName("testrepo")
-	if err != nil {
-		t.Fatalf("could not parse reference: %v", err)
-	}
+	require.NoError(t, err, "could not parse reference")
 	ref, err = reference.WithTag(ref, "testtag")
-	if err != nil {
-		t.Fatalf("could not add tag: %v", err)
-	}
+	require.NoError(t, err, "could not add tag")
 
 	builder := NewConfigManifestBuilder(bs, pk, ref, []byte(imgJSON))
 
 	for _, d := range descriptors {
-		if err := builder.AppendReference(d); err != nil {
-			t.Fatalf("AppendReference returned error: %v", err)
-		}
+		require.NoError(t, builder.AppendReference(d), "AppendReference returned error")
 	}
 
 	signed, err := builder.Build(dcontext.Background())
-	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
-	}
+	require.NoError(t, err, "Build returned error")
 
 	// Check that the gzipped empty layer tar was put in the blob store
 	_, err = bs.Stat(dcontext.Background(), digestSHA256GzippedEmptyTar)
-	if err != nil {
-		t.Fatal("gzipped empty tar was not put in the blob store")
-	}
+	require.NoError(t, err, "gzipped empty tar was not put in the blob store")
 
 	manifest := signed.(*SignedManifest).Manifest
 
-	if manifest.Versioned.SchemaVersion != 1 {
-		t.Fatal("SchemaVersion != 1")
-	}
-	if manifest.Name != "testrepo" {
-		t.Fatal("incorrect name in manifest")
-	}
-	if manifest.Tag != "testtag" {
-		t.Fatal("incorrect tag in manifest")
-	}
-	if manifest.Architecture != "amd64" {
-		t.Fatal("incorrect arch in manifest")
-	}
+	require.Equal(t, 1, manifest.Versioned.SchemaVersion, "SchemaVersion != 1")
+	require.Equal(t, "testrepo", manifest.Name, "incorrect name in manifest")
+	require.Equal(t, "testtag", manifest.Tag, "incorrect tag in manifest")
+	require.Equal(t, "amd64", manifest.Architecture, "incorrect arch in manifest")
 
 	expectedFSLayers := []FSLayer{
 		{BlobSum: digest.Digest("sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4")},
@@ -252,12 +218,7 @@ func TestConfigBuilder(t *testing.T) {
 		{BlobSum: digest.Digest("sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4")},
 	}
 
-	if len(manifest.FSLayers) != len(expectedFSLayers) {
-		t.Fatalf("wrong number of FSLayers: %d", len(manifest.FSLayers))
-	}
-	if !reflect.DeepEqual(manifest.FSLayers, expectedFSLayers) {
-		t.Fatal("wrong FSLayers list")
-	}
+	require.ElementsMatch(t, expectedFSLayers, manifest.FSLayers, "wrong FSLayers list")
 
 	expectedV1Compatibility := []string{
 		`{"architecture":"amd64","config":{"AttachStderr":false,"AttachStdin":false,"AttachStdout":false,"Cmd":["/bin/sh","-c","echo hi"],"Domainname":"","Entrypoint":null,"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","derived=true","asdf=true"],"Hostname":"23304fc829f9","Image":"sha256:4ab15c48b859c2920dd5224f92aabcd39a52794c5b3cf088fb3bbb438756c246","Labels":{},"OnBuild":[],"OpenStdin":false,"StdinOnce":false,"Tty":false,"User":"","Volumes":null,"WorkingDir":""},"container":"e91032eb0403a61bfe085ff5a5a48e3659e5a6deae9f4d678daa2ae399d5a001","container_config":{"AttachStderr":false,"AttachStdin":false,"AttachStdout":false,"Cmd":["/bin/sh","-c","#(nop) CMD [\"/bin/sh\" \"-c\" \"echo hi\"]"],"Domainname":"","Entrypoint":null,"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","derived=true","asdf=true"],"Hostname":"23304fc829f9","Image":"sha256:4ab15c48b859c2920dd5224f92aabcd39a52794c5b3cf088fb3bbb438756c246","Labels":{},"OnBuild":[],"OpenStdin":false,"StdinOnce":false,"Tty":false,"User":"","Volumes":null,"WorkingDir":""},"created":"2015-11-04T23:06:32.365666163Z","docker_version":"1.9.0-dev","id":"69e5c1bfadad697fdb6db59f6326648fa119e0c031a0eda33b8cfadcab54ba7f","os":"linux","parent":"74cf9c92699240efdba1903c2748ef57105d5bedc588084c4e88f3bb1c3ef0b0","throwaway":true}`,
@@ -268,12 +229,8 @@ func TestConfigBuilder(t *testing.T) {
 		`{"id":"3690474eb5b4b26fdfbd89c6e159e8cc376ca76ef48032a30fa6aafd56337880","created":"2015-10-31T22:22:54.690851953Z","container_config":{"Cmd":["/bin/sh -c #(nop) ADD file:a3bc1e842b69636f9df5256c49c5374fb4eef1e281fe3f282c65fb853ee171c5 in /"]}}`,
 	}
 
-	if len(manifest.History) != len(expectedV1Compatibility) {
-		t.Fatalf("wrong number of history entries: %d", len(manifest.History))
-	}
+	require.Lenf(t, manifest.History, len(expectedV1Compatibility), "wrong number of history entries: %d", len(manifest.History))
 	for i := range expectedV1Compatibility {
-		if manifest.History[i].V1Compatibility != expectedV1Compatibility[i] {
-			t.Errorf("wrong V1Compatibility %d. expected:\n%s\ngot:\n%s", i, expectedV1Compatibility[i], manifest.History[i].V1Compatibility)
-		}
+		assert.Equal(t, manifest.History[i].V1Compatibility, expectedV1Compatibility[i])
 	}
 }
