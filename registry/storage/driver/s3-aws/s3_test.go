@@ -1,7 +1,6 @@
 package s3
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/hashicorp/go-multierror"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -459,18 +459,11 @@ func TestS3DriverFromParameters(t *testing.T) {
 		}
 
 		d, err := FromParameters(tt.params)
-		if err != nil {
-			t.Fatalf("unable to create a new S3 driver: %v", err)
-		}
+		require.NoError(t, err, "unable to create a new S3 driver")
 
 		pathStyle := d.baseEmbed.Base.StorageDriver.(*driver).S3.s3.(*s3.S3).Client.Config.S3ForcePathStyle
-		if pathStyle == nil {
-			t.Fatal("expected pathStyle not to be nil")
-		}
-
-		if *pathStyle != tt.wantedForcePathBool {
-			t.Fatalf("expected S3ForcePathStyle to be %v, got %v, with params %#v", tt.wantedForcePathBool, *pathStyle, tt.params)
-		}
+		require.NotNil(t, pathStyle, "expected pathStyle not to be nil")
+		require.Equalf(t, tt.wantedForcePathBool, *pathStyle, "expected S3ForcePathStyle to be %v, got %v, with params %#v", tt.wantedForcePathBool, *pathStyle, tt.params)
 	}
 }
 
@@ -482,41 +475,29 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 	validRoot := t.TempDir()
 
 	rootedDriver, err := s3DriverConstructor(validRoot, s3.StorageClassStandard)
-	if err != nil {
-		t.Fatalf("unexpected error creating rooted driver: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating rooted driver")
 
 	emptyRootDriver, err := s3DriverConstructor("", s3.StorageClassStandard)
-	if err != nil {
-		t.Fatalf("unexpected error creating empty root driver: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating empty root driver")
 
 	slashRootDriver, err := s3DriverConstructor("/", s3.StorageClassStandard)
-	if err != nil {
-		t.Fatalf("unexpected error creating slash root driver: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating slash root driver")
 
 	filename := "/test"
 	contents := []byte("contents")
 	ctx := context.Background()
 	err = rootedDriver.PutContent(ctx, filename, contents)
-	if err != nil {
-		t.Fatalf("unexpected error creating content: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating content")
 	defer rootedDriver.Delete(ctx, filename)
 
 	keys, _ := emptyRootDriver.List(ctx, "/")
 	for _, path := range keys {
-		if !storagedriver.PathRegexp.MatchString(path) {
-			t.Fatalf("unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
-		}
+		require.Truef(t, storagedriver.PathRegexp.MatchString(path), "unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
 	}
 
 	keys, _ = slashRootDriver.List(ctx, "/")
 	for _, path := range keys {
-		if !storagedriver.PathRegexp.MatchString(path) {
-			t.Fatalf("unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
-		}
+		require.Truef(t, storagedriver.PathRegexp.MatchString(path), "unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
 	}
 }
 
@@ -528,18 +509,13 @@ func TestS3DriverStorageClass(t *testing.T) {
 	rootDir := t.TempDir()
 
 	standardDriver, err := s3DriverConstructor(rootDir, s3.StorageClassStandard)
-	if err != nil {
-		t.Fatalf("unexpected error creating driver with standard storage: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating driver with standard storage")
 
 	rrDriver, err := s3DriverConstructor(rootDir, s3.StorageClassReducedRedundancy)
-	if err != nil {
-		t.Fatalf("unexpected error creating driver with reduced redundancy storage: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating driver with reduced redundancy storage")
 
-	if _, err = s3DriverConstructor(rootDir, noStorageClass); err != nil {
-		t.Fatalf("unexpected error creating driver without storage class: %v", err)
-	}
+	_, err = s3DriverConstructor(rootDir, noStorageClass)
+	require.NoError(t, err, "unexpected error creating driver without storage class")
 
 	standardFilename := "/test-standard"
 	rrFilename := "/test-rr"
@@ -547,15 +523,11 @@ func TestS3DriverStorageClass(t *testing.T) {
 	ctx := context.Background()
 
 	err = standardDriver.PutContent(ctx, standardFilename, contents)
-	if err != nil {
-		t.Fatalf("unexpected error creating content: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating content")
 	defer standardDriver.Delete(ctx, standardFilename)
 
 	err = rrDriver.PutContent(ctx, rrFilename, contents)
-	if err != nil {
-		t.Fatalf("unexpected error creating content: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating content")
 	defer rrDriver.Delete(ctx, rrFilename)
 
 	// nolint: revive // unchecked-type-assertion
@@ -566,14 +538,10 @@ func TestS3DriverStorageClass(t *testing.T) {
 			Bucket: aws.String(standardDriverUnwrapped.Bucket),
 			Key:    aws.String(standardDriverUnwrapped.s3Path(standardFilename)),
 		})
-	if err != nil {
-		t.Fatalf("unexpected error retrieving standard storage file: %v", err)
-	}
+	require.NoError(t, err, "unexpected error retrieving standard storage file")
 	defer resp.Body.Close()
 	// Amazon only populates this header value for non-standard storage classes
-	if resp.StorageClass != nil {
-		t.Fatalf("unexpected storage class for standard file: %v", resp.StorageClass)
-	}
+	require.Nil(t, resp.StorageClass, "unexpected storage class for standard file: %v", resp.StorageClass)
 
 	// nolint: revive // unchecked-type-assertion
 	rrDriverUnwrapped := rrDriver.Base.StorageDriver.(*driver)
@@ -583,15 +551,10 @@ func TestS3DriverStorageClass(t *testing.T) {
 			Bucket: aws.String(rrDriverUnwrapped.Bucket),
 			Key:    aws.String(rrDriverUnwrapped.s3Path(rrFilename)),
 		})
-	if err != nil {
-		t.Fatalf("unexpected error retrieving reduced-redundancy storage file: %v", err)
-	}
+	require.NoError(t, err, "unexpected error retrieving reduced-redundancy storage file")
 	defer resp.Body.Close()
-	if resp.StorageClass == nil {
-		t.Fatalf("unexpected storage class for reduced-redundancy file: %v", s3.StorageClassStandard)
-	} else if *resp.StorageClass != s3.StorageClassReducedRedundancy {
-		t.Fatalf("unexpected storage class for reduced-redundancy file: %v", *resp.StorageClass)
-	}
+	require.NotNilf(t, resp.StorageClass, "unexpected storage class for reduced-redundancy file: %v", s3.StorageClassStandard)
+	require.Equalf(t, s3.StorageClassReducedRedundancy, *resp.StorageClass, "unexpected storage class for reduced-redundancy file: %v", *resp.StorageClass)
 }
 
 func TestS3DriverOverThousandBlobs(t *testing.T) {
@@ -606,16 +569,12 @@ func TestS3DriverOverThousandBlobs(t *testing.T) {
 		filename := "/thousandfiletest/file" + strconv.Itoa(i)
 		contents := []byte("contents")
 		err := standardDriver.PutContent(ctx, filename, contents)
-		if err != nil {
-			t.Fatalf("unexpected error creating content: %v", err)
-		}
+		require.NoError(t, err, "unexpected error creating content")
 	}
 
 	// cant actually verify deletion because read-after-delete is inconsistent, but can ensure no errors
 	err := standardDriver.Delete(ctx, "/thousandfiletest")
-	if err != nil {
-		t.Fatalf("unexpected error deleting thousand files: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting thousand files")
 }
 
 func TestS3DriverURLFor_Expiry(t *testing.T) {
@@ -677,22 +636,14 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 	require.NoError(t, err)
 
 	err = d.PutContent(ctx, sourcePath, contents)
-	if err != nil {
-		t.Fatalf("unexpected error creating content: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating content")
 
 	err = d.Move(ctx, sourcePath, destPath)
-	if err != nil {
-		t.Fatalf("unexpected error moving file: %v", err)
-	}
+	require.NoError(t, err, "unexpected error moving file")
 
 	received, err := d.GetContent(ctx, destPath)
-	if err != nil {
-		t.Fatalf("unexpected error getting content: %v", err)
-	}
-	if !bytes.Equal(contents, received) {
-		t.Fatal("content differs")
-	}
+	require.NoError(t, err, "unexpected error getting content")
+	require.Equal(t, contents, received, "content differs")
 
 	_, err = d.GetContent(ctx, sourcePath)
 	require.ErrorAs(t, err, new(storagedriver.PathNotFoundError))
@@ -1001,29 +952,19 @@ func TestS3DriverClientTransport(t *testing.T) {
 		}
 		t.Run(fmt.Sprintf("SkipVerify %v", tc.skipverify), func(t *testing.T) {
 			drv, err := FromParameters(params)
-			if err != nil {
-				t.Fatalf("failed to create driver: %v", err)
-			}
+			require.NoError(t, err, "failed to create driver")
 
 			// nolint: revive // unchecked-type-assertion
 			s3drv := drv.baseEmbed.Base.StorageDriver.(*driver)
+
 			s3s, ok := s3drv.S3.s3.(*s3.S3)
-			if !ok {
-				t.Fatal("failed to cast storage driver to *s3.S3")
-			}
+			require.True(t, ok, "failed to cast storage driver to *s3.S3")
+
 			tr, ok := s3s.Config.HTTPClient.Transport.(*http.Transport)
-			if !ok {
-				t.Fatal("unexpected driver transport")
-			}
-			if tr.TLSClientConfig.InsecureSkipVerify != tc.skipverify {
-				t.Errorf("unexpected TLS Config. Expected InsecureSkipVerify: %v, got %v",
-					tc.skipverify,
-					tr.TLSClientConfig.InsecureSkipVerify)
-			}
+			require.True(t, ok, "unexpected driver transport")
+			assert.Equal(t, tr.TLSClientConfig.InsecureSkipVerify, tc.skipverify, "unexpected TLS Config. Expected InsecureSkipVerify")
 			// make sure the proxy is always set
-			if tr.Proxy == nil {
-				t.Fatal("missing HTTP transport proxy config")
-			}
+			require.NotNil(t, tr.Proxy, "missing HTTP transport proxy config")
 		})
 	}
 }

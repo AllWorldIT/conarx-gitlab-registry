@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type changingFileSystem struct {
@@ -40,12 +43,9 @@ func TestWalkFileRemoved(t *testing.T) {
 		infos = append(infos, fileInfo)
 		return nil
 	})
-	if len(infos) != 1 || infos[0].Path() != "zoidberg" {
-		t.Errorf("unexpected path set during walk: %s", infos)
-	}
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	assert.Len(t, infos, 1)
+	assert.Equal(t, "zoidberg", infos[0].Path(), "unexpected path set during walk")
+	require.NoError(t, err)
 }
 
 type errorFileSystem struct {
@@ -100,12 +100,6 @@ func TestWalkParallelError(t *testing.T) {
 		return nil
 	})
 
-	if err != errTopLevelDir {
-		t.Error("Expected to report a top level directory error, but reported an error from a deeply nested file")
-	}
-
-	if !(len(infos) < len(d.fileSet)) {
-		t.Errorf("Expected walk to terminate early, encountered %d of %d files",
-			len(infos), len(d.fileSet))
-	}
+	require.ErrorIs(t, err, errTopLevelDir, "expected to report a top level directory error, but reported an error from a deeply nested file")
+	assert.Less(t, len(infos), len(d.fileSet), "expected walk to terminate early")
 }

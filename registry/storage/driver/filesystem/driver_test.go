@@ -7,6 +7,7 @@ import (
 
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -180,12 +181,8 @@ func TestFilesystemDriverDeleteFilesNonExistingParentDir(t *testing.T) {
 
 	fp := path.Join("/non-existing-dir", "non-existing-file")
 	count, err := d.DeleteFiles(context.Background(), []string{fp})
-	if err != nil {
-		t.Errorf("unexpected error deleting files: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("expected deleted count to be 1, got %d", count)
-	}
+	require.NoError(t, err, "unexpected error deleting files")
+	assert.Equal(t, 1, count, "expected deleted count to be 1, got %d", count)
 }
 
 func newTempDirDriver(t *testing.T) *Driver {
