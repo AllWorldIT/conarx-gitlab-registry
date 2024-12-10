@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type nopCloser struct {
@@ -24,9 +25,7 @@ func TestHandleErrorResponse401ValidBody(t *testing.T) {
 	err := HandleErrorResponse(response)
 
 	expectedMsg := "unauthorized: action requires authentication"
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("Expected \"%s\", got: \"%s\"", expectedMsg, err.Error())
-	}
+	assert.ErrorContains(t, err, expectedMsg)
 }
 
 func TestHandleErrorResponse401WithInvalidBody(t *testing.T) {
@@ -39,9 +38,7 @@ func TestHandleErrorResponse401WithInvalidBody(t *testing.T) {
 	err := HandleErrorResponse(response)
 
 	expectedMsg := "unauthorized: authentication required"
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("Expected \"%s\", got: \"%s\"", expectedMsg, err.Error())
-	}
+	assert.ErrorContains(t, err, expectedMsg)
 }
 
 func TestHandleErrorResponseExpectedStatusCode400ValidBody(t *testing.T) {
@@ -54,9 +51,7 @@ func TestHandleErrorResponseExpectedStatusCode400ValidBody(t *testing.T) {
 	err := HandleErrorResponse(response)
 
 	expectedMsg := "digest invalid: provided digest does not match"
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("Expected \"%s\", got: \"%s\"", expectedMsg, err.Error())
-	}
+	assert.ErrorContains(t, err, expectedMsg)
 }
 
 func TestHandleErrorResponseExpectedStatusCode404EmptyErrorSlice(t *testing.T) {
@@ -69,9 +64,7 @@ func TestHandleErrorResponseExpectedStatusCode404EmptyErrorSlice(t *testing.T) {
 	err := HandleErrorResponse(response)
 
 	expectedMsg := `error parsing HTTP 404 response body: no error details found in HTTP response body: "{\"randomkey\": \"randomvalue\"}"`
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("Expected \"%s\", got: \"%s\"", expectedMsg, err.Error())
-	}
+	assert.ErrorContains(t, err, expectedMsg)
 }
 
 func TestHandleErrorResponseExpectedStatusCode404InvalidBody(t *testing.T) {
@@ -84,9 +77,7 @@ func TestHandleErrorResponseExpectedStatusCode404InvalidBody(t *testing.T) {
 	err := HandleErrorResponse(response)
 
 	expectedMsg := "error parsing HTTP 404 response body: invalid character 'i' looking for beginning of object key string: \"{invalid json}\""
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("Expected \"%s\", got: \"%s\"", expectedMsg, err.Error())
-	}
+	assert.ErrorContains(t, err, expectedMsg)
 }
 
 func TestHandleErrorResponseUnexpectedStatusCode501(t *testing.T) {
@@ -98,7 +89,5 @@ func TestHandleErrorResponseUnexpectedStatusCode501(t *testing.T) {
 	err := HandleErrorResponse(response)
 
 	expectedMsg := "received unexpected HTTP status: 501 Not Implemented"
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("Expected \"%s\", got: \"%s\"", expectedMsg, err.Error())
-	}
+	assert.ErrorContains(t, err, expectedMsg)
 }

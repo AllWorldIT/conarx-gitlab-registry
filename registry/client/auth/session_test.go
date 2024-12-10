@@ -12,6 +12,7 @@ import (
 	"github.com/docker/distribution/registry/client/auth/challenge"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/docker/distribution/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -152,65 +153,43 @@ func TestEndpointAuthorizeToken(t *testing.T) {
 
 	challengeManager1 := challenge.NewSimpleManager()
 	versions, err := ping(challengeManager1, e+"/v2/", "x-api-version")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(versions) != 1 {
-		t.Fatalf("Unexpected version count: %d, expected 1", len(versions))
-	}
-	if check := (APIVersion{Type: "registry", Version: "2.0"}); versions[0] != check {
-		t.Fatalf("Unexpected api version: %#v, expected %#v", versions[0], check)
-	}
+	require.NoError(t, err)
+	require.Len(t, versions, 1, "unexpected version count")
+	require.Equal(t, APIVersion{Type: "registry", Version: "2.0"}, versions[0], "unexpected api version")
+
 	transport1 := transport.NewTransport(nil, NewAuthorizer(challengeManager1, NewTokenHandler(nil, nil, repo1, "pull", "push")))
 	client := &http.Client{Transport: transport1}
 
 	req, _ := http.NewRequest(http.MethodGet, e+"/v2/hello", nil)
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "error sending get request")
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-	}
+	require.Equal(t, http.StatusAccepted, resp.StatusCode, "unexpected status code")
 
 	e2, c2 := testServerWithAuth(m, authenicate, validCheck)
 	defer c2()
 
 	challengeManager2 := challenge.NewSimpleManager()
 	versions, err = ping(challengeManager2, e2+"/v2/", "x-multi-api-version")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(versions) != 3 {
-		t.Fatalf("Unexpected version count: %d, expected 3", len(versions))
-	}
-	if check := (APIVersion{Type: "registry", Version: "2.0"}); versions[0] != check {
-		t.Fatalf("Unexpected api version: %#v, expected %#v", versions[0], check)
-	}
-	if check := (APIVersion{Type: "registry", Version: "2.1"}); versions[1] != check {
-		t.Fatalf("Unexpected api version: %#v, expected %#v", versions[1], check)
-	}
-	if check := (APIVersion{Type: "trust", Version: "1.0"}); versions[2] != check {
-		t.Fatalf("Unexpected api version: %#v, expected %#v", versions[2], check)
-	}
+	require.NoError(t, err)
+	require.Len(t, versions, 3, "unexpected version count")
+	require.Equal(t, APIVersion{Type: "registry", Version: "2.0"}, versions[0], "unexpected api version")
+	require.Equal(t, APIVersion{Type: "registry", Version: "2.1"}, versions[1], "unexpected api version")
+	require.Equal(t, APIVersion{Type: "trust", Version: "1.0"}, versions[2], "unexpected api version")
+
 	transport2 := transport.NewTransport(nil, NewAuthorizer(challengeManager2, NewTokenHandler(nil, nil, repo2, "pull", "push")))
 	client2 := &http.Client{Transport: transport2}
 
 	req, _ = http.NewRequest(http.MethodGet, e2+"/v2/hello", nil)
 	resp, err = client2.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "error sending get request")
 
 	err = resp.Body.Close()
 	require.NoError(t, err)
 
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusUnauthorized)
-	}
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code")
 }
 
 func TestEndpointAuthorizeRefreshToken(t *testing.T) {
@@ -281,15 +260,10 @@ func TestEndpointAuthorizeRefreshToken(t *testing.T) {
 
 	challengeManager1 := challenge.NewSimpleManager()
 	versions, err := ping(challengeManager1, e+"/v2/", "x-api-version")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(versions) != 1 {
-		t.Fatalf("Unexpected version count: %d, expected 1", len(versions))
-	}
-	if check := (APIVersion{Type: "registry", Version: "2.0"}); versions[0] != check {
-		t.Fatalf("Unexpected api version: %#v, expected %#v", versions[0], check)
-	}
+	require.NoError(t, err)
+	require.Len(t, versions, 1, "unexpected version count")
+	require.Equal(t, APIVersion{Type: "registry", Version: "2.0"}, versions[0], "unexpected api version")
+
 	creds := &testCredentialStore{
 		refreshTokens: map[string]string{
 			service: refreshToken1,
@@ -300,16 +274,12 @@ func TestEndpointAuthorizeRefreshToken(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodGet, e+"/v2/hello", nil)
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "error sending get request")
 
 	err = resp.Body.Close()
 	require.NoError(t, err)
 
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-	}
+	require.Equal(t, http.StatusAccepted, resp.StatusCode, "unexpected status code")
 
 	// Try with refresh token setting
 	e2, c2 := testServerWithAuth(m, authenicate, validCheck)
@@ -317,35 +287,23 @@ func TestEndpointAuthorizeRefreshToken(t *testing.T) {
 
 	challengeManager2 := challenge.NewSimpleManager()
 	versions, err = ping(challengeManager2, e2+"/v2/", "x-api-version")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(versions) != 1 {
-		t.Fatalf("Unexpected version count: %d, expected 1", len(versions))
-	}
-	if check := (APIVersion{Type: "registry", Version: "2.0"}); versions[0] != check {
-		t.Fatalf("Unexpected api version: %#v, expected %#v", versions[0], check)
-	}
+	require.NoError(t, err)
+	require.Len(t, versions, 1, "unexpected version count")
+	require.Equal(t, APIVersion{Type: "registry", Version: "2.0"}, versions[0], "unexpected api version")
 
 	transport2 := transport.NewTransport(nil, NewAuthorizer(challengeManager2, NewTokenHandler(nil, creds, repo2, "pull", "push")))
 	client2 := &http.Client{Transport: transport2}
 
 	req, _ = http.NewRequest(http.MethodGet, e2+"/v2/hello", nil)
 	resp, err = client2.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "error sending get request")
 
 	err = resp.Body.Close()
 	require.NoError(t, err)
 
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusUnauthorized)
-	}
+	require.Equal(t, http.StatusAccepted, resp.StatusCode, "unexpected status code")
 
-	if creds.refreshTokens[service] != refreshToken2 {
-		t.Fatalf("Refresh token not set after change")
-	}
+	require.Equal(t, refreshToken2, creds.refreshTokens[service], "refresh token not set after change")
 
 	// Try with bad token
 	e3, c3 := testServerWithAuth(m, authenicate, validCheck)
@@ -353,28 +311,20 @@ func TestEndpointAuthorizeRefreshToken(t *testing.T) {
 
 	challengeManager3 := challenge.NewSimpleManager()
 	versions, err = ping(challengeManager3, e3+"/v2/", "x-api-version")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if check := (APIVersion{Type: "registry", Version: "2.0"}); versions[0] != check {
-		t.Fatalf("Unexpected api version: %#v, expected %#v", versions[0], check)
-	}
+	require.NoError(t, err)
+	require.Equal(t, APIVersion{Type: "registry", Version: "2.0"}, versions[0], "unexpected api version")
 
 	transport3 := transport.NewTransport(nil, NewAuthorizer(challengeManager3, NewTokenHandler(nil, creds, repo2, "pull", "push")))
 	client3 := &http.Client{Transport: transport3}
 
 	req, _ = http.NewRequest(http.MethodGet, e3+"/v2/hello", nil)
 	resp, err = client3.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "error sending get request")
 
 	err = resp.Body.Close()
 	require.NoError(t, err)
 
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusUnauthorized)
-	}
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected status code")
 }
 
 func TestEndpointAuthorizeV2RefreshToken(t *testing.T) {
@@ -418,15 +368,9 @@ func TestEndpointAuthorizeV2RefreshToken(t *testing.T) {
 
 	challengeManager1 := challenge.NewSimpleManager()
 	versions, err := ping(challengeManager1, e+"/v2/", "x-api-version")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(versions) != 1 {
-		t.Fatalf("Unexpected version count: %d, expected 1", len(versions))
-	}
-	if check := (APIVersion{Type: "registry", Version: "2.0"}); versions[0] != check {
-		t.Fatalf("Unexpected api version: %#v, expected %#v", versions[0], check)
-	}
+	require.NoError(t, err)
+	require.Len(t, versions, 1, "Unexpected version count")
+	require.Equal(t, APIVersion{Type: "registry", Version: "2.0"}, versions[0])
 	tho := TokenHandlerOptions{
 		Credentials: &testCredentialStore{
 			refreshTokens: map[string]string{
@@ -446,16 +390,12 @@ func TestEndpointAuthorizeV2RefreshToken(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodGet, e+"/v1/search", nil)
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "Error sending get request")
 
 	err = resp.Body.Close()
 	require.NoError(t, err)
 
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-	}
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 }
 
 func basicAuth(username, password string) string {
@@ -516,24 +456,18 @@ func TestEndpointAuthorizeTokenBasic(t *testing.T) {
 
 	challengeManager := challenge.NewSimpleManager()
 	_, err := ping(challengeManager, e+"/v2/", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	transport1 := transport.NewTransport(nil, NewAuthorizer(challengeManager, NewTokenHandler(nil, creds, repo, "pull", "push"), NewBasicHandler(creds)))
 	client := &http.Client{Transport: transport1}
 
 	req, _ := http.NewRequest(http.MethodGet, e+"/v2/hello", nil)
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "Error sending get request")
 
 	err = resp.Body.Close()
 	require.NoError(t, err)
 
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-	}
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 }
 
 func TestEndpointAuthorizeTokenBasicWithExpiresIn(t *testing.T) {
@@ -637,9 +571,7 @@ func TestEndpointAuthorizeTokenBasicWithExpiresIn(t *testing.T) {
 
 	challengeManager := challenge.NewSimpleManager()
 	_, err := ping(challengeManager, e+"/v2/", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	clock := &fakeClock{current: time.Now()}
 	options := TokenHandlerOptions{
 		Transport:   nil,
@@ -662,35 +594,23 @@ func TestEndpointAuthorizeTokenBasicWithExpiresIn(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		req, _ := http.NewRequest(http.MethodGet, e+"/v2/hello", nil)
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Error sending get request: %s", err)
-		}
+		require.NoError(t, err, "Error sending get request")
 		// nolint: revive // defer
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusAccepted {
-			t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-		}
-		if tokenExchanges != 1 {
-			t.Fatalf("Unexpected number of token exchanges, want: 1, got %d (iteration: %d)", tokenExchanges, i)
-		}
+		require.Equal(t, http.StatusAccepted, resp.StatusCode)
+		require.Equal(t, 1, tokenExchanges, "Unexpected number of token exchanges")
 		clock.current = clock.current.Add(timeIncrement)
 	}
 
 	// After we've exceeded the expiration, we should see a second token exchange.
 	req, _ := http.NewRequest(http.MethodGet, e+"/v2/hello", nil)
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "Error sending get request")
 	err = resp.Body.Close()
 	require.NoError(t, err)
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-	}
-	if tokenExchanges != 2 {
-		t.Fatalf("Unexpected number of token exchanges, want: 2, got %d", tokenExchanges)
-	}
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	require.Equal(t, 2, tokenExchanges)
 }
 
 func TestEndpointAuthorizeTokenBasicWithExpiresInAndIssuedAt(t *testing.T) {
@@ -793,9 +713,7 @@ func TestEndpointAuthorizeTokenBasicWithExpiresInAndIssuedAt(t *testing.T) {
 
 	challengeManager := challenge.NewSimpleManager()
 	_, err := ping(challengeManager, e+"/v2/", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	options := TokenHandlerOptions{
 		Transport:   nil,
@@ -819,35 +737,23 @@ func TestEndpointAuthorizeTokenBasicWithExpiresInAndIssuedAt(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		req, _ := http.NewRequest(http.MethodGet, e+"/v2/hello", nil)
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Error sending get request: %s", err)
-		}
+		require.NoError(t, err)
 		// nolint: revive // defer
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusAccepted {
-			t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-		}
-		if tokenExchanges != 1 {
-			t.Fatalf("Unexpected number of token exchanges, want: 1, got %d (iteration: %d)", tokenExchanges, i)
-		}
+		require.Equal(t, http.StatusAccepted, resp.StatusCode)
+		require.Equal(t, 1, tokenExchanges)
 		clock.current = clock.current.Add(timeIncrement)
 	}
 
 	// After we've exceeded the expiration, we should see a second token exchange.
 	req, _ := http.NewRequest(http.MethodGet, e+"/v2/hello", nil)
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err)
 	err = resp.Body.Close()
 	require.NoError(t, err)
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-	}
-	if tokenExchanges != 2 {
-		t.Fatalf("Unexpected number of token exchanges, want: 2, got %d", tokenExchanges)
-	}
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	require.Equal(t, 2, tokenExchanges)
 }
 
 func TestEndpointAuthorizeBasic(t *testing.T) {
@@ -878,22 +784,16 @@ func TestEndpointAuthorizeBasic(t *testing.T) {
 
 	challengeManager := challenge.NewSimpleManager()
 	_, err := ping(challengeManager, e+"/v2/", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	transport1 := transport.NewTransport(nil, NewAuthorizer(challengeManager, NewBasicHandler(creds)))
 	client := &http.Client{Transport: transport1}
 
 	req, _ := http.NewRequest(http.MethodGet, e+"/v2/hello", nil)
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error sending get request: %s", err)
-	}
+	require.NoError(t, err, "Error sending get request")
 
 	err = resp.Body.Close()
 	require.NoError(t, err)
 
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("Unexpected status code: %d, expected %d", resp.StatusCode, http.StatusAccepted)
-	}
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 }
