@@ -356,9 +356,18 @@ func (*schema1PreseededInMemoryDriverFactory) Create(_ map[string]any) (storaged
 
 	ctx := context.Background()
 
-	d.PutContent(ctx, manifestTagCurrentPath, []byte(dgst))
-	d.PutContent(ctx, manifestRevisionLinkPath, []byte(dgst))
-	d.PutContent(ctx, blobDataPath, sm.Canonical)
+	err = d.PutContent(ctx, manifestTagCurrentPath, []byte(dgst))
+	if err != nil {
+		return nil, err
+	}
+	err = d.PutContent(ctx, manifestRevisionLinkPath, []byte(dgst))
+	if err != nil {
+		return nil, err
+	}
+	err = d.PutContent(ctx, blobDataPath, sm.Canonical)
+	if err != nil {
+		return nil, err
+	}
 
 	return d, nil
 }
@@ -453,9 +462,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	require.NoError(t, err)
 
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("unexpected error generating private key: %v", err)
-	}
+	require.NoError(t, err, "unexpected error generating private key")
 
 	return &testEnv{
 		pk:           pk,
@@ -650,7 +657,8 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 			config.manifestURL = manifestDigestURL
 		}
 
-		resp := putManifest(t, "putting manifest no error", config.manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest, requestOpts...)
+		resp, err := putManifest("putting manifest no error", config.manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest, requestOpts...)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -822,7 +830,8 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 			config.manifestURL = manifestDigestURL
 		}
 
-		resp := putManifest(t, "putting manifest no error", config.manifestURL, v1.MediaTypeImageManifest, deserializedManifest)
+		resp, err := putManifest("putting manifest no error", config.manifestURL, v1.MediaTypeImageManifest, deserializedManifest)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -918,7 +927,8 @@ func seedRandomOCIImageIndex(t *testing.T, env *testEnv, repoPath string, opts .
 			config.manifestURL = manifestDigestURL
 		}
 
-		resp := putManifest(t, "putting oci image index no error", config.manifestURL, v1.MediaTypeImageIndex, deserializedManifest)
+		resp, err := putManifest("putting oci image index no error", config.manifestURL, v1.MediaTypeImageIndex, deserializedManifest)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1054,77 +1064,67 @@ func shuffledCopy(s []string) []string {
 	return shuffled
 }
 
-func putManifestRequest(t *testing.T, msg, targetURL, contentType string, v any) *http.Request {
+func putManifestRequest(targetURL, contentType string, v any) (*http.Request, error) {
 	var body []byte
 
 	switch m := v.(type) {
 	case *schema1.SignedManifest:
 		_, pl, err := m.Payload()
 		if err != nil {
-			t.Fatalf("error getting payload: %v", err)
+			return nil, fmt.Errorf("getting payload: %w", err)
 		}
 		body = pl
 	case *manifestlist.DeserializedManifestList:
 		_, pl, err := m.Payload()
 		if err != nil {
-			t.Fatalf("error getting payload: %v", err)
+			return nil, fmt.Errorf("getting payload: %w", err)
 		}
 		body = pl
 	default:
 		var err error
 		body, err = json.MarshalIndent(v, "", "   ")
 		if err != nil {
-			t.Fatalf("unexpected error marshaling %v: %v", v, err)
+			return nil, fmt.Errorf("json marshal: %w", err)
 		}
 	}
 
 	req, err := http.NewRequest(http.MethodPut, targetURL, bytes.NewReader(body))
 	if err != nil {
-		t.Fatalf("error creating request for %s: %v", msg, err)
+		return nil, fmt.Errorf("creating new request: %w", err)
 	}
 
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
 
-	return req
+	return req, nil
 }
 
-func putManifest(t *testing.T, msg, targetURL, contentType string, v any, requestopts ...requestOpt) *http.Response {
-	req := putManifestRequest(t, msg, targetURL, contentType, v)
+func putManifest(msg, targetURL, contentType string, v any, requestopts ...requestOpt) (*http.Response, error) {
+	req, err := putManifestRequest(targetURL, contentType, v)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", msg, err)
+	}
 	req = newRequest(req, requestopts...)
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("error doing put request while %s: %v", msg, err)
-	}
-
-	return resp
+	return http.DefaultClient.Do(req)
 }
 
 func startPushLayerRequest(t *testing.T, env *testEnv, name reference.Named) *http.Request {
 	t.Helper()
 
 	layerUploadURL, err := env.builder.BuildBlobUploadURL(name)
-	if err != nil {
-		t.Fatalf("unexpected error building layer upload url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error building layer upload url")
 
 	u, err := url.Parse(layerUploadURL)
-	if err != nil {
-		t.Fatalf("error parsing layer upload URL: %v", err)
-	}
+	require.NoError(t, err, "error parsing layer upload URL")
 
 	base, err := url.Parse(env.server.URL)
-	if err != nil {
-		t.Fatalf("error parsing server URL: %v", err)
-	}
+	require.NoError(t, err, "error parsing server URL")
 
 	layerUploadURL = base.ResolveReference(u).String()
 	req, err := http.NewRequest(http.MethodPost, layerUploadURL, nil)
-	if err != nil {
-		t.Fatalf("unexpected error creating new request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating new request")
 	req.Header.Set("Content-Type", "")
 
 	return req
@@ -1137,18 +1137,14 @@ func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopt
 	req = newRequest(req, requestopts...)
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("unexpected error starting layer push: %v", err)
-	}
+	require.NoError(t, err, "unexpected error starting layer push")
 
 	defer resp.Body.Close()
 
 	checkResponse(t, fmt.Sprintf("pushing starting layer push %v", name.String()), resp, http.StatusAccepted)
 
 	u, err := url.Parse(resp.Header.Get("Location"))
-	if err != nil {
-		t.Fatalf("error parsing location header: %v", err)
-	}
+	require.NoError(t, err, "error parsing location header")
 
 	uuid = path.Base(u.Path)
 	checkHeaders(t, resp, http.Header{
@@ -1162,9 +1158,7 @@ func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopt
 
 func doPushLayerRequest(t *testing.T, dgst digest.Digest, uploadURLBase string, body io.Reader) *http.Request {
 	u, err := url.Parse(uploadURLBase)
-	if err != nil {
-		t.Fatalf("unexpected error parsing pushLayer url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error parsing pushLayer url")
 
 	u.RawQuery = url.Values{
 		"_state": u.Query()["_state"],
@@ -1175,9 +1169,7 @@ func doPushLayerRequest(t *testing.T, dgst digest.Digest, uploadURLBase string, 
 
 	// Just do a monolithic upload
 	req, err := http.NewRequest(http.MethodPut, uploadURL, body)
-	if err != nil {
-		t.Fatalf("unexpected error creating new request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating new request")
 	return req
 }
 
@@ -1194,24 +1186,17 @@ func pushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest
 	digester := digest.Canonical.Digester()
 
 	resp, err := doPushLayer(t, dgst, uploadURLBase, io.TeeReader(body, digester.Hash()), requestopts...)
-	if err != nil {
-		t.Fatalf("unexpected error doing push layer request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error doing push layer request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "putting monolithic chunk", resp, http.StatusCreated)
 
-	if err != nil {
-		t.Fatalf("error generating sha256 digest of body")
-	}
-
 	sha256Dgst := digester.Digest()
+	ref, err := reference.WithDigest(name, sha256Dgst)
+	require.NoError(t, err, "error generating sha256 digest of body")
 
-	ref, _ := reference.WithDigest(name, sha256Dgst)
 	expectedLayerURL, err := ub.BuildBlobURL(ref)
-	if err != nil {
-		t.Fatalf("error building expected layer url: %v", err)
-	}
+	require.NoError(t, err, "error building expected layer url")
 
 	checkHeaders(t, resp, http.Header{
 		"Location":              []string{expectedLayerURL},
@@ -1224,18 +1209,14 @@ func pushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest
 
 func finishUpload(t *testing.T, ub *urls.Builder, name reference.Named, uploadURLBase string, dgst digest.Digest, requestopts ...requestOpt) string {
 	resp, err := doPushLayer(t, dgst, uploadURLBase, nil, requestopts...)
-	if err != nil {
-		t.Fatalf("unexpected error doing push layer request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error doing push layer request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "putting monolithic chunk", resp, http.StatusCreated)
 
 	ref, _ := reference.WithDigest(name, dgst)
 	expectedLayerURL, err := ub.BuildBlobURL(ref)
-	if err != nil {
-		t.Fatalf("error building expected layer url: %v", err)
-	}
+	require.NoError(t, err, "error building expected layer url")
 
 	checkHeaders(t, resp, http.Header{
 		"Location":              []string{expectedLayerURL},
@@ -1248,9 +1229,7 @@ func finishUpload(t *testing.T, ub *urls.Builder, name reference.Named, uploadUR
 
 func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) *http.Request {
 	u, err := url.Parse(uploadURLBase)
-	if err != nil {
-		t.Fatalf("unexpected error parsing pushLayer url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error parsing pushLayer url")
 
 	u.RawQuery = url.Values{
 		"_state": u.Query()["_state"],
@@ -1259,9 +1238,7 @@ func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) *htt
 	uploadURL := u.String()
 
 	req, err := http.NewRequest(http.MethodPatch, uploadURL, body)
-	if err != nil {
-		t.Fatalf("unexpected error creating new request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating new request")
 	req.Header.Set("Content-Type", "application/octet-stream")
 	return req
 }
@@ -1279,9 +1256,8 @@ func doPushChunk(t *testing.T, uploadURLBase string, body io.Reader, requestopts
 	digester := digest.Canonical.Digester()
 	multiWriter := io.MultiWriter(buf, digester.Hash())
 
-	if _, err := io.Copy(multiWriter, body); err != nil {
-		t.Fatalf("unexpected error while copying request body: %v", err)
-	}
+	_, err := io.Copy(multiWriter, body)
+	require.NoError(t, err, "unexpected error while copying request body")
 
 	req := doPushChunkRequest(t, uploadURLBase, buf)
 	req = newRequest(req, requestopts...)
@@ -1292,16 +1268,10 @@ func doPushChunk(t *testing.T, uploadURLBase string, body io.Reader, requestopts
 
 func pushChunk(t *testing.T, uploadURLBase string, body io.Reader, length int64, requestopts ...requestOpt) (string, digest.Digest) {
 	resp, dgst, err := doPushChunk(t, uploadURLBase, body, requestopts...)
-	if err != nil {
-		t.Fatalf("unexpected error doing push layer request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error doing push layer request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "putting chunk", resp, http.StatusAccepted)
-
-	if err != nil {
-		t.Fatalf("error generating sha256 digest of body")
-	}
 
 	checkHeaders(t, resp, http.Header{
 		"Range":          []string{fmt.Sprintf("0-%d", length-1)},
@@ -1315,20 +1285,16 @@ func checkResponse(t *testing.T, msg string, resp *http.Response, expectedStatus
 	t.Helper()
 
 	if resp.StatusCode != expectedStatus {
-		t.Logf("unexpected status %s: %v != %v", msg, resp.StatusCode, expectedStatus)
 		maybeDumpResponse(t, resp)
-
-		t.FailNow()
+		require.FailNow(t, fmt.Sprintf("unexpected status: %q", msg))
 	}
 
 	// We expect the headers included in the configuration, unless the
 	// status code is 405 (Method Not Allowed), which means the handler
 	// doesn't even get called.
 	if resp.StatusCode != 405 && !reflect.DeepEqual(resp.Header["X-Content-Type-Options"], []string{"nosniff"}) {
-		t.Logf("missing or incorrect header X-Content-Type-Options %s", msg)
 		maybeDumpResponse(t, resp)
-
-		t.FailNow()
+		require.FailNow(t, fmt.Sprintf("missing or incorrect header X-Content-Type-Options: %q", msg))
 	}
 }
 
@@ -1349,10 +1315,8 @@ func checkBodyHasErrorCodes(t *testing.T, msg string, resp *http.Response, error
 
 	// TODO(stevvooe): Shoot. The error setup is not working out. The content-
 	// type headers are being set after writing the status code.
-	// if resp.Header.Get("Content-Type") != "application/json" {
-	//	t.Fatalf("unexpected content type: %v != 'application/json'",
-	//		resp.Header.Get("Content-Type"))
-	// }
+	//
+	// require.Equal(t, resp.Header.Get("Content-Type"), "application/json", "unexpected content type: %v != 'application/json'", 	resp.Header.Get("Content-Type"))
 
 	expected := make(map[errcode.ErrorCode]struct{})
 	counts := make(map[errcode.ErrorCode]int)
@@ -1396,9 +1360,7 @@ func maybeDumpResponse(t *testing.T, resp *http.Response) {
 // suffice as a match.
 func checkHeaders(t *testing.T, resp *http.Response, headers http.Header) {
 	for k, vs := range headers {
-		if resp.Header.Get(k) == "" {
-			t.Fatalf("response missing header %q", k)
-		}
+		require.NotEmpty(t, resp.Header.Get(k), "response missing header %q", k)
 
 		for _, v := range vs {
 			if v == "*" {
@@ -1409,17 +1371,9 @@ func checkHeaders(t *testing.T, resp *http.Response, headers http.Header) {
 			}
 
 			for _, hv := range resp.Header[http.CanonicalHeaderKey(k)] {
-				if hv != v {
-					t.Fatalf("%+v %v header value not matched in response: %q != %q", resp.Header, k, hv, v)
-				}
+				require.Equalf(t, hv, v, "%+v %v header value not matched in response", resp.Header, k)
 			}
 		}
-	}
-}
-
-func checkErr(t *testing.T, err error, msg string) {
-	if err != nil {
-		t.Fatalf("unexpected error %s: %v", msg, err)
 	}
 }
 
@@ -1444,7 +1398,8 @@ func createRepositoryWithMultipleIdenticalTags(t *testing.T, env *testEnv, repoP
 		manifestTagURL := buildManifestTagURL(t, env, repoPath, tag)
 		manifestDigestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-		resp := putManifest(t, "putting manifest no error", manifestTagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+		resp, err := putManifest("putting manifest no error", manifestTagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+		require.NoError(t, err)
 		// nolint: revive // defer
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
