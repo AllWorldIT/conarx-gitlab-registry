@@ -24,34 +24,32 @@ func TestHTTPSink(t *testing.T) {
 		defer r.Body.Close()
 
 		// NOTE(prozlach): we can't use require (which internally uses
-		// t.FailNow()) in a goroutine as we may get an undefined behavior
+		// `FailNow` from testing package) in a goroutine as we may get an
+		// undefined behavior
 
-		if r.Method != http.MethodPost {
+		if !assert.Equal(t, http.MethodPost, r.Method, "unexpected request method") {
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			assert.Fail(t, "unexpected request method: %v", r.Method)
 			return
 		}
 
 		// Extract the content type and make sure it matches
 		contentType := r.Header.Get("Content-Type")
 		mediaType, _, err := mime.ParseMediaType(contentType)
-		if err != nil {
+		if !assert.NoError(t, err, "error parsing media type: contenttype=%q", contentType) {
 			w.WriteHeader(http.StatusBadRequest)
-			assert.Fail(t, "error parsing media type: %v, contenttype=%q", err, contentType)
 			return
 		}
 
-		if mediaType != EventsMediaType {
+		if !assert.Equal(t, EventsMediaType, mediaType, "incorrect media type") {
 			w.WriteHeader(http.StatusUnsupportedMediaType)
-			assert.Fail(t, "incorrect media type: %q != %q", mediaType, EventsMediaType)
 			return
 		}
 
 		var envelope Envelope
 		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(&envelope); err != nil {
+
+		if !assert.NoError(t, dec.Decode(&envelope), "error decoding request body") {
 			w.WriteHeader(http.StatusBadRequest)
-			assert.Fail(t, "error decoding request body: %v", err)
 			return
 		}
 
@@ -181,10 +179,10 @@ func TestHTTPSink(t *testing.T) {
 		// Try a simple event emission.
 		for _, ev := range tc.events {
 			err := sink.Write(&ev)
-			if !tc.failure {
-				require.NoError(t, err)
-			} else {
+			if tc.failure {
 				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 		}
 

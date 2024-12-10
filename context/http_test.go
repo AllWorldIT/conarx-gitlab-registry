@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,34 +66,23 @@ func TestWithRequest(t *testing.T) {
 	} {
 		v := ctx.Value(testcase.key)
 
-		if v == nil {
-			t.Fatalf("value not found for %q", testcase.key)
-		}
+		require.NotNilf(t, v, "value not found for %q", testcase.key)
 
-		if testcase.expected != nil && v != testcase.expected {
-			t.Fatalf("%s: %v != %v", testcase.key, v, testcase.expected)
+		if testcase.expected != nil {
+			require.Equalf(t, testcase.expected, v, "%s", testcase.key)
 		}
 
 		// Key specific checks!
 		switch testcase.key {
 		case "http.request.id":
-			if _, ok := v.(string); !ok {
-				t.Fatalf("request id not a string: %v", v)
-			}
+			assert.IsType(t, "", v)
 		case "http.request.startedat":
 			vt, ok := v.(time.Time)
-			if !ok {
-				t.Fatalf("value not a time: %v", v)
-			}
+			require.True(t, ok, "v is not of type time.Time")
 
 			now := time.Now()
-			if vt.After(now) {
-				t.Fatalf("time generated too late: %v > %v", vt, now)
-			}
-
-			if vt.Before(start) {
-				t.Fatalf("time generated too early: %v < %v", vt, start)
-			}
+			assert.False(t, vt.After(now), "time generated too late")
+			assert.False(t, vt.Before(start), "time generated too early")
 		}
 	}
 }
@@ -140,12 +129,10 @@ func TestWithRequest_MappedKeys(t *testing.T) {
 	} {
 		v := ctx.Value(testcase.key)
 
-		if v == nil {
-			t.Fatalf("value not found for %q", testcase.key)
-		}
+		require.NotNil(t, v, "value not found for %q", testcase.key)
 
-		if testcase.expected != nil && v != testcase.expected {
-			t.Fatalf("%s: %v != %v", testcase.key, v, testcase.expected)
+		if testcase.expected != nil {
+			assert.Equal(t, testcase.expected, v, "%s", testcase.key)
 		}
 	}
 }
@@ -187,51 +174,33 @@ func TestWithResponseWriter(t *testing.T) {
 	trw := testResponseWriter{}
 	ctx, rw := WithResponseWriter(Background(), &trw)
 
-	if ctx.Value("http.response") != rw {
-		t.Fatalf("response not available in context: %v != %v", ctx.Value("http.response"), rw)
-	}
+	require.Equal(t, rw, ctx.Value("http.response"), "response not available in context")
 
 	grw, err := GetResponseWriter(ctx)
-	if err != nil {
-		t.Fatalf("error getting response writer: %v", err)
-	}
+	require.NoError(t, err, "error getting response writer")
 
-	if grw != rw {
-		t.Fatalf("unexpected response writer returned: %#v != %#v", grw, rw)
-	}
+	require.Equal(t, rw, grw, "unexpected response writer returned")
 
-	if ctx.Value("http.response.status") != 0 {
-		t.Fatalf("response status should always be a number and should be zero here: %v != 0", ctx.Value("http.response.status"))
-	}
+	require.Zero(t, ctx.Value("http.response.status"), "response status should always be a number and should be zero here")
 
-	if n, err := rw.Write(make([]byte, 1024)); err != nil {
-		t.Fatalf("unexpected error writing: %v", err)
-	} else if n != 1024 {
-		t.Fatalf("unexpected number of bytes written: %v != %v", n, 1024)
-	}
+	n, err := rw.Write(make([]byte, 1024))
+	require.NoError(t, err, "unexpected error writing")
+	require.Equal(t, 1024, n, "unexpected number of bytes written")
 
-	if ctx.Value("http.response.status") != http.StatusOK {
-		t.Fatalf("unexpected response status in context: %v != %v", ctx.Value("http.response.status"), http.StatusOK)
-	}
+	require.Equal(t, http.StatusOK, ctx.Value("http.response.status"), "unexpected response status in context")
 
-	if ctx.Value("http.response.written") != int64(1024) {
-		t.Fatalf("unexpected number reported bytes written: %v != %v", ctx.Value("http.response.written"), 1024)
-	}
+	require.EqualValues(t, 1024, ctx.Value("http.response.written"), "unexpected number reported bytes written")
 
 	// Make sure flush propagates
 	rw.(http.Flusher).Flush()
 
-	if !trw.flushed {
-		t.Fatalf("response writer not flushed")
-	}
+	require.True(t, trw.flushed, "response writer not flushed")
 
 	// Write another status and make sure context is correct. This normally
 	// wouldn't work except for in this contrived testcase.
 	rw.WriteHeader(http.StatusBadRequest)
 
-	if ctx.Value("http.response.status") != http.StatusBadRequest {
-		t.Fatalf("unexpected response status in context: %v != %v", ctx.Value("http.response.status"), http.StatusBadRequest)
-	}
+	require.Equal(t, http.StatusBadRequest, ctx.Value("http.response.status"), "unexpected response status in context")
 }
 
 func TestWithVars(t *testing.T) {
@@ -242,9 +211,7 @@ func TestWithVars(t *testing.T) {
 	}
 
 	getVarsFromRequest = func(r *http.Request) map[string]string {
-		if r != &req {
-			t.Fatalf("unexpected request: %v != %v", r, req)
-		}
+		require.Equal(t, &req, r, "unexpected request")
 
 		return vars
 	}
@@ -269,9 +236,7 @@ func TestWithVars(t *testing.T) {
 	} {
 		v := ctx.Value(testcase.key)
 
-		if !reflect.DeepEqual(v, testcase.expected) {
-			t.Fatalf("%q: %v != %v", testcase.key, v, testcase.expected)
-		}
+		require.Equalf(t, testcase.expected, v, "%q", testcase.key)
 	}
 }
 
@@ -284,23 +249,17 @@ func TestRemoteAddr(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
-		if r.RemoteAddr == expectedRemote {
-			t.Errorf("Unexpected matching remote addresses")
-		}
+		assert.NotEqual(t, expectedRemote, r.RemoteAddr, "unexpected matching remote addresses")
 
 		actualRemote := RemoteAddr(r)
-		if expectedRemote != actualRemote {
-			t.Errorf("Mismatching remote hosts: %v != %v", expectedRemote, actualRemote)
-		}
+		assert.Equal(t, expectedRemote, actualRemote, "mismatching remote hosts")
 
 		w.WriteHeader(200)
 	}))
 
 	defer backend.Close()
 	backendURL, err := url.Parse(backend.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	proxy := httputil.NewSingleHostReverseProxy(backendURL)
 	frontend := httptest.NewServer(proxy)
@@ -309,30 +268,22 @@ func TestRemoteAddr(t *testing.T) {
 	// X-Forwarded-For set by proxy
 	expectedRemote = "127.0.0.1"
 	proxyReq, err := http.NewRequest(http.MethodGet, frontend.URL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rsp, err := http.DefaultClient.Do(proxyReq)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = rsp.Body.Close()
 	require.NoError(t, err)
 
 	// RemoteAddr in X-Real-Ip
 	getReq, err := http.NewRequest(http.MethodGet, backend.URL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	expectedRemote = "1.2.3.4"
 	getReq.Header["X-Real-ip"] = []string{expectedRemote}
 	rsp, err = http.DefaultClient.Do(getReq)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = rsp.Body.Close()
 	require.NoError(t, err)
@@ -340,9 +291,7 @@ func TestRemoteAddr(t *testing.T) {
 	// Valid X-Real-Ip and invalid X-Forwarded-For
 	getReq.Header["X-forwarded-for"] = []string{"1.2.3"}
 	rsp, err = http.DefaultClient.Do(getReq)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = rsp.Body.Close()
 	require.NoError(t, err)

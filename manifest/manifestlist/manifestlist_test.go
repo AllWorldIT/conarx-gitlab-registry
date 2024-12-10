@@ -1,13 +1,13 @@
 package manifestlist
 
 import (
-	"bytes"
 	"encoding/json"
-	"reflect"
 	"testing"
 
 	"github.com/docker/distribution"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var expectedManifestListSerialization = []byte(`{
@@ -66,9 +66,7 @@ func makeTestManifestList(t *testing.T, mediaType string) ([]ManifestDescriptor,
 	}
 
 	deserialized, err := FromDescriptorsWithMediaType(manifestDescriptors, mediaType)
-	if err != nil {
-		t.Fatalf("error creating DeserializedManifestList: %v", err)
-	}
+	require.NoError(t, err, "error creating DeserializedManifestList")
 
 	return manifestDescriptors, deserialized
 }
@@ -77,42 +75,26 @@ func TestManifestList(t *testing.T) {
 	manifestDescriptors, deserialized := makeTestManifestList(t, MediaTypeManifestList)
 	mediaType, canonical, _ := deserialized.Payload()
 
-	if mediaType != MediaTypeManifestList {
-		t.Fatalf("unexpected media type: %s", mediaType)
-	}
+	require.Equal(t, MediaTypeManifestList, mediaType, "unexpected media type")
 
 	// Check that the canonical field is the same as json.MarshalIndent
 	// with these parameters.
 	p, err := json.MarshalIndent(&deserialized.ManifestList, "", "   ")
-	if err != nil {
-		t.Fatalf("error marshaling manifest list: %v", err)
-	}
-	if !bytes.Equal(p, canonical) {
-		t.Fatalf("manifest bytes not equal: %q != %q", string(canonical), string(p))
-	}
+	require.NoError(t, err, "error marshaling manifest list")
+	require.Equal(t, p, canonical, "manifest bytes not equal")
 
 	// Check that the canonical field has the expected value.
-	if !bytes.Equal(expectedManifestListSerialization, canonical) {
-		t.Fatalf("manifest bytes not equal: %q != %q", string(canonical), string(expectedManifestListSerialization))
-	}
+	require.Equal(t, expectedManifestListSerialization, canonical, "manifest bytes not equal to expected")
 
 	var unmarshalled DeserializedManifestList
-	if err := json.Unmarshal(deserialized.canonical, &unmarshalled); err != nil {
-		t.Fatalf("error unmarshaling manifest: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(deserialized.canonical, &unmarshalled), "error unmarshaling manifest")
 
-	if !reflect.DeepEqual(&unmarshalled, deserialized) {
-		t.Fatalf("manifests are different after unmarshaling: %v != %v", unmarshalled, *deserialized)
-	}
+	require.Equal(t, unmarshalled, *deserialized, "manifests are different after unmarshaling")
 
 	references := deserialized.References()
-	if len(references) != 2 {
-		t.Fatalf("unexpected number of references: %d", len(references))
-	}
+	require.Len(t, references, 2, "unexpected number of references")
 	for i := range references {
-		if !reflect.DeepEqual(references[i], manifestDescriptors[i].Descriptor) {
-			t.Fatalf("unexpected value %d returned by References: %v", i, references[i])
-		}
+		assert.Equal(t, references[i], manifestDescriptors[i].Descriptor, "unexpected value returned by References")
 	}
 }
 
@@ -202,9 +184,7 @@ func makeTestOCIImageIndex(t *testing.T, mediaType string) ([]ManifestDescriptor
 	}
 
 	deserialized, err := FromDescriptorsWithMediaType(manifestDescriptors, mediaType)
-	if err != nil {
-		t.Fatalf("error creating DeserializedManifestList: %v", err)
-	}
+	require.NoError(t, err, "error creating DeserializedManifestList")
 
 	return manifestDescriptors, deserialized
 }
@@ -214,42 +194,26 @@ func TestOCIImageIndex(t *testing.T) {
 
 	mediaType, canonical, _ := deserialized.Payload()
 
-	if mediaType != v1.MediaTypeImageIndex {
-		t.Fatalf("unexpected media type: %s", mediaType)
-	}
+	require.Equal(t, v1.MediaTypeImageIndex, mediaType, "unexpected media type")
 
 	// Check that the canonical field is the same as json.MarshalIndent
 	// with these parameters.
 	p, err := json.MarshalIndent(&deserialized.ManifestList, "", "   ")
-	if err != nil {
-		t.Fatalf("error marshaling manifest list: %v", err)
-	}
-	if !bytes.Equal(p, canonical) {
-		t.Fatalf("manifest bytes not equal: %q != %q", string(canonical), string(p))
-	}
+	require.NoError(t, err, "error marshaling manifest list")
+	require.Equal(t, p, canonical, "manifest bytes not equal")
 
 	// Check that the canonical field has the expected value.
-	if !bytes.Equal(expectedOCIImageIndexSerialization, canonical) {
-		t.Fatalf("manifest bytes not equal to expected: %q != %q", string(canonical), string(expectedOCIImageIndexSerialization))
-	}
+	require.Equal(t, expectedOCIImageIndexSerialization, canonical, "manifest bytes not equal to expected")
 
 	var unmarshalled DeserializedManifestList
-	if err := json.Unmarshal(deserialized.canonical, &unmarshalled); err != nil {
-		t.Fatalf("error unmarshaling manifest: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(deserialized.canonical, &unmarshalled), "error unmarshaling manifest")
 
-	if !reflect.DeepEqual(&unmarshalled, deserialized) {
-		t.Fatalf("manifests are different after unmarshaling: %v != %v", unmarshalled, *deserialized)
-	}
+	require.Equal(t, &unmarshalled, deserialized, "manifests are different after unmarshaling")
 
 	references := deserialized.References()
-	if len(references) != 3 {
-		t.Fatalf("unexpected number of references: %d", len(references))
-	}
+	require.Len(t, references, 3, "unexpected number of references")
 	for i := range references {
-		if !reflect.DeepEqual(references[i], manifestDescriptors[i].Descriptor) {
-			t.Fatalf("unexpected value %d returned by References: %v", i, references[i])
-		}
+		assert.Equal(t, references[i], manifestDescriptors[i].Descriptor, "unexpected value returned by References")
 	}
 }
 
@@ -262,36 +226,24 @@ func mediaTypeTest(t *testing.T, contentType, mediaType string, shouldError bool
 	}
 
 	_, canonical, err := m.Payload()
-	if err != nil {
-		t.Fatalf("error getting payload, %v", err)
-	}
+	require.NoError(t, err, "error getting payload")
 
 	unmarshalled, descriptor, err := distribution.UnmarshalManifest(
 		contentType,
 		canonical)
 
 	if shouldError {
-		if err == nil {
-			t.Fatalf("bad content type should have produced error")
-		}
+		require.Error(t, err, "bad content type should have produced error")
 	} else {
-		if err != nil {
-			t.Fatalf("error unmarshaling manifest, %v", err)
-		}
+		require.NoError(t, err, "error unmarshaling manifest")
 
 		asManifest := unmarshalled.(*DeserializedManifestList)
-		if asManifest.MediaType != mediaType {
-			t.Fatalf("Bad media type '%v' as unmarshalled", asManifest.MediaType)
-		}
+		require.Equal(t, mediaType, asManifest.MediaType, "bad media type as unmarshalled")
 
-		if descriptor.MediaType != contentType {
-			t.Fatalf("Bad media type '%v' for descriptor", descriptor.MediaType)
-		}
+		require.Equal(t, contentType, descriptor.MediaType, "bad media type for descriptor")
 
 		unmarshalledMediaType, _, _ := unmarshalled.Payload()
-		if unmarshalledMediaType != contentType {
-			t.Fatalf("Bad media type '%v' for payload", unmarshalledMediaType)
-		}
+		require.Equal(t, contentType, unmarshalledMediaType, "bad media type for payload")
 	}
 }
 

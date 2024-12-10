@@ -2,12 +2,13 @@ package ocischema
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	"github.com/docker/distribution"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mockBlobService struct {
@@ -129,45 +130,27 @@ func TestBuilder(t *testing.T) {
 	builder := NewManifestBuilder(bs, imgJSON, annotations)
 
 	for _, d := range descriptors {
-		if err := builder.AppendReference(d); err != nil {
-			t.Fatalf("AppendReference returned error: %v", err)
-		}
+		require.NoError(t, builder.AppendReference(d), "AppendReference returned error")
 	}
 
 	built, err := builder.Build(context.Background())
-	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
-	}
+	require.NoError(t, err, "Build returned error")
 
 	// Check that the config was put in the blob store
 	_, err = bs.Stat(context.Background(), configDigest)
-	if err != nil {
-		t.Fatal("config was not put in the blob store")
-	}
+	require.NoError(t, err, "config was not put in the blob store")
 
 	manifest := built.(*DeserializedManifest).Manifest
-	if manifest.Annotations["hot"] != "potato" {
-		t.Fatalf("unexpected annotation in manifest: %s", manifest.Annotations["hot"])
-	}
+	require.Equal(t, "potato", manifest.Annotations["hot"], "unexpected annotation in manifest")
 
-	if manifest.Versioned.SchemaVersion != 2 {
-		t.Fatal("SchemaVersion != 2")
-	}
+	require.Equal(t, 2, manifest.Versioned.SchemaVersion, "SchemaVersion != 2")
 
 	target := manifest.Target()
-	if target.Digest != configDigest {
-		t.Fatalf("unexpected digest in target: %s", target.Digest.String())
-	}
-	if target.MediaType != v1.MediaTypeImageConfig {
-		t.Fatalf("unexpected media type in target: %s", target.MediaType)
-	}
-	if target.Size != 1632 {
-		t.Fatalf("unexpected size in target: %d", target.Size)
-	}
+	require.Equal(t, configDigest, target.Digest, "unexpected digest in target")
+	require.Equal(t, v1.MediaTypeImageConfig, target.MediaType, "unexpected media type in target")
+	require.Equal(t, int64(1632), target.Size, "unexpected size in target")
 
 	references := manifest.References()
 	expected := append([]distribution.Descriptor{manifest.Target()}, descriptors...)
-	if !reflect.DeepEqual(references, expected) {
-		t.Fatal("References() does not match the descriptors added")
-	}
+	assert.Equal(t, expected, references, "References() does not match the descriptors added")
 }
