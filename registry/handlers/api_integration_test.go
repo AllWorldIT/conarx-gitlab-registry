@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -39,6 +38,7 @@ import (
 	"github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -99,66 +99,42 @@ func TestRelativeURL(t *testing.T) {
 	uploadURLBaseAbs, _ := startPushLayer(t, env, ref)
 
 	u, err := url.Parse(uploadURLBaseAbs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !u.IsAbs() {
-		t.Fatal("Relative URL returned from blob upload chunk with non-relative configuration")
-	}
+	require.NoError(t, err)
+	assert.True(t, u.IsAbs(), "relative URL returned from blob upload chunk with non-relative configuration")
 
 	args := makeBlobArgs(t)
 	resp, err := doPushLayer(t, args.layerDigest, uploadURLBaseAbs, args.layerFile)
-	if err != nil {
-		t.Fatalf("unexpected error doing layer push relative url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error doing layer push relative url")
 	defer resp.Body.Close()
 	checkResponse(t, "relativeurl blob upload", resp, http.StatusCreated)
 	u, err = url.Parse(resp.Header.Get("Location"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !u.IsAbs() {
-		t.Fatal("Relative URL returned from blob upload with non-relative configuration")
-	}
+	require.NoError(t, err)
+	assert.True(t, u.IsAbs(), "relative URL returned from blob upload with non-relative configuration")
 
 	config.HTTP.RelativeURLs = true
 	args = makeBlobArgs(t)
 	uploadURLBaseRelative, _ := startPushLayer(t, env, ref)
 	u, err = url.Parse(uploadURLBaseRelative)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.IsAbs() {
-		t.Fatal("Absolute URL returned from blob upload chunk with relative configuration")
-	}
+	require.NoError(t, err)
+	assert.False(t, u.IsAbs(), "absolute URL returned from blob upload chunk with relative configuration")
 
 	// Start a new upload in absolute mode to get a valid base URL
 	config.HTTP.RelativeURLs = false
 	uploadURLBaseAbs, _ = startPushLayer(t, env, ref)
 	u, err = url.Parse(uploadURLBaseAbs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !u.IsAbs() {
-		t.Fatal("Relative URL returned from blob upload chunk with non-relative configuration")
-	}
+	require.NoError(t, err)
+	assert.True(t, u.IsAbs(), "relative URL returned from blob upload chunk with non-relative configuration")
 
 	// Complete upload with relative URLs enabled to ensure the final location is relative
 	config.HTTP.RelativeURLs = true
 	resp, err = doPushLayer(t, args.layerDigest, uploadURLBaseAbs, args.layerFile)
-	if err != nil {
-		t.Fatalf("unexpected error doing layer push relative url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error doing layer push relative url")
 	defer resp.Body.Close()
 
 	checkResponse(t, "relativeurl blob upload", resp, http.StatusCreated)
 	u, err = url.Parse(resp.Header.Get("Location"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.IsAbs() {
-		t.Fatal("Relative URL returned from blob upload with non-relative configuration")
-	}
+	require.NoError(t, err)
+	assert.False(t, u.IsAbs(), "absolute URL returned from blob upload with relative configuration")
 }
 
 func TestBlobDeleteDisabled(t *testing.T) {
@@ -170,14 +146,10 @@ func TestBlobDeleteDisabled(t *testing.T) {
 	layerDigest := args.layerDigest
 	ref, _ := reference.WithDigest(imageName, layerDigest)
 	layerURL, err := env.builder.BuildBlobURL(ref)
-	if err != nil {
-		t.Fatalf("error building url: %v", err)
-	}
+	require.NoError(t, err, "error building url")
 
 	resp, err := httpDelete(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error deleting when disabled: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting when disabled")
 	defer resp.Body.Close()
 
 	checkResponse(t, "status of disabled delete", resp, http.StatusMethodNotAllowed)
@@ -190,9 +162,7 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 
 	ref, _ := reference.WithDigest(imageName, layerDigest)
 	layerURL, err := env.builder.BuildBlobURL(ref)
-	if err != nil {
-		t.Fatalf("error building url: %v", err)
-	}
+	require.NoError(t, err, "error building url")
 
 	// ------------------------------------------
 	// Start an upload, check the status then cancel
@@ -200,9 +170,7 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 
 	// A status check should work
 	resp, err := http.Get(uploadURLBase)
-	if err != nil {
-		t.Fatalf("unexpected error getting upload status: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting upload status")
 	defer resp.Body.Close()
 	checkResponse(t, "status of deleted upload", resp, http.StatusNoContent)
 	checkHeaders(t, resp, http.Header{
@@ -212,23 +180,17 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	})
 
 	req, err := http.NewRequest(http.MethodDelete, uploadURLBase, nil)
-	if err != nil {
-		t.Fatalf("unexpected error creating delete request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating delete request")
 
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("unexpected error sending delete request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error sending delete request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "deleting upload", resp, http.StatusNoContent)
 
 	// A status check should result in 404
 	resp, err = http.Get(uploadURLBase)
-	if err != nil {
-		t.Fatalf("unexpected error getting upload status: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting upload status")
 	defer resp.Body.Close()
 	checkResponse(t, "status of deleted upload", resp, http.StatusNotFound)
 
@@ -236,9 +198,7 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// Do layer push with an empty body and different digest
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
 	resp, err = doPushLayer(t, layerDigest, uploadURLBase, bytes.NewReader(make([]byte, 0)))
-	if err != nil {
-		t.Fatalf("unexpected error doing bad layer push: %v", err)
-	}
+	require.NoError(t, err, "unexpected error doing bad layer push")
 	defer resp.Body.Close()
 
 	checkResponse(t, "bad layer push", resp, http.StatusBadRequest)
@@ -247,9 +207,7 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// -----------------------------------------
 	// Do layer push with an empty body and correct digest
 	zeroDigest, err := digest.FromReader(bytes.NewReader(make([]byte, 0)))
-	if err != nil {
-		t.Fatalf("unexpected error digesting empty buffer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error digesting empty buffer")
 
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
 	pushLayer(t, env.builder, imageName, zeroDigest, uploadURLBase, bytes.NewReader(make([]byte, 0)))
@@ -260,9 +218,7 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// This is a valid but empty tarfile!
 	emptyTar := bytes.Repeat([]byte("\x00"), 1024)
 	emptyDigest, err := digest.FromReader(bytes.NewReader(emptyTar))
-	if err != nil {
-		t.Fatalf("unexpected error digesting empty tar: %v", err)
-	}
+	require.NoError(t, err, "unexpected error digesting empty tar")
 
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
 	pushLayer(t, env.builder, imageName, emptyDigest, uploadURLBase, bytes.NewReader(emptyTar))
@@ -282,9 +238,8 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	require.NoError(t, err)
 
 	canonicalDigester := digest.Canonical.Digester()
-	if _, err := io.Copy(canonicalDigester.Hash(), layerFile); err != nil {
-		t.Fatalf("error copying to digest: %v", err)
-	}
+	_, err = io.Copy(canonicalDigester.Hash(), layerFile)
+	require.NoError(t, err, "error copying to digest")
 	canonicalDigest := canonicalDigester.Digest()
 
 	_, err = layerFile.Seek(0, 0)
@@ -301,18 +256,14 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 
 	uploadURLBase, _ = startPushLayer(t, env, imageName)
 	resp, _, err = doPushChunk(t, uploadURLBase, layerFile, witContentRangeHeader("8-30"))
-	if err != nil {
-		t.Fatalf("unexpected error on pushing layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error on pushing layer")
 	defer resp.Body.Close()
 	checkResponse(t, "uploading out of order chunk", resp, http.StatusRequestedRangeNotSatisfiable)
 
 	// ------------------------
 	// Use a head request to see if the layer exists.
 	resp, err = http.Head(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error checking head on existing layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error checking head on existing layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "checking head on existing layer", resp, http.StatusOK)
@@ -324,9 +275,7 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// ----------------
 	// Fetch the layer!
 	resp, err = http.Get(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error fetching layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching layer", resp, http.StatusOK)
@@ -340,26 +289,20 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	_, err = io.Copy(verifier, resp.Body)
 	require.NoError(t, err)
 
-	if !verifier.Verified() {
-		t.Fatalf("response body did not pass verification")
-	}
+	assert.True(t, verifier.Verified(), "response body did not pass verification")
 
 	// ----------------
 	// Fetch the layer with an invalid digest
 	badURL := strings.Replace(layerURL, "sha256", "sha257", 1)
 	resp, err = http.Get(badURL)
-	if err != nil {
-		t.Fatalf("unexpected error fetching layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching layer bad digest", resp, http.StatusBadRequest)
 
 	// Cache headers
 	resp, err = http.Get(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error fetching layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching layer", resp, http.StatusOK)
@@ -373,24 +316,18 @@ func testBlobAPIImpl(t *testing.T, env *testEnv, args blobArgs) *testEnv {
 	// Matching etag, gives 304
 	etag := resp.Header.Get("Etag")
 	req, err = http.NewRequest(http.MethodGet, layerURL, nil)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	req.Header.Set("If-None-Match", etag)
 
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching layer with etag", resp, http.StatusNotModified)
 
 	// Non-matching etag, gives 200
 	req, err = http.NewRequest(http.MethodGet, layerURL, nil)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	req.Header.Set("If-None-Match", "")
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -417,9 +354,7 @@ func testBlobDeleteImpl(t *testing.T, env *testEnv, args blobArgs) {
 	// ---------------
 	// Delete a layer
 	resp, err := httpDelete(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error deleting layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "deleting layer", resp, http.StatusAccepted)
@@ -431,18 +366,14 @@ func testBlobDeleteImpl(t *testing.T, env *testEnv, args blobArgs) {
 	// Try and get it back
 	// Use a head request to see if the layer exists.
 	resp, err = http.Head(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error checking head on existing layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error checking head on existing layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "checking existence of deleted layer", resp, http.StatusNotFound)
 
 	// Delete already deleted layer
 	resp, err = httpDelete(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error deleting layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "deleting layer", resp, http.StatusNotFound)
@@ -451,9 +382,7 @@ func testBlobDeleteImpl(t *testing.T, env *testEnv, args blobArgs) {
 	// Attempt to delete a layer with an invalid digest
 	badURL := strings.Replace(layerURL, "sha256", "sha257", 1)
 	resp, err = httpDelete(badURL)
-	if err != nil {
-		t.Fatalf("unexpected error fetching layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "deleting layer bad digest", resp, http.StatusBadRequest)
@@ -469,17 +398,14 @@ func testBlobDeleteImpl(t *testing.T, env *testEnv, args blobArgs) {
 	_, err = layerFile.Seek(0, io.SeekStart)
 	require.NoError(t, err)
 	canonicalDigester := digest.Canonical.Digester()
-	if _, err := io.Copy(canonicalDigester.Hash(), layerFile); err != nil {
-		t.Fatalf("error copying to digest: %v", err)
-	}
+	_, err = io.Copy(canonicalDigester.Hash(), layerFile)
+	require.NoError(t, err, "error copying to digest")
 	canonicalDigest := canonicalDigester.Digest()
 
 	// ------------------------
 	// Use a head request to see if it exists
 	resp, err = http.Head(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error checking head on existing layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error checking head on existing layer")
 	defer resp.Body.Close()
 
 	layerLength, _ := layerFile.Seek(0, io.SeekEnd)
@@ -497,22 +423,16 @@ func TestDeleteDisabled(t *testing.T) {
 	imageName, _ := reference.WithName("foo/bar")
 	// "build" our layer file
 	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
-	if err != nil {
-		t.Fatalf("error creating random layer file: %v", err)
-	}
+	require.NoError(t, err, "error creating random layer file")
 
 	ref, _ := reference.WithDigest(imageName, layerDigest)
 	layerURL, err := env.builder.BuildBlobURL(ref)
-	if err != nil {
-		t.Fatalf("Error building blob URL")
-	}
+	require.NoError(t, err, "Error building blob URL")
 	uploadURLBase, _ := startPushLayer(t, env, imageName)
 	pushLayer(t, env.builder, imageName, layerDigest, uploadURLBase, layerFile)
 
 	resp, err := httpDelete(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error deleting layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting layer: %v", err)
 	defer resp.Body.Close()
 
 	checkResponse(t, "deleting layer with delete disabled", resp, http.StatusMethodNotAllowed)
@@ -527,9 +447,7 @@ func TestDeleteReadOnly(t *testing.T) {
 	imageName, _ := reference.WithName("foo/bar")
 	// "build" our layer file
 	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
-	if err != nil {
-		t.Fatalf("error creating random layer file: %v", err)
-	}
+	require.NoError(t, err, "error creating random layer file")
 
 	ref, _ := reference.WithDigest(imageName, layerDigest)
 	uploadURLBase, _ := startPushLayer(t, setupEnv, imageName)
@@ -541,14 +459,10 @@ func TestDeleteReadOnly(t *testing.T) {
 	defer env.Shutdown()
 
 	layerURL, err := env.builder.BuildBlobURL(ref)
-	if err != nil {
-		t.Fatalf("Error building blob URL")
-	}
+	require.NoError(t, err, "Error building blob URL")
 
 	resp, err := httpDelete(layerURL)
-	if err != nil {
-		t.Fatalf("unexpected error deleting layer: %v", err)
-	}
+	require.NoError(t, err, "unexpected error deleting layer")
 	defer resp.Body.Close()
 
 	checkResponse(t, "deleting layer in read-only mode", resp, http.StatusMethodNotAllowed)
@@ -561,14 +475,10 @@ func TestStartPushReadOnly(t *testing.T) {
 	imageName, _ := reference.WithName("foo/bar")
 
 	layerUploadURL, err := env.builder.BuildBlobUploadURL(imageName)
-	if err != nil {
-		t.Fatalf("unexpected error building layer upload url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error building layer upload url")
 
 	resp, err := http.Post(layerUploadURL, "", nil)
-	if err != nil {
-		t.Fatalf("unexpected error starting layer push: %v", err)
-	}
+	require.NoError(t, err, "unexpected error starting layer push")
 	defer resp.Body.Close()
 
 	checkResponse(t, "starting push in read-only mode", resp, http.StatusMethodNotAllowed)
@@ -677,16 +587,12 @@ func testManifestWithStorageError(t *testing.T, env *testEnv, imageName referenc
 	tag := "latest"
 	tagRef, _ := reference.WithTag(imageName, tag)
 	manifestURL, err := env.builder.BuildManifestURL(tagRef)
-	if err != nil {
-		t.Fatalf("unexpected error getting manifest url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting manifest url")
 
 	// -----------------------------
 	// Attempt to fetch the manifest
 	resp, err := http.Get(manifestURL)
-	if err != nil {
-		t.Fatalf("unexpected error getting manifest: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting manifest")
 	defer resp.Body.Close()
 	checkResponse(t, "getting non-existent manifest", resp, expectedStatusCode)
 	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, expectedErrorCode)
@@ -872,7 +778,8 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 			// Build URLs.
 			tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-			resp := putManifest(t, "putting manifest", tagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			resp, err := putManifest("putting manifest", tagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 
 			require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -985,7 +892,8 @@ func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentIn
 	// Build URLs.
 	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	resp := putManifest(t, "putting manifest, layers not associated with repository", tagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	resp, err := putManifest("putting manifest, layers not associated with repository", tagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
@@ -1164,7 +1072,8 @@ func TestManifestAPI_ManifestListWithLayerReferences(t *testing.T) {
 	assertManifestPutByTagResponse(t, env, repoPath, didx, manifestlist.MediaTypeManifestList, tagName, 400)
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, didx)
 
-	resp := putManifest(t, "putting manifest list bad request", manifestDigestURL, manifestlist.MediaTypeManifestList, didx)
+	resp, err := putManifest("putting manifest list bad request", manifestDigestURL, manifestlist.MediaTypeManifestList, didx)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
@@ -1357,7 +1266,8 @@ func TestManifestAPI_Put_DatabaseEnabled_InvalidConfigMediaType(t *testing.T) {
 
 	// Push index
 	u := buildManifestTagURL(t, env, repoPath, tagName)
-	resp := putManifest(t, "", u, v1.MediaTypeImageManifest, dm.Manifest)
+	resp, err := putManifest("", u, v1.MediaTypeImageManifest, dm.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -1370,7 +1280,8 @@ func TestManifestAPI_Put_DatabaseEnabled_InvalidConfigMediaType(t *testing.T) {
 	// Push index again with dynamic media types enabled.
 	t.Setenv(feature.DynamicMediaTypes.EnvVariable, "true")
 
-	resp = putManifest(t, "", u, v1.MediaTypeImageManifest, dm.Manifest)
+	resp, err = putManifest("", u, v1.MediaTypeImageManifest, dm.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 }
@@ -1401,7 +1312,8 @@ func TestManifestAPI_Put_OCIImageIndexByTagManifestsNotPresentInDatabase(t *test
 	// into the filesystem manifests.
 	tagURL := buildManifestTagURL(t, env2, repoPath, tagName)
 
-	resp := putManifest(t, "putting OCI image index missing manifests", tagURL, v1.MediaTypeImageIndex, deserializedManifest.ManifestList)
+	resp, err := putManifest("putting OCI image index missing manifests", tagURL, v1.MediaTypeImageIndex, deserializedManifest.ManifestList)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
@@ -1602,7 +1514,8 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 			require.NoError(t, err)
 
 			u = buildManifestDigestURL(t, env, repoRef.Name(), dm)
-			resp := putManifest(t, "", u, test.ContentTypeHeader, dm.Manifest)
+			resp, err := putManifest("", u, test.ContentTypeHeader, dm.Manifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 
 			require.Equal(t, test.ExpectedStatus, resp.StatusCode)
@@ -1811,7 +1724,8 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 			require.NoError(t, err)
 
 			manifestDigestURL := buildManifestDigestURL(t, env, repoRef.Name(), dml)
-			resp := putManifest(t, "", manifestDigestURL, test.ContentTypeHeader, dml)
+			resp, err := putManifest("", manifestDigestURL, test.ContentTypeHeader, dml)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 
 			require.Equal(t, test.ExpectedStatus, resp.StatusCode)
@@ -1850,9 +1764,7 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 
 	tagRef, _ := reference.WithTag(imageName, tag)
 	manifestURL, err := env.builder.BuildManifestURL(tagRef)
-	if err != nil {
-		t.Fatalf("unexpected error getting manifest url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting manifest url")
 
 	// --------------------------------
 	// Attempt to push manifest list that refers to an unknown manifest
@@ -1876,7 +1788,8 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 		},
 	}
 
-	resp := putManifest(t, "putting missing manifest manifestlist", manifestURL, manifestlist.MediaTypeManifestList, manifestList)
+	resp, err := putManifest("putting missing manifest manifestlist", manifestURL, manifestlist.MediaTypeManifestList, manifestList)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	checkResponse(t, "putting missing manifest manifestlist", resp, http.StatusBadRequest)
 	_, p, counts := checkBodyHasErrorCodes(t, "putting missing manifest manifestlist", resp, v2.ErrorCodeManifestBlobUnknown)
@@ -1885,28 +1798,23 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 		v2.ErrorCodeManifestBlobUnknown: 1,
 	}
 
-	if !reflect.DeepEqual(counts, expectedCounts) {
-		t.Fatalf("unexpected number of error codes encountered: %v\n!=\n%v\n---\n%s", counts, expectedCounts, string(p))
-	}
+	require.Equalf(t, expectedCounts, counts, "unexpected number of error codes encountered: %v\n!=\n%v\n---\n%s", counts, expectedCounts, p)
 
 	// -------------------
 	// Push a manifest list that references an actual manifest
 	manifestList.Manifests[0].Digest = args.dgst
 	deserializedManifestList, err := manifestlist.FromDescriptors(manifestList.Manifests)
-	if err != nil {
-		t.Fatalf("could not create DeserializedManifestList: %v", err)
-	}
+	require.NoError(t, err, "could not create DeserializedManifestList")
 	_, canonical, err := deserializedManifestList.Payload()
-	if err != nil {
-		t.Fatalf("could not get manifest list payload: %v", err)
-	}
+	require.NoError(t, err, "could not get manifest list payload")
 	dgst := digest.FromBytes(canonical)
 
 	digestRef, _ := reference.WithDigest(imageName, dgst)
 	manifestDigestURL, err := env.builder.BuildManifestURL(digestRef)
-	checkErr(t, err, "building manifest url")
+	require.NoError(t, err, "building manifest url")
 
-	resp = putManifest(t, "putting manifest list no error", manifestURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+	resp, err = putManifest("putting manifest list no error", manifestURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+	require.Error(t, err)
 	defer resp.Body.Close()
 	checkResponse(t, "putting manifest list no error", resp, http.StatusCreated)
 	checkHeaders(t, resp, http.Header{
@@ -1916,7 +1824,8 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 
 	// --------------------
 	// Push by digest -- should get same result
-	resp = putManifest(t, "putting manifest list by digest", manifestDigestURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+	resp, err = putManifest("putting manifest list by digest", manifestDigestURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	checkResponse(t, "putting manifest list by digest", resp, http.StatusCreated)
 	checkHeaders(t, resp, http.Header{
@@ -1927,16 +1836,12 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 	// ------------------
 	// Fetch by tag name
 	req, err := http.NewRequest(http.MethodGet, manifestURL, nil)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	// multiple headers in mixed list format to ensure we parse correctly server-side
 	req.Header.Set("Accept", fmt.Sprintf(` %s ; q=0.8 , %s ; q=0.5 `, manifestlist.MediaTypeManifestList, v1.MediaTypeImageManifest))
 	req.Header.Add("Accept", schema2.MediaTypeManifest)
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("unexpected error fetching manifest list: %v", err)
-	}
+	require.NoError(t, err, "unexpected error fetching manifest list")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching uploaded manifest list", resp, http.StatusOK)
@@ -1948,28 +1853,21 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 	var fetchedManifestList manifestlist.DeserializedManifestList
 	dec := json.NewDecoder(resp.Body)
 
-	if err := dec.Decode(&fetchedManifestList); err != nil {
-		t.Fatalf("error decoding fetched manifest list: %v", err)
-	}
+	err = dec.Decode(&fetchedManifestList)
+	require.NoError(t, err, "error decoding fetched manifest list")
 
 	_, fetchedCanonical, err := fetchedManifestList.Payload()
-	if err != nil {
-		t.Fatalf("error getting manifest list payload: %v", err)
-	}
+	require.NoError(t, err, "error getting manifest list payload")
 
-	if !bytes.Equal(fetchedCanonical, canonical) {
-		t.Fatalf("manifest lists do not match")
-	}
+	require.Equal(t, fetchedCanonical, canonical, "manifest lists do not match")
 
 	// ---------------
 	// Fetch by digest
 	req, err = http.NewRequest(http.MethodGet, manifestDigestURL, nil)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	req.Header.Set("Accept", manifestlist.MediaTypeManifestList)
 	resp, err = http.DefaultClient.Do(req)
-	checkErr(t, err, "fetching manifest list by digest")
+	require.NoError(t, err, "fetching manifest list by digest")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching uploaded manifest list", resp, http.StatusOK)
@@ -1980,44 +1878,31 @@ func testManifestAPIManifestList(t *testing.T, env *testEnv, args manifestArgs) 
 
 	var fetchedManifestListByDigest manifestlist.DeserializedManifestList
 	dec = json.NewDecoder(resp.Body)
-	if err := dec.Decode(&fetchedManifestListByDigest); err != nil {
-		t.Fatalf("error decoding fetched manifest: %v", err)
-	}
+	err = dec.Decode(&fetchedManifestListByDigest)
+	require.NoError(t, err, "error decoding fetched manifest")
 
 	_, fetchedCanonical, err = fetchedManifestListByDigest.Payload()
-	if err != nil {
-		t.Fatalf("error getting manifest list payload: %v", err)
-	}
+	require.NoError(t, err, "error getting manifest list payload")
 
-	if !bytes.Equal(fetchedCanonical, canonical) {
-		t.Fatalf("manifests do not match")
-	}
+	require.Equal(t, fetchedCanonical, canonical, "manifests do not match")
 
 	// Get by name with etag, gives 304
 	etag := resp.Header.Get("Etag")
 	req, err = http.NewRequest(http.MethodGet, manifestURL, nil)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	req.Header.Set("If-None-Match", etag)
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching manifest by name with etag", resp, http.StatusNotModified)
 
 	// Get by digest with etag, gives 304
 	req, err = http.NewRequest(http.MethodGet, manifestDigestURL, nil)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	req.Header.Set("If-None-Match", etag)
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Error constructing request: %s", err)
-	}
+	require.NoError(t, err, "Error constructing request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching manifest by dgst with etag", resp, http.StatusNotModified)
@@ -2035,7 +1920,7 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	// ---------------
 	// Delete by digest
 	resp, err := httpDelete(manifestDigestURL)
-	checkErr(t, err, "deleting manifest by digest")
+	require.NoError(t, err, "deleting manifest by digest")
 	defer resp.Body.Close()
 
 	checkResponse(t, "deleting manifest", resp, http.StatusAccepted)
@@ -2046,7 +1931,7 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	// ---------------
 	// Attempt to fetch deleted manifest
 	resp, err = http.Get(manifestDigestURL)
-	checkErr(t, err, "fetching deleted manifest by digest")
+	require.NoError(t, err, "fetching deleted manifest by digest")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching deleted manifest", resp, http.StatusNotFound)
@@ -2054,14 +1939,15 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	// ---------------
 	// Delete already deleted manifest by digest
 	resp, err = httpDelete(manifestDigestURL)
-	checkErr(t, err, "re-deleting manifest by digest")
+	require.NoError(t, err, "re-deleting manifest by digest")
 	defer resp.Body.Close()
 
 	checkResponse(t, "re-deleting manifest", resp, http.StatusNotFound)
 
 	// --------------------
 	// Re-upload manifest by digest
-	resp = putManifest(t, "putting manifest", manifestDigestURL, args.mediaType, testManifest)
+	resp, err = putManifest("putting manifest", manifestDigestURL, args.mediaType, testManifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	checkResponse(t, "putting manifest", resp, http.StatusCreated)
 	checkHeaders(t, resp, http.Header{
@@ -2072,7 +1958,7 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	// ---------------
 	// Attempt to fetch re-uploaded deleted digest
 	resp, err = http.Get(manifestDigestURL)
-	checkErr(t, err, "fetching re-uploaded manifest by digest")
+	require.NoError(t, err, "fetching re-uploaded manifest by digest")
 	defer resp.Body.Close()
 
 	checkResponse(t, "fetching re-uploaded manifest", resp, http.StatusOK)
@@ -2085,10 +1971,10 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	unknownDigest := digest.Digest("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	unknownRef, _ := reference.WithDigest(imageName, unknownDigest)
 	unknownManifestDigestURL, err := env.builder.BuildManifestURL(unknownRef)
-	checkErr(t, err, "building unknown manifest url")
+	require.NoError(t, err, "building unknown manifest url")
 
 	resp, err = httpDelete(unknownManifestDigestURL)
-	checkErr(t, err, "delting unknown manifest by digest")
+	require.NoError(t, err, "delting unknown manifest by digest")
 	defer resp.Body.Close()
 	checkResponse(t, "fetching deleted manifest", resp, http.StatusNotFound)
 
@@ -2097,7 +1983,8 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	tag := "atag"
 	tagRef, _ := reference.WithTag(imageName, tag)
 	manifestTagURL, _ := env.builder.BuildManifestURL(tagRef)
-	resp = putManifest(t, "putting manifest by tag", manifestTagURL, args.mediaType, testManifest)
+	resp, err = putManifest("putting manifest by tag", manifestTagURL, args.mediaType, testManifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	checkResponse(t, "putting manifest by tag", resp, http.StatusCreated)
 	checkHeaders(t, resp, http.Header{
@@ -2106,39 +1993,28 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 	})
 
 	tagsURL, err := env.builder.BuildTagsURL(imageName)
-	if err != nil {
-		t.Fatalf("unexpected error building tags url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error building tags url")
 
 	// Ensure that the tag is listed.
 	resp, err = http.Get(tagsURL)
-	if err != nil {
-		t.Fatalf("unexpected error getting unknown tags: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting unknown tags")
 	defer resp.Body.Close()
 
 	dec := json.NewDecoder(resp.Body)
 	var tagsResponse tagsAPIResponse
-	if err := dec.Decode(&tagsResponse); err != nil {
-		t.Fatalf("unexpected error decoding error response: %v", err)
-	}
+	err = dec.Decode(&tagsResponse)
+	require.NoError(t, err, "unexpected error decoding error response")
 
-	if tagsResponse.Name != imageName.Name() {
-		t.Fatalf("tags name should match image name: %v != %v", tagsResponse.Name, imageName)
-	}
+	require.Equalf(t, tagsResponse.Name, imageName.Name(), "tags name should match image name: %v != %v", tagsResponse.Name, imageName)
 
-	if len(tagsResponse.Tags) != 1 {
-		t.Fatalf("expected some tags in response: %v", tagsResponse.Tags)
-	}
+	require.Lenf(t, tagsResponse.Tags, 1, "expected some tags in response: %v", tagsResponse.Tags)
 
-	if tagsResponse.Tags[0] != tag {
-		t.Fatalf("tag not as expected: %q != %q", tagsResponse.Tags[0], tag)
-	}
+	require.Equal(t, tagsResponse.Tags[0], tag, "tag not as expected")
 
 	// ---------------
 	// Delete by digest
 	resp, err = httpDelete(manifestDigestURL)
-	checkErr(t, err, "deleting manifest by digest")
+	require.NoError(t, err, "deleting manifest by digest")
 	defer resp.Body.Close()
 
 	checkResponse(t, "deleting manifest with tag", resp, http.StatusAccepted)
@@ -2148,23 +2024,16 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 
 	// Ensure that the tag is not listed.
 	resp, err = http.Get(tagsURL)
-	if err != nil {
-		t.Fatalf("unexpected error getting unknown tags: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting unknown tags")
 	defer resp.Body.Close()
 
 	dec = json.NewDecoder(resp.Body)
-	if err := dec.Decode(&tagsResponse); err != nil {
-		t.Fatalf("unexpected error decoding error response: %v", err)
-	}
+	err = dec.Decode(&tagsResponse)
+	require.NoError(t, err, "unexpected error decoding error response")
 
-	if tagsResponse.Name != imageName.Name() {
-		t.Fatalf("tags name should match image name: %v != %v", tagsResponse.Name, imageName)
-	}
+	require.Equal(t, tagsResponse.Name, imageName.Name(), "tags name should match image name")
 
-	if len(tagsResponse.Tags) != 0 {
-		t.Fatalf("expected 0 tags in response: %v", tagsResponse.Tags)
-	}
+	require.Emptyf(t, tagsResponse.Tags, "expected 0 tags in response: %v", tagsResponse.Tags)
 }
 
 // In https://gitlab.com/gitlab-org/container-registry/-/issues/409 we have identified that currently it's possible to
@@ -2335,7 +2204,9 @@ func TestExistingRenameLease_Prevents_Manifest_Push(t *testing.T) {
 
 	// Create and execute API request upload manifest (while project lease is in effect for "foo/bar")
 	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
-	req := newRequest(putManifestRequest(t, "putting manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest), witAuthToken(testToken))
+	manifestRequest, err := putManifestRequest(manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err, "putting manifest no error")
+	req := newRequest(manifestRequest, witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2370,7 +2241,9 @@ func TestExistingRenameLeaseExpires_Eventually_Allows_Manifest_Push(t *testing.T
 
 	// Create and execute API request upload a manifest (while project lease is in effect for "foo/bar")
 	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
-	req := newRequest(putManifestRequest(t, "putting manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest), witAuthToken(testToken))
+	manifestRequest, err := putManifestRequest(manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err, "putting manifest no error")
+	req := newRequest(manifestRequest, witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2951,7 +2824,8 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 
 			// Send manifest push request and ensure it responds as expected
 			manifestURL := buildManifestTagURL(t, env, imageName.Name(), tt.tag)
-			req := putManifestRequest(t, "", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			req, err := putManifestRequest(manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			require.NoError(t, err)
 			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)

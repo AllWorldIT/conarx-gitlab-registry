@@ -218,7 +218,8 @@ func manifestPutSchema2ByTagIsIdempotent(t *testing.T, opts ...configOpt) {
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
 	testFunc := func() {
-		resp := putManifest(t, "putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+		resp, err := putManifest("putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -263,7 +264,8 @@ func manifestPutSchema2ByTagSameDigestParallelIsIdempotent(t *testing.T, opts ..
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp := putManifest(t, "putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			resp, err := putManifest("putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			assert.NoError(t, err)
 			defer resp.Body.Close()
 			// NOTE(prozlach): we can't use require in a goroutine.
 			assert.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -327,7 +329,8 @@ func manifestPutManifestListByTagSameDigestParallelIsIdempotent(t *testing.T, op
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp := putManifest(t, "putting manifest list by tag no error", manifestListURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+			resp, err := putManifest("putting manifest list by tag no error", manifestListURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+			assert.NoError(t, err)
 			defer resp.Body.Close()
 			// NOTE(prozlach): we can't use require in a goroutine.
 			assert.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -760,7 +763,8 @@ func manifestPutSchema1ByTag(t *testing.T, opts ...configOpt) {
 
 	manifestURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	resp := putManifest(t, "putting schema1 manifest bad request error", manifestURL, schema1.MediaTypeManifest, signedManifest)
+	resp, err := putManifest("putting schema1 manifest bad request error", manifestURL, schema1.MediaTypeManifest, signedManifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -814,7 +818,8 @@ func manifestPutSchema2ByDigestConfigNotAssociatedWithRepository(t *testing.T, o
 
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath1, deserializedManifest)
 
-	resp := putManifest(t, "putting manifest whose config is not present in the repository", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	resp, err := putManifest("putting manifest whose config is not present in the repository", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
@@ -881,7 +886,8 @@ func manifestPutSchema2MissingConfig(t *testing.T, opts ...configOpt) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest with only the layer blobs pushed up.
-			resp := putManifest(t, "putting missing config manifest", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			resp, err := putManifest("putting missing config manifest", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -956,7 +962,8 @@ func manifestPutSchema2MissingLayers(t *testing.T, opts ...configOpt) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest with only the config blob pushed up.
-			resp := putManifest(t, "putting missing layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			resp, err := putManifest("putting missing layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1036,7 +1043,8 @@ func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest with only the config blob pushed up.
-			resp := putManifest(t, "putting missing layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			resp, err := putManifest("putting missing layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1115,7 +1123,8 @@ func manifestPutSchema2ReferencesExceedLimit(t *testing.T, opts ...configOpt) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest.
-			resp := putManifest(t, "putting manifest with too many layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			resp, err := putManifest("putting manifest with too many layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1184,7 +1193,8 @@ func manifestPutSchema2PayloadSizeExceedsLimit(t *testing.T, opts ...configOpt) 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest.
-			resp := putManifest(t, "putting oversized manifest", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			resp, err := putManifest("putting oversized manifest", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1426,7 +1436,8 @@ func manifestPutSchema2ByDigestLayersNotAssociatedWithRepository(t *testing.T, o
 
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath1, deserializedManifest)
 
-	resp := putManifest(t, "putting manifest whose layers are not present in the repository", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	resp, err := putManifest("putting manifest whose layers are not present in the repository", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
@@ -1475,7 +1486,8 @@ func manifestPutSchema1ByDigest(t *testing.T, opts ...configOpt) {
 
 	manifestURL := buildManifestDigestURL(t, env, repoPath, signedManifest)
 
-	resp := putManifest(t, "putting schema1 manifest bad request error", manifestURL, schema1.MediaTypeManifest, signedManifest)
+	resp, err := putManifest("putting schema1 manifest bad request error", manifestURL, schema1.MediaTypeManifest, signedManifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -1782,7 +1794,8 @@ func manifestDeleteSchema2Reupload(t *testing.T, opts ...configOpt) {
 	}
 
 	// Re-upload manifest by digest
-	resp = putManifest(t, "reuploading manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	resp, err = putManifest("reuploading manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -2154,7 +2167,8 @@ func manifestPutOCIWithNonMatchingSubject(t *testing.T, opts ...configOpt) {
 
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	resp := putManifest(t, "putting manifest with missing subject", manifestDigestURL, v1.MediaTypeImageManifest, deserializedManifest)
+	resp, err := putManifest("putting manifest with missing subject", manifestDigestURL, v1.MediaTypeImageManifest, deserializedManifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -2374,7 +2388,8 @@ func validateManifestPutWithNonDistributableLayers(t *testing.T, env *testEnv, r
 
 	// push manifest
 	u := buildManifestDigestURL(t, env, repoRef.Name(), m)
-	resp := putManifest(t, "putting manifest no error", u, mediaType, m)
+	resp, err := putManifest("putting manifest no error", u, mediaType, m)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -2684,7 +2699,8 @@ func manifestGetManifestListFallbackToSchema2(t *testing.T, opts ...configOpt) {
 	manifestTagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
 	// Push up manifest list.
-	resp := putManifest(t, "putting manifest list no error", manifestTagURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+	resp, err := putManifest("putting manifest list no error", manifestTagURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -3190,20 +3206,20 @@ func manifestDeleteTagNotification(t *testing.T, opts ...configOpt) {
 	defer env.Shutdown()
 
 	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
+	require.NoError(t, err, "building named object")
 
 	tag := "latest"
 	createRepository(t, env, imageName.Name(), tag)
 
 	ref, err := reference.WithTag(imageName, tag)
-	checkErr(t, err, "building tag reference")
+	require.NoError(t, err, "building tag reference")
 
 	manifestURL, err := env.builder.BuildManifestURL(ref)
-	checkErr(t, err, "building tag URL")
+	require.NoError(t, err, "building tag URL")
 
 	resp, err := httpDelete(manifestURL)
 	msg := "checking tag delete"
-	checkErr(t, err, msg)
+	require.NoError(t, err, msg)
 
 	defer resp.Body.Close()
 
@@ -3225,13 +3241,13 @@ func manifestDeleteTagNotificationWithAuth(t *testing.T, opts ...configOpt) {
 	defer env.Shutdown()
 
 	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
+	require.NoError(t, err, "building named object")
 
 	tag := "latest"
 	createRepository(t, env, imageName.Name(), tag)
 
 	ref, err := reference.WithTag(imageName, tag)
-	checkErr(t, err, "building tag reference")
+	require.NoError(t, err, "building tag reference")
 
 	tokenProvider := newAuthTokenProvider(t)
 	opts = append(opts, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
@@ -3240,7 +3256,7 @@ func manifestDeleteTagNotificationWithAuth(t *testing.T, opts ...configOpt) {
 	env = newTestEnv(t, opts...)
 
 	manifestURL, err := env.builder.BuildManifestURL(ref)
-	checkErr(t, err, "building tag URL")
+	require.NoError(t, err, "building tag URL")
 
 	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
 	require.NoError(t, err)
@@ -3281,7 +3297,7 @@ func manifestDeleteTagWithSameImageID(t *testing.T, opts ...configOpt) {
 	defer env.Shutdown()
 
 	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
+	require.NoError(t, err, "building named object")
 
 	// build two tags pointing to the same image
 	tag1 := "1.0.0"
@@ -3290,14 +3306,14 @@ func manifestDeleteTagWithSameImageID(t *testing.T, opts ...configOpt) {
 
 	// delete one of the tags
 	ref, err := reference.WithTag(imageName, tag1)
-	checkErr(t, err, "building tag reference")
+	require.NoError(t, err, "building tag reference")
 
 	manifestURL, err := env.builder.BuildManifestURL(ref)
-	checkErr(t, err, "building tag URL")
+	require.NoError(t, err, "building tag URL")
 
 	resp, err := httpDelete(manifestURL)
 	msg := "checking tag delete"
-	checkErr(t, err, msg)
+	require.NoError(t, err, msg)
 
 	defer resp.Body.Close()
 
@@ -3309,32 +3325,18 @@ func manifestDeleteTagWithSameImageID(t *testing.T, opts ...configOpt) {
 	}
 	// check the other tag is still there
 	tagsURL, err := env.builder.BuildTagsURL(imageName)
-	if err != nil {
-		t.Fatalf("unexpected error building tags url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error building tags url")
 	resp, err = http.Get(tagsURL)
-	if err != nil {
-		t.Fatalf("unexpected error getting tags: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting tags")
 	defer resp.Body.Close()
 
 	dec := json.NewDecoder(resp.Body)
 	var tagsResponse tagsAPIResponse
-	if err := dec.Decode(&tagsResponse); err != nil {
-		t.Fatalf("unexpected error decoding response: %v", err)
-	}
-
-	if tagsResponse.Name != imageName.Name() {
-		t.Fatalf("tags name should match image name: %v != %v", tagsResponse.Name, imageName)
-	}
-
-	if len(tagsResponse.Tags) != 1 {
-		t.Fatalf("expected 1 tag, got %d: %v", len(tagsResponse.Tags), tagsResponse.Tags)
-	}
-
-	if tagsResponse.Tags[0] != tag2 {
-		t.Fatalf("expected tag to be %q, got %q", tagsResponse.Tags[0], tag2)
-	}
+	err = dec.Decode(&tagsResponse)
+	require.NoError(t, err, "unexpected error decoding response")
+	require.Equal(t, tagsResponse.Name, imageName.Name(), "tags name should match image name")
+	require.Len(t, tagsResponse.Tags, 1)
+	require.Equal(t, tagsResponse.Tags[0], tag2)
 }
 
 type catalogAPIResponse struct {
