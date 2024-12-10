@@ -4,6 +4,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type regexpMatch struct {
@@ -16,21 +19,16 @@ func checkRegexp(t *testing.T, r *regexp.Regexp, m regexpMatch) {
 	matches := r.FindStringSubmatch(m.input)
 	switch {
 	case m.match && matches != nil:
-		if len(matches) != (r.NumSubexp()+1) || matches[0] != m.input {
-			t.Fatalf("Bad match result %#v for %q", matches, m.input)
-		}
-		if len(matches) < (len(m.subs) + 1) {
-			t.Errorf("Expected %d sub matches, only have %d for %q", len(m.subs), len(matches)-1, m.input)
-		}
+		require.Lenf(t, matches, r.NumSubexp()+1, "bad match result %#v for %q", matches, m.input)
+		assert.Equal(t, m.input, matches[0], "bad match result %#v for %q", matches, m.input)
+		assert.GreaterOrEqual(t, len(matches), len(m.subs)+1, "expected %d sub matches, only have %d for %q", len(m.subs), len(matches)-1, m.input)
 		for i := range m.subs {
-			if m.subs[i] != matches[i+1] {
-				t.Errorf("Unexpected submatch %d: %q, expected %q for %q", i+1, matches[i+1], m.subs[i], m.input)
-			}
+			assert.Equal(t, m.subs[i], matches[i+1], "unexpected submatch %d: %q, expected %q for %q", i+1, matches[i+1], m.subs[i], m.input)
 		}
 	case m.match:
-		t.Errorf("Expected match for %q", m.input)
+		assert.Fail(t, "expected match for %q", m.input)
 	case matches != nil:
-		t.Errorf("Unexpected match for %q", m.input)
+		assert.Fail(t, "unexpected match for %q", m.input)
 	}
 }
 
@@ -124,10 +122,8 @@ func TestDomainRegexp(t *testing.T) {
 }
 
 func TestFullNameRegexp(t *testing.T) {
-	if anchoredNameRegexp.NumSubexp() != 2 {
-		t.Fatalf("anchored name regexp should have two submatches: %v, %v != 2",
-			anchoredNameRegexp, anchoredNameRegexp.NumSubexp())
-	}
+	require.Equal(t, 2, anchoredNameRegexp.NumSubexp(), "anchored name regexp should have two submatches: %v, %v != 2",
+		anchoredNameRegexp, anchoredNameRegexp.NumSubexp())
 
 	testcases := []regexpMatch{
 		{
@@ -419,10 +415,8 @@ func TestFullNameRegexp(t *testing.T) {
 }
 
 func TestReferenceRegexp(t *testing.T) {
-	if ReferenceRegexp.NumSubexp() != 3 {
-		t.Fatalf("anchored name regexp should have three submatches: %v, %v != 3",
-			ReferenceRegexp, ReferenceRegexp.NumSubexp())
-	}
+	require.Equal(t, 3, ReferenceRegexp.NumSubexp(), "anchored name regexp should have three submatches: %v, %v != 3",
+		ReferenceRegexp, ReferenceRegexp.NumSubexp())
 
 	testcases := []regexpMatch{
 		{

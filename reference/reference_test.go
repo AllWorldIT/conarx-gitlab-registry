@@ -4,11 +4,12 @@ import (
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 	"encoding/json"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReferenceParse(t *testing.T) {
@@ -71,11 +72,6 @@ func TestReferenceParse(t *testing.T) {
 			repository: "test:5000/repo",
 			tag:        "tag",
 			digest:     "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-		},
-		{
-			input:      "test:5000/repo",
-			domain:     "test:5000",
-			repository: "test:5000/repo",
 		},
 		{
 			input: "",
@@ -173,64 +169,42 @@ func TestReferenceParse(t *testing.T) {
 		},
 	}
 	for _, testcase := range referenceTestcases {
-		failf := func(format string, v ...any) {
-			t.Logf(strconv.Quote(testcase.input)+": "+format, v...)
-			t.Fail()
-		}
-
-		repo, err := Parse(testcase.input)
-		if testcase.err != nil {
-			if err == nil {
-				failf("missing expected error: %v", testcase.err)
-			} else if testcase.err != err {
-				failf("mismatched error: got %v, expected %v", err, testcase.err)
+		t.Run(testcase.input, func(t *testing.T) {
+			repo, err := Parse(testcase.input)
+			if testcase.err != nil {
+				require.ErrorIs(t, err, testcase.err)
+				return
 			}
-			continue
-		} else if err != nil {
-			failf("unexpected parse error: %v", err)
-			continue
-		}
-		if repo.String() != testcase.input {
-			failf("mismatched repo: got %q, expected %q", repo.String(), testcase.input)
-		}
+			require.NoError(t, err)
+			require.Equal(t, testcase.input, repo.String())
 
-		if named, ok := repo.(Named); ok {
-			if named.Name() != testcase.repository {
-				failf("unexpected repository: got %q, expected %q", named.Name(), testcase.repository)
+			if named, ok := repo.(Named); ok {
+				require.Equal(t, testcase.repository, named.Name())
+				domain, _ := SplitHostname(named)
+				require.Equal(t, testcase.domain, domain)
+			} else {
+				require.Emptyf(t, testcase.repository, "expected named type, got %T", repo)
+				require.Emptyf(t, testcase.domain, "expected named type, got %T", repo)
 			}
-			domain, _ := SplitHostname(named)
-			if domain != testcase.domain {
-				failf("unexpected domain: got %q, expected %q", domain, testcase.domain)
-			}
-		} else if testcase.repository != "" || testcase.domain != "" {
-			failf("expected named type, got %T", repo)
-		}
 
-		tagged, ok := repo.(Tagged)
-		if testcase.tag != "" {
-			if ok {
-				if tagged.Tag() != testcase.tag {
-					failf("unexpected tag: got %q, expected %q", tagged.Tag(), testcase.tag)
+			tagged, ok := repo.(Tagged)
+			if testcase.tag != "" {
+				if assert.Truef(t, ok, "expected tagged type, got %T", repo) {
+					require.Equal(t, testcase.tag, tagged.Tag())
 				}
 			} else {
-				failf("expected tagged type, got %T", repo)
+				require.False(t, ok, "unexpected tagged type")
 			}
-		} else if ok {
-			failf("unexpected tagged type")
-		}
 
-		digested, ok := repo.(Digested)
-		if testcase.digest != "" {
-			if ok {
-				if digested.Digest().String() != testcase.digest {
-					failf("unexpected digest: got %q, expected %q", digested.Digest().String(), testcase.digest)
+			digested, ok := repo.(Digested)
+			if testcase.digest != "" {
+				if assert.Truef(t, ok, "expected digested type, got %T", repo) {
+					require.Equal(t, testcase.digest, digested.Digest().String())
 				}
 			} else {
-				failf("expected digested type, got %T", repo)
+				require.False(t, ok, "unexpected digested type")
 			}
-		} else if ok {
-			failf("unexpected digested type")
-		}
+		})
 	}
 }
 
@@ -239,43 +213,45 @@ func TestReferenceParse(t *testing.T) {
 func TestWithNameFailure(t *testing.T) {
 	testcases := []struct {
 		input string
+		name  string
 		err   error
 	}{
 		{
+			name:  "empty",
 			input: "",
-			err:   ErrNameEmpty,
+			err:   ErrReferenceInvalidFormat,
 		},
 		{
+			name:  "emptyJustTag",
 			input: ":justtag",
 			err:   ErrReferenceInvalidFormat,
 		},
 		{
+			name:  "refInvalidRefEmptyName",
 			input: "@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 			err:   ErrReferenceInvalidFormat,
 		},
 		{
+			name:  "refInvalidDigest",
 			input: "validname@invaliddigest:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 			err:   ErrReferenceInvalidFormat,
 		},
 		{
+			name:  "nameTooLong",
 			input: strings.Repeat("a/", 128) + "a:tag",
 			err:   ErrNameTooLong,
 		},
 		{
+			name:  "refInvalidFormat",
 			input: "aa/asdf$$^/aa",
 			err:   ErrReferenceInvalidFormat,
 		},
 	}
 	for _, testcase := range testcases {
-		failf := func(format string, v ...any) {
-			t.Logf(strconv.Quote(testcase.input)+": "+format, v...)
-			t.Fail()
-		}
-
-		_, err := WithName(testcase.input)
-		if err == nil {
-			failf("no error parsing name. expected: %s", testcase.err)
-		}
+		t.Run(testcase.name, func(t *testing.T) {
+			_, err := WithName(testcase.input)
+			require.ErrorIs(t, err, testcase.err)
+		})
 	}
 }
 
@@ -317,22 +293,13 @@ func TestSplitHostname(t *testing.T) {
 		},
 	}
 	for _, testcase := range testcases {
-		failf := func(format string, v ...any) {
-			t.Logf(strconv.Quote(testcase.input)+": "+format, v...)
-			t.Fail()
-		}
-
-		named, err := WithName(testcase.input)
-		if err != nil {
-			failf("error parsing name: %s", err)
-		}
-		domain, name := SplitHostname(named)
-		if domain != testcase.domain {
-			failf("unexpected domain: got %q, expected %q", domain, testcase.domain)
-		}
-		if name != testcase.name {
-			failf("unexpected name: got %q, expected %q", name, testcase.name)
-		}
+		t.Run(testcase.input, func(t *testing.T) {
+			named, err := WithName(testcase.input)
+			require.NoError(t, err, "error parsing name for input: %s", testcase.input)
+			domain, name := SplitHostname(named)
+			assert.Equal(t, testcase.domain, domain)
+			assert.Equal(t, testcase.name, name)
+		})
 	}
 }
 
@@ -373,94 +340,64 @@ func TestSerialization(t *testing.T) {
 		},
 	}
 	for _, testcase := range testcases {
-		failf := func(format string, v ...any) {
-			t.Logf(strconv.Quote(testcase.input)+": "+format, v...)
-			t.Fail()
-		}
-
-		m := map[string]string{
-			"Description": testcase.description,
-			"Field":       testcase.input,
-		}
-		b, err := json.Marshal(m)
-		if err != nil {
-			failf("error marshaling: %v", err)
-		}
-		t := serializationType{}
-
-		if err := json.Unmarshal(b, &t); err != nil {
-			if testcase.err == nil {
-				failf("error unmarshalling: %v", err)
+		t.Run(testcase.description, func(t *testing.T) {
+			m := map[string]string{
+				"Description": testcase.description,
+				"Field":       testcase.input,
 			}
-			if err != testcase.err {
-				failf("wrong error, expected %v, got %v", testcase.err, err)
+			b, err := json.Marshal(m)
+			require.NoError(t, err)
+			st := serializationType{}
+
+			err = json.Unmarshal(b, &st)
+			if testcase.err != nil {
+				require.ErrorIs(t, err, testcase.err)
+				return
+			}
+			require.NoError(t, err)
+
+			require.Equal(t, testcase.description, st.Description, "wrong description")
+
+			ref := st.Field.Reference()
+
+			if named, ok := ref.(Named); ok {
+				require.Equal(t, testcase.name, named.Name())
+			} else {
+				require.Emptyf(t, testcase.name, "expected named type, got %T", ref)
 			}
 
-			continue
-		} else if testcase.err != nil {
-			failf("expected error unmarshalling: %v", testcase.err)
-		}
-
-		if t.Description != testcase.description {
-			failf("wrong description, expected %q, got %q", testcase.description, t.Description)
-		}
-
-		ref := t.Field.Reference()
-
-		if named, ok := ref.(Named); ok {
-			if named.Name() != testcase.name {
-				failf("unexpected repository: got %q, expected %q", named.Name(), testcase.name)
-			}
-		} else if testcase.name != "" {
-			failf("expected named type, got %T", ref)
-		}
-
-		tagged, ok := ref.(Tagged)
-		if testcase.tag != "" {
-			if ok {
-				if tagged.Tag() != testcase.tag {
-					failf("unexpected tag: got %q, expected %q", tagged.Tag(), testcase.tag)
+			tagged, ok := ref.(Tagged)
+			if testcase.tag != "" {
+				if assert.Truef(t, ok, "expected tagged type, got %T", ref) {
+					require.Equal(t, testcase.tag, tagged.Tag())
 				}
 			} else {
-				failf("expected tagged type, got %T", ref)
+				require.False(t, ok, "unexpected tagged type")
 			}
-		} else if ok {
-			failf("unexpected tagged type")
-		}
 
-		digested, ok := ref.(Digested)
-		if testcase.digest != "" {
-			if ok {
-				if digested.Digest().String() != testcase.digest {
-					failf("unexpected digest: got %q, expected %q", digested.Digest().String(), testcase.digest)
+			digested, ok := ref.(Digested)
+			if testcase.digest != "" {
+				if assert.Truef(t, ok, "expected tagged type, got %T", ref) {
+					require.Equal(t, testcase.digest, digested.Digest().String())
 				}
 			} else {
-				failf("expected digested type, got %T", ref)
+				require.False(t, ok, "unexpected digested type")
 			}
-		} else if ok {
-			failf("unexpected digested type")
-		}
 
-		t = serializationType{
-			Description: testcase.description,
-			Field:       AsField(ref),
-		}
+			st = serializationType{
+				Description: testcase.description,
+				Field:       AsField(ref),
+			}
 
-		b2, err := json.Marshal(t)
-		if err != nil {
-			failf("error marshing serialization type: %v", err)
-		}
+			b2, err := json.Marshal(st)
+			require.NoError(t, err, "error marshing serialization type")
 
-		if string(b) != string(b2) {
-			failf("unexpected serialized value: expected %q, got %q", string(b), string(b2))
-		}
+			require.Equal(t, b, b2, "unexpected serialized value: expected %q, got %q", string(b), string(b2))
 
-		// Ensure t.Field is not implementing "Reference" directly, getting
-		// around the Reference type system
-		var fieldInterface any = t.Field
-		if _, ok := fieldInterface.(Reference); ok {
-			failf("field should not implement Reference interface")
-		}
+			// Ensure t.Field is not implementing "Reference" directly, getting
+			// around the Reference type system
+			require.NotImplements(t, (*Reference)(nil), st.Field, "field should not implement Reference interface")
+		})
 	}
 }
 
@@ -499,30 +436,19 @@ func TestWithTag(t *testing.T) {
 		},
 	}
 	for _, testcase := range testcases {
-		failf := func(format string, v ...any) {
-			t.Logf(strconv.Quote(testcase.name)+": "+format, v...)
-			t.Fail()
-		}
-
-		named, err := WithName(testcase.name)
-		if err != nil {
-			failf("error parsing name: %s", err)
-		}
-		if testcase.digest != "" {
-			canonical, err := WithDigest(named, testcase.digest)
-			if err != nil {
-				failf("error adding digest")
+		t.Run(testcase.name, func(t *testing.T) {
+			named, err := WithName(testcase.name)
+			require.NoError(t, err, "error parsing name")
+			if testcase.digest != "" {
+				canonical, err := WithDigest(named, testcase.digest)
+				require.NoError(t, err, "error adding digest")
+				named = canonical
 			}
-			named = canonical
-		}
 
-		tagged, err := WithTag(named, testcase.tag)
-		if err != nil {
-			failf("WithTag failed: %s", err)
-		}
-		if tagged.String() != testcase.combined {
-			failf("unexpected: got %q, expected %q", tagged.String(), testcase.combined)
-		}
+			tagged, err := WithTag(named, testcase.tag)
+			require.NoError(t, err, "WithTag failed")
+			assert.Equalf(t, tagged.String(), testcase.combined, "unexpected: got %q, expected %q", tagged.String(), testcase.combined)
+		})
 	}
 }
 
@@ -556,29 +482,18 @@ func TestWithDigest(t *testing.T) {
 		},
 	}
 	for _, testcase := range testcases {
-		failf := func(format string, v ...any) {
-			t.Logf(strconv.Quote(testcase.name)+": "+format, v...)
-			t.Fail()
-		}
-
-		named, err := WithName(testcase.name)
-		if err != nil {
-			failf("error parsing name: %s", err)
-		}
-		if testcase.tag != "" {
-			tagged, err := WithTag(named, testcase.tag)
-			if err != nil {
-				failf("error adding tag")
+		t.Run(testcase.name, func(t *testing.T) {
+			named, err := WithName(testcase.name)
+			require.NoError(t, err, "error parsing name")
+			if testcase.tag != "" {
+				tagged, err := WithTag(named, testcase.tag)
+				require.NoError(t, err, "error adding tag")
+				named = tagged
 			}
-			named = tagged
-		}
-		digested, err := WithDigest(named, testcase.digest)
-		if err != nil {
-			failf("WithDigest failed: %s", err)
-		}
-		if digested.String() != testcase.combined {
-			failf("unexpected: got %q, expected %q", digested.String(), testcase.combined)
-		}
+			digested, err := WithDigest(named, testcase.digest)
+			require.NoError(t, err, "WithDigest failed: %s", err)
+			require.Equalf(t, digested.String(), testcase.combined, "unexpected: got %q, expected %q", digested.String(), testcase.combined)
+		})
 	}
 }
 
@@ -627,32 +542,17 @@ func TestParseNamed(t *testing.T) {
 		},
 	}
 	for _, testcase := range testcases {
-		failf := func(format string, v ...any) {
-			t.Logf(strconv.Quote(testcase.input)+": "+format, v...)
-			t.Fail()
-		}
+		t.Run(testcase.input, func(t *testing.T) {
+			named, err := ParseNamed(testcase.input)
+			if testcase.err != nil {
+				require.ErrorIs(t, err, testcase.err)
+				return
+			}
+			require.NoError(t, err)
 
-		named, err := ParseNamed(testcase.input)
-		switch {
-		case err != nil && testcase.err == nil:
-			failf("error parsing name: %s", err)
-			continue
-		case err == nil && testcase.err != nil:
-			failf("parsing succeeded: expected error %v", testcase.err)
-			continue
-		case err != testcase.err:
-			failf("unexpected error %v, expected %v", err, testcase.err)
-			continue
-		case err != nil:
-			continue
-		}
-
-		domain, name := SplitHostname(named)
-		if domain != testcase.domain {
-			failf("unexpected domain: got %q, expected %q", domain, testcase.domain)
-		}
-		if name != testcase.name {
-			failf("unexpected name: got %q, expected %q", name, testcase.name)
-		}
+			domain, name := SplitHostname(named)
+			assert.Equal(t, domain, testcase.domain)
+			assert.Equal(t, name, testcase.name)
+		})
 	}
 }
