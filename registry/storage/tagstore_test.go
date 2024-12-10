@@ -8,6 +8,8 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/inmemory"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type tagsTestEnv struct {
@@ -20,15 +22,11 @@ func testTagStore(t *testing.T) *tagsTestEnv {
 	ctx := context.Background()
 	d := inmemory.New()
 	reg, err := NewRegistry(ctx, d)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	repoRef, _ := reference.WithName("a/b")
 	repo, err := reg.Repository(ctx, repoRef)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	return &tagsTestEnv{
 		d:   d,
@@ -44,40 +42,31 @@ func TestTagStoreTag(t *testing.T) {
 
 	d := distribution.Descriptor{}
 	err := tags.Tag(ctx, "latest", d)
-	if err == nil {
-		t.Errorf("unexpected error putting malformed descriptor : %s", err)
-	}
+	// nolint: testifylint // require-error
+	assert.Error(t, err, "unexpected error putting malformed descriptor")
 
 	d.Digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	err = tags.Tag(ctx, "latest", d)
-	if err != nil {
-		t.Error(err)
-	}
+	// nolint: testifylint // require-error
+	assert.NoError(t, err)
 
 	d1, err := tags.Get(ctx, "latest")
-	if err != nil {
-		t.Error(err)
-	}
+	// nolint: testifylint // require-error
+	assert.NoError(t, err)
 
-	if d1.Digest != d.Digest {
-		t.Error("put and get digest differ")
-	}
+	assert.Equal(t, d.Digest, d1.Digest, "put and get digest differ")
 
 	// Overwrite existing
 	d.Digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	err = tags.Tag(ctx, "latest", d)
-	if err != nil {
-		t.Error(err)
-	}
+	// nolint: testifylint // require-error
+	assert.NoError(t, err)
 
 	d1, err = tags.Get(ctx, "latest")
-	if err != nil {
-		t.Error(err)
-	}
+	// nolint: testifylint // require-error
+	assert.NoError(t, err)
 
-	if d1.Digest != d.Digest {
-		t.Error("put and get digest differ")
-	}
+	assert.Equal(t, d.Digest, d1.Digest, "put and get digest differ")
 }
 
 func TestTagStoreUnTag(t *testing.T) {
@@ -87,25 +76,21 @@ func TestTagStoreUnTag(t *testing.T) {
 	desc := distribution.Descriptor{Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
 
 	err := tags.Untag(ctx, "latest")
-	if err == nil {
-		t.Errorf("expected error untagging non-existing tag")
-	}
+	// nolint: testifylint // require-error
+	assert.Error(t, err, "expected error untagging non-existing tag")
 
 	err = tags.Tag(ctx, "latest", desc)
-	if err != nil {
-		t.Error(err)
-	}
+	// nolint: testifylint // require-error
+	assert.NoError(t, err)
 
 	err = tags.Untag(ctx, "latest")
-	if err != nil {
-		t.Error(err)
-	}
+	// nolint: testifylint // require-error
+	assert.NoError(t, err)
 
 	errExpect := distribution.ErrTagUnknown{Tag: "latest"}.Error()
 	_, err = tags.Get(ctx, "latest")
-	if err == nil || err.Error() != errExpect {
-		t.Error("Expected error getting untagged tag")
-	}
+	// nolint: testifylint // require-error
+	assert.EqualError(t, err, errExpect, "expected error getting untagged tag")
 }
 
 func TestTagStoreAll(t *testing.T) {
@@ -118,40 +103,24 @@ func TestTagStoreAll(t *testing.T) {
 		tag := alpha[i]
 		desc := distribution.Descriptor{Digest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}
 		err := tagStore.Tag(ctx, string(tag), desc)
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 	}
 
 	all, err := tagStore.All(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(all) != len(alpha) {
-		t.Errorf("Unexpected count returned from enumerate")
-	}
+	require.NoError(t, err)
+	require.Len(t, all, len(alpha), "unexpected count returned from enumerate")
 
 	for i, c := range all {
-		if c != string(alpha[i]) {
-			t.Errorf("unexpected tag in enumerate %s", c)
-		}
+		require.Equal(t, string(alpha[i]), c, "unexpected tag in enumerate")
 	}
 
 	removed := "a"
 	err = tagStore.Untag(ctx, removed)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	all, err = tagStore.All(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	for _, tag := range all {
-		if tag == removed {
-			t.Errorf("unexpected tag in enumerate %s", removed)
-		}
-	}
+	require.NoError(t, err)
+	assert.NotContains(t, all, removed, "unexpected tag in enumerate")
 }
 
 func TestTagLookup(t *testing.T) {
@@ -163,48 +132,28 @@ func TestTagLookup(t *testing.T) {
 	desc0 := distribution.Descriptor{Digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
 
 	tags, err := tagStore.Lookup(ctx, descA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tags) != 0 {
-		t.Fatalf("Lookup returned > 0 tags from empty store")
-	}
+	require.NoError(t, err)
+	require.Empty(t, tags, "lookup returned > 0 tags from empty store")
 
 	err = tagStore.Tag(ctx, "a", descA)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = tagStore.Tag(ctx, "b", descA)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = tagStore.Tag(ctx, "0", desc0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = tagStore.Tag(ctx, "1", desc0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tags, err = tagStore.Lookup(ctx, descA)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if len(tags) != 2 {
-		t.Errorf("Lookup of descA returned %d tags, expected 2", len(tags))
-	}
+	require.Len(t, tags, 2, "lookup of descA returned unexpected number of tags")
 
 	tags, err = tagStore.Lookup(ctx, desc0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if len(tags) != 2 {
-		t.Errorf("Lookup of descB returned %d tags, expected 2", len(tags))
-	}
+	require.Len(t, tags, 2, "lookup of descB returned unexpected number of tags")
 }

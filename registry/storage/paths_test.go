@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPathMapper(t *testing.T) {
@@ -98,13 +99,8 @@ func TestPathMapper(t *testing.T) {
 		},
 	} {
 		p, err := pathFor(testcase.spec)
-		if err != nil {
-			t.Fatalf("unexpected generating path (%T): %v", testcase.spec, err)
-		}
-
-		if p != testcase.expected {
-			t.Fatalf("unexpected path generated (%T): %q != %q", testcase.spec, p, testcase.expected)
-		}
+		require.NoError(t, err, "unexpected error generating path (%T)", testcase.spec)
+		require.Equal(t, testcase.expected, p, "unexpected path generated (%T)", testcase.spec)
 	}
 
 	// Add a few test cases to ensure we cover some errors
@@ -114,9 +110,7 @@ func TestPathMapper(t *testing.T) {
 		name: "foo/bar",
 	})
 
-	if err == nil {
-		t.Fatalf("expected an error when mapping an invalid revision: %s", badpath)
-	}
+	require.Error(t, err, "expected an error when mapping an invalid revision: %s", badpath)
 }
 
 func TestDigestFromPath(t *testing.T) {
@@ -134,12 +128,7 @@ func TestDigestFromPath(t *testing.T) {
 		},
 	} {
 		result, err := digestFromPath(testcase.path)
-		if err != testcase.err {
-			t.Fatalf("Unexpected error value %v when we wanted %v", err, testcase.err)
-		}
-
-		if result != testcase.expected {
-			t.Fatalf("Unexpected result value %v when we wanted %v", result, testcase.expected)
-		}
+		require.Equal(t, testcase.err, err, "unexpected error value")
+		require.Equal(t, testcase.expected, result, "unexpected result value")
 	}
 }
