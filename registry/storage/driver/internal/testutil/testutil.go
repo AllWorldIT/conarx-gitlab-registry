@@ -28,7 +28,7 @@ func AssertByDefaultType(t *testing.T, opts Opts) {
 	case string:
 		TestStringValue(t, opts)
 	default:
-		t.Fatalf("unknown type: %v", tt)
+		require.FailNowf(t, "unknown type", "%v", tt)
 	}
 }
 
@@ -135,7 +135,7 @@ func AssertParam(t *testing.T, params any, fieldName string, expected any, msgs 
 	case bool:
 		require.Equal(t, e, field.Bool(), msgs...)
 	default:
-		t.Fatalf("unhandled expected type: %T", e)
+		require.FailNowf(t, "unhandled expected type", "%T", e)
 	}
 }
 

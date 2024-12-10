@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRegulatorEnterExit(t *testing.T) {
@@ -57,14 +59,12 @@ func TestRegulatorEnterExit(t *testing.T) {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			t.Fatal("some r.enter() are still locked")
+			require.Fail(t, "some r.enter() are still locked")
 		}
 
 		firstGroupDone.Wait()
 
-		if r.available != limit {
-			t.Fatalf("r.available: got %d, want %d", r.available, limit)
-		}
+		require.Equal(t, limit, r.available, "r.available")
 	}
 }
 
@@ -87,13 +87,13 @@ func TestGetLimitFromParameter(t *testing.T) {
 		t.Run(fmt.Sprint(item.Input), func(t *testing.T) {
 			actual, err := GetLimitFromParameter(item.Input, item.Min, item.Default)
 
-			if err != nil && item.Err != nil && err.Error() != item.Err.Error() {
-				t.Fatalf("GetLimitFromParameter error, expected %#v got %#v", item.Err, err)
+			if item.Err != nil {
+				require.EqualError(t, err, item.Err.Error())
+			} else {
+				require.NoError(t, err)
 			}
 
-			if actual != item.Expected {
-				t.Fatalf("GetLimitFromParameter result error, expected %d got %d", item.Expected, actual)
-			}
+			require.Equal(t, item.Expected, actual)
 		})
 	}
 }

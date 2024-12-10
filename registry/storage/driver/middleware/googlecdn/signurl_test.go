@@ -15,7 +15,6 @@
 package googlecdn
 
 import (
-	"bytes"
 	"errors"
 	"os"
 	"testing"
@@ -26,9 +25,7 @@ import (
 
 func TestReadKeyFile(t *testing.T) {
 	f, err := os.CreateTemp("", "cdnkey")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(f.Name())
 	err = f.Close()
 	require.NoError(t, err)
@@ -38,16 +35,10 @@ func TestReadKeyFile(t *testing.T) {
 		0x9d, 0x9b, 0x51, 0xa2, 0x17, 0x4d, 0x17, 0xd9,
 		0xb7, 0x70, 0xa3, 0x36, 0xe0, 0x87, 0x0a, 0xe3,
 	}
-	if err := os.WriteFile(f.Name(), []byte(key), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(f.Name(), []byte(key), 0o600))
 	b, err := readKeyFile(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(b, expected) {
-		t.Fatalf("the signed cookie value did not match: got=%v; expected=%v", b, expected)
-	}
+	require.NoError(t, err)
+	require.Equal(t, expected, b, "the signed cookie value did not match")
 }
 
 func TestSignURLWithPrefix(t *testing.T) {
