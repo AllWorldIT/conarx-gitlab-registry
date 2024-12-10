@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/docker/distribution/health"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestGETDownHandlerDoesNotChangeStatus ensures that calling the endpoint
@@ -14,15 +16,11 @@ func TestGETDownHandlerDoesNotChangeStatus(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	req, err := http.NewRequest(http.MethodGet, "https://fakeurl.com/debug/health/down", nil)
-	if err != nil {
-		t.Errorf("Failed to create request.")
-	}
+	require.NoError(t, err, "failed to create request")
 
 	DownHandler(recorder, req)
 
-	if recorder.Code != 404 {
-		t.Errorf("Did not get a 404.")
-	}
+	assert.Equal(t, 404, recorder.Code, "did not get a 404")
 }
 
 // TestGETUpHandlerDoesNotChangeStatus ensures that calling the endpoint
@@ -31,15 +29,11 @@ func TestGETUpHandlerDoesNotChangeStatus(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	req, err := http.NewRequest(http.MethodGet, "https://fakeurl.com/debug/health/up", nil)
-	if err != nil {
-		t.Errorf("Failed to create request.")
-	}
+	require.NoError(t, err, "failed to create request")
 
 	DownHandler(recorder, req)
 
-	if recorder.Code != 404 {
-		t.Errorf("Did not get a 404.")
-	}
+	assert.Equal(t, 404, recorder.Code, "did not get a 404")
 }
 
 // TestPOSTDownHandlerChangeStatus ensures the endpoint /debug/health/down changes
@@ -49,19 +43,12 @@ func TestPOSTDownHandlerChangeStatus(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	req, err := http.NewRequest(http.MethodPost, "https://fakeurl.com/debug/health/down", nil)
-	if err != nil {
-		t.Errorf("Failed to create request.")
-	}
+	require.NoError(t, err, "failed to create request")
 
 	DownHandler(recorder, req)
 
-	if recorder.Code != 200 {
-		t.Errorf("Did not get a 200.")
-	}
-
-	if len(health.CheckStatus()) != 1 {
-		t.Errorf("DownHandler didn't add an error check.")
-	}
+	assert.Equal(t, 200, recorder.Code, "did not get a 200")
+	assert.Len(t, health.CheckStatus(), 1, "DownHandler didn't add an error check")
 }
 
 // TestPOSTUpHandlerChangeStatus ensures the endpoint /debug/health/up changes
@@ -70,17 +57,10 @@ func TestPOSTUpHandlerChangeStatus(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	req, err := http.NewRequest(http.MethodPost, "https://fakeurl.com/debug/health/up", nil)
-	if err != nil {
-		t.Errorf("Failed to create request.")
-	}
+	require.NoError(t, err, "failed to create request")
 
 	UpHandler(recorder, req)
 
-	if recorder.Code != 200 {
-		t.Errorf("Did not get a 200.")
-	}
-
-	if len(health.CheckStatus()) != 0 {
-		t.Errorf("UpHandler didn't remove the error check.")
-	}
+	assert.Equal(t, 200, recorder.Code, "did not get a 200")
+	assert.Empty(t, health.CheckStatus(), "UpHandler didn't remove the error check")
 }

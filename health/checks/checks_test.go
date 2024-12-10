@@ -9,28 +9,21 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/mocks"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
 func TestFileChecker(t *testing.T) {
-	if err := FileChecker("/tmp").Check(); err == nil {
-		t.Errorf("/tmp was expected as exists")
-	}
-
-	if err := FileChecker("NoSuchFileFromMoon").Check(); err != nil {
-		t.Errorf("NoSuchFileFromMoon was expected as not exists, error:%v", err)
-	}
+	// nolint: testifylint // require-error
+	assert.Error(t, FileChecker("/tmp").Check(), "/tmp was expected as exists")
+	assert.NoError(t, FileChecker("NoSuchFileFromMoon").Check(), "NoSuchFileFromMoon was expected as not exists")
 }
 
 func TestHTTPChecker(t *testing.T) {
-	if err := HTTPChecker("https://www.google.cybertron", 200, 0, nil).Check(); err == nil {
-		t.Errorf("Google on Cybertron was expected as not exists")
-	}
-
-	if err := HTTPChecker("https://www.google.pt", 200, 0, nil).Check(); err != nil {
-		t.Errorf("Google at Portugal was expected as exists, error:%v", err)
-	}
+	// nolint: testifylint // require-error
+	assert.Error(t, HTTPChecker("https://www.google.cybertron", 200, 0, nil).Check(), "Google on Cybertron was expected as not exists")
+	assert.NoError(t, HTTPChecker("https://www.google.pt", 200, 0, nil).Check(), "Google at Portugal was expected as exists")
 }
 
 func TestDBChecker(t *testing.T) {
