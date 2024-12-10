@@ -13,6 +13,7 @@ import (
 	"github.com/docker/distribution/registry/storage/validation"
 	"github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -112,8 +113,8 @@ func TestVerifyManifest_Schema2_ForeignLayer(t *testing.T) {
 		l.URLs = c.URLs
 		m.Layers = []distribution.Descriptor{l}
 		dm, err := schema2.FromStruct(m)
-		if err != nil {
-			t.Error(err)
+		// nolint: testifylint // require-error
+		if !assert.NoError(t, err, "error creating manifest from struct") {
 			continue
 		}
 
@@ -214,9 +215,7 @@ func TestVerifyManifest_Schema2_MultipleErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	layer, err := repo.Blobs(ctx).Put(ctx, schema2.MediaTypeLayer, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Create a manifest with three layers, two of which are missing. We should
 	// see the digest of each missing layer in the error message.
