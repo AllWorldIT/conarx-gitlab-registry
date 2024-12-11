@@ -41,7 +41,7 @@ require (
 	gitlab.com/gitlab-org/labkit v1.21.2
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/mock v0.5.0
-	golang.org/x/crypto v0.30.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/oauth2 v0.24.0
 	golang.org/x/sync v0.10.0
 	golang.org/x/time v0.8.0
