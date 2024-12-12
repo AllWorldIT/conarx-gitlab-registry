@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -47,9 +46,7 @@ func TestAppDistribtionDispatcher(t *testing.T) {
 	driver := testdriver.New()
 	ctx := dtestutil.NewContextWithLogger(t)
 	registry, err := storage.NewRegistry(ctx, driver, storage.BlobDescriptorCacheProvider(memorycache.NewInMemoryBlobDescriptorCacheProvider()), storage.EnableDelete, storage.EnableRedirect)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 	app := &App{
 		Config:   &configuration.Configuration{},
 		Context:  ctx,
@@ -65,32 +62,23 @@ func TestAppDistribtionDispatcher(t *testing.T) {
 	distributionRouter := v2.Router()
 
 	serverURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("error parsing server url: %v", err)
-	}
+	require.NoError(t, err, "error parsing server url")
 
 	varCheckingDispatcher := func(expectedVars map[string]string) dispatchFunc {
 		return func(ctx *Context, _ *http.Request) http.Handler {
 			// Always checks the same name context
-			if ctx.Repository.Named().Name() != getName(ctx) {
-				t.Fatalf("unexpected name: %q != %q", ctx.Repository.Named().Name(), "foo/bar")
-			}
+			assert.Equal(t, ctx.Repository.Named().Name(), getName(ctx), "unexpected name")
 
 			// Check that we have all that is expected
 			for expectedK, expectedV := range expectedVars {
-				if ctx.Value(expectedK) != expectedV {
-					t.Fatalf("unexpected %s in context vars: %q != %q", expectedK, ctx.Value(expectedK), expectedV)
-				}
+				assert.Equalf(t, expectedV, ctx.Value(expectedK), "unexpected %s in context vars", expectedK)
 			}
 
 			// Check that we only have variables that are expected
 			for k, v := range ctx.Value("vars").(map[string]string) {
 				_, ok := expectedVars[k]
 
-				if !ok { // name is checked on context
-					// We have an unexpected key, fail
-					t.Fatalf("unexpected key %q in vars with value %q", k, v)
-				}
+				assert.True(t, ok, "unexpected key %q in vars with value %q", k, v)
 			}
 
 			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -187,48 +175,30 @@ func TestNewApp(t *testing.T) {
 	server := httptest.NewServer(app)
 	defer server.Close()
 	builder, err := urls.NewBuilderFromString(server.URL, false)
-	if err != nil {
-		t.Fatalf("error creating urlbuilder: %v", err)
-	}
+	require.NoError(t, err, "error creating urlbuilder")
 
 	baseURL, err := builder.BuildBaseURL()
-	if err != nil {
-		t.Fatalf("error creating baseURL: %v", err)
-	}
+	require.NoError(t, err, "error creating baseURL")
 
 	// Just hit the app and make sure we get a 401 Unauthorized error.
 	req, err := http.Get(baseURL)
-	if err != nil {
-		t.Fatalf("unexpected error during GET: %v", err)
-	}
+	require.NoError(t, err, "unexpected error during GET")
 	defer req.Body.Close()
 
-	if req.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("unexpected status code during request: %v", err)
-	}
+	assert.Equal(t, http.StatusUnauthorized, req.StatusCode, "unexpected status code during request")
 
-	if req.Header.Get("Content-Type") != "application/json" {
-		t.Fatalf("unexpected content-type: %v != %v", req.Header.Get("Content-Type"), "application/json")
-	}
+	assert.Equal(t, "application/json", req.Header.Get("Content-Type"), "unexpected content-type")
 
 	expectedAuthHeader := "Bearer realm=\"realm-test\",service=\"service-test\""
-	if e, a := expectedAuthHeader, req.Header.Get("WWW-Authenticate"); e != a {
-		t.Fatalf("unexpected WWW-Authenticate header: %q != %q", e, a)
-	}
+	assert.Equal(t, expectedAuthHeader, req.Header.Get("WWW-Authenticate"), "unexpected WWW-Authenticate header")
 
 	var errs errcode.Errors
 	dec := json.NewDecoder(req.Body)
-	if err := dec.Decode(&errs); err != nil {
-		t.Fatalf("error decoding error response: %v", err)
-	}
+	require.NoError(t, dec.Decode(&errs), "error decoding error response")
 
 	err2, ok := errs[0].(errcode.ErrorCoder)
-	if !ok {
-		t.Fatalf("not an ErrorCoder: %#v", errs[0])
-	}
-	if err2.ErrorCode() != errcode.ErrorCodeUnauthorized {
-		t.Fatalf("unexpected error code: %v != %v", err2.ErrorCode(), errcode.ErrorCodeUnauthorized)
-	}
+	require.True(t, ok, "not an ErrorCoder")
+	assert.Equal(t, errcode.ErrorCodeUnauthorized, err2.ErrorCode(), "unexpected error code")
 }
 
 // Test the access record accumulator
@@ -256,44 +226,32 @@ func TestAppendAccessRecords(t *testing.T) {
 	records := make([]auth.Access, 0)
 	result := appendAccessRecords(records, http.MethodGet, repo)
 	expectedResult := []auth.Access{expectedPullRecord}
-	if ok := reflect.DeepEqual(result, expectedResult); !ok {
-		t.Fatalf("Actual access record differs from expected")
-	}
+	assert.Equal(t, expectedResult, result, "actual access record differs from expected")
 
 	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodHead, repo)
 	expectedResult = []auth.Access{expectedPullRecord}
-	if ok := reflect.DeepEqual(result, expectedResult); !ok {
-		t.Fatalf("Actual access record differs from expected")
-	}
+	assert.Equal(t, expectedResult, result, "actual access record differs from expected")
 
 	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodPost, repo)
 	expectedResult = []auth.Access{expectedPullRecord, expectedPushRecord}
-	if ok := reflect.DeepEqual(result, expectedResult); !ok {
-		t.Fatalf("Actual access record differs from expected")
-	}
+	assert.Equal(t, expectedResult, result, "actual access record differs from expected")
 
 	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodPut, repo)
 	expectedResult = []auth.Access{expectedPullRecord, expectedPushRecord}
-	if ok := reflect.DeepEqual(result, expectedResult); !ok {
-		t.Fatalf("Actual access record differs from expected")
-	}
+	assert.Equal(t, expectedResult, result, "actual access record differs from expected")
 
 	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodPatch, repo)
 	expectedResult = []auth.Access{expectedPullRecord, expectedPushRecord}
-	if ok := reflect.DeepEqual(result, expectedResult); !ok {
-		t.Fatalf("Actual access record differs from expected")
-	}
+	assert.Equal(t, expectedResult, result, "actual access record differs from expected")
 
 	records = make([]auth.Access, 0)
 	result = appendAccessRecords(records, http.MethodDelete, repo)
 	expectedResult = []auth.Access{expectedDeleteRecord}
-	if ok := reflect.DeepEqual(result, expectedResult); !ok {
-		t.Fatalf("Actual access record differs from expected")
-	}
+	assert.Equal(t, expectedResult, result, "actual access record differs from expected")
 }
 
 // TestGitlabAPI_GetRepositoryDetailsAccessRecords ensures that only users will pull permissions for repository x can invoke the

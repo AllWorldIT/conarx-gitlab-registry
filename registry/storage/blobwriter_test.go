@@ -113,7 +113,7 @@ func testIdempotentUpload(t *testing.T, env *env) {
 		// NOTE(prozlach): Pararelizing this requires rewriting both functions
 		// to return an error and doing the assertion in the main goroutine.
 		// Otherwise we may get an undefined behavior from require calling
-		// t.FailNow in a goroutine.
+		// FailNow() from the testing package in a goroutine.
 		testLayerUploadImpl(t, env, bytes.NewReader(dockerPayload), dgst)
 		testLayerLinked(t, env, dgst)
 	}

@@ -18,7 +18,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"reflect"
 	"syscall"
 	"testing"
 	"time"
@@ -27,6 +26,7 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	_ "github.com/docker/distribution/registry/storage/driver/inmemory"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/gitlab-org/labkit/monitoring"
 )
@@ -39,14 +39,10 @@ func TestNextProtos(t *testing.T) {
 	config := &configuration.Configuration{}
 	config.HTTP.HTTP2.Disabled = false
 	protos := nextProtos(config.HTTP.HTTP2.Disabled)
-	if !reflect.DeepEqual(protos, []string{"h2", "http/1.1"}) {
-		t.Fatalf("expected protos to equal [h2 http/1.1], got %s", protos)
-	}
+	assert.ElementsMatch(t, []string{"h2", "http/1.1"}, protos)
 	config.HTTP.HTTP2.Disabled = true
 	protos = nextProtos(config.HTTP.HTTP2.Disabled)
-	if !reflect.DeepEqual(protos, []string{"http/1.1"}) {
-		t.Fatalf("expected protos to equal [http/1.1], got %s", protos)
-	}
+	assert.ElementsMatch(t, []string{"http/1.1"}, protos)
 }
 
 func setupRegistry() (*Registry, error) {
@@ -91,9 +87,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 	for _, tt := range tests {
 		registry, err := setupRegistry()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		registry.config.HTTP.DrainTimeout = tt.httpDrainTimeout
 
@@ -114,7 +108,7 @@ func TestGracefulShutdown(t *testing.T) {
 		defer timer.Stop()
 		select {
 		case err = <-errChan:
-			t.Fatalf("Error listening: %v", err)
+			require.NoError(t, err, "error listening")
 		case <-timer.C:
 			// Wait for some unknown random time for server to start listening
 		}
@@ -125,17 +119,13 @@ func TestGracefulShutdown(t *testing.T) {
 		quit <- syscall.SIGTERM
 		time.Sleep(100 * time.Millisecond)
 
-		if cleanServerShutdown != tt.cleanServerShutdown {
-			t.Fatalf("expected clean shutdown to be %v, got %v", tt.cleanServerShutdown, cleanServerShutdown)
-		}
+		assert.Equal(t, tt.cleanServerShutdown, cleanServerShutdown)
 	}
 }
 
 func TestGracefulShutdown_HTTPDrainTimeout(t *testing.T) {
 	registry, err := setupRegistry()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// run registry server
 	var errChan chan error
@@ -144,7 +134,7 @@ func TestGracefulShutdown_HTTPDrainTimeout(t *testing.T) {
 	}()
 	select {
 	case err = <-errChan:
-		t.Fatalf("Error listening: %v", err)
+		require.NoError(t, err, "error listening")
 	default:
 	}
 
@@ -153,9 +143,7 @@ func TestGracefulShutdown_HTTPDrainTimeout(t *testing.T) {
 
 	// send incomplete request
 	conn, err := net.Dial("tcp", registry.config.HTTP.Addr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, err = fmt.Fprintf(conn, "GET /v2/ ")
 	require.NoError(t, err)
 
@@ -165,24 +153,18 @@ func TestGracefulShutdown_HTTPDrainTimeout(t *testing.T) {
 
 	// try connecting again. it shouldn't
 	_, err = net.Dial("tcp", registry.config.HTTP.Addr)
-	if err == nil {
-		t.Fatal("Managed to connect after stopping.")
-	}
+	require.Error(t, err)
 
 	// make sure earlier request is not disconnected and response can be received
 	_, err = fmt.Fprintf(conn, "HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
 	require.NoError(t, err)
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
-	if resp.Status != "200 OK" {
-		t.Error("response status is not 200 OK: ", resp.Status)
-	}
-	if body, err := io.ReadAll(resp.Body); err != nil || string(body) != "{}" {
-		t.Error("Body is not {}; ", string(body))
-	}
+	assert.Equal(t, "200 OK", resp.Status)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "{}", string(body))
 }
 
 func requireEnvNotSet(t *testing.T, names ...string) {
@@ -629,7 +611,7 @@ func TestRegistrySupportedCipherSuite(t *testing.T) {
 	defer timer.Stop()
 	select {
 	case err = <-errChan:
-		t.Fatalf("error listening: %v", err)
+		require.FailNow(t, fmt.Sprintf("error listening: %v", err))
 	case <-timer.C:
 		// Wait for some unknown random time for server to start listening
 	}
@@ -681,7 +663,7 @@ func TestRegistryUnsupportedCipherSuite(t *testing.T) {
 	defer timer.Stop()
 	select {
 	case err = <-errChan:
-		t.Fatalf("error listening: %v", err)
+		require.FailNow(t, fmt.Sprintf("error listening: %v", err))
 	case <-timer.C:
 		// Wait for some unknown random time for server to start listening
 	}
@@ -733,7 +715,7 @@ func TestRegistryTLS13(t *testing.T) {
 	defer timer.Stop()
 	select {
 	case err = <-errChan:
-		t.Fatalf("Error listening: %v", err)
+		require.FailNow(t, fmt.Sprintf("error listening: %v", err))
 	case <-timer.C:
 		// Wait for some unknown random time for server to start listening
 	}
