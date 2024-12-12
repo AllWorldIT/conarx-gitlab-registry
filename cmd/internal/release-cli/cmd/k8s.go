@@ -10,7 +10,7 @@ import (
 	"github.com/docker/distribution/cmd/internal/release-cli/slack"
 	"github.com/docker/distribution/cmd/internal/release-cli/utils"
 	"github.com/spf13/cobra"
-	"github.com/xanzy/go-gitlab"
+	gitlab "gitlab.com/gitlab-org/api/client-go"
 )
 
 var stage string
