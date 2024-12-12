@@ -40,7 +40,8 @@ func NewNotificationServer(t *testing.T, databaseEnabled bool) *NotificationServ
 	s := httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			// NOTE(prozlach): we can't use require (which internally uses
-			// t.FailNow()) in a goroutine as we may get an undefined behavior
+			// FailNow from testing package) in a goroutine as we may get an
+			// undefined behavior
 			dreq, err := httputil.DumpRequest(r, true)
 			assert.NoError(t, err)
 			fmt.Printf("Handler got event: \n\n%s\n\n", dreq)

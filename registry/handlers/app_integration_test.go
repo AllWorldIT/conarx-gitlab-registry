@@ -79,7 +79,7 @@ func TestNewApp_Lockfiles(t *testing.T) {
 			config := newConfig(opts...)
 			app, err := handlers.NewApp(context.Background(), &config)
 			if tc.expectedErr != nil {
-				require.Equal(t, tc.expectedErr, err)
+				require.ErrorIs(t, err, tc.expectedErr)
 				return
 			}
 
