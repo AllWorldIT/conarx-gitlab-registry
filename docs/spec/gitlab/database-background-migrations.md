@@ -481,16 +481,99 @@ Before running a background migration on a live production/staging database, itâ
  - etc..
 ```
 
-## Out of scope of first iteration
+## Release Plan (Phases)
+
+The release of the first iteration of background migrations is structured into three distinct phases:
+
+### Phase 1 (Beta) - Release MVC to GitLab.com
+
+Phase 1 focuses on introducing the minimum viable change (MVC) of the background migration system to GitLab.com. This phase will enable the ability to manage and run background migrations while the registry is actively serving traffic, as well as through the Registry CLI.
+
+For this phase, we have selected a background migration targeting the smallest table in [this migration plan](https://gitlab.com/groups/gitlab-org/-/epics/13805#note_1899438887). Specifically, we will migrate the `manifests` table to populate a new `media_type_id_convert_to_bigint` column. More details on the migration plan can be found [here](https://gitlab.com/groups/gitlab-org/-/epics/13805#note_1899438887)
+
+#### Rollout Plan
+
+The rollout of Phase 1 will proceed as follows:
+
+1. **Enable Background Migration Process (Staging and Production)**:
+   
+   - **Staging**: First, we will enable the background migration system on the staging environment without activating any actual background migrations. This allows us to test the system when no migrations are present.
+   - **Production**: Once the staging environment is verified and no issues are encountered, we will enable the background migration process (without activating any actual background migrations) on GitLab.com (production).
+
+1. **Add Required Schema Migrations to Staging and Production**: We will deploy the necessary schema changes to support the background migration, specifically adding the `media_type_id_convert_to_bigint` column to the `manifests` table.
+
+1. **Deploy the Background Migration to Staging**:
+   
+   - The background migration targeting the `manifests` table will be deployed to the staging environment. The deployment will be closely monitored to ensure it runs smoothly and without issues.
+
+1. **Deploy the Background Migration to Production**:
+   
+   - After successful monitoring in staging, the background migration will be deployed to GitLab.com (production). We will continue to monitor its progress and ensure the migration completes successfully.
+
+### Phase 2 (Beta) - Supporting Background Migrations on non-ID Columns
+
+In Phase 2, the release will continue to target GitLab.com and will build on the existing functionality by adding support for [ID-less column migrations](https://gitlab.com/gitlab-org/container-registry/-/issues/1248).
+
+The primary goal for this phase is to enable background migrations on the `blobs` table, which does not have a dedicated integer `id` column for keyset pagination. To make the blobs table compatible with the current background migration's strategy of using keyset pagination, we first need to add and backfill the `blobs` table's `id` column. This will allow us to paginate over the rows effectively in future background migrations.
+
+This phase will introduce a new strategy to handle migrations for non-ID tables.
+
+#### Rollout Plan
+
+1. **Implement Background Migration Strategy**:
+   
+   - Develop and implement the new migration strategy for non-ID tables.
+
+1. **Add Required Schema Migrations** :
+   
+   - We will deploy the necessary schema changes to support the background migration, specifically adding the `id` column to the `blobs` table.
+
+1. **Implement Background Migration on `blobs` table** :
+   
+   - We will add a background migration on the `blobs` table (using the new strategy) to backfill the table's `id` column.
+
+1. **Deploy Background Migration to Staging**:
+   
+   - Deploy the background migration to the staging environment and monitor its progress until it completes successfully.
+
+1. **Deploy Background Migration to Production**:
+   
+   - Once the background migration has completed successfully in staging, deploy it to GitLab.com (production) and monitor its progress until it finishes.
+
+### Phase 3 - General Availability (GA) & Self-Managed Release (TBD)
+
+Phase 3 will mark the transition to **General Availability (GA)** and will include the release for **self-managed instances**. The key focus for this phase is to enable background migrations in self-managed installs, expand the capabilities of background migrations, improve visibility, and provide additional management tools.
+
+#### Current requirements for GA
+
+1. **Support for Background Migrations in Required Stop Processes**:
+   
+   - Ensure that the background migration process is integrated with necessary required stop processes, allowing proper handling during upgrades.
+
+1. **Admin Area View**:
+   
+   - Add an interface in the **Admin Area** to provide administrators with visibility into the status and progress of background migrations.
+
+1. **API for Background Migration Management**:
+   
+   - Expose a set of API endpoints to allow users to **start**, **stop**, **pause**, and **view the status** of background migrations programmatically.
+
+1. **Migration Estimates**:
+   
+   - Provide estimation data for each background migration, such as expected duration or completion percentage, to help administrators track progress and make informed decisions.
+
+1. **ChatOps Integration**:
+   
+   - Integrate ChatOps to allow GitLab developers to manage background migrations directly from Slack. This will provide an easy way for teams to control and gain visibility on background migrations.
+
+## Out of scope
+
+These following optimizations are out of scope for the initial release:
 
 - Concurrent migration processing: To reduce complexity, for the first iteration only one migration and one job can be run at a time.
-
-- Batching strategy: To reduce complexity the first iteration will only support primary key batching (i.e. creating job batches based on a primary key). This is the default in rails.
 
 - Sub batching: It is often beneficial to run a dedicated migration query in a job batch on one "sub" batch (a smaller division of your batch) at a time. Although this is very useful I think we can consider introducing this when the need arises, for the time being we can make our batch small enough to satisfy our own constraints.
 
 - Dynamic optimization of batch sizes: Rails can optimize the batch size per job based on how long a prior job took.
 
-- API for status: While having an API to gauge the migration status would be nice, it wouldn't add a huge benefit than having the CLI command for checking the status, especially given as only admins will be able to access the APIs anyway.
-
-- Down migrating BBM.
+- Down migrating background migrations.
