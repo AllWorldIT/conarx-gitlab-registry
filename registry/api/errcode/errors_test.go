@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -40,57 +39,30 @@ var ErrorCodeTest3 = Register("test.errors", ErrorDescriptor{
 // TestErrorCodes ensures that error code format, mappings and
 // marshaling/unmarshaling. round trips are stable.
 func TestErrorCodes(t *testing.T) {
-	if len(errorCodeToDescriptors) == 0 {
-		t.Fatal("errors aren't loaded!")
-	}
+	require.NotEmpty(t, errorCodeToDescriptors, "errors aren't loaded")
 
 	for ec, desc := range errorCodeToDescriptors {
-		if ec != desc.Code {
-			t.Fatalf("error code in descriptor isn't correct, %q != %q", ec, desc.Code)
-		}
-
-		if idToDescriptors[desc.Value].Code != ec {
-			t.Fatalf("error code in idToDesc isn't correct, %q != %q", idToDescriptors[desc.Value].Code, ec)
-		}
-
-		if ec.Message() != desc.Message {
-			t.Fatalf("ec.Message doesn't mtach desc.Message: %q != %q", ec.Message(), desc.Message)
-		}
+		require.Equal(t, ec, desc.Code, "error code in descriptor isn't correct")
+		require.Equal(t, ec, idToDescriptors[desc.Value].Code, "error code in idToDesc isn't correct")
+		require.Equal(t, ec.Message(), desc.Message, "ec.Message doesn't match desc.Message")
 
 		// Test (de)serializing the ErrorCode
 		p, err := json.Marshal(ec)
-		if err != nil {
-			t.Fatalf("couldn't marshal ec %v: %v", ec, err)
-		}
-
-		if len(p) == 0 {
-			t.Fatalf("expected content in marshaled before for error code %v", ec)
-		}
+		require.NoErrorf(t, err, "couldn't marshal ec %v", ec)
+		require.NotEmptyf(t, p, "expected content in marshaled before for error code %v", ec)
 
 		// First, unmarshal to interface and ensure we have a string.
 		var ecUnspecified any
-		if err := json.Unmarshal(p, &ecUnspecified); err != nil {
-			t.Fatalf("error unmarshaling error code %v: %v", ec, err)
-		}
-
-		if _, ok := ecUnspecified.(string); !ok {
-			t.Fatalf("expected a string for error code %v on unmarshal got a %T", ec, ecUnspecified)
-		}
+		require.NoErrorf(t, json.Unmarshal(p, &ecUnspecified), "error unmarshaling error code %v", ec)
+		require.IsType(t, "", ecUnspecified, "expected a string for error code %v on unmarshal", ec)
 
 		// Now, unmarshal with the error code type and ensure they are equal
 		var ecUnmarshaled ErrorCode
-		if err := json.Unmarshal(p, &ecUnmarshaled); err != nil {
-			t.Fatalf("error unmarshaling error code %v: %v", ec, err)
-		}
-
-		if ecUnmarshaled != ec {
-			t.Fatalf("unexpected error code during error code marshal/unmarshal: %v != %v", ecUnmarshaled, ec)
-		}
+		require.NoErrorf(t, json.Unmarshal(p, &ecUnmarshaled), "error unmarshaling error code %v", ec)
+		require.Equal(t, ec, ecUnmarshaled, "unexpected error code during error code marshal/unmarshal")
 
 		expectedErrorString := strings.ToLower(strings.ReplaceAll(ec.Descriptor().Value, "_", " "))
-		if ec.Error() != expectedErrorString {
-			t.Fatalf("unexpected return from %v.Error(): %q != %q", ec, ec.Error(), expectedErrorString)
-		}
+		require.Equalf(t, expectedErrorString, ec.Error(), "unexpected return from %v.Error()", ec)
 	}
 }
 
@@ -104,9 +76,7 @@ func TestErrorsManagement(t *testing.T) {
 	errs = append(errs, ErrorCodeTest3.WithArgs("BOOGIE").WithDetail("data"))
 
 	p, err := json.Marshal(errs)
-	if err != nil {
-		t.Fatalf("error marashaling errors: %v", err)
-	}
+	require.NoError(t, err, "error marshaling errors")
 
 	expectedJSON := `{"errors":[` +
 		`{"code":"TEST1","message":"test error 1"},` +
@@ -115,75 +85,44 @@ func TestErrorsManagement(t *testing.T) {
 		`{"code":"TEST3","message":"Sorry \"BOOGIE\" isn't valid","detail":"data"}` +
 		`]}`
 
-	if string(p) != expectedJSON {
-		t.Fatalf("unexpected json:\ngot:\n%q\n\nexpected:\n%q", string(p), expectedJSON)
-	}
+	require.JSONEq(t, expectedJSON, string(p), "unexpected json")
 
 	// Now test the reverse
 	var unmarshaled Errors
-	if err := json.Unmarshal(p, &unmarshaled); err != nil {
-		t.Fatalf("unexpected error unmarshaling error envelope: %v", err)
-	}
-
-	if !reflect.DeepEqual(unmarshaled, errs) {
-		t.Fatalf("errors not equal after round trip:\nunmarshaled:\n%#v\n\nerrs:\n%#v", unmarshaled, errs)
-	}
+	require.NoError(t, json.Unmarshal(p, &unmarshaled), "unexpected error unmarshaling error envelope")
+	require.Equal(t, unmarshaled, errs, "errors not equal after round trip")
 
 	// Test the arg substitution stuff
 	e1 := unmarshaled[3].(Error)
 	exp1 := `Sorry "BOOGIE" isn't valid`
-	if e1.Message != exp1 {
-		t.Fatalf("Wrong msg, got:\n%q\n\nexpected:\n%q", e1.Message, exp1)
-	}
-
-	exp1 = "test3: " + exp1
-	if e1.Error() != exp1 {
-		t.Fatalf("Error() didn't return the right string, got:%s\nexpected:%s", e1.Error(), exp1)
-	}
+	require.Equal(t, exp1, e1.Message, "wrong msg")
+	require.Equal(t, "test3: "+exp1, e1.Error(), "Error() didn't return the right string")
 
 	// Test again with a single value this time
 	errs = Errors{ErrorCodeUnknown}
 	expectedJSON = "{\"errors\":[{\"code\":\"UNKNOWN\",\"message\":\"unknown error\"}]}"
 	p, err = json.Marshal(errs)
-	if err != nil {
-		t.Fatalf("error marashaling errors: %v", err)
-	}
-
-	if string(p) != expectedJSON {
-		t.Fatalf("unexpected json: %q != %q", string(p), expectedJSON)
-	}
+	require.NoError(t, err, "error marshaling errors")
+	require.JSONEq(t, expectedJSON, string(p), "unexpected json")
 
 	// Now test the reverse
 	unmarshaled = nil
-	if err := json.Unmarshal(p, &unmarshaled); err != nil {
-		t.Fatalf("unexpected error unmarshaling error envelope: %v", err)
-	}
-
-	if !reflect.DeepEqual(unmarshaled, errs) {
-		t.Fatalf("errors not equal after round trip:\nunmarshaled:\n%#v\n\nerrs:\n%#v", unmarshaled, errs)
-	}
+	require.NoError(t, json.Unmarshal(p, &unmarshaled), "unexpected error unmarshaling error envelope")
+	require.Equal(t, unmarshaled, errs, "errors not equal after round trip")
 
 	// Verify that calling WithArgs() more than once does the right thing.
 	// Meaning creates a new Error and uses the ErrorCode Message
 	e1 = ErrorCodeTest3.WithArgs("test1")
 	e2 := e1.WithArgs("test2")
-	if &e1 == &e2 {
-		t.Fatalf("args: e2 and e1 should not be the same, but they are")
-	}
-	if e2.Message != `Sorry "test2" isn't valid` {
-		t.Fatalf("e2 had wrong message: %q", e2.Message)
-	}
+	require.NotSame(t, &e1, &e2, "args: e2 and e1 should not be the same")
+	require.Equal(t, `Sorry "test2" isn't valid`, e2.Message, "e2 had wrong message")
 
 	// Verify that calling WithDetail() more than once does the right thing.
 	// Meaning creates a new Error and overwrites the old detail field
 	e1 = ErrorCodeTest3.WithDetail("stuff1")
 	e2 = e1.WithDetail("stuff2")
-	if &e1 == &e2 {
-		t.Fatalf("detail: e2 and e1 should not be the same, but they are")
-	}
-	if e2.Detail != `stuff2` {
-		t.Fatalf("e2 had wrong detail: %q", e2.Detail)
-	}
+	require.NotSame(t, &e1, &e2, "detail: e2 and e1 should not be the same")
+	require.Equal(t, `stuff2`, e2.Detail, "e2 had wrong detail")
 }
 
 func TestFromUnknownError(t *testing.T) {

@@ -1,7 +1,7 @@
 package urls
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,6 +17,8 @@ import (
 var (
 	defaultDistributionRouter = v2.Router()
 	defaultGitLabRouter       = v1.Router()
+
+	ErrNoTagManifest = errors.New("reference must have a tag or digest")
 )
 
 // Builder creates registry API urls from a single base endpoint. It can be
@@ -162,7 +164,7 @@ func (ub *Builder) BuildManifestURL(ref reference.Named) (string, error) {
 	case reference.Digested:
 		tagOrDigest = v.Digest().String()
 	default:
-		return "", fmt.Errorf("reference must have a tag or digest")
+		return "", ErrNoTagManifest
 	}
 
 	manifestURL, err := route.URL("name", ref.Name(), "reference", tagOrDigest)
