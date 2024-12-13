@@ -7,6 +7,8 @@ import (
 
 	"github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSillyAccessController(t *testing.T) {
@@ -25,51 +27,35 @@ func TestSillyAccessController(t *testing.T) {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			default:
-				t.Fatalf("unexpected error authorizing request: %v", err)
+				assert.NoError(t, err, "unexpected error authorizing request")
 			}
 		}
 
 		userInfo, ok := authCtx.Value(auth.UserKey).(auth.UserInfo)
-		if !ok {
-			t.Fatal("silly accessController did not set auth.user context")
-		}
+		assert.True(t, ok, "silly accessController did not set auth.user context")
 
-		if userInfo.Name != "silly" {
-			t.Fatalf("expected user name %q, got %q", "silly", userInfo.Name)
-		}
-		if userInfo.Type != "silly-type" {
-			t.Fatalf("expected user type %q, got %q", "silly-type", userInfo.Type)
-		}
+		assert.Equal(t, "silly", userInfo.Name)
+		assert.Equal(t, "silly-type", userInfo.Type)
 
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	t.Cleanup(server.Close)
 
 	resp, err := http.Get(server.URL)
-	if err != nil {
-		t.Fatalf("unexpected error during GET: %v", err)
-	}
+	require.NoError(t, err, "unexpected error during GET")
 	defer resp.Body.Close()
 
 	// Request should not be authorized
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("unexpected response status: %v != %v", resp.StatusCode, http.StatusUnauthorized)
-	}
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode, "unexpected response status")
 
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
-	if err != nil {
-		t.Fatalf("unexpected error creating new request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating new request")
 	req.Header.Set("Authorization", "seriously, anything")
 
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("unexpected error during GET: %v", err)
-	}
+	require.NoError(t, err, "unexpected error during GET")
 	defer resp.Body.Close()
 
 	// Request should not be authorized
-	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("unexpected response status: %v != %v", resp.StatusCode, http.StatusNoContent)
-	}
+	require.Equal(t, http.StatusNoContent, resp.StatusCode, "unexpected response status")
 }

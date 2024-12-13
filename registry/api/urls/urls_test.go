@@ -1,13 +1,13 @@
 package urls
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
-	"reflect"
 	"testing"
 
 	"github.com/docker/distribution/reference"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type urlBuilderTestCase struct {
@@ -77,7 +77,7 @@ func makeBuilderTestCases(builder *Builder) []urlBuilderTestCase {
 		{
 			description:  "test manifest url bare ref",
 			expectedPath: "",
-			expectedErr:  fmt.Errorf("reference must have a tag or digest"),
+			expectedErr:  ErrNoTagManifest,
 			build: func() (string, error) {
 				return builder.BuildManifestURL(fooBarRef)
 			},
@@ -179,17 +179,14 @@ func TestBuilder(t *testing.T) {
 	doTest := func(relative bool) {
 		for _, root := range roots {
 			builder, err := NewBuilderFromString(root, relative)
-			if err != nil {
-				t.Fatalf("unexpected error creating builder: %v", err)
-			}
+			require.NoError(t, err, "error creating builder")
 
 			for _, testCase := range makeBuilderTestCases(builder) {
 				testURL, err := testCase.build()
 				expectedErr := testCase.expectedErr
-				if !reflect.DeepEqual(expectedErr, err) {
-					t.Fatalf("%s: Expecting %v but got error %v", testCase.description, expectedErr, err)
-				}
 				if expectedErr != nil {
+					// nolint: testifylint // require-error
+					assert.ErrorIs(t, expectedErr, err, "%s: expected error %v but got %v", testCase.description, expectedErr, err)
 					continue
 				}
 
@@ -198,9 +195,7 @@ func TestBuilder(t *testing.T) {
 					expectedURL = root + expectedURL
 				}
 
-				if testURL != expectedURL {
-					t.Fatalf("%s: %q != %q", testCase.description, testURL, expectedURL)
-				}
+				assert.Equal(t, expectedURL, testURL, "%s: expected URL %q but got %q", testCase.description, expectedURL, testURL)
 			}
 		}
 	}
@@ -219,17 +214,14 @@ func TestBuilderWithPrefix(t *testing.T) {
 	doTest := func(relative bool) {
 		for _, root := range roots {
 			builder, err := NewBuilderFromString(root, relative)
-			if err != nil {
-				t.Fatalf("unexpected error creating builder: %v", err)
-			}
+			require.NoError(t, err, "unexpected error creating builder")
 
 			for _, testCase := range makeBuilderTestCases(builder) {
 				testURL, err := testCase.build()
 				expectedErr := testCase.expectedErr
-				if !reflect.DeepEqual(expectedErr, err) {
-					t.Fatalf("%s: Expecting %v but got error %v", testCase.description, expectedErr, err)
-				}
 				if expectedErr != nil {
+					// nolint: testifylint // require-error
+					assert.ErrorIs(t, expectedErr, err, "%s: expected error %v but got %v", testCase.description, expectedErr, err)
 					continue
 				}
 
@@ -237,9 +229,7 @@ func TestBuilderWithPrefix(t *testing.T) {
 				if !relative {
 					expectedURL = root[0:len(root)-1] + expectedURL
 				}
-				if testURL != expectedURL {
-					t.Fatalf("%s: %q != %q", testCase.description, testURL, expectedURL)
-				}
+				assert.Equal(t, expectedURL, testURL, "%s: expected URL %q but got %q", testCase.description, expectedURL, testURL)
 			}
 		}
 	}
@@ -256,9 +246,7 @@ type testRequests struct {
 
 func makeTestRequests(t testing.TB) []testRequests {
 	u, err := url.Parse("http://example.com")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	return []testRequests{
 		{
@@ -478,10 +466,9 @@ func TestBuilderFromRequest(t *testing.T) {
 			for _, testCase := range makeBuilderTestCases(builder) {
 				buildURL, err := testCase.build()
 				expectedErr := testCase.expectedErr
-				if !reflect.DeepEqual(expectedErr, err) {
-					t.Fatalf("%s: Expecting %v but got error %v", testCase.description, expectedErr, err)
-				}
 				if expectedErr != nil {
+					// nolint: testifylint // require-error
+					assert.ErrorIs(t, expectedErr, err)
 					continue
 				}
 
@@ -490,9 +477,7 @@ func TestBuilderFromRequest(t *testing.T) {
 					expectedURL = tr.base + expectedURL
 				}
 
-				if buildURL != expectedURL {
-					t.Errorf("[relative=%t, request=%q, case=%q]: %q != %q", relative, tr.name, testCase.description, buildURL, expectedURL)
-				}
+				assert.Equalf(t, expectedURL, buildURL, "[relative=%t, request=%q, case=%q]: %q != %q", relative, tr.name, testCase.description, buildURL, expectedURL)
 			}
 		}
 	}
@@ -615,9 +600,7 @@ func TestBuilderFromRequestWithPrefix(t *testing.T) {
 		for _, testCase := range makeBuilderTestCases(builder) {
 			buildURL, err := testCase.build()
 			expectedErr := testCase.expectedErr
-			if !reflect.DeepEqual(expectedErr, err) {
-				t.Fatalf("%s: Expecting %v but got error %v", testCase.description, expectedErr, err)
-			}
+			require.ErrorIs(t, expectedErr, err)
 			if expectedErr != nil {
 				continue
 			}
@@ -631,9 +614,7 @@ func TestBuilderFromRequestWithPrefix(t *testing.T) {
 				}
 			} else {
 				urlBase, err := url.Parse(tr.base)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				urlBase.Scheme = proto[0]
 				expectedURL = testCase.expectedPath
 				if !relative {
@@ -641,9 +622,7 @@ func TestBuilderFromRequestWithPrefix(t *testing.T) {
 				}
 			}
 
-			if buildURL != expectedURL {
-				t.Fatalf("%s: %q != %q", testCase.description, buildURL, expectedURL)
-			}
+			require.Equalf(t, expectedURL, buildURL, "%s: %q != %q", testCase.description, buildURL, expectedURL)
 		}
 	}
 }

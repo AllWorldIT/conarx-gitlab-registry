@@ -6,11 +6,11 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/require"
 )
 
 type routeTestCase struct {
@@ -256,18 +256,14 @@ func checkTestRouter(t *testing.T, testCases []routeTestCase, prefix string, dee
 		testcase.RequestURI = strings.TrimSuffix(prefix, "/") + testcase.RequestURI
 		// Register the endpoint
 		route := router.GetRoute(testcase.RouteName)
-		if route == nil {
-			t.Fatalf("route for name %q not found", testcase.RouteName)
-		}
+		require.NotNil(t, route, "route for name %q not found", testcase.RouteName)
 
 		route.Handler(testHandler)
 
 		u := server.URL + testcase.RequestURI
 
 		resp, err := http.Get(u)
-		if err != nil {
-			t.Fatalf("error issuing get request: %v", err)
-		}
+		require.NoError(t, err, "error issuing get request")
 
 		// nolint: revive // defer
 		defer resp.Body.Close()
@@ -281,9 +277,7 @@ func checkTestRouter(t *testing.T, testCases []routeTestCase, prefix string, dee
 			testcase.ExpectedURI = testcase.RequestURI
 		}
 
-		if resp.StatusCode != testcase.StatusCode {
-			t.Fatalf("unexpected status for %s: %v %v", u, resp.Status, resp.StatusCode)
-		}
+		require.Equal(t, testcase.StatusCode, resp.StatusCode, "unexpected status for %s", u)
 
 		if testcase.StatusCode != http.StatusOK {
 			// We don't care about json response.
@@ -293,26 +287,20 @@ func checkTestRouter(t *testing.T, testCases []routeTestCase, prefix string, dee
 		dec := json.NewDecoder(resp.Body)
 
 		var actualRouteInfo routeTestCase
-		if err := dec.Decode(&actualRouteInfo); err != nil {
-			t.Fatalf("error reading json response: %v", err)
-		}
+		require.NoError(t, dec.Decode(&actualRouteInfo), "error reading json response")
 		// Needs to be set out of band
 		actualRouteInfo.StatusCode = resp.StatusCode
 
-		if actualRouteInfo.RequestURI != testcase.ExpectedURI {
-			t.Fatalf("URI %v incorrectly parsed, expected %v", actualRouteInfo.RequestURI, testcase.ExpectedURI)
-		}
+		require.Equal(t, testcase.ExpectedURI, actualRouteInfo.RequestURI, "URI incorrectly parsed")
 
-		if actualRouteInfo.RouteName != testcase.RouteName {
-			t.Fatalf("incorrect route %q matched, expected %q", actualRouteInfo.RouteName, testcase.RouteName)
-		}
+		require.Equal(t, testcase.RouteName, actualRouteInfo.RouteName, "incorrect route matched")
 
 		// when testing deep equality, the actualRouteInfo has an empty ExpectedURI, we don't want
 		// that to make the comparison fail. We're otherwise done with the testcase so empty the
 		// testcase.ExpectedURI
 		testcase.ExpectedURI = ""
-		if deeplyEqual && !reflect.DeepEqual(actualRouteInfo, testcase) {
-			t.Fatalf("actual does not equal expected: %#v != %#v", actualRouteInfo, testcase)
+		if deeplyEqual {
+			require.Equal(t, testcase, actualRouteInfo, "actual does not equal expected")
 		}
 	}
 }
