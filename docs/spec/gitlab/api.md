@@ -178,18 +178,24 @@ curl --header "Authorization: Bearer <token>" \
 
 ##### Manifest Object
 
- Key                 | Value                                  | Type   | Format                      | Condition                                                                                                          |
----------------------|----------------------------------------|--------|-----------------------------|--------------------------------------------------------------------------------------------------------------------|
- `digest`        | The digest of the tagged manifest.         | String |                             |                                                                                                                    |
- `media_type`    | The media type of the tagged manifest.     | String |                             |                                                                                                                    |
- `references`    | The `references` is a list of `manifests`. | List   | List of [`manifest`](#manifest-object) objects. | Optional. Only present for [image indexes](https://github.com/opencontainers/image-spec/blob/main/image-index.md). |
+ Key                 | Value                                   | Type   | Format                                    | Condition                                                                                                          |
+---------------------|-----------------------------------------|--------|-------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
+ `digest`        | The digest of the tagged manifest.      | String |                                           |                                                                                                                    |
+ `media_type`    | The media type of the tagged manifest.  | String |                                           |                                                                                                                    |
+ `references`    | The `references` is a list of `image`. | List   | List of [`image`](#image-object) objects. | Optional. Only present for [image indexes](https://github.com/opencontainers/image-spec/blob/main/image-index.md). |
 
 ##### Config Object
 
- Key                 | Value                                         | Type    |
----------------------|-----------------------------------------------|---------|
+ Key                 | Value                                             | Type    |
+---------------------|---------------------------------------------------|---------|
  `digest`        | The digest of the manifest configuration.         | String  |
  `media_type`    | The media type of the manifest configuration.     | String  |
+ `platform`      | The image's [platform details](#platform-object). | Object  |
+
+##### Platform Object
+
+ Key                 | Value                                         | Type    |
+---------------------|-----------------------------------------------|---------|
  `architecture`  | The image targeted architecture.                  | String  |
  `os`            | The image targeted OS.                            | String  |
 
