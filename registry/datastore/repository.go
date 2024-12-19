@@ -14,12 +14,14 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
 	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/redis/go-redis/v9"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 )
@@ -90,6 +92,7 @@ type RepositoryReader interface {
 	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error)
 	TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error)
 	FindPaginatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error)
+	TagDetail(ctx context.Context, r *models.Repository, tagName string) (*models.TagDetail, error)
 }
 
 // RepositoryWriter is the interface that defines write operations for a repository store.
@@ -861,21 +864,15 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 			return nil, fmt.Errorf("scanning tag details: %w", err)
 		}
 
-		d, err := dgst.Parse()
+		var err error
+		t.Digest, err = dgst.Parse()
 		if err != nil {
 			return nil, err
 		}
-		t.Digest = d
 
-		if cfgDgst.Valid {
-			cd, err := Digest(cfgDgst.String).Parse()
-			if err != nil {
-				return nil, err
-			}
-			t.ConfigDigest = models.NullDigest{
-				Digest: cd,
-				Valid:  true,
-			}
+		t.ConfigDigest, err = parseConfigDigest(cfgDgst)
+		if err != nil {
+			return nil, err
 		}
 
 		tt = append(tt, t)
@@ -885,6 +882,24 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 	}
 
 	return tt, nil
+}
+
+func parseConfigDigest(cfgDgst sql.NullString) (models.NullDigest, error) {
+	var dgst models.NullDigest
+
+	if cfgDgst.Valid {
+		cd, err := Digest(cfgDgst.String).Parse()
+		if err != nil {
+			return dgst, err
+		}
+
+		dgst = models.NullDigest{
+			Digest: cd,
+			Valid:  true,
+		}
+	}
+
+	return dgst, nil
 }
 
 // The query for this method takes a list of TagDetails and returns a list of
@@ -1025,6 +1040,71 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 		}
 	}
 	return tags, nil
+}
+
+// SingleTagDetail returns the detail of a tag with its manifest payload
+// and its configuration payload for single manifests. The configuration
+// payload will be empty for manifest lists.
+func (s *repositoryStore) TagDetail(ctx context.Context, r *models.Repository, tagName string) (*models.TagDetail, error) {
+	defer metrics.InstrumentQuery("repository_tag_detail")()
+
+	q := `
+		SELECT
+			t.name,
+			encode(m.digest, 'hex') AS digest,
+			encode(m.configuration_blob_digest, 'hex') AS config_digest,
+			mt.media_type,
+			m.total_size,
+			t.created_at,
+			t.updated_at,
+			GREATEST(t.created_at, t.updated_at) as published_at,
+			m.payload,
+			m.configuration_payload
+		FROM tags t
+			JOIN manifests AS m ON m.top_level_namespace_id = t.top_level_namespace_id
+				AND m.repository_id = t.repository_id
+				AND m.id = t.manifest_id
+			JOIN media_types AS mt ON mt.id = m.media_type_id
+		WHERE
+			t.top_level_namespace_id = $1
+			AND t.repository_id = $2
+			AND t.name = $3
+	    `
+
+	manifestPayload := new(models.Payload)
+	cfgPayload := new(models.Payload)
+	td := &models.TagDetail{}
+
+	var dgst Digest
+	var cfgDgst sql.NullString
+
+	err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, tagName).Scan(
+		&td.Name, &dgst, &cfgDgst, &td.MediaType,
+		&td.Size, &td.CreatedAt, &td.UpdatedAt, &td.PublishedAt, &manifestPayload, &cfgPayload)
+	if err != nil {
+		return nil, fmt.Errorf("finding single tag detail: %w", err)
+	}
+
+	td.Digest, err = dgst.Parse()
+	if err != nil {
+		return nil, err
+	}
+
+	td.ConfigDigest, err = parseConfigDigest(cfgDgst)
+	if err != nil {
+		return nil, err
+	}
+
+	td.ManifestPayload = *manifestPayload
+
+	switch td.MediaType {
+	case manifestlist.MediaTypeManifestList, v1.MediaTypeImageIndex:
+	// no op
+	default:
+		td.ConfigPayload = *cfgPayload
+	}
+
+	return td, nil
 }
 
 func (s *repositoryStore) mediaTypeIDs(ctx context.Context, types []string) ([]string, error) {
