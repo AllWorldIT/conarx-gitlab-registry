@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -599,13 +600,8 @@ func (s *DriverSuite) testList(t *testing.T, numFiles int) {
 	})
 
 	parentDirectory := rootDirectory + "/" + randomFilenameRange(8, 8)
-	childFiles := make([]string, numFiles)
-	for i := range childFiles {
-		childFile := parentDirectory + "/" + randomFilenameRange(8, 8)
-		childFiles[i] = childFile
-		err := s.StorageDriver.PutContent(s.ctx, childFile, randomContents(8))
-		require.NoError(t, err)
-	}
+	childFiles := s.buildFiles(t, parentDirectory, numFiles, 8)
+
 	sort.Strings(childFiles)
 
 	keys, err := s.StorageDriver.List(s.ctx, "/")
@@ -765,13 +761,7 @@ func (s *DriverSuite) testDeleteDir(t *testing.T, numFiles int) {
 	defer s.deletePath(t, rootDirectory)
 
 	parentDirectory := rootDirectory + "/" + randomFilenameRange(8, 8)
-	childFiles := make([]string, numFiles)
-	for i := range childFiles {
-		childFile := parentDirectory + "/" + randomFilenameRange(8, 8)
-		childFiles[i] = childFile
-		err := s.StorageDriver.PutContent(s.ctx, childFile, randomContents(8))
-		require.NoError(t, err)
-	}
+	childFiles := s.buildFiles(t, parentDirectory, numFiles, 8)
 
 	err := s.StorageDriver.Delete(s.ctx, parentDirectory)
 	require.NoError(t, err)
@@ -802,20 +792,46 @@ func (s *DriverSuite) testDeleteDir(t *testing.T, numFiles int) {
 	require.False(t, filesRemaining, "Encountered files remaining after deletion")
 }
 
-// buildFiles builds a num amount of test files with a size of size under parentDir. Returns a slice with the path of
-// the created files.
-func (s *DriverSuite) buildFiles(t require.TestingT, parentDir string, num, size int64) []string {
-	paths := make([]string, 0, num)
+// buildFiles builds a num amount of test files with a size of size under
+// parentDir. Returns a slice with the path of the created files.
+func (s *DriverSuite) buildFiles(t require.TestingT, parentDirectory string, numFiles int, size int64) []string {
+	// NOTE(prozlach): chosen empirically, basing on how many CI tasks can run
+	// in pararell before we hit Azure limits (i.e. `RESPONSE 503: 503 The server is busy.`)
+	// It should still offer a considerable speed-up, and in the long term we
+	// can try to bump Azure limits. GCE and S3 does not have issues with
+	// values as high as 32.
+	const concurencyFactor = 5
+	var wg sync.WaitGroup
+	var failed atomic.Bool
 
-	for i := int64(0); i < num; i++ {
-		p := path.Join(parentDir, randomPath(4, 32))
-		paths = append(paths, p)
-
-		err := s.StorageDriver.PutContent(s.ctx, p, randomContents(size))
-		require.NoError(t, err)
+	sem := make(chan struct{}, concurencyFactor)
+	for i := 0; i < concurencyFactor; i++ {
+		sem <- struct{}{}
 	}
 
-	return paths
+	wg.Add(numFiles)
+
+	childFiles := make([]string, numFiles)
+
+	for i := range childFiles {
+		go func(i int) {
+			defer wg.Done()
+			<-sem
+			defer func() { sem <- struct{}{} }()
+
+			childFile := parentDirectory + "/" + randomFilenameRange(16, 32)
+			childFiles[i] = childFile
+
+			err := s.StorageDriver.PutContent(s.ctx, childFile, randomContents(size))
+			if !assert.NoError(t, err) {
+				failed.Store(true)
+			}
+		}(i)
+	}
+	wg.Wait()
+	require.False(t, failed.Load(), "One or more goroutines failed")
+
+	return childFiles
 }
 
 // assertPathNotFound asserts that path does not exist in the storage driver filesystem.
@@ -836,7 +852,7 @@ func (s *DriverSuite) TestDeleteFiles() {
 	defer s.deletePath(s.T(), firstPart(parentDir))
 
 	/* #nosec G404 */
-	blobPaths := s.buildFiles(s.T(), parentDir, rand.Int63n(10), 32)
+	blobPaths := s.buildFiles(s.T(), parentDir, rand.Intn(10), 32)
 
 	count, err := s.StorageDriver.DeleteFiles(s.ctx, blobPaths)
 	require.NoError(s.T(), err)
@@ -881,7 +897,7 @@ func (s *DriverSuite) TestDeleteFilesNotFound() {
 }
 
 // benchmarkDeleteFiles benchmarks DeleteFiles for an amount of num files.
-func (s *DriverSuite) benchmarkDeleteFiles(b *testing.B, num int64) {
+func (s *DriverSuite) benchmarkDeleteFiles(b *testing.B, num int) {
 	parentDir := randomPath(1, 8)
 	defer s.deletePath(b, firstPart(parentDir))
 
