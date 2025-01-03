@@ -232,15 +232,25 @@ func (s *DriverSuite) deletePath(t require.TestingT, targetPath string) {
 		// let's also confirm that with .List() call
 	}
 
+	// NOTE(prozlach): do the first check imediatelly as an optimization, so
+	// that we avoid the 1s wait even if the blobs were removed, and thus speed
+	// up the tests.
+	_, err = s.StorageDriver.List(s.ctx, targetPath)
+	if errors.As(err, new(storagedriver.PathNotFoundError)) {
+		return
+	}
+
+	startTime := time.Now()
 	require.EventuallyWithT(
 		t,
 		func(c *assert.CollectT) {
-			paths, _ := s.StorageDriver.List(s.ctx, targetPath)
-			assert.Empty(c, paths)
+			_, err := s.StorageDriver.List(s.ctx, targetPath)
+			assert.ErrorAs(c, err, new(storagedriver.PathNotFoundError))
 		},
 		4200*time.Millisecond,
 		1*time.Second,
 	)
+	s.T().Logf("waited %s for container to return an empty list of files", time.Since(startTime))
 }
 
 // TestInvalidPaths checks that various invalid file paths are rejected by the
