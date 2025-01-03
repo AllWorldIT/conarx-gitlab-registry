@@ -23,7 +23,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
-	github.com/jackc/pgx/v5 v5.7.1
+	github.com/jackc/pgx/v5 v5.7.2
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
