@@ -375,14 +375,19 @@ func (s *DriverSuite) TestWriteReadStreamsNonUTF8() {
 	s.writeReadCompareStreams(s.T(), filename, contents)
 }
 
-// TestWriteReadLargeStreams tests that a 5GB file may be written to the storage
+// TestWriteReadLargeStreams tests that a 2GB file may be written to the storage
 // driver safely.
 func (s *DriverSuite) TestWriteReadLargeStreams() {
 	filename := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(filename))
 
 	checksum := sha256.New()
+
 	var fileSize int64 = 2 * 1024 * 1024 * 1024
+	if testing.Short() {
+		fileSize = 256 * 1024 * 1024
+		s.T().Log("Reducing file size to 256MiB for short mode")
+	}
 
 	contents := newRandReader(fileSize)
 

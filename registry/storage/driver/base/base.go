@@ -69,7 +69,7 @@ func (base *Base) setDriverName(e error) error {
 	}
 
 	switch {
-	// NOTE(prozlach): These types have field sets in the code already
+	// NOTE(prozlach): These types have field set in the code already
 	case errors.As(e, new(storagedriver.ErrUnsupportedMethod)):
 		return e
 	case errors.As(e, new(storagedriver.PathNotFoundError)):
