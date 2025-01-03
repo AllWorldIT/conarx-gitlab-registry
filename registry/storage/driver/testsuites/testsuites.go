@@ -1091,8 +1091,22 @@ func (s *DriverSuite) TestStatCall() {
 
 	defer s.deletePath(s.T(), firstPart(dirPath))
 
+	// Call to stat on root directory
+	// The storage healthcheck performs this exact call to Stat.
+	// PathNotFoundErrors are not considered health check failures. Some
+	// drivers will return a not found here, while others will not return an
+	// error at all. If we get an error, ensure it's a not found.
+	fi, err := s.StorageDriver.Stat(s.ctx, "/")
+	if err != nil {
+		require.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
+	} else {
+		require.NotNil(s.T(), fi)
+		require.Equal(s.T(), "/", fi.Path())
+		require.True(s.T(), fi.IsDir())
+	}
+
 	// Call on non-existent file/dir, check error.
-	fi, err := s.StorageDriver.Stat(s.ctx, dirPath)
+	fi, err = s.StorageDriver.Stat(s.ctx, dirPath)
 	require.Error(s.T(), err)
 	require.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{
 		DriverName: s.StorageDriver.Name(),
