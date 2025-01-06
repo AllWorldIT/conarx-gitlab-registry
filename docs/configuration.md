@@ -84,9 +84,12 @@ storage:
   azure:
     accountname: accountname
     accountkey: base64encodedaccountkey
+    realm: realm
+    serviceurl: serviceurl
     container: containername
     rootdirectory: /azure/virtual/container
     legacyrootprefix: false
+    trimlegacyrootprefix: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -420,11 +423,15 @@ storage:
   filesystem:
     rootdirectory: /var/lib/registry
   azure:
+    credentialstype: <one of shared_key,client_secret,default_credentials>
     accountname: accountname
     accountkey: base64encodedaccountkey
+    realm: realm
+    serviceurl: serviceurl
     container: containername
     rootdirectory: /azure/virtual/container
     legacyrootprefix: false
+    trimlegacyrootprefix: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -476,31 +483,20 @@ storage:
     expirydelay: 20m
 ```
 
-The `storage` option is **required** and defines which storage backend is in
-use. You must configure exactly one backend. If you configure more, the registry
-returns an error. You can choose any of these backend storage drivers:
+The `storage` option is **required** and defines which storage backend is in use.
+You must configure exactly one backend.
+If you configure more, the registry returns an error.
+You can choose any of these backend storage drivers:
 
 | Storage driver         | Description                                                                                                                                                                                                                                                                              |
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `filesystem`           | Uses the local disk to store registry files. It is ideal for development and may be appropriate for some small-scale production applications. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md). |
-| `azure`                | Uses Microsoft Azure Blob Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/azure.md).                                                                                                                 |
+| `azure`                | Uses Microsoft Azure Blob Storage. See the [driver's reference documentation](./storage-drivers/azure_v1.md).                                                                                                                 |
 | `gcs`                  | Uses Google Cloud Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/gcs.md).                                                                                                                           |
 | `s3`                   | Uses Amazon Simple Storage Service (S3) and compatible Storage Services. See the [driver's reference documentation](https://github.com/distribution/distribution/blob/main/docs/storage-drivers/s3.md), or the [extra parameters documentation](#s3)                                 |
 
 For testing only, you can use the [`inmemory` storage driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/inmemory.md).
-If you would like to run a registry from volatile memory, use the
-[`filesystem` driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md)
-on a ramdisk.
-
-If you are deploying a registry on Windows, a Windows volume mounted from the
-host is not recommended. Instead, you can use a S3 or Azure backing
-data-store. If you do use a Windows volume, the length of the `PATH` to
-the mount point must be within the `MAX_PATH` limits (typically 255 characters),
-or this error will occur:
-
-```none
-mkdir /XXX protocol error and your registry will not function properly.
-```
+If you would like to run a registry from volatile memory, use the [`filesystem` driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md) on a ramdisk.
 
 ### `s3`
 
