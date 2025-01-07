@@ -639,9 +639,14 @@ func (s *DriverSuite) testList(t *testing.T, numFiles int) {
 	// 3. Ensure that we only respond to directory listings that end with a slash (maybe?).
 }
 
-// TestMove checks that a moved object no longer exists at the source path and
-// does exist at the destination.
-func (s *DriverSuite) TestMove() {
+// TestMovePutContentBlob checks that driver can indeed move an object, and
+// that the object no longer exists at the source path and does exist at the
+// destination after the move.
+// NOTE(prozlach): The reason why we differentiate between blobs created by
+// PutContent() and Write() methods is to make sure that there are no
+// differences in handling blobs created by PutContent() and Writer() calls
+// during move operation.
+func (s *DriverSuite) TestMovePutContentBlob() {
 	contents := randomContents(32)
 	sourcePath := randomPath(1, 32)
 	destPath := randomPath(1, 32)
@@ -651,6 +656,49 @@ func (s *DriverSuite) TestMove() {
 
 	err := s.StorageDriver.PutContent(s.ctx, sourcePath, contents)
 	require.NoError(s.T(), err)
+
+	err = s.StorageDriver.Move(s.ctx, sourcePath, destPath)
+	require.NoError(s.T(), err)
+
+	received, err := s.StorageDriver.GetContent(s.ctx, destPath)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), contents, received)
+
+	_, err = s.StorageDriver.GetContent(s.ctx, sourcePath)
+	require.Error(s.T(), err)
+	require.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{
+		DriverName: s.StorageDriver.Name(),
+		Path:       sourcePath,
+	})
+}
+
+// TestMoveWritterBlob checks that driver can indeed move an object, and
+// that the object no longer exists at the source path and does exist at the
+// destination after the move.
+// NOTE(prozlach): The reason why we differentiate between blobs created by
+// PutContent() and Write() methods is to make sure that there are no
+// differences in handling blobs created by PutContent() and Writer() calls
+// during move operation.
+func (s *DriverSuite) TestMoveWritterBlob() {
+	contents := randomContents(32)
+	sourcePath := randomPath(1, 32)
+	destPath := randomPath(1, 32)
+
+	defer s.deletePath(s.T(), firstPart(sourcePath))
+	defer s.deletePath(s.T(), firstPart(destPath))
+
+	writer, err := s.StorageDriver.Writer(s.ctx, sourcePath, false)
+	require.NoError(s.T(), err, "unexpected error from driver.Writer")
+
+	_, err = writer.Write(contents)
+	require.NoError(s.T(), err, "writer.Write: unexpected error")
+
+	// NOTE(prozlach): For some drivers, Close(), does not imply Commit()
+	err = writer.Commit()
+	require.NoError(s.T(), err, "writer.Commit: unexpected error")
+
+	err = writer.Close()
+	require.NoError(s.T(), err, "writer.Close: unexpected error")
 
 	err = s.StorageDriver.Move(s.ctx, sourcePath, destPath)
 	require.NoError(s.T(), err)
