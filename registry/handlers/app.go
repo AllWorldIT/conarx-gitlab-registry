@@ -451,6 +451,21 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			startDBReplicaChecking(ctx, db)
 		}
 
+		inRecovery, err := datastore.IsInRecovery(ctx, db.Primary())
+		if err != nil {
+			log.WithError(err).Error("could not check database recovery status")
+			return nil, err
+		}
+
+		if inRecovery {
+			err = errors.New("the database is in read-only mode (in recovery)")
+			log.WithError(err).Error("could not connect to database")
+			log.Warn("if this is a Geo secondary instance, the registry must not point to the default replicated database. Please configure the registry to connect to a separate, writable database on the Geo secondary site.")
+
+			log.Warn("if this is not a Geo secondary instance, the database must not be in read-only mode. Please ensure the database is correctly configured and set to read-write mode.")
+			return nil, err
+		}
+
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
 		m := migrations.NewMigrator(db.Primary(), migrations.SkipPostDeployment())

@@ -350,3 +350,41 @@ func TestDBLoadBalancer_TypeOf(t *testing.T) {
 	require.Equal(t, HostTypeReplica, lb.TypeOf(lb.replicas[0]))
 	require.Equal(t, HostTypeUnknown, lb.TypeOf(&DB{DB: unknownDB}))
 }
+
+func TestIsInRecovery(t *testing.T) {
+	ctx := context.Background()
+	primaryDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	db := &DB{DB: primaryDB}
+
+	// case 1 database is in recovery mode
+	mock.ExpectQuery("SELECT pg_is_in_recovery()").WillReturnRows(
+		sqlmock.NewRows([]string{"pg_is_in_recovery"}).AddRow(true),
+	)
+
+	inRecovery, err := IsInRecovery(ctx, db)
+	require.NoError(t, err)
+	require.True(t, inRecovery)
+
+	// case 2 database is not in recovery mode
+	mock.ExpectQuery("SELECT pg_is_in_recovery()").WillReturnRows(
+		sqlmock.NewRows([]string{"pg_is_in_recovery"}).AddRow(false),
+	)
+
+	inRecovery, err = IsInRecovery(ctx, db)
+	require.NoError(t, err)
+	require.False(t, inRecovery)
+
+	// case 3 there was a database error (query failure)
+	mock.ExpectQuery("SELECT pg_is_in_recovery()").WillReturnError(fmt.Errorf("query failed"))
+
+	inRecovery, err = IsInRecovery(ctx, db)
+	require.Error(t, err)
+	require.False(t, inRecovery)
+
+	// all expectations were met
+	err = mock.ExpectationsWereMet()
+	require.NoError(t, err)
+}

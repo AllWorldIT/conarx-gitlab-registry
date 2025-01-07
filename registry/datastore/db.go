@@ -1020,3 +1020,14 @@ func (qb *QueryBuilder) Params() []any {
 	copy(ret, qb.params)
 	return ret
 }
+
+// IsInRecovery checks if a provided database is in read-only mode.
+func IsInRecovery(ctx context.Context, db *DB) (bool, error) {
+	var inRecovery bool
+
+	// https://www.postgresql.org/docs/9.0/functions-admin.html#:~:text=Table%209%2D58.%20Recovery%20Information%20Functions
+	query := `SELECT pg_is_in_recovery()`
+	err := db.QueryRowContext(ctx, query).Scan(&inRecovery)
+
+	return inRecovery, err
+}
