@@ -24,6 +24,7 @@ default:
     policy: pull
 
 variables:
+  FF_TIMESTAMPS: 1
   # default Go version
   GO_VERSION: "1.22"
   BUILDTAGS: "include_gcs,continuous_profiler_stackdriver"
