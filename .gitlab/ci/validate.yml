@@ -137,12 +137,7 @@ mocks:
     REGISTRY_DATABASE_DBNAME: "registry"
     REGISTRY_DATABASE_SSLMODE: "disable"
   services:
-    # NOTE(prozlach): PostgreSQL 14 alpine images started crashing (SIGSEGV)
-    # around version 14.14 (Nov 2024). While alpine versions have this issue,
-    # bookworm versions remain stable. PostgreSQL 14 support needed until
-    # GitLab 18 release (May 2025). More details:
-    # https://gitlab.com/gitlab-org/container-registry/-/issues/1420#note_2233736983
-    - name: postgres:${PG_VERSION}-bookworm
+    - name: postgres:${PG_VERSION}
       alias: "db"
   before_script:
     - "echo 'version: 0.1' > config.yml"
@@ -159,6 +154,16 @@ database:schema-migrations:
 database:schema-migrations:status:
   extends: .schema-migrations
   stage: validate
+  # TODO: We're overriding the `.go-pg-version-matrix` build matrix to get rid of the flake described in https://gitlab.com/gitlab-org/container-registry/-/issues/1420
+  # by pinning the Postgres 14 version to 14.3. Remove this once we drop support for Postgres 14 in GitLab 18.0 (https://gitlab.com/gitlab-org/container-registry/-/issues/1466).
+  parallel:
+    matrix:
+      - PG_VERSION: "14.3"
+        GO_VERSION: [ "1.22", "1.23" ]
+      - PG_VERSION: $PG_CURR_VERSION
+        GO_VERSION: [ "1.22", "1.23" ]
+      - PG_VERSION: $PG_NEXT_VERSION
+        GO_VERSION: [ "1.22", "1.23" ]
   script:
     - ./bin/registry database migrate status -u config.yml | grep -qw 'false' || exit 1
     - ./bin/registry database migrate up -n 2 config.yml
