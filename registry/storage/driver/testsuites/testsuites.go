@@ -3,11 +3,12 @@ package testsuites
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	mrand "math/rand"
 	"net/http"
 	"os"
 	"path"
@@ -915,7 +916,7 @@ func (s *DriverSuite) TestDeleteFiles() {
 	defer s.deletePath(s.T(), firstPart(parentDir))
 
 	/* #nosec G404 */
-	blobPaths := s.buildFiles(s.T(), parentDir, rand.Intn(10), 32)
+	blobPaths := s.buildFiles(s.T(), parentDir, mrand.Intn(10), 32)
 
 	count, err := s.StorageDriver.DeleteFiles(s.ctx, blobPaths)
 	require.NoError(s.T(), err)
@@ -1273,7 +1274,7 @@ func (s *DriverSuite) TestConcurrentStreamReads() {
 	readContents := func() {
 		defer wg.Done()
 		/* #nosec G404 */
-		offset := rand.Int63n(int64(len(contents)))
+		offset := mrand.Int63n(int64(len(contents)))
 		reader, err := s.StorageDriver.Reader(s.ctx, filename, offset)
 		require.NoError(s.T(), err)
 		defer reader.Close()
@@ -1386,7 +1387,7 @@ func (s *DriverSuite) TestWalkParallel() {
 		}
 
 		/* #nosec G404 */
-		err := s.StorageDriver.PutContent(s.ctx, wantedFiles[i], randomContents(int64(8+rand.Intn(8))))
+		err := s.StorageDriver.PutContent(s.ctx, wantedFiles[i], randomContents(int64(8+mrand.Intn(8))))
 		require.NoError(s.T(), err)
 	}
 
@@ -1454,7 +1455,7 @@ func (s *DriverSuite) TestWalkParallelError() {
 
 	for _, file := range wantedFiles {
 		/* #nosec G404 */
-		err := s.StorageDriver.PutContent(s.ctx, file, randomContents(int64(8+rand.Intn(8))))
+		err := s.StorageDriver.PutContent(s.ctx, file, randomContents(int64(8+mrand.Intn(8))))
 		require.NoError(s.T(), err)
 	}
 
@@ -1507,7 +1508,7 @@ func (s *DriverSuite) TestWalkParallelStopsProcessingOnError() {
 
 	for _, file := range wantedFiles {
 		/* #nosec G404 */
-		err := s.StorageDriver.PutContent(s.ctx, file, randomContents(int64(8+rand.Intn(8))))
+		err := s.StorageDriver.PutContent(s.ctx, file, randomContents(int64(8+mrand.Intn(8))))
 		require.NoError(s.T(), err)
 	}
 
@@ -1706,7 +1707,7 @@ func (s *DriverSuite) benchmarkWalkParallel(b *testing.B, numFiles int, f storag
 
 		for i := 0; i < numFiles; i++ {
 			/* #nosec G404 */
-			err := s.StorageDriver.PutContent(s.ctx, wantedFiles[i], randomContents(int64(8+rand.Intn(8))))
+			err := s.StorageDriver.PutContent(s.ctx, wantedFiles[i], randomContents(int64(8+mrand.Intn(8))))
 			require.NoError(b, err)
 		}
 
@@ -2214,7 +2215,7 @@ func randomPath(minTldLen, length int) string {
 	p := "/"
 	for len(p) < length {
 		/* #nosec G404 */
-		chunkLength := rand.Intn(length-len(p)) + 1
+		chunkLength := mrand.Intn(length-len(p)) + 1
 		if len(p) == 1 && chunkLength < minTldLen {
 			// First component is too short - retry
 			continue
@@ -2236,11 +2237,11 @@ func randomFilename(length int) string {
 	wasSeparator := true
 	for i := range b {
 		/* #nosec G404 */
-		if !wasSeparator && i < len(b)-1 && rand.Intn(4) == 0 {
-			b[i] = separatorChars[rand.Intn(len(separatorChars))]
+		if !wasSeparator && i < len(b)-1 && mrand.Intn(4) == 0 {
+			b[i] = separatorChars[mrand.Intn(len(separatorChars))]
 			wasSeparator = true
 		} else {
-			b[i] = filenameChars[rand.Intn(len(filenameChars))]
+			b[i] = filenameChars[mrand.Intn(len(filenameChars))]
 			wasSeparator = false
 		}
 	}
@@ -2251,7 +2252,7 @@ func randomFilename(length int) string {
 // chars long inclusive.
 func randomFilenameRange(minimum, maximum int) string { // nolint:unparam //(min always receives 8)
 	/* #nosec G404 */
-	return randomFilename(minimum + (rand.Intn(maximum + 1)))
+	return randomFilename(minimum + (mrand.Intn(maximum + 1)))
 }
 
 // randomBranchingFiles creates n number of randomly named files at the end of
@@ -2289,7 +2290,6 @@ func randomContents(length int64) []byte {
 			randomBytes = make([]byte, 128<<23)
 		}
 
-		/* #nosec G404*/
 		_, _ = rand.Read(randomBytes) // always returns len(randomBytes) and nil error
 	})
 
