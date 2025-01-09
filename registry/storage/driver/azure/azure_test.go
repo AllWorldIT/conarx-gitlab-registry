@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
 	v1 "github.com/docker/distribution/registry/storage/driver/azure/v1"
+	v2 "github.com/docker/distribution/registry/storage/driver/azure/v2"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 	"github.com/stretchr/testify/require"
@@ -31,6 +33,8 @@ var (
 	accountRealm     string
 
 	missing []string
+
+	debugLog bool
 
 	driverVersion     string
 	parseParametersFn func(map[string]any) (any, error)
@@ -52,6 +56,9 @@ func fetchEnvVarsConfiguration() {
 	case v1.DriverName:
 		parseParametersFn = v1.ParseParameters
 		newDriverFn = v1.New
+	case v2.DriverName:
+		parseParametersFn = v2.ParseParameters
+		newDriverFn = v2.New
 	default:
 		msg := fmt.Sprintf("invalid azure driver version: %q", driverVersion)
 		missing = []string{msg}
@@ -90,6 +97,17 @@ func fetchEnvVarsConfiguration() {
 			missing = append(missing, v.env)
 		}
 	}
+
+	// NOTE(prozlach): debug logging is optional:
+	var err error
+	if v := os.Getenv(common.EnvDebugLog); v != "" {
+		debugLog, err = strconv.ParseBool(v)
+		if err != nil {
+			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvDebugLog, v)
+			missing = []string{msg}
+			return
+		}
+	}
 }
 
 func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (storagedriver.StorageDriver, error) {
@@ -101,11 +119,20 @@ func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (st
 		common.ParamTrimLegacyRootPrefix: trimLegacyRootPrefix,
 	}
 
-	// nolint: gocritic,revive // it will be extended once we add v2 driver
+	// nolint: revive,gocritic // this will be extended as soon as we add
+	// managed identities
 	switch credsType {
 	case common.CredentialsTypeSharedKey:
 		rawParams[common.ParamAccountKey] = accountKey
 		rawParams[common.ParamCredentialsType] = common.CredentialsTypeSharedKey
+	}
+
+	if debugLog {
+		rawParams[common.ParamDebugLog] = "true"
+		// logging all events is enabled by default, uncomment and adjust call
+		// below to change it:
+		//
+		// rawParams[common.ParamDebugLogEvents] = "Response,ResponseError,LongRunningOperation"
 	}
 
 	parsedParams, err := parseParametersFn(rawParams)

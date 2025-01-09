@@ -281,11 +281,11 @@ func (d *driver) newWriter(f *file) storagedriver.FileWriter {
 func (w *writer) Write(p []byte) (int, error) {
 	switch {
 	case w.closed:
-		return 0, fmt.Errorf("already closed")
+		return 0, storagedriver.ErrAlreadyClosed
 	case w.committed:
-		return 0, fmt.Errorf("already committed")
+		return 0, storagedriver.ErrAlreadyCommited
 	case w.canceled:
-		return 0, fmt.Errorf("already canceled")
+		return 0, storagedriver.ErrAlreadyCanceled
 	}
 
 	w.d.mutex.Lock()
@@ -304,7 +304,7 @@ func (w *writer) Size() int64 {
 
 func (w *writer) Close() error {
 	if w.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
 	return nil
@@ -312,9 +312,9 @@ func (w *writer) Close() error {
 
 func (w *writer) Cancel() error {
 	if w.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	} else if w.committed {
-		return fmt.Errorf("already committed")
+		return storagedriver.ErrAlreadyCommited
 	}
 	w.canceled = true
 
@@ -327,11 +327,11 @@ func (w *writer) Cancel() error {
 func (w *writer) Commit() error {
 	switch {
 	case w.closed:
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	case w.committed:
-		return fmt.Errorf("already committed")
+		return storagedriver.ErrAlreadyCommited
 	case w.canceled:
-		return fmt.Errorf("already canceled")
+		return storagedriver.ErrAlreadyCanceled
 	}
 	w.committed = true
 	return nil

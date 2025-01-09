@@ -90,6 +90,19 @@ storage:
     rootdirectory: /azure/virtual/container
     legacyrootprefix: false
     trimlegacyrootprefix: false
+  azure_v2:
+    accountname: accountname
+    accountkey: base64encodedaccountkey
+    realm: realm
+    serviceurl: serviceurl
+    container: containername
+    rootdirectory: /azure/virtual/container
+    legacyrootprefix: false
+    trimlegacyrootprefix: false
+    apipoolinitialinterval: 500ms
+    apipoolmaxinterval: 15s
+    apipoolmaxelapsedtime: 5m
+    debuglog: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -423,7 +436,6 @@ storage:
   filesystem:
     rootdirectory: /var/lib/registry
   azure:
-    credentialstype: <one of shared_key,client_secret,default_credentials>
     accountname: accountname
     accountkey: base64encodedaccountkey
     realm: realm
@@ -432,6 +444,19 @@ storage:
     rootdirectory: /azure/virtual/container
     legacyrootprefix: false
     trimlegacyrootprefix: false
+  azure_v2:
+    accountname: accountname
+    accountkey: base64encodedaccountkey
+    realm: realm
+    serviceurl: serviceurl
+    container: containername
+    rootdirectory: /azure/virtual/container
+    legacyrootprefix: false
+    trimlegacyrootprefix: false
+    apipoolinitialinterval: 500ms
+    apipoolmaxinterval: 15s
+    apipoolmaxelapsedtime: 5m
+    debuglog: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -492,6 +517,7 @@ You can choose any of these backend storage drivers:
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `filesystem`           | Uses the local disk to store registry files. It is ideal for development and may be appropriate for some small-scale production applications. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md). |
 | `azure`                | Uses Microsoft Azure Blob Storage. See the [driver's reference documentation](./storage-drivers/azure_v1.md).                                                                                                                 |
+| `azure_v2`             | Improved Microsoft Azure Blob Storage. See the [driver's reference documentation](./storage-drivers/azure_v2.md).                                                                                                                 |
 | `gcs`                  | Uses Google Cloud Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/gcs.md).                                                                                                                           |
 | `s3`                   | Uses Amazon Simple Storage Service (S3) and compatible Storage Services. See the [driver's reference documentation](https://github.com/distribution/distribution/blob/main/docs/storage-drivers/s3.md), or the [extra parameters documentation](#s3)                                 |
 

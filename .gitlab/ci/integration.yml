@@ -81,14 +81,22 @@ azure:default-runner:
     matrix:
       # Regular combinations
       - GO_VERSION: [ "1.22", "1.23" ]
-        AZURE_DRIVER_VERSION: [ "azure" ]
+        AZURE_DRIVER_VERSION: [ "azure", "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "shared_key" ]
   variables:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
     AZURE_DRIVER_VERSION: $AZURE_DRIVER_VERSION
     AZURE_CREDENTIALS_TYPE: $AZURE_CREDENTIALS_TYPE
-    TEST_TIMEOUT: "45m"
+    # NOTE(prozlach): Code supports `AZURE_DEBUGLOG` environment variable which
+    # can be toggled in the CI via CI enviroment variables for debugging
+    # if/when needed. It is currently set to `false`, set it to `true` to
+    # enable debug logging.
+    # NOTE(prozlach): From what I noticed, if the tests do not finish within 45
+    # minutes, they will not finish in 60 minutes either. A lot depends on the
+    # latency between the Gitlab runner and azure store account. Moving Azure
+    # storage closer to Gitlab runners (i.e. us-east Azure zone) decreased run
+    # time from ~40m to around 9m. 
 
 api:
   extends: .go-version-matrix

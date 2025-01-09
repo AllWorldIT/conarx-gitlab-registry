@@ -346,8 +346,9 @@ func (d *driver) Walk(ctx context.Context, targetPath string, f storagedriver.Wa
 // WalkParallel traverses a filesystem defined within driver in parallel, starting
 // from the given path, calling f on each file.
 func (d *driver) WalkParallel(ctx context.Context, targetPath string, f storagedriver.WalkFn) error {
-	// TODO: Verify that this driver can reliably handle parallel workloads before
-	// using storagedriver.WalkFallbackParallel
+	// NOTE(prozlach): WalkParallel will go away at some point, see
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/1182#note_2258251909
+	// for more context.
 	return d.Walk(ctx, targetPath, f)
 }
 
@@ -410,11 +411,11 @@ func newFileWriter(file *os.File, size int64) *fileWriter {
 func (fw *fileWriter) Write(p []byte) (int, error) {
 	switch {
 	case fw.closed:
-		return 0, fmt.Errorf("already closed")
+		return 0, storagedriver.ErrAlreadyClosed
 	case fw.committed:
-		return 0, fmt.Errorf("already committed")
+		return 0, storagedriver.ErrAlreadyCommited
 	case fw.canceled:
-		return 0, fmt.Errorf("already canceled")
+		return 0, storagedriver.ErrAlreadyCanceled
 	}
 	n, err := fw.bw.Write(p)
 	fw.size += int64(n)
@@ -427,7 +428,7 @@ func (fw *fileWriter) Size() int64 {
 
 func (fw *fileWriter) Close() error {
 	if fw.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	}
 
 	if err := fw.bw.Flush(); err != nil {
@@ -447,7 +448,7 @@ func (fw *fileWriter) Close() error {
 
 func (fw *fileWriter) Cancel() error {
 	if fw.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	}
 
 	fw.canceled = true
@@ -458,11 +459,11 @@ func (fw *fileWriter) Cancel() error {
 func (fw *fileWriter) Commit() error {
 	switch {
 	case fw.closed:
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	case fw.committed:
-		return fmt.Errorf("already committed")
+		return storagedriver.ErrAlreadyCommited
 	case fw.canceled:
-		return fmt.Errorf("already canceled")
+		return storagedriver.ErrAlreadyCanceled
 	}
 
 	if err := fw.bw.Flush(); err != nil {

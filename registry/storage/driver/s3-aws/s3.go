@@ -1518,11 +1518,11 @@ func (w *writer) Write(p []byte) (int, error) {
 
 	switch {
 	case w.closed:
-		return 0, fmt.Errorf("already closed")
+		return 0, storagedriver.ErrAlreadyClosed
 	case w.committed:
-		return 0, fmt.Errorf("already committed")
+		return 0, storagedriver.ErrAlreadyCommited
 	case w.canceled:
-		return 0, fmt.Errorf("already canceled")
+		return 0, storagedriver.ErrAlreadyCanceled
 	}
 
 	// If the last written part is smaller than minChunkSize, we need to make a
@@ -1663,7 +1663,7 @@ func (w *writer) Size() int64 {
 
 func (w *writer) Close() error {
 	if w.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
 	return w.flushPart()
@@ -1671,9 +1671,9 @@ func (w *writer) Close() error {
 
 func (w *writer) Cancel() error {
 	if w.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	} else if w.committed {
-		return fmt.Errorf("already committed")
+		return storagedriver.ErrAlreadyCommited
 	}
 	w.canceled = true
 	_, err := w.driver.S3.AbortMultipartUploadWithContext(
@@ -1691,11 +1691,11 @@ func (w *writer) Commit() error {
 
 	switch {
 	case w.closed:
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	case w.committed:
-		return fmt.Errorf("already committed")
+		return storagedriver.ErrAlreadyCommited
 	case w.canceled:
-		return fmt.Errorf("already canceled")
+		return storagedriver.ErrAlreadyCanceled
 	}
 	err := w.flushPart()
 	if err != nil {
