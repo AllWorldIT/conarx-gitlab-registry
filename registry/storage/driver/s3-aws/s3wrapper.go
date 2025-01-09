@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -281,8 +282,7 @@ func (w *s3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteOb
 
 		for _, e := range out.Errors {
 			if e != nil {
-				// TODO: switch to using the the core package `slice.Contains` function introduced in https://tip.golang.org/doc/go1.21 after dropping support for go1.20
-				if contains(retryableErrors, *e.Code) {
+				if slices.Contains(retryableErrors, *e.Code) {
 					return errors.New(*e.Code)
 				}
 			}
@@ -291,7 +291,7 @@ func (w *s3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteOb
 		return err
 	})
 
-	if err != nil && !contains(retryableErrors, err.Error()) {
+	if err != nil && !slices.Contains(retryableErrors, err.Error()) {
 		return out, err
 	}
 
@@ -400,14 +400,4 @@ func wrapAWSerr(e error) error {
 
 func nilRespError(s3API string) error {
 	return fmt.Errorf("received a nil response for %q from s3", s3API)
-}
-
-func contains(list []string, s string) bool {
-	for _, l := range list {
-		if s == l {
-			return true
-		}
-	}
-
-	return false
 }
