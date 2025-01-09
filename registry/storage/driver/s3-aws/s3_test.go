@@ -1,8 +1,9 @@
 package s3
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	mrand "math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -671,7 +672,7 @@ func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, 
 	// simulate deleting numFiles files
 	paths := make([]string, 0, numFiles)
 	for i := 0; i < numFiles; i++ {
-		paths = append(paths, strconv.Itoa(rand.Int()))
+		paths = append(paths, strconv.Itoa(mrand.Int()))
 	}
 
 	return d.DeleteFiles(context.Background(), paths)

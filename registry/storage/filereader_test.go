@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"crypto/rand"
 	"io"
 	mrand "math/rand"
 	"testing"
@@ -16,7 +17,7 @@ import (
 func TestSimpleRead(t *testing.T) {
 	ctx := context.Background()
 	content := make([]byte, 1<<20)
-	n, err := mrand.Read(content)
+	n, err := rand.Read(content)
 	require.NoError(t, err, "unexpected error building random data")
 
 	require.Equal(t, len(content), n, "random read didn't fill buffer")

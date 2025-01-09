@@ -6,11 +6,12 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	mrand "math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -683,7 +684,7 @@ func createRandomSmallLayer() (io.ReadSeeker, digest.Digest, int64) {
 	// small as this will lead to flakes, as there is only one sha for layer
 	// size 0, handfull of shas for layer with size 1, etc... 128-196 bytes
 	// gives enough entropy to make tests reliable.
-	size := 128 + rand.Int63n(64)
+	size := 128 + mrand.Int63n(64)
 	b := make([]byte, size)
 	_, _ = rand.Read(b) // always returns err==nil
 
@@ -859,8 +860,8 @@ func randomPlatformSpec() manifestlist.PlatformSpec {
 	oses := []string{"aix", "darwin", "linux", "freebsd", "plan9"}
 
 	return manifestlist.PlatformSpec{
-		Architecture: architectures[rand.Intn(len(architectures))],
-		OS:           oses[rand.Intn(len(oses))],
+		Architecture: architectures[mrand.Intn(len(architectures))],
+		OS:           oses[mrand.Intn(len(oses))],
 		// Optional values.
 		OSVersion:  "",
 		OSFeatures: nil,
@@ -1057,7 +1058,7 @@ func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, targetM
 func shuffledCopy(s []string) []string {
 	shuffled := make([]string, len(s))
 	copy(shuffled, s)
-	rand.Shuffle(len(shuffled), func(i, j int) {
+	mrand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 

@@ -1,8 +1,9 @@
 package validation_test
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	mrand "math/rand"
 	"regexp"
 	"testing"
 
@@ -289,7 +290,7 @@ func TestVerifyManifest_OCI_ReferenceLimits(t *testing.T) {
 
 			// Create a random layer for each of the specified manifest layers.
 			for i := 0; i < tt.manifestLayers; i++ {
-				b := make([]byte, rand.Intn(20))
+				b := make([]byte, mrand.Intn(20))
 				rand.Read(b)
 
 				layer, err := repo.Blobs(ctx).Put(ctx, v1.MediaTypeImageLayer, b)

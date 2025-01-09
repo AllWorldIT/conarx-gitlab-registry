@@ -3,7 +3,8 @@
 package handlers
 
 import (
-	"math/rand"
+	"crypto/rand"
+	mrand "math/rand"
 	"testing"
 
 	"github.com/docker/distribution"
@@ -28,7 +29,7 @@ func buildRepository(t *testing.T, env *env, path string) *models.Repository {
 func randomDigest(t *testing.T) digest.Digest {
 	t.Helper()
 
-	bytes := make([]byte, rand.Intn(10000))
+	bytes := make([]byte, mrand.Intn(10000))
 	_, err := rand.Read(bytes)
 	require.NoError(t, err)
 
@@ -43,7 +44,7 @@ func buildRandomBlob(t *testing.T, env *env) *models.Blob {
 	b := &models.Blob{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
-		Size:      rand.Int63n(10000),
+		Size:      mrand.Int63n(10000),
 	}
 	err := bStore.Create(env.ctx, b)
 	require.NoError(t, err)
@@ -57,7 +58,7 @@ func randomBlobDescriptor(t *testing.T) distribution.Descriptor {
 	return distribution.Descriptor{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
-		Size:      rand.Int63n(10000),
+		Size:      mrand.Int63n(10000),
 	}
 }
 

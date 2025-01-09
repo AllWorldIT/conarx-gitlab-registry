@@ -3,7 +3,8 @@
 package datastore_test
 
 import (
-	"math/rand"
+	"crypto/rand"
+	mrand "math/rand"
 	"strconv"
 	"testing"
 	"time"
@@ -32,14 +33,14 @@ func randomBlob(t testing.TB) *models.Blob {
 	return &models.Blob{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
-		Size:      rand.Int63(),
+		Size:      mrand.Int63(),
 	}
 }
 
 func randomRepository(t testing.TB) *models.Repository {
 	t.Helper()
 
-	n := strconv.Itoa(rand.Int())
+	n := strconv.Itoa(mrand.Int())
 	return &models.Repository{
 		Name: n,
 		Path: n,

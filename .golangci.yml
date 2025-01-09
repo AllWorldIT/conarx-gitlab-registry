@@ -573,11 +573,6 @@ issues:
         - dupl
         - gosec
 
-    # TODO: replace rand.Read with crypto/rand.Read
-    - text: 'rand.Read has been deprecated since Go 1.20'
-      linters:
-        - staticcheck
-
 #     CertPool.Subjects() has been deprecated but there is no alternative
 #	 https://github.com/golang/go/issues/46287
     - text: 'SA1019: pool.Subjects has been deprecated since Go 1.18'
