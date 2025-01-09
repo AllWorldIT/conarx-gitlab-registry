@@ -434,23 +434,24 @@ func (d *driver) Walk(ctx context.Context, path string, f storagedriver.WalkFn) 
 // WalkParallel traverses a filesystem defined within driver in parallel, starting
 // from the given path, calling f on each file.
 func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.WalkFn) error {
-	// TODO: Verify that this driver can reliably handle parallel workloads before
-	// using storagedriver.WalkFallbackParallel
+	// NOTE(prozlach): WalkParallel will go away at some point, see
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/1182#note_2258251909
+	// for more context.
 	return d.Walk(ctx, path, f)
 }
 
 // listImpl simulates a filesystem style listImpl in which both files (blobs) and
 // directories (virtual containers) are returned for a given prefix.
 func (d *driver) listImpl(prefix string) ([]string, error) {
-	return d.listWithDelimter(prefix, "/")
+	return d.listWithDelimiter(prefix, "/")
 }
 
 // listBlobs lists all blobs whose names begin with the specified prefix.
 func (d *driver) listBlobs(prefix string) ([]string, error) {
-	return d.listWithDelimter(prefix, "")
+	return d.listWithDelimiter(prefix, "")
 }
 
-func (d *driver) listWithDelimter(prefix, delimiter string) ([]string, error) {
+func (d *driver) listWithDelimiter(prefix, delimiter string) ([]string, error) {
 	out := make([]string, 0)
 	marker := ""
 	containerRef := d.client.GetContainerReference(d.container)
@@ -512,11 +513,11 @@ func (d *driver) newWriter(path string, size int64) storagedriver.FileWriter {
 func (w *writer) Write(p []byte) (int, error) {
 	switch {
 	case w.closed:
-		return 0, fmt.Errorf("already closed")
+		return 0, storagedriver.ErrAlreadyClosed
 	case w.committed:
-		return 0, fmt.Errorf("already committed")
+		return 0, storagedriver.ErrAlreadyCommited
 	case w.canceled:
-		return 0, fmt.Errorf("already canceled")
+		return 0, storagedriver.ErrAlreadyCanceled
 	}
 
 	n, err := w.bw.Write(p)
@@ -530,7 +531,7 @@ func (w *writer) Size() int64 {
 
 func (w *writer) Close() error {
 	if w.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
 	return w.bw.Flush()
@@ -538,9 +539,9 @@ func (w *writer) Close() error {
 
 func (w *writer) Cancel() error {
 	if w.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	} else if w.committed {
-		return fmt.Errorf("already committed")
+		return storagedriver.ErrAlreadyCommited
 	}
 	w.canceled = true
 	blobRef := w.driver.client.GetContainerReference(w.driver.container).GetBlobReference(w.path)
@@ -550,11 +551,11 @@ func (w *writer) Cancel() error {
 func (w *writer) Commit() error {
 	switch {
 	case w.closed:
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	case w.committed:
-		return fmt.Errorf("already committed")
+		return storagedriver.ErrAlreadyCommited
 	case w.canceled:
-		return fmt.Errorf("already canceled")
+		return storagedriver.ErrAlreadyCanceled
 	}
 	w.committed = true
 	return w.bw.Flush()

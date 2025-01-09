@@ -33,6 +33,8 @@ import (
 
 	"github.com/docker/distribution/registry/storage"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
+	azure_v1 "github.com/docker/distribution/registry/storage/driver/azure/v1"
+	azure_v2 "github.com/docker/distribution/registry/storage/driver/azure/v2"
 	"github.com/docker/distribution/testutil"
 )
 
@@ -102,8 +104,9 @@ func (s *DriverSuite) tearDownSuiteGeneric(t require.TestingT) {
 // This causes the suite to abort if any files are left around in the storage
 // driver.
 func (s *DriverSuite) TearDownTest() {
-	files, _ := s.StorageDriver.List(s.ctx, "/")
-	require.Empty(s.T(), files, "Storage driver did not clean up properly. Offending files: %#v", files)
+	files, err := s.StorageDriver.List(s.ctx, "/")
+	assert.NoError(s.T(), err)
+	assert.Empty(s.T(), files, "Storage driver did not clean up properly")
 }
 
 type syncDigestSet struct {
@@ -237,10 +240,11 @@ func (s *DriverSuite) deletePath(t require.TestingT, targetPath string) {
 	// NOTE(prozlach): do the first check imediatelly as an optimization, so
 	// that we avoid the 1s wait even if the blobs were removed, and thus speed
 	// up the tests.
-	_, err = s.StorageDriver.List(s.ctx, targetPath)
+	paths, err := s.StorageDriver.List(s.ctx, targetPath)
 	if errors.As(err, new(storagedriver.PathNotFoundError)) {
 		return
 	}
+	s.T().Logf("files were not cleaned up (%s), entering wait loop", strings.Join(paths, ","))
 
 	startTime := time.Now()
 	require.EventuallyWithT(
@@ -1479,7 +1483,7 @@ func (s *DriverSuite) TestWalkParallelError() {
 func (s *DriverSuite) TestWalkParallelStopsProcessingOnError() {
 	d := s.StorageDriver.Name()
 	switch d {
-	case "filesystem", "azure":
+	case "filesystem", azure_v1.DriverName, azure_v2.DriverName:
 		s.T().Skipf("%s driver does not support true WalkParallel", d)
 	case "gcs":
 		parallelWalk := os.Getenv("GCS_PARALLEL_WALK")

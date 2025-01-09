@@ -222,3 +222,9 @@ func (err Error) Error() string {
 func (err Error) Unwrap() error {
 	return err.Enclosed
 }
+
+var (
+	ErrAlreadyClosed   = fmt.Errorf("already closed")
+	ErrAlreadyCommited = fmt.Errorf("already committed")
+	ErrAlreadyCanceled = fmt.Errorf("already canceled")
+)

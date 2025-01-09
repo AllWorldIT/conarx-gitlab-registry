@@ -14,7 +14,6 @@ The following configuration parameters are required:
 
 | Parameter    | Required | Description                                                              |
 |:-------------|:---------|:-------------------------------------------------------------------------|
-| `credentialstype` | no      | Must be set to `shared_key` to use this authentication method. If not specified, defaults to `shared_key`.   |
 | `accountname`     | yes     | Name of the Azure Storage Account.                                    |
 | `accountkey`      | yes     | Primary or Secondary Key for the Storage Account, base64 encoded.     |
 

@@ -18,8 +18,20 @@ const (
 	ParamServiceURLKey = "serviceurl"
 	ParamRootDirectory = "rootdirectory"
 
+	ParamPoolInitialInterval = "apipoolinitialinterval"
+	ParamPoolMaxInterval     = "apipoolmaxinterval"
+	ParamPoolMaxElapsedTime  = "apipoolmaxelapsedtime"
+
 	ParamTrimLegacyRootPrefix = "trimlegacyrootprefix"
 	ParamLegacyRootPrefix     = "legacyrootprefix"
+
+	// NOTE(prozlach): In theory debug logging could be enabled using
+	// AZURE_SDK_GO_LOGGING env var, but in practice we want to have
+	// fine-grained control over events that get logged, we want events to be
+	// logged using logrus just like other drivers do and we want logging
+	// configurable from within driver configuration.
+	ParamDebugLog       = "debuglog"
+	ParamDebugLogEvents = "debuglogevents"
 
 	// NOTE(prozlach): Names of the variables are intentional, in order to
 	// match those required by:
@@ -46,6 +58,11 @@ const (
 	// Common parameters:
 	EnvContainer = "AZURE_CONTAINER"
 	EnvRealm     = "AZURE_REALM"
+
+	// Enables debug logging for Azure SDK. It is possible to filter the events
+	// being printed - check the code in the `ParseParameters()` function,
+	// where we parse the `common.ParamDebugLogEvents` parameter
+	EnvDebugLog = "AZURE_DEBUGLOG"
 
 	// specifies driver to use, one of: "azure", "azure_v2"
 	EnvDriverVersion = "AZURE_DRIVER_VERSION"
