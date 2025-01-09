@@ -366,6 +366,13 @@ options marked as **required**. In these cases, you can omit the parent with
 all its children. However, if the parent is included, you must also include all
 the children marked **required**.
 
+<!--- start_remove The following content will be removed on remove_date: '2025/08/15' -->
+
+WARNING:
+Support for authenticating requests using Amazon S3 Signature Version 2 in the container registry is deprecated in GitLab 17.8 and is planned for removal in 18.0. Use Signature Version 4 instead. This is a breaking change. For more information, see [issue 1449](https://gitlab.com/gitlab-org/container-registry/-/issues/1449).
+
+<!--- end_remove -->
+
 ## `version`
 
 ```none
