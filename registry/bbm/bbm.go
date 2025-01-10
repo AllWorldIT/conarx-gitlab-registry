@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/docker/distribution/registry/bbm/metrics"
+
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
@@ -198,7 +200,9 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 			// A period has elapsed, time to try to find and execute any available jobs.
 			case <-ticker.C:
 				jw.logger.Info("starting worker run...")
+				report := metrics.WorkerRun()
 				jw.run(ctx)
+				report()
 			}
 		}
 	}()
@@ -271,6 +275,7 @@ func (jw *Worker) run(ctx context.Context) {
 
 	// A job was found, lets execute it
 	jw.logger.Info("job found, executing")
+	defer metrics.Job(job.BatchSize, job.JobName, fmt.Sprint(job.BBMID))()
 	err = jw.wh.ExecuteJob(ctx, bbmStore, job)
 	if err != nil {
 		l.WithError(err).Error("failed to execute job")
@@ -284,6 +289,7 @@ func (jw *Worker) run(ctx context.Context) {
 		return
 	}
 
+	metrics.MigrationRecord(job.BatchSize, job.JobName, fmt.Sprint(job.BBMID))
 	l.Info("finished background migration job run")
 }
 
@@ -398,6 +404,8 @@ func (jw *Worker) ExecuteJob(ctx context.Context, bbmStore datastore.BackgroundM
 
 	// find the job function from the registered work map and execute it.
 	if work, found := jw.Work[job.JobName]; found {
+		defer metrics.InstrumentQuery(job.JobName, fmt.Sprint(job.BBMID))()
+
 		err := work.Do(ctx, jw.db, job.PaginationTable, job.PaginationColumn, job.StartID, job.EndID, job.BatchSize)
 		if err != nil {
 			jw.logger.WithError(err).Error("failed executing job")
