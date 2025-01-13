@@ -249,6 +249,10 @@ func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storaged
 			if err != nil {
 				return nil, fmt.Errorf("deleting existing blob before write: %w", err)
 			}
+			err = blobRef.PutAppendBlob(nil)
+			if err != nil {
+				return nil, fmt.Errorf("initializing empty append blob: %w", err)
+			}
 		}
 	} else {
 		if doAppend {
@@ -256,7 +260,7 @@ func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storaged
 		}
 		err = blobRef.PutAppendBlob(nil)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("initializing empty append blob: %w", err)
 		}
 	}
 

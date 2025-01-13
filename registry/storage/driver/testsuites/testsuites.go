@@ -720,6 +720,70 @@ func (s *DriverSuite) TestMoveWritterBlob() {
 	})
 }
 
+// TestOverwriteAppendBlob checks that driver can overwrite blob created using
+// Write() call with PutContent() call. In case of e.g. Azure, Write() creates
+// AppendBlob and PutContent() creates a BlockBlob and there is no in-place
+// conversion - blob needs to be deleted and re-created when overwritting it.
+func (s *DriverSuite) TestOverwriteAppendBlob() {
+	contentsAppend := randomContents(32)
+	contentsBlock := randomContents(32)
+	destPath := randomPath(1, 32)
+
+	defer s.deletePath(s.T(), firstPart(destPath))
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err, "unexpected error from driver.Writer")
+
+	_, err = writer.Write(contentsAppend)
+	require.NoError(s.T(), err, "writer.Write: unexpected error")
+
+	// NOTE(prozlach): For some drivers, Close(), does not imply Commit()
+	err = writer.Commit()
+	require.NoError(s.T(), err, "writer.Commit: unexpected error")
+
+	err = writer.Close()
+	require.NoError(s.T(), err, "writer.Close: unexpected error")
+
+	err = s.StorageDriver.PutContent(s.ctx, destPath, contentsBlock)
+	require.NoError(s.T(), err)
+
+	received, err := s.StorageDriver.GetContent(s.ctx, destPath)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), contentsBlock, received)
+}
+
+// TestOverwriteBlockBlob checks that driver can overwrite blob created using
+// PutContent() call using Write() call. In case of e.g. Azure Write() creates
+// Append blob and Write() creates a Block blob and there is no in-place
+// conversion - blob needs to be deleted.
+func (s *DriverSuite) TestOverwriteBlockBlob() {
+	contentsAppend := randomContents(32)
+	contentsBlock := randomContents(32)
+	destPath := randomPath(1, 32)
+
+	defer s.deletePath(s.T(), firstPart(destPath))
+
+	err := s.StorageDriver.PutContent(s.ctx, destPath, contentsBlock)
+	require.NoError(s.T(), err)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err, "unexpected error from driver.Writer")
+
+	_, err = writer.Write(contentsAppend)
+	require.NoError(s.T(), err, "writer.Write: unexpected error")
+
+	// NOTE(prozlach): For some drivers, Close(), does not imply Commit()
+	err = writer.Commit()
+	require.NoError(s.T(), err, "writer.Commit: unexpected error")
+
+	err = writer.Close()
+	require.NoError(s.T(), err, "writer.Close: unexpected error")
+
+	received, err := s.StorageDriver.GetContent(s.ctx, destPath)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), contentsAppend, received)
+}
+
 // TestMoveOverwrite checks that a moved object no longer exists at the source
 // path and overwrites the contents at the destination.
 func (s *DriverSuite) TestMoveOverwrite() {
