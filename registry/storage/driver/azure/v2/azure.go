@@ -78,6 +78,8 @@ func New(in any) (storagedriver.StorageDriver, error) {
 	switch params.credentialsType {
 	case common.CredentialsTypeSharedKey:
 		return newSharedKeyCredentialsClient(params)
+	case common.CredentialsTypeClientSecret, common.CredentialsTypeDefaultCredentials:
+		return newTokenClient(params)
 	default:
 		return nil, fmt.Errorf("invalid credentials type: %q", params.credentialsType)
 	}

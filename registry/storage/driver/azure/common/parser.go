@@ -7,11 +7,17 @@ import (
 )
 
 const (
-	ParamCredentialsType     = "credentialstype"
-	CredentialsTypeSharedKey = "shared_key"
+	ParamCredentialsType              = "credentialstype"
+	CredentialsTypeSharedKey          = "shared_key"
+	CredentialsTypeClientSecret       = "client_secret"
+	CredentialsTypeDefaultCredentials = "default_credentials"
 
 	ParamAccountName = "accountname"
 	ParamAccountKey  = "accountkey"
+
+	ParamTenantID = "tenantid"
+	ParamClientID = "clientid"
+	ParamSecret   = "secret"
 
 	ParamContainer     = "container"
 	ParamRealm         = "realm"
@@ -45,12 +51,21 @@ const (
 	// EnvCredentialsType determines the type of credentials to use, determines
 	// which env variables need to be set, must be one of:
 	// * shared_key
+	// * client_secret
+	// * default_credentials
 	// nolint: gosec // Potential hardcoded credentials
 	EnvCredentialsType = "AZURE_CREDENTIALS_TYPE"
 
 	// Shared keys credentials:
 	EnvAccountName = "AZURE_ACCOUNT_NAME"
 	EnvAccountKey  = "AZURE_ACCOUNT_KEY"
+
+	// Client secret credentials:
+	EnvTenantID = "AZURE_TENANT_ID"
+	// nolint: gosec // Potential hardcoded credentials
+	EnvClientID = "AZURE_CLIENT_ID"
+	// nolint: gosec // Potential hardcoded credentials
+	EnvSecret = "AZURE_CLIENT_SECRET"
 
 	// When testing default azure credentials, we use CLI credentials which in
 	// turn authenticates using a certificate

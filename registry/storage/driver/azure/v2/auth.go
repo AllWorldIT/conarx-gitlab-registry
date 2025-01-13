@@ -3,20 +3,29 @@ package v2
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	azlog "github.com/Azure/azure-sdk-for-go/sdk/azcore/log"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/sirupsen/logrus"
 )
 
-// NOTE(prozlach): Time period in the past, starting from time.Now(), for which
-// the signed URL is already valid. Meant to minimize issues caused by small time
-// synchronization issues. Value follows the one set by upstream.
-const clockSkewTolerance = 10 * time.Second
+const (
+	// NOTE(prozlach): Time period in the past, starting from time.Now(), for which
+	// the signed URL is already valid. Meant to minimize issues caused by small time
+	// synchronization issues. Value follows the one set by upstream.
+	clockSkewTolerance = 10 * time.Second
+	UDCGracePeriod     = 30.0 * time.Minute
+	UDCExpiryTime      = 48.0 * time.Hour
+)
 
 // signer abstracts the specifics of a blob SAS and is specialized
 // for the different authentication credentials
@@ -37,6 +46,50 @@ type sharedKeySigner struct {
 func (s *sharedKeySigner) Sign(_ context.Context, signatureValues *sas.BlobSignatureValues) (sas.QueryParameters, error) {
 	return signatureValues.SignWithSharedKey(s.cred)
 }
+
+var _ signer = (*clientTokenSigner)(nil)
+
+type clientTokenSigner struct {
+	client *azblob.Client
+	cred   azcore.TokenCredential
+
+	udc       *service.UserDelegationCredential
+	udcMutex  sync.Mutex
+	udcExpiry time.Time
+}
+
+func (s *clientTokenSigner) refreshUDC(ctx context.Context) (*service.UserDelegationCredential, error) {
+	s.udcMutex.Lock()
+	defer s.udcMutex.Unlock()
+
+	now := time.Now().UTC()
+	if s.udc == nil || s.udcExpiry.Sub(now) < UDCGracePeriod {
+		// reissue user delegation credential
+		startTime := now.Add(-10 * time.Second)
+		expiryTime := startTime.Add(UDCExpiryTime)
+		info := service.KeyInfo{
+			Start:  to.Ptr(startTime.UTC().Format(sas.TimeFormat)),
+			Expiry: to.Ptr(expiryTime.UTC().Format(sas.TimeFormat)),
+		}
+		udc, err := s.client.ServiceClient().GetUserDelegationCredential(ctx, info, nil)
+		if err != nil {
+			return nil, fmt.Errorf("creating user delegation credentials: %w", err)
+		}
+		s.udc = udc
+		s.udcExpiry = expiryTime
+	}
+	return s.udc, nil
+}
+
+func (s *clientTokenSigner) Sign(ctx context.Context, signatureValues *sas.BlobSignatureValues) (sas.QueryParameters, error) {
+	udc, err := s.refreshUDC(ctx)
+	if err != nil {
+		return sas.QueryParameters{}, fmt.Errorf("refreshing UDC credentials: %w", err)
+	}
+	return signatureValues.SignWithUserDelegation(udc)
+}
+
+var _ urlSigner = (*urlSignerImpl)(nil)
 
 type urlSignerImpl struct {
 	si signer
@@ -79,6 +132,47 @@ func newSharedKeyCredentialsClient(params *driverParameters) (*Driver, error) {
 		signer: &urlSignerImpl{
 			si: &sharedKeySigner{
 				cred: cred,
+			},
+		},
+	}
+	commonClientSetup(params, d)
+
+	return &Driver{baseEmbed: baseEmbed{Base: base.Base{StorageDriver: d}}}, nil
+}
+
+func newTokenClient(params *driverParameters) (*Driver, error) {
+	var cred azcore.TokenCredential
+	var err error
+
+	if params.credentialsType == common.CredentialsTypeClientSecret {
+		cred, err = azidentity.NewClientSecretCredential(
+			params.tenantID,
+			params.clientID,
+			params.secret,
+			nil,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("creating new client-secret credential: %w", err)
+		}
+	} else {
+		// params.credentialsType == credentialsTypeDefaultCredentials
+		cred, err = azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			return nil, fmt.Errorf("creating default azure credentials: %w", err)
+		}
+	}
+
+	client, err := azblob.NewClient(params.serviceURL, cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating azure client: %w", err)
+	}
+
+	d := &driver{
+		client: client.ServiceClient().NewContainerClient(params.container),
+		signer: &urlSignerImpl{
+			si: &clientTokenSigner{
+				cred:   cred,
+				client: client,
 			},
 		},
 	}

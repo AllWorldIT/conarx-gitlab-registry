@@ -14,6 +14,11 @@ type driverParameters struct {
 	// One of `shared_key,client_secret,default_credentials`
 	credentialsType string
 
+	// client_secret:
+	tenantID string
+	clientID string
+	secret   string
+
 	// shared key:
 	accountName string
 	accountKey  string
@@ -60,6 +65,27 @@ func ParseParameters(parameters map[string]any) (any, error) {
 			return nil, fmt.Errorf("no %s parameter provided", common.ParamAccountKey)
 		}
 		res.accountKey = fmt.Sprint(tmp)
+	case common.CredentialsTypeClientSecret:
+		tmp, ok := parameters[common.ParamClientID]
+		if !ok || fmt.Sprint(tmp) == "" {
+			return nil, fmt.Errorf("no %s parameter provided", common.ParamClientID)
+		}
+		res.clientID = fmt.Sprint(tmp)
+
+		tmp, ok = parameters[common.ParamTenantID]
+		if !ok || fmt.Sprint(tmp) == "" {
+			return nil, fmt.Errorf("no %s parameter provided", common.ParamTenantID)
+		}
+		res.tenantID = fmt.Sprint(tmp)
+
+		tmp, ok = parameters[common.ParamSecret]
+		if !ok || fmt.Sprint(tmp) == "" {
+			return nil, fmt.Errorf("no %s parameter provided", common.ParamSecret)
+		}
+		res.secret = fmt.Sprint(tmp)
+	case common.CredentialsTypeDefaultCredentials:
+		// Azure SDK will try to auto-detect instnance-credentials, env vars,
+		// etc... So there are no extra config variables here.
 	default:
 		return nil, fmt.Errorf("credentials type %q is invalid", res.credentialsType)
 	}
