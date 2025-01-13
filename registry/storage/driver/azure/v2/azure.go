@@ -498,9 +498,11 @@ func (d *driver) listBlobs(ctx context.Context, prefix string) ([]string, error)
 
 func (d *driver) listWithDelimiter(ctx context.Context, prefix, delimiter string) ([]string, error) {
 	out := make([]string, 0)
-	pager := d.client.NewListBlobsHierarchyPager(delimiter, &container.ListBlobsHierarchyOptions{
-		Prefix: &prefix,
-	})
+	pager := d.client.NewListBlobsHierarchyPager(
+		delimiter, &container.ListBlobsHierarchyOptions{
+			Prefix:     &prefix,
+			MaxResults: to.Ptr((int32)(common.ListMax)),
+		})
 	for pager.More() {
 		page, err := pager.NextPage(ctx)
 		if err != nil {
