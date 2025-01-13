@@ -119,17 +119,17 @@ type NullDigest struct {
 // by merging a Tag entity with the corresponding Manifest entity and the GET /gitlab/v1/<name>/tags/list
 // and GET /gitlab/v1/<name>/tags/detail API endpoints are its primary use case.
 type TagDetail struct {
-	Name            string
-	Digest          digest.Digest
-	ConfigDigest    NullDigest
-	MediaType       string
-	Size            int64
-	CreatedAt       time.Time
-	UpdatedAt       sql.NullTime
-	PublishedAt     time.Time
-	Referrers       []TagReferrerDetail
-	ManifestPayload Payload
-	ConfigPayload   Payload
+	ManifestID    int64
+	Name          string
+	Digest        digest.Digest
+	ConfigDigest  NullDigest
+	MediaType     string
+	Size          int64
+	CreatedAt     time.Time
+	UpdatedAt     sql.NullTime
+	PublishedAt   time.Time
+	Referrers     []TagReferrerDetail
+	Configuration *Configuration
 }
 
 type TagReferrerDetail struct {

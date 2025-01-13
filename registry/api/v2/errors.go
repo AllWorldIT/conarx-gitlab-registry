@@ -61,6 +61,15 @@ var (
 		HTTPStatusCode: http.StatusNotFound,
 	})
 
+	// ErrorTagNameUnknown when the tag name for a given repository is not known.
+	ErrorTagNameUnknown = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:   "TAG_UNKNOWN",
+		Message: "tag name for repository does not exist",
+		Description: `This is returend if the tagName used during an operation
+		is unknown to the registry.`,
+		HTTPStatusCode: http.StatusNotFound,
+	})
+
 	// ErrorCodeManifestUnknown returned when image manifest is unknown.
 	ErrorCodeManifestUnknown = errcode.Register(errGroup, errcode.ErrorDescriptor{
 		Value:   "MANIFEST_UNKNOWN",

@@ -16,6 +16,7 @@ import (
 
 	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/notifications"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
@@ -28,6 +29,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
@@ -1220,4 +1222,227 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 		}
 	}
 	return isRenamed, nil
+}
+
+type repositoryTagDetailsHandler struct {
+	*Context
+	Tag string
+}
+
+func repositoryTagDetailsDispatcher(ctx *Context, _ *http.Request) http.Handler {
+	repositorySingleTagHandler := &repositoryTagDetailsHandler{
+		Context: ctx,
+		Tag:     getTagName(ctx),
+	}
+
+	return handlers.MethodHandler{
+		http.MethodGet: http.HandlerFunc(repositorySingleTagHandler.HandleGetSingleTag),
+	}
+}
+
+// RepositoryTagDetailAPIResponse describes the API response for the endpoint
+// GET /gitlab/v1/repositories/<path>/tags/detail/<tagName>/
+type RepositoryTagDetailAPIResponse struct {
+	Repository  string `json:"repository"`
+	Name        string `json:"name"`
+	Image       *Image `json:"image"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	PublishedAt string `json:"published_at,omitempty"`
+}
+
+type Image struct {
+	SizeBytes int64     `json:"size_bytes"`
+	Manifest  *Manifest `json:"manifest"`
+	Config    *Config   `json:"config,omitempty"`
+}
+
+type Manifest struct {
+	Digest     string   `json:"digest"`
+	MediaType  string   `json:"media_type"`
+	References []*Image `json:"references,omitempty"`
+}
+
+type Config struct {
+	Digest    string    `json:"digest"`
+	MediaType string    `json:"media_type"`
+	Platform  *Platform `json:"platform,omitempty"`
+}
+
+type Platform struct {
+	Architecture string `json:"architecture"`
+	OS           string `json:"os"`
+}
+
+// HandleGetSingleTag retrieves detailed information about a specific tag in a repository
+func (h *repositoryTagDetailsHandler) HandleGetSingleTag(w http.ResponseWriter, _ *http.Request) {
+	if err := validateTagName(h.Tag); err != nil {
+		h.Errors = append(h.Errors, err)
+		return
+	}
+
+	repo, err := h.getRepository()
+	if err != nil {
+		h.Errors = append(h.Errors, err)
+		return
+	}
+
+	rStore := datastore.NewRepositoryStore(h.db.Primary())
+	std, err := rStore.TagDetail(h.Context, repo, h.Tag)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	if std == nil {
+		h.Errors = append(h.Errors, v2.ErrorTagNameUnknown.WithDetail(map[string]string{"tagName": h.Tag}))
+		return
+	}
+
+	resp, err := h.buildTagResponse(repo, std)
+	if err != nil {
+		h.Errors = append(h.Errors, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+}
+
+func validateTagName(tagName string) error {
+	if !reference.TagRegexp.MatchString(tagName) {
+		return v2.ErrorCodeTagInvalid.WithDetail(tagName)
+	}
+	return nil
+}
+
+func (h *repositoryTagDetailsHandler) getRepository() (*models.Repository, error) {
+	var opts []datastore.RepositoryStoreOption
+	if h.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(h.GetRepoCache()))
+	}
+
+	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
+
+	repo, err := rStore.FindByPath(h.Context, h.Repository.Named().Name())
+	if err != nil {
+		return nil, errcode.FromUnknownError(err)
+	}
+	if repo == nil {
+		return nil, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": h.Repository.Named().Name()})
+	}
+	return repo, nil
+}
+
+func (h *repositoryTagDetailsHandler) buildTagResponse(repo *models.Repository, std *models.TagDetail) (*RepositoryTagDetailAPIResponse, error) {
+	cfg, err := parseConfigPayload(std.Configuration)
+	if err != nil {
+		return nil, errcode.FromUnknownError(err)
+	}
+
+	manifest := &models.Manifest{
+		ID:           std.ManifestID,
+		Digest:       std.Digest,
+		NamespaceID:  repo.NamespaceID,
+		RepositoryID: repo.ID,
+		MediaType:    std.MediaType,
+	}
+
+	resp := &RepositoryTagDetailAPIResponse{
+		Repository: h.Repository.Named().Name(),
+		Name:       std.Name,
+		Image: &Image{
+			SizeBytes: std.Size,
+			Manifest:  h.parseManifest(manifest),
+			Config:    cfg,
+		},
+		CreatedAt:   timeToString(std.CreatedAt),
+		PublishedAt: timeToString(std.PublishedAt),
+	}
+
+	if std.UpdatedAt.Valid {
+		resp.UpdatedAt = timeToString(std.UpdatedAt.Time)
+	}
+
+	return resp, nil
+}
+
+func parseConfigPayload(cfg *models.Configuration) (*Config, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+
+	payload, err := cfg.Payload.Value()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Config{
+		Digest:    cfg.Digest.String(),
+		MediaType: cfg.MediaType,
+		Platform:  parsePlatformFromPayload(payload.([]byte)),
+	}, nil
+}
+
+func parsePlatformFromPayload(payload []byte) *Platform {
+	if payload == nil {
+		return nil
+	}
+
+	var d map[string]any
+	if err := json.Unmarshal(payload, &d); err != nil {
+		return nil
+	}
+	// NOTE: asserting that the map key exists is not necessary as this allocates
+	// an empty string if the key does not exist for architecture and os.
+	arch, _ := d["architecture"].(string)
+	os, _ := d["os"].(string)
+
+	return &Platform{
+		Architecture: arch,
+		OS:           os,
+	}
+}
+
+func (h *repositoryTagDetailsHandler) parseManifest(m *models.Manifest) *Manifest {
+	manifest := &Manifest{
+		Digest:    m.Digest.String(),
+		MediaType: m.MediaType,
+	}
+
+	if isManifestList(m.MediaType) {
+		manifest.References = h.getManifestReferences(m)
+	}
+
+	return manifest
+}
+
+func isManifestList(mediaType string) bool {
+	return mediaType == manifestlist.MediaTypeManifestList || mediaType == ociv1.MediaTypeImageIndex
+}
+
+func (h *repositoryTagDetailsHandler) getManifestReferences(m *models.Manifest) []*Image {
+	mStore := datastore.NewManifestStore(h.db.Primary())
+	references, err := mStore.References(h.Context, m)
+	if err != nil {
+		return nil
+	}
+
+	var result []*Image
+	for _, ref := range references {
+		cfg, err := parseConfigPayload(ref.Configuration)
+		if err != nil {
+			continue
+		}
+		result = append(result, &Image{
+			SizeBytes: ref.TotalSize,
+			Manifest:  h.parseManifest(ref),
+			Config:    cfg,
+		})
+	}
+
+	return result
 }

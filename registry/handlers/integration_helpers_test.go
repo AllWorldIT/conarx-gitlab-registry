@@ -569,6 +569,7 @@ func withAuthToken(t string) manifestOptsFunc {
 func schema2Config() ([]byte, distribution.Descriptor) {
 	payload := []byte(`{
 		"architecture": "amd64",
+		"os": "linux",
 		"history": [
 			{
 				"created": "2015-10-31T22:22:54.690851953Z",
