@@ -203,6 +203,10 @@ func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storag
 			if err != nil {
 				return nil, fmt.Errorf("deleting existing blob before write: %w", err)
 			}
+			_, err = d.client.NewAppendBlobClient(blobName).Create(ctx, nil)
+			if err != nil {
+				return nil, fmt.Errorf("creating new append blob: %w", err)
+			}
 		}
 	} else {
 		if doAppend {
