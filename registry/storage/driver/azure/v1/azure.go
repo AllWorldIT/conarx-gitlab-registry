@@ -14,8 +14,6 @@ import (
 	"time"
 
 	azure "github.com/Azure/azure-sdk-for-go/storage"
-	"github.com/benbjohnson/clock"
-	"github.com/docker/distribution/registry/internal"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
 	"github.com/docker/distribution/registry/storage/driver/base"
@@ -399,14 +397,11 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 	return count, nil
 }
 
-// for testing purposes
-var systemClock internal.Clock = clock.New()
-
 // URLFor returns a publicly accessible URL for the blob stored at given path
 // for specified duration by making use of Azure Storage Shared Access Signatures (SAS).
 // See https://msdn.microsoft.com/en-us/library/azure/ee395415.aspx for more info.
 func (d *driver) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
-	expiresTime := systemClock.Now().UTC().Add(20 * time.Minute) // default expiration
+	expiresTime := common.SystemClock.Now().UTC().Add(20 * time.Minute) // default expiration
 	expires, ok := options["expiry"]
 	if ok {
 		t, ok := expires.(time.Time)
