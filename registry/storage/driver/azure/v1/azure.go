@@ -457,9 +457,10 @@ func (d *driver) listWithDelimiter(prefix, delimiter string) ([]string, error) {
 	containerRef := d.client.GetContainerReference(d.container)
 	for {
 		resp, err := containerRef.ListBlobs(azure.ListBlobsParameters{
-			Marker:    marker,
-			Prefix:    prefix,
-			Delimiter: delimiter,
+			Marker:     marker,
+			Prefix:     prefix,
+			Delimiter:  delimiter,
+			MaxResults: common.ListMax,
 		})
 		if err != nil {
 			return out, err

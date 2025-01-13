@@ -2,6 +2,12 @@ package common
 
 import "strings"
 
+// ListMax is the largest number of objects we request from Azure in a single
+// list call. This value aligns Azure driver with S3 and GCS drivers and
+// enables testing/exercising of underlying Azure pagination in the List()
+// function.
+const ListMax = 1000
+
 type Pather struct {
 	rootDirectory string
 
