@@ -91,6 +91,7 @@ storage:
     legacyrootprefix: false
     trimlegacyrootprefix: false
   azure_v2:
+    credentialstype: shared_key
     accountname: accountname
     accountkey: base64encodedaccountkey
     realm: realm
@@ -452,6 +453,7 @@ storage:
     legacyrootprefix: false
     trimlegacyrootprefix: false
   azure_v2:
+    credentialstype: shared_key
     accountname: accountname
     accountkey: base64encodedaccountkey
     realm: realm

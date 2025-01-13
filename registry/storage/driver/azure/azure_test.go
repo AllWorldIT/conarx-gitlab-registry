@@ -29,6 +29,10 @@ var (
 	accountName string
 	accountKey  string
 
+	tenantID string
+	clientID string
+	secret   string
+
 	accountContainer string
 	accountRealm     string
 
@@ -84,6 +88,21 @@ func fetchEnvVarsConfiguration() {
 			{common.EnvContainer, &accountContainer},
 			{common.EnvRealm, &accountRealm},
 		}
+	case common.CredentialsTypeClientSecret:
+		expected = []envConfig{
+			{common.EnvTenantID, &tenantID},
+			{common.EnvClientID, &clientID},
+			{common.EnvSecret, &secret},
+			{common.EnvAccountName, &accountName},
+			{common.EnvContainer, &accountContainer},
+			{common.EnvRealm, &accountRealm},
+		}
+	case common.CredentialsTypeDefaultCredentials:
+		expected = []envConfig{
+			{common.EnvAccountName, &accountName},
+			{common.EnvContainer, &accountContainer},
+			{common.EnvRealm, &accountRealm},
+		}
 	default:
 		msg := fmt.Sprintf("invalid azure credentials type: %q", credsType)
 		missing = []string{msg}
@@ -119,12 +138,25 @@ func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (st
 		common.ParamTrimLegacyRootPrefix: trimLegacyRootPrefix,
 	}
 
-	// nolint: revive,gocritic // this will be extended as soon as we add
-	// managed identities
 	switch credsType {
 	case common.CredentialsTypeSharedKey:
 		rawParams[common.ParamAccountKey] = accountKey
 		rawParams[common.ParamCredentialsType] = common.CredentialsTypeSharedKey
+	case common.CredentialsTypeClientSecret:
+		rawParams[common.ParamTenantID] = tenantID
+		rawParams[common.ParamClientID] = clientID
+		rawParams[common.ParamSecret] = secret
+		rawParams[common.ParamCredentialsType] = common.CredentialsTypeClientSecret
+	case common.CredentialsTypeDefaultCredentials:
+		rawParams[common.ParamCredentialsType] = common.CredentialsTypeDefaultCredentials
+	}
+
+	if debugLog {
+		rawParams[common.ParamDebugLog] = "true"
+		// logging all events is enabled by default, uncomment and adjust call
+		// below to change it:
+		//
+		// rawParams[paramDebugLogEvents]="Request,Response,ResponseError,Retry,LongRunningOperation"
 	}
 
 	if debugLog {

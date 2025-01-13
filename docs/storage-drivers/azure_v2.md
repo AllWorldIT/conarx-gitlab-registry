@@ -20,6 +20,41 @@ This method uses an account name and account key to authenticate with Azure stor
 | `accountname`     | yes     | Name of the Azure Storage Account.                                    |
 | `accountkey`      | yes     | Primary or Secondary Key for the Storage Account, base64 encoded.     |
 
+### Client Secret  
+
+This method uses an Azure Entra service principal to authenticate with Azure storage.
+A service principal is an identity created for use with applications, hosted services, and automated tools to access Azure resources.
+
+To use this method, you first need to create an [Application Registration in Azure Entra](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=certificate) and assign it the necessary permissions to access your storage account.
+You'll need to provide the following configuration parameters:
+
+| Parameter    | Required | Description                                            |
+|:-------------|:---------|:-------------------------------------------------------|
+| `credentialstype` | yes     | Must be set to `client_secret` to use this authentication method. |
+| `tenantid`        | yes     | Azure AD tenant ID.                                 |
+| `clientid`        | yes     | Azure AD client (application) ID.                   |  
+| `secret`          | yes     | Azure AD client secret.                             |
+
+When the registry starts up with these parameters, it will use the provided service principal credentials to request an access token from Azure AD. This token will then be used to authenticate all subsequent requests to Azure storage.
+
+The main advantage of this method compared to shared keys is that service principal credentials can be easily rotated and have fine-grained access control through Azure role-based access control (RBAC).
+The trade-off is the additional complexity of setting up and managing the service principal and its permissions.
+
+### Default Credentials
+
+This method uses the default credentials of the environment the registry is running in.
+This could be, for example, managed identities for Azure resources, or Azure CLI credentials.
+The driver will automatically try to detect and use the most appropriate credentials available in the environment without requiring any additional configuration parameters.
+
+When running in an Azure cloud environment, such as a Virtual Machine or App Service with a managed identity, the registry will automatically use that managed identity to authenticate with Azure storage.
+When running locally for development, the driver will use the credentials of the logged in Azure CLI user.
+
+No additional configuration parameters are required.
+
+| Parameter    | Required | Description                                            |
+|:-------------|:---------|:-------------------------------------------------------|
+| `credentialstype` | yes     | Must be set to `default_credentials` to use this authentication method. |
+
 ## Other Parameters
 
 | Parameter    | Required | Description                                            |
