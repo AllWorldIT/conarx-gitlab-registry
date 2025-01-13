@@ -61,6 +61,10 @@ func getName(ctx context.Context) (name string) {
 	return dcontext.GetStringValue(ctx, "vars.name")
 }
 
+func getTagName(ctx context.Context) string {
+	return dcontext.GetStringValue(ctx, "vars.tagName")
+}
+
 func getReference(ctx context.Context) (reference string) {
 	return dcontext.GetStringValue(ctx, "vars.reference")
 }

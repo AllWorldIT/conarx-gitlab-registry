@@ -1299,6 +1299,7 @@ func (app *App) initMetaRouter() error {
 		})
 	}))
 	app.registerGitlab(v1.RepositoryTags, h.wrap(repositoryTagsDispatcher))
+	app.registerGitlab(v1.RepositoryTagDetail, h.wrap(repositoryTagDetailsDispatcher))
 	app.registerGitlab(v1.Repositories, h.wrap(repositoryDispatcher))
 	app.registerGitlab(v1.SubRepositories, h.wrap(subRepositoriesDispatcher))
 

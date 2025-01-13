@@ -36,6 +36,12 @@ var (
 		Path: Base.Path + "repositories/{name:" + reference.NameRegexp.String() + "}/tags/list/",
 		ID:   Base.Path + "repositories/{name}/tags/list",
 	}
+	// RepositoryTagDetail is the API route for the repository tag details endpoint.
+	RepositoryTagDetail = Route{
+		Name: "repository-tag-detail",
+		Path: Base.Path + "repositories/{name:" + reference.NameRegexp.String() + "}/tags/detail/{tagName:" + reference.TagRegexp.String() + "}/",
+		ID:   Base.Path + "repositories/{name}/tags/detail/{tagName}",
+	}
 	// SubRepositories is the API route for the sub-repositories list.
 	SubRepositories = Route{
 		Name: "sub-repositories",
@@ -62,6 +68,7 @@ func RouterWithPrefix(prefix string) *mux.Router {
 
 	router.Path(Base.Path).Name(Base.Name)
 	router.Path(RepositoryTags.Path).Name(RepositoryTags.Name)
+	router.Path(RepositoryTagDetail.Path).Name(RepositoryTagDetail.Name)
 	router.Path(Repositories.Path).Name(Repositories.Name)
 	router.Path(SubRepositories.Path).Name(SubRepositories.Name)
 

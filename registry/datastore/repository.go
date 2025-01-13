@@ -1058,30 +1058,36 @@ func (s *repositoryStore) TagDetail(ctx context.Context, r *models.Repository, t
 			t.created_at,
 			t.updated_at,
 			GREATEST(t.created_at, t.updated_at) as published_at,
-			m.payload,
+			m.id,
+			mtc.media_type as configuration_media_type,
 			m.configuration_payload
 		FROM tags t
 			JOIN manifests AS m ON m.top_level_namespace_id = t.top_level_namespace_id
 				AND m.repository_id = t.repository_id
 				AND m.id = t.manifest_id
 			JOIN media_types AS mt ON mt.id = m.media_type_id
+			LEFT JOIN media_types AS mtc ON mtc.id = m.configuration_media_type_id                           
 		WHERE
 			t.top_level_namespace_id = $1
 			AND t.repository_id = $2
 			AND t.name = $3
 	    `
 
-	manifestPayload := new(models.Payload)
 	cfgPayload := new(models.Payload)
 	td := &models.TagDetail{}
 
 	var dgst Digest
 	var cfgDgst sql.NullString
+	var cfgMediaType sql.NullString
 
 	err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, tagName).Scan(
 		&td.Name, &dgst, &cfgDgst, &td.MediaType,
-		&td.Size, &td.CreatedAt, &td.UpdatedAt, &td.PublishedAt, &manifestPayload, &cfgPayload)
+		&td.Size, &td.CreatedAt, &td.UpdatedAt, &td.PublishedAt, &td.ManifestID, &cfgMediaType, &cfgPayload)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+
 		return nil, fmt.Errorf("finding single tag detail: %w", err)
 	}
 
@@ -1095,13 +1101,15 @@ func (s *repositoryStore) TagDetail(ctx context.Context, r *models.Repository, t
 		return nil, err
 	}
 
-	td.ManifestPayload = *manifestPayload
-
 	switch td.MediaType {
 	case manifestlist.MediaTypeManifestList, v1.MediaTypeImageIndex:
 	// no op
 	default:
-		td.ConfigPayload = *cfgPayload
+		td.Configuration = &models.Configuration{
+			Digest:    td.ConfigDigest.Digest,
+			MediaType: cfgMediaType.String,
+			Payload:   *cfgPayload,
+		}
 	}
 
 	return td, nil

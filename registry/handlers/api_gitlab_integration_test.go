@@ -17,8 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/distribution"
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/ocischema"
+	"github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/notifications"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
@@ -30,6 +33,8 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -2384,4 +2389,190 @@ func TestGitlabAPI_404WithDatabaseDisabled(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
 		require.Equal(t, strings.TrimPrefix(version.Version, "v"), resp.Header.Get("Gitlab-Container-Registry-Version"))
 	}
+}
+
+func TestGitlabAPI_RepositoryTagDetail(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	repoName := "bar"
+	repoPath := fmt.Sprintf("foo/%s", repoName)
+	repoRef, err := reference.WithName(repoPath)
+	require.NoError(t, err)
+
+	t.Run("non-existing tag", func(t *testing.T) {
+		testNonExistingTag(t, env, repoRef, repoPath)
+	})
+
+	t.Run("single manifest tag", func(t *testing.T) {
+		testSingleManifestTag(t, env, repoRef, repoPath)
+	})
+
+	t.Run("manifest list tag", func(t *testing.T) {
+		testManifestListTag(t, env, repoRef, repoPath)
+	})
+}
+
+func testNonExistingTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
+	t.Helper()
+
+	// seed an untagged manifest to be able to return v2.ErrorTagNameUnknown
+	seedRandomSchema2Manifest(t, env, repoPath)
+	u, err := env.builder.BuildGitlabV1RepositoryTagDetailURL(repoRef, "unknown")
+	require.NoError(t, err)
+
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	errs, _, _ := checkBodyHasErrorCodes(t, "wrong response body error code", resp, v2.ErrorTagNameUnknown)
+	require.Len(t, errs, 1)
+
+	errc, ok := errs[0].(errcode.Error)
+	require.True(t, ok)
+	errDetail, ok := errc.Detail.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, map[string]any{"tagName": "unknown"}, errDetail)
+}
+
+func testSingleManifestTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
+	t.Helper()
+
+	tagName := "latest"
+	// Seed initial repository with a manifest
+	expectedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
+
+	u, err := env.builder.BuildGitlabV1RepositoryTagDetailURL(repoRef, tagName)
+	require.NoError(t, err)
+
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var r handlers.RepositoryTagDetailAPIResponse
+	decodeJSON(t, resp, &r)
+
+	assertSingleManifestResponse(t, &r, tagName, repoPath, expectedManifest)
+}
+
+func testManifestListTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
+	t.Helper()
+
+	ociIndexTagName := "oci-index"
+	expectedManifestList := seedRandomOCIImageIndex(t, env, repoRef.Name(), putByTag(ociIndexTagName))
+
+	u, err := env.builder.BuildGitlabV1RepositoryTagDetailURL(repoRef, ociIndexTagName)
+	require.NoError(t, err)
+
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var indexResp handlers.RepositoryTagDetailAPIResponse
+	decodeJSON(t, resp, &indexResp)
+
+	assertManifestListResponse(t, &indexResp, ociIndexTagName, repoPath, expectedManifestList)
+}
+
+func decodeJSON(t *testing.T, resp *http.Response, v any) {
+	t.Helper()
+
+	p, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	err = json.Unmarshal(p, v)
+	require.NoError(t, err)
+}
+
+func assertSingleManifestResponse(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse, tagName, repoPath string, expectedManifest *schema2.DeserializedManifest) {
+	t.Helper()
+
+	assert.Equal(t, r.Name, tagName, "tag name did not match")
+	assert.Equal(t, r.Repository, repoPath, "repo path did not match")
+	require.NotNil(t, r.Image)
+	assert.Equal(t, expectedManifest.TotalSize(), r.Image.SizeBytes, "empty image size")
+
+	require.NotNil(t, r.Image.Manifest)
+	assert.Equal(t, schema2.MediaTypeManifest, r.Image.Manifest.MediaType, "mismatch media type")
+
+	_, payload, err := expectedManifest.Payload()
+	require.NoError(t, err)
+	expectedDigest := digest.FromBytes(payload)
+	assert.Equal(t, expectedDigest.String(), r.Image.Manifest.Digest)
+	assert.Empty(t, r.Image.Manifest.References, "single tag should not have references")
+
+	require.NotNil(t, r.Image.Config, "single tag must have a config")
+	assert.Equal(t, schema2.MediaTypeImageConfig, r.Image.Config.MediaType, "config media type mismatch")
+	assert.Equal(t, expectedManifest.Config().Digest.String(), r.Image.Config.Digest, "config digest should not be empty")
+
+	require.NotNil(t, r.Image.Config.Platform, "config should not be empty")
+	assert.Equal(t, "linux", r.Image.Config.Platform.OS)
+	assert.Equal(t, "amd64", r.Image.Config.Platform.Architecture)
+
+	assertCommonResponseFields(t, r)
+}
+
+func assertManifestListResponse(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse, tagName, repoPath string, expectedManifestList *manifestlist.DeserializedManifestList) {
+	t.Helper()
+
+	assert.Equal(t, r.Name, tagName, "tag name did not match")
+	assert.Equal(t, r.Repository, repoPath, "repo path did not match")
+	require.NotNil(t, r.Image)
+	assert.Zero(t, r.Image.SizeBytes, "image size should be empty")
+
+	require.NotNil(t, r.Image.Manifest)
+	assert.Equal(t, ocispec.MediaTypeImageIndex, r.Image.Manifest.MediaType, "mismatch media type")
+
+	_, payload, err := expectedManifestList.Payload()
+
+	require.NoError(t, err)
+	expectedDigest := digest.FromBytes(payload)
+	assert.NotEmpty(t, expectedDigest, r.Image.Manifest.Digest)
+	assert.NotEmpty(t, r.Image.Manifest.References, "indexes must have references")
+
+	assert.Nil(t, r.Image.Config, "manifest list should not have a config")
+
+	assertManifestReferences(t, expectedManifestList.References(), r.Image.Manifest.References)
+	assertCommonResponseFields(t, r)
+
+	require.Nil(t, r.Image.Config, "indexes should not have a config")
+	assertCommonResponseFields(t, r)
+}
+
+func assertManifestReferences(t *testing.T, expectedReferences []distribution.Descriptor, references []*handlers.Image) {
+	t.Helper()
+
+	for i, expectedRef := range expectedReferences {
+		if expectedRef.Digest.String() != references[i].Manifest.Digest {
+			continue
+		}
+		ref := references[i]
+
+		// the expectedRef.Size is always 0 so we just assert that the result is not 0.
+		assert.NotZero(t, ref.SizeBytes, "empty image size")
+		require.NotNil(t, ref.Manifest)
+		assert.Equal(t, ocispec.MediaTypeImageManifest, ref.Manifest.MediaType, "mismatch media type")
+		assert.Equal(t, expectedRef.Digest.String(), ref.Manifest.Digest)
+
+		require.NotNil(t, ref.Config)
+
+		// the distribution.Descriptor does not expose the config data
+		// so we can only assert that they are not empty
+		assert.NotEmpty(t, ref.Config.Digest, "config digest should not be empty")
+		require.NotNil(t, ref.Config.Platform, "config should not be empty")
+		assert.NotEmpty(t, ref.Config.Platform.OS)
+		assert.NotEmpty(t, ref.Config.Platform.Architecture)
+	}
+}
+
+func assertCommonResponseFields(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse) {
+	t.Helper()
+
+	assert.NotEmpty(t, r.CreatedAt, "created_at must exist")
+	assert.Regexp(t, iso8601MsFormat, r.CreatedAt, "created_at must match ISO format")
+	assert.Empty(t, r.UpdatedAt)
+	assert.Equal(t, r.CreatedAt, r.PublishedAt)
 }
