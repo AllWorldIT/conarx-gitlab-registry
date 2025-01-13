@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -162,14 +163,14 @@ func (t *Token) Verify(verifyOpts VerifyOptions) error {
 	logger := log.GetLogger()
 
 	// Verify that the Issuer claim is a trusted authority.
-	if !contains(verifyOpts.TrustedIssuers, t.Claims.Issuer) {
+	if !slices.Contains(verifyOpts.TrustedIssuers, t.Claims.Issuer) {
 		logger.WithFields(log.Fields{"issuer": t.Claims.Issuer, "trusted_issuers": verifyOpts.TrustedIssuers}).
 			Error("token from untrusted issuer")
 		return ErrInvalidToken
 	}
 
 	// Verify that the Audience claim is allowed.
-	if !contains(verifyOpts.AcceptedAudiences, t.Claims.Audience) {
+	if !slices.Contains(verifyOpts.AcceptedAudiences, t.Claims.Audience) {
 		logger.WithFields(log.Fields{"audience": t.Claims.Audience, "accepted_audiences": verifyOpts.AcceptedAudiences}).
 			Error("token intended for another audience")
 		return ErrInvalidToken
