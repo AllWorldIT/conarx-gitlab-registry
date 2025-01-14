@@ -1,3 +1,48 @@
+## [4.15.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.14.0-gitlab...v4.15.0-gitlab) (2025-01-14)
+
+
+### ✨ Features ✨
+
+* add single tag details API endpoint ([7158ad0](https://gitlab.com/gitlab-org/container-registry/commit/7158ad04ea1c10e4faf0d432827f43c273ea4833))
+* add support for managed identies to Azure v2 storage driver ([ea370ee](https://gitlab.com/gitlab-org/container-registry/commit/ea370eef4fc1bb607b4d6716dc814949f9ef11f9))
+* **bbm:** add initial bbm metrics ([4d831e8](https://gitlab.com/gitlab-org/container-registry/commit/4d831e8ee23a280712a371dcb014d1ee9432c630))
+* **datastore:** detect read-only database and fail fast ([af1e2b6](https://gitlab.com/gitlab-org/container-registry/commit/af1e2b6796e8f029f4d466e0178ed2257a823dc8))
+* implement azure driver using azblob module, name it v2 version ([65b6207](https://gitlab.com/gitlab-org/container-registry/commit/65b6207e3fa22e2ac1f56bce1109e11667e3428b))
+
+
+### 🐛 Bug Fixes 🐛
+
+* align Azure List() call internal pagination with that of S3 and GCS, enable testing it ([6990f3a](https://gitlab.com/gitlab-org/container-registry/commit/6990f3acfb0bca1895f9bf4f26c89b9fdd67f6e3))
+* fix handling of overwrite of BlockBlob with AppendBlob in Azure storage driver, add regression tests ([1ae816b](https://gitlab.com/gitlab-org/container-registry/commit/1ae816b896469e46c2396ad4ccb2769c10471ba6))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update dependency danger-review to v1.4.2 ([9d4d9b1](https://gitlab.com/gitlab-org/container-registry/commit/9d4d9b13440c1afece03230593eb3cd8b573edc3))
+* **deps:** update dependency danger-review to v2 ([34ebe31](https://gitlab.com/gitlab-org/container-registry/commit/34ebe31013c2f6de3c1bbb60487b2e36114cde51))
+* **deps:** update module cloud.google.com/go/storage to v1.48.0 ([de75ddf](https://gitlab.com/gitlab-org/container-registry/commit/de75ddf96c7d2053847d891263144a9cd7750501))
+* **deps:** update module github.com/alicebob/miniredis/v2 to v2.34.0 ([bb0d1f7](https://gitlab.com/gitlab-org/container-registry/commit/bb0d1f771d33cad9eebb81f0d1a6e4242be4caea))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.17.0 ([4e62acc](https://gitlab.com/gitlab-org/container-registry/commit/4e62accda70eabcd621bafbea019b1c05a00380a))
+* **deps:** update module github.com/eko/gocache/lib/v4 to v4.2.0 ([1d948d5](https://gitlab.com/gitlab-org/container-registry/commit/1d948d5edd0431fd54c590ad1a524571f8b7c833))
+* **deps:** update module github.com/getsentry/sentry-go to v0.30.0 ([b6d3615](https://gitlab.com/gitlab-org/container-registry/commit/b6d3615fa7e002ca3726915f9f20933b7f4872c9))
+* **deps:** update module github.com/getsentry/sentry-go to v0.31.1 ([5011cac](https://gitlab.com/gitlab-org/container-registry/commit/5011cac1186e4029a738af063fb4a27094047f47))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.7.2 ([bbb2a6e](https://gitlab.com/gitlab-org/container-registry/commit/bbb2a6e4b80fe4291839c6169d790457e3f82ac5))
+* **deps:** update module github.com/rubenv/sql-migrate to v1.7.1 ([63cad34](https://gitlab.com/gitlab-org/container-registry/commit/63cad343187bf4b2d798e286af7036fd1b05da3d))
+* **deps:** update module github.com/schollz/progressbar/v3 to v3.18.0 ([8ce5d3b](https://gitlab.com/gitlab-org/container-registry/commit/8ce5d3b2c21ecf99848c1af37f28b1f7fd058e59))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.119.0 ([6aa1770](https://gitlab.com/gitlab-org/container-registry/commit/6aa1770096fb9f8aa46270a40990192c514d12bc))
+* **deps:** update module golang.org/x/crypto to v0.30.0 ([6915029](https://gitlab.com/gitlab-org/container-registry/commit/6915029250548344096aaffeb213c2ae6bb62d83))
+* **deps:** update module golang.org/x/crypto to v0.31.0 ([1e09441](https://gitlab.com/gitlab-org/container-registry/commit/1e094419072a005954248642dda97ebd021a7c87))
+* **deps:** update module golang.org/x/crypto to v0.32.0 ([cec7530](https://gitlab.com/gitlab-org/container-registry/commit/cec7530bd8cebd1c2c6d53c5e3de6d28c56b6683))
+* **deps:** update module golang.org/x/oauth2 to v0.25.0 ([563fd3b](https://gitlab.com/gitlab-org/container-registry/commit/563fd3ba9cc1f27cad83eaadb6ed8c4054d3f9bc))
+* **deps:** update module golang.org/x/sync to v0.10.0 ([b14aa3b](https://gitlab.com/gitlab-org/container-registry/commit/b14aa3bc358c83068389fcec7de97e6e9e2b3084))
+* **deps:** update module golang.org/x/time to v0.9.0 ([92c08dd](https://gitlab.com/gitlab-org/container-registry/commit/92c08dd3393e9d6553f679e17cec1c8eb7750e19))
+* **deps:** update module google.golang.org/api to v0.210.0 ([1bd8827](https://gitlab.com/gitlab-org/container-registry/commit/1bd882732db4005a3b865d024da78755832d9622))
+* **deps:** update module google.golang.org/api to v0.211.0 ([ae4ee16](https://gitlab.com/gitlab-org/container-registry/commit/ae4ee165b247cff7653fe85810656388f719bd70))
+* **deps:** update module google.golang.org/api to v0.212.0 ([e63c433](https://gitlab.com/gitlab-org/container-registry/commit/e63c4334152ee034c03b5d1561c87c92dcd1e414))
+* **deps:** update module google.golang.org/api to v0.213.0 ([c18d870](https://gitlab.com/gitlab-org/container-registry/commit/c18d87014ffd468386879fe6435ebb4411508196))
+* **deps:** update module google.golang.org/api to v0.216.0 ([d3a999c](https://gitlab.com/gitlab-org/container-registry/commit/d3a999c7507a1ee66ed6ee2176ef248b72b5af2a))
+* **deps:** use official go-gitlab package ([114ce56](https://gitlab.com/gitlab-org/container-registry/commit/114ce5634224d88221143498855fe085bdd1fb48))
+
 ## [4.14.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.13.0-gitlab...v4.14.0-gitlab) (2024-11-27)
 
 ### ✨ Features ✨
