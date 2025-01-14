@@ -1,3 +1,10 @@
+## [4.15.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.15.0-gitlab...v4.15.1-gitlab) (2025-01-14)
+
+
+### 🐛 Bug Fixes 🐛
+
+* add stack trace to a panic log ([bd70777](https://gitlab.com/gitlab-org/container-registry/commit/bd70777944c1d047dd8874ee94baea237fde5a54))
+
 ## [4.15.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.14.0-gitlab...v4.15.0-gitlab) (2025-01-14)
 
 
