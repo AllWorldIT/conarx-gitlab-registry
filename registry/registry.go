@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -538,7 +539,7 @@ func panicHandler(handler http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				// nolint: revive // deep-exit
-				log.Panic(fmt.Sprintf("%v", err))
+				log.WithField("stack", string(debug.Stack())).Panic(fmt.Sprintf("%v", err))
 			}
 		}()
 		handler.ServeHTTP(w, r)
