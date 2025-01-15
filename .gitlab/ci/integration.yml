@@ -100,7 +100,10 @@ azure:default-runner:
     # latency between the Gitlab runner and azure store account. Moving Azure
     # storage closer to Gitlab runners (i.e. us-east Azure zone) decreased run
     # time from ~40m to around 9m. 
-    
+  # TODO: remove allow_failure once the test setup is fixed
+  # https://gitlab.com/gitlab-org/container-registry/-/issues/1478
+  allow_failure: true
+
 # NOTE(prozlach): Do not run all azure jobs on the azure runner as it does not
 # have enough capacity and is not secure enough to be exposed to shared_key
 # credentials.
@@ -152,6 +155,9 @@ azure:managed-identity:
       unset AZURE_CLIENT_ID
       unset AZURE_CLIENT_SECRET
       $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
+  # TODO: remove allow_failure once the test setup is fixed
+  # https://gitlab.com/gitlab-org/container-registry/-/issues/1478
+  allow_failure: true
 
 api:
   extends: .go-version-matrix
