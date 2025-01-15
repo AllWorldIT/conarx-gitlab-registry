@@ -196,6 +196,9 @@ func TestAzureDriverSuite(t *testing.T) {
 		func() (storagedriver.StorageDriver, error) {
 			return azureDriverConstructor(root, true)
 		},
+		func() (storagedriver.StorageDriver, error) {
+			return azureDriverConstructor("", true)
+		},
 		nil,
 	)
 	suite.Run(t, ts)
@@ -214,6 +217,9 @@ func BenchmarkAzureDriverSuite(b *testing.B) {
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
 			return azureDriverConstructor(root, true)
+		},
+		func() (storagedriver.StorageDriver, error) {
+			return azureDriverConstructor("", true)
 		},
 		nil,
 	)

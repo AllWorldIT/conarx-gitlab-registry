@@ -176,6 +176,9 @@ func TestS3DriverSuite(t *testing.T) {
 		func() (storagedriver.StorageDriver, error) {
 			return s3DriverConstructor(root, s3.StorageClassStandard)
 		},
+		func() (storagedriver.StorageDriver, error) {
+			return s3DriverConstructor("", s3.StorageClassStandard)
+		},
 		nil,
 	)
 	suite.Run(t, ts)
@@ -192,6 +195,9 @@ func BenchmarkS3DriverSuite(b *testing.B) {
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
 			return s3DriverConstructor(root, s3.StorageClassStandard)
+		},
+		func() (storagedriver.StorageDriver, error) {
+			return s3DriverConstructor("", s3.StorageClassStandard)
 		},
 		nil,
 	)

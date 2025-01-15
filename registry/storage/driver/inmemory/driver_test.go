@@ -15,6 +15,9 @@ func TestInMemoryDriverSuite(t *testing.T) {
 		func() (storagedriver.StorageDriver, error) {
 			return New(), nil
 		},
+		func() (storagedriver.StorageDriver, error) {
+			return New(), nil
+		},
 		nil,
 	)
 	suite.Run(t, ts)
@@ -23,6 +26,9 @@ func TestInMemoryDriverSuite(t *testing.T) {
 func BenchmarkInMemoryDriverSuite(b *testing.B) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
+		func() (storagedriver.StorageDriver, error) {
+			return New(), nil
+		},
 		func() (storagedriver.StorageDriver, error) {
 			return New(), nil
 		},
