@@ -72,7 +72,10 @@ gcs:
   before_script:
     - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
 
-# NOTE(prozlach): Azure storage container used in tests has a auto-cleanup policy set
+.if-fork: &if-fork
+  if: '$CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
+
+# NOTE(prozlach): Azure storage container used in tests has an auto-cleanup policy set
 # - all blobs older than 24h will be deleted, so even if CI task fails, there
 # is no risk that we will keep being billed for the storage indefinatelly.
 azure:default-runner:
@@ -123,6 +126,10 @@ azure:managed-identity:
       - GO_VERSION: [ "1.22", "1.23" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "default_credentials" ]
+  # Do not run in forked projects without the required runner.
+  rules:
+    - <<: *if-fork
+      when: never
   variables:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
