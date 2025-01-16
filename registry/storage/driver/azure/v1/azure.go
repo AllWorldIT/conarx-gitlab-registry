@@ -189,7 +189,11 @@ func (d *driver) PutContent(_ context.Context, path string, contents []byte) err
 	r := bytes.NewReader(contents)
 	// reset properties to empty before doing overwrite
 	blobRef.Properties = azure.BlobProperties{}
-	return blobRef.CreateBlockBlobFromReader(r, nil)
+	err = blobRef.CreateBlockBlobFromReader(r, nil)
+	if err != nil {
+		return fmt.Errorf("creating block blob: %w", err)
+	}
+	return nil
 }
 
 // Reader retrieves an io.ReadCloser for the content stored at "path" with a
