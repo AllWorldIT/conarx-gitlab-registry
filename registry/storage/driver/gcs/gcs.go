@@ -736,6 +736,9 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 	query := &storage.Query{}
 	query.Delimiter = "/"
 	query.Prefix = d.pathToDirKey(path)
+	if query.Prefix == "/" {
+		query.Prefix = ""
+	}
 	list := make([]string, 0, 64)
 
 	it, err := storageListObjects(ctx, d.storageClient, d.bucket, query)

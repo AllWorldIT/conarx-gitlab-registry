@@ -665,6 +665,25 @@ func (s *DriverSuite) testList(t *testing.T, numFiles int) {
 	// 3. Ensure that we only respond to directory listings that end with a slash (maybe?).
 }
 
+// TestListUnprefixed checks if listing root directory with no prefix
+// configured works.
+func (s *DriverSuite) TestListUnprefixed() {
+	// NOTE(prozlach): we are sharing the storage root with other tests, so the
+	// idea is to create a very uniqe file name and simply look for it in the
+	// results. This way there should be no collisions.
+	destPath := "/" + randomFilename(64)
+	destContents := randomContents(64)
+
+	defer s.deletePath(s.T(), destPath, true)
+
+	err := s.StorageDriverRootless.PutContent(s.ctx, destPath, destContents)
+	require.NoError(s.T(), err)
+
+	keys, err := s.StorageDriverRootless.List(s.ctx, "/")
+	require.NoError(s.T(), err)
+	require.Contains(s.T(), keys, destPath)
+}
+
 // TestMovePutContentBlob checks that driver can indeed move an object, and
 // that the object no longer exists at the source path and does exist at the
 // destination after the move.
