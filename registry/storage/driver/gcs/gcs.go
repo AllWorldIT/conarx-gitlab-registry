@@ -24,7 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -668,7 +668,7 @@ func retry(req request) error {
 		}
 
 		// nolint:gosec // this is just a random number for rety backoff
-		time.Sleep(backoff - time.Second + (time.Duration(rand.Int31n(1000)) * time.Millisecond))
+		time.Sleep(backoff - time.Second + (time.Duration(rand.Int32N(1000)) * time.Millisecond))
 		if i <= 4 {
 			backoff *= 2
 		}

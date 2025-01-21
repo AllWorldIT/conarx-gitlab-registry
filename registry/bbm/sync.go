@@ -3,7 +3,7 @@ package bbm
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/docker/distribution/log"
@@ -236,7 +236,7 @@ func (jw *SyncWorker) runImpl(ctx context.Context) error {
 
 		// Randomized delay between `minDelayPerRun` and `maxDelayPerRun`
 		// nolint: gosec
-		sleep := time.Duration(rand.Int63n(int64(maxDelayPerRun-minDelayPerRun))) + minDelayPerRun
+		sleep := time.Duration(rand.Int64N(int64(maxDelayPerRun-minDelayPerRun))) + minDelayPerRun
 		jw.logger.WithFields(log.Fields{"duration_s": sleep.Seconds()}).
 			Info("released lock, sleeping before next run")
 		time.Sleep(sleep)

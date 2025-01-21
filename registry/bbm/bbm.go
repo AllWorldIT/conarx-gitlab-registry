@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/docker/distribution/registry/bbm/metrics"
@@ -185,7 +185,7 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 	gracefullFinish := make(chan struct{})
 	// Create a period that this worker searches and executes work on (use a random jitter of jobIntervalJitterSeconds for obscurity).
 	// nolint: gosec
-	ticker := time.NewTicker(jw.jobInterval + time.Duration(rand.Intn(jobIntervalJitterSeconds))*time.Second)
+	ticker := time.NewTicker(jw.jobInterval + time.Duration(rand.IntN(jobIntervalJitterSeconds))*time.Second)
 
 	go func() {
 		for {

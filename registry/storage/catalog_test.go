@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"testing"
 
@@ -276,7 +276,7 @@ func randomPath() string {
 	path := "/"
 	length := int64(100)
 	for int64(len(path)) < length {
-		chunkLength := rand.Int63n(length-int64(len(path))) + 1
+		chunkLength := rand.Int64N(length-int64(len(path))) + 1
 		chunk := randomFilename(chunkLength)
 		path += chunk
 		remaining := length - int64(len(path))
@@ -293,11 +293,11 @@ func randomFilename(length int64) string {
 	b := make([]byte, length)
 	wasSeparator := true
 	for i := range b {
-		if !wasSeparator && i < len(b)-1 && rand.Intn(4) == 0 {
-			b[i] = separatorChars[rand.Intn(len(separatorChars))]
+		if !wasSeparator && i < len(b)-1 && rand.IntN(4) == 0 {
+			b[i] = separatorChars[rand.IntN(len(separatorChars))]
 			wasSeparator = true
 		} else {
-			b[i] = filenameChars[rand.Intn(len(filenameChars))]
+			b[i] = filenameChars[rand.IntN(len(filenameChars))]
 			wasSeparator = false
 		}
 	}
