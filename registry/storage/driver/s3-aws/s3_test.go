@@ -3,7 +3,7 @@ package s3
 import (
 	"crypto/rand"
 	"fmt"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"

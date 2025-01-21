@@ -4,7 +4,7 @@ package datastore_test
 
 import (
 	"crypto/rand"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -33,7 +33,7 @@ func randomBlob(t testing.TB) *models.Blob {
 	return &models.Blob{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
-		Size:      mrand.Int63(),
+		Size:      mrand.Int64(),
 	}
 }
 
