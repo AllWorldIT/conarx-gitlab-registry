@@ -465,7 +465,7 @@ var ImportCmd = &cobra.Command{
 		}
 
 		parameters := config.Storage.Parameters()
-		if (parameters[parallelwalkKey]).(bool) {
+		if val, ok := parameters[parallelwalkKey].(bool); ok && val {
 			parameters[parallelwalkKey] = false
 			logrus.Info("the 'parallelwalk' configuration parameter has been disabled")
 		}
