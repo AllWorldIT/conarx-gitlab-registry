@@ -83,10 +83,10 @@ azure:default-runner:
   parallel:
     matrix:
       # Regular combinations
-      - GO_VERSION: [ "1.22", "1.23" ]
+      - GO_VERSION: [ "1.23", "1.24rc2" ]
         AZURE_DRIVER_VERSION: [ "azure", "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "shared_key" ]
-      - GO_VERSION: [ "1.22", "1.23" ]
+      - GO_VERSION: [ "1.23", "1.24rc2" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "client_secret" ]
   variables:
@@ -126,7 +126,7 @@ azure:managed-identity:
   parallel:
     matrix:
       # Managed identity combinations
-      - GO_VERSION: [ "1.22", "1.23" ]
+      - GO_VERSION: [ "1.23", "1.24rc2" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "default_credentials" ]
   # Do not run in forked projects without the required runner.
