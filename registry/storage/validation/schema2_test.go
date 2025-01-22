@@ -1,10 +1,9 @@
 package validation_test
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
-	mrand "math/rand"
+	"math/rand/v2"
 	"regexp"
 	"testing"
 
@@ -287,14 +286,15 @@ func TestVerifyManifest_Schema2_ReferenceLimits(t *testing.T) {
 		},
 	}
 
+	rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(t)))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := makeSchema2ManifestTemplate(t, repo)
 
 			// Create a random layer for each of the specified manifest layers.
 			for i := 0; i < tt.manifestLayers; i++ {
-				b := make([]byte, mrand.Intn(20))
-				rand.Read(b)
+				b := make([]byte, rand.IntN(20))
+				rng.Read(b)
 
 				layer, err := repo.Blobs(ctx).Put(ctx, schema2.MediaTypeLayer, b)
 				require.NoError(t, err)
