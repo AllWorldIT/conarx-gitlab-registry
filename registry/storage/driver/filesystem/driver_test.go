@@ -22,9 +22,7 @@ func TestFilesystemDriverSuite(t *testing.T) {
 				"rootdirectory": root,
 			})
 		},
-		func() (storagedriver.StorageDriver, error) {
-			return FromParameters(make(map[string]any))
-		},
+		nil,
 		nil,
 	)
 	suite.Run(t, ts)
@@ -40,9 +38,7 @@ func BenchmarkFilesystemDriverSuite(b *testing.B) {
 				"rootdirectory": root,
 			})
 		},
-		func() (storagedriver.StorageDriver, error) {
-			return FromParameters(make(map[string]any))
-		},
+		nil,
 		nil,
 	)
 
