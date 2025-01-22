@@ -26,7 +26,7 @@ default:
 variables:
   FF_TIMESTAMPS: 1
   # default Go version
-  GO_VERSION: "1.22"
+  GO_VERSION: "1.23"
   BUILDTAGS: "include_gcs,continuous_profiler_stackdriver"
   CGO_ENABLED: "1"
   GOPATH: $CI_PROJECT_DIR/.GOPATH
@@ -47,8 +47,8 @@ stages:
   parallel:
     matrix:
       - PG_VERSION: $PG_PREV_VERSION
-        GO_VERSION: [ "1.22", "1.23" ]
+        GO_VERSION: [ "1.23", "1.24rc2" ]
       - PG_VERSION: $PG_CURR_VERSION
-        GO_VERSION: [ "1.22", "1.23" ]
+        GO_VERSION: [ "1.23", "1.24rc2" ]
       - PG_VERSION: $PG_NEXT_VERSION
-        GO_VERSION: [ "1.22", "1.23" ]
+        GO_VERSION: [ "1.23", "1.24rc2" ]
