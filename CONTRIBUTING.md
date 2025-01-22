@@ -42,7 +42,8 @@ available at [https://contributor-covenant.org/version/1/1/0/](https://contribut
 
 ## Style guides
 
-See [Go standards and style guidelines](https://docs.gitlab.com/ee/development/go_guide).
+See [Go standards and style guidelines](https://docs.gitlab.com/ee/development/go_guide),
+and the project specific [style guidelines](./docs/style-guide.md).
 
 ## Commits
 
