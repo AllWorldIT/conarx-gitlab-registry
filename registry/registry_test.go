@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	mrand "math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,6 +26,7 @@ import (
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/registry/internal/testutil"
 	_ "github.com/docker/distribution/registry/storage/driver/inmemory"
+	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -527,14 +529,15 @@ func TestGetCipherSuite(t *testing.T) {
 func buildRegistryTLSConfig(t *testing.T, name string, cipherSuites []string) *registryTLSConfig {
 	t.Helper()
 
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	rng := mrand.NewChaCha8([32]byte(rngtestutil.MustChaChaSeed(t)))
+	rsaKey, err := rsa.GenerateKey(rng, 2048)
 	require.NoError(t, err, "failed to create rsa private key")
 	pub := rsaKey.Public()
 
 	notBefore := time.Now().Add(-10 * time.Second)
 	notAfter := notBefore.Add(5 * time.Minute)
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	serialNumber, err := rand.Int(rng, serialNumberLimit)
 	require.NoError(t, err, "failed to create serial number")
 
 	cert := x509.Certificate{
@@ -551,7 +554,7 @@ func buildRegistryTLSConfig(t *testing.T, name string, cipherSuites []string) *r
 		DNSNames:              []string{"localhost"},
 		IsCA:                  true,
 	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &cert, &cert, pub, rsaKey)
+	derBytes, err := x509.CreateCertificate(rng, &cert, &cert, pub, rsaKey)
 	require.NoError(t, err, "failed to create certificate")
 
 	tmpDir := t.TempDir()

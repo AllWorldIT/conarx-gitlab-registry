@@ -4,10 +4,10 @@ package handlers_test
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"path"
@@ -31,6 +31,7 @@ import (
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/internal/testutil"
+	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -1010,10 +1011,10 @@ func TestGitlabAPI_RepositoryTagsList_DefaultPageSize(t *testing.T) {
 
 	// generate 100+1 random tag names
 	tags := make([]string, 0, 101)
+	rng := rand.NewChaCha8([32]byte(rngtestutil.MustChaChaSeed(t)))
 	for i := 0; i <= 100; i++ {
 		b := make([]byte, 10)
-		_, err := rand.Read(b)
-		require.NoError(t, err)
+		_, _ = rng.Read(b)
 		tags = append(tags, fmt.Sprintf("%x", b)[:10])
 	}
 

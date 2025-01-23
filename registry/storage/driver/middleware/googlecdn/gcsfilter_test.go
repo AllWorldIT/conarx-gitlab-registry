@@ -2,9 +2,9 @@ package googlecdn
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/testutil"
 )
 
 type mockIPRangeHandler struct {
@@ -276,12 +277,10 @@ func TestResponseNotOK(t *testing.T) {
 // of benchmarking contains() performance.
 func populateRandomNetworks(b *testing.B, ips *googleIPs, ipv4Count, ipv6Count int) {
 	generateNetworks := func(dest *[]net.IPNet, bytes, count int) {
+		rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(b)))
 		for i := 0; i < count; i++ {
 			ip := make([]byte, bytes)
-			_, err := rand.Read(ip)
-			if err != nil {
-				b.Fatalf("failed to generate network for test : %s", err.Error())
-			}
+			_, _ = rng.Read(ip)
 			mask := make([]byte, bytes)
 			for i := 0; i < bytes; i++ {
 				mask[i] = 0xff
@@ -310,13 +309,12 @@ func BenchmarkContainsRandom(b *testing.B) {
 
 	ipv4 := make([][]byte, b.N)
 	ipv6 := make([][]byte, b.N)
+	rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(b)))
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		_, err := rand.Read(ipv4[i])
-		require.NoError(b, err)
-		_, err = rand.Read(ipv6[i])
-		require.NoError(b, err)
+		_, _ = rng.Read(ipv4[i])
+		_, _ = rng.Read(ipv6[i])
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -329,13 +327,12 @@ func BenchmarkContainsProd(b *testing.B) {
 	googleIPs := newGoogleIPs(defaultIPRangesURL, defaultUpdateFrequency)
 	ipv4 := make([][]byte, b.N)
 	ipv6 := make([][]byte, b.N)
+	rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(b)))
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		_, err := rand.Read(ipv4[i])
-		require.NoError(b, err)
-		_, err = rand.Read(ipv6[i])
-		require.NoError(b, err)
+		_, _ = rng.Read(ipv4[i])
+		_, _ = rng.Read(ipv6[i])
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

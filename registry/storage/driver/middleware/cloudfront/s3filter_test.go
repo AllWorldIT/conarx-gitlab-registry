@@ -2,9 +2,9 @@ package middleware
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -339,10 +340,10 @@ func TestEligibleForS3WithAWSIPNotInitialized(t *testing.T) {
 // of benchmarking contains() performance.
 func populateRandomNetworks(b *testing.B, ips *awsIPs, ipv4Count, ipv6Count int) {
 	generateNetworks := func(dest *[]net.IPNet, bytes, count int) {
+		rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(b)))
 		for i := 0; i < count; i++ {
 			ip := make([]byte, bytes)
-			_, err := rand.Read(ip)
-			require.NoError(b, err, "failed to generate network for test")
+			_, _ = rng.Read(ip)
 			mask := make([]byte, bytes)
 			for i := 0; i < bytes; i++ {
 				mask[i] = 0xff
@@ -371,13 +372,12 @@ func BenchmarkContainsRandom(b *testing.B) {
 
 	ipv4 := make([][]byte, b.N)
 	ipv6 := make([][]byte, b.N)
+	rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(b)))
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		_, err := rand.Read(ipv4[i])
-		require.NoError(b, err)
-		_, err = rand.Read(ipv6[i])
-		require.NoError(b, err)
+		_, _ = rng.Read(ipv4[i])
+		_, _ = rng.Read(ipv6[i])
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -390,13 +390,12 @@ func BenchmarkContainsProd(b *testing.B) {
 	awsIPs := newAWSIPs(defaultIPRangesURL, defaultUpdateFrequency, nil)
 	ipv4 := make([][]byte, b.N)
 	ipv6 := make([][]byte, b.N)
+	rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(b)))
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		_, err := rand.Read(ipv4[i])
-		require.NoError(b, err)
-		_, err = rand.Read(ipv6[i])
-		require.NoError(b, err)
+		_, _ = rng.Read(ipv4[i])
+		_, _ = rng.Read(ipv6[i])
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
