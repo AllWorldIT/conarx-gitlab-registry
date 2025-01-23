@@ -3,7 +3,6 @@ package token
 import (
 	"context"
 	"crypto"
-	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -17,6 +16,7 @@ import (
 
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
+	"github.com/docker/distribution/testutil"
 	"github.com/docker/libtrust"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -93,7 +93,9 @@ func makeTrustedKeyMap(rootKeys []libtrust.PrivateKey) map[string]libtrust.Publi
 	return trustedKeys
 }
 
-func makeTestToken(issuer, audience string, access []*ResourceActions, rootKey libtrust.PrivateKey, depth int, now, exp time.Time) (*Token, error) {
+func makeTestToken(tb testing.TB, issuer, audience string, access []*ResourceActions, rootKey libtrust.PrivateKey, depth int, now, exp time.Time) (*Token, error) {
+	tb.Helper()
+
 	signingKey, err := makeSigningKeyWithChain(rootKey, depth)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make signing key with chain: %s", err)
@@ -111,10 +113,7 @@ func makeTestToken(issuer, audience string, access []*ResourceActions, rootKey l
 		RawJWK:     &rawJWK,
 	}
 
-	randomBytes := make([]byte, 15)
-	if _, err = rand.Read(randomBytes); err != nil {
-		return nil, fmt.Errorf("unable to read random bytes for jwt id: %s", err)
-	}
+	randomBytes := testutil.RandomBlob(tb, 15)
 
 	claimSet := &ClaimSet{
 		Issuer:     issuer,
@@ -185,7 +184,7 @@ func TestTokenVerify(t *testing.T) {
 	tokens := make([]*Token, 0, numTokens)
 
 	for i := 0; i < numTokens; i++ {
-		token, err := makeTestToken(issuer, audience, access, rootKeys[i], i, time.Now(), time.Now().Add(5*time.Minute))
+		token, err := makeTestToken(t, issuer, audience, access, rootKeys[i], i, time.Now(), time.Now().Add(5*time.Minute))
 		require.NoError(t, err)
 		tokens = append(tokens, token)
 	}
@@ -231,7 +230,7 @@ func TestLeeway(t *testing.T) {
 
 	// nbf verification should pass within leeway
 	futureNow := time.Now().Add(time.Duration(5) * time.Second)
-	token, err := makeTestToken(issuer, audience, access, rootKeys[0], 0, futureNow, futureNow.Add(5*time.Minute))
+	token, err := makeTestToken(t, issuer, audience, access, rootKeys[0], 0, futureNow, futureNow.Add(5*time.Minute))
 	require.NoError(t, err)
 
 	// nolint: testifylint // require-error
@@ -239,21 +238,21 @@ func TestLeeway(t *testing.T) {
 
 	// nbf verification should fail with a skew larger than leeway
 	futureNow = time.Now().Add(time.Duration(61) * time.Second)
-	token, err = makeTestToken(issuer, audience, access, rootKeys[0], 0, futureNow, futureNow.Add(5*time.Minute))
+	token, err = makeTestToken(t, issuer, audience, access, rootKeys[0], 0, futureNow, futureNow.Add(5*time.Minute))
 	require.NoError(t, err)
 
 	// nolint: testifylint // require-error
 	assert.Error(t, token.Verify(verifyOps), "verification should fail for token with nbf in the future outside leeway")
 
 	// exp verification should pass within leeway
-	token, err = makeTestToken(issuer, audience, access, rootKeys[0], 0, time.Now(), time.Now().Add(-59*time.Second))
+	token, err = makeTestToken(t, issuer, audience, access, rootKeys[0], 0, time.Now(), time.Now().Add(-59*time.Second))
 	require.NoError(t, err)
 
 	// nolint: testifylint // require-error
 	assert.NoError(t, token.Verify(verifyOps))
 
 	// exp verification should fail with a skew larger than leeway
-	token, err = makeTestToken(issuer, audience, access, rootKeys[0], 0, time.Now(), time.Now().Add(-60*time.Second))
+	token, err = makeTestToken(t, issuer, audience, access, rootKeys[0], 0, time.Now(), time.Now().Add(-60*time.Second))
 	require.NoError(t, err)
 
 	// nolint: testifylint // require-error
@@ -338,7 +337,7 @@ func TestAccessController(t *testing.T) {
 	assert.Nil(t, authCtx, "expected nil auth context")
 
 	// 2. Supply an invalid token.
-	token, err := makeTestToken(
+	token, err := makeTestToken(t,
 		issuer, service,
 		[]*ResourceActions{{
 			Type:    testAccess.Type,
@@ -360,7 +359,7 @@ func TestAccessController(t *testing.T) {
 	assert.Nil(t, authCtx, "expected nil auth context")
 
 	// 3. Supply a token with insufficient access.
-	token, err = makeTestToken(
+	token, err = makeTestToken(t,
 		issuer, service,
 		make([]*ResourceActions, 0), // No access specified.
 		rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
@@ -378,7 +377,7 @@ func TestAccessController(t *testing.T) {
 	assert.Nil(t, authCtx, "expected nil auth context")
 
 	// 4. Supply the token we need, or deserve, or whatever.
-	token, err = makeTestToken(
+	token, err = makeTestToken(t,
 		issuer, service,
 		[]*ResourceActions{{
 			Type:    testAccess.Type,
@@ -402,7 +401,7 @@ func TestAccessController(t *testing.T) {
 	assert.Equal(t, "bar", userInfo.Type)
 
 	// 5. Supply a token with full admin rights, which is represented as "*".
-	token, err = makeTestToken(
+	token, err = makeTestToken(t,
 		issuer, service,
 		[]*ResourceActions{{
 			Type:    testAccess.Type,
@@ -531,7 +530,7 @@ func newTestAuthContext(t *testing.T, ctx context.Context, req *http.Request, ac
 	accessController, err := newAccessController(options)
 	require.NoError(t, err)
 
-	token, err := makeTestToken(
+	token, err := makeTestToken(t,
 		testIssuer, testService, actions, rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
 	)
 	require.NoError(t, err)

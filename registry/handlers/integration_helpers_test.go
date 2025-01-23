@@ -6,12 +6,11 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	mrand "math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -637,7 +636,7 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 	tmpManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range tmpManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef, requestOpts...)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs, requestOpts...)
@@ -680,14 +679,13 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 	return deserializedManifest
 }
 
-func createRandomSmallLayer() (io.ReadSeeker, digest.Digest, int64) {
+func createRandomSmallLayer(t *testing.T) (io.ReadSeeker, digest.Digest, int64) {
 	// NOTE(prozlach): It is crucial to not to make the size of the layer too
 	// small as this will lead to flakes, as there is only one sha for layer
 	// size 0, handfull of shas for layer with size 1, etc... 128-196 bytes
 	// gives enough entropy to make tests reliable.
-	size := 128 + mrand.Int63n(64)
-	b := make([]byte, size)
-	_, _ = rand.Read(b) // always returns err==nil
+	size := 128 + rand.Int64N(64)
+	b := testutil.RandomBlob(t, int(size))
 
 	dgst := digest.FromBytes(b)
 	rs := bytes.NewReader(b)
@@ -798,7 +796,7 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 	tmpManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range tmpManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
@@ -861,8 +859,8 @@ func randomPlatformSpec() manifestlist.PlatformSpec {
 	oses := []string{"aix", "darwin", "linux", "freebsd", "plan9"}
 
 	return manifestlist.PlatformSpec{
-		Architecture: architectures[mrand.Intn(len(architectures))],
-		OS:           oses[mrand.Intn(len(oses))],
+		Architecture: architectures[rand.IntN(len(architectures))],
+		OS:           oses[rand.IntN(len(oses))],
 		// Optional values.
 		OSVersion:  "",
 		OSFeatures: nil,
@@ -1059,7 +1057,7 @@ func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, targetM
 func shuffledCopy(s []string) []string {
 	shuffled := make([]string, len(s))
 	copy(shuffled, s)
-	mrand.Shuffle(len(shuffled), func(i, j int) {
+	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 
@@ -1752,9 +1750,7 @@ func generateAuthToken(t *testing.T, user string, access []*token.ResourceAction
 		RawJWK:     &rawJWK,
 	}
 
-	randomBytes := make([]byte, 15)
-	_, err = rand.Read(randomBytes)
-	require.NoError(t, err, "unable to read random bytes for jwt")
+	randomBytes := testutil.RandomBlob(t, 15)
 
 	claimSet := &token.ClaimSet{
 		Issuer:     issuer.Issuer,

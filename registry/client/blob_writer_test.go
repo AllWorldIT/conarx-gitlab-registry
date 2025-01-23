@@ -18,7 +18,7 @@ import (
 var _ distribution.BlobWriter = &httpBlobUpload{}
 
 func TestUploadReadFrom(t *testing.T) {
-	_, b := newRandomBlob(64)
+	_, b := newRandomBlob(t, 64)
 	repo := "test/upload/readfrom"
 	locationPath := fmt.Sprintf("/v2/%s/uploads/testid", repo)
 

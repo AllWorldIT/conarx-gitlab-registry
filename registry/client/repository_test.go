@@ -2,7 +2,6 @@ package client
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,13 +34,10 @@ func testServer(rrm testutil.RequestResponseMap) (string, func()) {
 	return s.URL, s.Close
 }
 
-func newRandomBlob(size int) (digest.Digest, []byte) {
-	b := make([]byte, size)
-	if n, err := rand.Read(b); err != nil {
-		panic(err)
-	} else if n != size {
-		panic("unable to read enough bytes")
-	}
+func newRandomBlob(tb testing.TB, size int) (digest.Digest, []byte) {
+	tb.Helper()
+
+	b := testutil.RandomBlob(tb, size)
 
 	return digest.FromBytes(b), b
 }
@@ -100,7 +96,7 @@ func addTestCatalog(route string, content []byte, link string, m *testutil.Reque
 }
 
 func TestBlobDelete(t *testing.T) {
-	dgst, _ := newRandomBlob(1024)
+	dgst, _ := newRandomBlob(t, 1024)
 	var m testutil.RequestResponseMap
 	repo, _ := reference.WithName("test.example.com/repo1")
 	m = append(m, testutil.RequestResponseMapping{
@@ -128,7 +124,7 @@ func TestBlobDelete(t *testing.T) {
 }
 
 func TestBlobFetch(t *testing.T) {
-	d1, b1 := newRandomBlob(1024)
+	d1, b1 := newRandomBlob(t, 1024)
 	var m testutil.RequestResponseMap
 	addTestFetch("test.example.com/repo1", d1, b1, &m)
 
@@ -152,7 +148,7 @@ func TestBlobExistsNoContentLength(t *testing.T) {
 	var m testutil.RequestResponseMap
 
 	repo, _ := reference.WithName("biff")
-	dgst, content := newRandomBlob(1024)
+	dgst, content := newRandomBlob(t, 1024)
 	m = append(m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodGet,
@@ -195,7 +191,7 @@ func TestBlobExistsNoContentLength(t *testing.T) {
 }
 
 func TestBlobExists(t *testing.T) {
-	d1, b1 := newRandomBlob(1024)
+	d1, b1 := newRandomBlob(t, 1024)
 	var m testutil.RequestResponseMap
 	addTestFetch("test.example.com/repo1", d1, b1, &m)
 
@@ -219,7 +215,7 @@ func TestBlobExists(t *testing.T) {
 }
 
 func TestBlobUploadChunked(t *testing.T) {
-	dgst, b1 := newRandomBlob(1024)
+	dgst, b1 := newRandomBlob(t, 1024)
 	var m testutil.RequestResponseMap
 	chunks := [][]byte{
 		b1[0:256],
@@ -326,7 +322,7 @@ func TestBlobUploadChunked(t *testing.T) {
 }
 
 func TestBlobUploadMonolithic(t *testing.T) {
-	dgst, b1 := newRandomBlob(1024)
+	dgst, b1 := newRandomBlob(t, 1024)
 	var m testutil.RequestResponseMap
 	repo, _ := reference.WithName("test.example.com/uploadrepo")
 	uploadID := uuid.Generate().String()
@@ -420,7 +416,7 @@ func TestBlobUploadMonolithic(t *testing.T) {
 }
 
 func TestBlobMount(t *testing.T) {
-	dgst, content := newRandomBlob(1024)
+	dgst, content := newRandomBlob(t, 1024)
 	var m testutil.RequestResponseMap
 	repo, _ := reference.WithName("test.example.com/uploadrepo")
 
@@ -476,12 +472,12 @@ func TestBlobMount(t *testing.T) {
 	}
 }
 
-func newRandomSchemaV1Manifest(name reference.Named, tag string, blobCount int) (*schema1.SignedManifest, digest.Digest, []byte) {
+func newRandomSchemaV1Manifest(tb testing.TB, name reference.Named, tag string, blobCount int) (*schema1.SignedManifest, digest.Digest, []byte) {
 	blobs := make([]schema1.FSLayer, blobCount)
 	history := make([]schema1.History, blobCount)
 
 	for i := 0; i < blobCount; i++ {
-		dgst, blob := newRandomBlob((i % 5) * 16)
+		dgst, blob := newRandomBlob(tb, (i%5)*16)
 
 		blobs[i] = schema1.FSLayer{BlobSum: dgst}
 		history[i] = schema1.History{V1Compatibility: fmt.Sprintf("{\"Hex\": \"%x\"}", blob)}
@@ -649,7 +645,7 @@ func checkEqualManifest(m1, m2 *schema1.SignedManifest) error {
 func TestV1ManifestFetch(t *testing.T) {
 	ctx := context.Background()
 	repo, _ := reference.WithName("test.example.com/repo")
-	m1, dgst, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
+	m1, dgst, _ := newRandomSchemaV1Manifest(t, repo, "latest", 6)
 	var m testutil.RequestResponseMap
 	_, pl, err := m1.Payload()
 	require.NoError(t, err)
@@ -697,7 +693,7 @@ func TestV1ManifestFetch(t *testing.T) {
 
 func TestManifestFetchWithEtag(t *testing.T) {
 	repo, _ := reference.WithName("test.example.com/repo/by/tag")
-	_, d1, p1 := newRandomSchemaV1Manifest(repo, "latest", 6)
+	_, d1, p1 := newRandomSchemaV1Manifest(t, repo, "latest", 6)
 	var m testutil.RequestResponseMap
 	addTestManifestWithEtag(repo, "latest", p1, &m, d1.String())
 
@@ -722,7 +718,7 @@ func TestManifestFetchWithEtag(t *testing.T) {
 func TestManifestFetchWithAccept(t *testing.T) {
 	ctx := context.Background()
 	repo, _ := reference.WithName("test.example.com/repo")
-	_, dgst, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
+	_, dgst, _ := newRandomSchemaV1Manifest(t, repo, "latest", 6)
 	headers := make(chan []string, 1)
 	s := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
 		headers <- req.Header["Accept"]
@@ -774,8 +770,8 @@ func TestManifestFetchWithAccept(t *testing.T) {
 
 func TestManifestDelete(t *testing.T) {
 	repo, _ := reference.WithName("test.example.com/repo/delete")
-	_, dgst1, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
-	_, dgst2, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
+	_, dgst1, _ := newRandomSchemaV1Manifest(t, repo, "latest", 6)
+	_, dgst2, _ := newRandomSchemaV1Manifest(t, repo, "latest", 6)
 	var m testutil.RequestResponseMap
 	m = append(m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
@@ -809,7 +805,7 @@ func TestManifestDelete(t *testing.T) {
 
 func TestManifestPut(t *testing.T) {
 	repo, _ := reference.WithName("test.example.com/repo/delete")
-	m1, dgst, _ := newRandomSchemaV1Manifest(repo, "other", 6)
+	m1, dgst, _ := newRandomSchemaV1Manifest(t, repo, "other", 6)
 
 	_, payload, err := m1.Payload()
 	require.NoError(t, err)
@@ -921,7 +917,7 @@ func TestManifestTags(t *testing.T) {
 func TestTagDelete(t *testing.T) {
 	tag := "latest"
 	repo, _ := reference.WithName("test.example.com/repo/delete")
-	newRandomSchemaV1Manifest(repo, tag, 1)
+	newRandomSchemaV1Manifest(t, repo, tag, 1)
 	var m testutil.RequestResponseMap
 	m = append(m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
@@ -990,7 +986,7 @@ func TestObtainsManifestForTagWithoutHeaders(t *testing.T) {
 	repo, _ := reference.WithName("test.example.com/repo")
 
 	var m testutil.RequestResponseMap
-	m1, dgst, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
+	m1, dgst, _ := newRandomSchemaV1Manifest(t, repo, "latest", 6)
 	_, pl, err := m1.Payload()
 	require.NoError(t, err)
 	addTestManifestWithoutDigestHeader(repo, "1.0.0", schema1.MediaTypeSignedManifest, pl, &m)
@@ -1087,7 +1083,7 @@ func TestManifestTagsPaginated(t *testing.T) {
 
 func TestManifestUnauthorized(t *testing.T) {
 	repo, _ := reference.WithName("test.example.com/repo")
-	_, dgst, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
+	_, dgst, _ := newRandomSchemaV1Manifest(t, repo, "latest", 6)
 	var m testutil.RequestResponseMap
 
 	m = append(m, testutil.RequestResponseMapping{
