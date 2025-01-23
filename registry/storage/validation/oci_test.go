@@ -1,9 +1,8 @@
 package validation_test
 
 import (
-	"crypto/rand"
 	"fmt"
-	mrand "math/rand"
+	"math/rand/v2"
 	"regexp"
 	"testing"
 
@@ -289,9 +288,10 @@ func TestVerifyManifest_OCI_ReferenceLimits(t *testing.T) {
 			m := makeOCIManifestTemplate(t, repo)
 
 			// Create a random layer for each of the specified manifest layers.
+			rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(t)))
 			for i := 0; i < tt.manifestLayers; i++ {
-				b := make([]byte, mrand.Intn(20))
-				rand.Read(b)
+				b := make([]byte, rand.IntN(20))
+				rng.Read(b)
 
 				layer, err := repo.Blobs(ctx).Put(ctx, v1.MediaTypeImageLayer, b)
 				require.NoError(t, err)

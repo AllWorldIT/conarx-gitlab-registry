@@ -3,8 +3,8 @@
 package datastore_test
 
 import (
-	"crypto/rand"
-	mrand "math/rand/v2"
+	"io"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -13,6 +13,7 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
+	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
@@ -20,11 +21,9 @@ import (
 func randomDigest(t testing.TB) digest.Digest {
 	t.Helper()
 
-	data := make([]byte, 100)
-	_, err := rand.Read(data)
-	require.NoError(t, err)
-
-	return digest.FromBytes(data)
+	rng := rand.NewChaCha8([32]byte(rngtestutil.MustChaChaSeed(t)))
+	dgst, _ := digest.FromReader(io.LimitReader(rng, rand.Int64N(10000)))
+	return dgst
 }
 
 func randomBlob(t testing.TB) *models.Blob {
@@ -33,14 +32,14 @@ func randomBlob(t testing.TB) *models.Blob {
 	return &models.Blob{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
-		Size:      mrand.Int64(),
+		Size:      rand.Int64(),
 	}
 }
 
 func randomRepository(t testing.TB) *models.Repository {
 	t.Helper()
 
-	n := strconv.Itoa(mrand.Int())
+	n := strconv.Itoa(rand.Int())
 	return &models.Repository{
 		Name: n,
 		Path: n,
