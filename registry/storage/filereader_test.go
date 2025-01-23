@@ -2,25 +2,21 @@ package storage
 
 import (
 	"bytes"
-	"crypto/rand"
 	"io"
-	mrand "math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/docker/distribution/registry/storage/driver/inmemory"
+	"github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSimpleRead(t *testing.T) {
 	ctx := context.Background()
-	content := make([]byte, 1<<20)
-	n, err := rand.Read(content)
-	require.NoError(t, err, "unexpected error building random data")
-
-	require.Equal(t, len(content), n, "random read didn't fill buffer")
+	content := testutil.RandomBlob(t, 1<<20)
 
 	dgst, err := digest.FromReader(bytes.NewReader(content))
 	require.NoError(t, err, "unexpected error digesting random content")
@@ -66,7 +62,7 @@ func TestFileReaderSeek(t *testing.T) {
 
 	// Seek all over the place, in blocks of pattern size and make sure we get
 	// the right data.
-	for _, repitition := range mrand.Perm(repititions - 1) {
+	for _, repitition := range rand.Perm(repititions - 1) {
 		targetOffset := int64(len(pattern) * repitition)
 		// Seek to a multiple of pattern size and read pattern size bytes
 		offset, err := fr.Seek(targetOffset, io.SeekStart)

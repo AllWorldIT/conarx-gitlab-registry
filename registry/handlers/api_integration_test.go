@@ -751,7 +751,7 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 
 			manifest.Layers = make([]distribution.Descriptor, 1)
 
-			rs, dgst, size := createRandomSmallLayer()
+			rs, dgst, size := createRandomSmallLayer(t)
 
 			// Save the layer content as pushLayer exhausts the io.ReadSeeker
 			layerBytes, err := io.ReadAll(rs)
@@ -861,7 +861,7 @@ func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentIn
 	require.NoError(t, err)
 
 	for i := range testManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		// Save the layer content as pushLayer exhausts the io.ReadSeeker
 		layerBytes, err := io.ReadAll(rs)
@@ -919,7 +919,7 @@ func TestManifestAPI_BuildkitIndex(t *testing.T) {
 	// Create and push 2 random layers
 	layers := make([]distribution.Descriptor, 2)
 	for i := range layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 		assertBlobPutResponse(t, env, repoPath, dgst, rs, 201)
 
 		layers[i] = distribution.Descriptor{
@@ -1044,7 +1044,7 @@ func TestManifestAPI_ManifestListWithLayerReferences(t *testing.T) {
 	// Create and push 2 random layers
 	layers := make([]distribution.Descriptor, 2)
 	for i := range layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 		assertBlobPutResponse(t, env, repoPath, dgst, rs, 201)
 
 		layers[i] = distribution.Descriptor{
@@ -1247,7 +1247,7 @@ func TestManifestAPI_Put_DatabaseEnabled_InvalidConfigMediaType(t *testing.T) {
 	assertBlobPutResponse(t, env, repoPath, cfgDesc.Digest, strings.NewReader(cfgPayload), 201)
 
 	// Create and push 1 random layer
-	rs, dgst, size := createRandomSmallLayer()
+	rs, dgst, size := createRandomSmallLayer(t)
 	assertBlobPutResponse(t, env, repoPath, dgst, rs, 201)
 	layerDesc := distribution.Descriptor{
 		MediaType: v1.MediaTypeImageLayerGzip,
@@ -1484,7 +1484,7 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, u, bytes.NewReader(cfgPayload))
 
 	// push random layer blob
-	rs, layerDgst, size := createRandomSmallLayer()
+	rs, layerDgst, size := createRandomSmallLayer(t)
 	u, _ = startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, layerDgst, u, rs)
 
