@@ -11,7 +11,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
@@ -57,6 +57,7 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	storagemiddleware "github.com/docker/distribution/registry/storage/driver/middleware"
 	"github.com/docker/distribution/registry/storage/validation"
+	"github.com/docker/distribution/testutil"
 	"github.com/docker/distribution/version"
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/mux"
@@ -644,8 +645,8 @@ func updateOnlineGCSettings(ctx context.Context, db datastore.Queryer, config *c
 
 	// execute DB update after a randomized jitter of up to 60 seconds to ease concurrency in clustered environments
 	// nolint: gosec // G404: used only for jitter calculation
-	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
-	jitter := time.Duration(r.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(systemClock.Now().UnixNano())))
+	jitter := time.Duration(r.IntN(onlineGCUpdateJitterMaxSeconds)) * time.Second
 
 	log.WithField("jitter_s", jitter.Seconds()).Info("preparing to update online GC settings")
 	systemClock.Sleep(jitter)
@@ -765,8 +766,8 @@ func startDBReplicaChecking(ctx context.Context, lb datastore.LoadBalancer) {
 
 	// delay startup using a randomized jitter to ease concurrency in clustered environments
 	// nolint: gosec // G404: used only for jitter calculation
-	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
-	jitter := time.Duration(r.Intn(dlbReplicaCheckJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(systemClock.Now().UnixNano())))
+	jitter := time.Duration(r.IntN(dlbReplicaCheckJitterMaxSeconds)) * time.Second
 
 	l.WithFields(dlog.Fields{"jitter_s": jitter.Seconds()}).
 		Info("preparing to start database load balancing replica checking")
