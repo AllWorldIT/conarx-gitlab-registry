@@ -72,8 +72,8 @@ gcs:
   before_script:
     - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
 
-.if-fork: &if-fork
-  if: '$CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
+.if-fork-merge-request: &if-fork-merge-request
+  if: '($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE != "merge_train") && $CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
 
 # NOTE(prozlach): Azure storage container used in tests has an auto-cleanup policy set
 # - all blobs older than 24h will be deleted, so even if CI task fails, there
@@ -129,10 +129,11 @@ azure:managed-identity:
       - GO_VERSION: [ "1.23", "1.24rc2" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "default_credentials" ]
-  # Do not run in forked projects without the required runner.
+  # Do not run in forked projects, as they can't use the custom runner:
   rules:
-    - <<: *if-fork
+    - <<: *if-fork-merge-request
       when: never
+    - when: on_success
   variables:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
