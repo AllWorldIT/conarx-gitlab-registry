@@ -3,10 +3,9 @@ package testutil
 import (
 	"archive/tar"
 	"bytes"
-	"crypto/rand"
 	"fmt"
 	"io"
-	mrand "math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/docker/distribution"
@@ -18,10 +17,21 @@ import (
 // io.ReadSeeker along with its digest. An error is returned if there is a
 // problem generating valid content.
 // nolint: gosec //  G404
-func CreateRandomTarFile() (rs io.ReadSeeker, dgst digest.Digest, err error) {
-	nFiles := mrand.Intn(10) + 10
-	target := &bytes.Buffer{}
+func CreateRandomTarFile(seed SeedT) (rs io.ReadSeeker, dgst digest.Digest, err error) {
+	// NOTE(prozlach): Pre-allocate resulting BytesBuffer. For that we need to
+	// know in advance file sizes though.
+	nFiles := rand.IntN(10) + 10
+	fileSizes := make([]int64, nFiles)
+	fileSizesTotal := int64(0)
+	for i := 0; i < nFiles; i++ {
+		fileSizes[i] = rand.Int64N(1<<20) + 1<<20
+		// Tar header is 512bytes per file:
+		fileSizesTotal += fileSizes[i] + 512
+	}
+	target := bytes.NewBuffer(make([]byte, 0, fileSizesTotal))
 	wr := tar.NewWriter(target)
+
+	rng := rand.NewChaCha8([32]byte(seed))
 
 	// Perturb this on each iteration of the loop below.
 	header := &tar.Header{
@@ -35,30 +45,15 @@ func CreateRandomTarFile() (rs io.ReadSeeker, dgst digest.Digest, err error) {
 	}
 
 	for fileNumber := 0; fileNumber < nFiles; fileNumber++ {
-		fileSize := mrand.Int63n(1<<20) + 1<<20
-
 		header.Name = fmt.Sprint(fileNumber)
-		header.Size = fileSize
+		header.Size = fileSizes[fileNumber]
 
 		if err := wr.WriteHeader(header); err != nil {
 			return nil, "", err
 		}
 
-		randomData := make([]byte, fileSize)
-
-		// Fill up the buffer with some random data.
-		n, err := rand.Read(randomData)
-
-		if n != len(randomData) {
-			return nil, "", fmt.Errorf("short read creating random reader: %v bytes != %v bytes", n, len(randomData))
-		}
-
-		if err != nil {
-			return nil, "", err
-		}
-
-		nn, err := io.Copy(wr, bytes.NewReader(randomData))
-		if nn != fileSize {
+		nn, err := io.Copy(wr, io.LimitReader(rng, fileSizes[fileNumber]))
+		if nn != fileSizes[fileNumber] {
 			return nil, "", fmt.Errorf("short copy writing random file to tar")
 		}
 
@@ -85,7 +80,12 @@ func CreateRandomTarFile() (rs io.ReadSeeker, dgst digest.Digest, err error) {
 func CreateRandomLayers(n int) (map[digest.Digest]io.ReadSeeker, error) {
 	digestMap := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < n; i++ {
-		rs, ds, err := CreateRandomTarFile()
+		seed, err := ChaChaSeed()
+		if err != nil {
+			return nil, fmt.Errorf("creating rng seed: %w", err)
+		}
+
+		rs, ds, err := CreateRandomTarFile(seed)
 		if err != nil {
 			return nil, fmt.Errorf("unexpected error generating test layer file: %v", err)
 		}

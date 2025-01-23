@@ -422,7 +422,7 @@ func TestDeleteDisabled(t *testing.T) {
 
 	imageName, _ := reference.WithName("foo/bar")
 	// "build" our layer file
-	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
+	layerFile, layerDigest, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err, "error creating random layer file")
 
 	ref, _ := reference.WithDigest(imageName, layerDigest)
@@ -446,7 +446,7 @@ func TestDeleteReadOnly(t *testing.T) {
 
 	imageName, _ := reference.WithName("foo/bar")
 	// "build" our layer file
-	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
+	layerFile, layerDigest, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err, "error creating random layer file")
 
 	ref, _ := reference.WithDigest(imageName, layerDigest)
