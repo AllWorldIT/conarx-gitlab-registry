@@ -430,7 +430,15 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 
 	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
 	require.NoError(s.T(), err)
-	written, err := io.Copy(writer, io.TeeReader(contents, checksum))
+	// NOTE(prozlach): VERY IMPORTANT - DO NOT WRAP contents into a another
+	// Reader that does not support WriterTo interface or limit the size of the
+	// copy buffer. Doing so could cause us to miss critical test cases where a large enough buffer
+	// is sent to the storage, triggering the driver's Write() method and causing chunking.
+	// If chunking is not properly handled, this may result in errors such as the following on Azure:
+	//
+	// RESPONSE 413: 413 The request body is too large and exceeds the maximum permissible limit.
+	//
+	written, err := io.CopyBuffer(writer, io.TeeReader(contents, checksum), make([]byte, 256*1024*1024))
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), fileSize, written)
 
@@ -2393,7 +2401,7 @@ var once sync.Once
 func randomContents(length int64) []byte {
 	once.Do(func() {
 		if testing.Short() {
-			randomBytes = make([]byte, 10*1024*1024)
+			randomBytes = make([]byte, 256*1024*1024)
 		} else {
 			randomBytes = make([]byte, 128<<23)
 		}
