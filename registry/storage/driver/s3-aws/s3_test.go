@@ -1,7 +1,6 @@
 package s3
 
 import (
-	"crypto/rand"
 	"fmt"
 	mrand "math/rand/v2"
 	"net/http"
@@ -19,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/registry/internal/testutil"
+	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -638,11 +638,9 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 
 	// An object larger than d's MultipartCopyThresholdSize will cause d.Move() to perform a multipart copy.
 	multipartCopyThresholdSize := d.baseEmbed.Base.StorageDriver.(*driver).MultipartCopyThresholdSize
-	contents := make([]byte, 2*multipartCopyThresholdSize)
-	_, err := rand.Read(contents)
-	require.NoError(t, err)
+	contents := rngtestutil.RandomBlob(t, int(2*multipartCopyThresholdSize))
 
-	err = d.PutContent(ctx, sourcePath, contents)
+	err := d.PutContent(ctx, sourcePath, contents)
 	require.NoError(t, err, "unexpected error creating content")
 
 	err = d.Move(ctx, sourcePath, destPath)
