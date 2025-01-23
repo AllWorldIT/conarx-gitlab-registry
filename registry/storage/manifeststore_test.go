@@ -82,7 +82,7 @@ func testManifestStorageImpl(t *testing.T, schema1Enabled bool, options ...Regis
 	// readseekers for upload later.
 	testLayers := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < 2; i++ {
-		rs, dgst, err := testutil.CreateRandomTarFile()
+		rs, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 		require.NoError(t, err, "unexpected error generating test layer file")
 
 		testLayers[dgst] = rs
@@ -290,7 +290,7 @@ func testOCIManifestStorageImpl(t *testing.T, testname string, includeMediaTypes
 
 	// Add some layers
 	for i := 0; i < 2; i++ {
-		rs, dgst, err := testutil.CreateRandomTarFile()
+		rs, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 		require.NoErrorf(t, err, "%s: unexpected error generating test layer file", testname)
 
 		wr, err := env.repository.Blobs(env.ctx).Create(env.ctx)

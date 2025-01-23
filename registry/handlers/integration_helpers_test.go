@@ -1434,7 +1434,7 @@ type blobArgs struct {
 }
 
 func makeBlobArgs(t *testing.T) blobArgs {
-	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
+	layerFile, layerDigest, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err)
 
 	args := blobArgs{
@@ -1448,7 +1448,7 @@ func makeBlobArgs(t *testing.T) blobArgs {
 }
 
 func makeBlobArgsWithRepoName(t *testing.T, repoName string) blobArgs {
-	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
+	layerFile, layerDigest, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err)
 
 	args := blobArgs{

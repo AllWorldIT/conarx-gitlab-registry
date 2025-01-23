@@ -77,7 +77,7 @@ func TestDisabledBlobMetadataLinking(t *testing.T) {
 		storage.Database(&datastore.DBLoadBalancer{}),
 	)
 
-	layer, dgst, err := testutil.CreateRandomTarFile()
+	layer, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err)
 
 	testLayerUploadImpl(t, env, layer, dgst)
@@ -91,7 +91,7 @@ func TestDisabledBlobMetadataLinking(t *testing.T) {
 }
 
 func testFilesystemLayerUpload(t *testing.T, env *env) {
-	layer, dgst, err := testutil.CreateRandomTarFile()
+	layer, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err)
 
 	testLayerUploadImpl(t, env, layer, dgst)
