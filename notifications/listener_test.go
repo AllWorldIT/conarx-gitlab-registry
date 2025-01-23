@@ -124,7 +124,7 @@ func checkExerciseRepository(t *testing.T, repository distribution.Repository, r
 	var blobDigests []digest.Digest
 	blobs := repository.Blobs(ctx)
 	for i := 0; i < 2; i++ {
-		rs, dgst, err := testutil.CreateRandomTarFile()
+		rs, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 		require.NoError(t, err, "error creating test layer")
 
 		blobDigests = append(blobDigests, dgst)
