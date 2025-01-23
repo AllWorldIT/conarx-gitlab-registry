@@ -639,12 +639,20 @@ type blockWriter struct {
 
 func (bw *blockWriter) Write(p []byte) (int, error) {
 	blobRef := bw.client.NewAppendBlobClient(bw.path)
-	// NOTE(prozlach): wrapping `blockWriter` writter into the
-	// `bufio.NewWriterSize` already guarantees that we will write in
-	// `maxChunkSize` blocks, no need to chunk it here as well.
-	_, err := blobRef.AppendBlock(bw.ctx, streaming.NopCloser(bytes.NewReader(p)), nil)
-	if err != nil {
-		return 0, err
+	n := 0
+	for offset := 0; offset < len(p); offset += maxChunkSize {
+		chunkSize := min(maxChunkSize, len(p)-offset)
+		_, err := blobRef.AppendBlock(
+			bw.ctx,
+			streaming.NopCloser(bytes.NewReader(p[offset:offset+chunkSize])),
+			nil,
+		)
+		if err != nil {
+			return n, err
+		}
+
+		n += chunkSize
 	}
-	return len(p), nil
+
+	return n, nil
 }
