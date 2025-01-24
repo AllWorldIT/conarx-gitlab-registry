@@ -91,9 +91,11 @@ func (s *DriverSuite) setupSuiteGeneric(t require.TestingT) {
 	require.NoError(t, err)
 	s.StorageDriver = driver
 
-	driver, err = s.ConstructorRootless()
-	require.NoError(t, err)
-	s.StorageDriverRootless = driver
+	if s.ConstructorRootless != nil {
+		driver, err = s.ConstructorRootless()
+		require.NoError(t, err)
+		s.StorageDriverRootless = driver
+	}
 }
 
 // TearDownSuite tears down the test suite when testing.
@@ -676,6 +678,9 @@ func (s *DriverSuite) testList(t *testing.T, numFiles int) {
 // TestListUnprefixed checks if listing root directory with no prefix
 // configured works.
 func (s *DriverSuite) TestListUnprefixed() {
+	if s.StorageDriver.Name() == "filesystem" {
+		s.T().Skip("filesystem driver does not support prefix-less operation")
+	}
 	// NOTE(prozlach): we are sharing the storage root with other tests, so the
 	// idea is to create a very uniqe file name and simply look for it in the
 	// results. This way there should be no collisions.
