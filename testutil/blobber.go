@@ -95,10 +95,10 @@ func (b *Blobber) GetReader() *bytes.Reader {
 // AssertStreamEqual reads data from the provided reader and compares it to the cached rngCache starting from the specified offset.
 func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int, streamID string) bool {
 	// Check if offset is valid
-	if !assert.GreaterOrEqualf(t, offset, 0, "streamID: %s", streamID) {
+	if !assert.GreaterOrEqualf(t, offset, 0, "offset must not be negative, streamID: %s", streamID) {
 		return false
 	}
-	if !assert.LessOrEqualf(t, offset, len(b.rngCache), "streamID: %s", streamID) {
+	if !assert.LessOrEqualf(t, offset, len(b.rngCache), "offset exceeds rng cache length, streamID: %s", streamID) {
 		return false
 	}
 
@@ -125,7 +125,7 @@ func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int, strea
 			return assert.Equalf(
 				t,
 				b.rngCache[currentOffset:currentOffset+bytesRead], readBuffer[:bytesRead],
-				"difference found: chunk number %d, current offset: %d, starting offset %d, streamID: %s", chunkNumber, currentOffset, offset, streamID,
+				"difference between streams found. Chunk number %d, current offset: %d, starting offset %d, streamID: %s", chunkNumber, currentOffset, offset, streamID,
 			)
 		}
 
