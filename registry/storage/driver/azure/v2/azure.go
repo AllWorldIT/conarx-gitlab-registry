@@ -74,14 +74,14 @@ func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, err
 
 // New constructs a new Driver with the given Azure Storage Account credentials
 func New(in any) (storagedriver.StorageDriver, error) {
-	params := in.(*driverParameters)
-	switch params.credentialsType {
+	params := in.(*DriverParameters)
+	switch params.CredentialsType {
 	case common.CredentialsTypeSharedKey:
 		return newSharedKeyCredentialsClient(params)
 	case common.CredentialsTypeClientSecret, common.CredentialsTypeDefaultCredentials:
 		return newTokenClient(params)
 	default:
-		return nil, fmt.Errorf("invalid credentials type: %q", params.credentialsType)
+		return nil, fmt.Errorf("invalid credentials type: %q", params.CredentialsType)
 	}
 }
 
@@ -94,7 +94,7 @@ func (*driver) Name() string {
 func (d *driver) GetContent(ctx context.Context, targetPath string) ([]byte, error) {
 	resp, err := d.client.NewBlobClient(d.PathToKey(targetPath)).DownloadStream(ctx, nil)
 	if err != nil {
-		if is404(err) {
+		if Is404(err) {
 			return nil, storagedriver.PathNotFoundError{Path: targetPath, DriverName: DriverName}
 		}
 		return nil, err
@@ -129,7 +129,7 @@ func (d *driver) PutContent(ctx context.Context, path string, contents []byte) e
 	blobName := d.PathToKey(path)
 	blobRef := d.client.NewBlobClient(blobName)
 	props, err := blobRef.GetProperties(ctx, nil)
-	if err != nil && !is404(err) {
+	if err != nil && !Is404(err) {
 		return fmt.Errorf("failed to get blob properties: %w", err)
 	}
 	if err == nil && props.BlobType != nil && *props.BlobType != blob.BlobTypeBlockBlob {
@@ -156,7 +156,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 	}
 	props, err := blobRef.GetProperties(ctx, nil)
 	if err != nil {
-		if is404(err) {
+		if Is404(err) {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
 		}
 		return nil, fmt.Errorf("failed to get blob properties: %v", err)
@@ -171,7 +171,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 
 	resp, err := blobRef.DownloadStream(ctx, &options)
 	if err != nil {
-		if is404(err) {
+		if Is404(err) {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
 		}
 		return nil, err
@@ -188,7 +188,7 @@ func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storag
 	props, err := blobRef.GetProperties(ctx, nil)
 	blobExists := true
 	if err != nil {
-		if !is404(err) {
+		if !Is404(err) {
 			return nil, fmt.Errorf("getting blob properties: %w", err)
 		}
 		blobExists = false
@@ -247,7 +247,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 			}
 
 			if len(missing) > 0 {
-				return nil, fmt.Errorf("missing required prroperties (%s) for blob %q", strings.Join(missing, ","), blobName)
+				return nil, fmt.Errorf("missing required properties (%s) for blob %q", strings.Join(missing, ","), blobName)
 			}
 
 			return storagedriver.FileInfoInternal{
@@ -260,7 +260,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 			}, nil
 		}
 
-		if !is404(err) {
+		if !Is404(err) {
 			return nil, fmt.Errorf("fetching blob %q properties: %w", blobName, err)
 		}
 
@@ -328,7 +328,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 	dstBlobRef := d.client.NewBlobClient(d.PathToKey(destPath))
 	resp, err := dstBlobRef.StartCopyFromURL(ctx, srcBlobURL, nil)
 	if err != nil {
-		if is404(err) {
+		if Is404(err) {
 			return storagedriver.PathNotFoundError{Path: sourcePath, DriverName: DriverName}
 		}
 		return err
@@ -416,7 +416,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 		// was a blob and deleted, return
 		return nil
 	}
-	if !is404(err) {
+	if !Is404(err) {
 		return fmt.Errorf("deleting blob %s: %w", path, err)
 	}
 
@@ -529,7 +529,7 @@ func (d *driver) listWithDelimiter(ctx context.Context, prefix, delimiter string
 	return out, nil
 }
 
-func is404(err error) bool {
+func Is404(err error) bool {
 	return bloberror.HasCode(
 		err,
 		bloberror.BlobNotFound,
