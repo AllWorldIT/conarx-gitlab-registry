@@ -34,8 +34,6 @@ func (e *env) isDatabaseEnabled() bool {
 }
 
 func (e *env) shutdown(t *testing.T) {
-	t.Helper()
-
 	if !e.isDatabaseEnabled() {
 		return
 	}
@@ -50,8 +48,6 @@ func (e *env) shutdown(t *testing.T) {
 }
 
 func initDatabase(t *testing.T, env *env) {
-	t.Helper()
-
 	if !env.isDatabaseEnabled() {
 		t.Skip("database connection is required for this test")
 	}
@@ -89,8 +85,6 @@ func newEnv(t *testing.T) *env {
 }
 
 func setupBlob(t *testing.T, path string, env *env) (*models.Blob, *models.Repository, datastore.BlobStore) {
-	t.Helper()
-
 	// build test repository
 	rStore := datastore.NewRepositoryStore(env.db)
 	r, err := rStore.CreateByPath(env.ctx, path)

@@ -2067,8 +2067,6 @@ func TestManifestAPI_Get_Config(t *testing.T) {
 }
 
 func testPrometheusMetricsCollectionDoesNotPanic(t *testing.T, env *testEnv) {
-	t.Helper()
-
 	// we can test this with any HTTP request
 	catalogURL, err := env.builder.BuildCatalogURL()
 	require.NoError(t, err)

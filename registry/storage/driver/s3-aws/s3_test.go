@@ -927,8 +927,6 @@ func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
 }
 
 func newTempDirDriver(t *testing.T) *Driver {
-	t.Helper()
-
 	rootDir := t.TempDir()
 
 	d, err := s3DriverConstructor(rootDir, s3.StorageClassStandard)

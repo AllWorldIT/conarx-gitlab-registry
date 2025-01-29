@@ -18,7 +18,6 @@ import (
 )
 
 func createRegistry(tb testing.TB, sdriver driver.StorageDriver) distribution.Namespace {
-	tb.Helper()
 	ctx := context.Background()
 
 	k, err := libtrust.GenerateECP256PrivateKey()
@@ -32,7 +31,6 @@ func createRegistry(tb testing.TB, sdriver driver.StorageDriver) distribution.Na
 }
 
 func makeRepository(tb testing.TB, registry distribution.Namespace, name string) distribution.Repository {
-	tb.Helper()
 	ctx := context.Background()
 
 	// Initialize a dummy repository
@@ -46,7 +44,6 @@ func makeRepository(tb testing.TB, registry distribution.Namespace, name string)
 }
 
 func allManifests(tb testing.TB, manifestService distribution.ManifestService) map[digest.Digest]struct{} {
-	tb.Helper()
 	ctx := context.Background()
 
 	allManSet := newSyncDigestSet()
@@ -63,7 +60,6 @@ func allManifests(tb testing.TB, manifestService distribution.ManifestService) m
 }
 
 func allBlobs(tb testing.TB, registry distribution.Namespace) map[digest.Digest]struct{} {
-	tb.Helper()
 	ctx := context.Background()
 	blobService := registry.Blobs()
 	allBlobsSet := newSyncDigestSet()

@@ -31,8 +31,6 @@ type env struct {
 }
 
 func newEnv(t *testing.T, repoName string, opts ...storage.RegistryOption) *env {
-	t.Helper()
-
 	env := &env{
 		ctx:     context.Background(),
 		driver:  inmemory.New(),
