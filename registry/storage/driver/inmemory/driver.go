@@ -142,6 +142,14 @@ func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storaged
 
 	normalized := normalize(path)
 
+	if doAppend {
+		found := d.root.find(normalized)
+
+		if found.path() != normalized {
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+		}
+	}
+
 	f, err := d.root.mkfile(normalized)
 	if err != nil {
 		return nil, fmt.Errorf("not a file")

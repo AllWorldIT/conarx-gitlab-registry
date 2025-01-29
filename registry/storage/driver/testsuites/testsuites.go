@@ -765,6 +765,14 @@ func (s *DriverSuite) TestMoveWritterBlob() {
 	})
 }
 
+func (s *DriverSuite) TestAppendInexistentBlob() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+
+	_, err := s.StorageDriver.Writer(s.ctx, destPath, true)
+	require.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
+}
+
 // TestOverwriteAppendBlob checks that driver can overwrite blob created using
 // Write() call with PutContent() call. In case of e.g. Azure, Write() creates
 // AppendBlob and PutContent() creates a BlockBlob and there is no in-place
