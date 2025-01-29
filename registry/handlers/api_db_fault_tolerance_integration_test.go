@@ -52,8 +52,6 @@ type dbProxy struct {
 }
 
 func (p dbProxy) HostAndPort() (string, int) {
-	p.t.Helper()
-
 	_, portStr, err := net.SplitHostPort(p.proxy.Listen)
 	require.NoError(p.t, err)
 	port, err := strconv.Atoi(portStr)
@@ -63,35 +61,28 @@ func (p dbProxy) HostAndPort() (string, int) {
 }
 
 func (p dbProxy) Enable() {
-	p.t.Helper()
 	require.NoError(p.t, p.proxy.Enable())
 }
 
 func (p dbProxy) Disable() {
-	p.t.Helper()
 	require.NoError(p.t, p.proxy.Disable())
 }
 
 func (p dbProxy) Delete() {
-	p.t.Helper()
 	require.NoError(p.t, p.proxy.Delete())
 }
 
 func (p dbProxy) AddToxic(typeName string, attrs toxiproxy.Attributes) *toxiproxy.Toxic {
-	p.t.Helper()
 	toxic, err := p.proxy.AddToxic("", typeName, "", 1, attrs)
 	require.NoError(p.t, err)
 	return toxic
 }
 
 func (p dbProxy) RemoveToxic(toxic *toxiproxy.Toxic) {
-	p.t.Helper()
 	require.NoError(p.t, p.proxy.RemoveToxic(toxic.Name))
 }
 
 func newDBProxy(t *testing.T) *dbProxy {
-	t.Helper()
-
 	dsn, err := testutil.NewDSNFromEnv()
 	require.NoError(t, err)
 	p, err := toxiClient.CreateProxy("db", "", dsn.Address())
@@ -1039,7 +1030,6 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestDelete(t *testing.T) {
 
 // nolint:unparam //(`open` always receives `1`)
 func assertEventuallyOpenAndInUseDBConnections(t *testing.T, env *testEnv, open, inUse int, deadline time.Duration) {
-	t.Helper()
 	require.Eventually(t, func() bool {
 		stats := env.app.DBStats()
 		return stats.OpenConnections == open && stats.InUse == inUse
@@ -1047,7 +1037,6 @@ func assertEventuallyOpenAndInUseDBConnections(t *testing.T, env *testEnv, open,
 }
 
 func assertNoDBConnections(t *testing.T, env *testEnv) {
-	t.Helper()
 	stats := env.app.DBStats()
 	require.Zero(t, stats.OpenConnections)
 	require.Zero(t, stats.InUse)

@@ -62,8 +62,6 @@ REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_PRIVATEKEY and REGISTRY_MIDDLEWARE_STORAGE
 }
 
 func newGCSDriver(t *testing.T) (driver.StorageDriver, string) {
-	t.Helper()
-
 	// generate unique root directory for each test to make them safe for parallel execution
 	root := t.TempDir()
 

@@ -68,8 +68,6 @@ func (e testEnv) mockDB() sqlmock.Sqlmock {
 }
 
 func newTestEnv(t *testing.T) *testEnv {
-	t.Helper()
-
 	dbDSN, err := testutil.NewDSNFromEnv()
 	require.NoError(t, err)
 

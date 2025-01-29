@@ -36,8 +36,6 @@ func ChaChaSeed() (SeedT, error) {
 }
 
 func MustChaChaSeed(tb testing.TB) SeedT {
-	tb.Helper()
-
 	seed, err := ChaChaSeed()
 	require.NoError(tb, err)
 	// The text will be printed only if the test fails or the -test.v flag is

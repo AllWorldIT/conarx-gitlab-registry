@@ -13,8 +13,6 @@ import (
 )
 
 func createTmpKeyFile(t *testing.T) *os.File {
-	t.Helper()
-
 	f, err := os.CreateTemp("", "")
 	require.NoError(t, err)
 

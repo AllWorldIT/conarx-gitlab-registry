@@ -167,8 +167,6 @@ func createQueueBridgeTestEnv(t *testing.T, fn testSinkFn) *QueueBridge {
 }
 
 func checkDeleted(t *testing.T, action string, event *Event) {
-	t.Helper()
-
 	require.NotNil(t, event, "event is nil")
 	require.Equal(t, event.Source, source, "source not equal")
 	require.Equal(t, event.Request, request, "request not equal")
