@@ -176,6 +176,17 @@ func (d *driver) Reader(_ context.Context, targetPath string, offset int64) (io.
 func (d *driver) Writer(_ context.Context, subPath string, doAppend bool) (storagedriver.FileWriter, error) {
 	fullPath := d.fullPath(subPath)
 	parentDir := path.Dir(fullPath)
+
+	if doAppend {
+		_, err := os.Stat(fullPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, storagedriver.PathNotFoundError{Path: fullPath, DriverName: driverName}
+			}
+			return nil, fmt.Errorf("checking if file exist while creating append writer: %w", err)
+		}
+	}
+
 	// nolint:gosec // needs some more research so that we do not break anything
 	if err := os.MkdirAll(parentDir, 0o777); err != nil {
 		return nil, err

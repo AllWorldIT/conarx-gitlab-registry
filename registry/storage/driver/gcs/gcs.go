@@ -392,7 +392,7 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 	}
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating new http request: %w", err)
 	}
 	if offset > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
@@ -405,11 +405,11 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 		return err
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("executing http request: %w", err)
 	}
 	if err := googleapi.CheckMediaResponse(res); err != nil {
 		_ = res.Body.Close()
-		return nil, err
+		return nil, fmt.Errorf("checking media response: %w", err)
 	}
 	return res, nil
 }
@@ -626,6 +626,11 @@ func (w *writer) Size() int64 {
 func (w *writer) init(path string) error {
 	res, err := getObject(w.client, w.bucket, w.name, 0)
 	if err != nil {
+		var gcsErr *googleapi.Error
+		if errors.As(err, &gcsErr) && gcsErr.Code == http.StatusNotFound {
+			return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+		}
+
 		return err
 	}
 	defer res.Body.Close()
