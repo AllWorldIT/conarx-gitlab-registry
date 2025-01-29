@@ -125,11 +125,12 @@ func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int, strea
 			return assert.Equalf(
 				t,
 				b.rngCache[currentOffset:currentOffset+bytesRead], readBuffer[:bytesRead],
-				"chunk number %d, starting from offset %d differs, streamID: %s", chunkNumber, offset, streamID,
+				"difference found: chunk number %d, current offset: %d, starting offset %d, streamID: %s", chunkNumber, currentOffset, offset, streamID,
 			)
 		}
 
 		currentOffset += bytesRead
+		chunkNumber++
 
 		if err != nil {
 			if err == io.EOF {
