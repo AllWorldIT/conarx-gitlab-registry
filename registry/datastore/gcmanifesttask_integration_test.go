@@ -354,8 +354,6 @@ func TestGcManifestTaskStore_Count(t *testing.T) {
 }
 
 func nextGCManifestTask(t *testing.T) (datastore.Transactor, *models.GCManifestTask) {
-	t.Helper()
-
 	tx, err := suite.db.BeginTx(suite.ctx, nil)
 	require.NoError(t, err)
 	require.NotNil(t, tx)
@@ -467,8 +465,6 @@ func TestGcManifestTaskStore_Postpone_NotFound(t *testing.T) {
 }
 
 func existsGCManifestTask(t *testing.T, db datastore.Queryer, repositoryID, manifestID int64) bool {
-	t.Helper()
-
 	q := `SELECT
 			EXISTS (
 				SELECT
@@ -494,8 +490,6 @@ func TestExistsGCManifestTask(t *testing.T) {
 }
 
 func pickGCManifestTask(t *testing.T, db datastore.Queryer, namespaceID, repositoryID, manifestID int64) *models.GCManifestTask {
-	t.Helper()
-
 	q := `SELECT
 			review_after,
 			review_count

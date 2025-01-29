@@ -25,8 +25,6 @@ func isEligible(t *testing.T) {
 }
 
 func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
-	t.Helper()
-
 	var db int
 	s := os.Getenv("REDIS_DB")
 	if s == "" {
@@ -49,8 +47,6 @@ func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
 }
 
 func flushDB(t *testing.T, client redis.UniversalClient) {
-	t.Helper()
-
 	require.NoError(t, client.FlushDB(context.Background()).Err(), "unexpected error flushing redis db")
 }
 

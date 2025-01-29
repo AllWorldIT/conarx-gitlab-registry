@@ -193,8 +193,6 @@ func TestGcBlobTaskStore_Postpone_NotFound(t *testing.T) {
 }
 
 func existsGCBlobTaskByDigest(t *testing.T, db datastore.Queryer, d digest.Digest) bool {
-	t.Helper()
-
 	q := `SELECT
 			EXISTS (
 				SELECT
@@ -222,8 +220,6 @@ func TestExistsGCBlobTaskByDigest(t *testing.T) {
 }
 
 func pickGCBlobTaskByDigest(t *testing.T, db datastore.Queryer, d digest.Digest) *models.GCBlobTask {
-	t.Helper()
-
 	q := `SELECT
 			review_after,
 			review_count

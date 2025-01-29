@@ -1730,7 +1730,6 @@ func TestRepositoryStore_Size_WithCentralRepositoryCache(t *testing.T) {
 }
 
 func testRepositoryStoreSizeWithDescendantsWithCentralRepositoryCacheImpl(t *testing.T, estimate bool) {
-	t.Helper()
 	reloadManifestFixtures(t)
 
 	// see testdata/fixtures/repositories.sql

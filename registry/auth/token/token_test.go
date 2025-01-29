@@ -506,8 +506,6 @@ func TestAccessController_Meta(t *testing.T) {
 // newTestAuthContext creates a valid JWT token with the requested access controls and passes it through the accesscontoller's `Authorized`
 // in order to : assert the JWT is still valid (with a meta field embedded in it) AND to return a context with a possibly embedded meta object.
 func newTestAuthContext(t *testing.T, ctx context.Context, req *http.Request, actions []*ResourceActions, access ...auth.Access) context.Context {
-	t.Helper()
-
 	rootKeys, err := makeRootKeys(1)
 	require.NoError(t, err)
 

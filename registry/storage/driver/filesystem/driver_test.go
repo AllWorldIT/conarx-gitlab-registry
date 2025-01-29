@@ -188,8 +188,6 @@ func TestFilesystemDriverDeleteFilesNonExistingParentDir(t *testing.T) {
 }
 
 func newTempDirDriver(t *testing.T) *Driver {
-	t.Helper()
-
 	rootDir := t.TempDir()
 
 	d, err := FromParameters(map[string]any{

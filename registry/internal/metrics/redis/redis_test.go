@@ -95,8 +95,6 @@ func (l *labelsIter) HasMore() bool {
 }
 
 func validateGauge(t *testing.T, collector prometheus.Collector, name, desc string, value float64, labels prometheus.Labels) {
-	t.Helper()
-
 	tmpl := template.New("")
 	tmpl.Delims("[[", "]]")
 	txt := `

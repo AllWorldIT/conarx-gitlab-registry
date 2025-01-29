@@ -20,8 +20,6 @@ type Opts struct {
 }
 
 func AssertByDefaultType(t *testing.T, opts Opts) {
-	t.Helper()
-
 	switch tt := opts.Defaultt.(type) {
 	case bool:
 		TestBoolValue(t, opts)
@@ -33,8 +31,6 @@ func AssertByDefaultType(t *testing.T, opts Opts) {
 }
 
 func TestBoolValue(t *testing.T, opts Opts) {
-	t.Helper()
-
 	// Keep OriginalParams intact for idempotency.
 	params := CopyMap(opts.OriginalParams)
 
@@ -75,8 +71,6 @@ func TestBoolValue(t *testing.T, opts Opts) {
 }
 
 func TestStringValue(t *testing.T, opts Opts) {
-	t.Helper()
-
 	// Keep OriginalParams intact for idempotency.
 	params := CopyMap(opts.OriginalParams)
 
@@ -124,8 +118,6 @@ func TestStringValue(t *testing.T, opts Opts) {
 }
 
 func AssertParam(t *testing.T, params any, fieldName string, expected any, msgs ...any) {
-	t.Helper()
-
 	r := reflect.ValueOf(params)
 	field := reflect.Indirect(r).FieldByName(fieldName)
 

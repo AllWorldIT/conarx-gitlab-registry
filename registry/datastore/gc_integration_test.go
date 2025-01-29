@@ -1285,8 +1285,6 @@ func TestGC_TrackDeletedTags_DoesNothingIfTriggerDisabled(t *testing.T) {
 // where trigerOperationTime is the time the operation that triggered the review task to be qeued was executed
 // and actualReviewAfterTime is the actual time the review is set to be carried out.
 func assertGCReviewDelayInMinMaxRange(t *testing.T, actualReviewAfterTime, trigerOperationTime time.Time) {
-	t.Helper()
-
 	lowerBound := trigerOperationTime.Add(defaultReviewAfterWithMinJitterDelay)
 	upperBound := trigerOperationTime.Add(defaultReviewAfterWithMaxJitterDelay)
 	require.WithinRange(t, actualReviewAfterTime, lowerBound, upperBound,

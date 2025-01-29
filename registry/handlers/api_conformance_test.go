@@ -2384,8 +2384,6 @@ func manifestPutOCIImageIndexByDigest(t *testing.T, opts ...configOpt) {
 }
 
 func validateManifestPutWithNonDistributableLayers(t *testing.T, env *testEnv, repoRef reference.Named, m distribution.Manifest, mediaType string, foreignDigest digest.Digest) {
-	t.Helper()
-
 	// push manifest
 	u := buildManifestDigestURL(t, env, repoRef.Name(), m)
 	resp, err := putManifest("putting manifest no error", u, mediaType, m)
@@ -2921,8 +2919,6 @@ func blobDeleteDisabled(t *testing.T, opts ...configOpt) {
 }
 
 func blobDeleteImpl(t *testing.T, opts ...configOpt) string {
-	t.Helper()
-
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	t.Cleanup(env.Shutdown)
