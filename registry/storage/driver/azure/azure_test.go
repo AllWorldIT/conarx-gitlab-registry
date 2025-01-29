@@ -2,8 +2,8 @@ package azure
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net/url"
 	"os"
 	"strconv"
@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
@@ -129,7 +132,7 @@ func fetchEnvVarsConfiguration() {
 	}
 }
 
-func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (storagedriver.StorageDriver, error) {
+func fetchDriverConfig(rootDirectory string, trimLegacyRootPrefix bool) (any, error) {
 	rawParams := map[string]any{
 		common.ParamAccountName:          accountName,
 		common.ParamContainer:            accountContainer,
@@ -168,6 +171,14 @@ func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (st
 	}
 
 	parsedParams, err := parseParametersFn(rawParams)
+	if err != nil {
+		return nil, fmt.Errorf("parsing azure login credentials: %w", err)
+	}
+	return parsedParams, nil
+}
+
+func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (storagedriver.StorageDriver, error) {
+	parsedParams, err := fetchDriverConfig(rootDirectory, trimLegacyRootPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("parsing azure login credentials: %w", err)
 	}
@@ -236,68 +247,294 @@ func BenchmarkAzureDriverSuite(b *testing.B) {
 	}
 }
 
-func TestAzureDriverStatRootPath(t *testing.T) {
+// NOTE(prozlach): TestAzureDriverRootPathList and TestAzureDriverRootPathStat
+// tests verify different configurations of root directory and legacy prefix
+// config parameters. They use Azure code in ensureBlobFuncFactory function
+// that is completely separate from the Storage driver being tested in order
+// to avoid "self-confirming error" when testing root directory and legacy
+// prefixing.
+//
+// If both the creation and verification processes shared the same underlying
+// flaw or assumption, it could cause an error to appear valid because the
+// verification method carries the same bias. By having the dir structure
+// created by a different path, we prevent this bias and establish an anchor for
+// all the remaining tests.
+//
+// We need the following folder structure to be present:
+//
+// "/emRoDiWiLePr"
+// "/nested/root/dir/prefix/neCuRoDiWiLePr"
+// "/root_dir_prefix/roDiNoSlWiLePr"
+// "/slRoDiWiLePr"
+// "emRoDi"
+// "nested/root/dir/prefix/neCuRoDi"
+// "root_dir_prefix/roDiNoSl"
+// "slRoDi"
+//
+// The content of the files is irrelevant as long as the size is 3542 bytes.
+const sampleFileSize = 3542
+
+func ensureBlobFuncFactory(t *testing.T) (string, func(absPath string) func()) {
+	ctx, cancelF := context.WithCancel(context.Background())
+	t.Cleanup(cancelF)
+
+	rawParams, err := fetchDriverConfig("", false)
+	require.NoError(t, err)
+
+	var azBlobClient *azblob.Client
+	var container string
+
+	switch params := rawParams.(type) {
+	case *v1.DriverParameters:
+		cred, err := azblob.NewSharedKeyCredential(params.AccountName, params.AccountKey)
+		require.NoError(t, err)
+
+		azBlobClient, err = azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("https://%s.blob.core.windows.net", accountName), cred, nil)
+		require.NoError(t, err)
+
+		container = params.Container
+	case *v2.DriverParameters:
+		switch params.CredentialsType {
+		case common.CredentialsTypeSharedKey:
+			cred, err := azblob.NewSharedKeyCredential(params.AccountName, params.AccountKey)
+			require.NoError(t, err)
+
+			azBlobClient, err = azblob.NewClientWithSharedKeyCredential(params.ServiceURL, cred, nil)
+			require.NoError(t, err)
+		case common.CredentialsTypeClientSecret, common.CredentialsTypeDefaultCredentials:
+			var cred azcore.TokenCredential
+
+			if params.CredentialsType == common.CredentialsTypeClientSecret {
+				cred, err = azidentity.NewClientSecretCredential(
+					params.TenantID,
+					params.ClientID,
+					params.Secret,
+					nil,
+				)
+				require.NoError(t, err)
+			} else {
+				// params.credentialsType == credentialsTypeDefaultCredentials
+				cred, err = azidentity.NewDefaultAzureCredential(nil)
+				require.NoError(t, err)
+			}
+
+			azBlobClient, err = azblob.NewClient(params.ServiceURL, cred, nil)
+			require.NoError(t, err)
+		default:
+			require.FailNowf(t, "invalid credentials type: %q", params.CredentialsType)
+		}
+		container = params.Container
+	}
+
+	azBlobContainerClient := azBlobClient.ServiceClient().NewContainerClient(container)
+
+	generateRandomString := func(strLen int) string {
+		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+		b := make([]byte, strLen)
+		for i := range b {
+			b[i] = charset[rand.IntN(len(charset))]
+		}
+		return string(b)
+	}
+	randomSuffix := generateRandomString(16)
+	contents := generateRandomString(sampleFileSize)
+
+	ensureBlobF := func(absPath string) func() {
+		uniqPath := fmt.Sprintf("%s-%s", absPath, randomSuffix)
+
+		blobRef := azBlobContainerClient.NewBlobClient(uniqPath)
+		// Check if the path is a blob
+		props, err := blobRef.GetProperties(ctx, nil)
+		if err != nil {
+			if !v2.Is404(err) {
+				require.NoError(t, err)
+			}
+		} else {
+			if *props.ContentLength != sampleFileSize {
+				_, err := blobRef.Delete(ctx, nil)
+				require.NoError(t, err)
+			}
+		}
+
+		_, err = azBlobContainerClient.NewBlockBlobClient(uniqPath).UploadBuffer(ctx, []byte(contents), nil)
+		require.NoError(t, err)
+
+		return func() {
+			_, err := blobRef.Delete(ctx, nil)
+			if err != nil && v2.Is404(err) {
+				t.Logf("warning: file %q has already been deleted", uniqPath)
+				return
+			}
+			require.NoError(t, err)
+		}
+	}
+
+	return randomSuffix, ensureBlobF
+}
+
+func TestAzureDriverRootPathStat(t *testing.T) {
 	if skipCheck() != "" {
 		t.Skip(skipCheck())
 	}
+
+	suffix, ensureBlobF := ensureBlobFuncFactory(t)
 
 	tests := []struct {
 		name          string
 		rootDirectory string
 		legacyPath    bool
+		filename      string
+		fileToCreate  string
 	}{
 		{
-			name:          "legacy empty root directory",
+			name:          "empty root directory with legacy prefix",
 			rootDirectory: "",
 			legacyPath:    true,
+			filename:      "emRoDiWiLePr",
+			fileToCreate:  "/emRoDiWiLePr",
 		},
 		{
 			name:          "empty root directory",
 			rootDirectory: "",
+			filename:      "emRoDi",
+			fileToCreate:  "emRoDi",
 		},
 		{
-			name:          "legacy slash root directory",
+			name:          "slash root directory with legacy prefix",
 			rootDirectory: "/",
 			legacyPath:    true,
+			filename:      "slRoDiWiLePr",
+			fileToCreate:  "/slRoDiWiLePr",
 		},
 		{
 			name:          "slash root directory",
 			rootDirectory: "/",
+			filename:      "slRoDi",
+			fileToCreate:  "slRoDi",
+		},
+		{
+			name:          "root directory no slashes with legacy prefix",
+			rootDirectory: "root_dir_prefix",
+			legacyPath:    true,
+			filename:      "roDiNoSlWiLePr",
+			fileToCreate:  "/root_dir_prefix/roDiNoSlWiLePr",
 		},
 		{
 			name:          "root directory no slashes",
-			rootDirectory: "opt",
+			rootDirectory: "root_dir_prefix",
+			filename:      "roDiNoSl",
+			fileToCreate:  "root_dir_prefix/roDiNoSl",
 		},
 		{
-			name:          "legacy root directory no slashes",
-			rootDirectory: "opt",
+			name:          "nested custom root directory with legacy prefix",
+			rootDirectory: "nested/root/dir/prefix",
 			legacyPath:    true,
+			filename:      "neCuRoDiWiLePr",
+			fileToCreate:  "/nested/root/dir/prefix/neCuRoDiWiLePr",
 		},
 		{
 			name:          "nested custom root directory",
-			rootDirectory: "a/b/c/d/",
-		},
-		{
-			name:          "legacy nested custom root directory",
-			rootDirectory: "a/b/c/d/",
-			legacyPath:    true,
+			rootDirectory: "nested/root/dir/prefix",
+			filename:      "neCuRoDi",
+			fileToCreate:  "nested/root/dir/prefix/neCuRoDi",
 		},
 	}
 
 	for _, tt := range tests {
+		cleanupF := ensureBlobF(tt.fileToCreate)
+		t.Cleanup(cleanupF)
+
 		t.Run(tt.name, func(t *testing.T) {
-			// NOTE(prozlach): No need to use an unique root prefix here as we
-			// are not doing any writes so there is no risk of collision with
-			// other CI jobs running.
 			d, err := azureDriverConstructor(tt.rootDirectory, !tt.legacyPath)
 			require.NoError(t, err)
 
-			// Health checks stat "/" and expect either a not found error or a directory.
-			fsInfo, err := d.Stat(context.Background(), "/")
-			if !errors.As(err, &storagedriver.PathNotFoundError{}) {
-				require.NoError(t, err)
-				require.True(t, fsInfo.IsDir())
-			}
+			fsInfo, err := d.Stat(context.Background(), fmt.Sprintf("/%s-%s", tt.filename, suffix))
+			require.NoError(t, err)
+			require.False(t, fsInfo.IsDir())
+			require.EqualValues(t, sampleFileSize, fsInfo.Size())
+		})
+	}
+}
+
+func TestAzureDriverRootPathList(t *testing.T) {
+	if skipCheck() != "" {
+		t.Skip(skipCheck())
+	}
+
+	suffix, ensureBlobF := ensureBlobFuncFactory(t)
+
+	tests := []struct {
+		name          string
+		rootDirectory string
+		legacyPath    bool
+		filename      string
+		fileToCreate  string
+	}{
+		{
+			name:          "empty root directory with legacy prefix",
+			rootDirectory: "",
+			legacyPath:    true,
+			filename:      "emRoDiWiLePr",
+			fileToCreate:  "/emRoDiWiLePr",
+		},
+		{
+			name:          "empty root directory",
+			rootDirectory: "",
+			filename:      "emRoDi",
+			fileToCreate:  "emRoDi",
+		},
+		{
+			name:          "slash root directory with legacy prefix",
+			rootDirectory: "/",
+			legacyPath:    true,
+			filename:      "slRoDiWiLePr",
+			fileToCreate:  "/slRoDiWiLePr",
+		},
+		{
+			name:          "slash root directory",
+			rootDirectory: "/",
+			filename:      "slRoDi",
+			fileToCreate:  "slRoDi",
+		},
+		{
+			name:          "root directory no slashes with legacy prefix",
+			rootDirectory: "root_dir_prefix",
+			legacyPath:    true,
+			filename:      "roDiNoSlWiLePr",
+			fileToCreate:  "/root_dir_prefix/roDiNoSlWiLePr",
+		},
+		{
+			name:          "root directory no slashes",
+			rootDirectory: "root_dir_prefix",
+			filename:      "roDiNoSl",
+			fileToCreate:  "root_dir_prefix/roDiNoSl",
+		},
+		{
+			name:          "nested custom root directory with legacy prefix",
+			rootDirectory: "nested/root/dir/prefix",
+			legacyPath:    true,
+			filename:      "neCuRoDiWiLePr",
+			fileToCreate:  "/nested/root/dir/prefix/neCuRoDiWiLePr",
+		},
+		{
+			name:          "nested custom root directory",
+			rootDirectory: "nested/root/dir/prefix",
+			filename:      "neCuRoDi",
+			fileToCreate:  "nested/root/dir/prefix/neCuRoDi",
+		},
+	}
+
+	for _, tt := range tests {
+		cleanupF := ensureBlobF(tt.fileToCreate)
+		t.Cleanup(cleanupF)
+
+		t.Run(tt.name, func(t *testing.T) {
+			d, err := azureDriverConstructor(tt.rootDirectory, !tt.legacyPath)
+			require.NoError(t, err)
+
+			files, err := d.List(context.Background(), "/")
+			require.NoError(t, err)
+			require.Contains(t, files, fmt.Sprintf("/%s-%s", tt.filename, suffix))
 		})
 	}
 }
@@ -313,7 +550,7 @@ func TestAzureDriver_parseParameters_Bool(t *testing.T) {
 	opts := dtestutil.Opts{
 		Defaultt:          true,
 		ParamName:         common.ParamTrimLegacyRootPrefix,
-		DriverParamName:   "trimLegacyRootPrefix",
+		DriverParamName:   "TrimLegacyRootPrefix",
 		OriginalParams:    p,
 		ParseParametersFn: parseParametersFn,
 	}

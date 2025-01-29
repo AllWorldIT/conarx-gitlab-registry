@@ -116,19 +116,19 @@ func (s *urlSignerImpl) SignBlobURL(ctx context.Context, blobURL string, expires
 	return urlParts.String(), nil
 }
 
-func newSharedKeyCredentialsClient(params *driverParameters) (*Driver, error) {
-	cred, err := azblob.NewSharedKeyCredential(params.accountName, params.accountKey)
+func newSharedKeyCredentialsClient(params *DriverParameters) (*Driver, error) {
+	cred, err := azblob.NewSharedKeyCredential(params.AccountName, params.AccountKey)
 	if err != nil {
 		return nil, fmt.Errorf("creating shared key credentials: %w", err)
 	}
 
-	client, err := azblob.NewClientWithSharedKeyCredential(params.serviceURL, cred, nil)
+	client, err := azblob.NewClientWithSharedKeyCredential(params.ServiceURL, cred, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating client using shared key credentials: %w", err)
 	}
 
 	d := &driver{
-		client: client.ServiceClient().NewContainerClient(params.container),
+		client: client.ServiceClient().NewContainerClient(params.Container),
 		signer: &urlSignerImpl{
 			si: &sharedKeySigner{
 				cred: cred,
@@ -140,15 +140,15 @@ func newSharedKeyCredentialsClient(params *driverParameters) (*Driver, error) {
 	return &Driver{baseEmbed: baseEmbed{Base: base.Base{StorageDriver: d}}}, nil
 }
 
-func newTokenClient(params *driverParameters) (*Driver, error) {
+func newTokenClient(params *DriverParameters) (*Driver, error) {
 	var cred azcore.TokenCredential
 	var err error
 
-	if params.credentialsType == common.CredentialsTypeClientSecret {
+	if params.CredentialsType == common.CredentialsTypeClientSecret {
 		cred, err = azidentity.NewClientSecretCredential(
-			params.tenantID,
-			params.clientID,
-			params.secret,
+			params.TenantID,
+			params.ClientID,
+			params.Secret,
 			nil,
 		)
 		if err != nil {
@@ -162,13 +162,13 @@ func newTokenClient(params *driverParameters) (*Driver, error) {
 		}
 	}
 
-	client, err := azblob.NewClient(params.serviceURL, cred, nil)
+	client, err := azblob.NewClient(params.ServiceURL, cred, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating azure client: %w", err)
 	}
 
 	d := &driver{
-		client: client.ServiceClient().NewContainerClient(params.container),
+		client: client.ServiceClient().NewContainerClient(params.Container),
 		signer: &urlSignerImpl{
 			si: &clientTokenSigner{
 				cred:   cred,
@@ -181,16 +181,16 @@ func newTokenClient(params *driverParameters) (*Driver, error) {
 	return &Driver{baseEmbed: baseEmbed{Base: base.Base{StorageDriver: d}}}, nil
 }
 
-func commonClientSetup(params *driverParameters, d *driver) {
-	d.Pather = common.NewPather(params.root, !params.trimLegacyRootPrefix)
+func commonClientSetup(params *DriverParameters, d *driver) {
+	d.Pather = common.NewPather(params.Root, !params.TrimLegacyRootPrefix)
 
-	d.poolInitialInterval = params.poolInitialInterval
-	d.poolMaxInterval = params.poolMaxInterval
+	d.poolInitialInterval = params.PoolInitialInterval
+	d.poolMaxInterval = params.PoolMaxInterval
 	d.poolMaxElapsedTime = params.poolMaxElapsedTime
 
-	if params.debugLog {
-		if len(params.debugLogEvents) > 0 {
-			azlog.SetEvents(params.debugLogEvents...)
+	if params.DebugLog {
+		if len(params.DebugLogEvents) > 0 {
+			azlog.SetEvents(params.DebugLogEvents...)
 		}
 		logrus.SetFormatter(&logrus.TextFormatter{
 			DisableQuote: true,

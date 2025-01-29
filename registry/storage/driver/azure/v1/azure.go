@@ -40,13 +40,13 @@ type Driver struct{ baseEmbed }
 
 type (
 	AzureDriverFactory struct{}
-	driverParameters   struct {
-		accountName          string
-		accountKey           string
-		container            string
-		realm                string
-		root                 string
-		trimLegacyRootPrefix bool
+	DriverParameters   struct {
+		AccountName          string
+		AccountKey           string
+		Container            string
+		Realm                string
+		Root                 string
+		TrimLegacyRootPrefix bool
 	}
 )
 
@@ -95,20 +95,20 @@ func ParseParameters(parameters map[string]any) (any, error) {
 		return nil, err
 	}
 
-	return &driverParameters{
-		accountName:          fmt.Sprint(accountName),
-		accountKey:           fmt.Sprint(accountKey),
-		container:            fmt.Sprint(container),
-		realm:                fmt.Sprint(realm),
-		root:                 fmt.Sprint(root),
-		trimLegacyRootPrefix: !useLegacyRootPrefix,
+	return &DriverParameters{
+		AccountName:          fmt.Sprint(accountName),
+		AccountKey:           fmt.Sprint(accountKey),
+		Container:            fmt.Sprint(container),
+		Realm:                fmt.Sprint(realm),
+		Root:                 fmt.Sprint(root),
+		TrimLegacyRootPrefix: !useLegacyRootPrefix,
 	}, nil
 }
 
 // New constructs a new Driver with the given Azure Storage Account credentials
 func New(in any) (storagedriver.StorageDriver, error) {
-	params := in.(*driverParameters)
-	api, err := azure.NewClient(params.accountName, params.accountKey, params.realm, azure.DefaultAPIVersion, true)
+	params := in.(*DriverParameters)
+	api, err := azure.NewClient(params.AccountName, params.AccountKey, params.Realm, azure.DefaultAPIVersion, true)
 	if err != nil {
 		return nil, err
 	}
@@ -116,20 +116,20 @@ func New(in any) (storagedriver.StorageDriver, error) {
 	blobClient := api.GetBlobService()
 
 	// Create registry container
-	containerRef := blobClient.GetContainerReference(params.container)
+	containerRef := blobClient.GetContainerReference(params.Container)
 	if _, err = containerRef.CreateIfNotExists(nil); err != nil {
 		return nil, err
 	}
 
-	rootDirectory := strings.Trim(params.root, "/")
+	rootDirectory := strings.Trim(params.Root, "/")
 	if rootDirectory != "" {
 		rootDirectory += "/"
 	}
 
 	d := &driver{
-		Pather:    common.NewPather(rootDirectory, !params.trimLegacyRootPrefix),
+		Pather:    common.NewPather(rootDirectory, !params.TrimLegacyRootPrefix),
 		client:    blobClient,
-		container: params.container,
+		container: params.Container,
 	}
 
 	return &Driver{baseEmbed: baseEmbed{Base: base.Base{StorageDriver: d}}}, nil
