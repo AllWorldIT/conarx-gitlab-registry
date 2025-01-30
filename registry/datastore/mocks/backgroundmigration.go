@@ -55,6 +55,21 @@ func (mr *MockBackgroundMigrationStoreMockRecorder) AreFinished(arg0, arg1 any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AreFinished", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).AreFinished), arg0, arg1)
 }
 
+// CountByStatus mocks base method.
+func (m *MockBackgroundMigrationStore) CountByStatus(arg0 context.Context) (map[models.BackgroundMigrationStatus]int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountByStatus", arg0)
+	ret0, _ := ret[0].(map[models.BackgroundMigrationStatus]int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountByStatus indicates an expected call of CountByStatus.
+func (mr *MockBackgroundMigrationStoreMockRecorder) CountByStatus(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountByStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).CountByStatus), arg0)
+}
+
 // CreateNewJob mocks base method.
 func (m *MockBackgroundMigrationStore) CreateNewJob(arg0 context.Context, arg1 *models.BackgroundMigrationJob) error {
 	m.ctrl.T.Helper()

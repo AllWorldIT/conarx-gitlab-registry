@@ -71,6 +71,8 @@ type BackgroundMigrationStore interface {
 	FindNextByStatus(ctx context.Context, status models.BackgroundMigrationStatus) (*models.BackgroundMigration, error)
 	// AreFinished checks if a list of background migrations referenced by name are in the finished state.
 	AreFinished(ctx context.Context, names []string) (bool, error)
+	// CountByStatus counts the background migrations by status.
+	CountByStatus(ctx context.Context) (map[models.BackgroundMigrationStatus]int, error)
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
@@ -564,6 +566,46 @@ func (bms *backgroundMigrationStore) AreFinished(ctx context.Context, names []st
 	}
 
 	return count == 0, nil
+}
+
+// CountByStatus counts the background migrations by status.
+func (bms *backgroundMigrationStore) CountByStatus(ctx context.Context) (map[models.BackgroundMigrationStatus]int, error) {
+	defer metrics.InstrumentQuery("bbm_count_by_status")()
+
+	q := `SELECT
+			status,
+			COUNT(*)
+		FROM
+			batched_background_migrations
+		GROUP BY
+			status`
+
+	rows, err := bms.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("counting background migrations by status : %w", err)
+	}
+	defer rows.Close()
+
+	statusCount := make(map[models.BackgroundMigrationStatus]int)
+
+	for rows.Next() {
+		var (
+			count  int
+			status models.BackgroundMigrationStatus
+		)
+
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("scanning background migrations count: %w", err)
+		}
+
+		statusCount[status] = count
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating background migrations status rows: %w", err)
+	}
+
+	return statusCount, nil
 }
 
 // ValidateMigrationTableAndColumn asserts that the column and table exists in the database.

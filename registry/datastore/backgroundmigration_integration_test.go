@@ -799,3 +799,27 @@ func TestBackgroundMigrationStore_SyncLock(t *testing.T) {
 	s := datastore.NewBackgroundMigrationStore(tx)
 	require.NoError(t, s.SyncLock(suite.ctx))
 }
+
+func TestBackgroundMigrationStore_CountByStatus(t *testing.T) {
+	reloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	expectedStatusCount := map[models.BackgroundMigrationStatus]int{
+		models.BackgroundMigrationActive:   2,
+		models.BackgroundMigrationFinished: 1,
+		models.BackgroundMigrationPaused:   1,
+		models.BackgroundMigrationRunning:  1,
+	}
+	statusCount, err := s.CountByStatus(suite.ctx)
+	require.NoError(t, err)
+	require.Equal(t, expectedStatusCount, statusCount)
+}
+
+func TestBackgroundMigrationStore_CountByStatus_NotFound(t *testing.T) {
+	unloadBackgroundMigrationFixtures(t)
+
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	statusCount, err := s.CountByStatus(suite.ctx)
+	require.Empty(t, statusCount)
+	require.NoError(t, err)
+}
