@@ -427,7 +427,7 @@ func (s *AzureDriverParametersTestSuite) TestPoolConfiguration() {
 			driverParams := result.(*DriverParameters)
 			assert.Equal(s.T(), tc.expectedInitInterval, driverParams.PoolInitialInterval)
 			assert.Equal(s.T(), tc.expectedMaxInterval, driverParams.PoolMaxInterval)
-			assert.Equal(s.T(), tc.expectedMaxElapsed, driverParams.poolMaxElapsedTime)
+			assert.Equal(s.T(), tc.expectedMaxElapsed, driverParams.PoolMaxElapsedTime)
 		})
 	}
 }

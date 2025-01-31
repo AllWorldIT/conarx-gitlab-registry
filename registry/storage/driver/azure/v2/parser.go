@@ -31,7 +31,7 @@ type DriverParameters struct {
 
 	PoolInitialInterval time.Duration
 	PoolMaxInterval     time.Duration
-	poolMaxElapsedTime  time.Duration
+	PoolMaxElapsedTime  time.Duration
 
 	DebugLog       bool
 	DebugLogEvents []azlog.Event
@@ -188,13 +188,13 @@ func ParseParameters(parameters map[string]any) (any, error) {
 
 	poolMaxElapsedTime, ok := parameters[common.ParamPoolMaxElapsedTime]
 	if !ok {
-		res.poolMaxElapsedTime = DefaultPoolMaxElapsedTime
+		res.PoolMaxElapsedTime = DefaultPoolMaxElapsedTime
 	} else {
 		tmp, err := time.ParseDuration(fmt.Sprint(poolMaxElapsedTime))
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamPoolMaxElapsedTime, poolMaxElapsedTime, err)
 		}
-		res.poolMaxElapsedTime = tmp
+		res.PoolMaxElapsedTime = tmp
 	}
 
 	useLegacyRootPrefix, err := common.InferRootPrefixConfiguration(parameters)
