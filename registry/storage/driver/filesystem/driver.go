@@ -441,17 +441,23 @@ func (fw *fileWriter) Close() error {
 	if fw.closed {
 		return storagedriver.ErrAlreadyClosed
 	}
+	if fw.canceled {
+		// NOTE(prozlach): If the writer has already been canceled, then there
+		// is nothing to flush to the backend as the target file has already
+		// been deleted.
+		return nil
+	}
 
 	if err := fw.bw.Flush(); err != nil {
-		return err
+		return fmt.Errorf("flushing file while closing writer: %w", err)
 	}
 
 	if err := fw.file.Sync(); err != nil {
-		return err
+		return fmt.Errorf("syncing file while closing writer: %w", err)
 	}
 
 	if err := fw.file.Close(); err != nil {
-		return err
+		return fmt.Errorf("closing file while closing writer: %w", err)
 	}
 	fw.closed = true
 	return nil
@@ -460,11 +466,20 @@ func (fw *fileWriter) Close() error {
 func (fw *fileWriter) Cancel() error {
 	if fw.closed {
 		return storagedriver.ErrAlreadyClosed
+	} else if fw.committed {
+		return storagedriver.ErrAlreadyCommited
 	}
-
 	fw.canceled = true
+
 	_ = fw.file.Close()
-	return os.Remove(fw.file.Name())
+	err := os.Remove(fw.file.Name())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("removing file %q: %w", fw.file.Name(), err)
+	}
+	return nil
 }
 
 func (fw *fileWriter) Commit() error {

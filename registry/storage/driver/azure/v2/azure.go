@@ -592,6 +592,14 @@ func (w *writer) Close() error {
 		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
+
+	if w.canceled {
+		// NOTE(prozlach): If the writer has already been canceled, then there
+		// is nothing to flush to the backend as the target file has already
+		// been deleted.
+		return nil
+	}
+
 	err := w.bw.Flush()
 	if err != nil {
 		return fmt.Errorf("flushing while closing writer: %w", err)
@@ -606,9 +614,13 @@ func (w *writer) Cancel() error {
 		return storagedriver.ErrAlreadyCommited
 	}
 	w.canceled = true
+
 	blobRef := w.driver.client.NewBlobClient(w.path)
 	_, err := blobRef.Delete(w.ctx, nil)
 	if err != nil {
+		if Is404(err) {
+			return nil
+		}
 		return fmt.Errorf("removing canceled blob: %w", err)
 	}
 	return nil
@@ -624,6 +636,7 @@ func (w *writer) Commit() error {
 		return storagedriver.ErrAlreadyCanceled
 	}
 	w.committed = true
+
 	err := w.bw.Flush()
 	if err != nil {
 		return fmt.Errorf("flushing while committing writer: %w", err)

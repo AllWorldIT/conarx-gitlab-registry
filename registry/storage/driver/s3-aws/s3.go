@@ -1666,7 +1666,19 @@ func (w *writer) Close() error {
 		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
-	return w.flushPart()
+
+	if w.canceled {
+		// NOTE(prozlach): If the writer has been already canceled, then there
+		// is nothing to flush to the backend as the target file has already
+		// been deleted.
+		return nil
+	}
+
+	err := w.flushPart()
+	if err != nil {
+		return fmt.Errorf("fluxing buffers while closing writer: %w", err)
+	}
+	return nil
 }
 
 func (w *writer) Cancel() error {
@@ -1676,6 +1688,7 @@ func (w *writer) Cancel() error {
 		return storagedriver.ErrAlreadyCommited
 	}
 	w.canceled = true
+
 	_, err := w.driver.S3.AbortMultipartUploadWithContext(
 		context.Background(),
 		&s3.AbortMultipartUploadInput{
@@ -1683,7 +1696,10 @@ func (w *writer) Cancel() error {
 			Key:      aws.String(w.key),
 			UploadId: aws.String(w.uploadID),
 		})
-	return err
+	if err != nil {
+		return fmt.Errorf("aborting s3 multipart upload: %w", err)
+	}
+	return nil
 }
 
 func (w *writer) Commit() error {

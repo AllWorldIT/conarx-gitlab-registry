@@ -315,6 +315,7 @@ func (w *writer) Close() error {
 		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
+
 	return nil
 }
 
@@ -328,8 +329,14 @@ func (w *writer) Cancel() error {
 
 	w.d.mutex.Lock()
 	defer w.d.mutex.Unlock()
-
-	return w.d.root.delete(w.f.path())
+	err := w.d.root.delete(w.f.path())
+	if err != nil {
+		if errors.As(err, new(storagedriver.PathNotFoundError)) {
+			return nil
+		}
+		return fmt.Errorf("removing canceled blob: %w", err)
+	}
+	return nil
 }
 
 func (w *writer) Commit() error {
