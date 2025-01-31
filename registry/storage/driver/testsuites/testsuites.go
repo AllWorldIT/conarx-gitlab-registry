@@ -809,6 +809,184 @@ func (s *DriverSuite) TestAppendInexistentBlob() {
 	require.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
 }
 
+func (s *DriverSuite) TestWriterDoubleClose() {
+	destPath := randomPath(1, 32)
+	s.T().Logf("destination path for blob: %s", destPath)
+
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	err = writer.Close()
+	require.NoError(s.T(), err)
+
+	err = writer.Close()
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyClosed)
+}
+
+func (s *DriverSuite) TestWriterDoubleCommit() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination path for blob: %s", destPath)
+	contents := s.blobberFactory.GetBlobber(96).GetAllBytes()
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.NoError(s.T(), err)
+
+	err = writer.Commit()
+	require.NoError(s.T(), err)
+
+	err = writer.Commit()
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyCommited)
+}
+
+func (s *DriverSuite) TestWriterWriteAfterClose() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination path for blob: %s", destPath)
+	contents := s.blobberFactory.GetBlobber(96).GetAllBytes()
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.NoError(s.T(), err)
+
+	err = writer.Close()
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyClosed)
+}
+
+func (s *DriverSuite) TestWriterCancelAfterClose() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination path for blob: %s", destPath)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	err = writer.Close()
+	require.NoError(s.T(), err)
+
+	err = writer.Cancel()
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyClosed)
+}
+
+func (s *DriverSuite) TestWriterCommitAfterClose() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination path for blob: %s", destPath)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	err = writer.Close()
+	require.NoError(s.T(), err)
+
+	err = writer.Commit()
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyClosed)
+}
+
+func (s *DriverSuite) TestWriterCommitAfterCancel() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	contents := s.blobberFactory.GetBlobber(96).GetAllBytes()
+	s.T().Logf("destination path for blob: %s", destPath)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.NoError(s.T(), err)
+
+	err = writer.Commit()
+	require.NoError(s.T(), err)
+
+	err = writer.Cancel()
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyCommited)
+}
+
+func (s *DriverSuite) TestWriterCancelAfterCommit() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination path for blob: %s", destPath)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	err = writer.Cancel()
+	require.NoError(s.T(), err)
+
+	err = writer.Commit()
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyCanceled)
+}
+
+func (s *DriverSuite) TestWriterWriteAfterCommit() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	contents := s.blobberFactory.GetBlobber(96).GetAllBytes()
+	s.T().Logf("destination path for blob: %s", destPath)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.NoError(s.T(), err)
+
+	err = writer.Commit()
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyCommited)
+}
+
+func (s *DriverSuite) TestWriterWriteAfterCancel() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	contents := s.blobberFactory.GetBlobber(96).GetAllBytes()
+	s.T().Logf("destination path for blob: %s", destPath)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.NoError(s.T(), err)
+
+	err = writer.Cancel()
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.ErrorIs(s.T(), err, storagedriver.ErrAlreadyCanceled)
+}
+
+func (s *DriverSuite) TestWriterCancel() {
+	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	contents := s.blobberFactory.GetBlobber(96).GetAllBytes()
+	s.T().Logf("destination path for blob: %s", destPath)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
+	require.NoError(s.T(), err)
+
+	_, err = writer.Write(contents)
+	require.NoError(s.T(), err)
+
+	err = writer.Cancel()
+	require.NoError(s.T(), err)
+
+	err = writer.Close()
+	require.NoError(s.T(), err)
+
+	_, err = s.StorageDriver.Stat(s.ctx, destPath)
+	require.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
+}
+
 // TestOverwriteAppendBlob checks that driver can overwrite blob created using
 // Write() call with PutContent() call. In case of e.g. Azure, Write() creates
 // AppendBlob and PutContent() creates a BlockBlob and there is no in-place

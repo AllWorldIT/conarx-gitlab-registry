@@ -442,6 +442,8 @@ type writer struct {
 	size          int64
 	offset        int64
 	closed        bool
+	committed     bool
+	canceled      bool
 	sessionURI    string
 	buffer        []byte
 	buffSize      int
@@ -449,28 +451,47 @@ type writer struct {
 
 // Cancel removes any written content from this FileWriter.
 func (w *writer) Cancel() error {
-	w.closed = true
+	if w.closed {
+		return storagedriver.ErrAlreadyClosed
+	} else if w.committed {
+		return storagedriver.ErrAlreadyCommited
+	}
+	w.canceled = true
+
 	err := storageDeleteObject(context.Background(), w.storageClient, w.bucket, w.name)
 	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return nil
+		}
+
 		var gerr *googleapi.Error
-		if errors.As(err, &gerr) {
-			if gerr.Code == http.StatusNotFound {
-				err = nil
-			}
+		if errors.As(err, &gerr) && gerr.Code == http.StatusNotFound {
+			return nil
 		}
 	}
-	return err
+	return fmt.Errorf("deleting object while canceling writer: %w", err)
 }
 
 func (w *writer) Close() error {
 	if w.closed {
-		return nil
+		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
 
+	if w.canceled {
+		// NOTE(prozlach): If the writer has already been canceled, then there
+		// is nothing to flush to the backend as the target file has already
+		// been deleted.
+		return nil
+	}
+	if w.committed {
+		// we are done already, return early
+		return nil
+	}
+
 	err := w.writeChunk()
 	if err != nil {
-		return err
+		return fmt.Errorf("writing chunk: %w", err)
 	}
 
 	// Copy the remaining bytes from the buffer to the upload session
@@ -493,7 +514,7 @@ func (w *writer) Close() error {
 		return putContentsClose(wc, w.buffer[0:w.buffSize])
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("writing contents while closing writer: %w", err)
 	}
 	w.size = w.offset + int64(w.buffSize)
 	w.buffSize = 0
@@ -523,10 +544,15 @@ func putContentsClose(wc *storage.Writer, contents []byte) error {
 // available for future calls to StorageDriver.GetContent and
 // StorageDriver.Reader.
 func (w *writer) Commit() error {
-	if err := w.checkClosed(); err != nil {
-		return err
+	switch {
+	case w.closed:
+		return storagedriver.ErrAlreadyClosed
+	case w.committed:
+		return storagedriver.ErrAlreadyCommited
+	case w.canceled:
+		return storagedriver.ErrAlreadyCanceled
 	}
-	w.closed = true
+	w.committed = true
 
 	// no session started yet just perform a simple upload
 	if w.sessionURI == "" {
@@ -564,13 +590,6 @@ func (w *writer) Commit() error {
 	return nil
 }
 
-func (w *writer) checkClosed() error {
-	if w.closed {
-		return fmt.Errorf("Writer already closed")
-	}
-	return nil
-}
-
 func (w *writer) writeChunk() error {
 	var err error
 	// chunks can be uploaded only in multiples of minChunkSize
@@ -598,12 +617,18 @@ func (w *writer) writeChunk() error {
 }
 
 func (w *writer) Write(p []byte) (int, error) {
-	err := w.checkClosed()
-	if err != nil {
-		return 0, err
+	switch {
+	case w.closed:
+		return 0, storagedriver.ErrAlreadyClosed
+	case w.committed:
+		return 0, storagedriver.ErrAlreadyCommited
+	case w.canceled:
+		return 0, storagedriver.ErrAlreadyCanceled
 	}
 
+	var err error
 	var nn int
+
 	for nn < len(p) {
 		n := copy(w.buffer[w.buffSize:], p[nn:])
 		w.buffSize += n
