@@ -330,6 +330,8 @@ func (s *DriverSuite) TestInvalidPaths() {
 // TestWriteRead1 tests a simple write-read workflow.
 func (s *DriverSuite) TestWriteRead1() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	contents := []byte("a")
 	s.writeReadCompare(s.T(), filename, contents)
 }
@@ -337,6 +339,8 @@ func (s *DriverSuite) TestWriteRead1() {
 // TestWriteRead2 tests a simple write-read workflow with unicode data.
 func (s *DriverSuite) TestWriteRead2() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	contents := []byte("\xc3\x9f")
 	s.writeReadCompare(s.T(), filename, contents)
 }
@@ -344,6 +348,8 @@ func (s *DriverSuite) TestWriteRead2() {
 // TestWriteRead3 tests a simple write-read workflow with a small string.
 func (s *DriverSuite) TestWriteRead3() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
 	s.writeReadCompare(s.T(), filename, contents)
 }
@@ -351,6 +357,8 @@ func (s *DriverSuite) TestWriteRead3() {
 // TestWriteRead4 tests a simple write-read workflow with 1MB of data.
 func (s *DriverSuite) TestWriteRead4() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	contents := s.blobberFactory.GetBlobber(1 << 20).GetAllBytes()
 	s.writeReadCompare(s.T(), filename, contents)
 }
@@ -359,6 +367,8 @@ func (s *DriverSuite) TestWriteRead4() {
 // driver safely.
 func (s *DriverSuite) TestWriteReadNonUTF8() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	contents := []byte{0x80, 0x80, 0x80, 0x80}
 	s.writeReadCompare(s.T(), filename, contents)
 }
@@ -367,6 +377,8 @@ func (s *DriverSuite) TestWriteReadNonUTF8() {
 // remove the excess contents.
 func (s *DriverSuite) TestTruncate() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	// NOTE(prozlach): We explicitly need a different blob to confirm that
 	// in-place overwrite and truncation was indeed successful. In order to
 	// avoid allocations, we simply request a bigger blobber and then slice it.
@@ -379,6 +391,8 @@ func (s *DriverSuite) TestTruncate() {
 // TestReadNonexistent tests reading content from an empty path.
 func (s *DriverSuite) TestReadNonexistent() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	_, err := s.StorageDriver.GetContent(s.ctx, filename)
 	require.Error(s.T(), err)
 	require.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{
@@ -390,6 +404,8 @@ func (s *DriverSuite) TestReadNonexistent() {
 // TestWriteReadStreams1 tests a simple write-read streaming workflow.
 func (s *DriverSuite) TestWriteReadStreams1() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	blobber := testutil.NewBlober([]byte("a"))
 	s.writeReadCompareStreams(s.T(), filename, blobber)
 }
@@ -398,6 +414,8 @@ func (s *DriverSuite) TestWriteReadStreams1() {
 // unicode data.
 func (s *DriverSuite) TestWriteReadStreams2() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	blobber := testutil.NewBlober([]byte("\xc3\x9f"))
 	s.writeReadCompareStreams(s.T(), filename, blobber)
 }
@@ -406,6 +424,8 @@ func (s *DriverSuite) TestWriteReadStreams2() {
 // small amount of data.
 func (s *DriverSuite) TestWriteReadStreams3() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	blobber := s.blobberFactory.GetBlobber(32)
 	s.writeReadCompareStreams(s.T(), filename, blobber)
 }
@@ -414,6 +434,8 @@ func (s *DriverSuite) TestWriteReadStreams3() {
 // of data.
 func (s *DriverSuite) TestWriteReadStreams4() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	blobber := s.blobberFactory.GetBlobber(1 << 20)
 	s.writeReadCompareStreams(s.T(), filename, blobber)
 }
@@ -422,6 +444,8 @@ func (s *DriverSuite) TestWriteReadStreams4() {
 // storage driver safely.
 func (s *DriverSuite) TestWriteReadStreamsNonUTF8() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
+
 	blobber := testutil.NewBlober([]byte{0x80, 0x80, 0x80, 0x80})
 	s.writeReadCompareStreams(s.T(), filename, blobber)
 }
@@ -431,6 +455,7 @@ func (s *DriverSuite) TestWriteReadStreamsNonUTF8() {
 func (s *DriverSuite) TestWriteReadLargeStreams() {
 	filename := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(filename), false)
+	s.T().Logf("blob path used for testing: %s", filename)
 
 	fileSize := 2 * 1 << 30
 	if testing.Short() {
@@ -472,6 +497,7 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 func (s *DriverSuite) TestReaderWithOffset() {
 	filename := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(filename), false)
+	s.T().Logf("blob path used for testing: %s", filename)
 
 	chunkSize := 32
 	blobber := s.blobberFactory.GetBlobber(3 * chunkSize)
@@ -557,6 +583,7 @@ func (s *DriverSuite) TestContinueStreamAppendSmall() {
 func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int) {
 	filename := randomPath(1, 32)
 	defer s.deletePath(t, firstPart(filename), false)
+	t.Logf("blob path used for testing: %s", filename)
 
 	blobber := s.blobberFactory.GetBlobber(3 * chunkSize)
 	contentsChunk123 := blobber.GetAllBytes()
@@ -604,6 +631,7 @@ func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int) {
 // fails.
 func (s *DriverSuite) TestReadNonexistentStream() {
 	filename := randomPath(1, 32)
+	s.T().Logf("blob path used for testing: %s", filename)
 
 	_, err := s.StorageDriver.Reader(s.ctx, filename, 0)
 	require.Error(s.T(), err)
@@ -634,6 +662,7 @@ func (s *DriverSuite) TestList1200Files() {
 func (s *DriverSuite) testList(t *testing.T, numFiles int) {
 	rootDirectory := "/" + randomFilenameRange(8, 8)
 	defer s.deletePath(t, rootDirectory, false)
+	t.Logf("root directory path used for testing: %s", rootDirectory)
 
 	doesnotexist := path.Join(rootDirectory, "nonexistent")
 	_, err := s.StorageDriver.List(s.ctx, doesnotexist)
@@ -677,9 +706,9 @@ func (s *DriverSuite) TestListUnprefixed() {
 	// idea is to create a very uniqe file name and simply look for it in the
 	// results. This way there should be no collisions.
 	destPath := "/" + randomFilename(64)
-	destContents := s.blobberFactory.GetBlobber(64).GetAllBytes()
-
 	defer s.deletePath(s.T(), destPath, true)
+	s.T().Logf("destination blob path used for testing: %s", destPath)
+	destContents := s.blobberFactory.GetBlobber(64).GetAllBytes()
 
 	err := s.StorageDriverRootless.PutContent(s.ctx, destPath, destContents)
 	require.NoError(s.T(), err)
@@ -698,11 +727,14 @@ func (s *DriverSuite) TestListUnprefixed() {
 // during move operation.
 func (s *DriverSuite) TestMovePutContentBlob() {
 	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
-	sourcePath := randomPath(1, 32)
-	destPath := randomPath(1, 32)
 
+	sourcePath := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(sourcePath), false)
+	s.T().Logf("source blob path used for testing: %s", sourcePath)
+
+	destPath := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination blob path used for testing: %s", destPath)
 
 	err := s.StorageDriver.PutContent(s.ctx, sourcePath, contents)
 	require.NoError(s.T(), err)
@@ -731,11 +763,14 @@ func (s *DriverSuite) TestMovePutContentBlob() {
 // during move operation.
 func (s *DriverSuite) TestMoveWritterBlob() {
 	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
-	sourcePath := randomPath(1, 32)
-	destPath := randomPath(1, 32)
 
+	sourcePath := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(sourcePath), false)
+	s.T().Logf("source blob path used for testing: %s", sourcePath)
+
+	destPath := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination blob path used for testing: %s", destPath)
 
 	writer, err := s.StorageDriver.Writer(s.ctx, sourcePath, false)
 	require.NoError(s.T(), err, "unexpected error from driver.Writer")
@@ -768,6 +803,7 @@ func (s *DriverSuite) TestMoveWritterBlob() {
 func (s *DriverSuite) TestAppendInexistentBlob() {
 	destPath := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination blob path used for testing: %s", destPath)
 
 	_, err := s.StorageDriver.Writer(s.ctx, destPath, true)
 	require.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
@@ -785,8 +821,8 @@ func (s *DriverSuite) TestOverwriteAppendBlob() {
 	contentsAppend := contents[:32]
 	contentsBlock := contents[32:]
 	destPath := randomPath(1, 32)
-
 	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination blob path used for testing: %s", destPath)
 
 	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
 	require.NoError(s.T(), err, "unexpected error from driver.Writer")
@@ -821,8 +857,8 @@ func (s *DriverSuite) TestOverwriteBlockBlob() {
 	contentsAppend := contents[:32]
 	contentsBlock := contents[32:]
 	destPath := randomPath(1, 32)
-
 	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination blob path used for testing: %s", destPath)
 
 	err := s.StorageDriver.PutContent(s.ctx, destPath, contentsBlock)
 	require.NoError(s.T(), err)
@@ -849,16 +885,19 @@ func (s *DriverSuite) TestOverwriteBlockBlob() {
 // path and overwrites the contents at the destination.
 func (s *DriverSuite) TestMoveOverwrite() {
 	sourcePath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(sourcePath), false)
+	s.T().Logf("source blob path used for testing: %s", sourcePath)
+
 	destPath := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination blob path used for testing: %s", destPath)
+
 	// NOTE(prozlach): We explicitly need a different blob here to confirm that
 	// in-place overwrite was indeed successful. In order to avoid extra
 	// allocations, we simply request a blobber double the size.
 	contents := s.blobberFactory.GetBlobber(96).GetAllBytes()
 	sourceContents := contents[:32]
 	destContents := contents[32:]
-
-	defer s.deletePath(s.T(), firstPart(sourcePath), false)
-	defer s.deletePath(s.T(), firstPart(destPath), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, sourcePath, sourceContents)
 	require.NoError(s.T(), err)
@@ -886,9 +925,11 @@ func (s *DriverSuite) TestMoveOverwrite() {
 func (s *DriverSuite) TestMoveNonexistent() {
 	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
 	sourcePath := randomPath(1, 32)
-	destPath := randomPath(1, 32)
+	s.T().Logf("source blob path used for testing: %s", sourcePath)
 
+	destPath := randomPath(1, 32)
 	defer s.deletePath(s.T(), firstPart(destPath), false)
+	s.T().Logf("destination blob path used for testing: %s", destPath)
 
 	err := s.StorageDriver.PutContent(s.ctx, destPath, contents)
 	require.NoError(s.T(), err)
@@ -923,9 +964,9 @@ func (s *DriverSuite) TestMoveInvalid() {
 // driver
 func (s *DriverSuite) TestDelete() {
 	filename := randomPath(1, 32)
-	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
-
 	defer s.deletePath(s.T(), firstPart(filename), false)
+	s.T().Logf("blob path used for testing: %s", filename)
+	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
 
 	err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 	require.NoError(s.T(), err)
@@ -956,6 +997,7 @@ func (s *DriverSuite) TestDeleteDir1200Files() {
 func (s *DriverSuite) testDeleteDir(t *testing.T, numFiles int) {
 	rootDirectory := "/" + randomFilenameRange(8, 8)
 	defer s.deletePath(t, rootDirectory, false)
+	t.Logf("root directory path used for testing: %s", rootDirectory)
 
 	parentDirectory := rootDirectory + "/" + randomFilenameRange(8, 8)
 	childFiles := s.buildFiles(t, parentDirectory, numFiles, 8)
@@ -1047,6 +1089,7 @@ func (s *DriverSuite) assertPathNotFound(t require.TestingT, p ...string) {
 func (s *DriverSuite) TestDeleteFiles() {
 	parentDir := randomPath(1, 8)
 	defer s.deletePath(s.T(), firstPart(parentDir), false)
+	s.T().Logf("parent directory path used for testing: %s", parentDir)
 
 	/* #nosec G404 */
 	blobPaths := s.buildFiles(s.T(), parentDir, mrand.IntN(10), 32)
@@ -1065,6 +1108,7 @@ func (s *DriverSuite) TestDeleteFileEqualFolderFileName() {
 	fileName := "Maryna"
 	p := path.Join(parentDir, fileName, fileName)
 	defer s.deletePath(s.T(), firstPart(parentDir), false)
+	s.T().Logf("parent directory path used for testing: %s", parentDir)
 
 	err := s.StorageDriver.PutContent(s.ctx, p, s.blobberFactory.GetBlobber(32).GetAllBytes())
 	require.NoError(s.T(), err)
@@ -1079,6 +1123,7 @@ func (s *DriverSuite) TestDeleteFileEqualFolderFileName() {
 func (s *DriverSuite) TestDeleteFilesNotFound() {
 	parentDir := randomPath(1, 8)
 	defer s.deletePath(s.T(), firstPart(parentDir), false)
+	s.T().Logf("parent directory path used for testing: %s", parentDir)
 
 	blobPaths := s.buildFiles(s.T(), parentDir, 5, 32)
 	// delete the 1st, 3rd and last file so that they don't exist anymore
@@ -1124,9 +1169,9 @@ func (s *DriverSuite) BenchmarkDeleteFiles100Files(b *testing.B) {
 // is implemented
 func (s *DriverSuite) TestURLFor() {
 	filename := randomPath(1, 32)
-	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
-
 	defer s.deletePath(s.T(), firstPart(filename), false)
+	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
+	s.T().Logf("blob path used for testing: %s", filename)
 
 	err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 	require.NoError(s.T(), err)
@@ -1176,9 +1221,9 @@ func (s *DriverSuite) TestDeleteFolder() {
 	filename1 := randomPath(1, 32)
 	filename2 := randomPath(1, 32)
 	filename3 := randomPath(1, 32)
-	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
-
 	defer s.deletePath(s.T(), firstPart(dirname), false)
+	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
+	s.T().Logf("parent directory: %s, filename1: %s, filename2: %s, filename3: %s", dirname, filename1, filename2, filename3)
 
 	err := s.StorageDriver.PutContent(s.ctx, path.Join(dirname, filename1), contents)
 	require.NoError(s.T(), err)
@@ -1238,8 +1283,8 @@ func (s *DriverSuite) TestDeleteOnlyDeletesSubpaths() {
 	dirname := randomPath(1, 32)
 	filename := randomPath(1, 32)
 	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
-
 	defer s.deletePath(s.T(), firstPart(dirname), false)
+	s.T().Logf("directory: %s, filename: %s", dirname, filename)
 
 	err := s.StorageDriver.PutContent(s.ctx, path.Join(dirname, filename), contents)
 	require.NoError(s.T(), err)
@@ -1290,6 +1335,7 @@ func (s *DriverSuite) TestStatCall() {
 	dirPath := randomPath(1, 32)
 	fileName := randomFilename(32)
 	filePath := path.Join(dirPath, fileName)
+	s.T().Logf("directory: %s, filename: %s", dirPath, fileName)
 
 	defer s.deletePath(s.T(), firstPart(dirPath), false)
 
@@ -1372,13 +1418,14 @@ func (s *DriverSuite) TestStatCall() {
 // rather than writing the data to the [0,len(data)) of the file.
 func (s *DriverSuite) TestPutContentMultipleTimes() {
 	filename := randomPath(1, 32)
+	defer s.deletePath(s.T(), firstPart(filename), false)
+	s.T().Logf("blob path used for testing: %s", filename)
 	// NOTE(prozlach): We explicitly need a different blob here to confirm that
 	// in-place overwrite was indeed successful.
 	contentsAB := s.blobberFactory.GetBlobber(4096 + 2048).GetAllBytes()
 	contentsA := contentsAB[:4096]
 	contentsB := contentsAB[4096:]
 
-	defer s.deletePath(s.T(), firstPart(filename), false)
 	err := s.StorageDriver.PutContent(s.ctx, filename, contentsA)
 	require.NoError(s.T(), err)
 
@@ -1397,13 +1444,14 @@ func (s *DriverSuite) TestConcurrentStreamReads() {
 
 	if testing.Short() {
 		fileSize = 10 * 1 << 20
-		s.T().Log("Reducing file size to 10MB for short mode")
+		s.T().Logf("Reducing file size to 10MB for short mode")
 	}
 
 	filename := randomPath(1, 32)
-	blobber := s.blobberFactory.GetBlobber(fileSize)
-
 	defer s.deletePath(s.T(), firstPart(filename), false)
+	s.T().Logf("blob path used for testing: %s", filename)
+
+	blobber := s.blobberFactory.GetBlobber(fileSize)
 
 	err := s.StorageDriver.PutContent(s.ctx, filename, blobber.GetAllBytes())
 	require.NoError(s.T(), err)
@@ -1509,6 +1557,7 @@ func (s *DriverSuite) TestConcurrentFileStreams() {
 func (s *DriverSuite) TestWalkParallel() {
 	rootDirectory := "/" + randomFilenameRange(8, 8)
 	defer s.deletePath(s.T(), rootDirectory, false)
+	s.T().Logf("root directory used for testing: %s", rootDirectory)
 
 	numWantedFiles := 10
 	wantedFiles := randomBranchingFiles(rootDirectory, numWantedFiles)
@@ -1590,6 +1639,7 @@ func (s *DriverSuite) TestWalkParallel() {
 func (s *DriverSuite) TestWalkParallelError() {
 	rootDirectory := "/" + randomFilenameRange(8, 8)
 	defer s.deletePath(s.T(), rootDirectory, false)
+	s.T().Logf("root directory used for testing: %s", rootDirectory)
 
 	wantedFiles := randomBranchingFiles(rootDirectory, 100)
 
@@ -1637,6 +1687,7 @@ func (s *DriverSuite) TestWalkParallelStopsProcessingOnError() {
 
 	rootDirectory := "/" + randomFilenameRange(8, 8)
 	defer s.deletePath(s.T(), rootDirectory, false)
+	s.T().Logf("root directory used for testing: %s", rootDirectory)
 
 	numWantedFiles := 1000
 	wantedFiles := randomBranchingFiles(rootDirectory, numWantedFiles)
@@ -1965,7 +2016,9 @@ func (s *DriverSuite) TestRemoveBlob() {
 	defer s.deletePath(s.T(), firstPart("docker/"), false)
 
 	registry := s.createRegistry(s.T())
-	repo := s.makeRepository(s.T(), registry, randomFilename(5))
+	repoName := randomFilename(5)
+	repo := s.makeRepository(s.T(), registry, repoName)
+	s.T().Logf("repo name used for testing: %s", repoName)
 	v := storage.NewVacuum(s.StorageDriver)
 
 	// build two blobs, one more than the number to delete, otherwise there will be no /docker/registry/v2/blobs path
@@ -1992,7 +2045,9 @@ func (s *DriverSuite) benchmarkRemoveBlob(b *testing.B, numBlobs int) {
 	defer s.deletePath(b, firstPart("docker/"), false)
 
 	registry := s.createRegistry(b)
-	repo := s.makeRepository(b, registry, randomFilename(5))
+	repoName := randomFilename(5)
+	repo := s.makeRepository(s.T(), registry, repoName)
+	s.T().Logf("repo name used for testing: %s", repoName)
 	v := storage.NewVacuum(s.StorageDriver)
 
 	for n := 0; n < b.N; n++ {
@@ -2027,7 +2082,9 @@ func (s *DriverSuite) TestRemoveBlobs() {
 	defer s.deletePath(s.T(), firstPart("docker/"), false)
 
 	registry := s.createRegistry(s.T())
-	repo := s.makeRepository(s.T(), registry, randomFilename(5))
+	repoName := randomFilename(5)
+	repo := s.makeRepository(s.T(), registry, repoName)
+	s.T().Logf("repo name used for testing: %s", repoName)
 	v := storage.NewVacuum(s.StorageDriver)
 
 	// build some blobs and remove half of them, otherwise there will be no /docker/registry/v2/blobs path to look at
@@ -2057,7 +2114,9 @@ func (s *DriverSuite) benchmarkRemoveBlobs(b *testing.B, numBlobs int) {
 	defer s.deletePath(b, firstPart("docker/"), false)
 
 	registry := s.createRegistry(b)
-	repo := s.makeRepository(b, registry, randomFilename(5))
+	repoName := randomFilename(5)
+	repo := s.makeRepository(s.T(), registry, repoName)
+	s.T().Logf("repo name used for testing: %s", repoName)
 	v := storage.NewVacuum(s.StorageDriver)
 
 	for n := 0; n < b.N; n++ {
@@ -2130,7 +2189,9 @@ func (s *DriverSuite) TestRemoveManifests() {
 	defer s.deletePath(s.T(), firstPart("docker/"), false)
 
 	registry := s.createRegistry(s.T())
-	repo := s.makeRepository(s.T(), registry, randomFilename(5))
+	repoName := randomFilename(5)
+	repo := s.makeRepository(s.T(), registry, repoName)
+	s.T().Logf("repo name used for testing: %s", repoName)
 
 	// build some manifests
 	manifests := s.buildManifests(s.T(), repo, 3, 1)
@@ -2207,7 +2268,9 @@ func (s *DriverSuite) benchmarkRemoveManifests(b *testing.B, numManifests, numTa
 	defer s.deletePath(b, firstPart("docker/"), false)
 
 	registry := s.createRegistry(b)
-	repo := s.makeRepository(b, registry, randomFilename(5))
+	repoName := randomFilename(5)
+	repo := s.makeRepository(s.T(), registry, repoName)
+	s.T().Logf("repo name used for testing: %s", repoName)
 
 	for n := 0; n < b.N; n++ {
 		b.StopTimer()
@@ -2269,6 +2332,7 @@ func (s *DriverSuite) BenchmarkRemoveManifests100Manifests20TagsEach(b *testing.
 func (s *DriverSuite) testFileStreams(t *testing.T, size int) {
 	filename := randomPath(4, 32)
 	defer s.deletePath(t, firstPart(filename), false)
+	s.T().Logf("blob path for this stream: %s", filename)
 
 	blobber := s.blobberFactory.GetBlobber(size)
 
