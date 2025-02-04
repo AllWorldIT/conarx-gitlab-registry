@@ -540,6 +540,10 @@ func TestAzureDriverRootPathList(t *testing.T) {
 }
 
 func TestAzureDriver_parseParameters_Bool(t *testing.T) {
+	if skipCheck() != "" {
+		t.Skip(skipCheck())
+	}
+
 	p := map[string]any{
 		"accountname": "accountName",
 		"accountkey":  "accountKey",
