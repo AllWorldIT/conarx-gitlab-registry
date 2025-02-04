@@ -60,16 +60,16 @@ func init() {
 func fetchEnvVarsConfiguration() {
 	driverVersion = os.Getenv(common.EnvDriverVersion)
 	switch driverVersion {
-	case v1.DriverName:
-		parseParametersFn = v1.ParseParameters
-		newDriverFn = v1.New
 	case v2.DriverName:
 		parseParametersFn = v2.ParseParameters
 		newDriverFn = v2.New
+	case v1.DriverName:
+		// If driver name has not been specified, fallback to v1 as this is the
+		// current GA version.
+		fallthrough
 	default:
-		msg := fmt.Sprintf("invalid azure driver version: %q", driverVersion)
-		missing = []string{msg}
-		return
+		parseParametersFn = v1.ParseParameters
+		newDriverFn = v1.New
 	}
 
 	credsType = os.Getenv(common.EnvCredentialsType)
