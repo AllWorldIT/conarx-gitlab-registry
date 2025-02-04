@@ -188,6 +188,11 @@ func commonClientSetup(params *DriverParameters, d *driver) {
 	d.poolMaxInterval = params.PoolMaxInterval
 	d.poolMaxElapsedTime = params.poolMaxElapsedTime
 
+	d.maxRetries = params.MaxRetries
+	d.retryTryTimeout = params.RetryTryTimeout
+	d.retryDelay = params.RetryDelay
+	d.maxRetryDelay = params.MaxRetryDelay
+
 	if params.DebugLog {
 		if len(params.DebugLogEvents) > 0 {
 			azlog.SetEvents(params.DebugLogEvents...)

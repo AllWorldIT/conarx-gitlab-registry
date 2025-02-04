@@ -557,3 +557,97 @@ func (s *AzureDriverParametersTestSuite) TestRootPrefixConfigurationError() {
 	require.Error(s.T(), err)
 	assert.ErrorContains(s.T(), err, "can not both be true")
 }
+
+func (s *AzureDriverParametersTestSuite) TestRetryConfiguration() {
+	testCases := []struct {
+		name               string
+		params             map[string]any
+		expectedMaxRetries int32
+		expectedTryTimeout time.Duration
+		expectedRetryDelay time.Duration
+		expectedMaxDelay   time.Duration
+		expectError        bool
+	}{
+		{
+			name:               "Default Values",
+			params:             s.baseParams,
+			expectedMaxRetries: DefaultMaxRetries,
+			expectedTryTimeout: DefaultRetryTryTimeout,
+			expectedRetryDelay: DefaultRetryDelay,
+			expectedMaxDelay:   DefaultMaxRetryDelay,
+		},
+		{
+			name: "Custom Values",
+			params: map[string]any{
+				common.ParamAccountName:     "testaccount",
+				common.ParamAccountKey:      "testkey",
+				common.ParamContainer:       "testcontainer",
+				common.ParamMaxRetries:      5,
+				common.ParamRetryTryTimeout: "30s",
+				common.ParamRetryDelay:      "2s",
+				common.ParamMaxRetryDelay:   "20s",
+			},
+			expectedMaxRetries: 5,
+			expectedTryTimeout: 30 * time.Second,
+			expectedRetryDelay: 2 * time.Second,
+			expectedMaxDelay:   20 * time.Second,
+		},
+		{
+			name: "Invalid MaxRetries",
+			params: map[string]any{
+				common.ParamAccountName: "testaccount",
+				common.ParamAccountKey:  "testkey",
+				common.ParamContainer:   "testcontainer",
+				common.ParamMaxRetries:  "invalid",
+			},
+			expectError: true,
+		},
+		{
+			name: "Invalid RetryTryTimeout",
+			params: map[string]any{
+				common.ParamAccountName:     "testaccount",
+				common.ParamAccountKey:      "testkey",
+				common.ParamContainer:       "testcontainer",
+				common.ParamRetryTryTimeout: "invalid",
+			},
+			expectError: true,
+		},
+		{
+			name: "Invalid RetryDelay",
+			params: map[string]any{
+				common.ParamAccountName: "testaccount",
+				common.ParamAccountKey:  "testkey",
+				common.ParamContainer:   "testcontainer",
+				common.ParamRetryDelay:  "invalid",
+			},
+			expectError: true,
+		},
+		{
+			name: "Invalid MaxRetryDelay",
+			params: map[string]any{
+				common.ParamAccountName:   "testaccount",
+				common.ParamAccountKey:    "testkey",
+				common.ParamContainer:     "testcontainer",
+				common.ParamMaxRetryDelay: "invalid",
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			result, err := ParseParameters(tc.params)
+			if tc.expectError {
+				assert.Error(s.T(), err)
+				return
+			}
+			require.NoError(s.T(), err)
+
+			driverParams := result.(*DriverParameters)
+			assert.Equal(s.T(), tc.expectedMaxRetries, driverParams.MaxRetries)
+			assert.Equal(s.T(), tc.expectedTryTimeout, driverParams.RetryTryTimeout)
+			assert.Equal(s.T(), tc.expectedRetryDelay, driverParams.RetryDelay)
+			assert.Equal(s.T(), tc.expectedMaxDelay, driverParams.MaxRetryDelay)
+		})
+	}
+}

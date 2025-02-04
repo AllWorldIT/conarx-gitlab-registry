@@ -55,6 +55,21 @@ No additional configuration parameters are required.
 |:-------------|:---------|:-------------------------------------------------------|
 | `credentialstype` | yes     | Must be set to `default_credentials` to use this authentication method. |
 
+## Retry Configuration
+
+The Azure storage driver supports configuring the retry behavior for failed operations.
+This includes control over the number of retries, timeouts, and delay between retry attempts.
+These settings work alongside the connection pooling configuration to provide fine-grained control over the driver's resilience strategy.
+
+| Parameter    | Required | Description                                            |
+|:-------------|:---------|:-------------------------------------------------------|
+| `max_retries` | no | Maximum number of attempts a failed operation will be retried before producing an error. The default value is three. A value less than zero means one try and no retries. |
+| `retry_try_timeout` | no | Maximum time allowed for any single try of an HTTP request. This is disabled by default. Specify a value greater than zero to enable. Note that setting this to a small value might cause premature HTTP request time-outs. |
+| `retry_delay` | no | Initial amount of delay to use before retrying an operation. The value is used only if the HTTP response does not contain a Retry-After header. The delay increases exponentially with each retry up to the maximum specified by `maxretrydelay`. The default value is four seconds. A value less than zero means no delay between retries. |
+| `max_retry_delay` | no | Maximum delay allowed before retrying an operation. Typically the value is greater than or equal to the value specified in `retrydelay`. The default value is 60 seconds. A value less than zero means there is no cap. |
+
+`retry_try_timeout`, `retry_delay` and `max_retry_delay` parameters accept time duration in the format used by Go's [time\.ParseDuration](https://pkg.go.dev/time#ParseDuration) package.
+
 ## Other Parameters
 
 | Parameter    | Required | Description                                            |

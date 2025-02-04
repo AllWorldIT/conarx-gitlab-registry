@@ -34,6 +34,14 @@ const (
 	DefaultPoolMaxInterval     = 1 * time.Second
 	DefaultPoolMaxElapsedTime  = 5 * time.Second
 
+	// Defaults match the Azure driver defaults as per
+	// https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azcore@v1.17.0/policy#RetryOptions
+	//
+	DefaultMaxRetries      = 3
+	DefaultRetryTryTimeout = 0 // disabled
+	DefaultRetryDelay      = 4 * time.Second
+	DefaultMaxRetryDelay   = 60 * time.Second
+
 	DefaultSignedURLExpiry = 20 * time.Minute
 )
 
@@ -48,6 +56,11 @@ type driver struct {
 	poolInitialInterval time.Duration
 	poolMaxInterval     time.Duration
 	poolMaxElapsedTime  time.Duration
+
+	maxRetries      int32
+	retryTryTimeout time.Duration
+	retryDelay      time.Duration
+	maxRetryDelay   time.Duration
 }
 
 type baseEmbed struct{ base.Base }

@@ -33,6 +33,11 @@ type DriverParameters struct {
 	PoolMaxInterval     time.Duration
 	poolMaxElapsedTime  time.Duration
 
+	MaxRetries      int32
+	RetryTryTimeout time.Duration
+	RetryDelay      time.Duration
+	MaxRetryDelay   time.Duration
+
 	DebugLog       bool
 	DebugLogEvents []azlog.Event
 }
@@ -195,6 +200,50 @@ func ParseParameters(parameters map[string]any) (any, error) {
 			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamPoolMaxElapsedTime, poolMaxElapsedTime, err)
 		}
 		res.poolMaxElapsedTime = tmp
+	}
+
+	maxRetries, ok := parameters[common.ParamMaxRetries]
+	if !ok {
+		res.MaxRetries = DefaultMaxRetries
+	} else {
+		tmp, err := parse.Int32(parameters, common.ParamMaxRetries, DefaultMaxRetries)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse parameter %q = %v: %w", common.ParamMaxRetries, maxRetries, err)
+		}
+		res.MaxRetries = tmp
+	}
+
+	retryTryTimeout, ok := parameters[common.ParamRetryTryTimeout]
+	if !ok {
+		res.RetryTryTimeout = DefaultRetryTryTimeout
+	} else {
+		tmp, err := time.ParseDuration(fmt.Sprint(retryTryTimeout))
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamRetryTryTimeout, retryTryTimeout, err)
+		}
+		res.RetryTryTimeout = tmp
+	}
+
+	retryDelay, ok := parameters[common.ParamRetryDelay]
+	if !ok {
+		res.RetryDelay = DefaultRetryDelay
+	} else {
+		tmp, err := time.ParseDuration(fmt.Sprint(retryDelay))
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamRetryDelay, retryDelay, err)
+		}
+		res.RetryDelay = tmp
+	}
+
+	maxRetryDelay, ok := parameters[common.ParamMaxRetryDelay]
+	if !ok {
+		res.MaxRetryDelay = DefaultMaxRetryDelay
+	} else {
+		tmp, err := time.ParseDuration(fmt.Sprint(maxRetryDelay))
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamMaxRetryDelay, maxRetryDelay, err)
+		}
+		res.MaxRetryDelay = tmp
 	}
 
 	useLegacyRootPrefix, err := common.InferRootPrefixConfiguration(parameters)

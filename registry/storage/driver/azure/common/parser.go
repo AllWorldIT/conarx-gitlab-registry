@@ -28,6 +28,11 @@ const (
 	ParamPoolMaxInterval     = "apipoolmaxinterval"
 	ParamPoolMaxElapsedTime  = "apipoolmaxelapsedtime"
 
+	ParamMaxRetries      = "max_retries"
+	ParamRetryTryTimeout = "retry_try_timeout"
+	ParamRetryDelay      = "retry_delay"
+	ParamMaxRetryDelay   = "max_retry_delay"
+
 	ParamTrimLegacyRootPrefix = "trimlegacyrootprefix"
 	ParamLegacyRootPrefix     = "legacyrootprefix"
 
