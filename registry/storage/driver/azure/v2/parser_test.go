@@ -119,7 +119,7 @@ func (s *AzureDriverParametersTestSuite) TestClientSecretCredentialsMissingParam
 				common.ParamSecret:          "testsecret",
 				common.ParamContainer:       "testcontainer",
 			},
-			expectedError: "no tenantid parameter provided",
+			expectedError: "no tenant_id parameter provided",
 		},
 		{
 			name: "Empty TenantID",
@@ -130,7 +130,7 @@ func (s *AzureDriverParametersTestSuite) TestClientSecretCredentialsMissingParam
 				common.ParamSecret:          "testsecret",
 				common.ParamContainer:       "testcontainer",
 			},
-			expectedError: "no tenantid parameter provided",
+			expectedError: "no tenant_id parameter provided",
 		},
 		{
 			name: "Missing ClientID",
@@ -140,7 +140,7 @@ func (s *AzureDriverParametersTestSuite) TestClientSecretCredentialsMissingParam
 				common.ParamSecret:          "testsecret",
 				common.ParamContainer:       "testcontainer",
 			},
-			expectedError: "no clientid parameter provided",
+			expectedError: "no client_id parameter provided",
 		},
 		{
 			name: "Empty ClientID",
@@ -151,7 +151,7 @@ func (s *AzureDriverParametersTestSuite) TestClientSecretCredentialsMissingParam
 				common.ParamSecret:          "testsecret",
 				common.ParamContainer:       "testcontainer",
 			},
-			expectedError: "no clientid parameter provided",
+			expectedError: "no client_id parameter provided",
 		},
 		{
 			name: "Missing Secret",
@@ -492,7 +492,7 @@ func (s *AzureDriverParametersTestSuite) TestInvalidDebugLogOption() {
 
 	_, err := ParseParameters(params)
 	require.Error(s.T(), err)
-	assert.ErrorContains(s.T(), err, "parsing parameter debuglog")
+	assert.ErrorContains(s.T(), err, "parsing parameter debug_log")
 }
 
 func (s *AzureDriverParametersTestSuite) TestEmptyServiceURLAndAccountName() {
@@ -521,7 +521,7 @@ func (s *AzureDriverParametersTestSuite) TestInvalidPoolDurations() {
 				common.ParamContainer:       "testcontainer",
 				common.ParamPoolMaxInterval: "invalid",
 			},
-			expectedError: "unable to parse parameter \"apipoolmaxinterval\"",
+			expectedError: "unable to parse parameter \"api_pool_max_interval\"",
 		},
 		{
 			name: "Invalid MaxElapsedTime",
@@ -531,7 +531,7 @@ func (s *AzureDriverParametersTestSuite) TestInvalidPoolDurations() {
 				common.ParamContainer:          "testcontainer",
 				common.ParamPoolMaxElapsedTime: "invalid",
 			},
-			expectedError: "unable to parse parameter \"apipoolmaxelapsedtime\"",
+			expectedError: "unable to parse parameter \"api_pool_max_elapsed_time\"",
 		},
 	}
 
