@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	ParamCredentialsType              = "credentialstype"
+	ParamCredentialsType              = "credentials_type"
 	CredentialsTypeSharedKey          = "shared_key"
 	CredentialsTypeClientSecret       = "client_secret"
 	CredentialsTypeDefaultCredentials = "default_credentials"
@@ -15,8 +15,8 @@ const (
 	ParamAccountName = "accountname"
 	ParamAccountKey  = "accountkey"
 
-	ParamTenantID = "tenantid"
-	ParamClientID = "clientid"
+	ParamTenantID = "tenant_id"
+	ParamClientID = "client_id"
 	ParamSecret   = "secret"
 
 	ParamContainer     = "container"
@@ -24,9 +24,9 @@ const (
 	ParamServiceURLKey = "serviceurl"
 	ParamRootDirectory = "rootdirectory"
 
-	ParamPoolInitialInterval = "apipoolinitialinterval"
-	ParamPoolMaxInterval     = "apipoolmaxinterval"
-	ParamPoolMaxElapsedTime  = "apipoolmaxelapsedtime"
+	ParamPoolInitialInterval = "api_pool_initial_interval"
+	ParamPoolMaxInterval     = "api_pool_max_interval"
+	ParamPoolMaxElapsedTime  = "api_pool_max_elapsed_time"
 
 	ParamTrimLegacyRootPrefix = "trimlegacyrootprefix"
 	ParamLegacyRootPrefix     = "legacyrootprefix"
@@ -36,8 +36,8 @@ const (
 	// fine-grained control over events that get logged, we want events to be
 	// logged using logrus just like other drivers do and we want logging
 	// configurable from within driver configuration.
-	ParamDebugLog       = "debuglog"
-	ParamDebugLogEvents = "debuglogevents"
+	ParamDebugLog       = "debug_log"
+	ParamDebugLogEvents = "debug_log_events"
 
 	// NOTE(prozlach): Names of the variables are intentional, in order to
 	// match those required by:
