@@ -16,7 +16,7 @@ This method uses an account name and account key to authenticate with Azure stor
 
 | Parameter    | Required | Description                                                              |
 |:-------------|:---------|:-------------------------------------------------------------------------|
-| `credentialstype` | no      | Must be set to `shared_key` to use this authentication method. If not specified, defaults to `shared_key`.   |
+| `credentials_type` | no      | Must be set to `shared_key` to use this authentication method. If not specified, defaults to `shared_key`.   |
 | `accountname`     | yes     | Name of the Azure Storage Account.                                    |
 | `accountkey`      | yes     | Primary or Secondary Key for the Storage Account, base64 encoded.     |
 
@@ -30,9 +30,9 @@ You'll need to provide the following configuration parameters:
 
 | Parameter    | Required | Description                                            |
 |:-------------|:---------|:-------------------------------------------------------|
-| `credentialstype` | yes     | Must be set to `client_secret` to use this authentication method. |
-| `tenantid`        | yes     | Azure AD tenant ID.                                 |
-| `clientid`        | yes     | Azure AD client (application) ID.                   |  
+| `credentials_type` | yes     | Must be set to `client_secret` to use this authentication method. |
+| `tenant_id`        | yes     | Azure AD tenant ID.                                 |
+| `client_id`        | yes     | Azure AD client (application) ID.                   |  
 | `secret`          | yes     | Azure AD client secret.                             |
 
 When the registry starts up with these parameters, it will use the provided service principal credentials to request an access token from Azure AD. This token will then be used to authenticate all subsequent requests to Azure storage.
@@ -53,7 +53,7 @@ No additional configuration parameters are required.
 
 | Parameter    | Required | Description                                            |
 |:-------------|:---------|:-------------------------------------------------------|
-| `credentialstype` | yes     | Must be set to `default_credentials` to use this authentication method. |
+| `credentials_type` | yes     | Must be set to `default_credentials` to use this authentication method. |
 
 ## Other Parameters
 
@@ -73,8 +73,8 @@ This is enabled using the following parameters:
 
 | Parameter    | Required | Description                                            |
 |:-------------|:---------|:-------------------------------------------------------|
-| `debuglog`   | no       | Set to `true` to enable debug logging. Defaults to `false`. |
-| `debuglogevents` | no  | Comma-separated list of API events to log. Possible values: `request`, `response`, `responseError`, `retry`, `longRunningOperation`. If not specified, all events are logged when `debuglog` is enabled. |
+| `debug_log`   | no       | Set to `true` to enable debug logging. Defaults to `false`. |
+| `debug_log_events` | no  | Comma-separated list of API events to log. Possible values: `request`, `response`, `responseError`, `retry`, `longRunningOperation`. If not specified, all events are logged when `debug_log` is enabled. |
 
 The logging functionality uses the `azcore` package from the Azure SDK for Go under the hood, specifically the [`SetListener` and `SetEvents` functions](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/internal/log).
 Alternative way to enable logging is setting `AZURE_SDK_GO_LOGGING` environment variable to `all`.
@@ -87,9 +87,9 @@ The behavior of the pool can be tuned using the following parameters:
 
 | Parameter    | Required | Description                                            |
 |:-------------|:---------|:-------------------------------------------------------|
-| `apipoolinitialinterval` | no | The initial delay before retrying an operation that failed. On subsequent retries, this delay increases exponentially up to the `apipoolmaxinterval` value. Defaults to 100ms. |
-| `apipoolmaxinterval`     | no | The maximum delay between retry attempts for a failed operation. Defaults to 1s. |  
-| `apipoolmaxelapsedtime` | no | The maximum total time that an operation is allowed to take, including the initial attempt and any retries. If this time elapses before the operation succeeds, no more retries are attempted. Defaults to 5s. |
+| `api_pool_initial_interval` | no | The initial delay before retrying an operation that failed. On subsequent retries, this delay increases exponentially up to the `api_pool_max_interval` value. Defaults to 100ms. |
+| `api_pool_max_interval`     | no | The maximum delay between retry attempts for a failed operation. Defaults to 1s. |  
+| `api_pool_max_elapsed_time` | no | The maximum total time that an operation is allowed to take, including the initial attempt and any retries. If this time elapses before the operation succeeds, no more retries are attempted. Defaults to 5s. |
 
 All parameters accept time duration in the format used by Go's [time\.ParseDuration](https://pkg.go.dev/time#ParseDuration) package.
 The retry delays increase exponentially with some randomization between attempts in order to avoid overwhelming the storage service with many simultaneous retries.
