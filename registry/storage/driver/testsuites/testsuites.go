@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -716,6 +717,75 @@ func (s *DriverSuite) TestListUnprefixed() {
 	keys, err := s.StorageDriverRootless.List(s.ctx, "/")
 	require.NoError(s.T(), err)
 	require.Contains(s.T(), keys, destPath)
+}
+
+func (s *DriverSuite) TestCreateListDeleteTightLoop() {
+	destPath := "/" + randomFilename(64)
+	destContents := s.blobberFactory.GetBlobber(64).GetAllBytes()
+	s.T().Logf("blob path used for testing: %s", destPath)
+
+	assertEventually := func(i int, invertCheck bool) {
+		keys, err := s.StorageDriver.List(s.ctx, "/")
+		require.NoErrorf(s.T(), err, "iteration %d", i)
+
+		// NOTE(prozlach): the blob name not showing imediatelly after is
+		// already a problem, but we want to also know after how much time it
+		// shows up (if it does at all), hence only do the `assert` and not
+		// `require`
+		if !invertCheck && assert.Containsf(s.T(), keys, destPath, "List() call inconsistency detected, iteration %d - element should have been found", i) {
+			return
+		}
+		if invertCheck && assert.NotContainsf(s.T(), keys, destPath, "List() call inconsistency detected, iteration %d - element should not have been found", i) {
+			return
+		}
+
+		// NOTE(prozlach): we need to see if the file not showing up in the
+		// list is a temporary or a permament situation.
+		ticker := time.NewTicker(700 * time.Millisecond)
+		defer ticker.Stop()
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+
+		for {
+			select {
+			case t := <-ticker.C:
+				keys, err = s.StorageDriver.List(s.ctx, "/")
+				require.NoErrorf(s.T(), err, "iteration %d, time %s", i, t.String())
+				if !invertCheck && slices.Contains(keys, destPath) {
+					s.T().Logf("OK: found - iteration %d, time %s", i, t.String())
+					return
+				}
+				if invertCheck && !slices.Contains(keys, destPath) {
+					s.T().Logf("OK: not found - iteration %d, time %s", i, t.String())
+					return
+				}
+			case t := <-timer.C:
+				notWord := "not"
+				if invertCheck {
+					notWord = "can be"
+				}
+				require.FailNow(s.T(), fmt.Sprintf("iteration %d, time %s - blob still %s found in output of List()", i, t.String(), notWord))
+				return
+			}
+		}
+	}
+	assertEventuallyContains := func(i int) { assertEventually(i, false) }
+	assertEventuallyDoesNotContain := func(i int) { assertEventually(i, true) }
+
+	// NOTE(prozlach): Number of repetitions was chosen basing on how many
+	// iterations on average are needed to reproduce issues with List call when
+	// running things locally.
+	for i := 0; i < 40; i++ {
+		err := s.StorageDriver.PutContent(s.ctx, destPath, destContents)
+		require.NoErrorf(s.T(), err, "iteration %d", i)
+
+		assertEventuallyContains(i)
+
+		err = s.StorageDriver.Delete(s.ctx, destPath)
+		require.NoErrorf(s.T(), err, "iteration %d", i)
+
+		assertEventuallyDoesNotContain(i)
+	}
 }
 
 // TestMovePutContentBlob checks that driver can indeed move an object, and
