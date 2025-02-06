@@ -417,3 +417,9 @@ cache:redis-sentinel-auth:
           sentinel resolve-hostnames yes
           EOF
           redis-sentinel /opt/bitnami/redis-sentinel/etc/sentinel.conf
+
+base-driver:
+  <<: *storage-driver-test
+  variables:
+    <<: *storage-driver-variables
+    PACKAGE: "github.com/docker/distribution/registry/storage/driver/base"

@@ -64,7 +64,7 @@ func TestRegulatorEnterExit(t *testing.T) {
 
 		firstGroupDone.Wait()
 
-		require.Equal(t, limit, r.available, "r.available")
+		require.Equal(t, limit, int(r.available), "r.available")
 	}
 }
 
