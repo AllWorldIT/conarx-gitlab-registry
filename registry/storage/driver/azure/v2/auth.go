@@ -186,7 +186,7 @@ func commonClientSetup(params *DriverParameters, d *driver) {
 
 	d.poolInitialInterval = params.PoolInitialInterval
 	d.poolMaxInterval = params.PoolMaxInterval
-	d.poolMaxElapsedTime = params.poolMaxElapsedTime
+	d.poolMaxElapsedTime = params.PoolMaxElapsedTime
 
 	if params.DebugLog {
 		if len(params.DebugLogEvents) > 0 {
