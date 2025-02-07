@@ -96,3 +96,69 @@ func Test_tagDenyAccessPatternsContext_Value(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, patterns, retrievedPatterns)
 }
+
+func Test_WithTagImmutablePatterns(t *testing.T) {
+	// Define immutable patterns
+	patterns := map[string][]string{
+		"repo1": {"^v1.*", "^release.*"},
+		"repo2": {"^stable.*", "^v2.*"},
+	}
+
+	// Create a context with the tag immutable patterns added
+	ctx := WithTagImmutablePatterns(context.Background(), patterns)
+
+	// Verify that the patterns were stored in the context
+	retrievedPatterns := ctx.Value(tagImmutablePatternsKey)
+	require.NotNil(t, retrievedPatterns)
+	require.Equal(t, patterns, retrievedPatterns)
+}
+
+func Test_TagImmutablePatterns(t *testing.T) {
+	// Define immutable patterns
+	patterns := map[string][]string{
+		"repo1": {"^v1.*", "^release.*"},
+		"repo2": {"^stable.*", "^v2.*"},
+	}
+	ctx := WithTagImmutablePatterns(context.Background(), patterns)
+
+	// Test retrieving immutable patterns for repo1
+	retrievedPatterns, exists := TagImmutablePatterns(ctx, "repo1")
+	require.True(t, exists)
+	require.Equal(t, patterns["repo1"], retrievedPatterns)
+
+	// Test retrieving immutable patterns for repo2
+	retrievedPatterns, exists = TagImmutablePatterns(ctx, "repo2")
+	require.True(t, exists)
+	require.Equal(t, patterns["repo2"], retrievedPatterns)
+
+	// Test non-existent repository for immutable patterns
+	retrievedPatterns, exists = TagImmutablePatterns(ctx, "foo")
+	require.False(t, exists)
+	require.Nil(t, retrievedPatterns)
+}
+
+func Test_tagImmutablePatternsContext_Value(t *testing.T) {
+	// Define immutable patterns
+	patterns := map[string][]string{
+		"repo1": {"^v1.*", "^release.*"},
+	}
+
+	// Base context with an unrelated key-value pair
+	// nolint: revive // context-keys-type
+	baseCtx := context.WithValue(context.Background(), "unrelatedKey", "unrelatedValue")
+
+	// Create context with tag immutable patterns added
+	ctxWithPatterns := WithTagImmutablePatterns(baseCtx, patterns)
+
+	// Verify the unrelated key-value pair is still accessible
+	unrelatedValue := ctxWithPatterns.Value("unrelatedKey")
+	require.NotNil(t, unrelatedValue)
+	require.Equal(t, "unrelatedValue", unrelatedValue)
+
+	// Verify the correct tag immutable patterns are accessible
+	retrieved := ctxWithPatterns.Value(tagImmutablePatternsKey)
+	require.NotNil(t, retrieved)
+	retrievedPatterns, ok := retrieved.(map[string][]string)
+	require.True(t, ok)
+	require.Equal(t, patterns, retrievedPatterns)
+}

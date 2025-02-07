@@ -216,7 +216,7 @@ var (
 		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
 	})
 
-	// 	ErrorCodeInvalidTagProtectionPattern is returned when a provided tag protection pattern is invalid.
+	// ErrorCodeInvalidTagProtectionPattern is returned when a provided tag protection pattern is invalid.
 	ErrorCodeInvalidTagProtectionPattern = errcode.Register(errGroup, errcode.ErrorDescriptor{
 		Value:          "TAG_PROTECTION_PATTERN_INVALID",
 		Message:        "invalid tag protection pattern",
@@ -224,15 +224,15 @@ var (
 		HTTPStatusCode: http.StatusBadRequest,
 	})
 
-	// 	ErrorCodeTagProtectionPatternCount is returned when the number of tag protection patterns exceeds the limit.
-	ErrorCodeTagProtectionPatternCount = errcode.Register(errGroup, errcode.ErrorDescriptor{
-		Value:          "TAG_PROTECTION_PATTERN_COUNT_LIMIT_EXCEEDED",
-		Message:        "tag protection patterns count limit exceeded",
-		Description:    `The number of tag protection patterns exceed the configured limit`,
+	// ErrorCodeTagPatternCount is returned when the number of tag protection and immutability patterns exceeds the limit.
+	ErrorCodeTagPatternCount = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "TAG_PATTERN_COUNT_LIMIT_EXCEEDED",
+		Message:        "tag protection and immutability patterns count limit exceeded",
+		Description:    `The number of tag protection and immutability patterns exceed the configured limit`,
 		HTTPStatusCode: http.StatusBadRequest,
 	})
 
-	// 	ErrorCodeProtectedTag is returned when attempting to push or delete a protected tag.
+	// ErrorCodeProtectedTag is returned when attempting to push or delete a protected tag.
 	ErrorCodeProtectedTag = errcode.Register(errGroup, errcode.ErrorDescriptor{
 		Value:          "PROTECTED_TAG",
 		Message:        "insufficient permissions to push or delete protected tag",
@@ -240,11 +240,27 @@ var (
 		HTTPStatusCode: http.StatusUnauthorized,
 	})
 
-	// 	ErrorCodeProtectedManifest is returned when attempting to push or delete a protected tag.
+	// ErrorCodeProtectedManifest is returned when attempting to push or delete a protected or immutable tag.
 	ErrorCodeProtectedManifest = errcode.Register(errGroup, errcode.ErrorDescriptor{
 		Value:          "PROTECTED_MANIFEST",
-		Message:        "insufficient permissions to delete manifest due to tag protection policies",
-		Description:    `Permission denied. Unable to delete manifest due to configured tag protection policies.`,
+		Message:        "insufficient permissions to delete manifest due to tag protection or immutability policies",
+		Description:    `Permission denied. Unable to delete manifest due to configured tag protection or immutability policies.`,
+		HTTPStatusCode: http.StatusUnauthorized,
+	})
+
+	// ErrorCodeInvalidTagImmutabilityPattern is returned when a provided tag immutability pattern is invalid.
+	ErrorCodeInvalidTagImmutabilityPattern = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "TAG_IMMUTABILITY_PATTERN_INVALID",
+		Message:        "invalid tag immutability pattern",
+		Description:    `The provided tag immutability pattern is invalid`,
+		HTTPStatusCode: http.StatusBadRequest,
+	})
+
+	// ErrorCodeImmutableTag is returned when attempting to push or delete an immutable tag.
+	ErrorCodeImmutableTag = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "IMMUTABLE_TAG",
+		Message:        "tag is immutable",
+		Description:    `Permission denied. Unable to push or delete tag due to configured immutability policies.`,
 		HTTPStatusCode: http.StatusUnauthorized,
 	})
 )

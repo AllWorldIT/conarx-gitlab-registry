@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Fixed set of valid and overly complex regex patterns within the protectedTagPatternMaxLen limit. A fixed set of
+// Fixed set of valid and overly complex regex patterns within the tagPatternMaxLen limit. A fixed set of
 // patterns provides reproducibility for benchmarking.
 var fixedPatterns = []string{
 	"^[a-zA-Z0-9]{1,10}-[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2}-(alpha|beta|rc)-[a-zA-Z0-9]{1,10}$",    // Matches: "release-1.0.0-alpha-v1", "v10-1.2.3-beta-x"
@@ -23,7 +23,7 @@ func BenchmarkValidateTagProtection(b *testing.B) {
 	tagName := "v1.0.0"
 
 	// Use the maximum allowed number of patterns
-	patterns := fixedPatterns[:protectedTagPatternMaxCount]
+	patterns := fixedPatterns[:tagPatternMaxCount]
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
