@@ -679,15 +679,21 @@ The error codes encountered via this API are enumerated in the following table. 
 error codes described in the
 [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#error-codes) are reused.
 
-Code|Message|Description|
-----|-------|-----------|
-`NAME_INVALID` | `invalid repository name` | Invalid repository name encountered either during manifest validation or any API operation.|
-`NAME_UNKNOWN` | `repository name not known to registry` | This is returned if the name used during an operation is unknown to the registry.|
-`UNAUTHORIZED` | `authentication required` | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate.|
-`INVALID_QUERY_PARAMETER_VALUE` | `the value of a query parameter is invalid` | The value of a request query parameter is invalid. The error detail identifies the concerning parameter and the list of possible values.|
-`INVALID_QUERY_PARAMETER_TYPE` | `the value of a query parameter is of an invalid type` | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.|
+Code                              | Message                                                  | Description                                                                                                                                                              |
+----------------------------------|----------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+`NAME_INVALID`                    | `invalid repository name`                                | Invalid repository name encountered either during manifest validation or any API operation.                                                                                |
+`NAME_UNKNOWN`                    | `repository name not known to registry`                  | This is returned if the name used during an operation is unknown to the registry.                                                                                         |
+`UNAUTHORIZED`                    | `authentication required`                                | The access controller was unable to authenticate the client. Often this will be accompanied by a Www-Authenticate HTTP response header indicating how to authenticate.      |
+`INVALID_QUERY_PARAMETER_VALUE`   | `the value of a query parameter is invalid`             | The value of a request query parameter is invalid. The error detail identifies the concerning parameter and the list of possible values.                                   |
+`INVALID_QUERY_PARAMETER_TYPE`    | `the value of a query parameter is of an invalid type`  | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.                         |
+`INVALID_LIMIT_PARAMETER_VALUE`   | `invalid limit query parameter value`                   | The value of a limit query parameter is invalid.                                                                                                                          |
+`PAGINATION_NUMBER_INVALID`       | `invalid number of results requested`                    | Returned when the "n" parameter (number of results to return) is not an integer, "n" is negative or "n" is bigger than the maximum allowed.                               |
 
 ## Changes
+
+### 2025-02-07
+
+- Update error codes list to reflect the currently implemented error codes.
 
 ### 2024-12-10
 
