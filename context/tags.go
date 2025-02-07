@@ -6,6 +6,7 @@ const (
 	tagDenyAccessPatternsKey = "tagdenyaccesspatterns"
 	actionPush               = "push"
 	actionDelete             = "delete"
+	tagImmutablePatternsKey  = "tagimmutablepatterns"
 )
 
 // TagActionPatterns represents the name matching patterns used to restrict specific tag operations. The `Push` field
@@ -60,6 +61,40 @@ func tagDenyAccessPatterns(ctx context.Context, repoPath, action string) ([]stri
 			case actionDelete:
 				return repoPatterns.Delete, true
 			}
+		}
+	}
+	return nil, false
+}
+
+// tagImmutablePatternsContext is the context key used to store tag immutability patterns for specific repository paths.
+type tagImmutablePatternsContext struct {
+	context.Context
+	patterns map[string][]string
+}
+
+// Value implements context.Context.
+func (c tagImmutablePatternsContext) Value(key any) any {
+	switch key {
+	case tagImmutablePatternsKey:
+		return c.patterns
+	default:
+		return c.Context.Value(key)
+	}
+}
+
+// WithTagImmutablePatterns stores tag immutability patterns in the context.
+func WithTagImmutablePatterns(ctx context.Context, patterns map[string][]string) context.Context {
+	return tagImmutablePatternsContext{
+		Context:  ctx,
+		patterns: patterns,
+	}
+}
+
+// TagImmutablePatterns retrieves the tag immutability patterns for a given repo path.
+func TagImmutablePatterns(ctx context.Context, repoPath string) ([]string, bool) {
+	if patterns, ok := ctx.Value(tagImmutablePatternsKey).(map[string][]string); ok {
+		if repoPatterns, exists := patterns[repoPath]; exists {
+			return repoPatterns, true
 		}
 	}
 	return nil, false

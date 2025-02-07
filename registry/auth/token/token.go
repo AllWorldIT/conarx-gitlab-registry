@@ -70,6 +70,8 @@ type Meta struct {
 	NamespaceID int64 `json:"root_namespace_id"`
 	// TagDenyAccessPatterns contains the patterns used to deny access to specific tags.
 	TagDenyAccessPatterns *TagDenyAccessPatterns `json:"tag_deny_access_patterns"`
+	// TagImmutablePatterns contains the patterns used to treat specific tags as immutable.
+	TagImmutablePatterns []string `json:"tag_immutable_patterns"`
 }
 
 // TagDenyAccessPatterns stores the patterns used to deny access to specific tags for push and/or delete actions.

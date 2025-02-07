@@ -2521,7 +2521,7 @@ func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
 			name:           "pattern count exceeded",
 			denyPatterns:   []string{"a", "b", "c", "d", "e", "f"},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  &v2.ErrorCodeTagProtectionPatternCount,
+			expectedError:  &v2.ErrorCodeTagPatternCount,
 		},
 		{
 			name:           "pattern length exceeded",
@@ -2776,7 +2776,7 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 			tag:            "latest",
 			denyPatterns:   []string{"a", "b", "c", "d", "e", "f"},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  &v2.ErrorCodeTagProtectionPatternCount,
+			expectedError:  &v2.ErrorCodeTagPatternCount,
 		},
 		{
 			name:           "pattern length exceeded",
@@ -2813,6 +2813,377 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 						TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
 							Push: tt.denyPatterns,
 						},
+					},
+				},
+			}
+
+			// Seed random layers and generate an image manifest
+			deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), withAuthToken(tokenProvider.tokenWithActions(tokenActions)))
+
+			// Send manifest push request and ensure it responds as expected
+			manifestURL := buildManifestTagURL(t, env, imageName.Name(), tt.tag)
+			req, err := putManifestRequest(manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			require.NoError(t, err)
+			req = tokenProvider.requestWithAuthActions(req, tokenActions)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			checkResponse(t, "", resp, tt.expectedStatus)
+
+			if tt.expectedError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			} else {
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				require.Empty(t, body)
+			}
+		})
+	}
+}
+
+// TestManifestAPI_Delete_ImmutableTags verifies that tags can only be deleted if not immutable.
+func TestManifestAPI_Delete_ImmutableTags(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+
+	// Set up authentication provider and test environment with delete permissions
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
+
+	// Create test repository and image tagged `latest`.
+	tag := "latest"
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	pushToken := tokenProvider.tokenWithActions(fullAccessToken(imageName.Name()))
+	seedRandomSchema2Manifest(t, env, imageName.Name(), putByTag(tag), withAuthToken(pushToken))
+	tagRef, err := reference.WithTag(imageName, tag)
+	require.NoError(t, err)
+
+	manifestURL, err := env.builder.BuildManifestURL(tagRef)
+	require.NoError(t, err)
+
+	// Test cases
+	tests := []struct {
+		name              string
+		customTag         string
+		immutablePatterns []string
+		expectedStatus    int
+		expectedError     *errcode.ErrorCode
+	}{
+		{
+			name:              "immutable tag",
+			immutablePatterns: []string{`^v[0-9]+\.[0-9]+\.[0-9]+$`, "^latest$"},
+			expectedStatus:    http.StatusUnauthorized,
+			expectedError:     &v2.ErrorCodeImmutableTag,
+		},
+		{
+			name:              "mutable tag",
+			immutablePatterns: []string{"foo", "bar"},
+			expectedStatus:    http.StatusAccepted,
+		},
+		{
+			name:              "non-existing immutable tag",
+			customTag:         "nonexisting",
+			immutablePatterns: []string{"nonexisting"},
+			expectedStatus:    http.StatusNotFound,
+			expectedError:     &v2.ErrorCodeManifestUnknown,
+		},
+		{
+			name:              "non-existing mutable tag",
+			customTag:         "nonexisting",
+			immutablePatterns: []string{"foo"},
+			expectedStatus:    http.StatusNotFound,
+			expectedError:     &v2.ErrorCodeManifestUnknown,
+		},
+		{
+			name:              "pattern count exceeded",
+			immutablePatterns: []string{"a", "b", "c", "d", "e", "f"},
+			expectedStatus:    http.StatusBadRequest,
+			expectedError:     &v2.ErrorCodeTagPatternCount,
+		},
+		{
+			name:              "pattern length exceeded",
+			immutablePatterns: []string{"^iFl12h7joyT83me9Pbfp5GaoO0ihjEs3QFRoKjODsNw7IYMxD8ePi3zLfj20QjfZHtL7RKi9Ew9v2MBhI3YhQFg4LjmNpXYZa2c$"}, // 101 characters
+			expectedStatus:    http.StatusBadRequest,
+			expectedError:     &v2.ErrorCodeInvalidTagImmutabilityPattern,
+		},
+		{
+			name:              "invalid pattern",
+			immutablePatterns: []string{"^[a-z"},
+			expectedStatus:    http.StatusBadRequest,
+			expectedError:     &v2.ErrorCodeInvalidTagImmutabilityPattern,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create auth token actions with immutable patterns for delete action
+			tokenActions := []*token.ResourceActions{
+				{
+					Type:    "repository",
+					Name:    imageName.Name(),
+					Actions: []string{"delete"},
+					Meta: &token.Meta{
+						TagImmutablePatterns: tt.immutablePatterns,
+					},
+				},
+			}
+
+			// Send delete request and validate response based on expected status and error codes
+			req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
+			require.NoError(t, err)
+			req = tokenProvider.requestWithAuthActions(req, tokenActions)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			checkResponse(t, "", resp, tt.expectedStatus)
+
+			if tt.expectedError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			} else {
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				require.Empty(t, body)
+			}
+		})
+	}
+}
+
+// TestManifestAPI_Delete_ImmutableTags_MultipleRepositories tests that the immutable tags feature works as expected
+// when handling requests that include a token with access grants for multiple repositories. This is not an expected
+// scenario as tokens with multiple target repositories are only used for cross-repository blob mount requests, not
+// manifest/tag deletes. However, it's technically possible to bypass established registry client tools, obtaining such
+// token from Rails and then manually invoke the registry API with it. So this test exists for peace of mind. Using a
+// separate test instead of an additional test case in TestManifestAPI_Delete_ImmutableTags to avoid increasing the
+// complexity of the expected/realistic test cases and keeping it separate.
+func TestManifestAPI_Delete_ImmutableTags_MultipleRepositories(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+
+	// Create sample repository with an image tagged as `latest`
+	imageName1, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	tag1 := "latest"
+	createRepository(t, env, imageName1.Name(), tag1)
+
+	// Create another sample repository with an image tagged as `stable`
+	imageName2, err := reference.WithName("bar/foo")
+	require.NoError(t, err)
+
+	tag2 := "stable"
+	createRepository(t, env, imageName1.Name(), tag2)
+
+	ref2, err := reference.WithTag(imageName2, tag2)
+	require.NoError(t, err)
+
+	// Prepare auth token and request
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
+
+	tokenActions := []*token.ResourceActions{
+		{
+			Type:    "repository",
+			Name:    imageName1.Name(),
+			Actions: []string{"delete"},
+			Meta: &token.Meta{
+				TagImmutablePatterns: []string{tag1},
+			},
+		},
+		{
+			Type:    "repository",
+			Name:    imageName2.Name(),
+			Actions: []string{"delete"},
+			Meta: &token.Meta{
+				TagImmutablePatterns: []string{tag2},
+			},
+		},
+	}
+
+	manifestURL, err := env.builder.BuildManifestURL(ref2)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
+	require.NoError(t, err)
+	req = tokenProvider.requestWithAuthActions(req, tokenActions)
+
+	// Attempt to delete immutable tag and ensure it fails with the proper status and error code
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	checkResponse(t, "", resp, http.StatusUnauthorized)
+	checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeImmutableTag)
+}
+
+// TestManifestAPI_Delete_ImmutableTags_ByDigest verifies that a manifest can't be deleted directly if the auth token
+// includes any tag immutable patterns.
+func TestManifestAPI_Delete_ImmutableTags_ByDigest(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+
+	// Set up authentication provider and test environment with delete permissions
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
+
+	// Create test repository and image
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+	pushToken := tokenProvider.tokenWithActions(fullAccessToken(imageName.Name()))
+	deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), putByDigest, withAuthToken(pushToken))
+	manifestDigestURL := buildManifestDigestURL(t, env, imageName.Name(), deserializedManifest)
+
+	// Test cases
+	tests := []struct {
+		name              string
+		immutablePatterns []string
+		expectedStatus    int
+		expectedError     *errcode.ErrorCode
+	}{
+		{
+			name:              "with immutable tag pattern",
+			immutablePatterns: []string{"doesnotmatter"},
+			expectedStatus:    http.StatusUnauthorized,
+			expectedError:     &v2.ErrorCodeProtectedManifest,
+		},
+		{
+			name:           "without immutable tag pattern",
+			expectedStatus: http.StatusAccepted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create auth token actions with immutable patterns for delete action
+			tokenActions := []*token.ResourceActions{
+				{
+					Type:    "repository",
+					Name:    imageName.Name(),
+					Actions: []string{"delete"},
+					Meta: &token.Meta{
+						TagImmutablePatterns: tt.immutablePatterns,
+					},
+				},
+			}
+
+			// Send delete request and validate response based on expected status and error codes
+			req, err := http.NewRequest(http.MethodDelete, manifestDigestURL, nil)
+			require.NoError(t, err)
+			req = tokenProvider.requestWithAuthActions(req, tokenActions)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			checkResponse(t, "", resp, tt.expectedStatus)
+
+			if tt.expectedError != nil {
+				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			} else {
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				require.Empty(t, body)
+			}
+		})
+	}
+}
+
+// TestManifestAPI_Put_ImmutableTags verifies that immutable tags can only be created or updated if unprotected.
+func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+
+	imageName, err := reference.WithName("foo/bar")
+	require.NoError(t, err)
+
+	// Set up authentication provider and test environment
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
+
+	// Test cases
+	tests := []struct {
+		name              string
+		tag               string
+		existingTag       bool
+		immutablePatterns []string
+		expectedStatus    int
+		expectedError     *errcode.ErrorCode
+	}{
+		{
+			name:              "immutable tag creation",
+			tag:               "latest",
+			immutablePatterns: []string{`^v[0-9]+\.[0-9]+\.[0-9]+$`, "^latest$"},
+			expectedStatus:    http.StatusUnauthorized,
+			expectedError:     &v2.ErrorCodeImmutableTag,
+		},
+		{
+			name:              "mutable tag creation",
+			tag:               "latest",
+			immutablePatterns: []string{"foo", "bar"},
+			expectedStatus:    http.StatusCreated,
+			expectedError:     nil,
+		},
+		{
+			name:              "immutable tag update",
+			tag:               "latest",
+			existingTag:       true,
+			immutablePatterns: []string{`^v[0-9]+\.[0-9]+\.[0-9]+$`, "^latest$"},
+			expectedStatus:    http.StatusUnauthorized,
+			expectedError:     &v2.ErrorCodeImmutableTag,
+		},
+		{
+			name:              "mutable tag update",
+			tag:               "latest",
+			existingTag:       true,
+			immutablePatterns: []string{"foo", "bar"},
+			expectedStatus:    http.StatusCreated,
+			expectedError:     nil,
+		},
+		{
+			name:              "pattern count exceeded",
+			tag:               "latest",
+			immutablePatterns: []string{"a", "b", "c", "d", "e", "f"},
+			expectedStatus:    http.StatusBadRequest,
+			expectedError:     &v2.ErrorCodeTagPatternCount,
+		},
+		{
+			name:              "pattern length exceeded",
+			tag:               "latest",
+			immutablePatterns: []string{"^iFl12h7joyT83me9Pbfp5GaoO0ihjEs3QFRoKjODsNw7IYMxD8ePi3zLfj20QjfZHtL7RKi9Ew9v2MBhI3YhQFg4LjmNpXYZa2c$"}, // 101 characters
+			expectedStatus:    http.StatusBadRequest,
+			expectedError:     &v2.ErrorCodeInvalidTagImmutabilityPattern,
+		},
+		{
+			name:              "invalid pattern",
+			tag:               "latest",
+			immutablePatterns: []string{"^[a-z"},
+			expectedStatus:    http.StatusBadRequest,
+			expectedError:     &v2.ErrorCodeInvalidTagImmutabilityPattern,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Pre-create the repository and tag if it's an update scenario
+			if tt.existingTag {
+				noAuthEnv := newTestEnv(t)
+				t.Cleanup(noAuthEnv.Shutdown)
+				seedRandomSchema2Manifest(t, noAuthEnv, imageName.Name(), putByTag(tt.tag))
+			}
+
+			// Create auth token with immutable patterns for push action
+			tokenActions := []*token.ResourceActions{
+				{
+					Type:    "repository",
+					Name:    imageName.Name(),
+					Actions: []string{"pull", "push"},
+					Meta: &token.Meta{
+						TagImmutablePatterns: tt.immutablePatterns,
 					},
 				},
 			}
