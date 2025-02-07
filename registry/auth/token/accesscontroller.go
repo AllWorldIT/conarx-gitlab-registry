@@ -285,6 +285,7 @@ func (ac *accessController) Authorized(ctx context.Context, accessItems ...auth.
 	ctx = auth.WithResources(ctx, token.resources())
 	ctx = WithEgressMetadata(ctx, token.Claims.Access)
 	ctx = injectTagDenyAccessPatterns(ctx, token.Claims.Access)
+	ctx = injectTagImmutablePatterns(ctx, token.Claims.Access)
 	ctx = auth.WithUser(ctx, auth.UserInfo{Name: token.Claims.Subject, Type: token.Claims.AuthType, JWT: token.Claims.User})
 
 	return ctx, nil
@@ -306,6 +307,24 @@ func injectTagDenyAccessPatterns(ctx context.Context, accesses []*ResourceAction
 
 	if len(patterns) > 0 {
 		return dcontext.WithTagDenyAccessPatterns(ctx, patterns)
+	}
+
+	return ctx
+}
+
+func injectTagImmutablePatterns(ctx context.Context, accesses []*ResourceActions) context.Context {
+	patterns := make(map[string][]string)
+
+	// Iterate over claims to collect all patterns for each repository. A token may include multiple access claims,
+	// so we should track all target repositories and their patterns.
+	for _, a := range accesses {
+		if a.Meta != nil && len(a.Meta.TagImmutablePatterns) > 0 {
+			patterns[a.Name] = a.Meta.TagImmutablePatterns
+		}
+	}
+
+	if len(patterns) > 0 {
+		return dcontext.WithTagImmutablePatterns(ctx, patterns)
 	}
 
 	return ctx
