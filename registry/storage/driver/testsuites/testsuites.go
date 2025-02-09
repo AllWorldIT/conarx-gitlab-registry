@@ -480,6 +480,13 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 	written, err := io.CopyBuffer(writer, blobber.GetReader(), make([]byte, 256*1<<20))
 	require.NoError(s.T(), err)
 	require.EqualValues(s.T(), fileSize, written)
+	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
+	// This is just a workaround for now to enforce correct behavior on other
+	// drivers. The TLDR is that gcs Writer object does not report correct size
+	// until the Commit() is called. This is not the case for other drivers.
+	if s.StorageDriver.Name() != "gcs" {
+		require.EqualValues(s.T(), fileSize, writer.Size())
+	}
 
 	err = writer.Commit()
 	require.NoError(s.T(), err)
@@ -2597,6 +2604,17 @@ func (s *DriverSuite) testFileStreams(t *testing.T, size int) {
 	if !assert.EqualValues(t, size, nn) {
 		return
 	}
+
+	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
+	// This is just a workaround for now to enforce correct behavior on other
+	// drivers. The TLDR is that gcs Writer object does not report correct size
+	// until the Commit() is called. This is not the case for other drivers.
+	if s.StorageDriver.Name() != "gcs" {
+		if !assert.EqualValues(t, size, writer.Size()) {
+			return
+		}
+	}
+
 	// nolint: testifylint // require-error
 	if !assert.NoError(t, writer.Commit()) {
 		return
