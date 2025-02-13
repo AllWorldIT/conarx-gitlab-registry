@@ -96,7 +96,7 @@ modules:download:
   stage: validate
   parallel:
     matrix:
-      - GO_VERSION: [ "1.23", "1.24rc2" ]
+      - GO_VERSION: [ "1.23", "1.24" ]
   script:
     - go mod download
     # This is an external tool used to run tests, we can save some time by downloading in advance
@@ -129,11 +129,11 @@ mocks:
   parallel:
     matrix:
       - PG_VERSION: "14.3"
-        GO_VERSION: [ "1.23", "1.24rc2" ]
+        GO_VERSION: [ "1.23", "1.24" ]
       - PG_VERSION: $PG_CURR_VERSION
-        GO_VERSION: [ "1.23", "1.24rc2" ]
+        GO_VERSION: [ "1.23", "1.24" ]
       - PG_VERSION: $PG_NEXT_VERSION
-        GO_VERSION: [ "1.23", "1.24rc2" ]
+        GO_VERSION: [ "1.23", "1.24" ]
   variables:
     FF_NETWORK_PER_BUILD: 1
     POSTGRES_PASSWORD: "secret"
