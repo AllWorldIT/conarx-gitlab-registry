@@ -15,12 +15,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
-	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
@@ -31,7 +28,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -42,7 +38,7 @@ import (
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/docker/distribution/registry/storage/driver/factory"
-	"github.com/docker/distribution/registry/storage/driver/internal/parse"
+	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	"github.com/docker/distribution/version"
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
@@ -51,35 +47,10 @@ import (
 
 const driverName = "s3aws"
 
-// minChunkSize defines the minimum multipart upload chunk size
-// S3 API requires multipart upload chunks to be at least 5MB
-const minChunkSize = 5 << 20
-
-// maxChunkSize defines the maximum multipart upload chunk size allowed by S3.
-const maxChunkSize = 5 << 30
-
-const defaultChunkSize = 2 * minChunkSize
-
 // maxListRespLoop is the max number of traversed loops/parts-pages allowed to be pushed.
 // It is set to 10000 part pages, which signifies 10000 * 10485760 bytes (i.e. 100GB) of data.
 // This is defined in order to prevent infinite loops (i.e. an unbounded amount of parts-pages).
 const maxListRespLoop = 10000
-
-const (
-	// defaultMultipartCopyChunkSize defines the default chunk size for all
-	// but the last Upload Part - Copy operation of a multipart copy.
-	// Empirically, 32 MB is optimal.
-	defaultMultipartCopyChunkSize = 32 << 20
-
-	// defaultMultipartCopyMaxConcurrency defines the default maximum number
-	// of concurrent Upload Part - Copy operations for a multipart copy.
-	defaultMultipartCopyMaxConcurrency = 100
-
-	// defaultMultipartCopyThresholdSize defines the default object size
-	// above which multipart copy will be used. (PUT Object - Copy is used
-	// for objects at or below this size.)  Empirically, 32 MB is optimal.
-	defaultMultipartCopyThresholdSize = 32 << 20
-)
 
 // listMax is the largest amount of objects you can request from S3 in a list call
 const listMax = 1000
@@ -88,23 +59,12 @@ const listMax = 1000
 // currently set to 1000 as per the S3 specification https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html
 const deleteMax = 1000
 
-// defaultMaxRequestsPerSecond defines the default maximum number of requests
-// per second that can be made to the S3 API per driver instance. 350 is 10%
-// of the requestsPerSecondUpperLimit based on the figures listed in
-// https://docs.aws.amazon.com/AmazonS3/latest/dev/optimizing-performance.html
-const defaultMaxRequestsPerSecond = 350
-
 // defaultBurst is how many limiter tokens may be reserved at once. Currently,
 // we only reserve one at a time via Limiter.Wait()
 const defaultBurst = 1
 
-// noStorageClass defines the value to be used if storage class is not supported by the S3 endpoint
-const noStorageClass = "NONE"
-
 // defaults related to exponential backoff
 const (
-	// defaultMaxRetries is how many times the driver will retry failed requests.
-	defaultMaxRetries          = 5
 	defaultInitialInterval     = backoff.DefaultInitialInterval
 	defaultRandomizationFactor = backoff.DefaultRandomizationFactor
 	defaultMultiplier          = backoff.DefaultMultiplier
@@ -112,63 +72,10 @@ const (
 	defaultMaxElapsedTime      = backoff.DefaultMaxElapsedTime
 )
 
-// validRegions maps known s3 region identifiers to region descriptors
-var validRegions = make(map[string]struct{})
-
-// validObjectACLs contains known s3 object Acls
-var validObjectACLs = make(map[string]struct{})
-
 // errMaxListRespExceeded signifies a multi part layer upload has exceeded the allowable maximum size
 var errMaxListRespExceeded = fmt.Errorf("layer parts pages exceeds the maximum of %d allowed", maxListRespLoop)
 
-// DriverParameters A struct that encapsulates all of the driver parameters after all values have been set
-type DriverParameters struct {
-	AccessKey                   string
-	SecretKey                   string
-	Bucket                      string
-	Region                      string
-	RegionEndpoint              string
-	Encrypt                     bool
-	KeyID                       string
-	Secure                      bool
-	SkipVerify                  bool
-	V4Auth                      bool
-	ChunkSize                   int64
-	MultipartCopyChunkSize      int64
-	MultipartCopyMaxConcurrency int64
-	MultipartCopyThresholdSize  int64
-	RootDirectory               string
-	StorageClass                string
-	ObjectACL                   string
-	SessionToken                string
-	PathStyle                   bool
-	MaxRequestsPerSecond        int64
-	MaxRetries                  int64
-	ParallelWalk                bool
-	LogLevel                    aws.LogLevelType
-	ObjectOwnership             bool
-}
-
 func init() {
-	partitions := endpoints.DefaultPartitions()
-	for _, p := range partitions {
-		for region := range p.Regions() {
-			validRegions[region] = struct{}{}
-		}
-	}
-
-	for _, objectACL := range []string{
-		s3.ObjectCannedACLPrivate,
-		s3.ObjectCannedACLPublicRead,
-		s3.ObjectCannedACLPublicReadWrite,
-		s3.ObjectCannedACLAuthenticatedRead,
-		s3.ObjectCannedACLAwsExecRead,
-		s3.ObjectCannedACLBucketOwnerRead,
-		s3.ObjectCannedACLBucketOwnerFullControl,
-	} {
-		validObjectACLs[objectACL] = struct{}{}
-	}
-
 	// Register this as the default s3 driver in addition to s3aws
 	factory.Register("s3", &s3DriverFactory{})
 	factory.Register(driverName, &s3DriverFactory{})
@@ -207,39 +114,6 @@ type Driver struct {
 	baseEmbed
 }
 
-func parseLogLevelParam(param any) aws.LogLevelType {
-	logLevel := aws.LogOff
-
-	if param != nil {
-		switch strings.ToLower(param.(string)) {
-		case "logoff":
-			log.Info("S3 logging level set to LogOff")
-		case "logdebug":
-			log.Info("S3 logging level set to LogDebug")
-			logLevel = aws.LogDebug
-		case "logdebugwithsigning":
-			log.Info("S3 logging level set to LogDebugWithSigning")
-			logLevel = aws.LogDebugWithSigning
-		case "logdebugwithhttpbody":
-			log.Info("S3 logging level set to LogDebugWithHTTPBody")
-			logLevel = aws.LogDebugWithHTTPBody
-		case "logdebugwithrequestretries":
-			log.Info("S3 logging level set to LogDebugWithRequestRetries")
-			logLevel = aws.LogDebugWithRequestRetries
-		case "logdebugwithrequesterrors":
-			log.Info("S3 logging level set to LogDebugWithRequestErrors")
-			logLevel = aws.LogDebugWithRequestErrors
-		case "logdebugwitheventstreambody":
-			log.Info("S3 logging level set to LogDebugWithEventStreamBody")
-			logLevel = aws.LogDebugWithEventStreamBody
-		default:
-			log.Infof("unknown loglevel %q, S3 logging level set to LogOff", param)
-		}
-	}
-
-	return logLevel
-}
-
 // FromParameters constructs a new Driver with a given parameters map
 // Required parameters:
 // - accesskey
@@ -248,7 +122,7 @@ func parseLogLevelParam(param any) aws.LogLevelType {
 // - bucket
 // - encrypt
 func FromParameters(parameters map[string]any) (*Driver, error) {
-	params, err := parseParameters(parameters)
+	params, err := common.ParseParameters(parameters)
 	if err != nil {
 		return nil, err
 	}
@@ -256,251 +130,9 @@ func FromParameters(parameters map[string]any) (*Driver, error) {
 	return New(params)
 }
 
-func parseParameters(parameters map[string]any) (*DriverParameters, error) {
-	// Providing no values for these is valid in case the user is authenticating
-	// with an IAM on an ec2 instance (in which case the instance credentials will
-	// be summoned when GetAuth is called)
-	accessKey := parameters["accesskey"]
-	if accessKey == nil {
-		accessKey = ""
-	}
-	secretKey := parameters["secretkey"]
-	if secretKey == nil {
-		// nolint: gosec // G101 -- This is a false positive
-		secretKey = ""
-	}
-
-	regionEndpoint := parameters["regionendpoint"]
-	if regionEndpoint == nil {
-		regionEndpoint = ""
-	}
-
-	var result *multierror.Error
-	regionName := parameters["region"]
-	if regionName == nil || fmt.Sprint(regionName) == "" {
-		err := errors.New("no region parameter provided")
-		result = multierror.Append(result, err)
-	}
-	region := fmt.Sprint(regionName)
-	// Don't check the region value if a custom endpoint is provided.
-	if regionEndpoint == "" {
-		if _, ok := validRegions[region]; !ok {
-			err := fmt.Errorf("validating region provided: %v", region)
-
-			result = multierror.Append(result, err)
-		}
-	}
-	bucket := parameters["bucket"]
-	if bucket == nil || fmt.Sprint(bucket) == "" {
-		err := errors.New("no bucket parameter provided")
-		result = multierror.Append(result, err)
-	}
-	// encryptBool := false
-	encryptBool, err := parse.Bool(parameters, "encrypt", false)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	secureBool, err := parse.Bool(parameters, "secure", true)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	skipVerifyBool, err := parse.Bool(parameters, "skipverify", false)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	v4Bool, err := parse.Bool(parameters, "v4auth", true)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	keyID := parameters["keyid"]
-	if keyID == nil {
-		keyID = ""
-	}
-
-	chunkSize, err := getParameterAsInt64(parameters, "chunksize", defaultChunkSize, minChunkSize, maxChunkSize)
-	if err != nil {
-		err := fmt.Errorf("converting chunksize to int64: %w", err)
-		result = multierror.Append(result, err)
-	}
-
-	multipartCopyChunkSize, err := getParameterAsInt64(parameters, "multipartcopychunksize", defaultMultipartCopyChunkSize, minChunkSize, maxChunkSize)
-	if err != nil {
-		err := fmt.Errorf("converting multipartcopychunksize to valid int64: %w", err)
-		result = multierror.Append(result, err)
-	}
-
-	multipartCopyMaxConcurrency, err := getParameterAsInt64(parameters, "multipartcopymaxconcurrency", defaultMultipartCopyMaxConcurrency, 1, math.MaxInt64)
-	if err != nil {
-		err := fmt.Errorf("converting multipartcopymaxconcurrency to valid int64: %w", err)
-		result = multierror.Append(result, err)
-	}
-
-	multipartCopyThresholdSize, err := getParameterAsInt64(parameters, "multipartcopythresholdsize", defaultMultipartCopyThresholdSize, 0, maxChunkSize)
-	if err != nil {
-		err := fmt.Errorf("converting multipartcopythresholdsize to valid int64: %w", err)
-		result = multierror.Append(result, err)
-	}
-
-	rootDirectory := parameters["rootdirectory"]
-	if rootDirectory == nil {
-		rootDirectory = ""
-	}
-
-	storageClass := s3.StorageClassStandard
-	storageClassParam := parameters["storageclass"]
-	if storageClassParam != nil {
-		storageClassString, ok := storageClassParam.(string)
-		if !ok {
-			err := fmt.Errorf("the storageclass parameter must be one of %v, %v invalid",
-				[]string{s3.StorageClassStandard, s3.StorageClassReducedRedundancy}, storageClassParam)
-			result = multierror.Append(result, err)
-		}
-		// All valid storage class parameters are UPPERCASE, so be a bit more flexible here
-		storageClassString = strings.ToUpper(storageClassString)
-		if storageClassString != noStorageClass &&
-			storageClassString != s3.StorageClassStandard &&
-			storageClassString != s3.StorageClassReducedRedundancy {
-			err := fmt.Errorf("the storageclass parameter must be one of %v, %v invalid",
-				[]string{noStorageClass, s3.StorageClassStandard, s3.StorageClassReducedRedundancy}, storageClassParam)
-			result = multierror.Append(result, err)
-		}
-		storageClass = storageClassString
-	}
-
-	objectOwnership := false
-	objectOwnershipParam := parameters["objectownership"]
-	if objectOwnershipParam != nil {
-		objectOwnershipBool, ok := objectOwnershipParam.(bool)
-		if !ok {
-			err := fmt.Errorf("object ownership parameter must be either %v or %v", true, false)
-			result = multierror.Append(result, err)
-		}
-		objectOwnership = objectOwnershipBool
-	}
-
-	objectACL := s3.ObjectCannedACLPrivate
-	objectACLParam := parameters["objectacl"]
-	if objectACLParam != nil {
-		if objectOwnership {
-			err := fmt.Errorf("object ACL parameter should not be set when object ownership is enabled")
-			result = multierror.Append(result, err)
-		}
-
-		objectACLString, ok := objectACLParam.(string)
-		if !ok {
-			err := fmt.Errorf("object ACL parameter should be a string: %v", objectACLParam)
-			result = multierror.Append(result, err)
-		}
-
-		if _, ok = validObjectACLs[objectACLString]; !ok {
-			var objectACLkeys []string
-			for key := range validObjectACLs {
-				objectACLkeys = append(objectACLkeys, key)
-			}
-			err := fmt.Errorf("object ACL parameter should be one of %v: %v", objectACLkeys, objectACLParam)
-			result = multierror.Append(result, err)
-		}
-		objectACL = objectACLString
-	}
-
-	// If regionEndpoint is set, default to forcing pathstyle to preserve legacy behavior.
-	defaultPathStyle := regionEndpoint != ""
-
-	pathStyleBool, err := parse.Bool(parameters, "pathstyle", defaultPathStyle)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	parallelWalkBool, err := parse.Bool(parameters, "parallelwalk", false)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	maxRequestsPerSecond, err := getParameterAsInt64(parameters, "maxrequestspersecond", defaultMaxRequestsPerSecond, 0, math.MaxInt64)
-	if err != nil {
-		err = fmt.Errorf("converting maxrequestspersecond to valid int64: %w", err)
-		result = multierror.Append(result, err)
-	}
-
-	maxRetries, err := getParameterAsInt64(parameters, "maxretries", defaultMaxRetries, 0, math.MaxInt64)
-	if err != nil {
-		err := fmt.Errorf("converting maxrequestspersecond to valid int64: %w", err)
-		result = multierror.Append(result, err)
-	}
-
-	// multierror return
-	if err := result.ErrorOrNil(); err != nil {
-		return nil, err
-	}
-
-	sessionToken := ""
-
-	logLevel := parseLogLevelParam(parameters["loglevel"])
-
-	return &DriverParameters{
-		fmt.Sprint(accessKey),
-		fmt.Sprint(secretKey),
-		fmt.Sprint(bucket),
-		region,
-		fmt.Sprint(regionEndpoint),
-		encryptBool,
-		fmt.Sprint(keyID),
-		secureBool,
-		skipVerifyBool,
-		v4Bool,
-		chunkSize,
-		multipartCopyChunkSize,
-		multipartCopyMaxConcurrency,
-		multipartCopyThresholdSize,
-		fmt.Sprint(rootDirectory),
-		storageClass,
-		objectACL,
-		fmt.Sprint(sessionToken),
-		pathStyleBool,
-		maxRequestsPerSecond,
-		maxRetries,
-		parallelWalkBool,
-		logLevel,
-		objectOwnership,
-	}, nil
-}
-
-// getParameterAsInt64 converts parameters[name] to an int64 value (using
-// default if nil), verifies it is no smaller than min, and returns it.
-func getParameterAsInt64(parameters map[string]any, name string, defaultt, minimum, maximum int64) (int64, error) {
-	rv := defaultt
-	param := parameters[name]
-	switch v := param.(type) {
-	case string:
-		vv, err := strconv.ParseInt(v, 0, 64)
-		if err != nil {
-			return 0, fmt.Errorf("%s parameter must be an integer, %v invalid", name, param)
-		}
-		rv = vv
-	case int64:
-		rv = v
-	case int, uint, int32, uint32, uint64:
-		rv = reflect.ValueOf(v).Convert(reflect.TypeOf(rv)).Int()
-	case nil:
-		// do nothing
-	default:
-		return 0, fmt.Errorf("converting value for %s: %#v", name, param)
-	}
-
-	if rv < minimum || rv > maximum {
-		return 0, fmt.Errorf("the %s %#v parameter should be a number between %d and %d (inclusive)", name, rv, minimum, maximum)
-	}
-
-	return rv, nil
-}
-
 // New constructs a new Driver with the given AWS credentials, region, encryption flag, and
 // bucketName
-func New(params *DriverParameters) (*Driver, error) {
+func New(params *common.DriverParameters) (*Driver, error) {
 	if !params.V4Auth &&
 		(params.RegionEndpoint == "" ||
 			strings.Contains(params.RegionEndpoint, "s3.amazonaws.com")) {
@@ -1470,7 +1102,7 @@ func (d *driver) getACL() *string {
 }
 
 func (d *driver) getStorageClass() *string {
-	if d.StorageClass == noStorageClass {
+	if d.StorageClass == common.StorageClassNone {
 		return nil
 	}
 	return aws.String(d.StorageClass)
@@ -1527,7 +1159,7 @@ func (w *writer) Write(p []byte) (int, error) {
 
 	// If the last written part is smaller than minChunkSize, we need to make a
 	// new multipart upload :sadface:
-	if len(w.parts) > 0 && int(*w.parts[len(w.parts)-1].Size) < minChunkSize {
+	if len(w.parts) > 0 && int(*w.parts[len(w.parts)-1].Size) < common.MinChunkSize {
 		var completedUploadedParts completedParts
 		for _, part := range w.parts {
 			completedUploadedParts = append(completedUploadedParts, &s3.CompletedPart{
@@ -1579,7 +1211,7 @@ func (w *writer) Write(p []byte) (int, error) {
 
 		// If the entire written file is smaller than minChunkSize, we need to make
 		// a new part from scratch :double sad face:
-		if w.size < minChunkSize {
+		if w.size < common.MinChunkSize {
 			resp, err := w.driver.S3.GetObjectWithContext(
 				ctx,
 				&s3.GetObjectInput{
