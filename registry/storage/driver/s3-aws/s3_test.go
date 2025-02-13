@@ -27,6 +27,7 @@ import (
 	"github.com/docker/distribution/context"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
+	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 )
 
@@ -99,7 +100,7 @@ func s3DriverConstructor(rootDirectory, storageClass string) (*Driver, error) {
 		}
 	}
 
-	maxRequestsPerSecondInt64 := int64(defaultMaxRequestsPerSecond)
+	maxRequestsPerSecondInt64 := int64(common.DefaultMaxRequestsPerSecond)
 
 	if maxRequestsPerSecond != "" {
 		if maxRequestsPerSecondInt64, err = strconv.ParseInt(maxRequestsPerSecond, 10, 64); err != nil {
@@ -107,7 +108,7 @@ func s3DriverConstructor(rootDirectory, storageClass string) (*Driver, error) {
 		}
 	}
 
-	maxRetriesInt64 := int64(defaultMaxRetries)
+	maxRetriesInt64 := int64(common.DefaultMaxRetries)
 
 	if maxRetries != "" {
 		if maxRetriesInt64, err = strconv.ParseInt(maxRetries, 10, 64); err != nil {
@@ -125,9 +126,9 @@ func s3DriverConstructor(rootDirectory, storageClass string) (*Driver, error) {
 
 	parallelWalkBool := true
 
-	logLevelType := parseLogLevelParam(logLevel)
+	logLevelType := common.ParseLogLevelParam(logLevel)
 
-	parameters := &DriverParameters{
+	parameters := &common.DriverParameters{
 		accessKey,
 		secretKey,
 		bucket,
@@ -138,10 +139,10 @@ func s3DriverConstructor(rootDirectory, storageClass string) (*Driver, error) {
 		secureBool,
 		skipVerifyBool,
 		v4Bool,
-		minChunkSize,
-		defaultMultipartCopyChunkSize,
-		defaultMultipartCopyMaxConcurrency,
-		defaultMultipartCopyThresholdSize,
+		common.MinChunkSize,
+		common.DefaultMultipartCopyChunkSize,
+		common.DefaultMultipartCopyMaxConcurrency,
+		common.DefaultMultipartCopyThresholdSize,
 		rootDirectory,
 		storageClass,
 		objectACL,
@@ -222,7 +223,7 @@ func TestS3Driver_parseParameters(t *testing.T) {
 	}
 
 	testFn := func(params map[string]any) (any, error) {
-		return parseParameters(params)
+		return common.ParseParameters(params)
 	}
 
 	tcs := map[string]struct {
@@ -521,7 +522,7 @@ func TestS3DriverStorageClass(t *testing.T) {
 	rrDriver, err := s3DriverConstructor(rootDir, s3.StorageClassReducedRedundancy)
 	require.NoError(t, err, "unexpected error creating driver with reduced redundancy storage")
 
-	_, err = s3DriverConstructor(rootDir, noStorageClass)
+	_, err = s3DriverConstructor(rootDir, common.StorageClassNone)
 	require.NoError(t, err, "unexpected error creating driver without storage class")
 
 	standardFilename := "/test-standard"
@@ -844,19 +845,19 @@ func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
 	d.baseEmbed.Base.StorageDriver.(*driver).S3 = newS3Wrapper(
 		&mockPutObjectWithContextRetryableError{},
 		withBackoffNotify(notifyFn),
-		withExponentialBackoff(defaultMaxRetries),
+		withExponentialBackoff(common.DefaultMaxRetries),
 	)
 
 	start := time.Now()
 	err := d.PutContent(context.Background(), "/test/file", make([]byte, 0))
 	require.Error(t, err)
-	require.Equal(t, defaultMaxRetries, retries)
+	require.Equal(t, common.DefaultMaxRetries, retries)
 	require.WithinDuration(t, time.Now(), start, time.Second*10)
 
 	start = time.Now()
 	err = d.Walk(context.Background(), "test/", func(storagedriver.FileInfo) error { return nil })
 	require.Error(t, err)
-	require.Equal(t, defaultMaxRetries, retries)
+	require.Equal(t, common.DefaultMaxRetries, retries)
 	require.WithinDuration(t, time.Now(), start, time.Second*10)
 }
 
