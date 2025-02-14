@@ -209,7 +209,7 @@ func ParseParameters(parameters map[string]any) (any, error) {
 	if !ok {
 		res.MaxRetries = DefaultMaxRetries
 	} else {
-		tmp, err := parse.Int32(parameters, common.ParamMaxRetries, DefaultMaxRetries)
+		tmp, err := parse.Int32(parameters, common.ParamMaxRetries, DefaultMaxRetries, 0, common.ValidRetriesLimit)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse parameter %q = %v: %w", common.ParamMaxRetries, maxRetries, err)
 		}
