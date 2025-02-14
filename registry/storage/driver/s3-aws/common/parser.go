@@ -416,7 +416,6 @@ func ParseParameters(parameters map[string]any) (*DriverParameters, error) {
 		return nil, err
 	}
 
-	res.SessionToken = ""
 	res.LogLevel = ParseLogLevelParam(parameters[ParamLogLevel])
 
 	return res, nil
