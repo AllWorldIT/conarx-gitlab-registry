@@ -1,10 +1,19 @@
 package testutil
 
 import (
+	"context"
+	"errors"
+	mrand "math/rand/v2"
+	"path"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	storagedriver "github.com/docker/distribution/registry/storage/driver"
 )
 
 type Opts struct {
@@ -138,4 +147,130 @@ func CopyMap(original map[string]any) map[string]any {
 	}
 
 	return newMap
+}
+
+func EnsurePathDeleted(
+	ctx context.Context,
+	tb testing.TB,
+	driver storagedriver.StorageDriver,
+	targetPath string,
+) {
+	// NOTE(prozlach): We want to make sure that we do not do an accidental
+	// retry of the Delete call, hence it is outside of the
+	// require.EventuallyWithT block.
+	err := driver.Delete(ctx, targetPath)
+	if err != nil {
+		if !errors.As(err, new(storagedriver.PathNotFoundError)) {
+			// Handover the termination of the execution to require.NoError call
+			require.NoError(tb, err)
+		}
+
+		// Path does not exist, in theory we are done, but in practice
+		// let's also confirm that with .List() call
+	}
+
+	// NOTE(prozlach): do the first check imediatelly as an optimization, so
+	// that we avoid the 1s wait even if the blobs were removed, and thus speed
+	// up the tests.
+	paths, err := driver.List(ctx, targetPath)
+	if errors.As(err, new(storagedriver.PathNotFoundError)) {
+		return
+	}
+	tb.Logf("files were not cleaned up (%s), entering wait loop", strings.Join(paths, ","))
+
+	startTime := time.Now()
+	require.EventuallyWithT(
+		tb,
+		func(c *assert.CollectT) {
+			_, err := driver.List(ctx, targetPath)
+			assert.ErrorAs(c, err, new(storagedriver.PathNotFoundError))
+		},
+		4200*time.Millisecond,
+		1*time.Second,
+	)
+	tb.Logf("waited %s for container to return an empty list of files", time.Since(startTime))
+}
+
+var (
+	filenameChars  = []byte("abcdefghijklmnopqrstuvwxyz0123456789")
+	separatorChars = []byte("._-")
+)
+
+func RandomPath(minTldLen, length int) string {
+	// NOTE(prozlach): randomPath() is called in some tests concurrently and it
+	// may happen that the top-level directory of the path returned is not
+	// unique given enough calls to it. This leads to wonky race conditions as
+	// the tests are running concurrently and are trying to remove top level
+	// directory to clean up after themselves while others are still writing to
+	// it, leading to errors where paths are not being cleaned up.
+	//
+	// The solution is simple - enforce the minimal length of the top level dir
+	// enough so that the chance that there are collisions(i.e. same top-level
+	// directories) are very low for tests that require it.
+	//
+	// In my test script doing one million iterations I was not able to get a
+	// collision anymore for directories with minimal length of 4 and 32 calls
+	// to randomPath() function.
+	p := "/"
+	for len(p) < length {
+		/* #nosec G404 */
+		chunkLength := mrand.IntN(length-len(p)) + 1
+		if len(p) == 1 && chunkLength < minTldLen {
+			// First component is too short - retry
+			continue
+		}
+		chunk := RandomFilename(chunkLength)
+		p += chunk
+		remaining := length - len(p)
+		if remaining == 1 {
+			p += RandomFilename(1)
+		} else if remaining > 1 {
+			p += "/"
+		}
+	}
+	return p
+}
+
+func RandomFilename(length int) string {
+	b := make([]byte, length)
+	wasSeparator := true
+	for i := range b {
+		/* #nosec G404 */
+		if !wasSeparator && i < len(b)-1 && mrand.IntN(4) == 0 {
+			b[i] = separatorChars[mrand.IntN(len(separatorChars))]
+			wasSeparator = true
+		} else {
+			b[i] = filenameChars[mrand.IntN(len(filenameChars))]
+			wasSeparator = false
+		}
+	}
+	return string(b)
+}
+
+// RandomFilenameRange returns a random file with a length between min and max
+// chars long inclusive.
+func RandomFilenameRange(minimum, maximum int) string { // nolint:unparam //(min always receives 8)
+	/* #nosec G404 */
+	return RandomFilename(minimum + (mrand.IntN(maximum + 1)))
+}
+
+// RandomBranchingFiles creates n number of randomly named files at the end of
+// a binary tree of randomly named directories.
+func RandomBranchingFiles(root string, n int) []string {
+	var files []string
+
+	subDirectory := path.Join(root, RandomFilenameRange(8, 8))
+
+	if n <= 1 {
+		files = append(files, path.Join(subDirectory, RandomFilenameRange(8, 8)))
+		return files
+	}
+
+	half := n / 2
+	remainder := n % 2
+
+	files = append(files, RandomBranchingFiles(subDirectory, half+remainder)...)
+	files = append(files, RandomBranchingFiles(subDirectory, half)...)
+
+	return files
 }
