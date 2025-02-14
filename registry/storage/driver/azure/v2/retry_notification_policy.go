@@ -2,6 +2,7 @@ package v2
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -61,7 +62,15 @@ func newRetryNotificationPolicy() policy.Policy {
 		// So the idea is to piggy-back on the runtime.NewResponseError that
 		// will do the proper decoding for us and just return the ErrorCode
 		// field instead.
-		return runtime.NewResponseError(resp).(*azcore.ResponseError).ErrorCode
+		err := runtime.NewResponseError(resp)
+		if err == nil {
+			return ""
+		}
+		errTyped, ok := err.(*azcore.ResponseError)
+		if ok {
+			return errTyped.ErrorCode
+		}
+		return fmt.Sprintf("non standard error: %s", err.Error())
 	}
 
 	return PolicyFunc(func(req *policy.Request) (*http.Response, error) {
