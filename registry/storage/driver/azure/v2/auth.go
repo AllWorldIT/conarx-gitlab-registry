@@ -3,11 +3,13 @@ package v2
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	azlog "github.com/Azure/azure-sdk-for-go/sdk/azcore/log"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -122,7 +124,21 @@ func newSharedKeyCredentialsClient(params *DriverParameters) (*Driver, error) {
 		return nil, fmt.Errorf("creating shared key credentials: %w", err)
 	}
 
-	client, err := azblob.NewClientWithSharedKeyCredential(params.ServiceURL, cred, nil)
+	opts := azcore.ClientOptions{
+		PerRetryPolicies: []policy.Policy{newRetryNotificationPolicy()},
+	}
+	if params.Transport != nil {
+		opts.Transport = &http.Client{
+			Transport: params.Transport,
+		}
+	}
+	client, err := azblob.NewClientWithSharedKeyCredential(
+		params.ServiceURL,
+		cred,
+		&azblob.ClientOptions{
+			ClientOptions: opts,
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("creating client using shared key credentials: %w", err)
 	}
@@ -144,19 +160,31 @@ func newTokenClient(params *DriverParameters) (*Driver, error) {
 	var cred azcore.TokenCredential
 	var err error
 
+	opts := azcore.ClientOptions{
+		PerRetryPolicies: []policy.Policy{newRetryNotificationPolicy()},
+	}
+	if params.Transport != nil {
+		opts.Transport = &http.Client{
+			Transport: params.Transport,
+		}
+	}
 	if params.CredentialsType == common.CredentialsTypeClientSecret {
 		cred, err = azidentity.NewClientSecretCredential(
-			params.TenantID,
-			params.ClientID,
-			params.Secret,
-			nil,
+			params.TenantID, params.ClientID, params.Secret,
+			&azidentity.ClientSecretCredentialOptions{
+				ClientOptions: opts,
+			},
 		)
 		if err != nil {
 			return nil, fmt.Errorf("creating new client-secret credential: %w", err)
 		}
 	} else {
 		// params.credentialsType == credentialsTypeDefaultCredentials
-		cred, err = azidentity.NewDefaultAzureCredential(nil)
+		cred, err = azidentity.NewDefaultAzureCredential(
+			&azidentity.DefaultAzureCredentialOptions{
+				ClientOptions: opts,
+			},
+		)
 		if err != nil {
 			return nil, fmt.Errorf("creating default azure credentials: %w", err)
 		}

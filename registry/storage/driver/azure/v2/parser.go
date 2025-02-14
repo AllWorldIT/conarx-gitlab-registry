@@ -2,6 +2,7 @@ package v2
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -40,6 +41,8 @@ type DriverParameters struct {
 
 	DebugLog       bool
 	DebugLogEvents []azlog.Event
+
+	Transport http.RoundTripper
 }
 
 // ParseParameters parses parameters for v2 driver version, and returns object
