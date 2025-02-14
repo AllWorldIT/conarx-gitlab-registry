@@ -79,13 +79,18 @@ const (
 	EnvContainer = "AZURE_CONTAINER"
 	EnvRealm     = "AZURE_REALM"
 
-	// Enables debug logging for Azure SDK. It is possible to filter the events
-	// being printed - check the code in the `ParseParameters()` function,
-	// where we parse the `common.ParamDebugLogEvents` parameter
-	EnvDebugLog = "AZURE_DEBUGLOG"
+	// Enables debug logging for Azure SDK.
+	EnvDebugLog       = "AZURE_DEBUGLOG"
+	EnvDebugLogEvents = "AZURE_DEBUGLOG_EVENTS"
 
 	// specifies driver to use, one of: "azure", "azure_v2"
 	EnvDriverVersion = "AZURE_DRIVER_VERSION"
+
+	// Retry configuration:
+	EnvMaxRetries      = "AZURE_MAX_RETRIES"
+	EnvRetryTryTimeout = "AZURE_RETRY_TRY_TIMEOUT"
+	EnvRetryDelay      = "AZURE_RETRY_DELAY"
+	EnvMaxRetryDelay   = "AZURE_MAX_RETRY_DELAY"
 )
 
 // InferRootPrefixConfiguration determines when to use the azure legacy root prefix or not based on the storage driver configurations
