@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 )
 
@@ -53,4 +54,33 @@ func Int32(parameters map[string]any, name string, defaultt int32) (int32, error
 	default:
 		return defaultt, fmt.Errorf("cannot parse %q with type %T as int32", name, value)
 	}
+}
+
+// Int64 converts parameters[name] to an int64 value (using
+// default if nil), verifies it is no smaller than min, and returns it.
+func Int64(parameters map[string]any, name string, defaultt, minimum, maximum int64) (int64, error) {
+	rv := defaultt
+	param := parameters[name]
+	switch v := param.(type) {
+	case string:
+		vv, err := strconv.ParseInt(v, 0, 64)
+		if err != nil {
+			return 0, fmt.Errorf("%s parameter must be an integer, %v invalid", name, param)
+		}
+		rv = vv
+	case int64:
+		rv = v
+	case int, uint, int32, uint32, uint64:
+		rv = reflect.ValueOf(v).Convert(reflect.TypeOf(rv)).Int()
+	case nil:
+		// do nothing
+	default:
+		return 0, fmt.Errorf("converting value for %s: %#v", name, param)
+	}
+
+	if rv < minimum || rv > maximum {
+		return 0, fmt.Errorf("the %s %#v parameter should be a number between %d and %d (inclusive)", name, rv, minimum, maximum)
+	}
+
+	return rv, nil
 }
