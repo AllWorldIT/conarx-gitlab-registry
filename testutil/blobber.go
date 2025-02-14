@@ -20,7 +20,7 @@ func RandomBlob(t testing.TB, size int) []byte {
 	res := make([]byte, size)
 
 	seed := SeedFromUnixNano(time.Now().UnixNano())
-	t.Logf("using rng seed %s for random blob", seed)
+	t.Logf("using rng seed %v for random blob", seed)
 
 	rng := rand.NewChaCha8(seed)
 	// NOTE(prozlach): On my laptop, generating 2GiB of rng data takes around
