@@ -41,11 +41,17 @@ var (
 
 	missing []string
 
-	debugLog bool
+	debugLog       bool
+	debugLogEvents string
 
 	driverVersion     string
 	parseParametersFn func(map[string]any) (any, error)
 	newDriverFn       func(any) (storagedriver.StorageDriver, error)
+
+	maxRetries      int32
+	retryTryTimeout time.Duration
+	retryDelay      time.Duration
+	maxRetryDelay   time.Duration
 )
 
 type envConfig struct {
@@ -129,6 +135,48 @@ func fetchEnvVarsConfiguration() {
 			missing = []string{msg}
 			return
 		}
+		debugLogEvents = os.Getenv(common.EnvDebugLogEvents)
+	}
+
+	// Parse retry configuration
+	if v := os.Getenv(common.EnvMaxRetries); v != "" {
+		mr, err := strconv.ParseInt(v, 10, 32)
+		if err != nil {
+			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvMaxRetries, v)
+			missing = []string{msg}
+			return
+		}
+		maxRetries = int32(mr)
+	}
+
+	if v := os.Getenv(common.EnvRetryTryTimeout); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvRetryTryTimeout, v)
+			missing = []string{msg}
+			return
+		}
+		retryTryTimeout = d
+	}
+
+	if v := os.Getenv(common.EnvRetryDelay); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvRetryDelay, v)
+			missing = []string{msg}
+			return
+		}
+		retryDelay = d
+	}
+
+	if v := os.Getenv(common.EnvMaxRetryDelay); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvMaxRetryDelay, v)
+			missing = []string{msg}
+			return
+		}
+		maxRetryDelay = d
 	}
 }
 
@@ -156,18 +204,23 @@ func fetchDriverConfig(rootDirectory string, trimLegacyRootPrefix bool) (any, er
 
 	if debugLog {
 		rawParams[common.ParamDebugLog] = "true"
-		// logging all events is enabled by default, uncomment and adjust call
-		// below to change it:
-		//
-		// rawParams[paramDebugLogEvents]="Request,Response,ResponseError,Retry,LongRunningOperation"
+		if debugLogEvents != "" {
+			// NOTE(prozlach): unset means simply log everything
+			rawParams[common.ParamDebugLogEvents] = debugLogEvents
+		}
 	}
 
-	if debugLog {
-		rawParams[common.ParamDebugLog] = "true"
-		// logging all events is enabled by default, uncomment and adjust call
-		// below to change it:
-		//
-		// rawParams[common.ParamDebugLogEvents] = "Response,ResponseError,LongRunningOperation"
+	if maxRetries != 0 {
+		rawParams[common.ParamMaxRetries] = maxRetries
+	}
+	if retryTryTimeout != 0 {
+		rawParams[common.ParamRetryTryTimeout] = retryTryTimeout.String()
+	}
+	if retryDelay != 0 {
+		rawParams[common.ParamRetryDelay] = retryDelay.String()
+	}
+	if maxRetryDelay != 0 {
+		rawParams[common.ParamMaxRetryDelay] = maxRetryDelay.String()
 	}
 
 	parsedParams, err := parseParametersFn(rawParams)

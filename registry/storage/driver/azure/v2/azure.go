@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
@@ -24,10 +25,12 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/base"
 )
 
+var ErrCorruptedData = errors.New("corrupted data found in the uploaded data")
+
 const DriverName = "azure_v2"
 
 const (
-	maxChunkSize = 4 * 1024 * 1024
+	MaxChunkSize = 4 << 20
 
 	// NOTE(prozlach): values chosen arbitrarily
 	DefaultPoolInitialInterval = 100 * time.Millisecond
@@ -105,7 +108,17 @@ func (*driver) Name() string {
 
 // GetContent retrieves the content stored at "targetPath" as a []byte.
 func (d *driver) GetContent(ctx context.Context, targetPath string) ([]byte, error) {
-	resp, err := d.client.NewBlobClient(d.PathToKey(targetPath)).DownloadStream(ctx, nil)
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
+
+	resp, err := d.client.NewBlobClient(d.PathToKey(targetPath)).DownloadStream(ctxRetry, nil)
 	if err != nil {
 		if Is404(err) {
 			return nil, storagedriver.PathNotFoundError{Path: targetPath, DriverName: DriverName}
@@ -118,6 +131,16 @@ func (d *driver) GetContent(ctx context.Context, targetPath string) ([]byte, err
 
 // PutContent stores the []byte content at a location designated by "path".
 func (d *driver) PutContent(ctx context.Context, path string, contents []byte) error {
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
+
 	// max size for block blobs uploaded via single "Put Blob" for version after "2016-05-31"
 	// https://docs.microsoft.com/en-us/rest/api/storageservices/put-blob#remarks
 	if len(contents) > blockblob.MaxUploadBlobBytes {
@@ -141,17 +164,17 @@ func (d *driver) PutContent(ctx context.Context, path string, contents []byte) e
 	// response.
 	blobName := d.PathToKey(path)
 	blobRef := d.client.NewBlobClient(blobName)
-	props, err := blobRef.GetProperties(ctx, nil)
+	props, err := blobRef.GetProperties(ctxRetry, nil)
 	if err != nil && !Is404(err) {
 		return fmt.Errorf("failed to get blob properties: %w", err)
 	}
 	if err == nil && props.BlobType != nil && *props.BlobType != blob.BlobTypeBlockBlob {
-		if _, err := blobRef.Delete(ctx, nil); err != nil {
+		if _, err := blobRef.Delete(ctxRetry, nil); err != nil && !Is404(err) {
 			return fmt.Errorf("failed to delete legacy blob (%s): %w", *props.BlobType, err)
 		}
 	}
 
-	_, err = d.client.NewBlockBlobClient(blobName).UploadBuffer(ctx, contents, nil)
+	_, err = d.client.NewBlockBlobClient(blobName).UploadBuffer(ctxRetry, contents, nil)
 	if err != nil {
 		return fmt.Errorf("creating new block blob client: %w", err)
 	}
@@ -161,13 +184,23 @@ func (d *driver) PutContent(ctx context.Context, path string, contents []byte) e
 // Reader retrieves an io.ReadCloser for the content stored at "path" with a
 // given byte offset.
 func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
+
 	blobRef := d.client.NewBlobClient(d.PathToKey(path))
 	options := blob.DownloadStreamOptions{
 		Range: blob.HTTPRange{
 			Offset: offset,
 		},
 	}
-	props, err := blobRef.GetProperties(ctx, nil)
+	props, err := blobRef.GetProperties(ctxRetry, nil)
 	if err != nil {
 		if Is404(err) {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
@@ -182,7 +215,7 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 		return io.NopCloser(bytes.NewReader(nil)), nil
 	}
 
-	resp, err := blobRef.DownloadStream(ctx, &options)
+	resp, err := blobRef.DownloadStream(ctxRetry, &options)
 	if err != nil {
 		if Is404(err) {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
@@ -195,10 +228,19 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
 func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
 	blobName := d.PathToKey(path)
 	blobRef := d.client.NewBlobClient(blobName)
 
-	props, err := blobRef.GetProperties(ctx, nil)
+	props, err := blobRef.GetProperties(ctxRetry, nil)
 	blobExists := true
 	if err != nil {
 		if !Is404(err) {
@@ -207,6 +249,15 @@ func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storag
 		blobExists = false
 	}
 
+	// NOTE(prozlach): In case when there was operation timeout, Azure
+	// specifies that the operation might have succeeded, or not and that the
+	// client needs to verify the state. In our case it does not make much
+	// difference, because if the operation succeeded and the blob was indeed
+	// created, the next call will simply truncate it and this does not make
+	// difference for us.
+	//
+	// https://learn.microsoft.com/en-gb/rest/api/storageservices/put-blob
+	// https://learn.microsoft.com/en-us/rest/api/storageservices/common-rest-api-error-codes
 	var size int64
 	if blobExists {
 		if doAppend {
@@ -215,12 +266,10 @@ func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storag
 			}
 			size = *props.ContentLength
 		} else {
-			_, err = blobRef.Delete(ctx, nil)
-			if err != nil {
+			if _, err := blobRef.Delete(ctxRetry, nil); err != nil && !Is404(err) {
 				return nil, fmt.Errorf("deleting existing blob before write: %w", err)
 			}
-			_, err = d.client.NewAppendBlobClient(blobName).Create(ctx, nil)
-			if err != nil {
+			if _, err = d.client.NewAppendBlobClient(blobName).Create(ctxRetry, nil); err != nil {
 				return nil, fmt.Errorf("creating new append blob: %w", err)
 			}
 		}
@@ -228,18 +277,27 @@ func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storag
 		if doAppend {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
 		}
-		_, err = d.client.NewAppendBlobClient(blobName).Create(ctx, nil)
-		if err != nil {
+		if _, err = d.client.NewAppendBlobClient(blobName).Create(ctxRetry, nil); err != nil {
 			return nil, fmt.Errorf("creating new append blob: %w", err)
 		}
 	}
 
-	return d.newWriter(ctx, d.PathToKey(path), size), nil
+	return d.newWriter(ctxRetry, blobName, size), nil
 }
 
 // Stat retrieves the FileInfo for the given path, including the current size
 // in bytes and the creation time.
 func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
+
 	// If we try to get "/" as a blob, pathToKey will return "" when no root
 	// directory is specified and we are not in legacy path mode, which causes
 	// Azure to return a **400** when that object doesn't exist. So we need to
@@ -249,7 +307,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 		blobName := d.PathToKey(path)
 		blobRef := d.client.NewBlobClient(blobName)
 		// Check if the path is a blob
-		props, err := blobRef.GetProperties(ctx, nil)
+		props, err := blobRef.GetProperties(ctxRetry, nil)
 		if err == nil {
 			var missing []string
 			if props.ContentLength == nil {
@@ -286,7 +344,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 	})
 
 	for pager.More() {
-		resp, err := pager.NextPage(ctx)
+		resp, err := pager.NextPage(ctxRetry)
 		if err != nil {
 			return nil, fmt.Errorf("next page when listing blobs: %w", err)
 		}
@@ -307,6 +365,16 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 
 // List returns a list of objects that are direct descendants of the given path.
 func (d *driver) List(ctx context.Context, path string) ([]string, error) {
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
+
 	prefix := d.PathToDirKey(path)
 
 	// If we aren't using a particular root directory, we should not add the extra
@@ -315,7 +383,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 		prefix = d.PathToKey(path)
 	}
 
-	list, err := d.listImpl(ctx, prefix)
+	list, err := d.listImpl(ctxRetry, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -333,13 +401,23 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 // things (esp. testing) simple, we use asynchronous copying for all blob
 // sizes.
 func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
+
 	srcBlobRef := d.client.NewBlobClient(d.PathToKey(sourcePath))
 	// NOTE(prozlach): No need to sign the src URL, as the credentials for the
 	// dst blob will be used for accessing src blob when calling StartCopyFromURL()
 	srcBlobURL := srcBlobRef.URL()
 
 	dstBlobRef := d.client.NewBlobClient(d.PathToKey(destPath))
-	resp, err := dstBlobRef.StartCopyFromURL(ctx, srcBlobURL, nil)
+	resp, err := dstBlobRef.StartCopyFromURL(ctxRetry, srcBlobURL, nil)
 	if err != nil {
 		if Is404(err) {
 			return storagedriver.PathNotFoundError{Path: sourcePath, DriverName: DriverName}
@@ -352,11 +430,11 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 		backoff.WithMaxInterval(d.poolMaxInterval),
 		backoff.WithMaxElapsedTime(d.poolMaxElapsedTime),
 	)
-	ctxB := backoff.WithContext(b, ctx)
+	ctxB := backoff.WithContext(b, ctxRetry)
 
 	// Operation to check copy status
 	operation := func() error {
-		props, err := dstBlobRef.GetProperties(ctx, nil)
+		props, err := dstBlobRef.GetProperties(ctxRetry, nil)
 		if err != nil {
 			// NOTE(prozlach): We do not treat this as a permament error and
 			// retry instead as this may be a transient error and the copy
@@ -406,7 +484,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 		if errors.Is(err, ErrCopyStatusPending) {
 			// Blob copy has not finished yet and we can't wait any longer.
 			// Abort the operation and return the error.
-			if _, errAbort := dstBlobRef.AbortCopyFromURL(ctx, *resp.CopyID, nil); errAbort != nil {
+			if _, errAbort := dstBlobRef.AbortCopyFromURL(ctxRetry, *resp.CopyID, nil); errAbort != nil {
 				return fmt.Errorf("aborting copy operation: %w, while handling move operation timeout", errAbort)
 			}
 			return fmt.Errorf("move blob did not finish after %s", b.GetElapsedTime())
@@ -414,8 +492,8 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 		return fmt.Errorf("move blob: %w", err)
 	}
 
-	_, err = srcBlobRef.Delete(ctx, nil)
-	if err != nil {
+	// Blob might have been already deleted due to retry
+	if _, err = srcBlobRef.Delete(ctxRetry, nil); err != nil && !Is404(err) {
 		return fmt.Errorf("deleting source blob: %w", err)
 	}
 	return nil
@@ -423,8 +501,18 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
 func (d *driver) Delete(ctx context.Context, path string) error {
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
+
 	blobRef := d.client.NewBlobClient(d.PathToKey(path))
-	_, err := blobRef.Delete(ctx, nil)
+	_, err := blobRef.Delete(ctxRetry, nil)
 	if err == nil {
 		// was a blob and deleted, return
 		return nil
@@ -434,7 +522,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 	}
 
 	// Not a blob, see if path is a virtual container with blobs
-	blobs, err := d.listBlobs(ctx, d.PathToDirKey(path))
+	blobs, err := d.listBlobs(ctxRetry, d.PathToDirKey(path))
 	if err != nil {
 		return fmt.Errorf("listing blobs in virtual container before deletion: %w", err)
 	}
@@ -445,7 +533,8 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 
 	for _, b := range blobs {
 		blobRef = d.client.NewBlobClient(d.PathToKey(b))
-		if _, err = blobRef.Delete(ctx, nil); err != nil {
+		// Blob might have been already deleted due to retry
+		if _, err = blobRef.Delete(ctxRetry, nil); err != nil && !Is404(err) {
 			return fmt.Errorf("deleting blob %s: %w", b, err)
 		}
 	}
@@ -474,6 +563,16 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 // for specified duration by making use of Azure Storage Shared Access Signatures (SAS).
 // See https://msdn.microsoft.com/en-us/library/azure/ee395415.aspx for more info.
 func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
+	ctxRetry := policy.WithRetryOptions(
+		ctx,
+		policy.RetryOptions{
+			MaxRetries:    d.maxRetries,
+			TryTimeout:    d.retryTryTimeout,
+			RetryDelay:    d.retryDelay,
+			MaxRetryDelay: d.maxRetryDelay,
+		},
+	)
+
 	expiresTime := common.SystemClock.Now().UTC().Add(DefaultSignedURLExpiry)
 	expires, ok := options["expiry"]
 	if ok {
@@ -483,7 +582,7 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]any
 		}
 	}
 	blobRef := d.client.NewBlobClient(d.PathToKey(path))
-	return d.signer.SignBlobURL(ctx, blobRef.URL(), expiresTime)
+	return d.signer.SignBlobURL(ctxRetry, blobRef.URL(), expiresTime)
 }
 
 // Walk traverses a filesystem defined within driver, starting
@@ -577,7 +676,7 @@ func (d *driver) newWriter(ctx context.Context, path string, size int64) storage
 			client: d.client,
 			ctx:    ctx,
 			path:   path,
-		}, maxChunkSize),
+		}, MaxChunkSize),
 	}
 }
 
@@ -666,8 +765,8 @@ type blockWriter struct {
 func (bw *blockWriter) Write(p []byte) (int, error) {
 	blobRef := bw.client.NewAppendBlobClient(bw.path)
 	n := 0
-	for offset := 0; offset < len(p); offset += maxChunkSize {
-		chunkSize := min(maxChunkSize, len(p)-offset)
+	for offset := 0; offset < len(p); offset += MaxChunkSize {
+		chunkSize := min(MaxChunkSize, len(p)-offset)
 		_, err := blobRef.AppendBlock(
 			bw.ctx,
 			streaming.NopCloser(bytes.NewReader(p[offset:offset+chunkSize])),
