@@ -142,9 +142,7 @@ func New(params *common.DriverParameters) (*Driver, error) {
 	awsConfig := aws.NewConfig().WithLogLevel(params.LogLevel)
 	if params.AccessKey != "" && params.SecretKey != "" {
 		creds := credentials.NewStaticCredentials(
-			params.AccessKey,
-			params.SecretKey,
-			params.SessionToken,
+			params.AccessKey, params.SecretKey, params.SessionToken,
 		)
 		awsConfig.WithCredentials(creds)
 	}

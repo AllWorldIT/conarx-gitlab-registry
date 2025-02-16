@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 )
@@ -24,36 +25,43 @@ func Bool(parameters map[string]any, name string, defaultt bool) (bool, error) {
 	}
 }
 
-func Int32(parameters map[string]any, name string, defaultt int32) (int32, error) {
+func Int32(parameters map[string]any, name string, defaultt, minimum, maximum int32) (int32, error) {
+	var rv int32
 	switch value := parameters[name].(type) {
 	case string:
 		v, err := strconv.ParseInt(value, 10, 32)
 		if err != nil {
 			return defaultt, fmt.Errorf("cannot parse %q string as int32: %w", name, err)
 		}
-		return int32(v), nil
+		rv = int32(v)
 	case int32:
-		return value, nil
+		rv = value
 	case int:
-		if value > 2147483647 || value < -2147483648 {
+		if value > math.MaxInt32 || value < math.MinInt32 {
 			return defaultt, fmt.Errorf("value %d for %q exceeds int32 range", value, name)
 		}
-		return int32(value), nil
+		rv = int32(value)
 	case int64:
-		if value > 2147483647 || value < -2147483648 {
+		if value > math.MaxInt32 || value < math.MinInt32 {
 			return defaultt, fmt.Errorf("value %d for %q exceeds int32 range", value, name)
 		}
-		return int32(value), nil
+		rv = int32(value)
 	case float64:
-		if value > 2147483647 || value < -2147483648 {
+		if value > math.MaxInt32 || value < math.MinInt32 {
 			return defaultt, fmt.Errorf("value %f for %q exceeds int32 range", value, name)
 		}
-		return int32(value), nil
+		rv = int32(value)
 	case nil:
 		return defaultt, nil
 	default:
 		return defaultt, fmt.Errorf("cannot parse %q with type %T as int32", name, value)
 	}
+
+	if rv < minimum || rv > maximum {
+		return 0, fmt.Errorf("the %s %d parameter should be a number between %d and %d (inclusive)", name, rv, minimum, maximum)
+	}
+
+	return rv, nil
 }
 
 // Int64 converts parameters[name] to an int64 value (using

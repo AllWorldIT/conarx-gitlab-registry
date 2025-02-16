@@ -93,6 +93,12 @@ const (
 	EnvMaxRetryDelay   = "AZURE_MAX_RETRY_DELAY"
 )
 
+const (
+	// ValidRetriesLimit is the maximum number of retries that can be set,
+	// chosen arbitrarily, 1000 seemed like a moderatelly sane limit
+	ValidRetriesLimit = 1000
+)
+
 // InferRootPrefixConfiguration determines when to use the azure legacy root prefix or not based on the storage driver configurations
 func InferRootPrefixConfiguration(ac map[string]any) (useLegacyRootPrefix bool, err error) {
 	// extract config values
