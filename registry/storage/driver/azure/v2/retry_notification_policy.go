@@ -17,30 +17,13 @@ type contextKey struct {
 	name string
 }
 
-var (
-	timeoutNotifyContextKey = contextKey{"timeoutNotify"}
-	retryNotifyContextKey   = contextKey{"retryNotify"}
-)
-
-// retryNotificationReceiver should be implemented by code that wishes to be
-// notified when a retry happens. Such code must register itself into the
-// context, using withRetryNotification, so that the RetryNotificationPolicy
-// can invoke the callback when necessary.
-type retryNotificationReceiver interface {
-	RetryCallback()
-}
+var timeoutNotifyContextKey = contextKey{"timeoutNotify"}
 
 // withTimeoutNotification returns a context that contains indication of a
 // timeout. The retryNotificationPolicy will then set the timeout flag when a
 // timeout happens
 func withTimeoutNotification(ctx context.Context, timeout *bool) context.Context { // nolint: unused
 	return context.WithValue(ctx, timeoutNotifyContextKey, timeout)
-}
-
-// withRetryNotifier returns a context that contains a retry notifier. The
-// retryNotificationPolicy will then invoke the callback when a retry happens
-func withRetryNotification(ctx context.Context, r retryNotificationReceiver) context.Context { // nolint: unused // may become useful at some point
-	return context.WithValue(ctx, retryNotifyContextKey, r)
 }
 
 // PolicyFunc is a type that implements the Policy interface.
@@ -80,22 +63,19 @@ func newRetryNotificationPolicy() policy.Policy {
 			return nil, err
 		}
 
-		switch response.StatusCode {
-		case http.StatusServiceUnavailable:
-			// Grab the notification callback out of the context and, if its there, call it
-			if notifier, ok := req.Raw().Context().Value(retryNotifyContextKey).(retryNotificationReceiver); ok {
-				notifier.RetryCallback()
-			}
-		case http.StatusInternalServerError:
-			errorCodeHeader := getErrorCode(response)
-			if bloberror.Code(errorCodeHeader) != bloberror.OperationTimedOut {
-				break
-			}
-
-			if timeout, ok := req.Raw().Context().Value(timeoutNotifyContextKey).(*bool); ok {
-				*timeout = true
-			}
+		if response.StatusCode != http.StatusInternalServerError {
+			return response, err
 		}
+
+		errorCodeHeader := getErrorCode(response)
+		if bloberror.Code(errorCodeHeader) != bloberror.OperationTimedOut {
+			return response, err
+		}
+
+		if timeout, ok := req.Raw().Context().Value(timeoutNotifyContextKey).(*bool); ok {
+			*timeout = true
+		}
+
 		return response, err
 	})
 }
