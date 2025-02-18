@@ -27,6 +27,12 @@ import (
 )
 
 var (
+	driverVersion     string
+	parseParametersFn func(map[string]any) (any, error)
+	newDriverFn       func(any) (storagedriver.StorageDriver, error)
+
+	missing []string
+
 	credsType string
 
 	accountName string
@@ -39,24 +45,19 @@ var (
 	accountContainer string
 	accountRealm     string
 
-	missing []string
-
-	debugLog       bool
-	debugLogEvents string
-
-	driverVersion     string
-	parseParametersFn func(map[string]any) (any, error)
-	newDriverFn       func(any) (storagedriver.StorageDriver, error)
-
 	maxRetries      int32
 	retryTryTimeout time.Duration
 	retryDelay      time.Duration
 	maxRetryDelay   time.Duration
+
+	debugLog       bool
+	debugLogEvents string
 )
 
 type envConfig struct {
-	env   string
-	value *string
+	env      string
+	value    any
+	required bool
 }
 
 func init() {
@@ -87,31 +88,29 @@ func fetchEnvVarsConfiguration() {
 	// that know how to determine service URL themselves will likelly not care
 	// anyway.
 
-	var expected []envConfig
+	vars := []envConfig{
+		{common.EnvContainer, &accountContainer, true},
+		{common.EnvRealm, &accountRealm, true},
+		{common.EnvAccountName, &accountName, true},
+		{common.EnvDebugLog, &debugLog, false},
+		{common.EnvDebugLogEvents, &debugLogEvents, false},
+		{common.EnvMaxRetries, &maxRetries, false},
+		{common.EnvRetryTryTimeout, &retryTryTimeout, false},
+		{common.EnvRetryDelay, &retryDelay, false},
+		{common.EnvMaxRetryDelay, &maxRetryDelay, false},
+	}
 	switch credsType {
 	case common.CredentialsTypeSharedKey, "":
 		credsType = common.CredentialsTypeSharedKey
-		expected = []envConfig{
-			{common.EnvAccountName, &accountName},
-			{common.EnvAccountKey, &accountKey},
-			{common.EnvContainer, &accountContainer},
-			{common.EnvRealm, &accountRealm},
-		}
+		vars = append(vars, envConfig{common.EnvAccountKey, &accountKey, true})
 	case common.CredentialsTypeClientSecret:
-		expected = []envConfig{
-			{common.EnvTenantID, &tenantID},
-			{common.EnvClientID, &clientID},
-			{common.EnvSecret, &secret},
-			{common.EnvAccountName, &accountName},
-			{common.EnvContainer, &accountContainer},
-			{common.EnvRealm, &accountRealm},
-		}
+		vars = append(vars,
+			envConfig{common.EnvTenantID, &tenantID, true},
+			envConfig{common.EnvClientID, &clientID, true},
+			envConfig{common.EnvSecret, &secret, true},
+		)
 	case common.CredentialsTypeDefaultCredentials:
-		expected = []envConfig{
-			{common.EnvAccountName, &accountName},
-			{common.EnvContainer, &accountContainer},
-			{common.EnvRealm, &accountRealm},
-		}
+	// no extra parameters needed
 	default:
 		msg := fmt.Sprintf("invalid azure credentials type: %q", credsType)
 		missing = []string{msg}
@@ -119,64 +118,37 @@ func fetchEnvVarsConfiguration() {
 	}
 
 	missing = make([]string, 0)
-	for _, v := range expected {
-		*v.value = os.Getenv(v.env)
-		if *v.value == "" {
-			missing = append(missing, v.env)
+	for _, v := range vars {
+		val := os.Getenv(v.env)
+		if val == "" {
+			if v.required {
+				missing = append(missing, v.env)
+			}
+			continue
 		}
-	}
 
-	// NOTE(prozlach): debug logging is optional:
-	var err error
-	if v := os.Getenv(common.EnvDebugLog); v != "" {
-		debugLog, err = strconv.ParseBool(v)
-		if err != nil {
-			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvDebugLog, v)
-			missing = []string{msg}
-			return
+		var err error
+		switch vv := v.value.(type) {
+		case *string:
+			*vv = val
+		case *bool:
+			*vv, err = strconv.ParseBool(val)
+		case *int64:
+			*vv, err = strconv.ParseInt(val, 10, 64)
+		case *int32:
+			var tmp int64
+			tmp, err = strconv.ParseInt(val, 10, 32)
+			*vv = int32(tmp)
+		case *time.Duration:
+			*vv, err = time.ParseDuration(val)
 		}
-		debugLogEvents = os.Getenv(common.EnvDebugLogEvents)
-	}
 
-	// Parse retry configuration
-	if v := os.Getenv(common.EnvMaxRetries); v != "" {
-		mr, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
-			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvMaxRetries, v)
-			missing = []string{msg}
-			return
+			missing = append(
+				missing,
+				fmt.Sprintf("invalid value for %q: %s", v.env, val),
+			)
 		}
-		maxRetries = int32(mr)
-	}
-
-	if v := os.Getenv(common.EnvRetryTryTimeout); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvRetryTryTimeout, v)
-			missing = []string{msg}
-			return
-		}
-		retryTryTimeout = d
-	}
-
-	if v := os.Getenv(common.EnvRetryDelay); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvRetryDelay, v)
-			missing = []string{msg}
-			return
-		}
-		retryDelay = d
-	}
-
-	if v := os.Getenv(common.EnvMaxRetryDelay); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvMaxRetryDelay, v)
-			missing = []string{msg}
-			return
-		}
-		maxRetryDelay = d
 	}
 }
 
@@ -241,7 +213,10 @@ func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (st
 
 func skipCheck() string {
 	if len(missing) > 0 {
-		return fmt.Sprintf("Must set %s environment variables to run Azure tests", strings.Join(missing, ", "))
+		return fmt.Sprintf(
+			"Invalid value or missing environment values required to run Azure tests: %s",
+			strings.Join(missing, ", "),
+		)
 	}
 	return ""
 }

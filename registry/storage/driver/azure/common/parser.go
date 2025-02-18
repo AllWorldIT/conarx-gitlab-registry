@@ -43,7 +43,9 @@ const (
 	// configurable from within driver configuration.
 	ParamDebugLog       = "debug_log"
 	ParamDebugLogEvents = "debug_log_events"
+)
 
+const (
 	// NOTE(prozlach): Names of the variables are intentional, in order to
 	// match those required by:
 	// 		github.com/Azure/azure-sdk-for-go/sdk/azidentity.NewEnvironmentCredential()
