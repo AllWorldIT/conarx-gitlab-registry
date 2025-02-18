@@ -69,36 +69,95 @@ const (
 )
 
 const (
-	// MinChunkSize defines the minimum multipart upload chunk size
-	// S3 API requires multipart upload chunks to be at least 5MB
+	// EnvDriverVersion defines the version of the S3 storage driver to use
+	EnvDriverVersion = "S3_DRIVER_VERSION"
+
+	// EnvAccessKey defines the AWS access key for S3 authentication
+	EnvAccessKey = "AWS_ACCESS_KEY"
+
+	// EnvSecretKey defines the AWS secret key for S3 authentication
+	EnvSecretKey = "AWS_SECRET_KEY" // nolint: gosec // this is just and env var name
+
+	// EnvBucket defines the target S3 bucket name
+	EnvBucket = "S3_BUCKET"
+
+	// EnvEncrypt enables server-side encryption for S3 objects
+	EnvEncrypt = "S3_ENCRYPT"
+
+	// EnvKeyID specifies the KMS key ID for server-side encryption
+	EnvKeyID = "S3_KEY_ID"
+
+	// EnvSecure enables HTTPS for S3 connections
+	EnvSecure = "S3_SECURE"
+
+	// EnvSkipVerify disables SSL certificate verification
+	EnvSkipVerify = "S3_SKIP_VERIFY"
+
+	// EnvV4Auth is used to disable AWS Signature Version 4 authentication
+	EnvV4Auth = "S3_V4_AUTH"
+
+	// EnvRegion specifies the AWS region for S3 operations
+	EnvRegion = "AWS_REGION"
+
+	// EnvObjectACL defines the access control list for S3 objects
+	EnvObjectACL = "S3_OBJECT_ACL"
+
+	// EnvRegionEndpoint specifies a custom S3 endpoint URL
+	EnvRegionEndpoint = "REGION_ENDPOINT"
+
+	// EnvSessionToken provides temporary AWS credentials
+	EnvSessionToken = "AWS_SESSION_TOKEN" // nolint: gosec // this is just and env var name
+
+	// EnvPathStyle enables path-style S3 URLs instead of virtual-hosted-style
+	EnvPathStyle = "AWS_PATH_STYLE"
+
+	// EnvMaxRequestsPerSecond limits the rate of S3 API requests
+	EnvMaxRequestsPerSecond = "S3_MAX_REQUESTS_PER_SEC"
+
+	// EnvMaxRetries specifies the maximum number of retry attempts for failed S3 operations
+	EnvMaxRetries = "S3_MAX_RETRIES"
+
+	// EnvLogLevel sets the logging verbosity for S3 operations
+	EnvLogLevel = "S3_LOG_LEVEL"
+
+	// EnvObjectOwnership configures the object ownership settings for the S3 bucket
+	EnvObjectOwnership = "S3_OBJECT_OWNERSHIP"
+)
+
+const (
+	// MinChunkSize defines the minimum multipart upload chunk size S3 API
+	// requires multipart upload chunks to be at least 5MB
 	MinChunkSize = 5 << 20
 
-	// MaxChunkSize defines the maximum multipart upload chunk size allowed by S3.
+	// MaxChunkSize defines the maximum multipart upload chunk size allowed by
+	// S3.
 	MaxChunkSize = 5 << 30
 
 	DefaultChunkSize = 2 * MinChunkSize
 
-	// DefaultMultipartCopyChunkSize defines the default chunk size for all
-	// but the last Upload Part - Copy operation of a multipart copy.
-	// Empirically, 32 MB is optimal.
+	// DefaultMultipartCopyChunkSize defines the default chunk size for all but
+	// the last Upload Part - Copy operation of a multipart copy. Empirically,
+	// 32 MB is optimal.
 	DefaultMultipartCopyChunkSize = 32 << 20
 
-	// DefaultMultipartCopyMaxConcurrency defines the default maximum number
-	// of concurrent Upload Part - Copy operations for a multipart copy.
+	// DefaultMultipartCopyMaxConcurrency defines the default maximum number of
+	// concurrent Upload Part - Copy operations for a multipart copy.
 	DefaultMultipartCopyMaxConcurrency = 100
 
-	// DefaultMultipartCopyThresholdSize defines the default object size
-	// above which multipart copy will be used. (PUT Object - Copy is used
-	// for objects at or below this size.)  Empirically, 32 MB is optimal.
+	// DefaultMultipartCopyThresholdSize defines the default object size above
+	// which multipart copy will be used. (PUT Object - Copy is used for
+	// objects at or below this size.)  Empirically, 32 MB is optimal.
 	DefaultMultipartCopyThresholdSize = 32 << 20
 
-	// DefaultMaxRequestsPerSecond defines the default maximum number of requests
-	// per second that can be made to the S3 API per driver instance. 350 is 10%
-	// of the requestsPerSecondUpperLimit based on the figures listed in
+	// DefaultMaxRequestsPerSecond defines the default maximum number of
+	// requests per second that can be made to the S3 API per driver instance.
+	// 350 is 10% of the requestsPerSecondUpperLimit based on the figures
+	// listed in:
 	// https://docs.aws.amazon.com/AmazonS3/latest/dev/optimizing-performance.html
 	DefaultMaxRequestsPerSecond = 350
 
-	// DefaultMaxRetries is how many times the driver will retry failed requests.
+	// DefaultMaxRetries is how many times the driver will retry failed
+	// requests.
 	DefaultMaxRetries = 5
 )
 
@@ -162,9 +221,14 @@ func ParseLogLevelParam(param any) aws.LogLevelType {
 	logLevel := aws.LogOff
 
 	if param != nil {
+		if ll, ok := param.(aws.LogLevelType); ok {
+			return ll
+		}
+
 		switch strings.ToLower(param.(string)) {
 		case LogLevelOff:
 			log.Infof("S3 logging level set to %q", LogLevelOff)
+			logLevel = aws.LogOff
 		case LogLevelDebug:
 			log.Infof("S3 logging level set to %q", LogLevelDebug)
 			logLevel = aws.LogDebug
@@ -342,15 +406,9 @@ func ParseParameters(parameters map[string]any) (*DriverParameters, error) {
 	}
 	res.StorageClass = storageClass
 
-	objectOwnership := false
-	objectOwnershipParam := parameters[ParamObjectOwnership]
-	if objectOwnershipParam != nil {
-		objectOwnershipBool, ok := objectOwnershipParam.(bool)
-		if !ok {
-			err := fmt.Errorf("object ownership parameter must be either %v or %v", true, false)
-			mErr = multierror.Append(mErr, err)
-		}
-		objectOwnership = objectOwnershipBool
+	objectOwnership, err := parse.Bool(parameters, ParamObjectOwnership, false)
+	if err != nil {
+		mErr = multierror.Append(mErr, err)
 	}
 	res.ObjectOwnership = objectOwnership
 
