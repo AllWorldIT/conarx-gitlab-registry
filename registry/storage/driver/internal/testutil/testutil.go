@@ -29,6 +29,8 @@ type Opts struct {
 }
 
 func AssertByDefaultType(t *testing.T, opts Opts) {
+	t.Helper()
+
 	switch tt := opts.Defaultt.(type) {
 	case bool:
 		TestBoolValue(t, opts)

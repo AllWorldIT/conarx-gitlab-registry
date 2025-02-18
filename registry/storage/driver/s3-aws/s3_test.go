@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,145 +33,193 @@ import (
 )
 
 var (
-	accessKey            = os.Getenv("AWS_ACCESS_KEY")
-	secretKey            = os.Getenv("AWS_SECRET_KEY")
-	bucket               = os.Getenv("S3_BUCKET")
-	encrypt              = os.Getenv("S3_ENCRYPT")
-	keyID                = os.Getenv("S3_KEY_ID")
-	secure               = os.Getenv("S3_SECURE")
-	skipVerify           = os.Getenv("S3_SKIP_VERIFY")
-	v4Auth               = os.Getenv("S3_V4_AUTH")
-	region               = os.Getenv("AWS_REGION")
-	objectACL            = os.Getenv("S3_OBJECT_ACL")
-	regionEndpoint       = os.Getenv("REGION_ENDPOINT")
-	sessionToken         = os.Getenv("AWS_SESSION_TOKEN")
-	pathStyle            = os.Getenv("AWS_PATH_STYLE")
-	maxRequestsPerSecond = os.Getenv("S3_MAX_REQUESTS_PER_SEC")
-	maxRetries           = os.Getenv("S3_MAX_RETRIES")
-	logLevel             = os.Getenv("S3_LOG_LEVEL")
-	objectOwnership      = os.Getenv("S3_OBJECT_OWNERSHIP")
+	// Driver version control
+	driverVersion     string
+	parseParametersFn func(map[string]any) (*common.DriverParameters, error)
+	newDriverFn       func(*common.DriverParameters) (*Driver, error)
+
+	// Credentials
+	accessKey    string
+	secretKey    string
+	sessionToken string
+
+	// S3 configuration
+	bucket         string
+	region         string
+	regionEndpoint string
+	objectACL      string
+
+	// Security settings
+	encrypt    bool
+	keyID      string
+	secure     bool
+	skipVerify bool
+	v4Auth     bool
+	pathStyle  bool
+
+	// Performance settings
+	maxRequestsPerSecond int64
+	maxRetries           int64
+
+	// Logging
+	logLevel        string
+	objectOwnership bool
+
+	missing []string
 )
 
-func s3DriverConstructor(rootDirectory, storageClass string) (*Driver, error) {
-	var err error
-
-	encryptBool := false
-	if encrypt != "" {
-		encryptBool, err = strconv.ParseBool(encrypt)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	secureBool := true
-	if secure != "" {
-		secureBool, err = strconv.ParseBool(secure)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	skipVerifyBool := false
-	if skipVerify != "" {
-		skipVerifyBool, err = strconv.ParseBool(skipVerify)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	v4Bool := true
-	if v4Auth != "" {
-		v4Bool, err = strconv.ParseBool(v4Auth)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	pathStyleBool := false
-
-	// If regionEndpoint is set, default to forcing pathstyle to preserve legacy behavior.
-	if regionEndpoint != "" {
-		pathStyleBool = true
-	}
-
-	if pathStyle != "" {
-		pathStyleBool, err = strconv.ParseBool(pathStyle)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	maxRequestsPerSecondInt64 := int64(common.DefaultMaxRequestsPerSecond)
-
-	if maxRequestsPerSecond != "" {
-		if maxRequestsPerSecondInt64, err = strconv.ParseInt(maxRequestsPerSecond, 10, 64); err != nil {
-			return nil, err
-		}
-	}
-
-	maxRetriesInt64 := int64(common.DefaultMaxRetries)
-
-	if maxRetries != "" {
-		if maxRetriesInt64, err = strconv.ParseInt(maxRetries, 10, 64); err != nil {
-			return nil, err
-		}
-	}
-
-	objectOwnershipBool := false
-	if objectOwnership != "" {
-		objectOwnershipBool, err = strconv.ParseBool(objectOwnership)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	parallelWalkBool := true
-
-	logLevelType := common.ParseLogLevelParam(logLevel)
-
-	parameters := &common.DriverParameters{
-		accessKey,
-		secretKey,
-		bucket,
-		region,
-		regionEndpoint,
-		encryptBool,
-		keyID,
-		secureBool,
-		skipVerifyBool,
-		v4Bool,
-		common.MinChunkSize,
-		common.DefaultMultipartCopyChunkSize,
-		common.DefaultMultipartCopyMaxConcurrency,
-		common.DefaultMultipartCopyThresholdSize,
-		rootDirectory,
-		storageClass,
-		objectACL,
-		sessionToken,
-		pathStyleBool,
-		maxRequestsPerSecondInt64,
-		maxRetriesInt64,
-		parallelWalkBool,
-		logLevelType,
-		objectOwnershipBool,
-	}
-
-	return New(parameters)
+type envConfig struct {
+	env      string
+	value    any
+	required bool
 }
 
-func skipS3() string {
-	if accessKey == "" || secretKey == "" || region == "" || bucket == "" || encrypt == "" {
-		return "Must set AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION, S3_BUCKET, and S3_ENCRYPT to run S3 tests"
+func init() {
+	fetchEnvVarsConfiguration()
+}
+
+func fetchEnvVarsConfiguration() {
+	driverVersion = os.Getenv(common.EnvDriverVersion)
+	switch driverVersion {
+	case driverName:
+		// v1 is the default
+		fallthrough
+	default:
+		// backwards compatibility - if no version is defined, default to v2
+		parseParametersFn = common.ParseParameters
+		newDriverFn = New
+	}
+
+	vars := []envConfig{
+		{common.EnvAccessKey, &accessKey, true},
+		{common.EnvSecretKey, &secretKey, true},
+		{common.EnvSessionToken, &sessionToken, false},
+
+		{common.EnvBucket, &bucket, true},
+		{common.EnvRegion, &region, true},
+		{common.EnvRegionEndpoint, &regionEndpoint, false},
+		{common.EnvEncrypt, &encrypt, true},
+
+		{common.EnvObjectACL, &objectACL, false},
+		{common.EnvKeyID, &keyID, false},
+		{common.EnvSecure, &secure, false},
+		{common.EnvSkipVerify, &skipVerify, false},
+		{common.EnvV4Auth, &v4Auth, false},
+		{common.EnvPathStyle, &pathStyle, false},
+
+		{common.EnvMaxRequestsPerSecond, &maxRequestsPerSecond, false},
+		{common.EnvMaxRetries, &maxRetries, false},
+
+		{common.EnvLogLevel, &logLevel, false},
+		{common.EnvObjectOwnership, &objectOwnership, false},
+	}
+
+	// Set defaults for boolean values
+	secure = true
+	v4Auth = true
+	maxRequestsPerSecond = common.DefaultMaxRequestsPerSecond
+	maxRetries = common.DefaultMaxRetries
+
+	missing = make([]string, 0)
+	for _, v := range vars {
+		val := os.Getenv(v.env)
+		if val == "" {
+			if v.required {
+				missing = append(missing, v.env)
+			}
+			continue
+		}
+
+		var err error
+		switch vv := v.value.(type) {
+		case *string:
+			*vv = val
+		case *bool:
+			*vv, err = strconv.ParseBool(val)
+		case *int64:
+			*vv, err = strconv.ParseInt(val, 10, 64)
+		}
+
+		if err != nil {
+			missing = append(
+				missing,
+				fmt.Sprintf("invalid value for %q: %s", v.env, val),
+			)
+		}
+	}
+
+	if regionEndpoint != "" {
+		pathStyle = true // force pathstyle when endpoint is set
+	}
+}
+
+func fetchDriverConfig(rootDirectory, storageClass string) (*common.DriverParameters, error) {
+	rawParams := map[string]any{
+		common.ParamAccessKey:                   accessKey,
+		common.ParamSecretKey:                   secretKey,
+		common.ParamBucket:                      bucket,
+		common.ParamRegion:                      region,
+		common.ParamRootDirectory:               rootDirectory,
+		common.ParamStorageClass:                storageClass,
+		common.ParamSecure:                      secure,
+		common.ParamV4Auth:                      v4Auth,
+		common.ParamEncrypt:                     encrypt,
+		common.ParamKeyID:                       keyID,
+		common.ParamSkipVerify:                  skipVerify,
+		common.ParamPathStyle:                   pathStyle,
+		common.ParamSessionToken:                sessionToken,
+		common.ParamRegionEndpoint:              regionEndpoint,
+		common.ParamMaxRequestsPerSecond:        maxRequestsPerSecond,
+		common.ParamMaxRetries:                  maxRetries,
+		common.ParamParallelWalk:                true,
+		common.ParamObjectOwnership:             objectOwnership,
+		common.ParamChunkSize:                   common.MinChunkSize,
+		common.ParamMultipartCopyChunkSize:      common.DefaultMultipartCopyChunkSize,
+		common.ParamMultipartCopyMaxConcurrency: common.DefaultMultipartCopyMaxConcurrency,
+		common.ParamMultipartCopyThresholdSize:  common.DefaultMultipartCopyThresholdSize,
+	}
+
+	if objectACL != "" {
+		rawParams[common.ParamObjectACL] = objectACL
+	}
+	if logLevel != "" {
+		rawParams[common.ParamLogLevel] = common.ParseLogLevelParam(logLevel)
+	} else {
+		rawParams[common.ParamLogLevel] = aws.LogOff
+	}
+
+	parsedParams, err := parseParametersFn(rawParams)
+	if err != nil {
+		return nil, fmt.Errorf("parsing s3 parameters: %w", err)
+	}
+	return parsedParams, nil
+}
+
+func s3DriverConstructor(rootDirectory, storageClass string) (*Driver, error) {
+	parsedParams, err := fetchDriverConfig(rootDirectory, storageClass)
+	if err != nil {
+		return nil, fmt.Errorf("parsing s3 parameters: %w", err)
+	}
+
+	return newDriverFn(parsedParams)
+}
+
+func skipCheck() string {
+	if len(missing) > 0 {
+		return fmt.Sprintf(
+			"Invalid value or missing environment values required to run S3 tests: %s",
+			strings.Join(missing, ", "),
+		)
 	}
 	return ""
 }
 
 func TestS3DriverSuite(t *testing.T) {
-	root := t.TempDir()
-
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
+
+	root := t.TempDir()
 
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
@@ -186,11 +235,11 @@ func TestS3DriverSuite(t *testing.T) {
 }
 
 func BenchmarkS3DriverSuite(b *testing.B) {
-	root := b.TempDir()
-
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		b.Skip(skipMsg)
 	}
+
+	root := b.TempDir()
 
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
@@ -476,7 +525,7 @@ func TestS3DriverFromParameters(t *testing.T) {
 }
 
 func TestS3DriverEmptyRootList(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -510,7 +559,7 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 }
 
 func TestS3DriverStorageClass(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -566,7 +615,7 @@ func TestS3DriverStorageClass(t *testing.T) {
 }
 
 func TestS3DriverOverThousandBlobs(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -586,7 +635,7 @@ func TestS3DriverOverThousandBlobs(t *testing.T) {
 }
 
 func TestS3DriverURLFor_Expiry(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -624,7 +673,7 @@ func TestS3DriverURLFor_Expiry(t *testing.T) {
 }
 
 func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -665,7 +714,7 @@ func (*mockDeleteObjectsError) DeleteObjectsWithContext(_ aws.Context, _ *s3.Del
 }
 
 func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, error) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -780,7 +829,7 @@ func (*mockPutObjectWithContextRetryableError) ListObjectsV2PagesWithContext(_ a
 }
 
 func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -804,7 +853,7 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 }
 
 func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -829,7 +878,7 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 }
 
 func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -874,7 +923,7 @@ func (*mockPutObjectWithContextPermanentError) ListObjectsV2WithContext(_ aws.Co
 }
 
 func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -903,7 +952,7 @@ func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 }
 
 func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -937,7 +986,7 @@ func newTempDirDriver(t *testing.T) *Driver {
 }
 
 func TestS3DriverClientTransport(t *testing.T) {
-	if skipMsg := skipS3(); skipMsg != "" {
+	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
