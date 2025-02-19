@@ -126,6 +126,16 @@ func newSharedKeyCredentialsClient(params *DriverParameters) (*Driver, error) {
 
 	opts := azcore.ClientOptions{
 		PerRetryPolicies: []policy.Policy{newRetryNotificationPolicy()},
+		Logging: policy.LogOptions{
+			AllowedHeaders: []string{
+				"x-ms-error-code",
+				"Retry-After",
+				"Retry-After-Ms",
+				"If-Match",
+				"x-ms-blob-condition-appendpos",
+			},
+			AllowedQueryParams: []string{"comp"},
+		},
 	}
 	if params.Transport != nil {
 		opts.Transport = &http.Client{
@@ -162,6 +172,16 @@ func newTokenClient(params *DriverParameters) (*Driver, error) {
 
 	opts := azcore.ClientOptions{
 		PerRetryPolicies: []policy.Policy{newRetryNotificationPolicy()},
+		Logging: policy.LogOptions{
+			AllowedHeaders: []string{
+				"x-ms-error-code",
+				"Retry-After",
+				"Retry-After-Ms",
+				"If-Match",
+				"x-ms-blob-condition-appendpos",
+			},
+			AllowedQueryParams: []string{"comp"},
+		},
 	}
 	if params.Transport != nil {
 		opts.Transport = &http.Client{
