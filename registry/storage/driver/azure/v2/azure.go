@@ -6,15 +6,19 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/md5" // nolint: gosec,revive // ok for content verification
 	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/appendblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
@@ -249,6 +253,8 @@ func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storag
 		blobExists = false
 	}
 
+	eTag := props.ETag
+
 	// NOTE(prozlach): In case when there was operation timeout, Azure
 	// specifies that the operation might have succeeded, or not and that the
 	// client needs to verify the state. In our case it does not make much
@@ -269,20 +275,24 @@ func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storag
 			if _, err := blobRef.Delete(ctxRetry, nil); err != nil && !Is404(err) {
 				return nil, fmt.Errorf("deleting existing blob before write: %w", err)
 			}
-			if _, err = d.client.NewAppendBlobClient(blobName).Create(ctxRetry, nil); err != nil {
+			res, err := d.client.NewAppendBlobClient(blobName).Create(ctxRetry, nil)
+			if err != nil {
 				return nil, fmt.Errorf("creating new append blob: %w", err)
 			}
+			eTag = res.ETag
 		}
 	} else {
 		if doAppend {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
 		}
-		if _, err = d.client.NewAppendBlobClient(blobName).Create(ctxRetry, nil); err != nil {
+		res, err := d.client.NewAppendBlobClient(blobName).Create(ctxRetry, nil)
+		if err != nil {
 			return nil, fmt.Errorf("creating new append blob: %w", err)
 		}
+		eTag = res.ETag
 	}
 
-	return d.newWriter(ctxRetry, blobName, size), nil
+	return d.newWriter(ctxRetry, blobName, size, eTag), nil
 }
 
 // Stat retrieves the FileInfo for the given path, including the current size
@@ -658,7 +668,7 @@ func Is404(err error) bool {
 type writer struct {
 	driver    *driver
 	path      string
-	size      int64
+	size      *atomic.Int64
 	ctx       context.Context
 	bw        *bufio.Writer
 	closed    bool
@@ -666,18 +676,26 @@ type writer struct {
 	canceled  bool
 }
 
-func (d *driver) newWriter(ctx context.Context, path string, size int64) storagedriver.FileWriter {
-	return &writer{
+func (d *driver) newWriter(ctx context.Context, path string, size int64, eTag *azcore.ETag) storagedriver.FileWriter {
+	bw := &blockWriter{
+		maxRetries: d.maxRetries,
+		client:     d.client,
+		ctx:        ctx,
+		path:       path,
+		appenPos:   new(atomic.Int64),
+		eTag:       eTag,
+	}
+	bw.appenPos.Store(size)
+	res := &writer{
 		driver: d,
 		path:   path,
-		size:   size,
+		size:   new(atomic.Int64),
 		ctx:    ctx,
-		bw: bufio.NewWriterSize(&blockWriter{
-			client: d.client,
-			ctx:    ctx,
-			path:   path,
-		}, MaxChunkSize),
+		bw:     bufio.NewWriterSize(bw, MaxChunkSize),
 	}
+	res.size.Store(size)
+
+	return res
 }
 
 func (w *writer) Write(p []byte) (int, error) {
@@ -691,12 +709,12 @@ func (w *writer) Write(p []byte) (int, error) {
 	}
 
 	n, err := w.bw.Write(p)
-	w.size += int64(n)
+	w.size.Add(int64(n))
 	return n, err
 }
 
 func (w *writer) Size() int64 {
-	return w.size
+	return w.size.Load()
 }
 
 func (w *writer) Close() error {
@@ -757,27 +775,165 @@ func (w *writer) Commit() error {
 }
 
 type blockWriter struct {
-	client *container.Client
-	path   string
-	ctx    context.Context
+	client     *container.Client
+	path       string
+	ctx        context.Context
+	maxRetries int32
+	appenPos   *atomic.Int64
+	eTag       *azcore.ETag
 }
 
 func (bw *blockWriter) Write(p []byte) (int, error) {
-	blobRef := bw.client.NewAppendBlobClient(bw.path)
+	appendBlobRef := bw.client.NewAppendBlobClient(bw.path)
 	n := 0
-	for offset := 0; offset < len(p); offset += MaxChunkSize {
-		chunkSize := min(MaxChunkSize, len(p)-offset)
-		_, err := blobRef.AppendBlock(
-			bw.ctx,
-			streaming.NopCloser(bytes.NewReader(p[offset:offset+chunkSize])),
-			nil,
-		)
-		if err != nil {
-			return n, err
+	offsetRetryCount := int32(0)
+
+	for n < len(p) {
+		appendPos := bw.appenPos.Load()
+		chunkSize := min(MaxChunkSize, len(p)-n)
+		timeoutFromCtx := false
+		ctxTimeoutNotify := withTimeoutNotification(bw.ctx, &timeoutFromCtx)
+
+		if offsetRetryCount >= bw.maxRetries {
+			return n, fmt.Errorf("max number of retries (%d) reached while handling backend operation timeout", bw.maxRetries)
 		}
 
-		n += chunkSize
+		resp, err := appendBlobRef.AppendBlock(
+			ctxTimeoutNotify,
+			streaming.NopCloser(bytes.NewReader(p[n:n+chunkSize])),
+			&appendblob.AppendBlockOptions{
+				AppendPositionAccessConditions: &appendblob.AppendPositionAccessConditions{
+					AppendPosition: to.Ptr(appendPos),
+				},
+				AccessConditions: &blob.AccessConditions{
+					ModifiedAccessConditions: &blob.ModifiedAccessConditions{
+						IfMatch: bw.eTag,
+					},
+				},
+			},
+		)
+		if err == nil {
+			n += chunkSize // number of bytes uploaded in this call to Write()
+			bw.eTag = resp.ETag
+			bw.appenPos.Add(int64(chunkSize)) // total size of the blob in the backend
+			continue
+		}
+		// NOTE(prozlach): These conditions could have triggered because
+		// either:
+		// * the operation timed out, but the data was actually appended
+		// * the operation timed out, but some other process managed to append
+		// the data
+		// In both cases Azure returns bloberror.ConditionNotMet - i.e. the
+		// eTag condition failure takes precedence. The bw.chunkUploadVerify
+		// verifies the actuall data in the backend though, so we may put both
+		// cases in the single bucket - in case where MD5 of the data is
+		// correct, we update the eTag and carry on, in case it is not, then we
+		// return error as some other process appended the data instead.
+		// Worth noting here though is that eTag gives us additional protection
+		// here - i.e. in cases where blob size does not change during the
+		// overwrite by some another process, so these conditions are complete
+		// each other/are orthogonal.
+		appendposFailed := bloberror.HasCode(err, bloberror.AppendPositionConditionNotMet)
+		etagFailed := bloberror.HasCode(err, bloberror.ConditionNotMet)
+		if !(appendposFailed || etagFailed) || !timeoutFromCtx {
+			// Error was not caused by an operation timeout, abort!
+			return n, fmt.Errorf("appending blob: %w", err)
+		}
+
+		correctlyUploadedBytes, msg, newEtag, err := bw.chunkUploadVerify(appendPos, p[n:n+chunkSize])
+		if err != nil {
+			return n, fmt.Errorf("%s while handling operation timeout during append of data to blob: %w", msg, err)
+		}
+		bw.eTag = newEtag
+		if correctlyUploadedBytes == 0 {
+			offsetRetryCount++
+			continue
+		}
+		offsetRetryCount = 0
+
+		// MD5 is correct, data was uploaded. Let's bump the counters and
+		// continue with the upload
+		n += int(correctlyUploadedBytes)        // number of bytes uploaded in this call to Write()
+		bw.appenPos.Add(correctlyUploadedBytes) // total size of the blob in the backend
 	}
 
 	return n, nil
+}
+
+func (bw *blockWriter) chunkUploadVerify(appendPos int64, chunk []byte) (int64, string, *azcore.ETag, error) {
+	// NOTE(prozlach): We need to see if the chunk uploaded or not. As per
+	// the documentation, the operation __might__ have succeeded. There are
+	// three options:
+	// * chunk did not upload, the file size will be the same as bw.size.
+	// In this case we simply need to re-upload the last chunk
+	// * chunk or part of it was uploaded - we need to verify the contents
+	// of what has been uploaded with MD5 hash and either:
+	//   * MD5 is ok - let's continue uploading data starting from the next
+	//   chunk
+	//   * MD5 is not OK - we have garbadge at the end of the file and
+	//   AppendBlock supports only appending, we need to abort and return
+	//   permament error to the caller.
+
+	blobRef := bw.client.NewBlobClient(bw.path)
+	props, err := blobRef.GetProperties(bw.ctx, nil)
+	if err != nil {
+		return 0, "determining the end of the blob", nil, err
+	}
+	if props.ContentLength == nil {
+		return 0, "ContentLength in blob properties is missing in reply", nil, err
+	}
+	uploadedBytes := *props.ContentLength - appendPos
+	if uploadedBytes == 0 {
+		// NOTE(prozlach): This should never happen really and is here only as
+		// a precaution in case something changes in the future. The idea is
+		// that if the HTTP call did not succed and nothing was uploaded, then
+		// this code path is not going to be triggered as there will be no
+		// AppendPos condition violation during the retry. OTOH, if the write
+		// succeeded even partially, then the reuploadedBytes will be greater
+		// than zero.
+		return 0, "", props.ETag, nil
+	}
+	if uploadedBytes > int64(len(chunk)) {
+		// NOTE(prozlach): If this happens, it means that there is more than
+		// one entity uploading data
+		return 0, "determining the end of the blob", nil, errors.New("uploaded more data than the chunk size")
+	}
+
+	response, err := blobRef.DownloadStream(
+		bw.ctx,
+		&blob.DownloadStreamOptions{
+			Range:              blob.HTTPRange{Offset: appendPos, Count: uploadedBytes},
+			RangeGetContentMD5: to.Ptr(true), // we always upload <= 4MiB (i.e the maxChunkSize), so we can try to offload the MD5 calculation to azure
+		},
+	)
+	if err != nil {
+		return 0, "determining the MD5 of the upload blob chunk", nil, err
+	}
+	var uploadedMD5 []byte
+	// If upstream makes this extra check, then let's be paranoid too.
+	if len(response.ContentMD5) > 0 {
+		uploadedMD5 = response.ContentMD5
+	} else {
+		// compute md5
+		body := response.NewRetryReader(bw.ctx, &blob.RetryReaderOptions{MaxRetries: bw.maxRetries})
+		defer body.Close()
+		h := md5.New() // nolint: gosec // ok for content verification
+		_, err = io.Copy(h, body)
+		if err != nil {
+			return 0, "calculating the MD5 of the uploaded blob chunk", nil, err
+		}
+		uploadedMD5 = h.Sum(nil)
+	}
+
+	h := md5.New() // nolint: gosec // ok for content verification
+	if _, err = io.Copy(h, bytes.NewReader(chunk[:uploadedBytes])); err != nil {
+		return 0, "calculating the MD5 of the local blob chunk", nil, err
+	}
+	localMD5 := h.Sum(nil)
+
+	if !bytes.Equal(uploadedMD5, localMD5) {
+		return 0, "verifying contents of the uploaded blob chunk", nil, ErrCorruptedData
+	}
+
+	return uploadedBytes, "", response.ETag, nil
 }
