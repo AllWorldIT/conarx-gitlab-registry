@@ -191,26 +191,26 @@ func newTokenClient(params *DriverParameters) (*Driver, error) {
 	if params.CredentialsType == common.CredentialsTypeClientSecret {
 		cred, err = azidentity.NewClientSecretCredential(
 			params.TenantID, params.ClientID, params.Secret,
-			&azidentity.ClientSecretCredentialOptions{
-				ClientOptions: opts,
-			},
+			nil,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("creating new client-secret credential: %w", err)
 		}
 	} else {
 		// params.credentialsType == credentialsTypeDefaultCredentials
-		cred, err = azidentity.NewDefaultAzureCredential(
-			&azidentity.DefaultAzureCredentialOptions{
-				ClientOptions: opts,
-			},
-		)
+		cred, err = azidentity.NewDefaultAzureCredential(nil)
 		if err != nil {
 			return nil, fmt.Errorf("creating default azure credentials: %w", err)
 		}
 	}
 
-	client, err := azblob.NewClient(params.ServiceURL, cred, nil)
+	client, err := azblob.NewClient(
+		params.ServiceURL,
+		cred,
+		&azblob.ClientOptions{
+			ClientOptions: opts,
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("creating azure client: %w", err)
 	}

@@ -462,6 +462,101 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 	blobber.RequireStreamEqual(s.T(), reader, 0, "main stream")
 }
 
+// TestWriteReadSmallStream tests that a small file may be written to the storage
+// driver safely using Writer() interface.
+func (s *DriverSuite) TestWriteReadSmallStream() {
+	filename := dtestutil.RandomPath(1, 32)
+	defer s.deletePath(s.StorageDriver, firstPart(filename))
+	s.T().Logf("blob path used for testing: %s", filename)
+
+	fileSize := 2 * 1 << 10
+	blobber := s.blobberFactory.GetBlobber(fileSize)
+
+	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
+	require.NoError(s.T(), err)
+
+	written, err := io.CopyBuffer(writer, blobber.GetReader(), make([]byte, 2*1<<20))
+	require.NoError(s.T(), err)
+	require.EqualValues(s.T(), fileSize, written)
+	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
+	// This is just a workaround for now to enforce correct behavior on other
+	// drivers. The TLDR is that gcs Writer object does not report correct size
+	// until the Commit() is called. This is not the case for other drivers.
+	if s.StorageDriver.Name() != "gcs" {
+		require.EqualValues(s.T(), fileSize, writer.Size())
+	}
+
+	err = writer.Commit()
+	require.NoError(s.T(), err)
+	err = writer.Close()
+	require.NoError(s.T(), err)
+
+	reader, err := s.StorageDriver.Reader(s.ctx, filename, 0)
+	require.NoError(s.T(), err)
+	defer reader.Close()
+
+	blobber.RequireStreamEqual(s.T(), reader, 0, "main stream")
+}
+
+// TestConcurentWriteCausesError tests that a concurent write to the same file
+// will cause an error instead of data corruption.
+func (s *DriverSuite) TestConcurentWriteCausesError() {
+	if s.StorageDriver.Name() != azure_v2.DriverName {
+		s.T().Skip("only Azure v2 driver supports that strong consistency guarantees")
+	}
+
+	filename := dtestutil.RandomPath(1, 32)
+	defer s.deletePath(s.StorageDriver, firstPart(filename))
+	s.T().Logf("blob path used for testing: %s", filename)
+
+	// Must be greater than chunk size so that there is more than one request
+	// to the backend while writing:
+	fileSize := 32 * 1 << 20
+	contentsAB := s.blobberFactory.GetBlobber(fileSize).GetAllBytes()
+	blobberA1 := testutil.NewBlober(contentsAB[:fileSize>>2])
+	blobberA2 := testutil.NewBlober(contentsAB[fileSize>>2 : fileSize>>1])
+	blobberB := testutil.NewBlober(contentsAB[:fileSize>>1])
+
+	writerA, err := s.StorageDriver.Writer(s.ctx, filename, false)
+	require.NoError(s.T(), err)
+
+	written, err := io.Copy(writerA, blobberA1.GetReader())
+	require.NoError(s.T(), err)
+	require.EqualValues(s.T(), blobberA1.Size(), written)
+	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
+	// This is just a workaround for now to enforce correct behavior on other
+	// drivers. The TLDR is that gcs Writer object does not report correct size
+	// until the Commit() is called. This is not the case for other drivers.
+	if s.StorageDriver.Name() != "gcs" {
+		require.EqualValues(s.T(), blobberA1.Size(), writerA.Size())
+	}
+
+	writerB, err := s.StorageDriver.Writer(s.ctx, filename, false)
+	require.NoError(s.T(), err)
+
+	written, err = io.Copy(writerB, blobberB.GetReader())
+	require.NoError(s.T(), err)
+	require.EqualValues(s.T(), blobberB.Size(), written)
+	// See the comment above
+	if s.StorageDriver.Name() != "gcs" {
+		require.EqualValues(s.T(), blobberB.Size(), writerB.Size())
+	}
+
+	_, err = io.Copy(writerA, blobberA2.GetReader())
+	require.Error(s.T(), err)
+
+	err = writerB.Commit()
+	require.NoError(s.T(), err)
+	err = writerB.Close()
+	require.NoError(s.T(), err)
+
+	reader, err := s.StorageDriver.Reader(s.ctx, filename, 0)
+	require.NoError(s.T(), err)
+	defer reader.Close()
+
+	blobberB.RequireStreamEqual(s.T(), reader, 0, "main stream")
+}
+
 // TestReaderWithOffset tests that the appropriate data is streamed when
 // reading with a given offset.
 func (s *DriverSuite) TestReaderWithOffset() {
