@@ -54,15 +54,15 @@ func withExponentialBackoff(maximum int64) wrapperOpt {
 		maximum = 0
 	}
 
-	b := backoff.NewExponentialBackOff()
-	b.InitialInterval = defaultInitialInterval
-	b.RandomizationFactor = defaultRandomizationFactor
-	b.Multiplier = defaultMultiplier
-	b.MaxInterval = defaultMaxInterval
-	b.MaxElapsedTime = defaultMaxElapsedTime
-
 	return func(w *s3wrapper) {
 		w.backoff = func() backoff.BackOff {
+			b := backoff.NewExponentialBackOff()
+			b.InitialInterval = defaultInitialInterval
+			b.RandomizationFactor = defaultRandomizationFactor
+			b.Multiplier = defaultMultiplier
+			b.MaxInterval = defaultMaxInterval
+			b.MaxElapsedTime = defaultMaxElapsedTime
+
 			// nolint:gosec // there is no overflow here, max is always positive
 			return backoff.WithMaxRetries(b, uint64(maximum))
 		}
