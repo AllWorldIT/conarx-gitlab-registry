@@ -5,11 +5,12 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseParameters(t *testing.T) {
+func TestParseParameters_in_groups(t *testing.T) {
 	tests := []struct {
 		name          string
 		params        map[string]any
@@ -411,6 +412,205 @@ func TestParseParameters(t *testing.T) {
 				assert.Equal(t, tt.expected.KeyID, result.KeyID, "KeyID mismatch")
 				assert.Equal(t, tt.expected.LogLevel, result.LogLevel, "LogLevel mismatch")
 			}
+		})
+	}
+}
+
+func TestParseParameters_individually(t *testing.T) {
+	p := map[string]any{
+		"region": "us-west-2",
+		"bucket": "test",
+		"v4auth": "true",
+	}
+
+	testFn := func(params map[string]any) (any, error) {
+		return ParseParameters(params)
+	}
+
+	tcs := map[string]struct {
+		parameters      map[string]any
+		paramName       string
+		driverParamName string
+		required        bool
+		nilAllowed      bool
+		emptyAllowed    bool
+		nonTypeAllowed  bool
+		defaultt        any
+	}{
+		"secure": {
+			parameters:      p,
+			paramName:       "secure",
+			driverParamName: "Secure",
+			defaultt:        true,
+		},
+		"encrypt": {
+			parameters:      p,
+			paramName:       "encrypt",
+			driverParamName: "Encrypt",
+			defaultt:        false,
+		},
+		"pathstyle_without_region_endpoint": {
+			parameters:      p,
+			paramName:       "pathstyle",
+			driverParamName: "PathStyle",
+			defaultt:        false,
+		},
+		"pathstyle_with_region_endpoint": {
+			parameters: func() map[string]any {
+				pp := dtestutil.CopyMap(p)
+				pp["regionendpoint"] = "region/endpoint"
+
+				return pp
+			}(),
+			paramName:       "pathstyle",
+			driverParamName: "PathStyle",
+			defaultt:        true,
+		},
+		"skipverify": {
+			parameters:      p,
+			paramName:       "skipverify",
+			driverParamName: "SkipVerify",
+			defaultt:        false,
+		},
+		"v4auth": {
+			parameters:      p,
+			paramName:       "v4auth",
+			driverParamName: "V4Auth",
+			required:        true,
+			defaultt:        true,
+		},
+		"parallelwalk": {
+			parameters:      p,
+			paramName:       "parallelwalk",
+			driverParamName: "ParallelWalk",
+			defaultt:        false,
+		},
+		"accesskey": {
+			parameters:      p,
+			paramName:       "accesskey",
+			driverParamName: "AccessKey",
+			nilAllowed:      true,
+			emptyAllowed:    true,
+			nonTypeAllowed:  true,
+			defaultt:        "",
+		},
+		"secretkey": {
+			parameters:      p,
+			paramName:       "secretkey",
+			driverParamName: "SecretKey",
+			nilAllowed:      true,
+			emptyAllowed:    true,
+			nonTypeAllowed:  true,
+			defaultt:        "",
+		},
+		"regionendpoint": {
+			parameters:      p,
+			paramName:       "regionendpoint",
+			driverParamName: "RegionEndpoint",
+			nilAllowed:      true,
+			emptyAllowed:    true,
+			nonTypeAllowed:  true,
+			defaultt:        "",
+		},
+		"region": {
+			parameters:      p,
+			paramName:       "region",
+			driverParamName: "Region",
+			nilAllowed:      false,
+			emptyAllowed:    false,
+			// not allowed because we check validRegions[region] when regionendpoint is empty
+			nonTypeAllowed: false,
+			required:       true,
+			defaultt:       "",
+		},
+		"region_with_regionendpoint": {
+			parameters: func() map[string]any {
+				pp := dtestutil.CopyMap(p)
+				pp["regionendpoint"] = "region/endpoint"
+
+				return pp
+			}(),
+			paramName:       "region",
+			driverParamName: "Region",
+			nilAllowed:      false,
+			emptyAllowed:    false,
+			// allowed because we don't check validRegions[region] when regionendpoint is not empty
+			nonTypeAllowed: true,
+			required:       true,
+			defaultt:       "",
+		},
+		"bucket": {
+			parameters:      p,
+			paramName:       "bucket",
+			driverParamName: "Bucket",
+			nilAllowed:      false,
+			emptyAllowed:    false,
+			nonTypeAllowed:  true,
+			required:        true,
+			defaultt:        "",
+		},
+		"keyid": {
+			parameters:      p,
+			paramName:       "keyid",
+			driverParamName: "KeyID",
+			nilAllowed:      true,
+			emptyAllowed:    true,
+			nonTypeAllowed:  true,
+			defaultt:        "",
+		},
+		"rootdirectory": {
+			parameters:      p,
+			paramName:       "rootdirectory",
+			driverParamName: "RootDirectory",
+			nilAllowed:      true,
+			emptyAllowed:    true,
+			nonTypeAllowed:  true,
+			defaultt:        "",
+		},
+		"storageclass": {
+			parameters:      p,
+			paramName:       "storageclass",
+			driverParamName: "StorageClass",
+			nilAllowed:      true,
+			emptyAllowed:    false,
+			nonTypeAllowed:  false,
+			defaultt:        s3.StorageClassStandard,
+		},
+		"objectacl": {
+			parameters:      p,
+			paramName:       "objectacl",
+			driverParamName: "ObjectACL",
+			nilAllowed:      true,
+			emptyAllowed:    false,
+			nonTypeAllowed:  false,
+			defaultt:        s3.ObjectCannedACLPrivate,
+		},
+		"objectownership": {
+			parameters:      p,
+			paramName:       "objectownership",
+			driverParamName: "ObjectOwnership",
+			nilAllowed:      true,
+			emptyAllowed:    false,
+			nonTypeAllowed:  false,
+			defaultt:        false,
+		},
+	}
+
+	for tn, tt := range tcs {
+		t.Run(tn, func(t *testing.T) {
+			opts := dtestutil.Opts{
+				Defaultt:          tt.defaultt,
+				ParamName:         tt.paramName,
+				DriverParamName:   tt.driverParamName,
+				OriginalParams:    tt.parameters,
+				NilAllowed:        tt.nilAllowed,
+				EmptyAllowed:      tt.emptyAllowed,
+				NonTypeAllowed:    tt.nonTypeAllowed,
+				Required:          tt.required,
+				ParseParametersFn: testFn,
+			}
+
+			dtestutil.AssertByDefaultType(t, opts)
 		})
 	}
 }
