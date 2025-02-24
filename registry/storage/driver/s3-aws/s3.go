@@ -31,6 +31,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/benbjohnson/clock"
 	"github.com/cenkalti/backoff/v4"
 	dcontext "github.com/docker/distribution/context"
@@ -89,7 +90,7 @@ func (*s3DriverFactory) Create(parameters map[string]any) (storagedriver.Storage
 }
 
 type driver struct {
-	S3                          *s3wrapper
+	S3                          common.S3WrapperIf
 	Bucket                      string
 	ChunkSize                   int64
 	Encrypt                     bool
@@ -121,7 +122,7 @@ type Driver struct {
 // - region
 // - bucket
 // - encrypt
-func FromParameters(parameters map[string]any) (*Driver, error) {
+func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	params, err := common.ParseParameters(parameters)
 	if err != nil {
 		return nil, err
@@ -130,9 +131,9 @@ func FromParameters(parameters map[string]any) (*Driver, error) {
 	return New(params)
 }
 
-// New constructs a new Driver with the given AWS credentials, region, encryption flag, and
-// bucketName
-func New(params *common.DriverParameters) (*Driver, error) {
+// NewS3API constructs a new native s3 client with the given AWS credentials,
+// region, encryption flag, and bucketName
+func NewS3API(params *common.DriverParameters) (s3iface.S3API, error) {
 	if !params.V4Auth &&
 		(params.RegionEndpoint == "" ||
 			strings.Contains(params.RegionEndpoint, "s3.amazonaws.com")) {
@@ -185,6 +186,10 @@ func New(params *common.DriverParameters) (*Driver, error) {
 		setv2Handlers(s3obj)
 	}
 
+	return s3obj, nil
+}
+
+func New(params *common.DriverParameters) (storagedriver.StorageDriver, error) {
 	// TODO Currently multipart uploads have no timestamps, so this would be unwise
 	// if you initiated a new s3driver while another one is running on the same bucket.
 	// multis, _, err := bucket.ListMulti("", "")
@@ -200,17 +205,7 @@ func New(params *common.DriverParameters) (*Driver, error) {
 	// 	}
 	// }
 
-	w := newS3Wrapper(
-		s3obj,
-		withRateLimit(params.MaxRequestsPerSecond, defaultBurst),
-		withExponentialBackoff(params.MaxRetries),
-		withBackoffNotify(func(err error, t time.Duration) {
-			log.WithFields(log.Fields{"error": err, "delay_s": t.Seconds()}).Info("S3: retrying after error")
-		}),
-	)
-
 	d := &driver{
-		S3:                          w,
 		Bucket:                      params.Bucket,
 		ChunkSize:                   params.ChunkSize,
 		Encrypt:                     params.Encrypt,
@@ -223,6 +218,23 @@ func New(params *common.DriverParameters) (*Driver, error) {
 		ObjectACL:                   params.ObjectACL,
 		ParallelWalk:                params.ParallelWalk,
 		ObjectOwnership:             params.ObjectOwnership,
+	}
+
+	if params.S3APIImpl != nil {
+		d.S3 = params.S3APIImpl
+	} else {
+		s3obj, err := NewS3API(params)
+		if err != nil {
+			return nil, fmt.Errorf("creating new s3 driver implementation: %w", err)
+		}
+		d.S3 = newS3Wrapper(
+			s3obj,
+			withRateLimit(params.MaxRequestsPerSecond, defaultBurst),
+			withExponentialBackoff(params.MaxRetries),
+			withBackoffNotify(func(err error, t time.Duration) {
+				log.WithFields(log.Fields{"error": err, "delay_s": t.Seconds()}).Info("S3: retrying after error")
+			}),
+		)
 	}
 
 	return &Driver{

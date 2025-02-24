@@ -46,7 +46,7 @@ var (
 	// Driver version control
 	driverVersion     string
 	parseParametersFn func(map[string]any) (*common.DriverParameters, error)
-	newDriverFn       func(*common.DriverParameters) (*Driver, error)
+	newDriverFn       func(*common.DriverParameters) (storagedriver.StorageDriver, error)
 
 	// Credentials
 	accessKey    string
@@ -205,13 +205,41 @@ func fetchDriverConfig(rootDirectory, storageClass string) (*common.DriverParame
 	return parsedParams, nil
 }
 
-func s3DriverConstructor(rootDirectory, storageClass string) (*Driver, error) {
+func s3DriverConstructor(rootDirectory, storageClass string) (storagedriver.StorageDriver, error) {
 	parsedParams, err := fetchDriverConfig(rootDirectory, storageClass)
 	if err != nil {
 		return nil, fmt.Errorf("parsing s3 parameters: %w", err)
 	}
 
 	return newDriverFn(parsedParams)
+}
+
+func s3DriverConstructorT(t *testing.T, rootDirectory, storageClass string) storagedriver.StorageDriver {
+	d, err := s3DriverConstructor(rootDirectory, storageClass)
+	require.NoError(t, err)
+
+	return d
+}
+
+func prefixedS3DriverConstructorT(t *testing.T) storagedriver.StorageDriver {
+	rootDir := t.TempDir()
+	d, err := s3DriverConstructor(rootDir, s3.StorageClassStandard)
+	require.NoError(t, err)
+
+	return d
+}
+
+func prefixedMockedS3DriverConstructorT(t *testing.T, s3Mock common.S3WrapperIf) storagedriver.StorageDriver {
+	rootDir := t.TempDir()
+	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard)
+	require.NoError(t, err)
+
+	parsedParams.S3APIImpl = s3Mock
+
+	d, err := newDriverFn(parsedParams)
+	require.NoError(t, err)
+
+	return d
 }
 
 func skipCheck() string {
@@ -586,19 +614,14 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 
 	validRoot := t.TempDir()
 
-	rootedDriver, err := s3DriverConstructor(validRoot, s3.StorageClassStandard)
-	require.NoError(t, err, "unexpected error creating rooted driver")
-
-	emptyRootDriver, err := s3DriverConstructor("", s3.StorageClassStandard)
-	require.NoError(t, err, "unexpected error creating empty root driver")
-
-	slashRootDriver, err := s3DriverConstructor("/", s3.StorageClassStandard)
-	require.NoError(t, err, "unexpected error creating slash root driver")
+	rootedDriver := s3DriverConstructorT(t, validRoot, s3.StorageClassStandard)
+	emptyRootDriver := s3DriverConstructorT(t, "", s3.StorageClassStandard)
+	slashRootDriver := s3DriverConstructorT(t, "/", s3.StorageClassStandard)
 
 	filename := "/test"
 	contents := []byte("contents")
 	ctx := context.Background()
-	err = rootedDriver.PutContent(ctx, filename, contents)
+	err := rootedDriver.PutContent(ctx, filename, contents)
 	require.NoError(t, err, "unexpected error creating content")
 	defer rootedDriver.Delete(ctx, filename)
 
@@ -613,55 +636,75 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 	}
 }
 
-func TestS3DriverStorageClass(t *testing.T) {
+func TestS3DriverStorageClassStandard(t *testing.T) {
 	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
 	rootDir := t.TempDir()
 
-	standardDriver, err := s3DriverConstructor(rootDir, s3.StorageClassStandard)
-	require.NoError(t, err, "unexpected error creating driver with standard storage")
-
-	rrDriver, err := s3DriverConstructor(rootDir, s3.StorageClassReducedRedundancy)
-	require.NoError(t, err, "unexpected error creating driver with reduced redundancy storage")
-
-	_, err = s3DriverConstructor(rootDir, common.StorageClassNone)
-	require.NoError(t, err, "unexpected error creating driver without storage class")
+	standardDriver := s3DriverConstructorT(t, rootDir, s3.StorageClassStandard)
+	standardDriverKeyer := standardDriver.(common.S3BucketKeyer)
 
 	standardFilename := "/test-standard"
-	rrFilename := "/test-rr"
 	contents := []byte("contents")
 	ctx := context.Background()
 
-	err = standardDriver.PutContent(ctx, standardFilename, contents)
-	require.NoError(t, err, "unexpected error creating content")
+	err := standardDriver.PutContent(ctx, standardFilename, contents)
+	require.NoError(t, err)
 	defer standardDriver.Delete(ctx, standardFilename)
 
-	err = rrDriver.PutContent(ctx, rrFilename, contents)
-	require.NoError(t, err, "unexpected error creating content")
-	defer rrDriver.Delete(ctx, rrFilename)
+	// NOTE(prozlach): Our storage driver does not expose API method that
+	// allows fetching the storage class of the object, we need to create a
+	// native S3 client to do that.
+	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard)
+	require.NoError(t, err)
+	s3API, err := NewS3API(parsedParams)
+	require.NoError(t, err)
 
-	// nolint: revive // unchecked-type-assertion
-	standardDriverUnwrapped := standardDriver.Base.StorageDriver.(*driver)
-	resp, err := standardDriverUnwrapped.S3.GetObjectWithContext(
+	resp, err := s3API.GetObjectWithContext(
 		ctx,
 		&s3.GetObjectInput{
-			Bucket: aws.String(standardDriverUnwrapped.Bucket),
-			Key:    aws.String(standardDriverUnwrapped.s3Path(standardFilename)),
+			Bucket: aws.String(parsedParams.Bucket),
+			Key:    aws.String(standardDriverKeyer.S3BucketKey(standardFilename)),
 		})
 	require.NoError(t, err, "unexpected error retrieving standard storage file")
 	defer resp.Body.Close()
 	// Amazon only populates this header value for non-standard storage classes
 	require.Nil(t, resp.StorageClass, "unexpected storage class for standard file: %v", resp.StorageClass)
+}
 
-	// nolint: revive // unchecked-type-assertion
-	rrDriverUnwrapped := rrDriver.Base.StorageDriver.(*driver)
-	resp, err = rrDriverUnwrapped.S3.GetObjectWithContext(
+func TestS3DriverStorageClassReducedRedundancy(t *testing.T) {
+	if skipMsg := skipCheck(); skipMsg != "" {
+		t.Skip(skipMsg)
+	}
+
+	rootDir := t.TempDir()
+
+	rrDriver := s3DriverConstructorT(t, rootDir, s3.StorageClassReducedRedundancy)
+	rrDriverKeyer := rrDriver.(common.S3BucketKeyer)
+
+	rrFilename := "/test-rr"
+	contents := []byte("contents")
+	ctx := context.Background()
+
+	err := rrDriver.PutContent(ctx, rrFilename, contents)
+	require.NoError(t, err, "unexpected error creating content")
+	defer rrDriver.Delete(ctx, rrFilename)
+
+	// NOTE(prozlach): Our storage driver does not expose API method that
+	// allows fetching the storage class of the object, we need to create a
+	// native S3 client to do that.
+	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard)
+	require.NoError(t, err)
+	s3API, err := NewS3API(parsedParams)
+	require.NoError(t, err)
+
+	resp, err := s3API.GetObjectWithContext(
 		ctx,
 		&s3.GetObjectInput{
-			Bucket: aws.String(rrDriverUnwrapped.Bucket),
-			Key:    aws.String(rrDriverUnwrapped.s3Path(rrFilename)),
+			Bucket: aws.String(parsedParams.Bucket),
+			Key:    aws.String(rrDriverKeyer.S3BucketKey(rrFilename)),
 		})
 	require.NoError(t, err, "unexpected error retrieving reduced-redundancy storage file")
 	defer resp.Body.Close()
@@ -669,12 +712,22 @@ func TestS3DriverStorageClass(t *testing.T) {
 	require.Equalf(t, s3.StorageClassReducedRedundancy, *resp.StorageClass, "unexpected storage class for reduced-redundancy file: %v", *resp.StorageClass)
 }
 
+func TestS3DriverStorageClassNone(t *testing.T) {
+	if skipMsg := skipCheck(); skipMsg != "" {
+		t.Skip(skipMsg)
+	}
+
+	rootDir := t.TempDir()
+
+	_ = s3DriverConstructorT(t, rootDir, common.StorageClassNone)
+}
+
 func TestS3DriverOverThousandBlobs(t *testing.T) {
 	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
-	standardDriver := newTempDirDriver(t)
+	standardDriver := prefixedS3DriverConstructorT(t)
 
 	ctx := context.Background()
 	for i := 0; i < 1005; i++ {
@@ -695,7 +748,7 @@ func TestS3DriverURLFor_Expiry(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	d := newTempDirDriver(t)
+	d := prefixedS3DriverConstructorT(t)
 
 	fp := "/foo"
 	err := d.PutContent(ctx, fp, make([]byte, 0))
@@ -732,7 +785,7 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	d := newTempDirDriver(t)
+	d := prefixedS3DriverConstructorT(t)
 
 	ctx := context.Background()
 	sourcePath := "/source"
@@ -742,8 +795,7 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 	defer d.Delete(ctx, destPath)
 
 	// An object larger than d's MultipartCopyThresholdSize will cause d.Move() to perform a multipart copy.
-	multipartCopyThresholdSize := d.baseEmbed.Base.StorageDriver.(*driver).MultipartCopyThresholdSize
-	contents := rngtestutil.RandomBlob(t, int(2*multipartCopyThresholdSize))
+	contents := rngtestutil.RandomBlob(t, int(2*common.DefaultMultipartCopyThresholdSize))
 
 	err := d.PutContent(ctx, sourcePath, contents)
 	require.NoError(t, err, "unexpected error creating content")
@@ -773,10 +825,8 @@ func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, 
 		t.Skip(skipMsg)
 	}
 
-	d := newTempDirDriver(t)
-
 	// mock the underlying S3 client
-	d.baseEmbed.Base.StorageDriver.(*driver).S3 = newS3Wrapper(mock)
+	d := prefixedMockedS3DriverConstructorT(t, newS3Wrapper(mock))
 
 	// simulate deleting numFiles files
 	paths := make([]string, 0, numFiles)
@@ -888,8 +938,6 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	d := newTempDirDriver(t)
-
 	var retries int
 
 	notifyFn := func(_ error, _ time.Duration) {
@@ -897,9 +945,12 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 	}
 
 	// mock the underlying S3 client
-	d.baseEmbed.Base.StorageDriver.(*driver).S3 = newS3Wrapper(
-		&mockPutObjectWithContextRetryableError{},
-		withBackoffNotify(notifyFn),
+	d := prefixedMockedS3DriverConstructorT(
+		t,
+		newS3Wrapper(
+			&mockPutObjectWithContextRetryableError{},
+			withBackoffNotify(notifyFn),
+		),
 	)
 
 	err := d.PutContent(context.Background(), "/test/file", make([]byte, 0))
@@ -912,8 +963,6 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	d := newTempDirDriver(t)
-
 	var retries int
 
 	notifyFn := func(_ error, _ time.Duration) {
@@ -921,10 +970,13 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 	}
 
 	// mock the underlying S3 client
-	d.baseEmbed.Base.StorageDriver.(*driver).S3 = newS3Wrapper(
-		&mockPutObjectWithContextRetryableError{},
-		withExponentialBackoff(0),
-		withBackoffNotify(notifyFn),
+	d := prefixedMockedS3DriverConstructorT(
+		t,
+		newS3Wrapper(
+			&mockPutObjectWithContextRetryableError{},
+			withExponentialBackoff(0),
+			withBackoffNotify(notifyFn),
+		),
 	)
 
 	err := d.PutContent(context.Background(), "/test/file", make([]byte, 0))
@@ -937,8 +989,6 @@ func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	d := newTempDirDriver(t)
-
 	var retries int
 
 	notifyFn := func(_ error, _ time.Duration) {
@@ -946,10 +996,13 @@ func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
 	}
 
 	// mock the underlying S3 client
-	d.baseEmbed.Base.StorageDriver.(*driver).S3 = newS3Wrapper(
-		&mockPutObjectWithContextRetryableError{},
-		withBackoffNotify(notifyFn),
-		withExponentialBackoff(common.DefaultMaxRetries),
+	d := prefixedMockedS3DriverConstructorT(
+		t,
+		newS3Wrapper(
+			&mockPutObjectWithContextRetryableError{},
+			withBackoffNotify(notifyFn),
+			withExponentialBackoff(common.DefaultMaxRetries),
+		),
 	)
 
 	start := time.Now()
@@ -982,19 +1035,19 @@ func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	d := newTempDirDriver(t)
-
 	var retries int
 
 	notifyFn := func(_ error, _ time.Duration) {
 		retries++
 	}
 
-	// mock the underlying S3 client
-	d.baseEmbed.Base.StorageDriver.(*driver).S3 = newS3Wrapper(
-		&mockPutObjectWithContextPermanentError{},
-		withBackoffNotify(notifyFn),
-		withExponentialBackoff(200),
+	d := prefixedMockedS3DriverConstructorT(
+		t,
+		newS3Wrapper(
+			&mockPutObjectWithContextPermanentError{},
+			withBackoffNotify(notifyFn),
+			withExponentialBackoff(200),
+		),
 	)
 
 	err := d.PutContent(context.Background(), "/test/file", make([]byte, 0))
@@ -1011,33 +1064,24 @@ func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	d := newTempDirDriver(t)
-
 	var retries int
 
 	notifyFn := func(_ error, _ time.Duration) {
 		retries++
 	}
 
-	// mock the underlying S3 client
-	d.baseEmbed.Base.StorageDriver.(*driver).S3 = newS3Wrapper(
-		&mockDeleteObjectsError{},
-		withBackoffNotify(notifyFn),
-		withExponentialBackoff(200),
+	d := prefixedMockedS3DriverConstructorT(
+		t,
+		newS3Wrapper(
+			&mockDeleteObjectsError{},
+			withBackoffNotify(notifyFn),
+			withExponentialBackoff(200),
+		),
 	)
 
 	_, err := d.DeleteFiles(context.Background(), []string{"/test/file1", "/test/file2"})
 	require.Error(t, err)
 	require.Zero(t, retries)
-}
-
-func newTempDirDriver(t *testing.T) *Driver {
-	rootDir := t.TempDir()
-
-	d, err := s3DriverConstructor(rootDir, s3.StorageClassStandard)
-	require.NoError(t, err)
-
-	return d
 }
 
 func TestS3DriverClientTransport(t *testing.T) {
