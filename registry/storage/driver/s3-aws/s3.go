@@ -19,6 +19,7 @@ import (
 	"io"
 	"net/http"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,8 +74,8 @@ const (
 	defaultMaxElapsedTime      = backoff.DefaultMaxElapsedTime
 )
 
-// errMaxListRespExceeded signifies a multi part layer upload has exceeded the allowable maximum size
-var errMaxListRespExceeded = fmt.Errorf("layer parts pages exceeds the maximum of %d allowed", maxListRespLoop)
+// ErrMaxListRespExceeded signifies a multi part layer upload has exceeded the allowable maximum size
+var ErrMaxListRespExceeded = fmt.Errorf("layer parts pages exceeds the maximum of %d allowed", maxListRespLoop)
 
 func init() {
 	// Register this as the default s3 driver in addition to s3aws
@@ -332,46 +333,44 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 	if err != nil {
 		return nil, parseError(path, err)
 	}
-	var allParts []*s3.Part
-	for _, multi := range resp.Uploads {
-		if key != *multi.Key {
-			continue
-		}
 
-		var (
-			listResp = &s3.ListPartsOutput{}
-			trueVar  = true
-			// respLoopCount is the number of response pages traversed.
-			// Each increment of respLoopCount signifies that (at most) 1 full page of parts was pushed,
-			// where one full page of parts is equivalent to 1,000 uploaded parts
-			// which in turn is equivalent to 10485760 bytes of data. https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html
-			respLoopCount int
-		)
-		// assume the first response was truncated
-		listResp.IsTruncated = &trueVar
-
-		for *listResp.IsTruncated {
-			// error out if we have pushed up to 100GB of parts
-			if respLoopCount > maxListRespLoop {
-				return nil, errMaxListRespExceeded
-			}
-			listResp, err = d.S3.ListPartsWithContext(
-				ctx,
-				&s3.ListPartsInput{
-					Bucket:           aws.String(d.Bucket),
-					Key:              aws.String(key),
-					UploadId:         multi.UploadId,
-					PartNumberMarker: listResp.NextPartNumberMarker,
-				})
-			if err != nil {
-				return nil, parseError(path, err)
-			}
-			allParts = append(allParts, listResp.Parts...)
-			respLoopCount++
-		}
-		return d.newWriter(key, *multi.UploadId, allParts), nil
+	idx := slices.IndexFunc(resp.Uploads, func(v *s3.MultipartUpload) bool { return *v.Key == key })
+	if idx == -1 {
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
-	return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+	mpUpload := resp.Uploads[idx]
+
+	// respLoopCount is the number of response pages traversed. Each increment
+	// of respLoopCount signifies that (at most) 1 full page of parts was
+	// pushed, where one full page of parts is equivalent to 1,000 uploaded
+	// parts which in turn is equivalent to 10485760 bytes of data.
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html
+	respLoopCount := 0
+
+	allParts := make([]*s3.Part, 0)
+	listResp := &s3.ListPartsOutput{
+		IsTruncated: aws.Bool(true),
+	}
+	for *listResp.IsTruncated {
+		// error out if we have pushed more than 100GB of parts
+		if respLoopCount > maxListRespLoop {
+			return nil, ErrMaxListRespExceeded
+		}
+		listResp, err = d.S3.ListPartsWithContext(
+			ctx,
+			&s3.ListPartsInput{
+				Bucket:           aws.String(d.Bucket),
+				Key:              aws.String(key),
+				UploadId:         mpUpload.UploadId,
+				PartNumberMarker: listResp.NextPartNumberMarker,
+			})
+		if err != nil {
+			return nil, parseError(path, err)
+		}
+		allParts = append(allParts, listResp.Parts...)
+		respLoopCount++
+	}
+	return d.newWriter(key, *mpUpload.UploadId, allParts), nil
 }
 
 // Stat retrieves the FileInfo for the given path, including the current size
@@ -417,9 +416,10 @@ func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 		path += "/"
 	}
 
-	// This is to cover for the cases when the rootDirectory of the driver is either "" or "/".
-	// In those cases, there is no root prefix to replace and we must actually add a "/" to all
-	// results in order to keep them as valid paths as recognized by storagedriver.PathRegexp
+	// This is to cover for the cases when the rootDirectory of the driver is
+	// either "" or "/". In those cases, there is no root prefix to replace and
+	// we must actually add a "/" to all results in order to keep them as valid
+	// paths as recognized by storagedriver.PathRegexp
 	prefix := ""
 	if d.s3Path("") == "" {
 		prefix = "/"
@@ -627,15 +627,17 @@ ListLoop:
 		// list all the objects
 		resp, err := d.S3.ListObjectsV2WithContext(ctx, listObjectsV2Input)
 
-		// resp.Contents can only be empty on the first call
-		// if there were no more results to return after the first call, resp.IsTruncated would have been false
-		// and the loop would be exited without recalling ListObjects
+		// resp.Contents can only be empty on the first call if there were no
+		// more results to return after the first call, resp.IsTruncated would
+		// have been false and the loop would be exited without recalling
+		// ListObjects
 		if err != nil || len(resp.Contents) == 0 {
 			return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 
 		for _, key := range resp.Contents {
-			// Stop if we encounter a key that is not a subpath (so that deleting "/a" does not delete "/ab").
+			// Stop if we encounter a key that is not a subpath (so that
+			// deleting "/a" does not delete "/ab").
 			if len(*key.Key) > len(s3Path) && (*key.Key)[len(s3Path)] != '/' {
 				break ListLoop
 			}
@@ -644,7 +646,8 @@ ListLoop:
 			})
 		}
 
-		// resp.Contents must have at least one element or we would have returned not found
+		// resp.Contents must have at least one element or we would have
+		// returned not found
 		listObjectsV2Input.StartAfter = resp.Contents[len(resp.Contents)-1].Key
 
 		// from the s3 api docs, IsTruncated "specifies whether (true) or not (false) all of the results were returned"
@@ -670,8 +673,9 @@ ListLoop:
 			return err
 		}
 
-		// even if err is nil (200 OK response) it's not guaranteed that all files have been successfully deleted,
-		// we need to check the []*s3.Error slice within the S3 response and make sure it's empty
+		// even if err is nil (200 OK response) it's not guaranteed that all
+		// files have been successfully deleted, we need to check the
+		// []*s3.Error slice within the S3 response and make sure it's empty
 		if len(resp.Errors) > 0 {
 			// parse s3.Error errors and return a single storagedriver.MultiError
 			var errs error
@@ -685,11 +689,13 @@ ListLoop:
 	return nil
 }
 
-// DeleteFiles deletes a set of files using the S3 bulk delete feature, with up to deleteMax files per request. If
-// deleting more than deleteMax files, DeleteFiles will split files in deleteMax requests automatically.
-// Contrary to Delete, which is a generic method to delete any kind of object,
-// DeleteFiles does not send a ListObjects request before DeleteObjects. Returns the number of successfully deleted
-// files and any errors. This method is idempotent, no error is returned if a file does not exist.
+// DeleteFiles deletes a set of files using the S3 bulk delete feature, with up
+// to deleteMax files per request. If deleting more than deleteMax files,
+// DeleteFiles will split files in deleteMax requests automatically. Contrary
+// to Delete, which is a generic method to delete any kind of object,
+// DeleteFiles does not send a ListObjects request before DeleteObjects.
+// Returns the number of successfully deleted files and any errors. This method
+// is idempotent, no error is returned if a file does not exist.
 func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 	s3Objects := make([]*s3.ObjectIdentifier, 0, len(paths))
 	for i := range paths {
@@ -811,8 +817,8 @@ func (d *driver) Walk(ctx context.Context, from string, f storagedriver.WalkFn) 
 	return nil
 }
 
-// WalkParallel traverses a filesystem defined within driver, starting
-// from the given path, calling f on each file.
+// WalkParallel traverses a filesystem defined within driver, starting from the
+// given path, calling f on each file.
 func (d *driver) WalkParallel(ctx context.Context, from string, f storagedriver.WalkFn) error {
 	// If the ParallelWalk feature flag is not set, fall back to standard sequential walk.
 	if !d.ParallelWalk {
@@ -1187,7 +1193,7 @@ func (w *writer) Write(p []byte) (int, error) {
 	}
 
 	// If the last written part is smaller than minChunkSize, we need to make a
-	// new multipart upload :sadface:
+	// new multipart upload
 	if len(w.parts) > 0 && int(*w.parts[len(w.parts)-1].Size) < common.MinChunkSize {
 		var completedUploadedParts completedParts
 		for _, part := range w.parts {
@@ -1239,7 +1245,7 @@ func (w *writer) Write(p []byte) (int, error) {
 		w.uploadID = *resp.UploadId
 
 		// If the entire written file is smaller than minChunkSize, we need to make
-		// a new part from scratch :double sad face:
+		// a new part from scratch
 		if w.size < common.MinChunkSize {
 			resp, err := w.driver.S3.GetObjectWithContext(
 				ctx,
@@ -1330,8 +1336,8 @@ func (w *writer) Close() error {
 
 	if w.canceled {
 		// NOTE(prozlach): If the writer has been already canceled, then there
-		// is nothing to flush to the backend as the target file has already
-		// been deleted.
+		// is nothing to flush to the backend as the multipart upload has
+		// already been deleted.
 		return nil
 	}
 
