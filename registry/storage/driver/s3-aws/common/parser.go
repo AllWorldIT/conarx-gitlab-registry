@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
 	"github.com/hashicorp/go-multierror"
@@ -188,6 +189,32 @@ func init() {
 	}
 }
 
+// S3WrapperIf is the subset of methods exposed in s3 SDKs S3API object that we
+// use in our code.
+type S3WrapperIf interface {
+	PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error)
+	GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error)
+	CreateMultipartUploadWithContext(ctx aws.Context, input *s3.CreateMultipartUploadInput, opts ...request.Option) (*s3.CreateMultipartUploadOutput, error)
+	ListMultipartUploadsWithContext(ctx aws.Context, input *s3.ListMultipartUploadsInput, opts ...request.Option) (*s3.ListMultipartUploadsOutput, error)
+	ListPartsWithContext(ctx aws.Context, input *s3.ListPartsInput, opts ...request.Option) (*s3.ListPartsOutput, error)
+	ListObjectsV2WithContext(ctx aws.Context, input *s3.ListObjectsV2Input, opts ...request.Option) (*s3.ListObjectsV2Output, error)
+	CopyObjectWithContext(ctx aws.Context, input *s3.CopyObjectInput, opts ...request.Option) (*s3.CopyObjectOutput, error)
+	UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadPartCopyInput, opts ...request.Option) (*s3.UploadPartCopyOutput, error)
+	CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.CompleteMultipartUploadInput, opts ...request.Option) (*s3.CompleteMultipartUploadOutput, error)
+	DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteObjectsInput, opts ...request.Option) (*s3.DeleteObjectsOutput, error)
+	GetObjectRequest(input *s3.GetObjectInput) (*request.Request, *s3.GetObjectOutput)
+	HeadObjectRequest(input *s3.HeadObjectInput) (*request.Request, *s3.HeadObjectOutput)
+	ListObjectsV2PagesWithContext(ctx aws.Context, input *s3.ListObjectsV2Input, f func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error
+	AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error)
+	UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error)
+}
+
+// S3BucketKeyer is any type that is capable of returning the S3 bucket key
+// which should be cached by AWS CloudFront.
+type S3BucketKeyer interface {
+	S3BucketKey(path string) string
+}
+
 // DriverParameters A struct that encapsulates all of the driver parameters
 // after all values have been set
 type DriverParameters struct {
@@ -215,6 +242,7 @@ type DriverParameters struct {
 	ParallelWalk                bool
 	LogLevel                    aws.LogLevelType
 	ObjectOwnership             bool
+	S3APIImpl                   S3WrapperIf
 }
 
 func ParseLogLevelParam(param any) aws.LogLevelType {
@@ -295,7 +323,6 @@ func ParseParameters(parameters map[string]any) (*DriverParameters, error) {
 			mErr = multierror.Append(mErr, err)
 		}
 	}
-	res.RegionEndpoint = fmt.Sprint(regionEndpoint)
 
 	bucket := parameters[ParamBucket]
 	if bucket == nil || fmt.Sprint(bucket) == "" {

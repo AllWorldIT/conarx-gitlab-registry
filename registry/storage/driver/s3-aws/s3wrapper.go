@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	"golang.org/x/time/rate"
 )
 
@@ -68,6 +69,8 @@ func withExponentialBackoff(maximum int64) wrapperOpt {
 		}
 	}
 }
+
+var _ common.S3WrapperIf = (*s3wrapper)(nil)
 
 // s3wrapper implements a subset of s3iface.S3API allowing us to rate limit,
 // retry, add trace logging, or otherwise improve s3 calls made by the driver.
