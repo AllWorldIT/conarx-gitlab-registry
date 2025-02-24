@@ -1,9 +1,20 @@
 package s3
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	mrand "math/rand/v2"
+	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"regexp"
@@ -21,7 +32,6 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/hashicorp/go-multierror"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -463,64 +473,109 @@ func TestS3Driver_parseParameters(t *testing.T) {
 	}
 }
 
-func TestS3DriverFromParameters(t *testing.T) {
-	// Minimal params needed to construct the driver.
+func TestS3DriverPathStyle(t *testing.T) {
+	// Helper function to extract domain from S3 URL
+	extractDomain := func(urlStr string) string {
+		parsedURL, err := url.Parse(urlStr)
+		require.NoError(t, err)
+		return parsedURL.Host
+	}
+
+	// Helper function to check if URL uses path style
+	isPathStyle := func(urlStr, bucket string) bool {
+		parsedURL, err := url.Parse(urlStr)
+		require.NoError(t, err)
+		return strings.HasPrefix(parsedURL.Path, "/"+bucket)
+	}
+
+	// Base configuration that's common across all tests
 	baseParams := map[string]any{
 		"region": "us-west-2",
-		"bucket": "test",
+		"bucket": "test-bucket",
 		"v4auth": "true",
 	}
 
 	tests := []struct {
-		params              map[string]any
-		wantedForcePathBool bool
+		name           string
+		paramOverrides map[string]any
+		wantPathStyle  bool
+		wantedEndpoint string
 	}{
 		{
-			map[string]any{
+			name: "path style disabled without endpoint",
+			paramOverrides: map[string]any{
 				"pathstyle": "false",
-			}, false,
+			},
+			wantPathStyle:  false,
+			wantedEndpoint: "test-bucket.s3.us-west-2.amazonaws.com",
 		},
 		{
-			map[string]any{
+			name: "path style enabled without endpoint",
+			paramOverrides: map[string]any{
 				"pathstyle": "true",
-			}, true,
+			},
+			wantPathStyle:  true,
+			wantedEndpoint: "s3.us-west-2.amazonaws.com",
 		},
 		{
-			map[string]any{
-				"regionendpoint": "test-endpoint",
+			name: "path style disabled with custom endpoint",
+			paramOverrides: map[string]any{
+				"regionendpoint": "custom-endpoint:9000",
 				"pathstyle":      "false",
-			}, false,
+			},
+			wantPathStyle:  false,
+			wantedEndpoint: "test-bucket.custom-endpoint:9000",
 		},
 		{
-			map[string]any{
-				"regionendpoint": "test-endpoint",
+			name: "path style enabled with custom endpoint",
+			paramOverrides: map[string]any{
+				"regionendpoint": "custom-endpoint:9000",
 				"pathstyle":      "true",
-			}, true,
+			},
+			wantPathStyle:  true,
+			wantedEndpoint: "custom-endpoint:9000",
 		},
 		{
-			map[string]any{
-				"regionendpoint": "",
-			}, false,
-		},
-		{
-			map[string]any{
-				"regionendpoint": "test-endpoint",
-			}, true,
+			name: "default path style with custom endpoint",
+			paramOverrides: map[string]any{
+				"regionendpoint": "custom-endpoint:9000",
+			},
+			wantPathStyle:  true, // Path style should be forced when endpoint is set
+			wantedEndpoint: "custom-endpoint:9000",
 		},
 	}
 
 	for _, tt := range tests {
-		// add baseParams to testing params
-		for k, v := range baseParams {
-			tt.params[k] = v
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			// Merge base parameters with test-specific overrides
+			params := make(map[string]any)
+			for k, v := range baseParams {
+				params[k] = v
+			}
+			for k, v := range tt.paramOverrides {
+				params[k] = v
+			}
 
-		d, err := FromParameters(tt.params)
-		require.NoError(t, err, "unable to create a new S3 driver")
+			d, err := FromParameters(params)
+			require.NoError(t, err, "unable to create driver")
 
-		pathStyle := d.baseEmbed.Base.StorageDriver.(*driver).S3.s3.(*s3.S3).Client.Config.S3ForcePathStyle
-		require.NotNil(t, pathStyle, "expected pathStyle not to be nil")
-		require.Equalf(t, tt.wantedForcePathBool, *pathStyle, "expected S3ForcePathStyle to be %v, got %v, with params %#v", tt.wantedForcePathBool, *pathStyle, tt.params)
+			// Generate a signed URL to verify the path style and endpoint behavior
+			testPath := "/test/file.txt"
+			urlStr, err := d.URLFor(context.Background(), testPath, map[string]any{
+				"method": "GET",
+			})
+			require.NoError(t, err, "unable to generate URL")
+
+			// Verify the endpoint
+			domain := extractDomain(urlStr)
+			require.Equal(t, tt.wantedEndpoint, domain, "unexpected endpoint")
+
+			// Verify path style vs virtual hosted style
+			bucket := params["bucket"].(string)
+			actualPathStyle := isPathStyle(urlStr, bucket)
+			require.Equal(t, tt.wantPathStyle, actualPathStyle,
+				"path style mismatch, URL: %s", urlStr)
+		})
 	}
 }
 
@@ -990,34 +1045,148 @@ func TestS3DriverClientTransport(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
+	rootDir := t.TempDir()
+	driverConfig, err := fetchDriverConfig(rootDir, s3.StorageClassStandard)
+	require.NoError(t, err)
+
+	var hostport string
+	var host string
+	var scheme string
+	if driverConfig.RegionEndpoint == "" {
+		// Construct the AWS endpoint based on region
+		hostport = fmt.Sprintf("s3.%s.amazonaws.com", driverConfig.Region)
+		host = hostport
+		scheme = "https"
+	} else {
+		parsedURL, err := url.Parse(driverConfig.RegionEndpoint)
+		require.NoError(t, err)
+		hostport = parsedURL.Host
+		host, _, err = net.SplitHostPort(parsedURL.Host)
+		scheme = parsedURL.Scheme
+		require.NoError(t, err)
+	}
+
+	// Create a proxy that forwards to real S3
+	proxy := &httputil.ReverseProxy{
+		Director: func(req *http.Request) {
+			req.URL.Scheme = scheme
+			req.URL.Host = hostport
+			req.Host = host
+		},
+	}
+
+	// Create a proxy server with self-signed certificate
+	serverCert, err := generateSelfSignedCert([]string{"127.0.0.1"})
+	require.NoError(t, err, "failed to generate test certificate")
+
+	server := httptest.NewUnstartedServer(proxy)
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{serverCert}}
+	server.StartTLS()
+	defer server.Close()
+
 	testCases := []struct {
-		skipverify bool
+		name       string
+		skipVerify bool
+		shouldFail bool
 	}{
-		{true},
-		{false},
+		{
+			name:       "TLS verification enabled",
+			skipVerify: false,
+			shouldFail: true, // Should fail with self-signed cert when verification is enabled
+		},
+		{
+			name:       "TLS verification disabled",
+			skipVerify: true,
+			shouldFail: false, // Should succeed with self-signed cert when verification is disabled
+		},
 	}
 
 	for _, tc := range testCases {
-		params := map[string]any{
-			"region":     os.Getenv("AWS_REGION"),
-			"bucket":     os.Getenv("S3_BUCKET"),
-			"skipverify": tc.skipverify,
-		}
-		t.Run(fmt.Sprintf("SkipVerify %v", tc.skipverify), func(t *testing.T) {
-			drv, err := FromParameters(params)
-			require.NoError(t, err, "failed to create driver")
+		t.Run(tc.name, func(t *testing.T) {
+			parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard)
+			require.NoError(t, err)
 
-			// nolint: revive // unchecked-type-assertion
-			s3drv := drv.baseEmbed.Base.StorageDriver.(*driver)
+			parsedParams.SkipVerify = tc.skipVerify
+			parsedParams.RegionEndpoint = server.URL
+			parsedParams.MaxRetries = 1
+			parsedParams.PathStyle = true
 
-			s3s, ok := s3drv.S3.s3.(*s3.S3)
-			require.True(t, ok, "failed to cast storage driver to *s3.S3")
+			driver, err := newDriverFn(parsedParams)
+			require.NoError(t, err)
 
-			tr, ok := s3s.Config.HTTPClient.Transport.(*http.Transport)
-			require.True(t, ok, "unexpected driver transport")
-			assert.Equal(t, tr.TLSClientConfig.InsecureSkipVerify, tc.skipverify, "unexpected TLS Config. Expected InsecureSkipVerify")
-			// make sure the proxy is always set
-			require.NotNil(t, tr.Proxy, "missing HTTP transport proxy config")
+			// Use List operation to trigger an HTTPS request
+			ctx := context.Background()
+			_, err = driver.List(ctx, "/")
+
+			if tc.shouldFail {
+				require.ErrorContainsf(
+					t,
+					err, "x509: certificate signed by unknown authority",
+					"expected certificate verification error, got: %v", err,
+				)
+			} else {
+				require.Error(t, err)
+				var awsErr awserr.Error
+				require.ErrorAsf(t, err, &awsErr,
+					"expected AWS API error, got: %v", err)
+				require.Equal(t, "SignatureDoesNotMatch", awsErr.Code())
+				require.Contains(t, awsErr.Message(),
+					"The request signature we calculated does not match the signature you provided",
+				)
+			}
 		})
 	}
+}
+
+// generateSelfSignedCert creates a self-signed certificate for testing
+// addresses can contain both hostnames and IP addresses
+func generateSelfSignedCert(addresses []string) (tls.Certificate, error) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// Process addresses into DNS and IP SANs
+	var dnsNames []string
+	var ipAddresses []net.IP
+
+	for _, addr := range addresses {
+		if ip := net.ParseIP(addr); ip != nil {
+			ipAddresses = append(ipAddresses, ip)
+		} else {
+			dnsNames = append(dnsNames, addr)
+		}
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Test Corp"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Hour),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+
+		// Add the processed SANs
+		DNSNames:    dnsNames,
+		IPAddresses: ipAddresses,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	privDER, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	return tls.X509KeyPair(
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}),
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privDER}),
+	)
 }
