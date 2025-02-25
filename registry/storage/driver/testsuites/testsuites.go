@@ -42,7 +42,7 @@ import (
 // later re-used among tests. This way we speed up tests by not having to
 // re-generate it multiple times and save memory as all blobs used by tests
 // reference to this blob (or slices of it).
-const rngCacheSize = 2 * 1 << 30
+const rngCacheSize int64 = 2 * 1 << 30
 
 // DriverConstructor is a function which returns a new
 // storagedriver.StorageDriver.

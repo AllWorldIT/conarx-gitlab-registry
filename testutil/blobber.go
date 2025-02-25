@@ -45,7 +45,7 @@ type BlobberFactory struct {
 	rngCache []byte
 }
 
-func NewBlobberFactory(initialRngCacheSize int, seed SeedT) *BlobberFactory {
+func NewBlobberFactory(initialRngCacheSize int64, seed SeedT) *BlobberFactory {
 	res := &BlobberFactory{
 		rngCache: make([]byte, initialRngCacheSize),
 	}
