@@ -358,18 +358,14 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	dbLocker := storage.DatabaseInUseLocker{Driver: app.driver}
 	// Connect to the metadata database, if enabled.
 	if config.Database.Enabled {
-		// Temporary measure to enforce lock files while all the implementation is done
-		// Seehttps://gitlab.com/gitlab-org/container-registry/-/issues/1335
-		if feature.EnforceLockfiles.Enabled() {
-			fsLocked, err := fsLocker.IsLocked(ctx)
-			if err != nil {
-				log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
-				return nil, err
-			}
+		fsLocked, err := fsLocker.IsLocked(ctx)
+		if err != nil {
+			log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+			return nil, err
+		}
 
-			if fsLocked {
-				return nil, ErrFilesystemInUse
-			}
+		if fsLocked {
+			return nil, ErrFilesystemInUse
 		}
 
 		log.Info("using the metadata database")
@@ -506,27 +502,23 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		// Now that we've started the database successfully, lock the filesystem
 		// to signal that this object storage needs to be managed by the database.
-		if feature.EnforceLockfiles.Enabled() {
-			if err := dbLocker.Lock(app.Context); err != nil {
-				log.WithError(err).Error("failed to mark filesystem for database only usage, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
-				return nil, err
-			}
+		if err := dbLocker.Lock(app.Context); err != nil {
+			log.WithError(err).Error("failed to mark filesystem for database only usage, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+			return nil, err
 		}
 
 		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
 			startBackgroundMigrations(app.Context, app.db.Primary(), config)
 		}
 	} else {
-		if feature.EnforceLockfiles.Enabled() {
-			dbLocked, err := dbLocker.IsLocked(ctx)
-			if err != nil {
-				log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
-				return nil, err
-			}
+		dbLocked, err := dbLocker.IsLocked(ctx)
+		if err != nil {
+			log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+			return nil, err
+		}
 
-			if dbLocked {
-				return nil, ErrDatabaseInUse
-			}
+		if dbLocked {
+			return nil, ErrDatabaseInUse
 		}
 
 		// Lock the filesystem metadata to prevent
