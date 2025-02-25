@@ -45,15 +45,6 @@ var BBMProcess = Feature{
 	EnvVariable: "REGISTRY_FF_BBM",
 }
 
-// EnforceLockfiles is used to enable lock file checking for the `database-in-use` and `filesystem-in-use` checks.
-// Enabling this feature will stop the registry in an unsupported mode. See
-// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/lockfiles.md
-// for more information.
-var EnforceLockfiles = Feature{
-	defaultEnabled: true,
-	EnvVariable:    "REGISTRY_FF_ENFORCE_LOCKFILES",
-}
-
 // testFeature is used for testing purposes only
 var testFeature = Feature{
 	EnvVariable: "REGISTRY_FF_TEST",

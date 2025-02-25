@@ -13,8 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/distribution/internal/feature"
-
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/reference"
@@ -957,10 +955,6 @@ func TestNewApp_Locks_Errors(t *testing.T) {
 				"rootdirectory": tc.rootdir,
 			}
 			config.Database.Enabled = tc.databaseEnabled
-
-			// Temporary use of FF while other tests are updated and fixed
-			// see https://gitlab.com/gitlab-org/container-registry/-/issues/1335
-			t.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
 
 			_, err := NewApp(ctx, config)
 			require.ErrorIs(t, err, tc.expectedError)
