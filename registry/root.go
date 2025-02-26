@@ -25,6 +25,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func init() {
@@ -41,10 +42,12 @@ func init() {
 	MigrateCmd.AddCommand(MigrateVersionCmd)
 	MigrateStatusCmd.Flags().BoolVarP(&upToDateCheck, "up-to-date", "u", false, "check if all known migrations are applied")
 	MigrateStatusCmd.Flags().BoolVarP(&skipPostDeployment, "skip-post-deployment", "s", false, "ignore post deployment migrations")
+	MigrateStatusCmd.PreRunE = setBoolFlagWithEnv("SKIP_POST_DEPLOYMENT_MIGRATIONS", "skip-post-deployment")
 	MigrateCmd.AddCommand(MigrateStatusCmd)
 	MigrateUpCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do not commit changes to the database")
 	MigrateUpCmd.Flags().VarP(nullableInt{&maxNumMigrations}, "limit", "n", "limit the number of migrations (all by default)")
 	MigrateUpCmd.Flags().BoolVarP(&skipPostDeployment, "skip-post-deployment", "s", false, "do not apply post deployment migrations")
+	MigrateUpCmd.PreRunE = setBoolFlagWithEnv("SKIP_POST_DEPLOYMENT_MIGRATIONS", "skip-post-deployment")
 	MigrateCmd.AddCommand(MigrateUpCmd)
 	MigrateDownCmd.Flags().BoolVarP(&force, "force", "f", false, "no confirmation message")
 	MigrateDownCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do not commit changes to the database")
@@ -75,6 +78,8 @@ func init() {
 	RootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		return fmt.Errorf("%w\n\n%s", err, c.UsageString())
 	})
+
+	viper.AutomaticEnv()
 }
 
 // Command flag vars
@@ -103,6 +108,26 @@ var parallelwalkKey = "parallelwalk"
 // https://pkg.go.dev/github.com/spf13/pflag?tab=doc#Value
 type nullableInt struct {
 	ptr **int
+}
+
+// setBoolFlagWithEnv binds a boolean flag to an environment variable and overrides the flag if the env var is set.
+// It returns an error if the binding or setting fails.
+func setBoolFlagWithEnv(envVarKey, flagName string) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, _ []string) error {
+		if err := viper.BindPFlag(envVarKey, cmd.Flags().Lookup(flagName)); err != nil {
+			return fmt.Errorf("error binding env var %q to flag %q: %w", envVarKey, flagName, err)
+		}
+
+		if !cmd.Flags().Changed(flagName) {
+			if viper.IsSet(envVarKey) {
+				value := viper.GetBool(envVarKey)
+				if err := cmd.Flags().Set(flagName, strconv.FormatBool(value)); err != nil {
+					return fmt.Errorf("error setting flag %q from env var %q: %w", flagName, envVarKey, err)
+				}
+			}
+		}
+		return nil
+	}
 }
 
 func (f nullableInt) String() string {
