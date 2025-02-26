@@ -1,9 +1,10 @@
 package validation_test
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/rand"
+	mrand "math/rand"
 	"regexp"
 	"testing"
 
@@ -13,13 +14,13 @@ import (
 	"github.com/docker/distribution/registry/storage/validation"
 	"github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	errUnexpectedURL = errors.New("unexpected URL on layer")
-	errMissingURL    = errors.New("missing URL on layer")
-	errInvalidURL    = errors.New("invalid URL on layer")
+	errMissingURL = errors.New("missing URL on layer")
+	errInvalidURL = errors.New("invalid URL on layer")
 )
 
 func TestVerifyManifest_Schema2_ForeignLayer(t *testing.T) {
@@ -113,8 +114,8 @@ func TestVerifyManifest_Schema2_ForeignLayer(t *testing.T) {
 		l.URLs = c.URLs
 		m.Layers = []distribution.Descriptor{l}
 		dm, err := schema2.FromStruct(m)
-		if err != nil {
-			t.Error(err)
+		// nolint: testifylint // require-error
+		if !assert.NoError(t, err, "error creating manifest from struct") {
 			continue
 		}
 
@@ -202,7 +203,7 @@ func TestVerifyManifest_Schema2_ManifestLayer(t *testing.T) {
 	v := validation.NewSchema2Validator(manifestService, repo.Blobs(ctx), 0, 0, validation.ManifestURLs{})
 
 	err = v.Validate(ctx, dm)
-	require.NoErrorf(t, err, fmt.Sprintf("digest: %s", dgst))
+	require.NoErrorf(t, err, "digest: %s", dgst)
 }
 
 func TestVerifyManifest_Schema2_MultipleErrors(t *testing.T) {
@@ -215,9 +216,7 @@ func TestVerifyManifest_Schema2_MultipleErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	layer, err := repo.Blobs(ctx).Put(ctx, schema2.MediaTypeLayer, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Create a manifest with three layers, two of which are missing. We should
 	// see the digest of each missing layer in the error message.
@@ -294,7 +293,7 @@ func TestVerifyManifest_Schema2_ReferenceLimits(t *testing.T) {
 
 			// Create a random layer for each of the specified manifest layers.
 			for i := 0; i < tt.manifestLayers; i++ {
-				b := make([]byte, rand.Intn(20))
+				b := make([]byte, mrand.Intn(20))
 				rand.Read(b)
 
 				layer, err := repo.Blobs(ctx).Put(ctx, schema2.MediaTypeLayer, b)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,59 +14,165 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/registry/storage/driver/azure/common"
+	v1 "github.com/docker/distribution/registry/storage/driver/azure/v1"
+	v2 "github.com/docker/distribution/registry/storage/driver/azure/v2"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
-const (
-	envAccountName = "AZURE_STORAGE_ACCOUNT_NAME"
-	envAccountKey  = "AZURE_STORAGE_ACCOUNT_KEY"
-	envContainer   = "AZURE_STORAGE_CONTAINER"
-	envRealm       = "AZURE_STORAGE_REALM"
-)
-
 var (
+	credsType string
+
 	accountName string
 	accountKey  string
-	container   string
-	realm       string
+
+	tenantID string
+	clientID string
+	secret   string
+
+	accountContainer string
+	accountRealm     string
 
 	missing []string
+
+	debugLog bool
+
+	driverVersion     string
+	parseParametersFn func(map[string]any) (any, error)
+	newDriverFn       func(any) (storagedriver.StorageDriver, error)
 )
 
+type envConfig struct {
+	env   string
+	value *string
+}
+
 func init() {
-	config := []struct {
-		env   string
-		value *string
-	}{
-		{envAccountName, &accountName},
-		{envAccountKey, &accountKey},
-		{envContainer, &container},
-		{envRealm, &realm},
+	fetchEnvVarsConfiguration()
+}
+
+func fetchEnvVarsConfiguration() {
+	driverVersion = os.Getenv(common.EnvDriverVersion)
+	switch driverVersion {
+	case v1.DriverName:
+		parseParametersFn = v1.ParseParameters
+		newDriverFn = v1.New
+	case v2.DriverName:
+		parseParametersFn = v2.ParseParameters
+		newDriverFn = v2.New
+	default:
+		msg := fmt.Sprintf("invalid azure driver version: %q", driverVersion)
+		missing = []string{msg}
+		return
+	}
+
+	credsType = os.Getenv(common.EnvCredentialsType)
+
+	// NOTE(prozlach): Providing account name is not required for client-secret
+	// and default credentials, but it allows to auto-derrive service URL in
+	// case when it is not provided. It makes things easier for people that
+	// want things to "just work" as account name is easy to find, while people
+	// that know how to determine service URL themselves will likelly not care
+	// anyway.
+
+	var expected []envConfig
+	switch credsType {
+	case common.CredentialsTypeSharedKey, "":
+		credsType = common.CredentialsTypeSharedKey
+		expected = []envConfig{
+			{common.EnvAccountName, &accountName},
+			{common.EnvAccountKey, &accountKey},
+			{common.EnvContainer, &accountContainer},
+			{common.EnvRealm, &accountRealm},
+		}
+	case common.CredentialsTypeClientSecret:
+		expected = []envConfig{
+			{common.EnvTenantID, &tenantID},
+			{common.EnvClientID, &clientID},
+			{common.EnvSecret, &secret},
+			{common.EnvAccountName, &accountName},
+			{common.EnvContainer, &accountContainer},
+			{common.EnvRealm, &accountRealm},
+		}
+	case common.CredentialsTypeDefaultCredentials:
+		expected = []envConfig{
+			{common.EnvAccountName, &accountName},
+			{common.EnvContainer, &accountContainer},
+			{common.EnvRealm, &accountRealm},
+		}
+	default:
+		msg := fmt.Sprintf("invalid azure credentials type: %q", credsType)
+		missing = []string{msg}
+		return
 	}
 
 	missing = make([]string, 0)
-	for _, v := range config {
+	for _, v := range expected {
 		*v.value = os.Getenv(v.env)
 		if *v.value == "" {
 			missing = append(missing, v.env)
 		}
 	}
+
+	// NOTE(prozlach): debug logging is optional:
+	var err error
+	if v := os.Getenv(common.EnvDebugLog); v != "" {
+		debugLog, err = strconv.ParseBool(v)
+		if err != nil {
+			msg := fmt.Sprintf("invalid value for %q: %q", common.EnvDebugLog, v)
+			missing = []string{msg}
+			return
+		}
+	}
 }
 
-func azureDriverConstructor(rootDirectory string) (*Driver, error) {
-	params := &driverParameters{
-		accountName:          accountName,
-		accountKey:           accountKey,
-		container:            container,
-		realm:                realm,
-		root:                 rootDirectory,
-		trimLegacyRootPrefix: true,
+func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (storagedriver.StorageDriver, error) {
+	rawParams := map[string]any{
+		common.ParamAccountName:          accountName,
+		common.ParamContainer:            accountContainer,
+		common.ParamRealm:                accountRealm,
+		common.ParamRootDirectory:        rootDirectory,
+		common.ParamTrimLegacyRootPrefix: trimLegacyRootPrefix,
 	}
 
-	return New(params)
+	switch credsType {
+	case common.CredentialsTypeSharedKey:
+		rawParams[common.ParamAccountKey] = accountKey
+		rawParams[common.ParamCredentialsType] = common.CredentialsTypeSharedKey
+	case common.CredentialsTypeClientSecret:
+		rawParams[common.ParamTenantID] = tenantID
+		rawParams[common.ParamClientID] = clientID
+		rawParams[common.ParamSecret] = secret
+		rawParams[common.ParamCredentialsType] = common.CredentialsTypeClientSecret
+	case common.CredentialsTypeDefaultCredentials:
+		rawParams[common.ParamCredentialsType] = common.CredentialsTypeDefaultCredentials
+	}
+
+	if debugLog {
+		rawParams[common.ParamDebugLog] = "true"
+		// logging all events is enabled by default, uncomment and adjust call
+		// below to change it:
+		//
+		// rawParams[paramDebugLogEvents]="Request,Response,ResponseError,Retry,LongRunningOperation"
+	}
+
+	if debugLog {
+		rawParams[common.ParamDebugLog] = "true"
+		// logging all events is enabled by default, uncomment and adjust call
+		// below to change it:
+		//
+		// rawParams[common.ParamDebugLogEvents] = "Response,ResponseError,LongRunningOperation"
+	}
+
+	parsedParams, err := parseParametersFn(rawParams)
+	if err != nil {
+		return nil, fmt.Errorf("parsing azure login credentials: %w", err)
+	}
+
+	return newDriverFn(parsedParams)
 }
 
 func skipCheck() string {
@@ -76,8 +183,9 @@ func skipCheck() string {
 }
 
 func TestAzureDriverSuite(t *testing.T) {
-	root, err := os.MkdirTemp("", "azuredriver-test-")
-	require.NoError(t, err)
+	root := t.TempDir()
+
+	t.Logf("root directory for the tests set to %q", root)
 
 	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
@@ -86,18 +194,17 @@ func TestAzureDriverSuite(t *testing.T) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return azureDriverConstructor(root)
+			return azureDriverConstructor(root, true)
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 	suite.Run(t, ts)
 }
 
 func BenchmarkAzureDriverSuite(b *testing.B) {
-	root, err := os.MkdirTemp("", "azuredriver-bench-")
-	require.NoError(b, err)
+	root := b.TempDir()
+
+	b.Logf("root directory for the benchmarks set to %q", root)
 
 	if skipMsg := skipCheck(); skipMsg != "" {
 		b.Skip(skipMsg)
@@ -106,11 +213,9 @@ func BenchmarkAzureDriverSuite(b *testing.B) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return azureDriverConstructor(root)
+			return azureDriverConstructor(root, true)
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 
 	ts.SetupSuiteWithB(b)
@@ -122,112 +227,6 @@ func BenchmarkAzureDriverSuite(b *testing.B) {
 
 	for _, benchmark := range benchmarks {
 		b.Run(benchmark.Name, benchmark.Func)
-	}
-}
-
-func TestAzureDriverPathToKey(t *testing.T) {
-	tests := []struct {
-		name          string
-		rootDirectory string
-		providedPath  string
-		expectedPath  string
-		legacyPath    bool
-	}{
-		{
-			name:          "legacy leading slash empty root directory",
-			rootDirectory: "",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "/docker/registry/v2",
-			legacyPath:    true,
-		},
-		{
-			name:          "legacy leading slash single slash root directory",
-			rootDirectory: "/",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "/docker/registry/v2",
-			legacyPath:    true,
-		},
-		{
-			name:          "empty root directory results in expected path",
-			rootDirectory: "",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "docker/registry/v2",
-		},
-		{
-			name:          "legacy empty root directory results in expected path",
-			rootDirectory: "",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "/docker/registry/v2",
-			legacyPath:    true,
-		},
-		{
-			name:          "root directory no slashes prefixed to path with slash between root and path",
-			rootDirectory: "opt",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "opt/docker/registry/v2",
-		},
-		{
-			name:          "legacy root directory no slashes prefixed to path with slash between root and path",
-			rootDirectory: "opt",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "/opt/docker/registry/v2",
-			legacyPath:    true,
-		},
-		{
-			name:          "root directory with slashes prefixed to path no leading slash",
-			rootDirectory: "/opt/",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "opt/docker/registry/v2",
-		},
-		{
-			name:          "dirty root directory prefixed to path cleanly",
-			rootDirectory: "/opt////",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "opt/docker/registry/v2",
-		},
-		{
-			name:          "nested custom root directory prefixed to path",
-			rootDirectory: "a/b/c/d/",
-			providedPath:  "/docker/registry/v2/",
-			expectedPath:  "a/b/c/d/docker/registry/v2",
-		},
-		{
-			name:          "legacy root directory results in expected root path",
-			rootDirectory: "",
-			providedPath:  "/",
-			expectedPath:  "/",
-			legacyPath:    true,
-		},
-		{
-			name:          "root directory results in expected root path",
-			rootDirectory: "",
-			providedPath:  "/",
-			expectedPath:  "",
-		},
-		{
-			name:          "legacy root directory no slashes results in expected root path",
-			rootDirectory: "opt",
-			providedPath:  "/",
-			expectedPath:  "/opt",
-			legacyPath:    true,
-		},
-		{
-			name:          "root directory no slashes results in expected root path",
-			rootDirectory: "opt",
-			providedPath:  "/",
-			expectedPath:  "opt",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rootDirectory := strings.Trim(tt.rootDirectory, "/")
-			if rootDirectory != "" {
-				rootDirectory += "/"
-			}
-			d := &driver{rootDirectory: rootDirectory, legacyPath: tt.legacyPath}
-			require.Equal(t, tt.expectedPath, d.pathToKey(tt.providedPath))
-		})
 	}
 }
 
@@ -281,22 +280,16 @@ func TestAzureDriverStatRootPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params := &driverParameters{
-				accountName: accountName,
-				accountKey:  accountKey,
-				container:   container,
-				realm:       realm,
-				root:        tt.rootDirectory,
-				// trimLegacyRootPrefix is negated during driver init inside `New`
-				trimLegacyRootPrefix: !tt.legacyPath,
-			}
-
-			d, err := New(params)
+			// NOTE(prozlach): No need to use an unique root prefix here as we
+			// are not doing any writes so there is no risk of collision with
+			// other CI jobs running.
+			d, err := azureDriverConstructor(tt.rootDirectory, !tt.legacyPath)
 			require.NoError(t, err)
 
 			// Health checks stat "/" and expect either a not found error or a directory.
 			fsInfo, err := d.Stat(context.Background(), "/")
 			if !errors.As(err, &storagedriver.PathNotFoundError{}) {
+				require.NoError(t, err)
 				require.True(t, fsInfo.IsDir())
 			}
 		})
@@ -304,23 +297,19 @@ func TestAzureDriverStatRootPath(t *testing.T) {
 }
 
 func TestAzureDriver_parseParameters_Bool(t *testing.T) {
-	p := map[string]interface{}{
+	p := map[string]any{
 		"accountname": "accountName",
 		"accountkey":  "accountKey",
 		"container":   "container",
 		// TODO: add string test cases, if needed?
 	}
 
-	testFn := func(params map[string]interface{}) (interface{}, error) {
-		return parseParameters(params)
-	}
-
 	opts := dtestutil.Opts{
 		Defaultt:          true,
-		ParamName:         paramTrimLegacyRootPrefix,
+		ParamName:         common.ParamTrimLegacyRootPrefix,
 		DriverParamName:   "trimLegacyRootPrefix",
 		OriginalParams:    p,
-		ParseParametersFn: testFn,
+		ParseParametersFn: parseParametersFn,
 	}
 
 	dtestutil.AssertByDefaultType(t, opts)
@@ -333,19 +322,20 @@ func TestAzureDriverURLFor_Expiry(t *testing.T) {
 
 	ctx := context.Background()
 	validRoot := t.TempDir()
-	d, err := azureDriverConstructor(validRoot)
+	d, err := azureDriverConstructor(validRoot, true)
 	require.NoError(t, err)
 
 	fp := "/foo"
 	err = d.PutContent(ctx, fp, []byte(`bar`))
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Delete(ctx, "/foo") })
 
 	// https://docs.microsoft.com/en-us/rest/api/storageservices/create-service-sas#specifying-the-access-policy
 	param := "se"
 
 	mock := clock.NewMock()
 	mock.Set(time.Now())
-	testutil.StubClock(t, &systemClock, mock)
+	testutil.StubClock(t, &common.SystemClock, mock)
 
 	// default
 	s, err := d.URLFor(ctx, fp, nil)
@@ -359,7 +349,7 @@ func TestAzureDriverURLFor_Expiry(t *testing.T) {
 
 	// custom
 	dt = mock.Now().Add(1 * time.Hour)
-	s, err = d.URLFor(ctx, fp, map[string]interface{}{"expiry": dt})
+	s, err = d.URLFor(ctx, fp, map[string]any{"expiry": dt})
 	require.NoError(t, err)
 
 	u, err = url.Parse(s)
@@ -371,62 +361,62 @@ func TestAzureDriverURLFor_Expiry(t *testing.T) {
 func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
 	tests := []struct {
 		name                    string
-		config                  map[string]interface{}
+		config                  map[string]any
 		expectedUseLegacyPrefix bool
 	}{
 		{
 			name:                    "config: legacyrootprefix not set trimlegacyrootprefix not set",
-			config:                  map[string]interface{}{},
+			config:                  make(map[string]any, 0),
 			expectedUseLegacyPrefix: false,
 		},
 		{
 			name: "config: legacyrootprefix set trimlegacyrootprefix not set",
-			config: map[string]interface{}{
-				paramLegacyRootPrefix: true,
+			config: map[string]any{
+				common.ParamLegacyRootPrefix: true,
 			},
 			expectedUseLegacyPrefix: true,
 		},
 		{
 			name: "config: legacyrootprefix false trimlegacyrootprefix not set",
-			config: map[string]interface{}{
-				paramLegacyRootPrefix: false,
+			config: map[string]any{
+				common.ParamLegacyRootPrefix: false,
 			},
 			expectedUseLegacyPrefix: false,
 		},
 		{
 			name: "config: legacyrootprefix not set trimlegacyrootprefix true",
-			config: map[string]interface{}{
-				paramTrimLegacyRootPrefix: true,
+			config: map[string]any{
+				common.ParamTrimLegacyRootPrefix: true,
 			},
 			expectedUseLegacyPrefix: false,
 		},
 		{
 			name: "config: legacyrootprefix not set trimlegacyrootprefix false",
-			config: map[string]interface{}{
-				paramTrimLegacyRootPrefix: false,
+			config: map[string]any{
+				common.ParamTrimLegacyRootPrefix: false,
 			},
 			expectedUseLegacyPrefix: true,
 		},
 		{
 			name: "config: legacyrootprefix true trimlegacyrootprefix false",
-			config: map[string]interface{}{
-				paramTrimLegacyRootPrefix: false,
-				paramLegacyRootPrefix:     true,
+			config: map[string]any{
+				common.ParamTrimLegacyRootPrefix: false,
+				common.ParamLegacyRootPrefix:     true,
 			},
 			expectedUseLegacyPrefix: true,
 		},
 		{
 			name: "config: legacyrootprefix false trimlegacyrootprefix true",
-			config: map[string]interface{}{
-				paramTrimLegacyRootPrefix: true,
-				paramLegacyRootPrefix:     false,
+			config: map[string]any{
+				common.ParamTrimLegacyRootPrefix: true,
+				common.ParamLegacyRootPrefix:     false,
 			},
 			expectedUseLegacyPrefix: false,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualTrimLegacyPrefix, err := inferRootPrefixConfiguration(test.config)
+			actualTrimLegacyPrefix, err := common.InferRootPrefixConfiguration(test.config)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedUseLegacyPrefix, actualTrimLegacyPrefix)
 		})
@@ -436,27 +426,27 @@ func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
 func TestAzureDriverInferRootPrefixConfiguration_Invalid(t *testing.T) {
 	tests := []struct {
 		name                    string
-		config                  map[string]interface{}
+		config                  map[string]any
 		expectedUseLegacyPrefix bool
 	}{
 		{
 			name: "config: legacyrootprefix true trimlegacyrootprefix true",
-			config: map[string]interface{}{
-				paramTrimLegacyRootPrefix: true,
-				paramLegacyRootPrefix:     true,
+			config: map[string]any{
+				common.ParamTrimLegacyRootPrefix: true,
+				common.ParamLegacyRootPrefix:     true,
 			},
 		},
 		{
 			name: "config: legacyrootprefix false trimlegacyrootprefix false",
-			config: map[string]interface{}{
-				paramTrimLegacyRootPrefix: false,
-				paramLegacyRootPrefix:     false,
+			config: map[string]any{
+				common.ParamTrimLegacyRootPrefix: false,
+				common.ParamLegacyRootPrefix:     false,
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			useLegacyRootPrefix, err := inferRootPrefixConfiguration(test.config)
+			useLegacyRootPrefix, err := common.InferRootPrefixConfiguration(test.config)
 			require.Error(t, err)
 			require.ErrorContains(t, err, "storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be")
 			require.False(t, useLegacyRootPrefix)

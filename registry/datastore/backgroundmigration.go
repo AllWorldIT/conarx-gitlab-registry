@@ -74,7 +74,7 @@ type BackgroundMigrationStore interface {
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
-func NewBackgroundMigrationStore(db Queryer) *backgroundMigrationStore {
+func NewBackgroundMigrationStore(db Queryer) BackgroundMigrationStore {
 	return &backgroundMigrationStore{db: db}
 }
 
@@ -137,13 +137,15 @@ func (bms *backgroundMigrationStore) ExistsColumn(ctx context.Context, schema, t
 	return ok, nil
 }
 
-// FindJobEndFromJobStart finds the end cursor for a job based on the start of the job and the batch size of the Background Migration the job is associated with.
+// FindJobEndFromJobStart calculates the end cursor for a job based on its start position and the batch size.
+// If there are fewer records than the batch size, the end will be set to the last possible record.
 func (bms *backgroundMigrationStore) FindJobEndFromJobStart(ctx context.Context, table, column string, start, last, batchSize int) (int, error) {
 	err := bms.ValidateMigrationTableAndColumn(ctx, table, column)
 	if err != nil {
 		return 0, err
 	}
 
+	// If the range exceeds or meets the last record, return the last record.
 	if start+batchSize >= last {
 		return last, nil
 	}
@@ -157,7 +159,7 @@ func (bms *backgroundMigrationStore) FindJobEndFromJobStart(ctx context.Context,
 	err = bms.db.QueryRowContext(ctx, q, start, last, batchSize).Scan(&end)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return start, nil
+			return last, nil
 		}
 		return end, fmt.Errorf("calculating batched background migration job end id: %w", err)
 	}
@@ -355,8 +357,8 @@ func (bms *backgroundMigrationStore) FindByName(ctx context.Context, name string
 func (bms *backgroundMigrationStore) CreateNewJob(ctx context.Context, newJob *models.BackgroundMigrationJob) error {
 	defer metrics.InstrumentQuery("bbm_create_new_job")()
 
-	q := `INSERT INTO batched_background_migration_jobs (batched_background_migration_id, min_value, max_value)
-			VALUES ($1, $2, $3)
+	q := `INSERT INTO batched_background_migration_jobs (batched_background_migration_id, min_value, max_value, started_at)
+			VALUES ($1, $2, $3, now())
 		RETURNING
 			id, status, attempts`
 	row := bms.db.QueryRowContext(ctx, q, newJob.BBMID, newJob.StartID, newJob.EndID)
@@ -372,17 +374,27 @@ func (bms *backgroundMigrationStore) UpdateStatus(ctx context.Context, bbm *mode
 
 	// Update both status and failure_error_code
 	q := `UPDATE
-    		batched_background_migrations
+			batched_background_migrations
 		SET
 			status = $1,
 			failure_error_code = $2,
-			updated_at = now()
+			updated_at = now(),
+			started_at = CASE WHEN $1 = $4 THEN
+				now()
+			ELSE
+				started_at
+			END,
+			finished_at = CASE WHEN $1 = $5 THEN
+				now()
+			ELSE
+				finished_at
+			END
 		WHERE
 			id = $3
 		RETURNING
 			status,
 			failure_error_code`
-	row := bms.db.QueryRowContext(ctx, q, int(bbm.Status), bbm.ErrorCode, bbm.ID)
+	row := bms.db.QueryRowContext(ctx, q, int(bbm.Status), bbm.ErrorCode, bbm.ID, int(models.BackgroundMigrationRunning), int(models.BackgroundMigrationFinished))
 	if err := row.Scan(&bbm.Status, &bbm.ErrorCode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("background migration not found")
@@ -419,14 +431,19 @@ func (bms *backgroundMigrationStore) UpdateJobStatus(ctx context.Context, job *m
 		SET
 			status = $1,
 			failure_error_code = $2,
-			updated_at = now()
+			updated_at = now(),
+			finished_at = CASE WHEN $1 = $4 THEN
+				now()
+			ELSE
+				finished_at
+			END
 		WHERE
 			id = $3
 		RETURNING
 			status,
 			failure_error_code`
 
-	row := bms.db.QueryRowContext(ctx, q, int(job.Status), job.ErrorCode, job.ID)
+	row := bms.db.QueryRowContext(ctx, q, int(job.Status), job.ErrorCode, job.ID, int(models.BackgroundMigrationFinished))
 	if err := row.Scan(&job.Status, &job.ErrorCode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("background migration job not found")

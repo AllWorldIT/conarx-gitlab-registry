@@ -60,7 +60,7 @@ func (rbds *redisBlobDescriptorService) Stat(ctx context.Context, dgst digest.Di
 		return distribution.Descriptor{}, err
 	}
 
-	return rbds.stat(ctx, dgst)
+	return rbds.statImpl(ctx, dgst)
 }
 
 func (rbds *redisBlobDescriptorService) Clear(ctx context.Context, dgst digest.Digest) error {
@@ -80,8 +80,8 @@ func (rbds *redisBlobDescriptorService) Clear(ctx context.Context, dgst digest.D
 	return nil
 }
 
-// stat provides an internal stat call.
-func (rbds *redisBlobDescriptorService) stat(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
+// statImpl provides an internal statImpl call.
+func (rbds *redisBlobDescriptorService) statImpl(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
 	reply, err := rbds.client.HMGet(ctx, rbds.blobDescriptorHashKey(dgst), "digest", "size", "mediatype").Result()
 	if err != nil {
 		return distribution.Descriptor{}, err
@@ -127,11 +127,11 @@ func (rbds *redisBlobDescriptorService) SetDescriptor(ctx context.Context, dgst 
 		return err
 	}
 
-	return rbds.setDescriptor(ctx, dgst, desc)
+	return rbds.setDescriptorImpl(ctx, dgst, desc)
 }
 
-func (rbds *redisBlobDescriptorService) setDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
-	if err := rbds.client.HMSet(ctx, rbds.blobDescriptorHashKey(dgst), map[string]interface{}{
+func (rbds *redisBlobDescriptorService) setDescriptorImpl(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
+	if err := rbds.client.HMSet(ctx, rbds.blobDescriptorHashKey(dgst), map[string]any{
 		"digest": desc.Digest.String(),
 		"size":   desc.Size,
 	}).Err(); err != nil {
@@ -140,13 +140,13 @@ func (rbds *redisBlobDescriptorService) setDescriptor(ctx context.Context, dgst 
 
 	// Only set mediatype if not already set.
 	if err := rbds.client.HSetNX(ctx, rbds.blobDescriptorHashKey(dgst), "mediatype", desc.MediaType).Err(); err != nil {
-		return err
+		return fmt.Errorf("redis HSetNX: %w", err)
 	}
 
 	return nil
 }
 
-func (rbds *redisBlobDescriptorService) blobDescriptorHashKey(dgst digest.Digest) string {
+func (*redisBlobDescriptorService) blobDescriptorHashKey(dgst digest.Digest) string {
 	return "blobs::" + dgst.String()
 }
 
@@ -175,7 +175,7 @@ func (rsrbds *repositoryScopedRedisBlobDescriptorService) Stat(ctx context.Conte
 		return distribution.Descriptor{}, distribution.ErrBlobUnknown
 	}
 
-	upstream, err := rsrbds.upstream.stat(ctx, dgst)
+	upstream, err := rsrbds.upstream.statImpl(ctx, dgst)
 	if err != nil {
 		return distribution.Descriptor{}, err
 	}
@@ -231,15 +231,15 @@ func (rsrbds *repositoryScopedRedisBlobDescriptorService) SetDescriptor(ctx cont
 		}
 	}
 
-	return rsrbds.setDescriptor(ctx, dgst, desc)
+	return rsrbds.setDescriptorImpl(ctx, dgst, desc)
 }
 
-func (rsrbds *repositoryScopedRedisBlobDescriptorService) setDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
+func (rsrbds *repositoryScopedRedisBlobDescriptorService) setDescriptorImpl(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
 	if err := rsrbds.upstream.client.SAdd(ctx, rsrbds.repositoryBlobSetKey(), dgst.String()).Err(); err != nil {
 		return err
 	}
 
-	if err := rsrbds.upstream.setDescriptor(ctx, dgst, desc); err != nil {
+	if err := rsrbds.upstream.setDescriptorImpl(ctx, dgst, desc); err != nil {
 		return err
 	}
 
@@ -251,7 +251,7 @@ func (rsrbds *repositoryScopedRedisBlobDescriptorService) setDescriptor(ctx cont
 	// Also set the values for the primary descriptor, if they differ by
 	// algorithm (ie sha256 vs sha512).
 	if desc.Digest != "" && dgst != desc.Digest && dgst.Algorithm() != desc.Digest.Algorithm() {
-		if err := rsrbds.setDescriptor(ctx, desc.Digest, desc); err != nil {
+		if err := rsrbds.setDescriptorImpl(ctx, desc.Digest, desc); err != nil {
 			return err
 		}
 	}

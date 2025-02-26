@@ -116,18 +116,20 @@ type NullDigest struct {
 }
 
 // TagDetail is a virtual entity with no parallel on the database schema. This provides a set of attributes obtained
-// by merging a Tag entity with the corresponding Manifest entity and the GET /gitlab/v1/<name>/tags/list API endpoint
-// is its primary use case.
+// by merging a Tag entity with the corresponding Manifest entity and the GET /gitlab/v1/<name>/tags/list
+// and GET /gitlab/v1/<name>/tags/detail API endpoints are its primary use case.
 type TagDetail struct {
-	Name         string
-	Digest       digest.Digest
-	ConfigDigest NullDigest
-	MediaType    string
-	Size         int64
-	CreatedAt    time.Time
-	UpdatedAt    sql.NullTime
-	PublishedAt  time.Time
-	Referrers    []TagReferrerDetail
+	ManifestID    int64
+	Name          string
+	Digest        digest.Digest
+	ConfigDigest  NullDigest
+	MediaType     string
+	Size          int64
+	CreatedAt     time.Time
+	UpdatedAt     sql.NullTime
+	PublishedAt   time.Time
+	Referrers     []TagReferrerDetail
+	Configuration *Configuration
 }
 
 type TagReferrerDetail struct {

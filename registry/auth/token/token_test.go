@@ -18,6 +18,7 @@ import (
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/libtrust"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -169,14 +170,10 @@ func TestTokenVerify(t *testing.T) {
 	)
 
 	rootKeys, err := makeRootKeys(numTokens)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rootCerts, err := makeRootCerts(rootKeys)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rootPool := x509.NewCertPool()
 	for _, rootCert := range rootCerts {
@@ -189,9 +186,7 @@ func TestTokenVerify(t *testing.T) {
 
 	for i := 0; i < numTokens; i++ {
 		token, err := makeTestToken(issuer, audience, access, rootKeys[i], i, time.Now(), time.Now().Add(5*time.Minute))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		tokens = append(tokens, token)
 	}
 
@@ -203,9 +198,7 @@ func TestTokenVerify(t *testing.T) {
 	}
 
 	for _, token := range tokens {
-		if err := token.Verify(verifyOps); err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, token.Verify(verifyOps))
 	}
 }
 
@@ -225,9 +218,7 @@ func TestLeeway(t *testing.T) {
 	)
 
 	rootKeys, err := makeRootKeys(1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	trustedKeys := makeTrustedKeyMap(rootKeys)
 
@@ -241,44 +232,32 @@ func TestLeeway(t *testing.T) {
 	// nbf verification should pass within leeway
 	futureNow := time.Now().Add(time.Duration(5) * time.Second)
 	token, err := makeTestToken(issuer, audience, access, rootKeys[0], 0, futureNow, futureNow.Add(5*time.Minute))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := token.Verify(verifyOps); err != nil {
-		t.Fatal(err)
-	}
+	// nolint: testifylint // require-error
+	assert.NoError(t, token.Verify(verifyOps))
 
 	// nbf verification should fail with a skew larger than leeway
 	futureNow = time.Now().Add(time.Duration(61) * time.Second)
 	token, err = makeTestToken(issuer, audience, access, rootKeys[0], 0, futureNow, futureNow.Add(5*time.Minute))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err = token.Verify(verifyOps); err == nil {
-		t.Fatal("Verification should fail for token with nbf in the future outside leeway")
-	}
+	// nolint: testifylint // require-error
+	assert.Error(t, token.Verify(verifyOps), "verification should fail for token with nbf in the future outside leeway")
 
 	// exp verification should pass within leeway
 	token, err = makeTestToken(issuer, audience, access, rootKeys[0], 0, time.Now(), time.Now().Add(-59*time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err = token.Verify(verifyOps); err != nil {
-		t.Fatal(err)
-	}
+	// nolint: testifylint // require-error
+	assert.NoError(t, token.Verify(verifyOps))
 
 	// exp verification should fail with a skew larger than leeway
 	token, err = makeTestToken(issuer, audience, access, rootKeys[0], 0, time.Now(), time.Now().Add(-60*time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err = token.Verify(verifyOps); err == nil {
-		t.Fatal("Verification should fail for token with exp in the future outside leeway")
-	}
+	// nolint: testifylint // require-error
+	assert.Error(t, token.Verify(verifyOps), "verification should fail for token with exp in the future outside leeway")
 }
 
 func writeTempRootCerts(rootKeys []libtrust.PrivateKey) (filename string, err error) {
@@ -298,7 +277,7 @@ func writeTempRootCerts(rootKeys []libtrust.PrivateKey) (filename string, err er
 			Type:  "CERTIFICATE",
 			Bytes: cert.Raw,
 		}); err != nil {
-			os.Remove(tempFile.Name())
+			_ = os.Remove(tempFile.Name())
 			return "", err
 		}
 	}
@@ -316,21 +295,17 @@ func writeTempRootCerts(rootKeys []libtrust.PrivateKey) (filename string, err er
 func TestAccessController(t *testing.T) {
 	// Make 2 keys; only the first is to be a trusted root key.
 	rootKeys, err := makeRootKeys(2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rootCertBundleFilename, err := writeTempRootCerts(rootKeys[:1])
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(rootCertBundleFilename)
 
 	realm := "https://auth.example.com/token/"
 	issuer := "test-issuer.example.com"
 	service := "test-service.example.com"
 
-	options := map[string]interface{}{
+	options := map[string]any{
 		"realm":          realm,
 		"issuer":         issuer,
 		"service":        service,
@@ -339,15 +314,11 @@ func TestAccessController(t *testing.T) {
 	}
 
 	accessController, err := newAccessController(options)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// 1. Make a mock http.Request with no token.
 	req, err := http.NewRequest(http.MethodGet, "http://example.com/foo", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	testAccess := auth.Access{
 		Resource: auth.Resource{
@@ -360,17 +331,11 @@ func TestAccessController(t *testing.T) {
 	ctx := dcontext.WithRequest(context.Background(), req)
 	authCtx, err := accessController.Authorized(ctx, testAccess)
 	challenge, ok := err.(auth.Challenge)
-	if !ok {
-		t.Fatal("accessController did not return a challenge")
-	}
+	assert.True(t, ok, "accessController did not return a challenge")
 
-	if challenge.Error() != ErrTokenRequired.Error() {
-		t.Fatalf("accessControler did not get expected error - got %s - expected %s", challenge, ErrTokenRequired)
-	}
+	assert.Equal(t, ErrTokenRequired.Error(), challenge.Error())
 
-	if authCtx != nil {
-		t.Fatalf("expected nil auth context but got %s", authCtx)
-	}
+	assert.Nil(t, authCtx, "expected nil auth context")
 
 	// 2. Supply an invalid token.
 	token, err := makeTestToken(
@@ -382,51 +347,35 @@ func TestAccessController(t *testing.T) {
 		}},
 		rootKeys[1], 1, time.Now(), time.Now().Add(5*time.Minute), // Everything is valid except the key which signed it.
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.compactRaw()))
 
 	authCtx, err = accessController.Authorized(ctx, testAccess)
 	challenge, ok = err.(auth.Challenge)
-	if !ok {
-		t.Fatal("accessController did not return a challenge")
-	}
+	assert.True(t, ok, "accessController did not return a challenge")
 
-	if challenge.Error() != ErrInvalidToken.Error() {
-		t.Fatalf("accessControler did not get expected error - got %s - expected %s", challenge, ErrTokenRequired)
-	}
+	assert.Equal(t, ErrInvalidToken.Error(), challenge.Error())
 
-	if authCtx != nil {
-		t.Fatalf("expected nil auth context but got %s", authCtx)
-	}
+	assert.Nil(t, authCtx, "expected nil auth context")
 
 	// 3. Supply a token with insufficient access.
 	token, err = makeTestToken(
 		issuer, service,
-		[]*ResourceActions{}, // No access specified.
+		make([]*ResourceActions, 0), // No access specified.
 		rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.compactRaw()))
 
 	authCtx, err = accessController.Authorized(ctx, testAccess)
 	challenge, ok = err.(auth.Challenge)
-	if !ok {
-		t.Fatal("accessController did not return a challenge")
-	}
+	assert.True(t, ok, "accessController did not return a challenge")
 
-	if challenge.Error() != ErrInsufficientScope.Error() {
-		t.Fatalf("accessControler did not get expected error - got %s - expected %s", challenge, ErrInsufficientScope)
-	}
+	assert.Equal(t, ErrInsufficientScope.Error(), challenge.Error())
 
-	if authCtx != nil {
-		t.Fatalf("expected nil auth context but got %s", authCtx)
-	}
+	assert.Nil(t, authCtx, "expected nil auth context")
 
 	// 4. Supply the token we need, or deserve, or whatever.
 	token, err = makeTestToken(
@@ -438,29 +387,19 @@ func TestAccessController(t *testing.T) {
 		}},
 		rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.compactRaw()))
 
 	authCtx, err = accessController.Authorized(ctx, testAccess)
-	if err != nil {
-		t.Fatalf("accessController returned unexpected error: %s", err)
-	}
+	require.NoError(t, err)
 
 	userInfo, ok := authCtx.Value(auth.UserKey).(auth.UserInfo)
-	if !ok {
-		t.Fatal("token accessController did not set auth.user context")
-	}
+	assert.True(t, ok, "token accessController did not set auth.user context")
 
-	if userInfo.Name != "foo" {
-		t.Fatalf("expected user name %q, got %q", "foo", userInfo.Name)
-	}
+	assert.Equal(t, "foo", userInfo.Name)
 
-	if userInfo.Type != "bar" {
-		t.Fatalf("expected user type %q, got %q", "bar", userInfo.Type)
-	}
+	assert.Equal(t, "bar", userInfo.Type)
 
 	// 5. Supply a token with full admin rights, which is represented as "*".
 	token, err = makeTestToken(
@@ -472,55 +411,39 @@ func TestAccessController(t *testing.T) {
 		}},
 		rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.compactRaw()))
 
 	_, err = accessController.Authorized(ctx, testAccess)
-	if err != nil {
-		t.Fatalf("accessController returned unexpected error: %s", err)
-	}
+	require.NoError(t, err, "accessController returned unexpected error")
 }
 
 // This tests that newAccessController can handle PEM blocks in the certificate
 // file other than certificates, for example a private key.
 func TestNewAccessControllerPemBlock(t *testing.T) {
 	rootKeys, err := makeRootKeys(2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rootCertBundleFilename, err := writeTempRootCerts(rootKeys)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(rootCertBundleFilename)
 
 	// Add something other than a certificate to the rootcertbundle
 	file, err := os.OpenFile(rootCertBundleFilename, os.O_WRONLY|os.O_APPEND, 0o666)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	keyBlock, err := rootKeys[0].PEMBlock()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	err = pem.Encode(file, keyBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	err = file.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	realm := "https://auth.example.com/token/"
 	issuer := "test-issuer.example.com"
 	service := "test-service.example.com"
 
-	options := map[string]interface{}{
+	options := map[string]any{
 		"realm":          realm,
 		"issuer":         issuer,
 		"service":        service,
@@ -529,13 +452,10 @@ func TestNewAccessControllerPemBlock(t *testing.T) {
 	}
 
 	ac, err := newAccessController(options)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if len(ac.(*accessController).rootCerts.Subjects()) != 2 {
-		t.Fatal("accessController has the wrong number of certificates")
-	}
+	// nolint: staticcheck // needs more thorought investigation and fix
+	require.Len(t, ac.(*accessController).rootCerts.Subjects(), 2, "accessController has the wrong number of certificates")
 }
 
 // TestAccessController_Meta tests that the meta data is correctly unmarshalled
@@ -594,13 +514,13 @@ func newTestAuthContext(t *testing.T, ctx context.Context, req *http.Request, ac
 
 	rootCertBundleFilename, err := writeTempRootCerts(rootKeys)
 	require.NoError(t, err)
-	t.Cleanup(func() { os.Remove(rootCertBundleFilename) })
+	t.Cleanup(func() { _ = os.Remove(rootCertBundleFilename) })
 
 	testRealm := "https://gitlab.com/jwt/auth"
 	testIssuer := "omnibus-gitlab-issuer"
 	testService := "container_registry"
 
-	options := map[string]interface{}{
+	options := map[string]any{
 		"realm":          testRealm,
 		"issuer":         testIssuer,
 		"service":        testService,

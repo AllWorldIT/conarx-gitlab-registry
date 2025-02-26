@@ -6,11 +6,12 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	mrand "math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -44,7 +45,6 @@ import (
 	registryhandlers "github.com/docker/distribution/registry/handlers"
 	iredis "github.com/docker/distribution/registry/internal/redis"
 	internaltestutil "github.com/docker/distribution/registry/internal/testutil"
-	rtestutil "github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	_ "github.com/docker/distribution/registry/storage/driver/filesystem"
@@ -86,7 +86,7 @@ func withReadOnly(config *configuration.Configuration) {
 		config.Storage["maintenance"] = configuration.Parameters{}
 	}
 
-	config.Storage["maintenance"]["readonly"] = map[interface{}]interface{}{"enabled": true}
+	config.Storage["maintenance"]["readonly"] = map[any]any{"enabled": true}
 }
 
 func withoutManifestURLValidation(config *configuration.Configuration) {
@@ -101,9 +101,9 @@ func withSillyAuth(config *configuration.Configuration) {
 	config.Auth["silly"] = configuration.Parameters{"realm": "test-realm", "service": "test-service"}
 }
 
-func withFSDriver(path string) configOpt {
+func withFSDriver(p string) configOpt {
 	return func(config *configuration.Configuration) {
-		config.Storage["filesystem"] = configuration.Parameters{"rootdirectory": path}
+		config.Storage["filesystem"] = configuration.Parameters{"rootdirectory": p}
 	}
 }
 
@@ -122,6 +122,7 @@ func withDBHostAndPort(host string, port int) configOpt {
 	}
 }
 
+// nolint:unparam //(`d` always receives `1 * time.Second`)
 func withDBConnectTimeout(d time.Duration) configOpt {
 	return func(config *configuration.Configuration) {
 		config.Database.ConnectTimeout = d
@@ -212,14 +213,11 @@ type tagsAPIResponse struct {
 	Tags []string `json:"tags"`
 }
 
-// digestSha256EmptyTar is the canonical sha256 digest of empty data
-const digestSha256EmptyTar = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-
 func newConfig(opts ...configOpt) configuration.Configuration {
 	config := &configuration.Configuration{
 		Storage: configuration.Storage{
 			"maintenance": configuration.Parameters{
-				"uploadpurging": map[interface{}]interface{}{"enabled": false},
+				"uploadpurging": map[any]any{"enabled": false},
 			},
 		},
 	}
@@ -251,12 +249,14 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 				tmpPort := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_PORT")
 				record := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_RECORD")
 
+				// nolint: revive // max-control-nesting
 				if nameserver == "" || tmpPort == "" || record == "" {
 					panic("REGISTRY_DATABASE_LOADBALANCING_NAMESERVER, " +
 						"REGISTRY_DATABASE_LOADBALANCING_PORT and REGISTRY_DATABASE_LOADBALANCING_RECORD required for " +
 						"enabling DB load balancing with service discovery")
 				}
 				port, err := strconv.Atoi(tmpPort)
+				// nolint: revive // max-control-nesting
 				if err != nil {
 					panic(fmt.Sprintf("invalid REGISTRY_DATABASE_LOADBALANCING_PORT: %q", tmpPort))
 				}
@@ -267,7 +267,7 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 					Port:       port,
 					Record:     record,
 				}
-			} else if hosts := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_HOSTS"); hosts != "" {
+			} else if hosts := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_HOSTS"); hosts != "" { // nolint: revive // max-control-nesting
 				config.Database.LoadBalancing = configuration.DatabaseLoadBalancing{
 					Enabled: true,
 					Hosts:   strings.Split(hosts, ","),
@@ -326,7 +326,7 @@ type schema1PreseededInMemoryDriverFactory struct{}
 // Create returns a shared instance of the inmemory storage driver with a
 // preseeded schema1 manifest. This allows us to test GETs against schema1
 // manifests even though we are unable to PUT schema1 manifests via the API.
-func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (*schema1PreseededInMemoryDriverFactory) Create(_ map[string]any) (storagedriver.StorageDriver, error) {
 	d := inmemory.New()
 
 	unsignedManifest := &schema1.Manifest{
@@ -335,7 +335,7 @@ func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[stri
 		},
 		Name:    preseededSchema1RepoPath,
 		Tag:     preseededSchema1TagName,
-		History: []schema1.History{},
+		History: make([]schema1.History, 0),
 	}
 
 	pk, err := libtrust.GenerateECP256PrivateKey()
@@ -357,9 +357,18 @@ func (factory *schema1PreseededInMemoryDriverFactory) Create(parameters map[stri
 
 	ctx := context.Background()
 
-	d.PutContent(ctx, manifestTagCurrentPath, []byte(dgst))
-	d.PutContent(ctx, manifestRevisionLinkPath, []byte(dgst))
-	d.PutContent(ctx, blobDataPath, sm.Canonical)
+	err = d.PutContent(ctx, manifestTagCurrentPath, []byte(dgst))
+	if err != nil {
+		return nil, err
+	}
+	err = d.PutContent(ctx, manifestRevisionLinkPath, []byte(dgst))
+	if err != nil {
+		return nil, err
+	}
+	err = d.PutContent(ctx, blobDataPath, sm.Canonical)
+	if err != nil {
+		return nil, err
+	}
 
 	return d, nil
 }
@@ -372,7 +381,7 @@ type testEnv struct {
 	server       *httptest.Server
 	builder      *urls.Builder
 	db           datastore.LoadBalancer
-	ns           *rtestutil.NotificationServer
+	ns           *internaltestutil.NotificationServer
 	cacheClient  cacheClient
 	shutdownOnce *sync.Once
 }
@@ -432,9 +441,9 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 		}
 	}
 
-	var notifServer *rtestutil.NotificationServer
+	var notifServer *internaltestutil.NotificationServer
 	if len(config.Notifications.Endpoints) == 1 {
-		notifServer = rtestutil.NewNotificationServer(t, config.Database.Enabled)
+		notifServer = internaltestutil.NewNotificationServer(t, config.Database.Enabled)
 		// ensure URL is set properly with mock server URL
 		config.Notifications.Endpoints[0].URL = notifServer.URL
 	}
@@ -454,9 +463,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	require.NoError(t, err)
 
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("unexpected error generating private key: %v", err)
-	}
+	require.NoError(t, err, "unexpected error generating private key")
 
 	return &testEnv{
 		pk:           pk,
@@ -472,27 +479,27 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	}
 }
 
-func (t *testEnv) Shutdown() {
-	t.shutdownOnce.Do(func() {
-		t.server.CloseClientConnections()
-		t.server.Close()
+func (e *testEnv) Shutdown() {
+	e.shutdownOnce.Do(func() {
+		e.server.CloseClientConnections()
+		e.server.Close()
 
-		if err := t.app.GracefulShutdown(t.ctx); err != nil {
+		if err := e.app.GracefulShutdown(e.ctx); err != nil {
 			panic(err)
 		}
 
-		if t.config.Database.Enabled {
-			if err := datastoretestutil.TruncateAllTables(t.db.Primary()); err != nil {
+		if e.config.Database.Enabled {
+			if err := datastoretestutil.TruncateAllTables(e.db.Primary()); err != nil {
 				panic(err)
 			}
 
-			if err := t.db.Close(); err != nil {
+			if err := e.db.Close(); err != nil {
 				panic(err)
 			}
 		}
 
-		if t.config.Redis.Cache.Enabled {
-			if err := t.cacheClient.FlushCache(); err != nil {
+		if e.config.Redis.Cache.Enabled {
+			if err := e.cacheClient.FlushCache(); err != nil {
 				panic(err)
 			}
 		}
@@ -529,11 +536,11 @@ func putByTag(tagName string) manifestOptsFunc {
 	}
 }
 
-func putByDigest(t *testing.T, env *testEnv, opts *manifestOpts) {
+func putByDigest(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 	opts.putManifest = true
 }
 
-func withAssertNotification(t *testing.T, env *testEnv, opts *manifestOpts) {
+func withAssertNotification(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 	opts.assertNotification = true
 }
 
@@ -542,26 +549,27 @@ func withoutMediaType(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 }
 
 func withArtifactType(at string) manifestOptsFunc {
-	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
+	return func(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 		opts.artifactType = at
 	}
 }
 
 func withSubject(subject subjectManifest) manifestOptsFunc {
-	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
+	return func(_ *testing.T, _ *testEnv, opts *manifestOpts) {
 		opts.subjectManifest = subject
 	}
 }
 
-func withAuthToken(token string) manifestOptsFunc {
-	return func(t *testing.T, env *testEnv, opts *manifestOpts) {
-		opts.authToken = token
+func withAuthToken(t string) manifestOptsFunc {
+	return func(_ *testing.T, _ *testEnv, opts *manifestOpts) {
+		opts.authToken = t
 	}
 }
 
 func schema2Config() ([]byte, distribution.Descriptor) {
 	payload := []byte(`{
 		"architecture": "amd64",
+		"os": "linux",
 		"history": [
 			{
 				"created": "2015-10-31T22:22:54.690851953Z",
@@ -612,7 +620,7 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	manifest := &schema2.Manifest{
+	tmpManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -623,25 +631,25 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 	cfgPayload, cfgDesc := schema2Config()
 	uploadURLBase, _ := startPushLayer(t, env, repoRef, requestOpts...)
 	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload), requestOpts...)
-	manifest.Config = cfgDesc
+	tmpManifest.Config = cfgDesc
 
 	// Create and push up 2 random layers.
-	manifest.Layers = make([]distribution.Descriptor, 2)
+	tmpManifest.Layers = make([]distribution.Descriptor, 2)
 
-	for i := range manifest.Layers {
+	for i := range tmpManifest.Layers {
 		rs, dgst, size := createRandomSmallLayer()
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef, requestOpts...)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs, requestOpts...)
 
-		manifest.Layers[i] = distribution.Descriptor{
+		tmpManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: schema2.MediaTypeLayer,
 			Size:      size,
 		}
 	}
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*tmpManifest)
 	require.NoError(t, err)
 
 	if config.putManifest {
@@ -651,7 +659,8 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 			config.manifestURL = manifestDigestURL
 		}
 
-		resp := putManifest(t, "putting manifest no error", config.manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest, requestOpts...)
+		resp, err := putManifest("putting manifest no error", config.manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest, requestOpts...)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -676,9 +685,9 @@ func createRandomSmallLayer() (io.ReadSeeker, digest.Digest, int64) {
 	// small as this will lead to flakes, as there is only one sha for layer
 	// size 0, handfull of shas for layer with size 1, etc... 128-196 bytes
 	// gives enough entropy to make tests reliable.
-	size := 128 + rand.Int63n(64)
+	size := 128 + mrand.Int63n(64)
 	b := make([]byte, size)
-	rand.Read(b)
+	_, _ = rand.Read(b) // always returns err==nil
 
 	dgst := digest.FromBytes(b)
 	rs := bytes.NewReader(b)
@@ -765,36 +774,36 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	manifest := &ocischema.Manifest{
+	tmpManifest := &ocischema.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     v1.MediaTypeImageManifest,
 		},
 	}
 
-	manifest.ArtifactType = config.artifactType
+	tmpManifest.ArtifactType = config.artifactType
 
 	// Use the config from the subject manifest, if present;
 	// otherwise, create a manifest config and push up its content.
 	if config.hasSubject() {
-		manifest.Config = config.subjectManifest.Config()
+		tmpManifest.Config = config.subjectManifest.Config()
 	} else {
 		cfgPayload, cfgDesc := ociConfig()
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-		manifest.Config = cfgDesc
+		tmpManifest.Config = cfgDesc
 	}
 
 	// Create and push up 2 random layers.
-	manifest.Layers = make([]distribution.Descriptor, 2)
+	tmpManifest.Layers = make([]distribution.Descriptor, 2)
 
-	for i := range manifest.Layers {
+	for i := range tmpManifest.Layers {
 		rs, dgst, size := createRandomSmallLayer()
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
 
-		manifest.Layers[i] = distribution.Descriptor{
+		tmpManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: v1.MediaTypeImageLayer,
 			Size:      size,
@@ -806,14 +815,14 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 		_, payload, err := config.subjectManifest.Payload()
 		require.NoError(t, err)
 
-		manifest.Subject = &distribution.Descriptor{
+		tmpManifest.Subject = &distribution.Descriptor{
 			Digest:    digest.FromBytes(payload),
 			MediaType: v1.MediaTypeImageManifest,
 			Size:      int64(len(payload)),
 		}
 	}
 
-	deserializedManifest, err := ocischema.FromStruct(*manifest)
+	deserializedManifest, err := ocischema.FromStruct(*tmpManifest)
 	require.NoError(t, err)
 
 	if config.putManifest {
@@ -823,7 +832,8 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 			config.manifestURL = manifestDigestURL
 		}
 
-		resp := putManifest(t, "putting manifest no error", config.manifestURL, v1.MediaTypeImageManifest, deserializedManifest)
+		resp, err := putManifest("putting manifest no error", config.manifestURL, v1.MediaTypeImageManifest, deserializedManifest)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -851,8 +861,8 @@ func randomPlatformSpec() manifestlist.PlatformSpec {
 	oses := []string{"aix", "darwin", "linux", "freebsd", "plan9"}
 
 	return manifestlist.PlatformSpec{
-		Architecture: architectures[rand.Intn(len(architectures))],
-		OS:           oses[rand.Intn(len(oses))],
+		Architecture: architectures[mrand.Intn(len(architectures))],
+		OS:           oses[mrand.Intn(len(oses))],
 		// Optional values.
 		OSVersion:  "",
 		OSFeatures: nil,
@@ -919,7 +929,8 @@ func seedRandomOCIImageIndex(t *testing.T, env *testEnv, repoPath string, opts .
 			config.manifestURL = manifestDigestURL
 		}
 
-		resp := putManifest(t, "putting oci image index no error", config.manifestURL, v1.MediaTypeImageIndex, deserializedManifest)
+		resp, err := putManifest("putting oci image index no error", config.manifestURL, v1.MediaTypeImageIndex, deserializedManifest)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -968,29 +979,21 @@ func buildEventManifestPull(mediaType, repoPath string, dgst digest.Digest, size
 	}
 }
 
-func buildEventManifestDeleteByDigest(mediaType, repoPath string, dgst digest.Digest) notifications.Event {
-	return buildEventManifestDelete(mediaType, repoPath, "", dgst)
+func buildEventSchema2ManifestDeleteByDigest(repoPath string, dgst digest.Digest) notifications.Event {
+	return buildEventManifestDelete(schema2.MediaTypeManifest, repoPath, "", dgst)
 }
 
 func buildEventManifestDeleteByTag(mediaType, repoPath, tag string, opts ...eventOpt) notifications.Event {
 	return buildEventManifestDelete(mediaType, repoPath, tag, "", opts...)
 }
 
-func buildEventRepositoryRenamed(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
-	return buildEventRepositoryRename(repoTargetPath, rename, opts...)
-}
-
-func buildEventRepositoryRename(repoTargetPath string, rename notifications.Rename, opts ...eventOpt) notifications.Event {
+func buildEventRepositoryRename(repoTargetPath string, rename notifications.Rename) notifications.Event {
 	event := notifications.Event{
 		Action: "rename",
 		Target: notifications.Target{
 			Repository: repoTargetPath,
 			Rename:     &rename,
 		},
-	}
-
-	for _, opt := range opts {
-		opt(&event)
 	}
 
 	return event
@@ -1033,13 +1036,13 @@ func buildManifestTagURL(t *testing.T, env *testEnv, repoPath, tagName string) s
 	return tagURL
 }
 
-func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, manifest distribution.Manifest) string {
+func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, targetManifest distribution.Manifest) string {
 	t.Helper()
 
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	_, payload, err := manifest.Payload()
+	_, payload, err := targetManifest.Payload()
 	require.NoError(t, err)
 
 	dgst := digest.FromBytes(payload)
@@ -1056,84 +1059,74 @@ func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, manifes
 func shuffledCopy(s []string) []string {
 	shuffled := make([]string, len(s))
 	copy(shuffled, s)
-	rand.Shuffle(len(shuffled), func(i, j int) {
+	mrand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 
 	return shuffled
 }
 
-func putManifestRequest(t *testing.T, msg, url, contentType string, v interface{}) *http.Request {
+func putManifestRequest(targetURL, contentType string, v any) (*http.Request, error) {
 	var body []byte
 
 	switch m := v.(type) {
 	case *schema1.SignedManifest:
 		_, pl, err := m.Payload()
 		if err != nil {
-			t.Fatalf("error getting payload: %v", err)
+			return nil, fmt.Errorf("getting payload: %w", err)
 		}
 		body = pl
 	case *manifestlist.DeserializedManifestList:
 		_, pl, err := m.Payload()
 		if err != nil {
-			t.Fatalf("error getting payload: %v", err)
+			return nil, fmt.Errorf("getting payload: %w", err)
 		}
 		body = pl
 	default:
 		var err error
 		body, err = json.MarshalIndent(v, "", "   ")
 		if err != nil {
-			t.Fatalf("unexpected error marshaling %v: %v", v, err)
+			return nil, fmt.Errorf("json marshal: %w", err)
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPut, targetURL, bytes.NewReader(body))
 	if err != nil {
-		t.Fatalf("error creating request for %s: %v", msg, err)
+		return nil, fmt.Errorf("creating new request: %w", err)
 	}
 
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
 
-	return req
+	return req, nil
 }
 
-func putManifest(t *testing.T, msg, url, contentType string, v interface{}, requestopts ...requestOpt) *http.Response {
-	req := putManifestRequest(t, msg, url, contentType, v)
+func putManifest(msg, targetURL, contentType string, v any, requestopts ...requestOpt) (*http.Response, error) {
+	req, err := putManifestRequest(targetURL, contentType, v)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", msg, err)
+	}
 	req = newRequest(req, requestopts...)
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("error doing put request while %s: %v", msg, err)
-	}
-
-	return resp
+	return http.DefaultClient.Do(req)
 }
 
 func startPushLayerRequest(t *testing.T, env *testEnv, name reference.Named) *http.Request {
 	t.Helper()
 
 	layerUploadURL, err := env.builder.BuildBlobUploadURL(name)
-	if err != nil {
-		t.Fatalf("unexpected error building layer upload url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error building layer upload url")
 
 	u, err := url.Parse(layerUploadURL)
-	if err != nil {
-		t.Fatalf("error parsing layer upload URL: %v", err)
-	}
+	require.NoError(t, err, "error parsing layer upload URL")
 
 	base, err := url.Parse(env.server.URL)
-	if err != nil {
-		t.Fatalf("error parsing server URL: %v", err)
-	}
+	require.NoError(t, err, "error parsing server URL")
 
 	layerUploadURL = base.ResolveReference(u).String()
 	req, err := http.NewRequest(http.MethodPost, layerUploadURL, nil)
-	if err != nil {
-		t.Fatalf("unexpected error creating new request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating new request")
 	req.Header.Set("Content-Type", "")
 
 	return req
@@ -1146,18 +1139,14 @@ func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopt
 	req = newRequest(req, requestopts...)
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("unexpected error starting layer push: %v", err)
-	}
+	require.NoError(t, err, "unexpected error starting layer push")
 
 	defer resp.Body.Close()
 
 	checkResponse(t, fmt.Sprintf("pushing starting layer push %v", name.String()), resp, http.StatusAccepted)
 
 	u, err := url.Parse(resp.Header.Get("Location"))
-	if err != nil {
-		t.Fatalf("error parsing location header: %v", err)
-	}
+	require.NoError(t, err, "error parsing location header")
 
 	uuid = path.Base(u.Path)
 	checkHeaders(t, resp, http.Header{
@@ -1169,11 +1158,9 @@ func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopt
 	return resp.Header.Get("Location"), uuid
 }
 
-func doPushLayerRequest(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest.Digest, uploadURLBase string, body io.Reader) *http.Request {
+func doPushLayerRequest(t *testing.T, dgst digest.Digest, uploadURLBase string, body io.Reader) *http.Request {
 	u, err := url.Parse(uploadURLBase)
-	if err != nil {
-		t.Fatalf("unexpected error parsing pushLayer url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error parsing pushLayer url")
 
 	u.RawQuery = url.Values{
 		"_state": u.Query()["_state"],
@@ -1184,16 +1171,14 @@ func doPushLayerRequest(t *testing.T, ub *urls.Builder, name reference.Named, dg
 
 	// Just do a monolithic upload
 	req, err := http.NewRequest(http.MethodPut, uploadURL, body)
-	if err != nil {
-		t.Fatalf("unexpected error creating new request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating new request")
 	return req
 }
 
 // doPushLayer pushes the layer content returning the url on success returning
 // the response. If you're only expecting a successful response, use pushLayer.
-func doPushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest.Digest, uploadURLBase string, body io.Reader, requestopts ...requestOpt) (*http.Response, error) {
-	req := doPushLayerRequest(t, ub, name, dgst, uploadURLBase, body)
+func doPushLayer(t *testing.T, dgst digest.Digest, uploadURLBase string, body io.Reader, requestopts ...requestOpt) (*http.Response, error) {
+	req := doPushLayerRequest(t, dgst, uploadURLBase, body)
 	req = newRequest(req, requestopts...)
 	return http.DefaultClient.Do(req)
 }
@@ -1202,25 +1187,18 @@ func doPushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst dige
 func pushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest.Digest, uploadURLBase string, body io.Reader, requestopts ...requestOpt) string {
 	digester := digest.Canonical.Digester()
 
-	resp, err := doPushLayer(t, ub, name, dgst, uploadURLBase, io.TeeReader(body, digester.Hash()), requestopts...)
-	if err != nil {
-		t.Fatalf("unexpected error doing push layer request: %v", err)
-	}
+	resp, err := doPushLayer(t, dgst, uploadURLBase, io.TeeReader(body, digester.Hash()), requestopts...)
+	require.NoError(t, err, "unexpected error doing push layer request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "putting monolithic chunk", resp, http.StatusCreated)
 
-	if err != nil {
-		t.Fatalf("error generating sha256 digest of body")
-	}
-
 	sha256Dgst := digester.Digest()
+	ref, err := reference.WithDigest(name, sha256Dgst)
+	require.NoError(t, err, "error generating sha256 digest of body")
 
-	ref, _ := reference.WithDigest(name, sha256Dgst)
 	expectedLayerURL, err := ub.BuildBlobURL(ref)
-	if err != nil {
-		t.Fatalf("error building expected layer url: %v", err)
-	}
+	require.NoError(t, err, "error building expected layer url")
 
 	checkHeaders(t, resp, http.Header{
 		"Location":              []string{expectedLayerURL},
@@ -1232,19 +1210,15 @@ func pushLayer(t *testing.T, ub *urls.Builder, name reference.Named, dgst digest
 }
 
 func finishUpload(t *testing.T, ub *urls.Builder, name reference.Named, uploadURLBase string, dgst digest.Digest, requestopts ...requestOpt) string {
-	resp, err := doPushLayer(t, ub, name, dgst, uploadURLBase, nil, requestopts...)
-	if err != nil {
-		t.Fatalf("unexpected error doing push layer request: %v", err)
-	}
+	resp, err := doPushLayer(t, dgst, uploadURLBase, nil, requestopts...)
+	require.NoError(t, err, "unexpected error doing push layer request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "putting monolithic chunk", resp, http.StatusCreated)
 
 	ref, _ := reference.WithDigest(name, dgst)
 	expectedLayerURL, err := ub.BuildBlobURL(ref)
-	if err != nil {
-		t.Fatalf("error building expected layer url: %v", err)
-	}
+	require.NoError(t, err, "error building expected layer url")
 
 	checkHeaders(t, resp, http.Header{
 		"Location":              []string{expectedLayerURL},
@@ -1257,9 +1231,7 @@ func finishUpload(t *testing.T, ub *urls.Builder, name reference.Named, uploadUR
 
 func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) *http.Request {
 	u, err := url.Parse(uploadURLBase)
-	if err != nil {
-		t.Fatalf("unexpected error parsing pushLayer url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error parsing pushLayer url")
 
 	u.RawQuery = url.Values{
 		"_state": u.Query()["_state"],
@@ -1268,9 +1240,7 @@ func doPushChunkRequest(t *testing.T, uploadURLBase string, body io.Reader) *htt
 	uploadURL := u.String()
 
 	req, err := http.NewRequest(http.MethodPatch, uploadURL, body)
-	if err != nil {
-		t.Fatalf("unexpected error creating new request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error creating new request")
 	req.Header.Set("Content-Type", "application/octet-stream")
 	return req
 }
@@ -1288,9 +1258,8 @@ func doPushChunk(t *testing.T, uploadURLBase string, body io.Reader, requestopts
 	digester := digest.Canonical.Digester()
 	multiWriter := io.MultiWriter(buf, digester.Hash())
 
-	if _, err := io.Copy(multiWriter, body); err != nil {
-		t.Fatalf("unexpected error while copying request body: %v", err)
-	}
+	_, err := io.Copy(multiWriter, body)
+	require.NoError(t, err, "unexpected error while copying request body")
 
 	req := doPushChunkRequest(t, uploadURLBase, buf)
 	req = newRequest(req, requestopts...)
@@ -1299,18 +1268,12 @@ func doPushChunk(t *testing.T, uploadURLBase string, body io.Reader, requestopts
 	return resp, digester.Digest(), err
 }
 
-func pushChunk(t *testing.T, ub *urls.Builder, name reference.Named, uploadURLBase string, body io.Reader, length int64, requestopts ...requestOpt) (string, digest.Digest) {
+func pushChunk(t *testing.T, uploadURLBase string, body io.Reader, length int64, requestopts ...requestOpt) (string, digest.Digest) {
 	resp, dgst, err := doPushChunk(t, uploadURLBase, body, requestopts...)
-	if err != nil {
-		t.Fatalf("unexpected error doing push layer request: %v", err)
-	}
+	require.NoError(t, err, "unexpected error doing push layer request")
 	defer resp.Body.Close()
 
 	checkResponse(t, "putting chunk", resp, http.StatusAccepted)
-
-	if err != nil {
-		t.Fatalf("error generating sha256 digest of body")
-	}
 
 	checkHeaders(t, resp, http.Header{
 		"Range":          []string{fmt.Sprintf("0-%d", length-1)},
@@ -1324,20 +1287,16 @@ func checkResponse(t *testing.T, msg string, resp *http.Response, expectedStatus
 	t.Helper()
 
 	if resp.StatusCode != expectedStatus {
-		t.Logf("unexpected status %s: %v != %v", msg, resp.StatusCode, expectedStatus)
 		maybeDumpResponse(t, resp)
-
-		t.FailNow()
+		require.FailNow(t, fmt.Sprintf("unexpected status: %q", msg))
 	}
 
 	// We expect the headers included in the configuration, unless the
 	// status code is 405 (Method Not Allowed), which means the handler
 	// doesn't even get called.
 	if resp.StatusCode != 405 && !reflect.DeepEqual(resp.Header["X-Content-Type-Options"], []string{"nosniff"}) {
-		t.Logf("missing or incorrect header X-Content-Type-Options %s", msg)
 		maybeDumpResponse(t, resp)
-
-		t.FailNow()
+		require.FailNow(t, fmt.Sprintf("missing or incorrect header X-Content-Type-Options: %q", msg))
 	}
 }
 
@@ -1358,13 +1317,11 @@ func checkBodyHasErrorCodes(t *testing.T, msg string, resp *http.Response, error
 
 	// TODO(stevvooe): Shoot. The error setup is not working out. The content-
 	// type headers are being set after writing the status code.
-	// if resp.Header.Get("Content-Type") != "application/json" {
-	//	t.Fatalf("unexpected content type: %v != 'application/json'",
-	//		resp.Header.Get("Content-Type"))
-	// }
+	//
+	// require.Equal(t, resp.Header.Get("Content-Type"), "application/json", "unexpected content type: %v != 'application/json'", 	resp.Header.Get("Content-Type"))
 
-	expected := map[errcode.ErrorCode]struct{}{}
-	counts := map[errcode.ErrorCode]int{}
+	expected := make(map[errcode.ErrorCode]struct{})
+	counts := make(map[errcode.ErrorCode]int)
 
 	// Initialize map with zeros for expected
 	for _, code := range errorCodes {
@@ -1405,9 +1362,7 @@ func maybeDumpResponse(t *testing.T, resp *http.Response) {
 // suffice as a match.
 func checkHeaders(t *testing.T, resp *http.Response, headers http.Header) {
 	for k, vs := range headers {
-		if resp.Header.Get(k) == "" {
-			t.Fatalf("response missing header %q", k)
-		}
+		require.NotEmpty(t, resp.Header.Get(k), "response missing header %q", k)
 
 		for _, v := range vs {
 			if v == "*" {
@@ -1418,30 +1373,9 @@ func checkHeaders(t *testing.T, resp *http.Response, headers http.Header) {
 			}
 
 			for _, hv := range resp.Header[http.CanonicalHeaderKey(k)] {
-				if hv != v {
-					t.Fatalf("%+v %v header value not matched in response: %q != %q", resp.Header, k, hv, v)
-				}
+				require.Equalf(t, hv, v, "%+v %v header value not matched in response", resp.Header, k)
 			}
 		}
-	}
-}
-
-func checkAllowedMethods(t *testing.T, url string, allowed []string) {
-	resp, err := httpOptions(url)
-	msg := "checking allowed methods"
-	checkErr(t, err, msg)
-
-	defer resp.Body.Close()
-
-	checkResponse(t, msg, resp, http.StatusOK)
-	checkHeaders(t, resp, http.Header{
-		"Allow": allowed,
-	})
-}
-
-func checkErr(t *testing.T, err error, msg string) {
-	if err != nil {
-		t.Fatalf("unexpected error %s: %v", msg, err)
 	}
 }
 
@@ -1466,7 +1400,9 @@ func createRepositoryWithMultipleIdenticalTags(t *testing.T, env *testEnv, repoP
 		manifestTagURL := buildManifestTagURL(t, env, repoPath, tag)
 		manifestDigestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-		resp := putManifest(t, "putting manifest no error", manifestTagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+		resp, err := putManifest("putting manifest no error", manifestTagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+		require.NoError(t, err)
+		// nolint: revive // defer
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1477,8 +1413,8 @@ func createRepositoryWithMultipleIdenticalTags(t *testing.T, env *testEnv, repoP
 	return dgst, deserializedManifest.Config().Digest, schema2.MediaTypeManifest, deserializedManifest.TotalSize()
 }
 
-func httpDelete(url string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+func httpDelete(targetURL string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodDelete, targetURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1488,20 +1424,6 @@ func httpDelete(url string) (*http.Response, error) {
 		return nil, err
 	}
 	//	defer resp.Body.Close()
-	return resp, err
-}
-
-func httpOptions(url string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodOptions, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
 	return resp, err
 }
 
@@ -1548,30 +1470,59 @@ func asyncDo(f func()) chan struct{} {
 	return done
 }
 
-func createRepoWithBlob(t *testing.T, env *testEnv) (blobArgs, string) {
+func createRepoWithBlob(t *testing.T, env *testEnv) blobArgs {
 	t.Helper()
 
 	args := makeBlobArgs(t)
 	uploadURLBase, _ := startPushLayer(t, env, args.imageName)
-	blobURL := pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
+	_ = pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
 
-	return args, blobURL
+	return args
 }
 
-func createNamedRepoWithBlob(t *testing.T, env *testEnv, repoName string) (blobArgs, string) {
+func createNamedRepoWithBlob(t *testing.T, env *testEnv, repoName string) blobArgs {
 	t.Helper()
 
 	args := makeBlobArgsWithRepoName(t, repoName)
 	uploadURLBase, _ := startPushLayer(t, env, args.imageName)
-	blobURL := pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
+	_ = pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
 
-	return args, blobURL
+	return args
 }
 
-func assertGetResponse(t *testing.T, url string, expectedStatus int, opts ...requestOpt) {
+// assertGetResponse and assertGetResponseErr have the same role, the
+// assertGetResponseErr returns an error so that an assertion can be made
+// inside the goroutine whereas assertGetResponse is just a simple/short
+// version
+func assertGetResponse(t *testing.T, targetURL string, expectedStatus int, opts ...requestOpt) {
+	t.Helper()
+	require.NoError(t, assertGetResponseErr(targetURL, expectedStatus, opts...))
+}
+
+func assertGetResponseErr(targetURL string, expectedStatus int, opts ...requestOpt) error {
+	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
+	if err != nil {
+		return fmt.Errorf("create new http request failed: %w", err)
+	}
+	for _, o := range opts {
+		o(req)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("executing http request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if expectedStatus != resp.StatusCode {
+		return fmt.Errorf("expectedStatus != resp.StatusCode: %d != %d", expectedStatus, resp.StatusCode)
+	}
+	return nil
+}
+
+func assertHeadResponse(t *testing.T, targetURL string, expectedStatus int, opts ...requestOpt) {
 	t.Helper()
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodHead, targetURL, nil)
 	require.NoError(t, err)
 	for _, o := range opts {
 		o(req)
@@ -1583,25 +1534,10 @@ func assertGetResponse(t *testing.T, url string, expectedStatus int, opts ...req
 	require.Equal(t, expectedStatus, resp.StatusCode)
 }
 
-func assertHeadResponse(t *testing.T, url string, expectedStatus int, opts ...requestOpt) {
+func assertPutResponse(t *testing.T, targetURL string, body io.Reader, headers http.Header, expectedStatus int) {
 	t.Helper()
 
-	req, err := http.NewRequest(http.MethodHead, url, nil)
-	require.NoError(t, err)
-	for _, o := range opts {
-		o(req)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	require.Equal(t, expectedStatus, resp.StatusCode)
-}
-
-func assertPutResponse(t *testing.T, url string, body io.Reader, headers http.Header, expectedStatus int) {
-	t.Helper()
-
-	req, err := http.NewRequest(http.MethodPut, url, body)
+	req, err := http.NewRequest(http.MethodPut, targetURL, body)
 	require.NoError(t, err)
 	for k, vv := range headers {
 		req.Header.Set(k, strings.Join(vv, ","))
@@ -1614,10 +1550,10 @@ func assertPutResponse(t *testing.T, url string, body io.Reader, headers http.He
 	require.Equal(t, expectedStatus, resp.StatusCode)
 }
 
-func assertPostResponse(t *testing.T, url string, body io.Reader, headers http.Header, expectedStatus int) {
+func assertPostResponse(t *testing.T, targetURL string, body io.Reader, headers http.Header, expectedStatus int) {
 	t.Helper()
 
-	req, err := http.NewRequest(http.MethodPost, url, body)
+	req, err := http.NewRequest(http.MethodPost, targetURL, body)
 	require.NoError(t, err)
 	for k, vv := range headers {
 		req.Header.Set(k, strings.Join(vv, ","))
@@ -1630,10 +1566,10 @@ func assertPostResponse(t *testing.T, url string, body io.Reader, headers http.H
 	require.Equal(t, expectedStatus, resp.StatusCode)
 }
 
-func assertDeleteResponse(t *testing.T, url string, expectedStatus int) {
+func assertDeleteResponse(t *testing.T, targetURL string, expectedStatus int) {
 	t.Helper()
 
-	resp, err := httpDelete(url)
+	resp, err := httpDelete(targetURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -1737,11 +1673,11 @@ func assertManifestGetByTagResponse(t *testing.T, env *testEnv, repoName, tagNam
 	assertGetResponse(t, u, expectedStatus, opts...)
 }
 
-func assertManifestHeadByDigestResponse(t *testing.T, env *testEnv, repoName string, m distribution.Manifest, expectedStatus int, opts ...requestOpt) {
+func assertManifestHeadByDigestResponse(t *testing.T, env *testEnv, repoName string, m distribution.Manifest, expectedStatus int) {
 	t.Helper()
 
 	u := buildManifestDigestURL(t, env, repoName, m)
-	assertHeadResponse(t, u, expectedStatus, opts...)
+	assertHeadResponse(t, u, expectedStatus)
 }
 
 func assertManifestHeadByTagResponse(t *testing.T, env *testEnv, repoName, tagName string, expectedStatus int, opts ...requestOpt) {
@@ -1778,14 +1714,14 @@ func assertManifestDeleteResponse(t *testing.T, env *testEnv, repoName string, m
 	assertDeleteResponse(t, u, expectedStatus)
 }
 
-func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagName string, repoPaths []string) {
+func seedMultipleRepositoriesWithTaggedLatestManifest(t *testing.T, env *testEnv, repoPaths []string) {
 	t.Helper()
 
 	wg := new(sync.WaitGroup)
-	// NOTE(prozlach): concurency controll, value chosen arbitraly
+	// NOTE(prozlach): concurency control, value chosen arbitraly
 	semaphore := make(chan struct{}, 20)
 
-	for _, path := range repoPaths {
+	for _, repoPath := range repoPaths {
 		wg.Add(1)
 		go func(path string) {
 			defer wg.Done()
@@ -1793,8 +1729,12 @@ func seedMultipleRepositoriesWithTaggedManifest(t *testing.T, env *testEnv, tagN
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			seedRandomSchema2Manifest(t, env, path, putByTag(tagName))
-		}(path)
+			// go-require: seedRandomSchema2Manifest contains assertions that must only be used in the goroutine running the test function (testifylint)
+			// nolint:testifylint // the `require` assertions are deeply
+			// ingrained/nested, a separate issue and prioritization is
+			// required to fix this. Disabling the linter warning for now.
+			seedRandomSchema2Manifest(t, env, path, putByTag("latest"))
+		}(repoPath)
 	}
 	wg.Wait()
 }
@@ -1862,27 +1802,27 @@ func joseBase64UrlEncode(b []byte) string {
 // authTokenProvider manages the procurement of authorization tokens
 // by holding the necessary private key value and public cert path needed to generate/validate a token.
 type authTokenProvider struct {
-	t          *testing.T
-	certPath   string
-	privateKey libtrust.PrivateKey
+	t               *testing.T
+	tokenCertPath   string
+	tokenPrivateKey libtrust.PrivateKey
 }
 
-// NewAuthTokenProvider creates an authTokenProvider that manages the procurement of authorization tokens
+// newAuthTokenProvider creates an authTokenProvider that manages the procurement of authorization tokens
 // by holding the necessary private key value and cert path needed to generate/validate a token.
-func NewAuthTokenProvider(t *testing.T) *authTokenProvider {
+func newAuthTokenProvider(t *testing.T) *authTokenProvider {
 	t.Helper()
 
-	path, privKey, err := rtestutil.WriteTempRootCerts()
+	p, privKey, err := internaltestutil.WriteTempRootCerts()
 	t.Cleanup(func() {
-		err := os.Remove(path)
+		err := os.Remove(p)
 		require.NoError(t, err)
 	})
 	require.NoError(t, err)
 
 	return &authTokenProvider{
-		t:          t,
-		certPath:   path,
-		privateKey: privKey,
+		t:               t,
+		tokenCertPath:   p,
+		tokenPrivateKey: privKey,
 	}
 }
 
@@ -1892,30 +1832,30 @@ const (
 	authUserJWT  = "user-jwt"
 )
 
-// TokenWithActions generates a token for a specified set of actions
-func (a *authTokenProvider) TokenWithActions(tra []*token.ResourceActions) string {
-	return generateAuthToken(a.t, authUsername, tra, defaultIssuerProps(), a.privateKey)
+// tokenWithActions generates a token for a specified set of actions
+func (a *authTokenProvider) tokenWithActions(tra []*token.ResourceActions) string {
+	return generateAuthToken(a.t, authUsername, tra, defaultIssuerProps(), a.tokenPrivateKey)
 }
 
-// RequestWithAuthActions wraps a request with a bearer authorization header
+// requestWithAuthActions wraps a request with a bearer authorization header
 // using a standard JWT generated from the provided resource actions
-func (a *authTokenProvider) RequestWithAuthActions(r *http.Request, tra []*token.ResourceActions) *http.Request {
+func (a *authTokenProvider) requestWithAuthActions(r *http.Request, tra []*token.ResourceActions) *http.Request {
 	clonedReq := r.Clone(r.Context())
-	clonedReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.TokenWithActions(tra)))
+	clonedReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.tokenWithActions(tra)))
 	return clonedReq
 }
 
-// RequestWithAuthToken wraps a request with a bearer authorization header
+// requestWithAuthToken wraps a request with a bearer authorization header
 // using a provided token string
-func (a *authTokenProvider) RequestWithAuthToken(r *http.Request, token string) *http.Request {
+func (*authTokenProvider) requestWithAuthToken(r *http.Request, t string) *http.Request {
 	clonedReq := r.Clone(r.Context())
-	clonedReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+	clonedReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", t))
 	return clonedReq
 }
 
-// CertPath returns the cert location for the token provider
-func (a *authTokenProvider) CertPath() string {
-	return a.certPath
+// certPath returns the cert location for the token provider
+func (a *authTokenProvider) certPath() string {
+	return a.tokenCertPath
 }
 
 // fullAccessToken grants a GitLab rails admin token for a specified repository
@@ -1958,6 +1898,8 @@ func deleteAccessTokenWithProjectMeta(projectPath, repositoryName string) []*tok
 }
 
 // requireRenameTTLInRange makes sure that the rename operation TTL is within an acceptable range of an expected duration
+//
+// nolint:unparam //(`expectedTTLDuration` always receives `60 * time.Second`)
 func requireRenameTTLInRange(t *testing.T, actualTTL time.Time, expectedTTLDuration time.Duration) {
 	t.Helper()
 	lowerBound := time.Now()
@@ -1968,7 +1910,9 @@ func requireRenameTTLInRange(t *testing.T, actualTTL time.Time, expectedTTLDurat
 }
 
 // acquireProjectLease enacts a project lease for `projectPath` in the `redisCache` for time `TTL` duration
-func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath string, TTL time.Duration) {
+//
+// nolint:unparam //(`TTL` always receives `1 * time.Hour`)
+func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath string, ttl time.Duration) {
 	t.Helper()
 	// enact a lease on the project path which will be used to block all
 	// write operations to the existing repositories in the given GitLab project.
@@ -1982,7 +1926,7 @@ func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath str
 	require.NoError(t, err)
 
 	// create a lease that expires in less than TTL duration .
-	err = plStore.Set(context.Background(), projectPath, TTL)
+	err = plStore.Set(context.Background(), projectPath, ttl)
 	require.NoError(t, err)
 }
 
@@ -1997,9 +1941,9 @@ func releaseProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath str
 
 type requestOpt func(r *http.Request)
 
-func witAuthToken(token string) requestOpt {
+func witAuthToken(t string) requestOpt {
 	return func(r *http.Request) {
-		r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+		r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", t))
 	}
 }
 
@@ -2022,8 +1966,8 @@ func newRequest(request *http.Request, opts ...requestOpt) *http.Request {
 // This function will also set the OngoingRenameCheck FF to true
 func setupValidRenameEnv(t *testing.T, opts ...configOpt) (*testEnv, internaltestutil.RedisCacheController, *authTokenProvider) {
 	redisController := internaltestutil.NewRedisCacheController(t, 0)
-	tokenProvider := NewAuthTokenProvider(t)
-	env := newTestEnv(t, append(opts, withRedisCache(redisController.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))...)
+	tokenProvider := newAuthTokenProvider(t)
+	env := newTestEnv(t, append(opts, withRedisCache(redisController.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))...)
 	// Enable the rename lease check environment variable
 	t.Setenv(feature.OngoingRenameCheck.EnvVariable, "true")
 	return env, redisController, tokenProvider

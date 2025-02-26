@@ -14,7 +14,7 @@ type Scope interface {
 
 type fullScope struct{}
 
-func (f fullScope) Contains(string) bool {
+func (fullScope) Contains(string) bool {
 	return true
 }
 
@@ -77,7 +77,7 @@ func WithTag(tag string) ManifestServiceOption {
 type WithTagOption struct{ Tag string }
 
 // Apply conforms to the ManifestServiceOption interface
-func (o WithTagOption) Apply(m ManifestService) error {
+func (WithTagOption) Apply(ManifestService) error {
 	// no implementation
 	return nil
 }
@@ -92,7 +92,7 @@ func WithManifestMediaTypes(mediaTypes []string) ManifestServiceOption {
 type WithManifestMediaTypesOption struct{ MediaTypes []string }
 
 // Apply conforms to the ManifestServiceOption interface
-func (o WithManifestMediaTypesOption) Apply(m ManifestService) error {
+func (WithManifestMediaTypesOption) Apply(ManifestService) error {
 	// no implementation
 	return nil
 }

@@ -109,16 +109,16 @@ func (lbs *linkedBlobStore) Put(ctx context.Context, mediaType string, p []byte)
 	return desc, lbs.linkBlob(ctx, desc)
 }
 
-type optionFunc func(interface{}) error
+type optionFunc func(any) error
 
-func (f optionFunc) Apply(v interface{}) error {
+func (f optionFunc) Apply(v any) error {
 	return f(v)
 }
 
 // WithMountFrom returns a BlobCreateOption which designates that the blob should be
 // mounted from the given canonical reference.
 func WithMountFrom(ref reference.Canonical) distribution.BlobCreateOption {
-	return optionFunc(func(v interface{}) error {
+	return optionFunc(func(v any) error {
 		opts, ok := v.(*distribution.CreateOptions)
 		if !ok {
 			return fmt.Errorf("unexpected options type: %T", v)
@@ -135,7 +135,7 @@ func WithMountFrom(ref reference.Canonical) distribution.BlobCreateOption {
 // should be mounted from the given canonical reference and that the repository
 // access check has already been performed.
 func WithMountFromStat(ref reference.Canonical, stat *distribution.Descriptor) distribution.BlobCreateOption {
-	return optionFunc(func(v interface{}) error {
+	return optionFunc(func(v any) error {
 		opts, ok := v.(*distribution.CreateOptions)
 		if !ok {
 			return fmt.Errorf("unexpected options type: %T", v)
@@ -170,12 +170,12 @@ func (lbs *linkedBlobStore) Create(ctx context.Context, options ...distribution.
 		}
 	}
 
-	uuid := uuid.Generate().String()
+	u := uuid.Generate().String()
 	startedAt := time.Now().UTC()
 
-	path, err := pathFor(uploadDataPathSpec{
+	p, err := pathFor(uploadDataPathSpec{
 		name: lbs.repository.Named().Name(),
-		id:   uuid,
+		id:   u,
 	})
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func (lbs *linkedBlobStore) Create(ctx context.Context, options ...distribution.
 
 	startedAtPath, err := pathFor(uploadStartedAtPathSpec{
 		name: lbs.repository.Named().Name(),
-		id:   uuid,
+		id:   u,
 	})
 	if err != nil {
 		return nil, err
@@ -194,7 +194,7 @@ func (lbs *linkedBlobStore) Create(ctx context.Context, options ...distribution.
 		return nil, err
 	}
 
-	return lbs.newBlobUpload(ctx, uuid, path, startedAt, false)
+	return lbs.newBlobUpload(ctx, u, p, startedAt, false)
 }
 
 func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution.BlobWriter, error) {
@@ -222,7 +222,7 @@ func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution
 		return nil, err
 	}
 
-	path, err := pathFor(uploadDataPathSpec{
+	p, err := pathFor(uploadDataPathSpec{
 		name: lbs.repository.Named().Name(),
 		id:   id,
 	})
@@ -230,7 +230,7 @@ func (lbs *linkedBlobStore) Resume(ctx context.Context, id string) (distribution
 		return nil, err
 	}
 
-	return lbs.newBlobUpload(ctx, id, path, startedAt, true)
+	return lbs.newBlobUpload(ctx, id, p, startedAt, true)
 }
 
 func (lbs *linkedBlobStore) Delete(ctx context.Context, dgst digest.Digest) error {
@@ -335,8 +335,8 @@ func (lbs *linkedBlobStore) mount(ctx context.Context, sourceRepo reference.Name
 }
 
 // newBlobUpload allocates a new upload controller with the given state.
-func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, uuid, path string, startedAt time.Time, append bool) (distribution.BlobWriter, error) {
-	fw, err := lbs.driver.Writer(ctx, path, append)
+func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, u, targetPath string, startedAt time.Time, doAppend bool) (distribution.BlobWriter, error) {
+	fw, err := lbs.driver.Writer(ctx, targetPath, doAppend)
 	if err != nil {
 		return nil, err
 	}
@@ -344,12 +344,12 @@ func (lbs *linkedBlobStore) newBlobUpload(ctx context.Context, uuid, path string
 	bw := &blobWriter{
 		ctx:                    ctx,
 		blobStore:              lbs,
-		id:                     uuid,
+		id:                     u,
 		startedAt:              startedAt,
 		digester:               digest.Canonical.Digester(),
 		fileWriter:             fw,
 		driver:                 lbs.driver,
-		path:                   path,
+		path:                   targetPath,
 		resumableDigestEnabled: lbs.resumableDigestEnabled,
 	}
 
@@ -431,19 +431,7 @@ func (lbs *linkedBlobStatter) Clear(ctx context.Context, dgst digest.Digest) (er
 	return lbs.blobStore.driver.Delete(ctx, blobLinkPath)
 }
 
-// resolveTargetWithFunc allows us to read a link to a resource with different
-// linkPathFuncs to let us try a few different paths before returning not
-// found.
-func (lbs *linkedBlobStatter) resolveWithLinkFunc(ctx context.Context, dgst digest.Digest, linkPathFn linkPathFunc) (digest.Digest, error) {
-	blobLinkPath, err := linkPathFn(lbs.repository.Named().Name(), dgst)
-	if err != nil {
-		return "", err
-	}
-
-	return lbs.blobStore.readlink(ctx, blobLinkPath)
-}
-
-func (lbs *linkedBlobStatter) SetDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
+func (*linkedBlobStatter) SetDescriptor(_ context.Context, _ digest.Digest, _ distribution.Descriptor) error {
 	// The canonical descriptor for a blob is set at the commit phase of upload
 	return nil
 }

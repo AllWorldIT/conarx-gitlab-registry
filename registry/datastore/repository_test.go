@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -102,7 +101,6 @@ func TestCentralRepositoryCache_LSN(t *testing.T) {
 }
 
 func TestCentralRepositoryCache_LSN_Error(t *testing.T) {
-	lsn := "0/16B3748"
 	ttl := 1 * time.Hour
 	repo := &models.Repository{
 		Path: "gitlab-org/gitlab",
@@ -178,16 +176,19 @@ func TestCentralRepositoryCache_SetLSN_IsAtomic(t *testing.T) {
 	}
 	rand.Shuffle(len(lsnValues), func(i, j int) { lsnValues[i], lsnValues[j] = lsnValues[j], lsnValues[i] })
 
-	var wg sync.WaitGroup
-	wg.Add(len(lsnValues))
-
+	errCh := make(chan error, len(lsnValues))
 	for _, lsn := range lsnValues {
 		go func(lsn string) {
-			defer wg.Done()
-			require.NoError(t, cache.SetLSN(ctx, repo, lsn))
+			err := cache.SetLSN(ctx, repo, lsn)
+			if err != nil {
+				err = fmt.Errorf("error occurred for lsn %s: %w", lsn, err)
+			}
+			errCh <- err
 		}(lsn)
 	}
-	wg.Wait()
+	for i := 0; i < len(lsnValues); i++ {
+		require.NoError(t, <-errCh)
+	}
 
 	finalLSN, err := cache.GetLSN(ctx, repo)
 	require.NoError(t, err)

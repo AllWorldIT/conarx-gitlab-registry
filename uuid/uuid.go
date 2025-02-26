@@ -29,7 +29,7 @@ var (
 
 	// Loggerf can be used to override the default logging destination. Such
 	// log messages in this library should be logged at warning or higher.
-	Loggerf = func(format string, args ...interface{}) {}
+	Loggerf = func(_ string, _ ...any) {}
 )
 
 // UUID represents a UUID value. UUIDs can be compared and set to other values
@@ -84,7 +84,7 @@ func Generate() (u UUID) {
 }
 
 // Parse attempts to extract a uuid from the string or returns an error.
-func Parse(s string) (u UUID, err error) {
+func Parse(s string) (UUID, error) {
 	if len(s) != 36 {
 		return UUID{}, ErrUUIDInvalid
 	}
@@ -93,16 +93,17 @@ func Parse(s string) (u UUID, err error) {
 	p := make([][]byte, 5)
 
 	if _, err := fmt.Sscanf(s, format, &p[0], &p[1], &p[2], &p[3], &p[4]); err != nil {
-		return u, err
+		return UUID{}, err
 	}
 
+	u := UUID{}
 	copy(u[0:4], p[0])
 	copy(u[4:6], p[1])
 	copy(u[6:8], p[2])
 	copy(u[8:10], p[3])
 	copy(u[10:16], p[4])
 
-	return
+	return u, nil
 }
 
 func (u UUID) String() string {

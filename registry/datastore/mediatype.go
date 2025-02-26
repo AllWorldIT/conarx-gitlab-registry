@@ -36,7 +36,7 @@ type mediaTypeStore struct {
 }
 
 // NewMediaTypeStore builds a new media type store.
-func NewMediaTypeStore(db Queryer) *mediaTypeStore {
+func NewMediaTypeStore(db Queryer) MediaTypeStore {
 	return &mediaTypeStore{db: db}
 }
 

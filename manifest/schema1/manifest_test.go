@@ -1,12 +1,12 @@
 package schema1
 
 import (
-	"bytes"
 	"encoding/json"
-	"reflect"
 	"testing"
 
 	"github.com/docker/libtrust"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testEnv struct {
@@ -22,39 +22,26 @@ func TestManifestMarshaling(t *testing.T) {
 	// Check that the all field is the same as json.MarshalIndent with these
 	// parameters.
 	p, err := json.MarshalIndent(env.signed, "", "   ")
-	if err != nil {
-		t.Fatalf("error marshaling manifest: %v", err)
-	}
+	require.NoError(t, err, "error marshaling manifest")
 
-	if !bytes.Equal(p, env.signed.all) {
-		t.Fatalf("manifest bytes not equal: %q != %q", string(env.signed.all), string(p))
-	}
+	require.Equal(t, p, env.signed.all)
 }
 
 func TestManifestUnmarshaling(t *testing.T) {
 	env := genEnv(t)
 
 	var signed SignedManifest
-	if err := json.Unmarshal(env.signed.all, &signed); err != nil {
-		t.Fatalf("error unmarshaling signed manifest: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(env.signed.all, &signed), "error unmarshaling signed manifest")
 
-	if !reflect.DeepEqual(&signed, env.signed) {
-		t.Fatalf("manifests are different after unmarshaling: %v != %v", signed, env.signed)
-	}
+	require.Equal(t, signed, *env.signed, "manifests are different after unmarshaling")
 }
 
 func TestManifestVerification(t *testing.T) {
 	env := genEnv(t)
 
 	publicKeys, err := Verify(env.signed)
-	if err != nil {
-		t.Fatalf("error verifying manifest: %v", err)
-	}
-
-	if len(publicKeys) == 0 {
-		t.Fatalf("no public keys found in signature")
-	}
+	require.NoError(t, err, "error verifying manifest")
+	require.NotEmpty(t, publicKeys, "no public keys found in signature")
 
 	var found bool
 	publicKey := env.pk.PublicKey()
@@ -66,22 +53,16 @@ func TestManifestVerification(t *testing.T) {
 		}
 	}
 
-	if !found {
-		t.Fatalf("expected public key, %v, not found in verified keys: %v", publicKey, publicKeys)
-	}
+	assert.True(t, found, "expected public key, %v, not found in verified keys: %v", publicKey, publicKeys)
 
 	// Check that an invalid manifest fails verification
 	_, err = Verify(env.invalidSigned)
-	if err != nil {
-		t.Fatalf("Invalid manifest should not pass Verify()")
-	}
+	assert.NoError(t, err, "Invalid manifest should not pass Verify()")
 }
 
 func genEnv(t *testing.T) *testEnv {
 	pk, err := libtrust.GenerateECP256PrivateKey()
-	if err != nil {
-		t.Fatalf("error generating test key: %v", err)
-	}
+	require.NoError(t, err, "error generating test key")
 
 	name, tag := "foo/bar", "test"
 
@@ -116,14 +97,10 @@ func genEnv(t *testing.T) *testEnv {
 	}
 
 	sm, err := Sign(&valid, pk)
-	if err != nil {
-		t.Fatalf("error signing manifest: %v", err)
-	}
+	require.NoError(t, err, "error signing manifest")
 
 	invalidSigned, err := Sign(&invalid, pk)
-	if err != nil {
-		t.Fatalf("error signing manifest: %v", err)
-	}
+	require.NoError(t, err, "error signing manifest")
 
 	return &testEnv{
 		name:          name,

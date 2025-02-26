@@ -55,9 +55,9 @@ const (
 
 // Queryer is the common interface to execute queries on a database.
 type Queryer interface {
-	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 // Handler represents a database connection handler.
@@ -260,11 +260,11 @@ func WithPreparedStatements(b bool) Option {
 }
 
 func applyOptions(input []Option) opts {
-	log := logrus.New()
-	log.SetOutput(io.Discard)
+	l := logrus.New()
+	l.SetOutput(io.Discard)
 
 	config := opts{
-		logger: logrus.NewEntry(log),
+		logger: logrus.NewEntry(l),
 		pool:   &PoolConfig{},
 		loadBalancing: &LoadBalancingConfig{
 			connector:            NewConnector(),
@@ -288,12 +288,12 @@ type logger struct {
 var logMinifyPattern = regexp.MustCompile(`\s+|\t+|\n+`)
 
 // Log implements the tracelog.Logger interface.
-func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, data map[string]interface{}) {
+func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, data map[string]any) {
 	// silence if debug level is not enabled, unless it's a warn or error
 	if !l.Logger.IsLevelEnabled(logrus.DebugLevel) && level != tracelog.LogLevelWarn && level != tracelog.LogLevelError {
 		return
 	}
-	var log *logrus.Entry
+	var configuredLogger *logrus.Entry
 	if data != nil {
 		// minify SQL statement, if any
 		if _, ok := data["sql"]; ok {
@@ -314,25 +314,25 @@ func (l *logger) Log(_ context.Context, level tracelog.LogLevel, msg string, dat
 			data["row_count"] = data["rowCount"]
 			delete(data, "rowCount")
 		}
-		log = l.WithFields(data)
+		configuredLogger = l.WithFields(data)
 	} else {
-		log = l.Entry
+		configuredLogger = l.Entry
 	}
 
 	switch level {
 	case tracelog.LogLevelTrace:
-		log.Trace(msg)
+		configuredLogger.Trace(msg)
 	case tracelog.LogLevelDebug:
-		log.Debug(msg)
+		configuredLogger.Debug(msg)
 	case tracelog.LogLevelInfo:
-		log.Info(msg)
+		configuredLogger.Info(msg)
 	case tracelog.LogLevelWarn:
-		log.Warn(msg)
+		configuredLogger.Warn(msg)
 	case tracelog.LogLevelError:
-		log.Error(msg)
+		configuredLogger.Error(msg)
 	default:
 		// this should never happen, but if it does, something went wrong and we need to notice it
-		log.WithField("invalid_log_level", level).Error(msg)
+		configuredLogger.WithField("invalid_log_level", level).Error(msg)
 	}
 }
 
@@ -351,7 +351,7 @@ func NewConnector() Connector {
 }
 
 // Open opens a new database connection with the given DSN and options.
-func (c *sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, error) {
+func (*sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, error) {
 	config := applyOptions(opts)
 	pgxConfig, err := pgx.ParseConfig(dsn.String())
 	if err != nil {
@@ -561,7 +561,7 @@ func resolveHosts(ctx context.Context, resolver DNSResolver) ([]*net.TCPAddr, er
 // by the database load balancer component. Instead of relying on a fixed log.Logger instance, this method allows
 // retrieving and extending a base logger embedded in the input context (if any) to preserve relevant key/value
 // pairs introduced upstream (such as a correlation ID, present when calling from the API handlers).
-func (lb *DBLoadBalancer) logger(ctx context.Context) log.Logger {
+func (*DBLoadBalancer) logger(ctx context.Context) log.Logger {
 	return log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
 		"component": "registry.datastore.DBLoadBalancer",
 	})
@@ -620,7 +620,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 	for i := range resolvedDSNs {
 		var err error
 		dsn := &resolvedDSNs[i]
-		l = l.WithFields(logrus.Fields{"address": dsn.Address()})
+		l = l.WithFields(logrus.Fields{"db_replica_addr": dsn.Address()})
 
 		r := dbByAddress(lb.replicas, dsn.Address())
 		if r != nil {
@@ -651,7 +651,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 				// whenever the pool changes. We don't want to cause a panic here, so we'll rely on prometheus.Register
 				// instead of prometheus.MustRegister and gracefully handle an error by logging and reporting it.
 				if err := lb.promRegisterer.Register(collector); err != nil {
-					l.WithError(err).WithFields(log.Fields{"host_addr": r.Address()}).
+					l.WithError(err).WithFields(log.Fields{"db_replica_addr": r.Address()}).
 						Error("failed to register collector for database replica metrics")
 					errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 				}
@@ -676,7 +676,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 			}
 
 			// Close handlers for retired replicas
-			l.WithFields(log.Fields{"address": r.Address()}).Info("closing connection handler for retired replica")
+			l.WithFields(log.Fields{"db_replica_addr": r.Address()}).Info("closing connection handler for retired replica")
 			if err := r.Close(); err != nil {
 				err = fmt.Errorf("failed to close retired replica %q connection: %w", r.Address(), err)
 				result = multierror.Append(result, err)
@@ -685,7 +685,10 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 		}
 	}
 
-	l.WithFields(logrus.Fields{"added": added, "removed": removed}).Info("updating replicas list")
+	l.WithFields(logrus.Fields{
+		"added_hosts":   strings.Join(added, ","),
+		"removed_hosts": strings.Join(removed, ","),
+	}).Info("updating replicas list")
 	metrics.ReplicaPoolSize(len(outputReplicas))
 	lb.replicas = outputReplicas
 
@@ -873,6 +876,7 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 		metrics.PrimaryFallbackNoReplica()
 		return lb.primary
 	}
+	l = l.WithFields(log.Fields{"db_replica_addr": replica.Address()})
 
 	// Fetch the primary LSN from cache
 	primaryLSN, err := lb.lsnCache.GetLSN(ctx, r)
@@ -995,9 +999,9 @@ func (qb *QueryBuilder) WrapIntoSubqueryOf(outerQuery string) error {
 		return fmt.Errorf("outerQuery must contain exactly one %%s placeholder. Query: %v", outerQuery)
 	}
 
-	newSql := strings.Builder{}
-	_, _ = fmt.Fprintf(&newSql, outerQuery, qb.sql.String())
-	qb.sql = newSql
+	newSQL := strings.Builder{}
+	_, _ = fmt.Fprintf(&newSQL, outerQuery, qb.sql.String())
+	qb.sql = newSQL
 
 	return nil
 }
@@ -1015,4 +1019,15 @@ func (qb *QueryBuilder) Params() []any {
 	ret := make([]any, len(qb.params))
 	copy(ret, qb.params)
 	return ret
+}
+
+// IsInRecovery checks if a provided database is in read-only mode.
+func IsInRecovery(ctx context.Context, db *DB) (bool, error) {
+	var inRecovery bool
+
+	// https://www.postgresql.org/docs/9.0/functions-admin.html#:~:text=Table%209%2D58.%20Recovery%20Information%20Functions
+	query := `SELECT pg_is_in_recovery()`
+	err := db.QueryRowContext(ctx, query).Scan(&inRecovery)
+
+	return inRecovery, err
 }

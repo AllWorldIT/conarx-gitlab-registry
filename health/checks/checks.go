@@ -13,8 +13,11 @@ import (
 
 	"github.com/docker/distribution/health"
 	"github.com/docker/distribution/registry/datastore"
+	"github.com/docker/distribution/version"
 	"github.com/hashicorp/go-multierror"
 )
+
+var registryHTTPCheckUserAgent = fmt.Sprintf("container-registry-httpcheck/%s-%s", version.Version, version.Revision)
 
 // FileChecker checks the existence of a file and returns an error
 // if the file exists.
@@ -47,10 +50,20 @@ func HTTPChecker(r string, statusCode int, timeout time.Duration, headers http.H
 		if err != nil {
 			return errors.New("error creating request: " + r)
 		}
+		// NOTE(prozlach): In case of Golang, only first call to `Add/Set` sets
+		// the `User-Agent` header, hence the extra logic to not to break
+		// User-Agent header that the user might have already set
+		userAgentSet := false
 		for headerName, headerValues := range headers {
+			if http.CanonicalHeaderKey(headerName) == "User-Agent" {
+				userAgentSet = true
+			}
 			for _, headerValue := range headerValues {
 				req.Header.Add(headerName, headerValue)
 			}
+		}
+		if !userAgentSet {
+			req.Header.Set("User-Agent", registryHTTPCheckUserAgent)
 		}
 		response, err := client.Do(req)
 		if err != nil {
@@ -71,7 +84,7 @@ func TCPChecker(addr string, timeout time.Duration) health.Checker {
 		if err != nil {
 			return errors.New("connection to " + addr + " failed")
 		}
-		conn.Close()
+		_ = conn.Close()
 		return nil
 	})
 }

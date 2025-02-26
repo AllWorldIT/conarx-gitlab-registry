@@ -4,10 +4,10 @@ package handlers_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"path"
@@ -17,8 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/distribution"
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/ocischema"
+	"github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/notifications"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
@@ -30,13 +33,15 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // iso8601MsFormat is a regular expression to validate ISO8601 timestamps with millisecond precision.
 var iso8601MsFormat = regexp.MustCompile(`^(?:[0-9]{4}-[0-9]{2}-[0-9]{2})?(?:[ T][0-9]{2}:[0-9]{2}:[0-9]{2})?(?:[.][0-9]{3})`)
 
-func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
+func testGitlabAPIRepositoryGet(t *testing.T, opts ...configOpt) {
 	t.Helper()
 
 	env := newTestEnv(t, opts...)
@@ -104,9 +109,9 @@ func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
 	err = json.Unmarshal(p, &r)
 	require.NoError(t, err)
 
-	require.Equal(t, r.Name, repoName)
-	require.Equal(t, r.Path, repoPath)
-	require.Equal(t, *r.Size, expectedSize)
+	require.Equal(t, repoName, r.Name)
+	require.Equal(t, repoPath, r.Path)
+	require.Equal(t, expectedSize, *r.Size)
 	require.NotEmpty(t, r.CreatedAt)
 	require.Regexp(t, iso8601MsFormat, r.CreatedAt)
 	require.NotEmpty(t, r.LastPublishedAt)
@@ -135,9 +140,9 @@ func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
 	err = json.Unmarshal(p, &r)
 	require.NoError(t, err)
 
-	require.Equal(t, r.Name, repoName)
-	require.Equal(t, r.Path, repoPath)
-	require.Equal(t, *r.Size, expectedSize)
+	require.Equal(t, repoName, r.Name)
+	require.Equal(t, repoPath, r.Path)
+	require.Equal(t, expectedSize, *r.Size)
 	require.NotEmpty(t, r.CreatedAt)
 	require.Regexp(t, iso8601MsFormat, r.CreatedAt)
 	require.Empty(t, r.UpdatedAt)
@@ -156,12 +161,12 @@ func testGitlabApiRepositoryGet(t *testing.T, opts ...configOpt) {
 }
 
 func TestGitlabAPI_Repository_Get(t *testing.T) {
-	testGitlabApiRepositoryGet(t)
+	testGitlabAPIRepositoryGet(t)
 }
 
 func TestGitlabAPI_Repository_Get_WithCentralRepositoryCache(t *testing.T) {
 	srv := testutil.RedisServer(t)
-	testGitlabApiRepositoryGet(t, withRedisCache(srv.Addr()))
+	testGitlabAPIRepositoryGet(t, withRedisCache(srv.Addr()))
 }
 
 func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingBase(t *testing.T) {
@@ -180,6 +185,7 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingBase(t *testing
 	// get size with descendants of base (non-existing) repository
 	baseRepoPath := "foo/bar"
 	baseRepoRef, err := reference.WithName(baseRepoPath)
+	require.NoError(t, err)
 	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoRef, url.Values{
 		"size": []string{"self_with_descendants"},
 	})
@@ -198,7 +204,7 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingBase(t *testing
 
 	require.Equal(t, "bar", r.Name)
 	require.Equal(t, baseRepoPath, r.Path)
-	require.Equal(t, *r.Size, expectedSize)
+	require.Equal(t, expectedSize, *r.Size)
 	require.Empty(t, r.CreatedAt)
 	require.Empty(t, r.UpdatedAt)
 }
@@ -210,6 +216,7 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingTopLevel(t *tes
 
 	baseRepoPath := "foo/bar"
 	baseRepoRef, err := reference.WithName(baseRepoPath)
+	require.NoError(t, err)
 	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoRef, url.Values{
 		"size": []string{"self_with_descendants"},
 	})
@@ -221,7 +228,7 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingTopLevel(t *tes
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
+func testGitlabAPIRepositoryTagsList(t *testing.T, opts ...configOpt) {
 	t.Helper()
 
 	env := newTestEnv(t, opts...)
@@ -599,7 +606,7 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 			name:                "filtered by the exact name - not found",
 			queryParams:         url.Values{"name_exact": []string{"bogumil"}},
 			expectedStatus:      http.StatusOK,
-			expectedOrderedTags: []string{},
+			expectedOrderedTags: make([]string, 0),
 		},
 		{
 			name:           "filtered both by the exact name and partial name",
@@ -722,11 +729,11 @@ func testGitlabApiRepositoryTagsList(t *testing.T, opts ...configOpt) {
 
 func TestGitlabAPI_RepositoryTagsList_WithCentralRepositoryCache(t *testing.T) {
 	srv := testutil.RedisServer(t)
-	testGitlabApiRepositoryTagsList(t, withRedisCache(srv.Addr()))
+	testGitlabAPIRepositoryTagsList(t, withRedisCache(srv.Addr()))
 }
 
 func TestGitlabAPI_RepositoryTagsList(t *testing.T) {
-	testGitlabApiRepositoryTagsList(t)
+	testGitlabAPIRepositoryTagsList(t)
 }
 
 // TestGitlabAPI_RepositoryTagsList_PublishedAt is similar to TestGitlabAPI_RepositoryTagsList but
@@ -949,14 +956,14 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 
 // assertLinkHeaderForPublishedAt formats the expected links according to the response we want from the
 // repositories tags list endpoint with the escaped base64 encoded pagination marker.
-func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expectedLast, path, sort string) {
+func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expectedLast, p, sortOrder string) {
 	t.Helper()
 
 	if expectedBefore == "" && expectedLast == "" {
 		require.Empty(t, gotLink, "Link header should not exist: %s", gotLink)
 	}
 
-	linkBase := fmt.Sprintf(`</gitlab/v1/repositories/%s/tags/list/`, path)
+	linkBase := fmt.Sprintf(`</gitlab/v1/repositories/%s/tags/list/`, p)
 	gotPreviousLink := ""
 	gotNextLink := ""
 	links := strings.Split(gotLink, ",")
@@ -977,7 +984,7 @@ func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expec
 
 	if expectedBefore != "" {
 		require.NotEmpty(t, gotPreviousLink, "previous link")
-		expectedPreviousLink := fmt.Sprintf("%s?before=%s&n=2&sort=%s>; rel=\"previous\"", linkBase, expectedBefore, sort)
+		expectedPreviousLink := fmt.Sprintf("%s?before=%s&n=2&sort=%s>; rel=\"previous\"", linkBase, expectedBefore, sortOrder)
 		require.Equal(t, expectedPreviousLink, gotPreviousLink)
 	} else {
 		require.Empty(t, gotPreviousLink)
@@ -985,7 +992,7 @@ func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expec
 
 	if expectedLast != "" {
 		require.NotEmpty(t, gotNextLink, "next link")
-		expectedNextLink := fmt.Sprintf("%s?last=%s&n=2&sort=%s>; rel=\"next\"", linkBase, expectedLast, sort)
+		expectedNextLink := fmt.Sprintf("%s?last=%s&n=2&sort=%s>; rel=\"next\"", linkBase, expectedLast, sortOrder)
 		require.Equal(t, expectedNextLink, gotNextLink)
 	} else {
 		require.Empty(t, gotNextLink)
@@ -1005,7 +1012,8 @@ func TestGitlabAPI_RepositoryTagsList_DefaultPageSize(t *testing.T) {
 	tags := make([]string, 0, 101)
 	for i := 0; i <= 100; i++ {
 		b := make([]byte, 10)
-		rand.Read(b)
+		_, err := rand.Read(b)
+		require.NoError(t, err)
 		tags = append(tags, fmt.Sprintf("%x", b)[:10])
 	}
 
@@ -1172,8 +1180,8 @@ func TestGitlabAPI_RepositoryTagsList_FilterReferrersByArtifactType(t *testing.T
 	err = dec.Decode(&list)
 	require.NoError(t, err)
 
-	require.Equal(t, 5, len(list))
-	require.Equal(t, 2, len(list[0].Referrers))
+	require.Len(t, list, 5)
+	require.Len(t, list[0].Referrers, 2)
 	require.Contains(t, list[0].Referrers, handlers.RepositoryTagReferrerResponse{
 		Digest:       digests[1],
 		ArtifactType: artifactType1,
@@ -1220,9 +1228,9 @@ func TestGitlabAPI_RepositoryTagsList_IncludeReferrers(t *testing.T) {
 	for _, tag := range list {
 		m[tag.Name] = tag
 	}
-	require.Equal(t, 2, len(m["apple"].Referrers))
-	require.Equal(t, 0, len(m["apple-sig"].Referrers))
-	require.Equal(t, 0, len(m["banana"].Referrers))
+	require.Len(t, m["apple"].Referrers, 2)
+	require.Empty(t, m["apple-sig"].Referrers)
+	require.Empty(t, m["banana"].Referrers)
 
 	// check ref digests match signature digests
 	_, mb1, err := mfstRef1.Payload()
@@ -1275,9 +1283,9 @@ func TestGitlabAPI_RepositoryTagsList_DoNotIncludeReferrersByDefault(t *testing.
 	for _, tag := range list {
 		m[tag.Name] = tag
 	}
-	require.Equal(t, 0, len(m["apple"].Referrers))
-	require.Equal(t, 0, len(m["apple-sig"].Referrers))
-	require.Equal(t, 0, len(m["banana"].Referrers))
+	require.Empty(t, m["apple"].Referrers)
+	require.Empty(t, m["apple-sig"].Referrers)
+	require.Empty(t, m["banana"].Referrers)
 
 	// no referrers returned if `referrers` param is set to something other than "true"
 	params := url.Values{
@@ -1299,9 +1307,9 @@ func TestGitlabAPI_RepositoryTagsList_DoNotIncludeReferrersByDefault(t *testing.
 	for _, tag := range list {
 		m[tag.Name] = tag
 	}
-	require.Equal(t, 0, len(m["apple"].Referrers))
-	require.Equal(t, 0, len(m["apple-sig"].Referrers))
-	require.Equal(t, 0, len(m["banana"].Referrers))
+	require.Empty(t, m["apple"].Referrers)
+	require.Empty(t, m["apple-sig"].Referrers)
+	require.Empty(t, m["banana"].Referrers)
 }
 
 func TestGitlabAPI_SubRepositoryList(t *testing.T) {
@@ -1321,9 +1329,8 @@ func TestGitlabAPI_SubRepositoryList(t *testing.T) {
 	repoWithoutTag := "foo/bar/b2"
 
 	require.NoError(t, err)
-	tagName := "latest"
 	// seed repos with the same base path foo/bar with tags
-	seedMultipleRepositoriesWithTaggedManifest(t, env, tagName, sortedReposWithTag)
+	seedMultipleRepositoriesWithTaggedLatestManifest(t, env, sortedReposWithTag)
 	// seed a repo under the same base path foo/bar but without tags
 	seedRandomSchema2Manifest(t, env, repoWithoutTag, putByDigest)
 
@@ -1382,7 +1389,7 @@ func TestGitlabAPI_SubRepositoryList(t *testing.T) {
 			name:              "last page",
 			queryParams:       url.Values{"last": []string{"foo/bar/b/c"}, "n": []string{"4"}},
 			expectedStatus:    http.StatusOK,
-			expectedRepoPaths: []string{},
+			expectedRepoPaths: make([]string, 0),
 		},
 		{
 			name:           "zero page size",
@@ -1481,8 +1488,7 @@ func TestGitlabAPI_SubRepositoryList_DefaultPageSize(t *testing.T) {
 	require.NoError(t, err)
 
 	// seed repos of the same base path foo/bar but with a tagged manifest
-	tagName := "latest"
-	seedMultipleRepositoriesWithTaggedManifest(t, env, tagName, reposWithTag)
+	seedMultipleRepositoriesWithTaggedLatestManifest(t, env, reposWithTag)
 
 	u, err := env.builder.BuildGitlabV1SubRepositoriesURL(baseRepoName)
 	require.NoError(t, err)
@@ -1544,7 +1550,7 @@ func TestGitlabAPI_SubRepositoryList_EmptyTagRepository(t *testing.T) {
 	err = dec.Decode(&body)
 	require.NoError(t, err)
 	require.NotNil(t, body)
-	require.ElementsMatch(t, body, []*handlers.RepositoryAPIResponse{})
+	require.ElementsMatch(t, body, make([]*handlers.RepositoryAPIResponse, 0))
 }
 
 func TestGitlabAPI_SubRepositoryList_NonExistentRepository(t *testing.T) {
@@ -1573,10 +1579,10 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 	require.NoError(t, err)
 
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 
-	// generate one full access auth token for all tests
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	// generate one full access auth actionsToken for all tests
+	actionsToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	tt := []struct {
 		name               string
@@ -1632,11 +1638,11 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 			t.Cleanup(env.Shutdown)
 
 			// seed repos
-			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+			seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
-			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+			env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 			// create and execute test request
 			u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, test.queryParams)
@@ -1646,7 +1652,7 @@ func TestGitlabAPI_RenameRepository_WithNoBaseRepository(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthToken(req, token)
+			req = tokenProvider.requestWithAuthToken(req, actionsToken)
 
 			// make request
 			resp, err := http.DefaultClient.Do(req)
@@ -1684,9 +1690,9 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 	require.NoError(t, err)
 
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
-	// generate one full access auth token for all tests
-	token := tokenProvider.TokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	tokenProvider := newAuthTokenProvider(t)
+	// generate one full access auth actionsToken for all tests
+	actionsToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	notifCfg := configuration.Notifications{
 		FanoutTimeout: 3 * time.Second,
@@ -1778,11 +1784,11 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 			t.Cleanup(env.Shutdown)
 
 			// seed repos
-			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+			seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
-			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps())}
+			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps())}
 			if test.notificationEnabled {
 				opts = append(opts, withWebhookNotifications(notifCfg))
 			}
@@ -1796,7 +1802,7 @@ func TestGitlabAPI_RenameRepository_WithBaseRepository(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthToken(req, token)
+			req = tokenProvider.requestWithAuthToken(req, actionsToken)
 
 			// execute request
 			resp, err := http.DefaultClient.Do(req)
@@ -1855,11 +1861,11 @@ func TestGitlabAPI_RenameRepository_WithoutRedis(t *testing.T) {
 
 func TestGitlabAPI_RenameRepository_Namespace_Empty(t *testing.T) {
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 
 	// config/setup to use token based
 	// authorization for all proceeding requests
-	env := newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	env := newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 	env.requireDB(t)
 	t.Cleanup(env.Shutdown)
 
@@ -1874,7 +1880,7 @@ func TestGitlabAPI_RenameRepository_Namespace_Empty(t *testing.T) {
 	require.NoError(t, err)
 
 	// attach authourization header to request
-	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	req = tokenProvider.requestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -1899,11 +1905,11 @@ func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagname))
 
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 
 	// override config/setup to use token based
 	// authorization for all proceeding requests
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// rename a non existing path (i.e. a path with no associated repositories or sub repositories)
 	// under the seeded namespace "foo/bar"
@@ -1918,7 +1924,7 @@ func TestGitlabAPI_RenameRepository_Namespace_Exist(t *testing.T) {
 	require.NoError(t, err)
 
 	// attach authourization header to request
-	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	req = tokenProvider.requestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -1947,8 +1953,8 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
 	// override registry config/setup to use token based authorization for all proceeding requests
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"true"}})
@@ -1956,7 +1962,7 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
+	fiirstReq = tokenProvider.requestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "foo" in "foo/foo" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"true"}})
@@ -1964,7 +1970,7 @@ func TestGitlabAPI_RenameRepository_LeaseTaken(t *testing.T) {
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
+	secondReq = tokenProvider.requestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -2006,8 +2012,8 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
 	// override registry config/setup to use token based authorization for all proceeding requests
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"true"}})
@@ -2015,7 +2021,7 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
+	fiirstReq = tokenProvider.requestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "zag" in "foo/bar/zag" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"true"}})
@@ -2023,7 +2029,7 @@ func TestGitlabAPI_RenameRepository_LeaseTaken_Nested(t *testing.T) {
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
+	secondReq = tokenProvider.requestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -2070,8 +2076,8 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 	seedRandomSchema2Manifest(t, env, secondRepoPath, putByTag(tagname))
 
 	// override registry config/setup to use token based authorization for all proceeding requests
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// obtain lease for renaming the "bar" in "foo/bar" to "not-bar"
 	u, err := env.builder.BuildGitlabV1RepositoryURL(firstRepo, url.Values{"dry_run": []string{"false"}})
@@ -2079,7 +2085,7 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 	fiirstReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	fiirstReq = tokenProvider.RequestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
+	fiirstReq = tokenProvider.requestWithAuthActions(fiirstReq, fullAccessTokenWithProjectMeta(firstRepo.Name(), firstRepo.Name()))
 
 	// try to obtain lease for renaming the "foo" in "foo/foo" to "not-bar"
 	u, err = env.builder.BuildGitlabV1RepositoryURL(secondRepo, url.Values{"dry_run": []string{"false"}})
@@ -2087,7 +2093,7 @@ func TestGitlabAPI_RenameRepository_NameTaken(t *testing.T) {
 	secondReq, err := http.NewRequest(http.MethodPatch, u, bytes.NewReader([]byte(`{"name" : "not-bar"}`)))
 	require.NoError(t, err)
 	// attach authourization header to request
-	secondReq = tokenProvider.RequestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
+	secondReq = tokenProvider.requestWithAuthActions(secondReq, fullAccessTokenWithProjectMeta(secondRepo.Name(), secondRepo.Name()))
 
 	// send first request
 	resp, err := http.DefaultClient.Do(fiirstReq)
@@ -2121,11 +2127,11 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 	for i := 0; i <= 1000; i++ {
 		nestedRepos = append(nestedRepos, fmt.Sprintf("foo/bar/%d", i))
 	}
-	seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+	seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 	// override registry config/setup to use token based authorization for all proceeding requests
-	tokenProvider := NewAuthTokenProvider(t)
-	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	env = newTestEnv(t, withRedisCache(testutil.RedisServer(t).Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// create and execute test request
 	u, err := env.builder.BuildGitlabV1RepositoryURL(baseRepoName, url.Values{"dry_run": []string{"false"}})
@@ -2135,7 +2141,7 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	// attach authourization header to request
-	req = tokenProvider.RequestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
+	req = tokenProvider.requestWithAuthActions(req, fullAccessTokenWithProjectMeta(baseRepoName.Name(), baseRepoName.Name()))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2155,14 +2161,14 @@ func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
 	t.Cleanup(env.Shutdown)
 
 	// create an auth token provider
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 
 	// seed repo
 	seedRandomSchema2Manifest(t, env, baseRepoName.Name(), putByTag("latest"))
 
 	// override test config/setup to use token based authorization for all proceeding requests
 	srv := testutil.RedisServer(t)
-	env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	env = newTestEnv(t, withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	requestBody := []byte(`{ "name" : "not-bar" }`)
 
@@ -2196,7 +2202,7 @@ func TestGitlabAPI_RenameRepository_InvalidTokenProjectPathMeta(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthActions(req, test.tokenActions)
+			req = tokenProvider.requestWithAuthActions(req, test.tokenActions)
 
 			// make request
 			resp, err := http.DefaultClient.Do(req)
@@ -2216,7 +2222,7 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 	require.NoError(t, err)
 	newNamespace := "foo/foo"
 
-	tokenProvider := NewAuthTokenProvider(t)
+	tokenProvider := newAuthTokenProvider(t)
 	notifCfg := configuration.Notifications{
 		FanoutTimeout: 3 * time.Second,
 		Endpoints: []configuration.Endpoint{
@@ -2311,11 +2317,11 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 			t.Cleanup(env.Shutdown)
 
 			// seed repos
-			seedMultipleRepositoriesWithTaggedManifest(t, env, "latest", nestedRepos)
+			seedMultipleRepositoriesWithTaggedLatestManifest(t, env, nestedRepos)
 
 			// override test config/setup to use token based authorization for all proceeding requests
 			srv := testutil.RedisServer(t)
-			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps())}
+			opts := []configOpt{withRedisCache(srv.Addr()), withTokenAuth(tokenProvider.certPath(), defaultIssuerProps())}
 			if test.notificationEnabled {
 				opts = append(opts, withWebhookNotifications(notifCfg))
 			}
@@ -2329,7 +2335,7 @@ func TestGitlabAPI_RenameRepositoryNamespace(t *testing.T) {
 			require.NoError(t, err)
 
 			// attach authourization header to request
-			req = tokenProvider.RequestWithAuthActions(req, test.tokenActions)
+			req = tokenProvider.requestWithAuthActions(req, test.tokenActions)
 
 			// make request
 			resp, err := http.DefaultClient.Do(req)
@@ -2378,8 +2384,195 @@ func TestGitlabAPI_404WithDatabaseDisabled(t *testing.T) {
 	for _, u := range urls {
 		resp, err := http.Get(u)
 		require.NoError(t, err)
+		// nolint: revive // defer
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
 		require.Equal(t, strings.TrimPrefix(version.Version, "v"), resp.Header.Get("Gitlab-Container-Registry-Version"))
 	}
+}
+
+func TestGitlabAPI_RepositoryTagDetail(t *testing.T) {
+	env := newTestEnv(t)
+	t.Cleanup(env.Shutdown)
+	env.requireDB(t)
+
+	repoName := "bar"
+	repoPath := fmt.Sprintf("foo/%s", repoName)
+	repoRef, err := reference.WithName(repoPath)
+	require.NoError(t, err)
+
+	t.Run("non-existing tag", func(t *testing.T) {
+		testNonExistingTag(t, env, repoRef, repoPath)
+	})
+
+	t.Run("single manifest tag", func(t *testing.T) {
+		testSingleManifestTag(t, env, repoRef, repoPath)
+	})
+
+	t.Run("manifest list tag", func(t *testing.T) {
+		testManifestListTag(t, env, repoRef, repoPath)
+	})
+}
+
+func testNonExistingTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
+	t.Helper()
+
+	// seed an untagged manifest to be able to return v2.ErrorTagNameUnknown
+	seedRandomSchema2Manifest(t, env, repoPath)
+	u, err := env.builder.BuildGitlabV1RepositoryTagDetailURL(repoRef, "unknown")
+	require.NoError(t, err)
+
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	errs, _, _ := checkBodyHasErrorCodes(t, "wrong response body error code", resp, v2.ErrorTagNameUnknown)
+	require.Len(t, errs, 1)
+
+	errc, ok := errs[0].(errcode.Error)
+	require.True(t, ok)
+	errDetail, ok := errc.Detail.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, map[string]any{"tagName": "unknown"}, errDetail)
+}
+
+func testSingleManifestTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
+	t.Helper()
+
+	tagName := "latest"
+	// Seed initial repository with a manifest
+	expectedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
+
+	u, err := env.builder.BuildGitlabV1RepositoryTagDetailURL(repoRef, tagName)
+	require.NoError(t, err)
+
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var r handlers.RepositoryTagDetailAPIResponse
+	decodeJSON(t, resp, &r)
+
+	assertSingleManifestResponse(t, &r, tagName, repoPath, expectedManifest)
+}
+
+func testManifestListTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
+	t.Helper()
+
+	ociIndexTagName := "oci-index"
+	expectedManifestList := seedRandomOCIImageIndex(t, env, repoRef.Name(), putByTag(ociIndexTagName))
+
+	u, err := env.builder.BuildGitlabV1RepositoryTagDetailURL(repoRef, ociIndexTagName)
+	require.NoError(t, err)
+
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var indexResp handlers.RepositoryTagDetailAPIResponse
+	decodeJSON(t, resp, &indexResp)
+
+	assertManifestListResponse(t, &indexResp, ociIndexTagName, repoPath, expectedManifestList)
+}
+
+func decodeJSON(t *testing.T, resp *http.Response, v any) {
+	t.Helper()
+
+	p, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	err = json.Unmarshal(p, v)
+	require.NoError(t, err)
+}
+
+func assertSingleManifestResponse(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse, tagName, repoPath string, expectedManifest *schema2.DeserializedManifest) {
+	t.Helper()
+
+	assert.Equal(t, r.Name, tagName, "tag name did not match")
+	assert.Equal(t, r.Repository, repoPath, "repo path did not match")
+	require.NotNil(t, r.Image)
+	assert.Equal(t, expectedManifest.TotalSize(), r.Image.SizeBytes, "empty image size")
+
+	require.NotNil(t, r.Image.Manifest)
+	assert.Equal(t, schema2.MediaTypeManifest, r.Image.Manifest.MediaType, "mismatch media type")
+
+	_, payload, err := expectedManifest.Payload()
+	require.NoError(t, err)
+	expectedDigest := digest.FromBytes(payload)
+	assert.Equal(t, expectedDigest.String(), r.Image.Manifest.Digest)
+	assert.Empty(t, r.Image.Manifest.References, "single tag should not have references")
+
+	require.NotNil(t, r.Image.Config, "single tag must have a config")
+	assert.Equal(t, schema2.MediaTypeImageConfig, r.Image.Config.MediaType, "config media type mismatch")
+	assert.Equal(t, expectedManifest.Config().Digest.String(), r.Image.Config.Digest, "config digest should not be empty")
+
+	require.NotNil(t, r.Image.Config.Platform, "config should not be empty")
+	assert.Equal(t, "linux", r.Image.Config.Platform.OS)
+	assert.Equal(t, "amd64", r.Image.Config.Platform.Architecture)
+
+	assertCommonResponseFields(t, r)
+}
+
+func assertManifestListResponse(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse, tagName, repoPath string, expectedManifestList *manifestlist.DeserializedManifestList) {
+	t.Helper()
+
+	assert.Equal(t, r.Name, tagName, "tag name did not match")
+	assert.Equal(t, r.Repository, repoPath, "repo path did not match")
+	require.NotNil(t, r.Image)
+	assert.Zero(t, r.Image.SizeBytes, "image size should be empty")
+
+	require.NotNil(t, r.Image.Manifest)
+	assert.Equal(t, ocispec.MediaTypeImageIndex, r.Image.Manifest.MediaType, "mismatch media type")
+
+	_, payload, err := expectedManifestList.Payload()
+
+	require.NoError(t, err)
+	expectedDigest := digest.FromBytes(payload)
+	assert.NotEmpty(t, expectedDigest, r.Image.Manifest.Digest)
+	assert.NotEmpty(t, r.Image.Manifest.References, "indexes must have references")
+
+	assert.Nil(t, r.Image.Config, "manifest list should not have a config")
+
+	assertManifestReferences(t, expectedManifestList.References(), r.Image.Manifest.References)
+	assertCommonResponseFields(t, r)
+
+	require.Nil(t, r.Image.Config, "indexes should not have a config")
+	assertCommonResponseFields(t, r)
+}
+
+func assertManifestReferences(t *testing.T, expectedReferences []distribution.Descriptor, references []*handlers.Image) {
+	t.Helper()
+
+	for i, expectedRef := range expectedReferences {
+		if expectedRef.Digest.String() != references[i].Manifest.Digest {
+			continue
+		}
+		ref := references[i]
+
+		// the expectedRef.Size is always 0 so we just assert that the result is not 0.
+		assert.NotZero(t, ref.SizeBytes, "empty image size")
+		require.NotNil(t, ref.Manifest)
+		assert.Equal(t, ocispec.MediaTypeImageManifest, ref.Manifest.MediaType, "mismatch media type")
+		assert.Equal(t, expectedRef.Digest.String(), ref.Manifest.Digest)
+
+		require.NotNil(t, ref.Config)
+
+		// the distribution.Descriptor does not expose the config data
+		// so we can only assert that they are not empty
+		assert.NotEmpty(t, ref.Config.Digest, "config digest should not be empty")
+		require.NotNil(t, ref.Config.Platform, "config should not be empty")
+		assert.NotEmpty(t, ref.Config.Platform.OS)
+		assert.NotEmpty(t, ref.Config.Platform.Architecture)
+	}
+}
+
+func assertCommonResponseFields(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse) {
+	t.Helper()
+
+	assert.NotEmpty(t, r.CreatedAt, "created_at must exist")
+	assert.Regexp(t, iso8601MsFormat, r.CreatedAt, "created_at must match ISO format")
+	assert.Empty(t, r.UpdatedAt)
+	assert.Equal(t, r.CreatedAt, r.PublishedAt)
 }

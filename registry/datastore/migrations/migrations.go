@@ -9,6 +9,6 @@ var allMigrations []*Migration
 type Migration struct {
 	*migrate.Migration
 
-	PostDeployment  bool
-	RequiredBBMs []string
+	PostDeployment bool
+	RequiredBBMs   []string
 }

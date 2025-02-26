@@ -17,12 +17,13 @@ import (
 	"github.com/docker/distribution/registry/datastore/testutil"
 	htestutil "github.com/docker/distribution/registry/internal/testutil"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // This file is intended to test the HTTP API fault tolerance under adverse network conditions related to the metadata
 // database, using Shopify Toxiproxy as intermediary between the registry and its DB. Fine grain tests of the handlers
-// internal behaviour (e.g., Schema 1 support, content negotiation, etc.) are out of scope. Here we're mainly concerned
+// internal behavior (e.g., Schema 1 support, content negotiation, etc.) are out of scope. Here we're mainly concerned
 // with ensuring that all HTTP handlers and methods are handling failure scenarios properly.
 
 var (
@@ -210,13 +211,13 @@ func TestDBFaultTolerance_ConnectionRefused_BlobDelete(t *testing.T) {
 
 	// query API with proxy disabled, should fail
 	// create the repo and blob, otherwise the request will halt on the filesystem search, which precedes the DB search
-	args, _ := createRepoWithBlob(t, env)
+	args := createRepoWithBlob(t, env)
 	dbProxy.Disable()
 	assertBlobDeleteResponse(t, env, args.imageName.String(), args.layerDigest, http.StatusServiceUnavailable)
 
 	// query API with proxy re-enabled, should succeed
 	dbProxy.Enable()
-	args, _ = createRepoWithBlob(t, env)
+	args = createRepoWithBlob(t, env)
 	assertBlobDeleteResponse(t, env, args.imageName.String(), args.layerDigest, http.StatusAccepted)
 }
 
@@ -238,15 +239,18 @@ func TestDBFaultTolerance_ConnectionRefused_BlobPut(t *testing.T) {
 	assertBlobPutResponse(t, env, args.imageName.String(), args.layerDigest, args.layerFile, http.StatusCreated)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionRefused_BlobPostMount(t *testing.T) {
-	testDBFaultTolerance_ConnectionRefused_BlobPostMount(t)
+	testDBFaultTolerance_ConnectionRefused_BlobPostMountImpl(t)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionRefused_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
-	testDBFaultTolerance_ConnectionRefused_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
+	testDBFaultTolerance_ConnectionRefused_BlobPostMountImpl(t, withRedisCache(htestutil.RedisServer(t).Addr()))
 }
 
-func testDBFaultTolerance_ConnectionRefused_BlobPostMount(t *testing.T, opts ...configOpt) {
+// nolint: revive // var-naming - I do not see any other way to make this name readable
+func testDBFaultTolerance_ConnectionRefused_BlobPostMountImpl(t *testing.T, opts ...configOpt) {
 	dbProxy := newDBProxy(t)
 	defer dbProxy.Delete()
 
@@ -254,7 +258,7 @@ func testDBFaultTolerance_ConnectionRefused_BlobPostMount(t *testing.T, opts ...
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
-	args, _ := createRepoWithBlob(t, env)
+	args := createRepoWithBlob(t, env)
 	destRepo := "foo"
 
 	// query API with proxy disabled, should fall back to starting a regular
@@ -514,13 +518,13 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobDelete(t *testing.T) {
 
 	// query API with timeout, should fail
 	// create the repo and blob, otherwise the request will halt on the filesystem search, which precedes the DB search
-	args, _ := createRepoWithBlob(t, env)
+	args := createRepoWithBlob(t, env)
 	toxic := dbProxy.AddToxic("timeout", toxiproxy.Attributes{"timeout": 2000})
 	assertBlobDeleteResponse(t, env, args.imageName.String(), args.layerDigest, http.StatusServiceUnavailable)
 
 	// query API with no timeout, should succeed
 	dbProxy.RemoveToxic(toxic)
-	args, _ = createRepoWithBlob(t, env)
+	args = createRepoWithBlob(t, env)
 	assertBlobDeleteResponse(t, env, args.imageName.String(), args.layerDigest, http.StatusAccepted)
 }
 
@@ -542,14 +546,17 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobPut(t *testing.T) {
 	assertBlobPutResponse(t, env, args.imageName.String(), args.layerDigest, args.layerFile, http.StatusCreated)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T) {
 	testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionTimeout_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
 	testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T, opts ...configOpt) {
 	dbProxy := newDBProxy(t)
 	defer dbProxy.Delete()
@@ -558,7 +565,7 @@ func testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T, opts ...
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
-	args, _ := createRepoWithBlob(t, env)
+	args := createRepoWithBlob(t, env)
 	destRepo := "foo"
 
 	// query API with timeout, should fall back to starting a regular
@@ -724,7 +731,7 @@ func TestDBFaultTolerance_ConnectionPoolSaturation(t *testing.T) {
 
 	// Connection pooling is handled by database/sql behind the scenes, so there is no app specific logic (besides
 	// configuring db.SetMaxOpenConns), therefore using the catalog endpoint (or any other) as example is enough to
-	// assert the behaviour.
+	// assert the behavior.
 	u, err := env.builder.BuildCatalogURL()
 	require.NoError(t, err)
 
@@ -736,7 +743,7 @@ func TestDBFaultTolerance_ConnectionPoolSaturation(t *testing.T) {
 			go func() {
 				// If there are no available connections, database/sql should queue connection requests until they
 				// can be assigned, so all requests should succeed.
-				assertGetResponse(t, u, http.StatusOK)
+				assert.NoError(t, assertGetResponseErr(u, http.StatusOK))
 				wg.Done()
 			}()
 		})
@@ -810,7 +817,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobGet(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.Shutdown()
 
-	blobArgs, _ := createRepoWithBlob(t, env)
+	blobArgs := createRepoWithBlob(t, env)
 
 	assertNoDBConnections(t, env)
 
@@ -827,7 +834,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobHead(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.Shutdown()
 
-	blobArgs, _ := createRepoWithBlob(t, env)
+	blobArgs := createRepoWithBlob(t, env)
 
 	assertNoDBConnections(t, env)
 
@@ -844,7 +851,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobDelete(t *testing.T) {
 	env := newTestEnv(t, withDelete)
 	defer env.Shutdown()
 
-	blobArgs, _ := createRepoWithBlob(t, env)
+	blobArgs := createRepoWithBlob(t, env)
 
 	assertNoDBConnections(t, env)
 
@@ -873,19 +880,22 @@ func TestDBFaultTolerance_ConnectionLeak_BlobPut(t *testing.T) {
 	assertNoDBConnections(t, env)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionLeak_BlobPostMount(t *testing.T) {
-	testDBFaultTolerance_ConnectionLeak_BlobPostMount(t)
+	testDBFaultTolerance_ConnectionLeak_BlobPostMountImpl(t)
 }
 
+// nolint: revive // var-naming - I do not see any other way to make this name readable
 func TestDBFaultTolerance_ConnectionLeak_BlobPostMount_WithCentralRepositoryCache(t *testing.T) {
-	testDBFaultTolerance_ConnectionLeak_BlobPostMount(t, withRedisCache(htestutil.RedisServer(t).Addr()))
+	testDBFaultTolerance_ConnectionLeak_BlobPostMountImpl(t, withRedisCache(htestutil.RedisServer(t).Addr()))
 }
 
-func testDBFaultTolerance_ConnectionLeak_BlobPostMount(t *testing.T, opts ...configOpt) {
+// nolint: revive // var-naming - I do not see any other way to make this name readable
+func testDBFaultTolerance_ConnectionLeak_BlobPostMountImpl(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
-	blobArgs, _ := createRepoWithBlob(t, env)
+	blobArgs := createRepoWithBlob(t, env)
 
 	assertNoDBConnections(t, env)
 
@@ -1027,6 +1037,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestDelete(t *testing.T) {
 	assertNoDBConnections(t, env)
 }
 
+// nolint:unparam //(`open` always receives `1`)
 func assertEventuallyOpenAndInUseDBConnections(t *testing.T, env *testEnv, open, inUse int, deadline time.Duration) {
 	t.Helper()
 	require.Eventually(t, func() bool {

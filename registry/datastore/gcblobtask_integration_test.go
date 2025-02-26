@@ -4,7 +4,6 @@ package datastore_test
 
 import (
 	"database/sql"
-	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -238,11 +238,11 @@ func pickGCBlobTaskByDigest(t *testing.T, db datastore.Queryer, d digest.Digest)
 
 	b := &models.GCBlobTask{Digest: d}
 
-	if err := db.QueryRowContext(suite.ctx, q, dgst).Scan(&b.ReviewAfter, &b.ReviewCount); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	err = db.QueryRowContext(suite.ctx, q, dgst).Scan(&b.ReviewAfter, &b.ReviewCount)
+	if err != nil {
+		if assert.ErrorIs(t, err, sql.ErrNoRows) {
 			return nil
 		}
-		t.Error(err)
 	}
 
 	return b

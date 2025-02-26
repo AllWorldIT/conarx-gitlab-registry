@@ -2,6 +2,7 @@ package testdriver
 
 import (
 	"context"
+	"fmt"
 
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
@@ -17,7 +18,7 @@ func init() {
 // testDriverFactory implements the factory.StorageDriverFactory interface.
 type testDriverFactory struct{}
 
-func (factory *testDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (*testDriverFactory) Create(_ map[string]any) (storagedriver.StorageDriver, error) {
 	return New(), nil
 }
 
@@ -44,8 +45,8 @@ func New() *TestDriver {
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (td *TestDriver) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
-	fw, err := td.StorageDriver.Writer(ctx, path, append)
+func (td *TestDriver) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
+	fw, err := td.StorageDriver.Writer(ctx, path, doAppend)
 	return &testFileWriter{FileWriter: fw}, err
 }
 
@@ -57,16 +58,25 @@ func (tfw *testFileWriter) Write(p []byte) (int, error) {
 }
 
 func (tfw *testFileWriter) Close() error {
-	tfw.Write(nil)
+	_, err := tfw.Write(nil)
+	if err != nil {
+		return fmt.Errorf("writing test file: %w", err)
+	}
 	return tfw.FileWriter.Close()
 }
 
 func (tfw *testFileWriter) Cancel() error {
-	tfw.Write(nil)
+	_, err := tfw.Write(nil)
+	if err != nil {
+		return fmt.Errorf("writing test file: %w", err)
+	}
 	return tfw.FileWriter.Cancel()
 }
 
 func (tfw *testFileWriter) Commit() error {
-	tfw.Write(nil)
+	_, err := tfw.Write(nil)
+	if err != nil {
+		return fmt.Errorf("writing test file: %w", err)
+	}
 	return tfw.FileWriter.Commit()
 }

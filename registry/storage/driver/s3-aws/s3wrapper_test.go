@@ -91,7 +91,7 @@ type mockDeleteObjectsWithContext struct {
 	counter        atomic.Int32
 }
 
-func (m *mockDeleteObjectsWithContext) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteObjectsInput, opts ...request.Option) (*s3.DeleteObjectsOutput, error) {
+func (m *mockDeleteObjectsWithContext) DeleteObjectsWithContext(_ aws.Context, _ *s3.DeleteObjectsInput, _ ...request.Option) (*s3.DeleteObjectsOutput, error) {
 	out := &s3.DeleteObjectsOutput{}
 	if m.counter.Load() < m.failedRequests {
 		out.Errors = []*s3.Error{
@@ -162,7 +162,7 @@ func TestDeleteObjectsWithContext_retryableErrors(t *testing.T) {
 			if test.maxRetries < test.failedRequests {
 				totalRequests = int32(test.maxRetries) + 1
 			}
-			require.Equal(t, counter, int32(totalRequests), "request counts do not match")
+			require.Equal(t, counter, totalRequests, "request counts do not match")
 		})
 	}
 }

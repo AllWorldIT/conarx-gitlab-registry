@@ -41,7 +41,7 @@ var _ storagedriver.StorageDriver = &cloudFrontStorageMiddleware{}
 //	to S3 directly. "awsregion", only regions listed in awsregion options goes to S3 directly
 //
 // awsregion: a comma separated string of AWS regions.
-func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, options map[string]interface{}) (storagedriver.StorageDriver, error) {
+func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, options map[string]any) (storagedriver.StorageDriver, error) {
 	// parse baseurl
 	base, ok := options["baseurl"]
 	if !ok {
@@ -82,6 +82,7 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 	}
 
 	// get urlSigner from the file specified in pkPath
+	// nolint: gosec
 	pkBytes, err := os.ReadFile(pkPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read privatekey file: %s", err)
@@ -135,41 +136,42 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 	// parse iprangesurl
 	ipRangesURL := defaultIPRangesURL
 	if i, ok := options["iprangesurl"]; ok {
-		if iprangeurl, ok := i.(string); ok {
-			ipRangesURL = iprangeurl
-		} else {
+		iprangeurl, ok := i.(string)
+		if !ok {
 			return nil, fmt.Errorf("iprangesurl must be a string")
 		}
+		ipRangesURL = iprangeurl
 	}
 
 	// parse ipfilteredby
 	var awsIPs *awsIPs
 	if i, ok := options["ipfilteredby"]; ok {
-		if ipFilteredBy, ok := i.(string); ok {
-			switch strings.ToLower(strings.TrimSpace(ipFilteredBy)) {
-			case "", "none":
-				awsIPs = nil
-			case "aws":
-				awsIPs = newAWSIPs(ipRangesURL, updateFrequency, nil)
-			case "awsregion":
-				var awsRegion []string
-				if i, ok := options["awsregion"]; ok {
-					if regions, ok := i.(string); ok {
-						for _, awsRegions := range strings.Split(regions, ",") {
-							awsRegion = append(awsRegion, strings.ToLower(strings.TrimSpace(awsRegions)))
-						}
-						awsIPs = newAWSIPs(ipRangesURL, updateFrequency, awsRegion)
-					} else {
-						return nil, fmt.Errorf("awsRegion must be a comma separated string of valid aws regions")
-					}
-				} else {
-					return nil, fmt.Errorf("awsRegion is not defined")
-				}
-			default:
-				return nil, fmt.Errorf("ipfilteredby only allows a string the following value: none|aws|awsregion")
-			}
-		} else {
+		ipFilteredBy, ok := i.(string)
+		if !ok {
 			return nil, fmt.Errorf("ipfilteredby only allows a string with the following value: none|aws|awsregion")
+		}
+
+		switch strings.ToLower(strings.TrimSpace(ipFilteredBy)) {
+		case "", "none":
+			awsIPs = nil
+		case "aws":
+			awsIPs = newAWSIPs(ipRangesURL, updateFrequency, nil)
+		case "awsregion":
+			var awsRegion []string
+			i, ok := options["awsregion"]
+			if !ok {
+				return nil, fmt.Errorf("awsRegion is not defined")
+			}
+			regions, ok := i.(string)
+			if !ok {
+				return nil, fmt.Errorf("awsRegion must be a comma separated string of valid aws regions")
+			}
+			for _, awsRegions := range strings.Split(regions, ",") {
+				awsRegion = append(awsRegion, strings.ToLower(strings.TrimSpace(awsRegions)))
+			}
+			awsIPs = newAWSIPs(ipRangesURL, updateFrequency, awsRegion)
+		default:
+			return nil, fmt.Errorf("ipfilteredby only allows a string the following value: none|aws|awsregion")
 		}
 	}
 
@@ -190,7 +192,7 @@ type S3BucketKeyer interface {
 
 // URLFor attempts to find a url which may be used to retrieve the file at the given path.
 // Returns an error if the file cannot be found.
-func (lh *cloudFrontStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (lh *cloudFrontStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	keyer, ok := lh.StorageDriver.(S3BucketKeyer)
 	if !ok {
 		dcontext.GetLogger(ctx).Warn("the CloudFront middleware does not support this backend storage driver")
@@ -211,5 +213,6 @@ func (lh *cloudFrontStorageMiddleware) URLFor(ctx context.Context, path string, 
 
 // init registers the cloudfront layerHandler backend.
 func init() {
-	storagemiddleware.Register("cloudfront", storagemiddleware.InitFunc(newCloudFrontStorageMiddleware))
+	// nolint: gosec // ignore when backend is already registered
+	_ = storagemiddleware.Register("cloudfront", storagemiddleware.InitFunc(newCloudFrontStorageMiddleware))
 }

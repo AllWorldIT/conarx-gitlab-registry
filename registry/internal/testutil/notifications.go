@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/notifications"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,23 +33,26 @@ func NewNotificationServer(t *testing.T, databaseEnabled bool) *NotificationServ
 
 	ns := &NotificationServer{
 		mu:              &sync.Mutex{},
-		receivedEvents:  []notifications.Event{},
+		receivedEvents:  make([]notifications.Event, 0),
 		databaseEnabled: databaseEnabled,
 	}
 
 	s := httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
+			// NOTE(prozlach): we can't use require (which internally uses
+			// FailNow from testing package) in a goroutine as we may get an
+			// undefined behavior
 			dreq, err := httputil.DumpRequest(r, true)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			fmt.Printf("Handler got event: \n\n%s\n\n", dreq)
 			events := struct {
 				Events []notifications.Event `json:"events"`
 			}{}
 			err = json.NewDecoder(r.Body).Decode(&events)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
-			require.Len(t, events.Events, 1)
-			require.Equal(t, notifications.EventsMediaType, r.Header.Get("Content-Type"), events.Events[0].ID)
+			assert.Len(t, events.Events, 1)
+			assert.Equal(t, notifications.EventsMediaType, r.Header.Get("Content-Type"), events.Events[0].ID)
 
 			ns.mu.Lock()
 			ns.receivedEvents = append(ns.receivedEvents, events.Events[0])
@@ -114,23 +118,18 @@ func (ns *NotificationServer) AssertEventNotification(t *testing.T, expectedEven
 
 			return
 		case "rename":
-			err := validateRepositoryRename(t, expectedEvent, receivedEvent)
-			if err != nil {
-				t.Logf("repository rename event mismatch: %v", err)
-				continue
-			}
+			validateRepositoryRename(t, expectedEvent, receivedEvent)
 
 			return
 		default:
 			t.Errorf("unknown action: %q", expectedEvent.Action)
 		}
-
 	}
 
 	t.Errorf("expected event did not match any received events")
 }
 
-func (ns *NotificationServer) validateManifestPush(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
+func (*NotificationServer) validateManifestPush(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
 	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
@@ -169,7 +168,7 @@ func (ns *NotificationServer) validateManifestPush(t *testing.T, expectedEvent, 
 }
 
 // validateManifestDelete only action, repository and tag are part of the received event
-func (ns *NotificationServer) validateManifestDelete(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
+func (*NotificationServer) validateManifestDelete(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
 	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
@@ -203,7 +202,7 @@ func (ns *NotificationServer) validateManifestDelete(t *testing.T, expectedEvent
 	return nil
 }
 
-func (ns *NotificationServer) validateManifestPull(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
+func (*NotificationServer) validateManifestPull(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
 	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
@@ -235,7 +234,7 @@ func (ns *NotificationServer) validateManifestPull(t *testing.T, expectedEvent, 
 }
 
 // validateRepositoryRename validates that a rename event contains the necessary fields.
-func validateRepositoryRename(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
+func validateRepositoryRename(t *testing.T, expectedEvent, receivedEvent notifications.Event) {
 	t.Helper()
 
 	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
@@ -245,6 +244,4 @@ func validateRepositoryRename(t *testing.T, expectedEvent, receivedEvent notific
 	require.Equal(t, expectedEvent.Action, receivedEvent.Action)
 	require.Equal(t, expectedEvent.Target.Repository, receivedEvent.Target.Repository)
 	require.Equal(t, expectedEvent.Target.Rename, receivedEvent.Target.Rename)
-
-	return nil
 }

@@ -24,6 +24,9 @@ package s3
 
 import (
 	"crypto/hmac"
+	"fmt"
+
+	// nolint: revive,gosec // imports-blocklist
 	"crypto/sha1"
 	"encoding/base64"
 	"net/http"
@@ -37,12 +40,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	log "github.com/sirupsen/logrus"
-)
-
-const (
-	signatureVersion = "2"
-	signatureMethod  = "HmacSHA1"
-	timeFormat       = "2006-01-02T15:04:05Z"
 )
 
 type signer struct {
@@ -84,6 +81,7 @@ func setv2Handlers(svc *s3.S3) {
 	svc.Handlers.Build.PushBack(func(r *request.Request) {
 		parsedURL, err := url.Parse(r.HTTPRequest.URL.String())
 		if err != nil {
+			// nolint: revive // deep-exit: calls to log.Fatalf only in main() or init() functions
 			log.Fatalf("Failed to parse URL: %v", err)
 		}
 		r.HTTPRequest.URL.Opaque = parsedURL.Path
@@ -111,7 +109,7 @@ func Sign(req *request.Request) {
 		Time:        req.Time,
 		Credentials: req.Config.Credentials,
 	}
-	v2.Sign()
+	_ = v2.Sign()
 }
 
 func (v2 *signer) Sign() error {
@@ -205,7 +203,10 @@ func (v2 *signer) Sign() error {
 		xamz + canonicalPath,
 	}, "\n")
 	hash := hmac.New(sha1.New, []byte(credValue.SecretAccessKey))
-	hash.Write([]byte(v2.stringToSign))
+	_, err = hash.Write([]byte(v2.stringToSign))
+	if err != nil {
+		return fmt.Errorf("writing to hash: %w", err)
+	}
 	v2.signature = base64.StdEncoding.EncodeToString(hash.Sum(nil))
 
 	if expires {

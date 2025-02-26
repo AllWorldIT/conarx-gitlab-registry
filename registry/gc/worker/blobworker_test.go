@@ -34,8 +34,8 @@ func mockBlobStores(tb testing.TB, ctrl *gomock.Controller) {
 	bkpBts := blobTaskStoreConstructor
 	bkpBs := blobStoreConstructor
 
-	blobTaskStoreConstructor = func(db datastore.Queryer) datastore.GCBlobTaskStore { return btsMock }
-	blobStoreConstructor = func(db datastore.Queryer) datastore.BlobStore { return bsMock }
+	blobTaskStoreConstructor = func(_ datastore.Queryer) datastore.GCBlobTaskStore { return btsMock }
+	blobStoreConstructor = func(_ datastore.Queryer) datastore.BlobStore { return bsMock }
 
 	tb.Cleanup(func() {
 		blobTaskStoreConstructor = bkpBts
@@ -144,10 +144,10 @@ func TestBlobWorker_processTask_BeginTxError(t *testing.T) {
 	w := NewBlobWorker(dbMock, driverMock)
 
 	dbCtx := testutil.IsContextWithDeadline{Deadline: clockMock.Now().Add(defaultTxTimeout)}
-	dbMock.EXPECT().BeginTx(dbCtx, nil).Return(nil, fakeErrorA).Times(1)
+	dbMock.EXPECT().BeginTx(dbCtx, nil).Return(nil, errFakeA).Times(1)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fmt.Errorf("creating database transaction: %w", fakeErrorA).Error())
+	require.EqualError(t, res.Err, fmt.Errorf("creating database transaction: %w", errFakeA).Error())
 	require.False(t, res.Found)
 	require.False(t, res.Dangling)
 	require.Empty(t, res.Event)
@@ -167,12 +167,12 @@ func TestBlobWorker_processTask_NextError(t *testing.T) {
 	dbCtx := testutil.IsContextWithDeadline{Deadline: clockMock.Now().Add(defaultTxTimeout)}
 	gomock.InOrder(
 		dbMock.EXPECT().BeginTx(dbCtx, nil).Return(txMock, nil).Times(1),
-		btsMock.EXPECT().Next(dbCtx).Return(nil, fakeErrorA).Times(1),
+		btsMock.EXPECT().Next(dbCtx).Return(nil, errFakeA).Times(1),
 		txMock.EXPECT().Rollback().Return(nil).Times(1),
 	)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fakeErrorA.Error())
+	require.EqualError(t, res.Err, errFakeA.Error())
 	require.False(t, res.Found)
 	require.False(t, res.Dangling)
 	require.Empty(t, res.Event)
@@ -219,12 +219,12 @@ func TestBlobWorker_processTask_None_CommitError(t *testing.T) {
 	gomock.InOrder(
 		dbMock.EXPECT().BeginTx(dbCtx, nil).Return(txMock, nil).Times(1),
 		btsMock.EXPECT().Next(dbCtx).Return(nil, nil).Times(1),
-		txMock.EXPECT().Commit().Return(fakeErrorA).Times(1),
+		txMock.EXPECT().Commit().Return(errFakeA).Times(1),
 		txMock.EXPECT().Rollback().Return(nil).Times(1),
 	)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fmt.Errorf("committing database transaction: %w", fakeErrorA).Error())
+	require.EqualError(t, res.Err, fmt.Errorf("committing database transaction: %w", errFakeA).Error())
 	require.False(t, res.Found)
 	require.False(t, res.Dangling)
 	require.Empty(t, res.Event)
@@ -275,16 +275,16 @@ func TestBlobWorker_processTask_IsDanglingErrorAndPostponeError(t *testing.T) {
 	gomock.InOrder(
 		dbMock.EXPECT().BeginTx(dbCtx, nil).Return(txMock, nil).Times(1),
 		btsMock.EXPECT().Next(dbCtx).Return(bt, nil).Times(1),
-		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(false, fakeErrorA).Times(1),
-		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(fakeErrorB).Times(1),
+		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(false, errFakeA).Times(1),
+		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(errFakeB).Times(1),
 		txMock.EXPECT().Rollback().Return(nil).Times(1),
 	)
 
 	res := w.processTask(context.Background())
 	expectedErr := multierror.Error{
 		Errors: []error{
-			fakeErrorA,
-			fakeErrorB,
+			errFakeA,
+			errFakeB,
 		},
 	}
 	require.EqualError(t, res.Err, expectedErr.Error())
@@ -309,17 +309,17 @@ func TestBlobWorker_processTask_IsDanglingErrorAndPostponeCommitError(t *testing
 	gomock.InOrder(
 		dbMock.EXPECT().BeginTx(dbCtx, nil).Return(txMock, nil).Times(1),
 		btsMock.EXPECT().Next(dbCtx).Return(bt, nil).Times(1),
-		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(true, fakeErrorA).Times(1),
+		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(true, errFakeA).Times(1),
 		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(nil).Times(1),
-		txMock.EXPECT().Commit().Return(fakeErrorB).Times(1),
+		txMock.EXPECT().Commit().Return(errFakeB).Times(1),
 		txMock.EXPECT().Rollback().Return(sql.ErrConnDone).Times(1),
 	)
 
 	res := w.processTask(context.Background())
 	expectedErr := multierror.Error{
 		Errors: []error{
-			fakeErrorA,
-			fmt.Errorf("committing database transaction: %s", fakeErrorB),
+			errFakeA,
+			fmt.Errorf("committing database transaction: %s", errFakeB),
 		},
 	}
 	require.EqualError(t, res.Err, expectedErr.Error())
@@ -440,14 +440,14 @@ func TestBlobWorker_processTask_StoreDeleteUnknownError(t *testing.T) {
 		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(true, nil).Times(1),
 		driverMock.EXPECT().Delete(driverCtx, blobPath(bt.Digest)).Return(nil).Times(1),
 		bsMock.EXPECT().FindByDigest(dbCtx, bt.Digest).Return(&models.Blob{}, nil).Times(1),
-		bsMock.EXPECT().Delete(dbCtx, bt.Digest).Return(fakeErrorA).Times(1),
+		bsMock.EXPECT().Delete(dbCtx, bt.Digest).Return(errFakeA).Times(1),
 		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(nil).Times(1),
 		txMock.EXPECT().Commit().Return(nil).Times(1),
 		txMock.EXPECT().Rollback().Return(sql.ErrTxDone).Times(1),
 	)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fakeErrorA.Error())
+	require.EqualError(t, res.Err, errFakeA.Error())
 	require.True(t, res.Found)
 	require.True(t, res.Dangling)
 	require.Equal(t, bt.Event, res.Event)
@@ -474,16 +474,16 @@ func TestBlobWorker_processTask_StoreDeleteUnknownErrorAndPostponeError(t *testi
 		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(true, nil).Times(1),
 		driverMock.EXPECT().Delete(driverCtx, blobPath(bt.Digest)).Return(nil).Times(1),
 		bsMock.EXPECT().FindByDigest(dbCtx, bt.Digest).Return(&models.Blob{}, nil).Times(1),
-		bsMock.EXPECT().Delete(dbCtx, bt.Digest).Return(fakeErrorA).Times(1),
-		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(fakeErrorB).Times(1),
+		bsMock.EXPECT().Delete(dbCtx, bt.Digest).Return(errFakeA).Times(1),
+		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(errFakeB).Times(1),
 		txMock.EXPECT().Rollback().Return(nil).Times(1),
 	)
 
 	res := w.processTask(context.Background())
 	expectedErr := multierror.Error{
 		Errors: []error{
-			fakeErrorA,
-			fakeErrorB,
+			errFakeA,
+			errFakeB,
 		},
 	}
 	require.EqualError(t, res.Err, expectedErr.Error())
@@ -544,14 +544,14 @@ func TestBlobWorker_processTask_VacuumUnknownError(t *testing.T) {
 		dbMock.EXPECT().BeginTx(dbCtx, nil).Return(txMock, nil).Times(1),
 		btsMock.EXPECT().Next(dbCtx).Return(bt, nil).Times(1),
 		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(true, nil).Times(1),
-		driverMock.EXPECT().Delete(driverCtx, blobPath(bt.Digest)).Return(fakeErrorA).Times(1),
+		driverMock.EXPECT().Delete(driverCtx, blobPath(bt.Digest)).Return(errFakeA).Times(1),
 		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(nil).Times(1),
 		txMock.EXPECT().Commit().Return(nil).Times(1),
 		txMock.EXPECT().Rollback().Return(sql.ErrTxDone).Times(1),
 	)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fmt.Errorf("deleting blob from storage: %w", fakeErrorA).Error())
+	require.EqualError(t, res.Err, fmt.Errorf("deleting blob from storage: deleting blob: %w", errFakeA).Error())
 	require.True(t, res.Found)
 	require.True(t, res.Dangling)
 	require.Equal(t, bt.Event, res.Event)
@@ -577,17 +577,17 @@ func TestBlobWorker_processTask_FindByDigestError(t *testing.T) {
 		btsMock.EXPECT().Next(dbCtx).Return(bt, nil).Times(1),
 		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(true, nil).Times(1),
 		driverMock.EXPECT().Delete(driverCtx, blobPath(bt.Digest)).Return(nil).Times(1),
-		bsMock.EXPECT().FindByDigest(dbCtx, bt.Digest).Return(nil, fakeErrorA).Times(1),
-		bsMock.EXPECT().Delete(dbCtx, bt.Digest).Return(fakeErrorA).Times(1),
-		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(fakeErrorB).Times(1),
+		bsMock.EXPECT().FindByDigest(dbCtx, bt.Digest).Return(nil, errFakeA).Times(1),
+		bsMock.EXPECT().Delete(dbCtx, bt.Digest).Return(errFakeA).Times(1),
+		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(errFakeB).Times(1),
 		txMock.EXPECT().Rollback().Return(nil).Times(1),
 	)
 
 	res := w.processTask(context.Background())
 	expectedErr := multierror.Error{
 		Errors: []error{
-			fakeErrorA,
-			fakeErrorB,
+			errFakeA,
+			errFakeB,
 		},
 	}
 	require.EqualError(t, res.Err, expectedErr.Error())
@@ -648,16 +648,16 @@ func TestBlobWorker_processTask_VacuumUnknownErrorAndPostponeError(t *testing.T)
 		dbMock.EXPECT().BeginTx(dbCtx, nil).Return(txMock, nil).Times(1),
 		btsMock.EXPECT().Next(dbCtx).Return(bt, nil).Times(1),
 		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(true, nil).Times(1),
-		driverMock.EXPECT().Delete(driverCtx, blobPath(bt.Digest)).Return(fakeErrorA).Times(1),
-		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(fakeErrorB).Times(1),
+		driverMock.EXPECT().Delete(driverCtx, blobPath(bt.Digest)).Return(errFakeA).Times(1),
+		btsMock.EXPECT().Postpone(dbCtx, bt, isDuration{10 * time.Minute}).Return(errFakeB).Times(1),
 		txMock.EXPECT().Rollback().Return(sql.ErrTxDone).Times(1),
 	)
 
 	res := w.processTask(context.Background())
 	expectedErr := multierror.Error{
 		Errors: []error{
-			fmt.Errorf("deleting blob from storage: %w", fakeErrorA),
-			fakeErrorB,
+			fmt.Errorf("deleting blob from storage: deleting blob: %w", errFakeA),
+			errFakeB,
 		},
 	}
 	require.EqualError(t, res.Err, expectedErr.Error())
@@ -713,12 +713,12 @@ func TestBlobWorker_processTask_IsDanglingNo_DeleteTaskError(t *testing.T) {
 		dbMock.EXPECT().BeginTx(dbCtx, nil).Return(txMock, nil).Times(1),
 		btsMock.EXPECT().Next(dbCtx).Return(bt, nil).Times(1),
 		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(false, nil).Times(1),
-		btsMock.EXPECT().Delete(dbCtx, bt).Return(fakeErrorA).Times(1),
+		btsMock.EXPECT().Delete(dbCtx, bt).Return(errFakeA).Times(1),
 		txMock.EXPECT().Rollback().Return(sql.ErrTxDone).Times(1),
 	)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fakeErrorA.Error())
+	require.EqualError(t, res.Err, errFakeA.Error())
 	require.True(t, res.Found)
 	require.False(t, res.Dangling)
 	require.Equal(t, bt.Event, res.Event)
@@ -743,12 +743,12 @@ func TestBlobWorker_processTask_IsDanglingNo_CommitError(t *testing.T) {
 		btsMock.EXPECT().Next(dbCtx).Return(bt, nil).Times(1),
 		btsMock.EXPECT().IsDangling(dbCtx, bt).Return(false, nil).Times(1),
 		btsMock.EXPECT().Delete(dbCtx, bt).Return(nil).Times(1),
-		txMock.EXPECT().Commit().Return(fakeErrorA).Times(1),
+		txMock.EXPECT().Commit().Return(errFakeA).Times(1),
 		txMock.EXPECT().Rollback().Return(sql.ErrConnDone).Times(1),
 	)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fmt.Errorf("committing database transaction: %s", fakeErrorA).Error())
+	require.EqualError(t, res.Err, fmt.Errorf("committing database transaction: %s", errFakeA).Error())
 	require.True(t, res.Found)
 	require.False(t, res.Dangling)
 	require.Equal(t, bt.Event, res.Event)
@@ -769,12 +769,12 @@ func TestBlobWorker_processTask_RollbackOnExitUnknownError(t *testing.T) {
 
 	gomock.InOrder(
 		dbMock.EXPECT().BeginTx(dbCtx, nil).Return(txMock, nil).Times(1),
-		btsMock.EXPECT().Next(dbCtx).Return(nil, fakeErrorA).Times(1),
+		btsMock.EXPECT().Next(dbCtx).Return(nil, errFakeA).Times(1),
 		txMock.EXPECT().Rollback().Return(sql.ErrConnDone).Times(1),
 	)
 
 	res := w.processTask(context.Background())
-	require.EqualError(t, res.Err, fakeErrorA.Error())
+	require.EqualError(t, res.Err, errFakeA.Error())
 	require.False(t, res.Found)
 	require.False(t, res.Dangling)
 	require.Empty(t, res.Event)
@@ -819,10 +819,10 @@ func TestBlobWorker_Run_Error(t *testing.T) {
 
 	dbCtx := testutil.IsContextWithDeadline{Deadline: clockMock.Now().Add(defaultTxTimeout)}
 
-	dbMock.EXPECT().BeginTx(dbCtx, nil).Return(nil, fakeErrorA).Times(1)
+	dbMock.EXPECT().BeginTx(dbCtx, nil).Return(nil, errFakeA).Times(1)
 
 	res := w.Run(context.Background())
-	require.EqualError(t, res.Err, fmt.Errorf("processing task: creating database transaction: %w", fakeErrorA).Error())
+	require.EqualError(t, res.Err, fmt.Errorf("processing task: creating database transaction: %w", errFakeA).Error())
 	require.False(t, res.Found)
 	require.False(t, res.Dangling)
 	require.Empty(t, res.Event)

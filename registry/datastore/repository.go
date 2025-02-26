@@ -14,12 +14,14 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
 	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/redis/go-redis/v9"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 )
@@ -90,6 +92,7 @@ type RepositoryReader interface {
 	EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error)
 	TagsDetailPaginated(ctx context.Context, r *models.Repository, filters FilterParams) ([]*models.TagDetail, error)
 	FindPaginatedRepositoriesForPath(ctx context.Context, r *models.Repository, filters FilterParams) (models.Repositories, error)
+	TagDetail(ctx context.Context, r *models.Repository, tagName string) (*models.TagDetail, error)
 }
 
 // RepositoryWriter is the interface that defines write operations for a repository store.
@@ -136,7 +139,7 @@ type repositoryStore struct {
 }
 
 // NewRepositoryStore builds a new repositoryStore.
-func NewRepositoryStore(db Queryer, opts ...RepositoryStoreOption) *repositoryStore {
+func NewRepositoryStore(db Queryer, opts ...RepositoryStoreOption) RepositoryStore {
 	rStore := &repositoryStore{db: db, cache: &noOpRepositoryCache{}}
 
 	for _, o := range opts {
@@ -234,27 +237,27 @@ type noOpRepositoryCache struct{}
 
 // NewNoOpRepositoryCache creates a new non-operational cache for a repository object.
 // This implementation does nothing and returns nothing for all its methods.
-func NewNoOpRepositoryCache() *noOpRepositoryCache {
+func NewNoOpRepositoryCache() RepositoryCache {
 	return &noOpRepositoryCache{}
 }
 
-func (n *noOpRepositoryCache) Get(context.Context, string) *models.Repository                  { return nil }
-func (n *noOpRepositoryCache) Set(context.Context, *models.Repository)                         {}
-func (n *noOpRepositoryCache) InvalidateSize(context.Context, *models.Repository)              {}
-func (n *noOpRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
-func (n *noOpRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
+func (*noOpRepositoryCache) Get(context.Context, string) *models.Repository                  { return nil }
+func (*noOpRepositoryCache) Set(context.Context, *models.Repository)                         {}
+func (*noOpRepositoryCache) InvalidateSize(context.Context, *models.Repository)              {}
+func (*noOpRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
+func (*noOpRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
 	return false
 }
-func (n *noOpRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
-func (n *noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
+func (*noOpRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
+func (*noOpRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
 	return false, 0
 }
 
-func (n *noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
+func (*noOpRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
-func (n *noOpRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
-func (n *noOpRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
+func (*noOpRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
+func (*noOpRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
 	return "", nil
 }
 
@@ -266,7 +269,7 @@ type singleRepositoryCache struct {
 
 // NewSingleRepositoryCache creates a new local in-memory cache for a single repository object. This implementation is
 // not thread-safe. Deprecated in favor of NewCentralRepositoryCache.
-func NewSingleRepositoryCache() *singleRepositoryCache {
+func NewSingleRepositoryCache() RepositoryCache {
 	return &singleRepositoryCache{}
 }
 
@@ -293,35 +296,35 @@ func (c *singleRepositoryCache) InvalidateSize(_ context.Context, r *models.Repo
 // SizeWithDescendantsTimedOut is a noop. We're phasing out the singleRepositoryCache cache implementation in favor of
 // the centralRepositoryCache one, and the only place where we'll be making use of the related functionality (estimated
 // size), the GitLab V1 API repositories handler, is explicitly making use of the latter.
-func (c *singleRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
+func (*singleRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
 
 // HasSizeWithDescendantsTimedOut is a noop. We're phasing out the singleRepositoryCache cache implementation in favor
 // of the centralRepositoryCache one, and the only place where we'll be making use of the related functionality
 // (estimated size), the GitLab V1 API repositories handler, is explicitly making use of the latter.
-func (c *singleRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
+func (*singleRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
 	return false
 }
 
 // SetSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor of
 // the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
-func (c *singleRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
+func (*singleRepositoryCache) SetSizeWithDescendants(context.Context, *models.Repository, int64) {}
 
 // GetSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor of
 // the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
-func (c *singleRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
+func (*singleRepositoryCache) GetSizeWithDescendants(context.Context, *models.Repository) (bool, int64) {
 	return false, 0
 }
 
 // InvalidateRootSizeWithDescendants is a noop. We're phasing out the singleRepositoryCache cache implementation in favor
 // of the centralRepositoryCache one, the only implementation where we'll be making use of the related functionality.
-func (c *singleRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
+func (*singleRepositoryCache) InvalidateRootSizeWithDescendants(context.Context, *models.Repository) {
 }
 
 // SetLSN is a noop as this functionality depends on Redis.
-func (c *singleRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
+func (*singleRepositoryCache) SetLSN(context.Context, *models.Repository, string) error { return nil }
 
 // GetLSN is a noop as this functionality depends on Redis.
-func (c *singleRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
+func (*singleRepositoryCache) GetLSN(context.Context, *models.Repository) (string, error) {
 	return "", nil
 }
 
@@ -331,13 +334,13 @@ type centralRepositoryCache struct {
 }
 
 // NewCentralRepositoryCache creates an interface for the centralized repository object cache backed by Redis.
-func NewCentralRepositoryCache(cache *iredis.Cache) *centralRepositoryCache {
+func NewCentralRepositoryCache(cache *iredis.Cache) RepositoryCache {
 	return &centralRepositoryCache{cache}
 }
 
 // key generates a valid Redis key string for a given repository object. The used key format is described in
 // https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/redis-dev-guidelines.md#key-format.
-func (c *centralRepositoryCache) key(path string) string {
+func (*centralRepositoryCache) key(path string) string {
 	nsPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()
 	return fmt.Sprintf("registry:db:{repository:%s:%s}", nsPrefix, hex)
@@ -820,7 +823,7 @@ func (s *repositoryStore) Tags(ctx context.Context, r *models.Repository) (model
 // TagsPaginated finds up to `filters.MaxEntries` tags of a given repository with name lexicographically after `filters.LastEntry`. This is used
 // exclusively for the GET /v2/<name>/tags/list API route, where pagination is done with a marker (`filters.LastEntry`). Even if
 // there is no tag with a name of `filters.LastEntry`, the returned tags will always be those with a path lexicographically after
-// `filters.LastEntry`. Finally, tags are lexicographically sorted. These constraints exists to preserve the existing API behaviour
+// `filters.LastEntry`. Finally, tags are lexicographically sorted. These constraints exists to preserve the existing API behavior
 // (when doing a filesystem walk based pagination).
 func (s *repositoryStore) TagsPaginated(ctx context.Context, r *models.Repository, filters FilterParams) (models.Tags, error) {
 	defer metrics.InstrumentQuery("repository_tags_paginated")()
@@ -861,21 +864,15 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 			return nil, fmt.Errorf("scanning tag details: %w", err)
 		}
 
-		d, err := dgst.Parse()
+		var err error
+		t.Digest, err = dgst.Parse()
 		if err != nil {
 			return nil, err
 		}
-		t.Digest = d
 
-		if cfgDgst.Valid {
-			cd, err := Digest(cfgDgst.String).Parse()
-			if err != nil {
-				return nil, err
-			}
-			t.ConfigDigest = models.NullDigest{
-				Digest: cd,
-				Valid:  true,
-			}
+		t.ConfigDigest, err = parseConfigDigest(cfgDgst)
+		if err != nil {
+			return nil, err
 		}
 
 		tt = append(tt, t)
@@ -885,6 +882,24 @@ func scanFullTagsDetail(rows *sql.Rows) ([]*models.TagDetail, error) {
 	}
 
 	return tt, nil
+}
+
+func parseConfigDigest(cfgDgst sql.NullString) (models.NullDigest, error) {
+	var dgst models.NullDigest
+
+	if cfgDgst.Valid {
+		cd, err := Digest(cfgDgst.String).Parse()
+		if err != nil {
+			return dgst, err
+		}
+
+		dgst = models.NullDigest{
+			Digest: cd,
+			Valid:  true,
+		}
+	}
+
+	return dgst, nil
 }
 
 // The query for this method takes a list of TagDetails and returns a list of
@@ -932,12 +947,12 @@ func (s *repositoryStore) appendTagsDetailReferrers(ctx context.Context, r *mode
 	var err error
 
 	if len(artifactTypes) > 0 {
-		ats, err := s.mediaTypeIds(ctx, artifactTypes)
-		if err != nil {
-			return err
+		ats, errInner := s.mediaTypeIDs(ctx, artifactTypes)
+		if errInner != nil {
+			return errInner
 		}
 		q += " AND (m.artifact_media_type_id = ANY ($4) OR m.configuration_media_type_id = ANY ($4))"
-		rows, err = s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sbjDigests, ats) //nolint: staticcheck // err is checked below
+		rows, err = s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sbjDigests, ats) // nolint: staticcheck // err is checked below
 	} else {
 		rows, err = s.db.QueryContext(ctx, q, r.NamespaceID, r.ID, sbjDigests)
 	}
@@ -1027,7 +1042,80 @@ func (s *repositoryStore) TagsDetailPaginated(ctx context.Context, r *models.Rep
 	return tags, nil
 }
 
-func (s *repositoryStore) mediaTypeIds(ctx context.Context, types []string) ([]string, error) {
+// SingleTagDetail returns the detail of a tag with its manifest payload
+// and its configuration payload for single manifests. The configuration
+// payload will be empty for manifest lists.
+func (s *repositoryStore) TagDetail(ctx context.Context, r *models.Repository, tagName string) (*models.TagDetail, error) {
+	defer metrics.InstrumentQuery("repository_tag_detail")()
+
+	q := `
+		SELECT
+			t.name,
+			encode(m.digest, 'hex') AS digest,
+			encode(m.configuration_blob_digest, 'hex') AS config_digest,
+			mt.media_type,
+			m.total_size,
+			t.created_at,
+			t.updated_at,
+			GREATEST(t.created_at, t.updated_at) as published_at,
+			m.id,
+			mtc.media_type as configuration_media_type,
+			m.configuration_payload
+		FROM tags t
+			JOIN manifests AS m ON m.top_level_namespace_id = t.top_level_namespace_id
+				AND m.repository_id = t.repository_id
+				AND m.id = t.manifest_id
+			JOIN media_types AS mt ON mt.id = m.media_type_id
+			LEFT JOIN media_types AS mtc ON mtc.id = m.configuration_media_type_id                           
+		WHERE
+			t.top_level_namespace_id = $1
+			AND t.repository_id = $2
+			AND t.name = $3
+	    `
+
+	cfgPayload := new(models.Payload)
+	td := &models.TagDetail{}
+
+	var dgst Digest
+	var cfgDgst sql.NullString
+	var cfgMediaType sql.NullString
+
+	err := s.db.QueryRowContext(ctx, q, r.NamespaceID, r.ID, tagName).Scan(
+		&td.Name, &dgst, &cfgDgst, &td.MediaType,
+		&td.Size, &td.CreatedAt, &td.UpdatedAt, &td.PublishedAt, &td.ManifestID, &cfgMediaType, &cfgPayload)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("finding single tag detail: %w", err)
+	}
+
+	td.Digest, err = dgst.Parse()
+	if err != nil {
+		return nil, err
+	}
+
+	td.ConfigDigest, err = parseConfigDigest(cfgDgst)
+	if err != nil {
+		return nil, err
+	}
+
+	switch td.MediaType {
+	case manifestlist.MediaTypeManifestList, v1.MediaTypeImageIndex:
+	// no op
+	default:
+		td.Configuration = &models.Configuration{
+			Digest:    td.ConfigDigest.Digest,
+			MediaType: cfgMediaType.String,
+			Payload:   *cfgPayload,
+		}
+	}
+
+	return td, nil
+}
+
+func (s *repositoryStore) mediaTypeIDs(ctx context.Context, types []string) ([]string, error) {
 	if len(types) == 0 {
 		return nil, nil
 	}
@@ -1168,9 +1256,8 @@ func getPublishedAtQuery(qb *QueryBuilder, filters FilterParams) error {
 		return qb.WrapIntoSubqueryOf(
 			fmt.Sprintf(`SELECT * FROM (%%s) AS tags ORDER BY tags.%s DESC`, filters.OrderBy),
 		)
-	} else {
-		return qb.Build(f(greaterThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
 	}
+	return qb.Build(f(greaterThan, OrderAsc), filters.PublishedAt, filters.MaxEntries)
 }
 
 func getLastEntryQuery(qb *QueryBuilder, filters FilterParams) error {
@@ -1193,12 +1280,11 @@ func getLastEntryQuery(qb *QueryBuilder, filters FilterParams) error {
 			formatTagFilterWithPublishedAt(comparisonOperator, orderDirection),
 			filters.PublishedAt, filters.LastEntry, filters.MaxEntries,
 		)
-	} else {
-		return qb.Build(
-			formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection),
-			filters.LastEntry, filters.MaxEntries,
-		)
 	}
+	return qb.Build(
+		formatTagFilter(comparisonOperator, filters.OrderBy, orderDirection),
+		filters.LastEntry, filters.MaxEntries,
+	)
 }
 
 func getBeforeEntryQuery(qb *QueryBuilder, filters FilterParams) error {

@@ -49,7 +49,7 @@ func (bs *blobServer) ServeBlob(ctx context.Context, w http.ResponseWriter, r *h
 
 	var redirect bool
 	if bs.redirect.enabled {
-		opts := map[string]interface{}{"method": r.Method}
+		opts := map[string]any{"method": r.Method}
 		if bs.redirect.expiryDelay > 0 {
 			opts["expiry"] = time.Now().Add(bs.redirect.expiryDelay)
 		}
@@ -80,7 +80,7 @@ func (bs *blobServer) ServeBlob(ctx context.Context, w http.ResponseWriter, r *h
 		}
 	}
 
-	br, err := newFileReader(ctx, bs.driver, path, desc.Size)
+	br := newFileReader(ctx, bs.driver, path, desc.Size)
 	if err != nil {
 		return nil, err
 	}

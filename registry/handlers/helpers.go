@@ -50,7 +50,7 @@ func copyFullPayload(ctx context.Context, responseWriter http.ResponseWriter, r 
 			// instead of showing 0 for the HTTP status.
 			responseWriter.WriteHeader(499)
 
-			dcontext.GetLoggerWithFields(ctx, map[interface{}]interface{}{
+			dcontext.GetLoggerWithFields(ctx, map[any]any{
 				"error":          err,
 				"copied":         copied,
 				"content_length": r.ContentLength,
@@ -66,7 +66,7 @@ func copyFullPayload(ctx context.Context, responseWriter http.ResponseWriter, r 
 		return err
 	}
 
-	dcontext.GetLoggerWithFields(ctx, map[interface{}]interface{}{
+	dcontext.GetLoggerWithFields(ctx, map[any]any{
 		"copied":         copied,
 		"content_length": r.ContentLength,
 		"action":         action,
@@ -77,22 +77,22 @@ func copyFullPayload(ctx context.Context, responseWriter http.ResponseWriter, r 
 
 // parseContentRange parses the value of a Content-Range header (contentRange) of assumed format: "<start of range>-<end of range>"
 // into startRange and endRange. It returns an error (err) whenever the contentRange argument can not be parsed.
-func parseContentRange(contentRange string) (startRange, endRange int64, err error) {
+func parseContentRange(contentRange string) (int64, int64, error) {
+	var startRange int64
+	var endRange int64
+
 	ranges := strings.Split(contentRange, "-")
 	if len(ranges) != 2 {
-		err = fmt.Errorf("invalid content range format, %s", contentRange)
-		return
+		return 0, 0, fmt.Errorf("invalid content range format, %s", contentRange)
 	}
-	startRange, err = strconv.ParseInt(ranges[0], 10, 64)
+	startRange, err := strconv.ParseInt(ranges[0], 10, 64)
 	if err != nil {
-		err = fmt.Errorf("invalid content range values, %s: %v", contentRange, err)
-		return
+		return 0, 0, fmt.Errorf("invalid content range values, %s: %v", contentRange, err)
 	}
 	endRange, err = strconv.ParseInt(ranges[1], 10, 64)
 	if err != nil {
-		err = fmt.Errorf("invalid content range values, %s: %v", contentRange, err)
-		return
+		return 0, 0, fmt.Errorf("invalid content range values, %s: %v", contentRange, err)
 	}
 
-	return
+	return startRange, endRange, nil
 }

@@ -29,7 +29,7 @@ type isDuration struct {
 }
 
 // Matches implements gomock.Matcher.
-func (m isDuration) Matches(x interface{}) bool {
+func (m isDuration) Matches(x any) bool {
 	d, ok := x.(time.Duration)
 	if !ok {
 		return false
@@ -43,8 +43,8 @@ func (m isDuration) String() string {
 }
 
 var (
-	fakeErrorA = errors.New("error A") //nolint: stylecheck
-	fakeErrorB = errors.New("error B") //nolint: stylecheck
+	errFakeA = errors.New("error A") // nolint: stylecheck
+	errFakeB = errors.New("error B") // nolint: stylecheck
 )
 
 func Test_baseWorker_Name(t *testing.T) {
@@ -96,15 +96,15 @@ func Test_exponentialBackoff(t *testing.T) {
 
 	// Test a wide range of input values to ensure base and max values are not violated.
 	base := 5 * time.Minute
-	max := 24 * time.Hour
-	durations := []time.Duration{}
+	maximum := 24 * time.Hour
+	durations := make([]time.Duration, 0)
 
 	for i := -12; i < 144; i++ {
 		d := exponentialBackoff(i)
 
 		// Ensure values never exceed base or max.
 		require.GreaterOrEqual(t, d, base)
-		require.LessOrEqual(t, d, max)
+		require.LessOrEqual(t, d, maximum)
 
 		durations = append(durations, d)
 	}

@@ -61,7 +61,7 @@ func MakeManifestList(blobstatter distribution.BlobStatter, manifestDigests []di
 // MakeSchema1Manifest constructs a schema 1 manifest from a given list of digests and returns
 // the digest of the manifest
 func MakeSchema1Manifest(digests []digest.Digest) (distribution.Manifest, error) {
-	manifest := schema1.Manifest{
+	m := schema1.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 1,
 		},
@@ -70,8 +70,8 @@ func MakeSchema1Manifest(digests []digest.Digest) (distribution.Manifest, error)
 	}
 
 	for _, digest := range digests {
-		manifest.FSLayers = append(manifest.FSLayers, schema1.FSLayer{BlobSum: digest})
-		manifest.History = append(manifest.History, schema1.History{V1Compatibility: ""})
+		m.FSLayers = append(m.FSLayers, schema1.FSLayer{BlobSum: digest})
+		m.History = append(m.History, schema1.History{V1Compatibility: ""})
 	}
 
 	pk, err := libtrust.GenerateECP256PrivateKey()
@@ -79,7 +79,7 @@ func MakeSchema1Manifest(digests []digest.Digest) (distribution.Manifest, error)
 		return nil, fmt.Errorf("unexpected error generating private key: %v", err)
 	}
 
-	signedManifest, err := schema1.Sign(&manifest, pk)
+	signedManifest, err := schema1.Sign(&m, pk)
 	if err != nil {
 		return nil, fmt.Errorf("error signing manifest: %v", err)
 	}
@@ -92,17 +92,20 @@ func MakeSchema1Manifest(digests []digest.Digest) (distribution.Manifest, error)
 func MakeSchema2Manifest(repository distribution.Repository, digests []digest.Digest) (distribution.Manifest, error) {
 	ctx := context.Background()
 	blobStore := repository.Blobs(ctx)
-	builder := schema2.NewManifestBuilder(blobStore, schema2.MediaTypeImageConfig, []byte{})
+	builder := schema2.NewManifestBuilder(blobStore, schema2.MediaTypeImageConfig, make([]byte, 0))
 	for _, digest := range digests {
-		builder.AppendReference(distribution.Descriptor{Digest: digest})
+		err := builder.AppendReference(distribution.Descriptor{Digest: digest})
+		if err != nil {
+			return nil, fmt.Errorf("appending reference: %w", err)
+		}
 	}
 
-	manifest, err := builder.Build(ctx)
+	m, err := builder.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unexpected error generating manifest: %v", err)
 	}
 
-	return manifest, nil
+	return m, nil
 }
 
 func UploadRandomSchema1Image(repository distribution.Repository) (Image, error) {
@@ -111,23 +114,23 @@ func UploadRandomSchema1Image(repository distribution.Repository) (Image, error)
 		return Image{}, err
 	}
 
-	digests := []digest.Digest{}
+	digests := make([]digest.Digest, 0)
 	for digest := range randomLayers {
 		digests = append(digests, digest)
 	}
 
-	manifest, err := MakeSchema1Manifest(digests)
+	m, err := MakeSchema1Manifest(digests)
 	if err != nil {
 		return Image{}, err
 	}
 
-	manifestDigest, err := UploadImage(repository, Image{manifest: manifest, Layers: randomLayers})
+	manifestDigest, err := UploadImage(repository, Image{manifest: m, Layers: randomLayers})
 	if err != nil {
 		return Image{}, err
 	}
 
 	return Image{
-		manifest:       manifest,
+		manifest:       m,
 		ManifestDigest: manifestDigest,
 		Layers:         randomLayers,
 	}, nil
@@ -139,23 +142,23 @@ func UploadRandomSchema2Image(repository distribution.Repository) (Image, error)
 		return Image{}, err
 	}
 
-	digests := []digest.Digest{}
+	digests := make([]digest.Digest, 0)
 	for digest := range randomLayers {
 		digests = append(digests, digest)
 	}
 
-	manifest, err := MakeSchema2Manifest(repository, digests)
+	m, err := MakeSchema2Manifest(repository, digests)
 	if err != nil {
 		return Image{}, err
 	}
 
-	manifestDigest, err := UploadImage(repository, Image{manifest: manifest, Layers: randomLayers})
+	manifestDigest, err := UploadImage(repository, Image{manifest: m, Layers: randomLayers})
 	if err != nil {
 		return Image{}, err
 	}
 
 	return Image{
-		manifest:       manifest,
+		manifest:       m,
 		ManifestDigest: manifestDigest,
 		Layers:         randomLayers,
 	}, nil

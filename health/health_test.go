@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestReturns200IfThereAreNoChecks ensures that the result code of the health
@@ -14,15 +17,11 @@ func TestReturns200IfThereAreNoChecks(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	req, err := http.NewRequest(http.MethodGet, "https://fakeurl.com/debug/health", nil)
-	if err != nil {
-		t.Errorf("Failed to create request.")
-	}
+	require.NoError(t, err, "failed to create request")
 
 	StatusHandler(recorder, req)
 
-	if recorder.Code != 200 {
-		t.Errorf("Did not get a 200.")
-	}
+	assert.Equal(t, 200, recorder.Code, "did not get a 200 status")
 }
 
 // TestReturns503IfThereAreErrorChecks ensures that the result code of the
@@ -31,9 +30,7 @@ func TestReturns503IfThereAreErrorChecks(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	req, err := http.NewRequest(http.MethodGet, "https://fakeurl.com/debug/health", nil)
-	if err != nil {
-		t.Errorf("Failed to create request.")
-	}
+	require.NoError(t, err, "failed to create request")
 
 	// Create a manual error
 	Register("some_check", CheckFunc(func() error {
@@ -42,9 +39,7 @@ func TestReturns503IfThereAreErrorChecks(t *testing.T) {
 
 	StatusHandler(recorder, req)
 
-	if recorder.Code != 503 {
-		t.Errorf("Did not get a 503.")
-	}
+	assert.Equal(t, 503, recorder.Code, "did not get a 503 status")
 }
 
 // TestHealthHandler ensures that our handler implementation correct protects
@@ -52,9 +47,15 @@ func TestReturns503IfThereAreErrorChecks(t *testing.T) {
 func TestHealthHandler(t *testing.T) {
 	// clear out existing checks.
 	DefaultRegistry = NewRegistry()
+	t.Cleanup(
+		func() {
+			err := DefaultRegistry.Shutdown()
+			require.NoError(t, err)
+		},
+	)
 
 	// protect an http server
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -71,28 +72,20 @@ func TestHealthHandler(t *testing.T) {
 
 	checkUp := func(t *testing.T, message string) {
 		resp, err := http.Get(server.URL)
-		if err != nil {
-			t.Fatalf("error getting success status: %v", err)
-		}
+		require.NoError(t, err, "error getting success status")
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusNoContent {
-			t.Fatalf("unexpected response code from server when %s: %d != %d", message, resp.StatusCode, http.StatusNoContent)
-		}
+		require.Equal(t, http.StatusNoContent, resp.StatusCode, "unexpected response code from server when %s: %d != %d", message, resp.StatusCode, http.StatusNoContent)
 		// NOTE(stevvooe): we really don't care about the body -- the format is
 		// not standardized or supported, yet.
 	}
 
 	checkDown := func(t *testing.T, message string) {
 		resp, err := http.Get(server.URL)
-		if err != nil {
-			t.Fatalf("error getting down status: %v", err)
-		}
+		require.NoError(t, err, "error getting down status")
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusServiceUnavailable {
-			t.Fatalf("unexpected response code from server when %s: %d != %d", message, resp.StatusCode, http.StatusServiceUnavailable)
-		}
+		require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode, "unexpected response code from server when %s: %d != %d", message, resp.StatusCode, http.StatusServiceUnavailable)
 	}
 
 	// server should be up

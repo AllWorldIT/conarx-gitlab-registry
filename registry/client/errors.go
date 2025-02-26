@@ -38,7 +38,7 @@ func (e *UnexpectedHTTPResponseError) Error() string {
 }
 
 func parseHTTPErrorResponse(statusCode int, r io.Reader) error {
-	var errors errcode.Errors
+	var errs errcode.Errors
 	body, err := io.ReadAll(r)
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func parseHTTPErrorResponse(statusCode int, r io.Reader) error {
 		}
 	}
 
-	if err := json.Unmarshal(body, &errors); err != nil {
+	if err := json.Unmarshal(body, &errs); err != nil {
 		return &UnexpectedHTTPResponseError{
 			ParseErr:   err,
 			StatusCode: statusCode,
@@ -69,7 +69,7 @@ func parseHTTPErrorResponse(statusCode int, r io.Reader) error {
 		}
 	}
 
-	if len(errors) == 0 {
+	if len(errs) == 0 {
 		// If there was no error specified in the body, return
 		// UnexpectedHTTPResponseError.
 		return &UnexpectedHTTPResponseError{
@@ -79,7 +79,7 @@ func parseHTTPErrorResponse(statusCode int, r io.Reader) error {
 		}
 	}
 
-	return errors
+	return errs
 }
 
 func makeErrorList(err error) []error {

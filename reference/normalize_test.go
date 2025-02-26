@@ -1,10 +1,11 @@
 package reference
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateReferenceName(t *testing.T) {
@@ -42,16 +43,13 @@ func TestValidateReferenceName(t *testing.T) {
 
 	for _, name := range invalidRepoNames {
 		_, err := ParseNormalizedNamed(name)
-		if err == nil {
-			t.Fatalf("Expected invalid repo name for %q", name)
-		}
+		// nolint: testifylint // require-error
+		assert.Errorf(t, err, "expected invalid repo name for %q", name)
 	}
 
 	for _, name := range validRepoNames {
 		_, err := ParseNormalizedNamed(name)
-		if err != nil {
-			t.Fatalf("Error parsing repo name %s, got: %q", name, err)
-		}
+		assert.NoErrorf(t, err, "error parsing repo name %s", name)
 	}
 }
 
@@ -81,9 +79,8 @@ func TestValidateRemoteName(t *testing.T) {
 	}
 	for _, repositoryName := range validRepositoryNames {
 		_, err := ParseNormalizedNamed(repositoryName)
-		if err != nil {
-			t.Errorf("Repository name should be valid: %v. Error: %v", repositoryName, err)
-		}
+		// nolint: testifylint // require-error
+		assert.NoErrorf(t, err, "repository name should be valid: %v", repositoryName)
 	}
 
 	invalidRepositoryNames := []string{
@@ -118,9 +115,8 @@ func TestValidateRemoteName(t *testing.T) {
 		"this_is_not_a_valid_namespace_because_its_lenth_is_greater_than_255_this_is_not_a_valid_namespace_because_its_lenth_is_greater_than_255_this_is_not_a_valid_namespace_because_its_lenth_is_greater_than_255_this_is_not_a_valid_namespace_because_its_lenth_is_greater_than_255/docker",
 	}
 	for _, repositoryName := range invalidRepositoryNames {
-		if _, err := ParseNormalizedNamed(repositoryName); err == nil {
-			t.Errorf("Repository name should be invalid: %v", repositoryName)
-		}
+		_, err := ParseNormalizedNamed(repositoryName)
+		assert.Errorf(t, err, "repository name should be invalid: %v", repositoryName)
 	}
 }
 
@@ -239,25 +235,15 @@ func TestParseRepositoryInfo(t *testing.T) {
 		var refs []Named
 		for _, r := range refStrings {
 			named, err := ParseNormalizedNamed(r)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			refs = append(refs, named)
 		}
 
 		for _, r := range refs {
-			if expected, actual := tcase.FamiliarName, FamiliarName(r); expected != actual {
-				t.Fatalf("Invalid normalized reference for %q. Expected %q, got %q", r, expected, actual)
-			}
-			if expected, actual := tcase.FullName, r.String(); expected != actual {
-				t.Fatalf("Invalid canonical reference for %q. Expected %q, got %q", r, expected, actual)
-			}
-			if expected, actual := tcase.Domain, Domain(r); expected != actual {
-				t.Fatalf("Invalid domain for %q. Expected %q, got %q", r, expected, actual)
-			}
-			if expected, actual := tcase.RemoteName, Path(r); expected != actual {
-				t.Fatalf("Invalid remoteName for %q. Expected %q, got %q", r, expected, actual)
-			}
+			assert.Equal(t, tcase.FamiliarName, FamiliarName(r), "invalid normalized reference for %q", r)
+			assert.Equal(t, tcase.FullName, r.String(), "invalid canonical reference for %q", r)
+			assert.Equal(t, tcase.Domain, Domain(r), "invalid domain for %q", r)
+			assert.Equal(t, tcase.RemoteName, Path(r), "invalid remoteName for %q", r)
 		}
 	}
 }
@@ -265,38 +251,30 @@ func TestParseRepositoryInfo(t *testing.T) {
 func TestParseReferenceWithTagAndDigest(t *testing.T) {
 	shortRef := "busybox:latest@sha256:86e0e091d0da6bde2456dbb48306f3956bbeb2eae1b5b9a43045843f69fe4aaa"
 	ref, err := ParseNormalizedNamed(shortRef)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if expected, actual := "docker.io/library/"+shortRef, ref.String(); actual != expected {
-		t.Fatalf("Invalid parsed reference for %q: expected %q, got %q", ref, expected, actual)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "docker.io/library/"+shortRef, ref.String(), "invalid parsed reference for %q", ref)
 
-	if _, isTagged := ref.(NamedTagged); !isTagged {
-		t.Fatalf("Reference from %q should support tag", ref)
-	}
-	if _, isCanonical := ref.(Canonical); !isCanonical {
-		t.Fatalf("Reference from %q should support digest", ref)
-	}
-	if expected, actual := shortRef, FamiliarString(ref); actual != expected {
-		t.Fatalf("Invalid parsed reference for %q: expected %q, got %q", ref, expected, actual)
-	}
+	assert.Implements(t, (*NamedTagged)(nil), ref, "reference from %q should support tag", ref)
+	assert.Implements(t, (*Canonical)(nil), ref, "reference from %q should support digest", ref)
+	assert.Equal(t, shortRef, FamiliarString(ref), "invalid parsed reference for %q", ref)
 }
 
 func TestInvalidReferenceComponents(t *testing.T) {
-	if _, err := ParseNormalizedNamed("-foo"); err == nil {
-		t.Fatal("Expected WithName to detect invalid name")
-	}
+	_, err := ParseNormalizedNamed("-foo")
+	// nolint: testifylint // require-error
+	assert.Error(t, err, "expected WithName to detect invalid name")
+
+	// nolint: testifylint // require-error
 	ref, err := ParseNormalizedNamed("busybox")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := WithTag(ref, "-foo"); err == nil {
-		t.Fatal("Expected WithName to detect invalid tag")
-	}
-	if _, err := WithDigest(ref, digest.Digest("foo")); err == nil {
-		t.Fatal("Expected WithDigest to detect invalid digest")
-	}
+	require.NoError(t, err)
+
+	_, err = WithTag(ref, "-foo")
+	// nolint: testifylint // require-error
+	assert.Error(t, err, "expected WithName to detect invalid tag")
+
+	_, err = WithDigest(ref, digest.Digest("foo"))
+	// nolint: testifylint // require-error
+	assert.Error(t, err, "expected WithDigest to detect invalid digest")
 }
 
 func equalReference(r1, r2 Reference) bool {
@@ -395,23 +373,15 @@ func TestParseAnyReference(t *testing.T) {
 		var ref Reference
 		var err error
 		ref, err = ParseAnyReference(tcase.Reference)
-		if err != nil {
-			t.Fatalf("Error parsing reference %s: %v", tcase.Reference, err)
-		}
-		if ref.String() != tcase.Equivalent {
-			t.Fatalf("Unexpected string: %s, expected %s", ref.String(), tcase.Equivalent)
-		}
+		require.NoError(t, err, "Error parsing reference %s", tcase.Reference)
+		require.Equal(t, ref.String(), tcase.Equivalent)
 
 		expected := tcase.Expected
 		if expected == nil {
 			expected, err = Parse(tcase.Equivalent)
-			if err != nil {
-				t.Fatalf("Error parsing reference %s: %v", tcase.Equivalent, err)
-			}
+			require.NoError(t, err, "Error parsing reference %s", err)
 		}
-		if !equalReference(ref, expected) {
-			t.Errorf("Unexpected reference %#v, expected %#v", ref, expected)
-		}
+		require.True(t, equalReference(ref, expected), "Unexpected reference %#v, expected %#v", ref, expected)
 	}
 }
 
@@ -478,34 +448,21 @@ func TestNormalizedSplitHostname(t *testing.T) {
 		},
 	}
 	for _, testcase := range testcases {
-		failf := func(format string, v ...interface{}) {
-			t.Logf(strconv.Quote(testcase.input)+": "+format, v...)
-			t.Fail()
-		}
-
-		named, err := ParseNormalizedNamed(testcase.input)
-		if err != nil {
-			failf("error parsing name: %s", err)
-		}
-		domain, name := SplitHostname(named)
-		if domain != testcase.domain {
-			failf("unexpected domain: got %q, expected %q", domain, testcase.domain)
-		}
-		if name != testcase.name {
-			failf("unexpected name: got %q, expected %q", name, testcase.name)
-		}
+		t.Run(testcase.input, func(t *testing.T) {
+			named, err := ParseNormalizedNamed(testcase.input)
+			require.NoError(t, err)
+			domain, name := SplitHostname(named)
+			require.Equal(t, domain, testcase.domain)
+			require.Equal(t, name, testcase.name)
+		})
 	}
 }
 
 func TestMatchError(t *testing.T) {
 	named, err := ParseAnyReference("foo")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, err = FamiliarMatch("[-x]", named)
-	if err == nil {
-		t.Fatalf("expected an error, got nothing")
-	}
+	require.Error(t, err)
 }
 
 func TestMatch(t *testing.T) {
@@ -562,15 +519,9 @@ func TestMatch(t *testing.T) {
 	}
 	for _, c := range matchCases {
 		named, err := ParseAnyReference(c.reference)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		actual, err := FamiliarMatch(c.pattern, named)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if actual != c.expected {
-			t.Fatalf("expected %s match %s to be %v, was %v", c.reference, c.pattern, c.expected, actual)
-		}
+		require.NoError(t, err)
+		require.Equal(t, c.expected, actual)
 	}
 }

@@ -68,8 +68,8 @@ func TestGetManifest(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test
-	manifestsGetter, err := newDBManifestGetter(env.db, repoCacheMock, r.Path, &http.Request{})
-	require.NoError(t, err)
+	manifestsGetter := newDBManifestGetter(env.db, repoCacheMock, r.Path, &http.Request{})
+	require.NotNil(t, manifestsGetter)
 	manifest, digest, err := manifestsGetter.GetByTag(env.ctx, tagName)
 	require.NoError(t, err)
 	require.EqualValues(t, g_digest.FromString(testutil.SampleManifestJSON), digest)

@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is intended to test the HTTP API tolerance and behaviour under scenarios that are prone to race conditions
+// This file is intended to test the HTTP API tolerance and behavior under scenarios that are prone to race conditions
 // due to online GC.
 
 // maxReviewAfterJitter is the maximum jitter in seconds that the online GC triggers will use to set a task's review
@@ -429,7 +429,8 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 
 	u := buildManifestDigestURL(t, env, repoName.String(), ml)
 	start := time.Now()
-	resp := putManifest(t, "", u, manifestlist.MediaTypeManifestList, ml)
+	resp, err := putManifest("", u, manifestlist.MediaTypeManifestList, ml)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	end := time.Now()
 	require.NoError(t, err)
@@ -499,7 +500,8 @@ func TestManifestsAPI_CreateList_OnlineGC_TimeoutOnProlongedReview(t *testing.T)
 
 	u := buildManifestDigestURL(t, env, repoName.String(), ml)
 	start := time.Now()
-	resp := putManifest(t, "", u, manifestlist.MediaTypeManifestList, ml)
+	resp, err := putManifest("", u, manifestlist.MediaTypeManifestList, ml)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	end := time.Now()
 	require.NoError(t, err)
@@ -581,7 +583,8 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview_Dangling
 
 	u := buildManifestDigestURL(t, env, repoName.String(), ml)
 	start := time.Now()
-	resp := putManifest(t, "", u, manifestlist.MediaTypeManifestList, ml)
+	resp, err := putManifest("", u, manifestlist.MediaTypeManifestList, ml)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	end := time.Now()
 	require.NoError(t, err)

@@ -78,7 +78,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Storage: configuration.Storage{
 			"testdriver": configuration.Parameters{},
 			"maintenance": configuration.Parameters{
-				"uploadpurging": map[interface{}]interface{}{"enabled": false},
+				"uploadpurging": map[any]any{"enabled": false},
 			},
 		},
 		GC: configuration.GC{Disabled: true},
@@ -135,6 +135,7 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 
 	// get size with descendants of a base repository
 	baseRepoRef, err := reference.WithName(want.Path)
+	require.NoError(t, err)
 	u, err := env.urlBuilder.BuildGitlabV1RepositoryURL(baseRepoRef, url.Values{
 		"size": []string{"self_with_descendants"},
 	})

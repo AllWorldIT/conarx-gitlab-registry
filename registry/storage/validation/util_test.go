@@ -40,25 +40,20 @@ func createRegistry(t *testing.T) distribution.Namespace {
 	ctx := context.Background()
 
 	registry, err := storage.NewRegistry(ctx, inmemory.New())
-	if err != nil {
-		t.Fatalf("Failed to construct namespace")
-	}
+	require.NoError(t, err, "failed to construct namespace")
 	return registry
 }
 
+// nolint:unparam //(name always receives "test")
 func makeRepository(t *testing.T, registry distribution.Namespace, name string) distribution.Repository {
 	ctx := context.Background()
 
 	// Initialize a dummy repository
 	named, err := reference.WithName(name)
-	if err != nil {
-		t.Fatalf("Failed to parse name %s:  %v", name, err)
-	}
+	require.NoError(t, err, "failed to parse name %s", name)
 
 	repo, err := registry.Repository(ctx, named)
-	if err != nil {
-		t.Fatalf("Failed to construct repository: %v", err)
-	}
+	require.NoError(t, err, "failed to construct repository")
 	return repo
 }
 

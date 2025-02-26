@@ -6,10 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +25,8 @@ import (
 	"github.com/docker/distribution/uuid"
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testServer(rrm testutil.RequestResponseMap) (string, func()) {
@@ -121,14 +121,10 @@ func TestBlobDelete(t *testing.T) {
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	l := r.Blobs(ctx)
 	err = l.Delete(ctx, dgst)
-	if err != nil {
-		t.Errorf("Error deleting blob: %s", err.Error())
-	}
+	assert.NoError(t, err, "error deleting blob")
 }
 
 func TestBlobFetch(t *testing.T) {
@@ -142,18 +138,12 @@ func TestBlobFetch(t *testing.T) {
 	ctx := context.Background()
 	repo, _ := reference.WithName("test.example.com/repo1")
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	l := r.Blobs(ctx)
 
 	b, err := l.Get(ctx, d1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(b, b1) {
-		t.Fatalf("Wrong bytes values fetched: [%d]byte != [%d]byte", len(b), len(b1))
-	}
+	require.NoError(t, err)
+	require.Equal(t, b1, b)
 
 	// TODO(dmcgowan): Test for unknown blob case
 }
@@ -196,18 +186,12 @@ func TestBlobExistsNoContentLength(t *testing.T) {
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	l := r.Blobs(ctx)
 
 	_, err = l.Stat(ctx, dgst)
-	if err == nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(err.Error(), "missing content-length heade") {
-		t.Fatalf("Expected missing content-length error message")
-	}
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "missing content-length header")
 }
 
 func TestBlobExists(t *testing.T) {
@@ -221,23 +205,15 @@ func TestBlobExists(t *testing.T) {
 	ctx := context.Background()
 	repo, _ := reference.WithName("test.example.com/repo1")
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	l := r.Blobs(ctx)
 
 	stat, err := l.Stat(ctx, d1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if stat.Digest != d1 {
-		t.Fatalf("Unexpected digest: %s, expected %s", stat.Digest, d1)
-	}
+	assert.Equal(t, d1, stat.Digest, "unexpected digest")
 
-	if stat.Size != int64(len(b1)) {
-		t.Fatalf("Unexpected length: %d, expected %d", stat.Size, len(b1))
-	}
+	assert.Equal(t, int64(len(b1)), stat.Size, "unexpected length")
 
 	// TODO(dmcgowan): Test error cases and ErrBlobUnknown case
 }
@@ -326,41 +302,27 @@ func TestBlobUploadChunked(t *testing.T) {
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	l := r.Blobs(ctx)
 
 	upload, err := l.Create(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if upload.ID() != uuids[0] {
-		log.Fatalf("Unexpected UUID %s; expected %s", upload.ID(), uuids[0])
-	}
+	require.Equal(t, uuids[0], upload.ID(), "unexpected UUID")
 
 	for _, chunk := range chunks {
 		n, err := upload.Write(chunk)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != len(chunk) {
-			t.Fatalf("Unexpected length returned from write: %d; expected: %d", n, len(chunk))
-		}
+		require.NoError(t, err)
+		require.Len(t, chunk, n, "unexpected length returned from write")
 	}
 
 	blob, err := upload.Commit(ctx, distribution.Descriptor{
 		Digest: dgst,
 		Size:   int64(len(b1)),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if blob.Size != int64(len(b1)) {
-		t.Fatalf("Unexpected blob size: %d; expected: %d", blob.Size, len(b1))
-	}
+	assert.Len(t, b1, int(blob.Size), "unexpected blob size")
 }
 
 func TestBlobUploadMonolithic(t *testing.T) {
@@ -436,39 +398,25 @@ func TestBlobUploadMonolithic(t *testing.T) {
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	l := r.Blobs(ctx)
 
 	upload, err := l.Create(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if upload.ID() != uploadID {
-		log.Fatalf("Unexpected UUID %s; expected %s", upload.ID(), uploadID)
-	}
+	require.Equalf(t, upload.ID(), uploadID, "Unexpected UUID %s; expected %s", upload.ID(), uploadID)
 
 	n, err := upload.ReadFrom(bytes.NewReader(b1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != int64(len(b1)) {
-		t.Fatalf("Unexpected ReadFrom length: %d; expected: %d", n, len(b1))
-	}
+	require.NoError(t, err)
+	require.Len(t, b1, int(n))
 
 	blob, err := upload.Commit(ctx, distribution.Descriptor{
 		Digest: dgst,
 		Size:   int64(len(b1)),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if blob.Size != int64(len(b1)) {
-		t.Fatalf("Unexpected blob size: %d; expected: %d", blob.Size, len(b1))
-	}
+	require.Len(t, b1, int(blob.Size))
 }
 
 func TestBlobMount(t *testing.T) {
@@ -508,31 +456,23 @@ func TestBlobMount(t *testing.T) {
 		},
 	})
 
-	e, c := testServer(m)
-	defer c()
+	e, cancelF := testServer(m)
+	defer cancelF()
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	l := r.Blobs(ctx)
 
 	bw, err := l.Create(ctx, WithMountFrom(canonicalRef))
-	if bw != nil {
-		t.Fatalf("Expected blob writer to be nil, was %v", bw)
-	}
+	require.Nilf(t, bw, "Expected blob writer to be nil, was %v", bw)
 
 	if ebm, ok := err.(distribution.ErrBlobMounted); ok {
-		if ebm.From.Digest() != dgst {
-			t.Fatalf("Unexpected digest: %s, expected %s", ebm.From.Digest(), dgst)
-		}
-		if ebm.From.Name() != sourceRepo.Name() {
-			t.Fatalf("Unexpected from: %s, expected %s", ebm.From.Name(), sourceRepo)
-		}
+		require.Equalf(t, ebm.From.Digest(), dgst, "Unexpected digest: %s, expected %s", ebm.From.Digest(), dgst)
+		require.Equalf(t, ebm.From.Name(), sourceRepo.Name(), "Unexpected from: %s, expected %s", ebm.From.Name(), sourceRepo)
 	} else {
-		t.Fatalf("Unexpected error: %v, expected an ErrBlobMounted", err)
+		require.FailNow(t, fmt.Sprintf("Unexpected error: %v, expected an ErrBlobMounted", err))
 	}
 }
 
@@ -571,11 +511,11 @@ func newRandomSchemaV1Manifest(name reference.Named, tag string, blobCount int) 
 	return sm, digest.FromBytes(sm.Canonical), sm.Canonical
 }
 
-func addTestManifestWithEtag(repo reference.Named, reference string, content []byte, m *testutil.RequestResponseMap, dgst string) {
+func addTestManifestWithEtag(repo reference.Named, referenceName string, content []byte, m *testutil.RequestResponseMap, dgst string) {
 	actualDigest := digest.FromBytes(content)
 	getReqWithEtag := testutil.Request{
 		Method: http.MethodGet,
-		Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+		Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		Headers: http.Header(map[string][]string{
 			"If-None-Match": {fmt.Sprintf(`"%s"`, dgst)},
 		}),
@@ -585,7 +525,7 @@ func addTestManifestWithEtag(repo reference.Named, reference string, content []b
 	if actualDigest.String() == dgst {
 		getRespWithEtag = testutil.Response{
 			StatusCode: http.StatusNotModified,
-			Body:       []byte{},
+			Body:       make([]byte, 0),
 			Headers: http.Header(map[string][]string{
 				"Content-Length": {"0"},
 				"Last-Modified":  {time.Now().Add(-1 * time.Second).Format(time.ANSIC)},
@@ -614,11 +554,11 @@ func contentDigestString(mediatype string, content []byte) string {
 	return digest.Canonical.FromBytes(content).String()
 }
 
-func addTestManifest(repo reference.Named, reference, mediatype string, content []byte, m *testutil.RequestResponseMap) {
+func addTestManifest(repo reference.Named, referenceName, mediatype string, content []byte, m *testutil.RequestResponseMap) {
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodGet,
-			Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusOK,
@@ -634,7 +574,7 @@ func addTestManifest(repo reference.Named, reference, mediatype string, content 
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodHead,
-			Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusOK,
@@ -648,11 +588,11 @@ func addTestManifest(repo reference.Named, reference, mediatype string, content 
 	})
 }
 
-func addTestManifestWithoutDigestHeader(repo reference.Named, reference, mediatype string, content []byte, m *testutil.RequestResponseMap) {
+func addTestManifestWithoutDigestHeader(repo reference.Named, referenceName, mediatype string, content []byte, m *testutil.RequestResponseMap) {
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodGet,
-			Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusOK,
@@ -667,7 +607,7 @@ func addTestManifestWithoutDigestHeader(repo reference.Named, reference, mediaty
 	*m = append(*m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodHead,
-			Route:  "/v2/" + repo.Name() + "/manifests/" + reference,
+			Route:  "/v2/" + repo.Name() + "/manifests/" + referenceName,
 		},
 		Response: testutil.Response{
 			StatusCode: http.StatusOK,
@@ -712,9 +652,7 @@ func TestV1ManifestFetch(t *testing.T) {
 	m1, dgst, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
 	var m testutil.RequestResponseMap
 	_, pl, err := m1.Payload()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	addTestManifest(repo, dgst.String(), schema1.MediaTypeSignedManifest, pl, &m)
 	addTestManifest(repo, "latest", schema1.MediaTypeSignedManifest, pl, &m)
 	addTestManifest(repo, "badcontenttype", "text/html", pl, &m)
@@ -723,60 +661,38 @@ func TestV1ManifestFetch(t *testing.T) {
 	defer c()
 
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	ms, err := r.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	ok, err := ms.Exists(ctx, dgst)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok {
-		t.Fatal("Manifest does not exist")
-	}
+	require.NoError(t, err)
+	require.True(t, ok, "Manifest does not exist")
 
-	manifest, err := ms.Get(ctx, dgst)
-	if err != nil {
-		t.Fatal(err)
-	}
-	v1manifest, ok := manifest.(*schema1.SignedManifest)
-	if !ok {
-		t.Fatalf("Unexpected manifest type from Get: %T", manifest)
-	}
+	testManifest, err := ms.Get(ctx, dgst)
+	require.NoError(t, err)
 
-	if err := checkEqualManifest(v1manifest, m1); err != nil {
-		t.Fatal(err)
-	}
+	v1manifest, ok := testManifest.(*schema1.SignedManifest)
+	require.True(t, ok, "Unexpected manifest type from Get: %T", testManifest)
+
+	err = checkEqualManifest(v1manifest, m1)
+	require.NoError(t, err)
 
 	var contentDigest digest.Digest
-	manifest, err = ms.Get(ctx, dgst, distribution.WithTag("latest"), ReturnContentDigest(&contentDigest))
-	if err != nil {
-		t.Fatal(err)
-	}
-	v1manifest, ok = manifest.(*schema1.SignedManifest)
-	if !ok {
-		t.Fatalf("Unexpected manifest type from Get: %T", manifest)
-	}
+	testManifest, err = ms.Get(ctx, dgst, distribution.WithTag("latest"), ReturnContentDigest(&contentDigest))
+	require.NoError(t, err)
+	v1manifest, ok = testManifest.(*schema1.SignedManifest)
+	require.True(t, ok, "Unexpected manifest type from Get: %T", testManifest)
 
-	if err = checkEqualManifest(v1manifest, m1); err != nil {
-		t.Fatal(err)
-	}
+	err = checkEqualManifest(v1manifest, m1)
+	require.NoError(t, err)
 
-	if contentDigest != dgst {
-		t.Fatalf("Unexpected returned content digest %v, expected %v", contentDigest, dgst)
-	}
+	require.Equal(t, contentDigest, dgst)
 
 	_, err = ms.Get(ctx, dgst, distribution.WithTag("badcontenttype"))
-	if err == nil {
-		t.Fatal("expected error, got none")
-	}
-	if err.Error() != "no mediaType in manifest" {
-		t.Fatalf("expected error %q, got %q", "no mediaType in manifest", err.Error())
-	}
+	require.Error(t, err)
+	require.ErrorContains(t, err, "no mediaType in manifest")
 }
 
 func TestManifestFetchWithEtag(t *testing.T) {
@@ -790,23 +706,17 @@ func TestManifestFetchWithEtag(t *testing.T) {
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	ms, err := r.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	clientManifestService, ok := ms.(*manifests)
 	if !ok {
 		panic("wrong type for client manifest service")
 	}
 	_, err = clientManifestService.Get(ctx, d1, distribution.WithTag("latest"), AddEtagToTag("latest", d1.String()))
-	if err != distribution.ErrManifestNotModified {
-		t.Fatal(err)
-	}
+	require.ErrorIs(t, err, distribution.ErrManifestNotModified)
 }
 
 func TestManifestFetchWithAccept(t *testing.T) {
@@ -814,20 +724,16 @@ func TestManifestFetchWithAccept(t *testing.T) {
 	repo, _ := reference.WithName("test.example.com/repo")
 	_, dgst, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
 	headers := make(chan []string, 1)
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	s := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
 		headers <- req.Header["Accept"]
 	}))
 	defer close(headers)
 	defer s.Close()
 
 	r, err := NewRepository(repo, s.URL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	ms, err := r.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	testCases := []struct {
 		// the media types we send
@@ -838,7 +744,7 @@ func TestManifestFetchWithAccept(t *testing.T) {
 		sort bool
 	}{
 		{
-			mediaTypes: []string{},
+			mediaTypes: make([]string, 0),
 			expect:     distribution.ManifestMediaTypes(),
 			sort:       true,
 		},
@@ -862,9 +768,7 @@ func TestManifestFetchWithAccept(t *testing.T) {
 			sort.Strings(actual)
 			sort.Strings(testCase.expect)
 		}
-		if !reflect.DeepEqual(actual, testCase.expect) {
-			t.Fatalf("unexpected Accept header values: %v", actual)
-		}
+		require.Equal(t, actual, testCase.expect)
 	}
 }
 
@@ -890,21 +794,16 @@ func TestManifestDelete(t *testing.T) {
 	defer c()
 
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	ctx := context.Background()
 	ms, err := r.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := ms.Delete(ctx, dgst1); err != nil {
-		t.Fatal(err)
-	}
-	if err := ms.Delete(ctx, dgst2); err == nil {
-		t.Fatal("Expected error deleting unknown manifest")
-	}
+	err = ms.Delete(ctx, dgst1)
+	require.NoError(t, err)
+
+	err = ms.Delete(ctx, dgst2)
+	require.Error(t, err, "Expected error deleting unknown manifest")
 	// TODO(dmcgowan): Check for specific unknown error
 }
 
@@ -913,9 +812,7 @@ func TestManifestPut(t *testing.T) {
 	m1, dgst, _ := newRandomSchemaV1Manifest(repo, "other", 6)
 
 	_, payload, err := m1.Payload()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	var m testutil.RequestResponseMap
 	m = append(m, testutil.RequestResponseMapping{
@@ -953,22 +850,16 @@ func TestManifestPut(t *testing.T) {
 	defer c()
 
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	ctx := context.Background()
 	ms, err := r.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if _, err := ms.Put(ctx, m1, distribution.WithTag(m1.Tag)); err != nil {
-		t.Fatal(err)
-	}
+	_, err = ms.Put(ctx, m1, distribution.WithTag(m1.Tag))
+	require.NoError(t, err)
 
-	if _, err := ms.Put(ctx, m1); err != nil {
-		t.Fatal(err)
-	}
+	_, err = ms.Put(ctx, m1)
+	require.NoError(t, err)
 
 	// TODO(dmcgowan): Check for invalid input error
 }
@@ -1006,20 +897,14 @@ func TestManifestTags(t *testing.T) {
 	defer c()
 
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	tagService := r.Tags(ctx)
 
 	tags, err := tagService.All(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tags) != 3 {
-		t.Fatalf("Wrong number of tags returned: %d, expected 3", len(tags))
-	}
+	require.NoError(t, err)
+	require.Len(t, tags, 3)
 
 	expected := map[string]struct{}{
 		"tag1":   {},
@@ -1029,9 +914,7 @@ func TestManifestTags(t *testing.T) {
 	for _, t := range tags {
 		delete(expected, t)
 	}
-	if len(expected) != 0 {
-		t.Fatalf("unexpected tags returned: %v", expected)
-	}
+	require.Empty(t, expected)
 	// TODO(dmcgowan): Check for error cases
 }
 
@@ -1057,18 +940,15 @@ func TestTagDelete(t *testing.T) {
 	defer c()
 
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	ctx := context.Background()
 	ts := r.Tags(ctx)
 
-	if err := ts.Untag(ctx, tag); err != nil {
-		t.Fatal(err)
-	}
-	if err := ts.Untag(ctx, tag); err == nil {
-		t.Fatal("expected error deleting unknown tag")
-	}
+	err = ts.Untag(ctx, tag)
+	require.NoError(t, err)
+
+	err = ts.Untag(ctx, tag)
+	require.Error(t, err, "expected error deleting unknown tag")
 }
 
 func TestObtainsErrorForMissingTag(t *testing.T) {
@@ -1078,9 +958,7 @@ func TestObtainsErrorForMissingTag(t *testing.T) {
 	var errors errcode.Errors
 	errors = append(errors, v2.ErrorCodeManifestUnknown.WithDetail("unknown manifest"))
 	errBytes, err := json.Marshal(errors)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	m = append(m, testutil.RequestResponseMapping{
 		Request: testutil.Request{
 			Method: http.MethodGet,
@@ -1099,19 +977,13 @@ func TestObtainsErrorForMissingTag(t *testing.T) {
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tagService := r.Tags(ctx)
 
 	_, err = tagService.Get(ctx, "1.0.0")
-	if err == nil {
-		t.Fatalf("Expected an error")
-	}
-	if !strings.Contains(err.Error(), "manifest unknown") {
-		t.Fatalf("Expected unknown manifest error message")
-	}
+	require.Error(t, err)
+	require.ErrorContains(t, err, "manifest unknown")
 }
 
 func TestObtainsManifestForTagWithoutHeaders(t *testing.T) {
@@ -1120,9 +992,7 @@ func TestObtainsManifestForTagWithoutHeaders(t *testing.T) {
 	var m testutil.RequestResponseMap
 	m1, dgst, _ := newRandomSchemaV1Manifest(repo, "latest", 6)
 	_, pl, err := m1.Payload()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	addTestManifestWithoutDigestHeader(repo, "1.0.0", schema1.MediaTypeSignedManifest, pl, &m)
 
 	e, c := testServer(m)
@@ -1130,19 +1000,13 @@ func TestObtainsManifestForTagWithoutHeaders(t *testing.T) {
 
 	ctx := context.Background()
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tagService := r.Tags(ctx)
 
 	desc, err := tagService.Get(ctx, "1.0.0")
-	if err != nil {
-		t.Fatalf("Expected no error")
-	}
-	if desc.Digest != dgst {
-		t.Fatalf("Unexpected digest")
-	}
+	require.NoError(t, err)
+	require.Equal(t, desc.Digest, dgst)
 }
 
 func TestManifestTagsPaginated(t *testing.T) {
@@ -1153,13 +1017,11 @@ func TestManifestTagsPaginated(t *testing.T) {
 	tagsList := []string{"tag1", "tag2", "funtag"}
 	var m testutil.RequestResponseMap
 	for i := 0; i < 3; i++ {
-		body, err := json.Marshal(map[string]interface{}{
+		body, err := json.Marshal(map[string]any{
 			"name": "test.example.com/repo/tags/list",
 			"tags": []string{tagsList[i]},
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		queryParams := make(map[string][]string)
 		if i > 0 {
 			queryParams["n"] = []string{"1"}
@@ -1203,20 +1065,14 @@ func TestManifestTagsPaginated(t *testing.T) {
 	s.Config.Handler = testutil.NewHandler(m)
 
 	r, err := NewRepository(repo, s.URL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	tagService := r.Tags(ctx)
 
 	tags, err := tagService.All(ctx)
-	if err != nil {
-		t.Fatal(tags, err)
-	}
-	if len(tags) != 3 {
-		t.Fatalf("Wrong number of tags returned: %d, expected 3", len(tags))
-	}
+	require.NoError(t, err)
+	require.Len(t, tags, 3)
 
 	expected := map[string]struct{}{
 		"tag1":   {},
@@ -1226,9 +1082,7 @@ func TestManifestTagsPaginated(t *testing.T) {
 	for _, t := range tags {
 		delete(expected, t)
 	}
-	if len(expected) != 0 {
-		t.Fatalf("unexpected tags returned: %v", expected)
-	}
+	require.Empty(t, expected)
 }
 
 func TestManifestUnauthorized(t *testing.T) {
@@ -1251,29 +1105,17 @@ func TestManifestUnauthorized(t *testing.T) {
 	defer c()
 
 	r, err := NewRepository(repo, e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	ctx := context.Background()
 	ms, err := r.Manifests(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	_, err = ms.Get(ctx, dgst)
-	if err == nil {
-		t.Fatal("Expected error fetching manifest")
-	}
-	v2Err, ok := err.(errcode.Error)
-	if !ok {
-		t.Fatalf("Unexpected error type: %#v", err)
-	}
-	if v2Err.Code != errcode.ErrorCodeUnauthorized {
-		t.Fatalf("Unexpected error code: %s", v2Err.Code.String())
-	}
-	if expected := errcode.ErrorCodeUnauthorized.Message(); v2Err.Message != expected {
-		t.Fatalf("Unexpected message value: %q, expected %q", v2Err.Message, expected)
-	}
+	require.Error(t, err)
+	var v2Err errcode.Error
+	require.ErrorAs(t, err, &v2Err)
+	require.Equal(t, v2Err.Code, errcode.ErrorCodeUnauthorized)
+	require.Equal(t, v2Err.Message, errcode.ErrorCodeUnauthorized.Message())
 }
 
 func TestCatalog(t *testing.T) {
@@ -1288,19 +1130,13 @@ func TestCatalog(t *testing.T) {
 	entries := make([]string, 5)
 
 	r, err := NewRegistry(e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	numFilled, err := r.Repositories(ctx, entries, "")
-	if err != io.EOF {
-		t.Fatal(err)
-	}
 
-	if numFilled != 3 {
-		t.Fatalf("Got wrong number of repos")
-	}
+	require.ErrorIs(t, err, io.EOF)
+	require.Equal(t, 3, numFilled)
 }
 
 func TestCatalogInParts(t *testing.T) {
@@ -1320,28 +1156,17 @@ func TestCatalogInParts(t *testing.T) {
 	entries := make([]string, 2)
 
 	r, err := NewRegistry(e, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	numFilled, err := r.Repositories(ctx, entries, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if numFilled != 2 {
-		t.Fatalf("Got wrong number of repos")
-	}
+	require.Equal(t, 2, numFilled, "Got wrong number of repos")
 
 	numFilled, err = r.Repositories(ctx, entries, "baz")
-	if err != io.EOF {
-		t.Fatal(err)
-	}
-
-	if numFilled != 1 {
-		t.Fatalf("Got wrong number of repos")
-	}
+	require.ErrorIs(t, err, io.EOF)
+	require.Equal(t, 1, numFilled, "Got wrong number of repos")
 }
 
 func TestSanitizeLocation(t *testing.T) {
@@ -1371,21 +1196,18 @@ func TestSanitizeLocation(t *testing.T) {
 			expected:    "https://mwhahaha.com/v2/foo/baasdf?_state=asdfasfdasdfasdf",
 		},
 	} {
-		fatalf := func(format string, args ...interface{}) {
-			t.Fatalf(testcase.description+": "+format, args...)
-		}
-
 		s, err := sanitizeLocation(testcase.location, testcase.source)
-		if err != testcase.err {
-			if testcase.err != nil {
-				fatalf("expected error: %v != %v", err, testcase)
-			} else {
-				fatalf("unexpected error sanitizing: %v", err)
+		if testcase.err != nil {
+			// nolint: testifylint // require-error
+			if !assert.ErrorIs(t, err, testcase.err) {
+				continue
 			}
 		}
-
-		if s != testcase.expected {
-			fatalf("bad sanitize: %q != %q", s, testcase.expected)
+		// nolint: testifylint // require-error
+		if !assert.NoError(t, err) {
+			continue
 		}
+
+		assert.Equal(t, testcase.expected, s, "bad sanitize")
 	}
 }

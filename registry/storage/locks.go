@@ -113,7 +113,7 @@ func (l *DatabaseInUseLocker) Unlock(ctx context.Context) error {
 	return l.Driver.Delete(ctx, path)
 }
 
-func (l *DatabaseInUseLocker) path() (string, error) {
+func (*DatabaseInUseLocker) path() (string, error) {
 	return pathFor(lockFilePathSpec{name: "database-in-use"})
 }
 
@@ -191,7 +191,7 @@ func (l *FilesystemInUseLocker) Unlock(ctx context.Context) error {
 	return l.Driver.Delete(ctx, path)
 }
 
-func (l *FilesystemInUseLocker) path() (string, error) {
+func (*FilesystemInUseLocker) path() (string, error) {
 	return pathFor(lockFilePathSpec{name: "filesystem-in-use"})
 }
 
@@ -200,6 +200,7 @@ var _ distribution.Lockers = &lockers{}
 func (l *lockers) DBLock(ctx context.Context) error {
 	return l.DB.Lock(ctx)
 }
+
 func (l *lockers) DBUnlock(ctx context.Context) error {
 	return l.DB.Unlock(ctx)
 }
@@ -211,6 +212,7 @@ func (l *lockers) DBIsLocked(ctx context.Context) (bool, error) {
 func (l *lockers) FSLock(ctx context.Context) error {
 	return l.FS.Lock(ctx)
 }
+
 func (l *lockers) FSUnlock(ctx context.Context) error {
 	return l.FS.Unlock(ctx)
 }

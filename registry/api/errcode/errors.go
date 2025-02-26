@@ -37,7 +37,7 @@ func (ec ErrorCode) ErrorCode() ErrorCode {
 // Error returns the ID/Value
 func (ec ErrorCode) Error() string {
 	// NOTE(stevvooe): Cannot use message here since it may have unpopulated args.
-	return strings.ToLower(strings.Replace(ec.String(), "_", " ", -1))
+	return strings.ToLower(strings.ReplaceAll(ec.String(), "_", " "))
 }
 
 // Descriptor returns the descriptor for the error code.
@@ -91,7 +91,7 @@ func (ec ErrorCode) WithMessage(message string) Error {
 
 // WithDetail creates a new Error struct based on the passed-in info and
 // set the Detail property appropriately
-func (ec ErrorCode) WithDetail(detail interface{}) Error {
+func (ec ErrorCode) WithDetail(detail any) Error {
 	return Error{
 		Code:    ec,
 		Message: ec.Message(),
@@ -99,7 +99,7 @@ func (ec ErrorCode) WithDetail(detail interface{}) Error {
 }
 
 // WithArgs creates a new Error struct and sets the Args slice
-func (ec ErrorCode) WithArgs(args ...interface{}) Error {
+func (ec ErrorCode) WithArgs(args ...any) Error {
 	return Error{
 		Code:    ec,
 		Message: ec.Message(),
@@ -108,9 +108,9 @@ func (ec ErrorCode) WithArgs(args ...interface{}) Error {
 
 // Error provides a wrapper around ErrorCode with extra Details provided.
 type Error struct {
-	Code    ErrorCode   `json:"code"`
-	Message string      `json:"message"`
-	Detail  interface{} `json:"detail,omitempty"`
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
+	Detail  any       `json:"detail,omitempty"`
 }
 
 var _ error = Error{}
@@ -127,7 +127,7 @@ func (e Error) Error() string {
 
 // WithDetail will return a new Error, based on the current one, but with
 // some Detail info added
-func (e Error) WithDetail(detail interface{}) Error {
+func (e Error) WithDetail(detail any) Error {
 	return Error{
 		Code:    e.Code,
 		Message: e.Message,
@@ -135,9 +135,9 @@ func (e Error) WithDetail(detail interface{}) Error {
 	}
 }
 
-// WithArgs uses the passed-in list of interface{} as the substitution
+// WithArgs uses the passed-in list of any as the substitution
 // variables in the Error's Message string, but returns a new Error
-func (e Error) WithArgs(args ...interface{}) Error {
+func (e Error) WithArgs(args ...any) Error {
 	return Error{
 		Code:    e.Code,
 		Message: fmt.Sprintf(e.Code.Message(), args...),
@@ -183,7 +183,7 @@ func ParseErrorCode(value string) ErrorCode {
 // for use within the application.
 type Errors []error
 
-var _ error = Errors{}
+var _ error = make(Errors, 0)
 
 func (errs Errors) Error() string {
 	switch len(errs) {

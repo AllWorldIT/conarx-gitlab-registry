@@ -23,7 +23,7 @@ type ocischemaManifestHandler struct {
 
 var _ ManifestHandler = &ocischemaManifestHandler{}
 
-func (ms *ocischemaManifestHandler) Unmarshal(ctx context.Context, dgst digest.Digest, content []byte) (distribution.Manifest, error) {
+func (ms *ocischemaManifestHandler) Unmarshal(_ context.Context, _ digest.Digest, content []byte) (distribution.Manifest, error) {
 	dcontext.GetLogger(ms.ctx).Debug("(*ocischemaManifestHandler).Unmarshal")
 
 	m := &ocischema.DeserializedManifest{}

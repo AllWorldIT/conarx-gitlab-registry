@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path"
 
 	"github.com/docker/distribution"
@@ -48,24 +49,6 @@ func (ts *tagStore) All(ctx context.Context) ([]string, error) {
 	}
 
 	return tags, nil
-}
-
-// exists returns true if the specified manifest tag exists in the repository.
-func (ts *tagStore) exists(ctx context.Context, tag string) (bool, error) {
-	tagPath, err := pathFor(manifestTagCurrentPathSpec{
-		name: ts.repository.Named().Name(),
-		tag:  tag,
-	})
-	if err != nil {
-		return false, err
-	}
-
-	exists, err := exists(ctx, ts.blobStore.driver, tagPath)
-	if err != nil {
-		return false, err
-	}
-
-	return exists, nil
 }
 
 // Tag tags the digest with the given tag, updating the the store to point at
@@ -136,7 +119,7 @@ func (ts *tagStore) Untag(ctx context.Context, tag string) error {
 	}
 
 	if err := ts.blobStore.driver.Delete(ctx, tagPath); err != nil {
-		return err
+		return fmt.Errorf("untagging blob: %w", err)
 	}
 
 	return nil
@@ -166,11 +149,8 @@ func (ts *tagStore) linkedBlobStore(ctx context.Context, tag string) *linkedBlob
 func (ts *tagStore) Lookup(ctx context.Context, desc distribution.Descriptor) ([]string, error) {
 	allTags, err := ts.All(ctx)
 	switch err.(type) {
-	case distribution.ErrRepositoryUnknown:
-		// This tag store has been initialized but not yet populated
-		break
-	case nil:
-		break
+	case distribution.ErrRepositoryUnknown, nil:
+	// This tag store has been initialized but not yet populated
 	default:
 		return nil, err
 	}

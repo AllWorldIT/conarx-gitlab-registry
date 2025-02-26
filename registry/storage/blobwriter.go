@@ -62,7 +62,7 @@ func (bw *blobWriter) Commit(ctx context.Context, desc distribution.Descriptor) 
 		return distribution.Descriptor{}, err
 	}
 
-	bw.Close()
+	_ = bw.Close()
 	desc.Size = bw.Size()
 
 	canonical, err := bw.validateBlob(ctx, desc)
@@ -248,10 +248,7 @@ func (bw *blobWriter) validateBlob(ctx context.Context, desc distribution.Descri
 			verifier := desc.Digest.Verifier()
 
 			// Read the file from the backend driver and validate it.
-			fr, err := newFileReader(ctx, bw.driver, bw.path, desc.Size)
-			if err != nil {
-				return distribution.Descriptor{}, err
-			}
+			fr := newFileReader(ctx, bw.driver, bw.path, desc.Size)
 			defer fr.Close()
 
 			tr := io.TeeReader(fr, digester.Hash())
@@ -267,7 +264,7 @@ func (bw *blobWriter) validateBlob(ctx context.Context, desc distribution.Descri
 
 	if !verified {
 		dcontext.GetLoggerWithFields(ctx,
-			map[interface{}]interface{}{
+			map[any]any{
 				"canonical": canonical,
 				"provided":  desc.Digest,
 			}, "canonical", "provided").
@@ -327,7 +324,7 @@ func (bw *blobWriter) moveBlob(ctx context.Context, desc distribution.Descriptor
 			// prevent this horrid thing, we employ the hack of only allowing
 			// to this happen for the digest of an empty blob.
 			if desc.Digest == digestSha256Empty {
-				return bw.blobStore.driver.PutContent(ctx, blobPath, []byte{})
+				return bw.blobStore.driver.PutContent(ctx, blobPath, make([]byte, 0))
 			}
 
 			// We let this fail during the move below.

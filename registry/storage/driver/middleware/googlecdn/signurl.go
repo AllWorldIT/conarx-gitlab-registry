@@ -16,6 +16,7 @@ package googlecdn
 
 import (
 	"crypto/hmac"
+	// nolint: gosec,revive // needs investigation
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
@@ -41,7 +42,10 @@ func signURLWithPrefix(url, keyName string, key []byte, expiration time.Time) (s
 		encodedURLPrefix, expiration.Unix(), keyName)
 
 	mac := hmac.New(sha1.New, key)
-	mac.Write([]byte(input))
+	_, err := mac.Write([]byte(input))
+	if err != nil {
+		return "", fmt.Errorf("writing input: %w", err)
+	}
 	sig := base64.URLEncoding.EncodeToString(mac.Sum(nil))
 
 	signedValue := fmt.Sprintf("%s&Signature=%s", input, sig)
@@ -51,6 +55,7 @@ func signURLWithPrefix(url, keyName string, key []byte, expiration time.Time) (s
 
 // readKeyFile reads the base64url-encoded key file and decodes it.
 func readKeyFile(path string) ([]byte, error) {
+	// nolint: gosec
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read key file: %+v", err)

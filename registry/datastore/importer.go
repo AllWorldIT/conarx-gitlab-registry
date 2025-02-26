@@ -645,16 +645,18 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 		close(tagResChan)
 	}()
 
-	opts := append(
-		commonBarOptions,
+	opts := make([]progressbar.Option, len(commonBarOptions), len(commonBarOptions)+3)
+	copy(opts, commonBarOptions)
+	opts = append(
+		opts,
 		progressbar.OptionSetDescription(fmt.Sprintf("importing tags in %s", dbRepo.Path)),
 		progressbar.OptionSetItsString("tags"),
 		progressbar.OptionSetVisibility(imp.showProgressBar),
 	)
 	bar := progressbar.NewOptions(total, opts...)
 	defer func() {
-		bar.Finish()
-		bar.Close()
+		_ = bar.Finish()
+		_ = bar.Close()
 	}()
 
 	// Consume the tag lookup details serially. In the ideal case, we only need
@@ -666,7 +668,7 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 		fsTag := tRes.name
 		desc := tRes.desc
 		err := tRes.err
-		bar.Add(1)
+		_ = bar.Add(1)
 
 		l := l.WithFields(log.Fields{"tag_name": fsTag, "count": i, "total": total, "digest": desc.Digest})
 		l.Info("importing tag")
@@ -779,27 +781,29 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 	}
 
 	total := len(fsTags)
-	doneManifests := map[digest.Digest]struct{}{}
+	doneManifests := make(map[digest.Digest]struct{}, 0)
 
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"repository": dbRepo.Path, "total": total})
 	l.Info("processing tags")
 
-	opts := append(
-		commonBarOptions,
+	opts := make([]progressbar.Option, len(commonBarOptions), len(commonBarOptions)+3)
+	copy(opts, commonBarOptions)
+	opts = append(
+		opts,
 		progressbar.OptionSetDescription(fmt.Sprintf("pre importing manifests in %s", dbRepo.Path)),
 		progressbar.OptionSetItsString("manifests"),
 		progressbar.OptionSetVisibility(imp.showProgressBar),
 	)
 	bar := progressbar.NewOptions(total, opts...)
 	defer func() {
-		bar.Finish()
-		bar.Close()
+		_ = bar.Finish()
+		_ = bar.Close()
 	}()
 
 	for i, fsTag := range fsTags {
 		l := l.WithFields(log.Fields{"tag_name": fsTag, "count": i + 1})
 		l.Info("processing tag")
-		bar.Add(1)
+		_ = bar.Add(1)
 
 		// read tag details from the filesystem
 		desc, err := tagService.Get(ctx, fsTag)
@@ -874,6 +878,7 @@ func (imp *Importer) preImportManifest(ctx context.Context, fsRepo distribution.
 				l.WithError(err).Warn("skipping manifest import")
 				return err
 			default:
+				// nolint: revive // max-control-nesting
 				if shouldRetryManifestPreImport(err) {
 					return imp.retryImportManifestWithBackoff(l, fsRepo, fsManifest, dbRepo, dgst)
 				}
@@ -986,21 +991,6 @@ func (imp *Importer) isTagsTableEmpty(ctx context.Context) (bool, error) {
 	return count == 0, nil
 }
 
-func (imp *Importer) isDatabaseEmpty(ctx context.Context) (bool, error) {
-	counters, err := imp.countRows(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	for _, c := range counters {
-		if c > 0 {
-			return false, nil
-		}
-	}
-
-	return true, nil
-}
-
 // ImportAll populates the registry database with metadata from all repositories in the storage backend.
 //
 // Deprecated: ImportAll is the original implementation and should no longer be used, use FullImport instead.
@@ -1026,12 +1016,12 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 	l.Info("starting metadata import")
 
 	if imp.importDanglingBlobs {
-		if err := imp.importBlobs(ctx); err != nil {
+		if err := imp.importBlobsImpl(ctx); err != nil {
 			return fmt.Errorf("importing blobs: %w", err)
 		}
 	}
 
-	if err := imp.importAllRepositories(ctx); err != nil {
+	if err := imp.importAllRepositoriesImpl(ctx); err != nil {
 		return err
 	}
 
@@ -1044,7 +1034,7 @@ func (imp *Importer) ImportAll(ctx context.Context) error {
 			l.WithError(err).Error("counting table rows")
 		}
 
-		logCounters := make(map[string]interface{}, len(counters))
+		logCounters := make(map[string]any, len(counters))
 		for t, n := range counters {
 			logCounters[t] = n
 		}
@@ -1105,7 +1095,8 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 
 	if imp.showProgressBar {
 		fn := fmt.Sprintf("%s-registry-import.log", time.Now().Format(time.RFC3339))
-		f, err = os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+		// nolint: gosec // G304
+		f, err = os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 		if err != nil {
 			return fmt.Errorf("opening log file: %w", err)
 		}
@@ -1118,7 +1109,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		// A little hacky, but we can use a progress bar to show the overall import
 		// progress by printing the bar with different descriptions. Otherwise, the
 		// progress bars and a regular logger would step over one another.
-		bar.Add(1) // Give the bar some state so we can print it.
+		_ = bar.Add(1) // Give the bar some state so we can print it.
 		imp.printBar(bar, fmt.Sprintf("registry import starting, detailed log written to: %s", filepath.Join(wd, fn)))
 	} else {
 		f = os.Stdout
@@ -1160,7 +1151,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		start := time.Now()
 		imp.printBar(bar, "step two: import tags")
 
-		if err := imp.importAllRepositories(ctx); err != nil {
+		if err := imp.importAllRepositoriesImpl(ctx); err != nil {
 			return fmt.Errorf("importing all repositories: %w", err)
 		}
 
@@ -1171,7 +1162,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		start := time.Now()
 		imp.printBar(bar, "step three: import blobs")
 
-		if err := imp.importBlobs(ctx); err != nil {
+		if err := imp.importBlobsImpl(ctx); err != nil {
 			return fmt.Errorf("importing blobs: %w", err)
 		}
 
@@ -1188,7 +1179,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 			l.WithError(err).Error("counting table rows")
 		}
 
-		logCounters := make(map[string]interface{}, len(counters))
+		logCounters := make(map[string]any, len(counters))
 		for t, n := range counters {
 			logCounters[t] = n
 		}
@@ -1270,27 +1261,29 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 	})
 }
 
-func (imp *Importer) importBlobs(ctx context.Context) error {
+func (imp *Importer) importBlobsImpl(ctx context.Context) error {
 	var index int
 	start := time.Now()
 	l := log.GetLogger(log.WithContext(ctx))
 	l.Info("importing all blobs")
 
-	opts := append(
-		commonBarOptions,
+	opts := make([]progressbar.Option, len(commonBarOptions), len(commonBarOptions)+3)
+	copy(opts, commonBarOptions)
+	opts = append(
+		opts,
 		progressbar.OptionSetDescription("importing blobs"),
 		progressbar.OptionSetItsString("blobs"),
 		progressbar.OptionSetVisibility(imp.showProgressBar),
 	)
 	bar := progressbar.NewOptions(-1, opts...)
 	defer func() {
-		bar.Finish()
-		bar.Close()
+		_ = bar.Finish()
+		_ = bar.Close()
 	}()
 
 	if err := imp.registry.Blobs().Enumerate(ctx, func(desc distribution.Descriptor) error {
 		index++
-		bar.Add(1)
+		_ = bar.Add(1)
 		l.WithFields(log.Fields{"digest": desc.Digest, "count": index, "size": desc.Size}).Info("importing blob")
 
 		dbBlob, err := imp.blobStore.FindByDigest(ctx, desc.Digest)
@@ -1343,7 +1336,7 @@ func (imp *Importer) handleLockers(ctx context.Context, err error) error {
 	return nil
 }
 
-func (imp *Importer) importAllRepositories(ctx context.Context) (err error) {
+func (imp *Importer) importAllRepositoriesImpl(ctx context.Context) (err error) {
 	var tx Transactor
 	defer func() {
 		if lockErr := imp.handleLockers(ctx, err); lockErr != nil {
@@ -1452,7 +1445,7 @@ func (imp *Importer) Import(ctx context.Context, path string) error {
 			l.WithError(err).Error("counting table rows")
 		}
 
-		logCounters := make(map[string]interface{}, len(counters))
+		logCounters := make(map[string]any, len(counters))
 		for t, n := range counters {
 			logCounters[t] = n
 		}
@@ -1543,7 +1536,7 @@ func (imp *Importer) PreImport(ctx context.Context, path string) error {
 			l.WithError(err).Error("counting table rows")
 		}
 
-		logCounters := make(map[string]interface{}, len(counters))
+		logCounters := make(map[string]any, len(counters))
 		for t, n := range counters {
 			logCounters[t] = n
 		}
@@ -1577,7 +1570,7 @@ func (imp *Importer) RestoreLockfiles(ctx context.Context) error {
 	}
 
 	if err := imp.registry.Lockers().FSLock(ctx); err != nil {
-		return err
+		return fmt.Errorf("creating the filesystem-in-use file in the storage driver: %w", err)
 	}
 
 	return nil
@@ -1595,5 +1588,5 @@ func (imp *Importer) printBar(b *progressbar.ProgressBar, s ...string) {
 		b.Describe(s[0])
 	}
 
-	fmt.Println(b)
+	_, _ = fmt.Println(b)
 }

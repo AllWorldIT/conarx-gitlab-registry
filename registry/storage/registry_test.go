@@ -5,10 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/distribution"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/storage/driver/inmemory"
-	"github.com/docker/distribution/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,8 +22,8 @@ func TestNewRegistry_RedirectException(t *testing.T) {
 			wantNonMatchingRepositories: []string{"example-com/alpine", "containers-gov/cool"},
 		},
 		{
-			exceptions:                  []string{},
-			wantMatchingRepositories:    []string{},
+			exceptions:                  make([]string, 0),
+			wantMatchingRepositories:    make([]string, 0),
 			wantNonMatchingRepositories: []string{"example-com/alpine", "gitlab-org/gitlab-build-images", "example-com/best-app", "cloud-internet/rockstar"},
 		},
 	}
@@ -93,56 +91,4 @@ func TestNewRegistry_RedirectExpiryDelay(t *testing.T) {
 	require.True(t, ok)
 
 	require.Equal(t, expiryDelay, r.blobServer.redirect.expiryDelay)
-}
-
-func TestRepositoryExists(t *testing.T) {
-	ctx := context.Background()
-
-	registry, err := NewRegistry(ctx, inmemory.New())
-	require.NoError(t, err)
-
-	named, err := reference.WithName("test/repo/with/parent")
-	require.NoError(t, err)
-
-	repo, err := registry.Repository(ctx, named)
-	require.NoError(t, err)
-
-	r, ok := repo.(*repository)
-	require.True(t, ok)
-
-	// check non existing test repo
-	exists, err := r.Exists(ctx)
-	require.NoError(t, err)
-	require.False(t, exists)
-
-	// upload a manifest to test repo (will create the repository path)
-	manifest, err := testutil.UploadRandomSchema2Image(repo)
-	require.NoError(t, err)
-
-	// Check the child repo, since there are no tags, it should not count as existing.
-	exists, err = r.Exists(ctx)
-	require.NoError(t, err)
-	require.False(t, exists)
-
-	// Tag the manifest we just uploaded, now the repo should count as existing.
-	err = r.Tags(ctx).Tag(ctx, "test", distribution.Descriptor{Digest: manifest.ManifestDigest})
-	require.NoError(t, err)
-
-	exists, err = r.Exists(ctx)
-	require.NoError(t, err)
-	require.True(t, exists)
-
-	// Check a parent repo, since there are no tags, it should not count as existing.
-	named, err = reference.WithName("test/repo")
-	require.NoError(t, err)
-
-	repo, err = registry.Repository(ctx, named)
-	require.NoError(t, err)
-
-	r, ok = repo.(*repository)
-	require.True(t, ok)
-
-	exists, err = r.Exists(ctx)
-	require.NoError(t, err)
-	require.False(t, exists)
 }

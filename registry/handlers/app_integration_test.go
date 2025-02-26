@@ -65,7 +65,6 @@ func TestNewApp_Lockfiles(t *testing.T) {
 
 	for tn, tc := range tcs {
 		t.Run(tn, func(t *testing.T) {
-
 			if os.Getenv("REGISTRY_DATABASE_ENABLED") != "true" {
 				t.Skip("Skipping test as database is disabled")
 			}
@@ -80,7 +79,7 @@ func TestNewApp_Lockfiles(t *testing.T) {
 			config := newConfig(opts...)
 			app, err := handlers.NewApp(context.Background(), &config)
 			if tc.expectedErr != nil {
-				require.Equal(t, tc.expectedErr, err)
+				require.ErrorIs(t, err, tc.expectedErr)
 				return
 			}
 
@@ -96,7 +95,6 @@ func TestNewApp_Lockfiles(t *testing.T) {
 
 func restoreLockfiles(t *testing.T, config *configuration.Configuration) {
 	t.Helper()
-
 
 	driver, err := factory.Create(config.Storage.Type(), config.Storage.Parameters())
 	require.NoError(t, err)

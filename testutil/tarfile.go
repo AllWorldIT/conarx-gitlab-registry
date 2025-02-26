@@ -3,6 +3,7 @@ package testutil
 import (
 	"archive/tar"
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
 	mrand "math/rand"
@@ -16,7 +17,7 @@ import (
 // CreateRandomTarFile creates a random tarfile, returning it as an
 // io.ReadSeeker along with its digest. An error is returned if there is a
 // problem generating valid content.
-/* #nosec G404 */
+// nolint: gosec //  G404
 func CreateRandomTarFile() (rs io.ReadSeeker, dgst digest.Digest, err error) {
 	nFiles := mrand.Intn(10) + 10
 	target := &bytes.Buffer{}
@@ -46,7 +47,7 @@ func CreateRandomTarFile() (rs io.ReadSeeker, dgst digest.Digest, err error) {
 		randomData := make([]byte, fileSize)
 
 		// Fill up the buffer with some random data.
-		n, err := mrand.Read(randomData)
+		n, err := rand.Read(randomData)
 
 		if n != len(randomData) {
 			return nil, "", fmt.Errorf("short read creating random reader: %v bytes != %v bytes", n, len(randomData))
@@ -82,7 +83,7 @@ func CreateRandomTarFile() (rs io.ReadSeeker, dgst digest.Digest, err error) {
 // CreateRandomLayers returns a map of n digests. We don't particularly care
 // about the order of said digests (since they're all random anyway).
 func CreateRandomLayers(n int) (map[digest.Digest]io.ReadSeeker, error) {
-	digestMap := map[digest.Digest]io.ReadSeeker{}
+	digestMap := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < n; i++ {
 		rs, ds, err := CreateRandomTarFile()
 		if err != nil {

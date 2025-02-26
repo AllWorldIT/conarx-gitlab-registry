@@ -92,7 +92,7 @@ func lessPath(a, b string) bool {
 
 // compareReplaceInline modifies runtime.cmpstring to replace old with new
 // during a byte-wise comparison.
-func compareReplaceInline(s1, s2 string, old, new byte) int {
+func compareReplaceInline(s1, s2 string, current, replacement byte) int {
 	l := len(s1)
 	if len(s2) < l {
 		l = len(s2)
@@ -100,12 +100,12 @@ func compareReplaceInline(s1, s2 string, old, new byte) int {
 
 	for i := 0; i < l; i++ {
 		c1, c2 := s1[i], s2[i]
-		if c1 == old {
-			c1 = new
+		if c1 == current {
+			c1 = replacement
 		}
 
-		if c2 == old {
-			c2 = new
+		if c2 == current {
+			c2 = replacement
 		}
 
 		if c1 < c2 {

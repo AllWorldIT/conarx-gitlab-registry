@@ -8,7 +8,7 @@ Related to <!-- add the issue URL here -->
 
 ## Author checklist
 
-- Assign one of [conventiona-commit](https://www.conventionalcommits.org/en/v1.0.0/#summary) prefixes to the MR.
+- Assign one of [conventional-commit](https://www.conventionalcommits.org/en/v1.0.0/#summary) prefixes to the MR.
   - [ ] `fix`: Indicates a bug fix, triggers a patch release.
   - [ ] `feat`: Signals the introduction of a new feature, triggers a minor release.
   - [ ] `perf`: Focuses on performance improvements that don't introduce new features or fix bugs, triggers a patch release.
@@ -30,13 +30,14 @@ Related to <!-- add the issue URL here -->
   - [ ] [Documentation is not required](https://about.gitlab.com/handbook/engineering/ux/technical-writing/workflow/#when-documentation-is-required)
   - [ ] I added [documentation](https://docs.gitlab.com/ee/development/documentation/workflow.html)
   - [ ] I created or linked to an existing issue for every added or updated `TODO`, `BUG`, `FIXME` or `OPTIMIZE` prefixed comment
-- ~database changes including schema migrations:
+- ~database changes including schema/background migrations:
   - [ ] Change does not introduce database changes
   - MR includes DB chagnes
     - **Do not** include code that depends on the schema migrations in the same commit. Split the MR into two or more.
     - [ ] Manually run up and down migrations in a [postgres.ai](https://console.postgres.ai/gitlab/joe-instances/68) production database clone and post a screenshot of the result here.
     - [ ] If adding new queries, extract a query plan from [postgres.ai](https://console.postgres.ai/gitlab/joe-instances/68) and post the link here. If changing existing queries, also extract a query plan for the current version for comparison.
       - [ ] I do not have access to postgres.ai and have made a comment on this MR asking for these to be run on my behalf.
+    - [ ] If adding new background migration, follow the guide for [performance testing new background migrations](../../docs/spec/gitlab/database-background-migrations.md#performance-testing-guide) and add a report/summary to the MR with your analysis.
 - [ ] Ensured this change is safe to deploy to individual stages in the same environment (`cny` -> `prod`). State-related changes can be troublesome due to having parts of the fleet processing (possibly related) requests in different ways.
 - [ ] If the change contains a breaking change, apply the ~"breaking change" label.
 - [ ] If the change is considered high risk, apply the label ~high-risk-change

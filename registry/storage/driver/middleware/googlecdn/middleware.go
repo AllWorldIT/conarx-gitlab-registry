@@ -53,7 +53,7 @@ var customParamKeys = map[string]string{
 // newGoogleCDNStorageMiddleware constructs and returns a new Google CDN driver.StorageDriver implementation.
 // Required options: baseurl, authtype, privatekey, keyname
 // Optional options: duration, updatefrequency, iprangesurl, ipfilteredby
-func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options map[string]interface{}) (driver.StorageDriver, error) {
+func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options map[string]any) (driver.StorageDriver, error) {
 	// parse baseurl
 	base, ok := options["baseurl"]
 	if !ok {
@@ -132,27 +132,27 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 	// parse iprangesurl
 	ipRangesURL := defaultIPRangesURL
 	if v, ok := options["iprangesurl"]; ok {
-		if s, ok := v.(string); ok {
-			ipRangesURL = s
-		} else {
+		s, ok := v.(string)
+		if !ok {
 			return nil, fmt.Errorf("iprangesurl must be a string")
 		}
+		ipRangesURL = s
 	}
 
 	// parse ipfilteredby
 	var googleIPs *googleIPs
 	if v, ok := options["ipfilteredby"]; ok {
-		if ipFilteredBy, ok := v.(string); ok {
-			switch strings.ToLower(strings.TrimSpace(ipFilteredBy)) {
-			case "", "none":
-				googleIPs = nil
-			case "gcp":
-				googleIPs = newGoogleIPs(ipRangesURL, updateFrequency)
-			default:
-				return nil, fmt.Errorf("ipfilteredby must be one of the following values: none|gcp")
-			}
-		} else {
+		ipFilteredBy, ok := v.(string)
+		if !ok {
 			return nil, fmt.Errorf("ipfilteredby must be a string")
+		}
+		switch strings.ToLower(strings.TrimSpace(ipFilteredBy)) {
+		case "", "none":
+			googleIPs = nil
+		case "gcp":
+			googleIPs = newGoogleIPs(ipRangesURL, updateFrequency)
+		default:
+			return nil, fmt.Errorf("ipfilteredby must be one of the following values: none|gcp")
 		}
 	}
 
@@ -175,7 +175,7 @@ type gcsBucketKeyer interface {
 
 // URLFor returns a URL which may be used to retrieve the content stored at the given path, possibly using the given
 // options.
-func (lh *googleCDNStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (lh *googleCDNStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	l := log.GetLogger(log.WithContext(ctx))
 
 	keyer, ok := lh.StorageDriver.(gcsBucketKeyer)
@@ -191,23 +191,24 @@ func (lh *googleCDNStorageMiddleware) URLFor(ctx context.Context, path string, o
 
 	metrics.CDNRedirect("cdn", false, "")
 
-	url := lh.baseURL + keyer.GCSBucketKey(path)
+	fullURL := lh.baseURL + keyer.GCSBucketKey(path)
 
 	// sign the url
-	url, err := lh.urlSigner.Sign(url, time.Now().Add(lh.duration))
+	fullURL, err := lh.urlSigner.Sign(fullURL, systemClock.Now().Add(lh.duration))
 	if err != nil {
-		return url, err
+		return fullURL, err
 	}
 
 	// add custom params
 	customQueryParams := driver.CustomParams(options, customParamKeys)
 	if len(customQueryParams) != 0 {
-		url = url + "&" + customQueryParams.Encode()
+		fullURL = fullURL + "&" + customQueryParams.Encode()
 	}
-	return url, err
+	return fullURL, err
 }
 
 // init registers the Google CDN middleware.
 func init() {
-	storagemiddleware.Register("googlecdn", newGoogleCDNStorageMiddleware)
+	// nolint: gosec // ignore when backend is already registered
+	_ = storagemiddleware.Register("googlecdn", newGoogleCDNStorageMiddleware)
 }

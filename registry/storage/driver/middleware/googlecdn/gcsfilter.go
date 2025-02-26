@@ -60,6 +60,7 @@ func fetchGoogleIPs(url string) (googleIPResponse, error) {
 	l.WithFields(log.Fields{"url": url}).Debug("fetching list of known Google IPs")
 
 	var response googleIPResponse
+	// nolint: gosec
 	resp, err := http.Get(url)
 	if err != nil {
 		return response, err
@@ -151,11 +152,12 @@ func (s *googleIPs) getCandidateNetworks(ip net.IP) []net.IPNet {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	if ip.To4() != nil {
+	switch {
+	case ip.To4() != nil:
 		return s.ipv4
-	} else if ip.To16() != nil {
+	case ip.To16() != nil:
 		return s.ipv6
-	} else {
+	default:
 		log.GetLogger().WithFields(log.Fields{"ip": ip}).Error("unknown IP address format")
 		// assume mismatch, pass through Google CDN
 		return nil

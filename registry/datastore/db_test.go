@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"regexp"
-	"sync"
 	"testing"
 	"time"
 
@@ -201,7 +200,7 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 
 	// Mock Open function to return errors based on host matching
 	mockConnector.EXPECT().Open(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, dsn *datastore.DSN, opts ...datastore.Option) (*datastore.DB, error) {
+		func(_ context.Context, dsn *datastore.DSN, _ ...datastore.Option) (*datastore.DB, error) {
 			if dsn.Host == "fail_primary" {
 				return nil, errors.New("primary connection failed")
 			} else if match, _ := regexp.MatchString(`fail_replica\d*`, dsn.Host); match {
@@ -1430,7 +1429,7 @@ func TestDBLoadBalancer_ResolveReplicas_CloseRemoved(t *testing.T) {
 	// Repeat with replica 1 gone but this time simulate a close error to make sure it's handled properly
 	mockResolver.EXPECT().
 		LookupSRV(gomock.Any()).
-		Return([]*net.SRV{}, nil).
+		Return(make([]*net.SRV, 0), nil).
 		Times(1)
 
 	fakeErr := errors.New("foo")
@@ -1525,7 +1524,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection_PoolUnchanged(t *testi
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 
-	// Simulate scenario where nothing has changed, so we should still see metrics labelled for primary, replica 1 and 2
+	// Simulate scenario where nothing has changed, so we should still see metrics labeled for primary, replica 1 and 2
 	err = lb.ResolveReplicas(ctx)
 	require.NoError(t, err)
 
@@ -2317,7 +2316,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 			require.NoError(t, err)
 
 			// Search for relevant matching labels
-			labelsFound := map[string]string{}
+			labelsFound := make(map[string]string, 0)
 			for _, m := range metrics {
 				for _, metric := range m.GetMetric() {
 					var hostType, hostAddr string
@@ -2463,12 +2462,9 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	require.Equal(t, replica2MockDB, lb.Replica(ctx).DB)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.Error(t, err, context.Canceled)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -2476,7 +2472,7 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 
 	// Cancel the context to stop the refreshing
 	cancel()
-	wg.Wait()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 
 	// Verify new replicas
 	require.Equal(t, replica1MockDB, lb.Replica(ctx).DB)
@@ -2559,21 +2555,18 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 	require.NotNil(t, lb)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.NoError(t, err)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time to confirm that no connections were attempted in the background. We've set expectations
 	// for the amount of times that connections can be established, so any attempt here to do so would lead to a failure.
 	time.Sleep(50 * time.Millisecond)
 
-	// Cancelling the context should not lead to an error as the execution should have been skipped
+	// Canceling the context should not lead to an error as the execution should have been skipped
 	cancel()
-	wg.Wait()
+	require.NoError(t, <-errCh)
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -2614,21 +2607,18 @@ func TestDBLoadBalancer_StartReplicaChecking_NoFixedHostsOrServiceDiscovery(t *t
 	require.NotNil(t, lb)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.NoError(t, err)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time to confirm that no connections were attempted in the background. We've set expectations
 	// for the amount of times that connections can be established, so any attempt here to do so would lead to a failure.
 	time.Sleep(50 * time.Millisecond)
 
-	// Cancelling the context should not lead to an error as the execution should have been skipped
+	// Canceling the context should not lead to an error as the execution should have been skipped
 	cancel()
-	wg.Wait()
+	require.NoError(t, <-errCh)
 
 	// Verify mock expectations
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -2788,7 +2778,7 @@ func TestDBLoadBalancer_RecordLSN_StoreSetError(t *testing.T) {
 // expectSingleRowQuery asserts that a query on the mock database returns a single row with the specified value for the
 // given column, or returns an error if specified. It takes the mock database, the query string, the response row column
 // name, the expected response row column value, an error (if any), and the query arguments as input.
-func expectSingleRowQuery(db sqlmock.Sqlmock, query string, column string, value driver.Value, err error, args ...driver.Value) {
+func expectSingleRowQuery(db sqlmock.Sqlmock, query, column string, value driver.Value, err error, args ...driver.Value) {
 	if err != nil {
 		db.ExpectQuery(query).
 			WithArgs(args...).
@@ -2922,7 +2912,7 @@ func TestDBLoadBalancer_UpToDateReplica_Inactive(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, lb)
 	require.Equal(t, primaryMockDB, lb.Primary().DB)
-	require.Len(t, lb.Replicas(), 0)
+	require.Empty(t, lb.Replicas())
 
 	// Test that we successfully get the primary handle as result
 	repo := &models.Repository{Path: "test/repo"}
@@ -3029,9 +3019,9 @@ func TestQueryBuilder_Build(t *testing.T) {
 		{
 			name:           "empty query",
 			query:          "",
-			args:           []any{},
+			args:           make([]any, 0),
 			expectedSQL:    "",
-			expectedParams: []any{},
+			expectedParams: make([]any, 0),
 		},
 		{
 			name:           "single placeholder",
@@ -3071,9 +3061,9 @@ func TestQueryBuilder_Build(t *testing.T) {
 		{
 			name:           "query without arguments",
 			query:          "SELECT * FROM users WHERE id = 10",
-			args:           []any{},
+			args:           make([]any, 0),
 			expectedSQL:    "SELECT * FROM users WHERE id = 10",
-			expectedParams: []any{},
+			expectedParams: make([]any, 0),
 		},
 		{
 			name:           "query with multiple newlines",
@@ -3091,7 +3081,6 @@ func TestQueryBuilder_Build(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			qb := datastore.NewQueryBuilder()
@@ -3153,7 +3142,6 @@ func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			qb := datastore.NewQueryBuilder()
@@ -3257,7 +3245,7 @@ func TestNewDBLoadBalancer_ReplicaResolveTimeout_HostLookupTimeout(t *testing.T)
 	// Mock the Host lookup to validate context deadline is ~100ms and simulate context.DeadlineExceeded
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv1.example.com").
-		DoAndReturn(func(ctx context.Context, host string) ([]string, error) {
+		DoAndReturn(func(ctx context.Context, _ string) ([]string, error) {
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
 			require.WithinDuration(t, time.Now().Add(datastore.InitReplicaResolveTimeout), deadline, datastore.InitReplicaResolveTimeout/10)
@@ -3327,7 +3315,7 @@ func TestNewDBLoadBalancer_ReplicaResolveTimeout_ConnectionOpenTimeout(t *testin
 	}
 
 	mockConnector.EXPECT().Open(gomock.Any(), replicaDSN, gomock.Any()).
-		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...interface{}) (*datastore.DB, error) {
+		DoAndReturn(func(ctx context.Context, _ *datastore.DSN, _ ...any) (*datastore.DB, error) {
 			// Validate that the context has a deadline and it's ~100ms from now
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
@@ -3401,12 +3389,9 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.
 		Times(1)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.Error(t, err, context.Canceled)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3414,7 +3399,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.
 
 	// Cancel the context to stop the refreshing
 	cancel()
-	wg.Wait()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 
 	// Ensure replica list is empty
 	require.Empty(t, lb.Replicas())
@@ -3470,7 +3455,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing
 	// Mock the Host lookup to validate context deadline is ~200ms and simulate context.DeadlineExceeded
 	mockResolver.EXPECT().
 		LookupHost(gomock.Any(), "srv1.example.com").
-		DoAndReturn(func(ctx context.Context, host string) ([]string, error) {
+		DoAndReturn(func(ctx context.Context, _ string) ([]string, error) {
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
 			require.WithinDuration(t, time.Now().Add(datastore.ReplicaResolveTimeout), deadline, datastore.ReplicaResolveTimeout/10)
@@ -3479,12 +3464,9 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing
 		Times(1)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.Error(t, err, context.Canceled)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3492,7 +3474,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing
 
 	// Cancel the context to stop the refreshing
 	cancel()
-	wg.Wait()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 
 	// Ensure replica list is empty
 	require.Empty(t, lb.Replicas())
@@ -3562,7 +3544,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 	}
 
 	mockConnector.EXPECT().Open(gomock.Any(), replicaDSN, gomock.Any()).
-		DoAndReturn(func(ctx context.Context, dsn *datastore.DSN, opts ...interface{}) (*datastore.DB, error) {
+		DoAndReturn(func(ctx context.Context, _ *datastore.DSN, _ ...any) (*datastore.DB, error) {
 			deadline, ok := ctx.Deadline()
 			require.True(t, ok)
 			require.WithinDuration(t, time.Now().Add(datastore.ReplicaResolveTimeout), deadline, datastore.ReplicaResolveTimeout/10)
@@ -3571,12 +3553,9 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 		Times(1)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	wg.Add(1)
+	errCh := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		err := lb.StartReplicaChecking(ctx)
-		require.Error(t, err, context.Canceled)
+		errCh <- lb.StartReplicaChecking(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3584,7 +3563,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 
 	// Cancel the context to stop the refreshing
 	cancel()
-	wg.Wait()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 
 	// Ensure replica list is empty
 	require.Empty(t, lb.Replicas())

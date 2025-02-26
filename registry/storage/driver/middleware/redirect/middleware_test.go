@@ -16,47 +16,47 @@ type RedirectMiddlewareSuite struct {
 	suite.Suite
 }
 
-func (suite *RedirectMiddlewareSuite) TestNoConfig() {
-	options := make(map[string]interface{})
+func (s *RedirectMiddlewareSuite) TestNoConfig() {
+	options := make(map[string]any)
 	_, err := newRedirectStorageMiddleware(nil, options)
-	require.ErrorContains(suite.T(), err, "no baseurl provided")
+	require.ErrorContains(s.T(), err, "no baseurl provided")
 }
 
-func (suite *RedirectMiddlewareSuite) TestMissingScheme() {
-	options := make(map[string]interface{})
+func (s *RedirectMiddlewareSuite) TestMissingScheme() {
+	options := make(map[string]any)
 	options["baseurl"] = "example.com"
 	_, err := newRedirectStorageMiddleware(nil, options)
-	require.ErrorContains(suite.T(), err, "no scheme specified for redirect baseurl")
+	require.ErrorContains(s.T(), err, "no scheme specified for redirect baseurl")
 }
 
-func (suite *RedirectMiddlewareSuite) TestHttpsPort() {
-	options := make(map[string]interface{})
+func (s *RedirectMiddlewareSuite) TestHttpsPort() {
+	options := make(map[string]any)
 	options["baseurl"] = "https://example.com:5443"
 	middleware, err := newRedirectStorageMiddleware(nil, options)
-	require.NoError(suite.T(), err)
+	require.NoError(s.T(), err)
 
 	m, ok := middleware.(*redirectStorageMiddleware)
-	require.True(suite.T(), ok)
-	require.Equal(suite.T(), "https", m.scheme)
-	require.Equal(suite.T(), "example.com:5443", m.host)
+	require.True(s.T(), ok)
+	require.Equal(s.T(), "https", m.scheme)
+	require.Equal(s.T(), "example.com:5443", m.host)
 
 	url, err := middleware.URLFor(context.TODO(), "/rick/data", nil)
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), "https://example.com:5443/rick/data", url)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), "https://example.com:5443/rick/data", url)
 }
 
-func (suite *RedirectMiddlewareSuite) TestHTTP() {
-	options := make(map[string]interface{})
+func (s *RedirectMiddlewareSuite) TestHTTP() {
+	options := make(map[string]any)
 	options["baseurl"] = "http://example.com"
 	middleware, err := newRedirectStorageMiddleware(nil, options)
-	require.NoError(suite.T(), err)
+	require.NoError(s.T(), err)
 
 	m, ok := middleware.(*redirectStorageMiddleware)
-	require.True(suite.T(), ok)
-	require.Equal(suite.T(), "http", m.scheme)
-	require.Equal(suite.T(), "example.com", m.host)
+	require.True(s.T(), ok)
+	require.Equal(s.T(), "http", m.scheme)
+	require.Equal(s.T(), "example.com", m.host)
 
 	url, err := middleware.URLFor(context.TODO(), "morty/data", nil)
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), "http://example.com/morty/data", url)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), "http://example.com/morty/data", url)
 }

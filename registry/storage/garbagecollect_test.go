@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -18,15 +17,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createRegistry(tb testing.TB, driver driver.StorageDriver, options ...RegistryOption) distribution.Namespace {
+func createRegistry(tb testing.TB, sdriver driver.StorageDriver) distribution.Namespace {
 	tb.Helper()
 	ctx := context.Background()
 
 	k, err := libtrust.GenerateECP256PrivateKey()
 	require.NoError(tb, err)
 
-	options = append([]RegistryOption{EnableDelete, Schema1SigningKey(k), EnableSchema1}, options...)
-	registry, err := NewRegistry(ctx, driver, options...)
+	options := []RegistryOption{EnableDelete, Schema1SigningKey(k), EnableSchema1}
+	registry, err := NewRegistry(ctx, sdriver, options...)
 	require.NoError(tb, err)
 
 	return registry
@@ -247,18 +246,20 @@ func TestDeletionHasEffect(t *testing.T) {
 	}
 }
 
-func getAnyKey(digests map[digest.Digest]io.ReadSeeker) (d digest.Digest) {
-	for d = range digests {
-		break
+func getAnyKey(digests map[digest.Digest]io.ReadSeeker) digest.Digest {
+	for d := range digests {
+		return d
 	}
-	return
+
+	return ""
 }
 
-func getKeys(digests map[digest.Digest]io.ReadSeeker) (ds []digest.Digest) {
+func getKeys(digests map[digest.Digest]io.ReadSeeker) []digest.Digest {
+	ds := make([]digest.Digest, 0, len(digests))
 	for d := range digests {
 		ds = append(ds, d)
 	}
-	return
+	return ds
 }
 
 func TestDeletionWithSharedLayer(t *testing.T) {
@@ -381,7 +382,7 @@ func TestGarbageCollectAfterLastTagRemoved(t *testing.T) {
 	tagsPath, err := pathFor(manifestTagsPathSpec{"testgarbagecollectafterlasttagremoved"})
 	require.NoError(t, err)
 
-	t.Logf(tagsPath)
+	t.Log(tagsPath)
 	err = inmemoryDriver.Delete(ctx, tagsPath)
 	require.NoError(t, err)
 
@@ -506,7 +507,7 @@ func TestGarbageCollectManifestListReferenceDeleted(t *testing.T) {
 
 			for l := range img.Layers {
 				_, err := blobstatter.Stat(ctx, l)
-				require.True(t, errors.Is(err, distribution.ErrBlobUnknown))
+				require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 			}
 
 			continue
@@ -576,7 +577,7 @@ func TestGarbageCollectNotConformantBuildxCacheReferences(t *testing.T) {
 
 	for _, desc := range untaggedCacheReferences {
 		_, err := blobstatter.Stat(ctx, desc.Digest)
-		require.True(t, errors.Is(err, distribution.ErrBlobUnknown))
+		require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 	}
 }
 
@@ -601,10 +602,11 @@ func TestFailWhenDatabaseInUse(t *testing.T) {
 
 	// Manually engage the database in use lock.
 	dbLock := DatabaseInUseLocker{Driver: inmemoryDriver}
-	dbLock.Lock(ctx)
+	err := dbLock.Lock(ctx)
+	require.NoError(t, err)
 
 	// Run GC
-	err := MarkAndSweep(ctx, inmemoryDriver, registry, GCOpts{
+	err = MarkAndSweep(ctx, inmemoryDriver, registry, GCOpts{
 		DryRun:         false,
 		RemoveUntagged: false,
 	})

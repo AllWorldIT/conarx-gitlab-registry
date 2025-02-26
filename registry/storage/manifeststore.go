@@ -19,10 +19,10 @@ import (
 // A ManifestHandler gets and puts manifests of a particular type.
 type ManifestHandler interface {
 	// Unmarshal unmarshals the manifest from a byte slice.
-	Unmarshal(ctx context.Context, dgst digest.Digest, content []byte) (distribution.Manifest, error)
+	Unmarshal(context.Context, digest.Digest, []byte) (distribution.Manifest, error)
 
 	// Put creates or updates the given manifest returning the manifest digest.
-	Put(ctx context.Context, manifest distribution.Manifest) (digest.Digest, error)
+	Put(context.Context, distribution.Manifest) (digest.Digest, error)
 }
 
 type manifestStore struct {
@@ -38,7 +38,7 @@ type manifestStore struct {
 
 var _ distribution.ManifestService = &manifestStore{}
 
-func (ms *manifestStore) Exists(ctx context.Context, dgst digest.Digest) (bool, error) {
+func (ms *manifestStore) Exists(_ context.Context, dgst digest.Digest) (bool, error) {
 	dcontext.GetLogger(ms.ctx).Debug("(*manifestStore).Exists")
 
 	_, err := ms.blobStore.Stat(ms.ctx, dgst)
@@ -53,7 +53,7 @@ func (ms *manifestStore) Exists(ctx context.Context, dgst digest.Digest) (bool, 
 	return true, nil
 }
 
-func (ms *manifestStore) Get(ctx context.Context, dgst digest.Digest, options ...distribution.ManifestServiceOption) (distribution.Manifest, error) {
+func (ms *manifestStore) Get(ctx context.Context, dgst digest.Digest, _ ...distribution.ManifestServiceOption) (distribution.Manifest, error) {
 	log := dcontext.GetLogger(ms.ctx)
 	log.Debug("(*manifestStore).Get")
 
@@ -99,6 +99,7 @@ func (ms *manifestStore) Get(ctx context.Context, dgst digest.Digest, options ..
 
 			// First see if it looks like an image index
 			res, err := ms.manifestListHandler.Unmarshal(ctx, dgst, content)
+			// nolint: revive // unchecked-type-assertion
 			resIndex := res.(*manifestlist.DeserializedManifestList)
 			if err == nil && resIndex.Manifests != nil {
 				return resIndex, nil
@@ -124,21 +125,21 @@ func (ms *manifestStore) Get(ctx context.Context, dgst digest.Digest, options ..
 	}
 }
 
-func (ms *manifestStore) Put(ctx context.Context, manifest distribution.Manifest, options ...distribution.ManifestServiceOption) (digest.Digest, error) {
+func (ms *manifestStore) Put(ctx context.Context, m distribution.Manifest, _ ...distribution.ManifestServiceOption) (digest.Digest, error) {
 	dcontext.GetLogger(ms.ctx).Debug("(*manifestStore).Put")
 
-	switch manifest.(type) {
+	switch m.(type) {
 	case *schema1.SignedManifest:
-		return ms.schema1Handler.Put(ctx, manifest)
+		return ms.schema1Handler.Put(ctx, m)
 	case *schema2.DeserializedManifest:
-		return ms.schema2Handler.Put(ctx, manifest)
+		return ms.schema2Handler.Put(ctx, m)
 	case *ocischema.DeserializedManifest:
-		return ms.ocischemaHandler.Put(ctx, manifest)
+		return ms.ocischemaHandler.Put(ctx, m)
 	case *manifestlist.DeserializedManifestList:
-		return ms.manifestListHandler.Put(ctx, manifest)
+		return ms.manifestListHandler.Put(ctx, m)
 	}
 
-	return "", fmt.Errorf("unrecognized manifest type %T", manifest)
+	return "", fmt.Errorf("unrecognized manifest type %T", m)
 }
 
 // Delete removes the revision of the specified manifest.

@@ -737,7 +737,7 @@ func TestRepositoryStore_SiblingsOf_OnlyChild(t *testing.T) {
 	require.NoError(t, err)
 
 	// see testdata/fixtures/repositories.sql
-	require.Len(t, rr, 0)
+	require.Empty(t, rr)
 }
 
 func TestRepositoryStore_SiblingsOf_NotFound(t *testing.T) {
@@ -1673,6 +1673,7 @@ func TestRepositoryStore_Size_SingleRepositoryCache(t *testing.T) {
 
 	expectedSize, err := s.Size(suite.ctx,
 		&models.Repository{Path: path, NamespaceID: 2, ID: 6}) // see testdata/fixtures/repositories.sql
+	require.NoError(t, err)
 	require.NotNil(t, c.Get(ctx, path))
 	// the size attribute of an existing repo is calculated from the db
 	// on the very first call to `Size`,  once calculated the size
@@ -1728,7 +1729,7 @@ func TestRepositoryStore_Size_WithCentralRepositoryCache(t *testing.T) {
 	require.False(t, expectedRepoSizeFromDB.Cached())
 }
 
-func testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testing.T, estimate bool) {
+func testRepositoryStoreSizeWithDescendantsWithCentralRepositoryCacheImpl(t *testing.T, estimate bool) {
 	t.Helper()
 	reloadManifestFixtures(t)
 
@@ -1777,11 +1778,11 @@ func testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testi
 }
 
 func TestRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t *testing.T) {
-	testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t, false)
+	testRepositoryStoreSizeWithDescendantsWithCentralRepositoryCacheImpl(t, false)
 }
 
 func TestRepositoryStore_EstimatedSizeWithDescendants_WithCentralRepositoryCache(t *testing.T) {
-	testRepositoryStore_SizeWithDescendants_WithCentralRepositoryCache(t, true)
+	testRepositoryStoreSizeWithDescendantsWithCentralRepositoryCacheImpl(t, true)
 }
 
 // This comment describes the repository size calculation in detail, explaining the results of the
@@ -1987,12 +1988,12 @@ func TestRepositoryStore_SizeWithDescendants_TopLevel_SetsCacheOnTimeout(t *test
 	redisMock.ExpectSet(redisKey, "true", 24*time.Hour).SetVal("true")
 
 	size, err := s.SizeWithDescendants(suite.ctx, repo)
-	require.NotNil(t, err)
+	require.Error(t, err)
 
 	// make sure the error is not masked
 	var pgErr *pgconn.PgError
 	require.ErrorAs(t, err, &pgErr)
-	require.Equal(t, pgErr.Code, pgerrcode.QueryCanceled)
+	require.Equal(t, pgerrcode.QueryCanceled, pgErr.Code)
 	require.Zero(t, size)
 }
 
@@ -2027,7 +2028,7 @@ func TestRepositoryStore_SizeWithDescendants_NonTopLevel_DoesNotTouchCacheTimeou
 	// make sure the error is not masked
 	var pgErr *pgconn.PgError
 	require.ErrorAs(t, err, &pgErr)
-	require.Equal(t, pgErr.Code, pgerrcode.QueryCanceled)
+	require.Equal(t, pgerrcode.QueryCanceled, pgErr.Code)
 	require.Zero(t, size.Bytes())
 }
 
@@ -2491,6 +2492,69 @@ func TestRepositoryStore_CreateOrFindByPath_SoftDeleted(t *testing.T) {
 	require.Zero(t, r.DeletedAt.Time)
 }
 
+func TestRepositoryStore_TagDetail(t *testing.T) {
+	testCases := []struct {
+		name        string
+		tagName     string
+		expectedTag *models.TagDetail
+	}{
+		{
+			name:    "regular manifest",
+			tagName: "1.0.0",
+			expectedTag: &models.TagDetail{
+				Name:       "1.0.0",
+				ManifestID: 1,
+				Digest:     digest.Digest("sha256:bd165db4bd480656a539e8e00db265377d162d6b98eebbfe5805d0fbd5144155"),
+				ConfigDigest: models.NullDigest{
+					Digest: "sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9",
+					Valid:  true,
+				},
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Size:      2480932,
+				Configuration: &models.Configuration{
+					Digest:    "sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9",
+					MediaType: "application/vnd.docker.container.image.v1+json",
+					Payload:   models.Payload(`{"architecture":"amd64","config":{"Hostname":"","Domainname":"","User":"","AttachStdin":false,"AttachStdout":false,"AttachStderr":false,"Tty":false,"OpenStdin":false,"StdinOnce":false,"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"Cmd":["/bin/sh"],"ArgsEscaped":true,"Image":"sha256:e7d92cdc71feacf90708cb59182d0df1b911f8ae022d29e8e95d75ca6a99776a","Volumes":null,"WorkingDir":"","Entrypoint":null,"OnBuild":null,"Labels":null},"container":"7980908783eb05384926afb5ffad45856f65bc30029722a4be9f1eb3661e9c5e","container_config":{"Hostname":"","Domainname":"","User":"","AttachStdin":false,"AttachStdout":false,"AttachStderr":false,"Tty":false,"OpenStdin":false,"StdinOnce":false,"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"Cmd":["/bin/sh","-c","echo \"1\" \u003e /data"],"Image":"sha256:e7d92cdc71feacf90708cb59182d0df1b911f8ae022d29e8e95d75ca6a99776a","Volumes":null,"WorkingDir":"","Entrypoint":null,"OnBuild":null,"Labels":null},"created":"2020-03-02T12:21:53.8027967Z","docker_version":"19.03.5","history":[{"created":"2020-01-18T01:19:37.02673981Z","created_by":"/bin/sh -c #(nop) ADD file:e69d441d729412d24675dcd33e04580885df99981cec43de8c9b24015313ff8e in / "},{"created":"2020-01-18T01:19:37.187497623Z","created_by":"/bin/sh -c #(nop)  CMD [\"/bin/sh\"]","empty_layer":true},{"created":"2020-03-02T12:21:53.8027967Z","created_by":"/bin/sh -c echo \"1\" \u003e /data"}],"os":"linux","rootfs":{"type":"layers","diff_ids":["sha256:5216338b40a7b96416b8b9858974bbe4acc3096ee60acbc4dfb1ee02aecceb10","sha256:99cb4c5d9f96432a00201f4b14c058c6235e563917ba7af8ed6c4775afa5780f"]}}`),
+				},
+			},
+		},
+		{
+			name:    "manifest list",
+			tagName: "0.2.0",
+			expectedTag: &models.TagDetail{
+				Name:       "0.2.0",
+				ManifestID: 6,
+				Digest:     digest.Digest("sha256:dc27c897a7e24710a2821878456d56f3965df7cc27398460aa6f21f8b385d2d0"),
+				ConfigDigest: models.NullDigest{
+					Valid: false,
+				},
+				MediaType: "application/vnd.docker.distribution.manifest.list.v2+json",
+				Size:      0,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			reloadTagFixtures(t)
+
+			r := &models.Repository{NamespaceID: 1, ID: 3}
+			s := datastore.NewRepositoryStore(suite.db)
+
+			tagDetail, err := s.TagDetail(suite.ctx, r, tc.tagName)
+			require.NoError(t, err)
+			require.NotNil(t, tagDetail)
+
+			// reset created_at and updated_at attributes for reproducible comparisons
+			tagDetail.CreatedAt = time.Time{}
+			tagDetail.UpdatedAt = sql.NullTime{}
+			tagDetail.PublishedAt = time.Time{}
+
+			require.Equal(t, tc.expectedTag, tagDetail, "tag detail must match")
+		})
+	}
+}
+
 func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 	reloadTagFixtures(t)
 
@@ -2586,7 +2650,7 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 			name:         "before 1st returns empty list",
 			limit:        1,
 			beforeName:   "1.0.0",
-			expectedTags: []*models.TagDetail{},
+			expectedTags: make([]*models.TagDetail, 0),
 		},
 		{
 			name:         "before nth",
@@ -3534,6 +3598,7 @@ func TestRepositoryStore_UpdateLastPublishedAt(t *testing.T) {
 	require.Equal(t, tag.CreatedAt, r.LastPublishedAt.Time)
 	// check the actual value on DB
 	r, err = s.FindByPath(suite.ctx, repoName)
+	require.NoError(t, err)
 	require.Equal(t, tag.CreatedAt, r.LastPublishedAt.Time)
 
 	//
@@ -3549,6 +3614,7 @@ func TestRepositoryStore_UpdateLastPublishedAt(t *testing.T) {
 	require.Equal(t, tag.UpdatedAt.Time, r.LastPublishedAt.Time)
 	// check the actual value on DB
 	r, err = s.FindByPath(suite.ctx, repoName)
+	require.NoError(t, err)
 	require.Equal(t, tag.UpdatedAt.Time, r.LastPublishedAt.Time)
 }
 

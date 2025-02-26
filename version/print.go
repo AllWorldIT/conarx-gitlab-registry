@@ -16,7 +16,7 @@ import (
 //
 //	registry github.com/docker/distribution v2.0
 func FprintVersion(w io.Writer) {
-	fmt.Fprintln(w, os.Args[0], Package, Version)
+	_, _ = fmt.Fprintln(w, os.Args[0], Package, Version)
 }
 
 // PrintVersion outputs the version information, from Fprint, to stdout.

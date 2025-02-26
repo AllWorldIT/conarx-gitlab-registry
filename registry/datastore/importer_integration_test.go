@@ -20,43 +20,37 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/storage"
-	storageDriver "github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/docker/libtrust"
 	"github.com/stretchr/testify/require"
 )
 
-func newFilesystemStorageDriver(tb testing.TB) *filesystem.Driver {
-	tb.Helper()
-
-	return newFilesystemStorageDriverWithRoot(tb, "happy-path")
-}
-
 func newFilesystemStorageDriverWithRoot(tb testing.TB, root string) *filesystem.Driver {
 	tb.Helper()
 
-	driver, err := filesystem.FromParameters(map[string]interface{}{
+	sdriver, err := filesystem.FromParameters(map[string]any{
 		"rootdirectory": path.Join(suite.fixturesPath, "importer", root),
 	})
 	require.NoError(tb, err, "error creating storage driver")
 
-	return driver
+	return sdriver
 }
 
-func newRegistry(tb testing.TB, driver storageDriver.StorageDriver) distribution.Namespace {
+func newRegistry(tb testing.TB, sdriver driver.StorageDriver) distribution.Namespace {
 	tb.Helper()
 
 	// load custom key to be used for manifest signing, ensuring that we have reproducible signatures
 	pemKey, err := os.ReadFile(path.Join(suite.fixturesPath, "keys", "manifest_sign"))
 	require.NoError(tb, err)
-	block, _ := pem.Decode([]byte(pemKey))
+	block, _ := pem.Decode(pemKey)
 	require.NotNil(tb, block)
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	require.NoError(tb, err)
 	k, err := libtrust.FromCryptoPrivateKey(privateKey)
 	require.NoErrorf(tb, err, "error loading signature key")
 
-	registry, err := storage.NewRegistry(suite.ctx, driver, storage.Schema1SigningKey(k), storage.EnableSchema1)
+	registry, err := storage.NewRegistry(suite.ctx, sdriver, storage.Schema1SigningKey(k), storage.EnableSchema1)
 	require.NoError(tb, err, "error creating registry")
 
 	return registry
@@ -70,11 +64,11 @@ func overrideDynamicData(tb testing.TB, actual []byte) []byte {
 	tb.Helper()
 
 	// the created_at timestamps for all entities change with every test run
-	re := regexp.MustCompile(`"created_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d*\+\d{2}:\d{2}"`)
+	re := regexp.MustCompile(`"created_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
 	actual = re.ReplaceAllLiteral(actual, []byte(`"created_at":"2020-04-15T12:04:28.95584"`))
 
 	// the review_after timestamps for the GC review queue entities change with every test run
-	re = regexp.MustCompile(`"review_after":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d*\+\d{2}:\d{2}"`)
+	re = regexp.MustCompile(`"review_after":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
 	actual = re.ReplaceAllLiteral(actual, []byte(`"review_after":"2020-04-16T12:04:28.95584"`))
 
 	// schema 1 manifests have `signature` and `protected` attributes that changes with every test run
@@ -95,8 +89,8 @@ func newImporter(t *testing.T, db *datastore.DB, opts ...datastore.ImporterOptio
 func newImporterWithRoot(t *testing.T, db *datastore.DB, root string, opts ...datastore.ImporterOption) *datastore.Importer {
 	t.Helper()
 
-	driver := newFilesystemStorageDriverWithRoot(t, root)
-	registry := newRegistry(t, driver)
+	sdriver := newFilesystemStorageDriverWithRoot(t, root)
+	registry := newRegistry(t, sdriver)
 
 	imp := datastore.NewImporter(db, registry, opts...)
 
@@ -106,21 +100,8 @@ func newImporterWithRoot(t *testing.T, db *datastore.DB, root string, opts ...da
 	return imp
 }
 
-func newTempDirDriver(t *testing.T) *filesystem.Driver {
-	rootDir := t.TempDir()
-
-	d, err := filesystem.FromParameters(map[string]interface{}{
-		"rootdirectory": rootDir,
-	})
-	require.NoError(t, err)
-
-	return d
-}
-
 // Dump each table as JSON and compare the output against reference snapshots (.golden files)
 func validateImport(t *testing.T, db *datastore.DB) {
-	t.Helper()
-
 	for _, tt := range testutil.AllTables {
 		t.Run(string(tt), func(t *testing.T) {
 			actual, err := tt.DumpAsJSON(suite.ctx, db)
@@ -350,20 +331,20 @@ type lastTagErrorDriver struct {
 	*filesystem.Driver
 }
 
-func (d *lastTagErrorDriver) GetContent(ctx context.Context, path string) ([]byte, error) {
+func (d *lastTagErrorDriver) GetContent(ctx context.Context, targetPath string) ([]byte, error) {
 	tagLinkFile := "/docker/registry/v2/repositories/last-tag-error/_manifests/tags/2.1.1/current/link"
-	if path == tagLinkFile {
-		return []byte{}, errors.New("test tag details read error")
+	if targetPath == tagLinkFile {
+		return make([]byte, 0), errors.New("test tag details read error")
 	}
 
-	return d.Driver.GetContent(ctx, path)
+	return d.Driver.GetContent(ctx, targetPath)
 }
 
 func TestImporter_Import_LastTagError(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
 
-	driver := &lastTagErrorDriver{newFilesystemStorageDriverWithRoot(t, "last-tag-error")}
-	registry := newRegistry(t, driver)
+	sdriver := &lastTagErrorDriver{newFilesystemStorageDriverWithRoot(t, "last-tag-error")}
+	registry := newRegistry(t, sdriver)
 
 	imp := datastore.NewImporter(suite.db, registry)
 	err := imp.Import(suite.ctx, "last-tag-error")

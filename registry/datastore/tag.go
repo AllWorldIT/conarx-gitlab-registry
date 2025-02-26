@@ -38,7 +38,7 @@ type tagStore struct {
 }
 
 // NewTagStore builds a new tag store.
-func NewTagStore(db Queryer) *tagStore {
+func NewTagStore(db Queryer) TagStore {
 	return &tagStore{db: db}
 }
 

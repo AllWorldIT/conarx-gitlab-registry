@@ -670,7 +670,7 @@ func TestRegisterWork(t *testing.T) {
 			name: "no options",
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          map[string]Work{},
+					Work:          make(map[string]Work, 0),
 					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: defaultMaxJobAttempt,
@@ -685,7 +685,7 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithJobInterval(1 * time.Second)},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          map[string]Work{},
+					Work:          make(map[string]Work, 0),
 					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
 					jobInterval:   1 * time.Second,
 					maxJobAttempt: defaultMaxJobAttempt,
@@ -699,7 +699,7 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithMaxJobAttempt(9)},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          map[string]Work{},
+					Work:          make(map[string]Work, 0),
 					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: 9,
@@ -713,7 +713,7 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithDB(&datastore.DB{})},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          map[string]Work{},
+					Work:          make(map[string]Work, 0),
 					db:            &datastore.DB{},
 					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
 					jobInterval:   defaultJobInterval,
@@ -728,7 +728,7 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithLogger(log.GetLogger().WithFields(log.Fields{"random_key": "random_value"}))},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          map[string]Work{},
+					Work:          make(map[string]Work, 0),
 					logger:        log.GetLogger().WithFields(log.Fields{"random_key": "random_value", componentKey: workerName}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: defaultMaxJobAttempt,
@@ -742,7 +742,7 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithHandler(wh)},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          map[string]Work{},
+					Work:          make(map[string]Work, 0),
 					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: defaultMaxJobAttempt,

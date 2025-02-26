@@ -350,6 +350,7 @@ func ReloadFixtures(tb testing.TB, db *datastore.DB, basePath string, tables ...
 	for _, table := range tables {
 		path := filepath.Join(basePath, "testdata", "fixtures", table.seedFileName())
 
+		// nolint: gosec // this is just a testutil
 		query, err := os.ReadFile(path)
 		require.NoErrorf(tb, err, "error reading fixture")
 
@@ -374,6 +375,7 @@ func createGoldenFile(tb testing.TB, path string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		tb.Log("creating .golden file")
 
+		// nolint: gosec // this is just a testutil
 		f, err := os.Create(path)
 		require.NoError(tb, err, "error creating .golden file")
 		require.NoError(tb, f.Close())
@@ -384,6 +386,7 @@ func updateGoldenFile(tb testing.TB, path string, content []byte) {
 	tb.Helper()
 
 	tb.Log("updating .golden file")
+	// nolint: gosec // this is just a testutil
 	err := os.WriteFile(path, content, 0o644)
 	require.NoError(tb, err, "error updating .golden file")
 }
@@ -391,6 +394,7 @@ func updateGoldenFile(tb testing.TB, path string, content []byte) {
 func readGoldenFile(tb testing.TB, path string) []byte {
 	tb.Helper()
 
+	// nolint: gosec // this is just a testutil
 	content, err := os.ReadFile(path)
 	require.NoError(tb, err, "error reading .golden file")
 
@@ -413,12 +417,12 @@ func CompareWithGoldenFile(tb testing.TB, path string, actual []byte, create, up
 	require.Equal(tb, string(expected), string(actual), "does not match .golden file")
 }
 
-type redisClient struct {
+type RedisClient struct {
 	redis redis.UniversalClient
 }
 
 // FlushCache Removes all cached data in the cache
-func (r *redisClient) FlushCache() error {
+func (r *RedisClient) FlushCache() error {
 	if err := r.redis.FlushAll(context.Background()).Err(); err != nil {
 		return fmt.Errorf("flushing redis cache: %w", err)
 	}
@@ -426,7 +430,7 @@ func (r *redisClient) FlushCache() error {
 }
 
 // NewRedisClientFromConfig generates a new redis cache client based on configuration settings.
-func NewRedisClientFromConfig(config *configuration.Configuration) (*redisClient, error) {
+func NewRedisClientFromConfig(config *configuration.Configuration) (*RedisClient, error) {
 	opts := &redis.UniversalOptions{
 		Addrs:    strings.Split(config.Redis.Cache.Addr, ","),
 		DB:       config.Redis.Cache.DB,
@@ -440,5 +444,5 @@ func NewRedisClientFromConfig(config *configuration.Configuration) (*redisClient
 	if cmd := redis.Ping(pingCtx); cmd.Err() != nil {
 		return nil, cmd.Err()
 	}
-	return &redisClient{redis}, nil
+	return &RedisClient{redis}, nil
 }

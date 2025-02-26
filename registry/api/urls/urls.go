@@ -1,7 +1,7 @@
 package urls
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,6 +17,8 @@ import (
 var (
 	defaultDistributionRouter = v2.Router()
 	defaultGitLabRouter       = v1.Router()
+
+	ErrNoTagManifest = errors.New("reference must have a tag or digest")
 )
 
 // Builder creates registry API urls from a single base endpoint. It can be
@@ -162,7 +164,7 @@ func (ub *Builder) BuildManifestURL(ref reference.Named) (string, error) {
 	case reference.Digested:
 		tagOrDigest = v.Digest().String()
 	default:
-		return "", fmt.Errorf("reference must have a tag or digest")
+		return "", ErrNoTagManifest
 	}
 
 	manifestURL, err := route.URL("name", ref.Name(), "reference", tagOrDigest)
@@ -237,6 +239,18 @@ func (ub *Builder) BuildGitlabV1RepositoryURL(name reference.Named, values ...ur
 	return appendValuesURL(u, values...).String(), nil
 }
 
+// BuildGitlabV1RepositoryTagDetailURL constructs a URL for the Gitlab v1 API repository tag details by tag name.
+func (ub *Builder) BuildGitlabV1RepositoryTagDetailURL(name reference.Named, tagName string) (string, error) {
+	route := ub.cloneGitLabRoute(v1.RepositoryTagDetail)
+
+	u, err := route.URL("name", name.Name(), "tagName", tagName)
+	if err != nil {
+		return "", err
+	}
+
+	return appendValuesURL(u).String(), nil
+}
+
 // BuildGitlabV1RepositoryTagsURL constructs a URL for the Gitlab v1 API repository tags route by name.
 func (ub *Builder) BuildGitlabV1RepositoryTagsURL(name reference.Named, values ...url.Values) (string, error) {
 	route := ub.cloneGitLabRoute(v1.RepositoryTags)
@@ -307,9 +321,9 @@ func (cr clonedRoute) URL(pairs ...string) (*url.URL, error) {
 		routeURL.Path = routeURL.Path[1:]
 	}
 
-	url := cr.root.ResolveReference(routeURL)
-	url.Scheme = cr.root.Scheme
-	return url, nil
+	resolvedURL := cr.root.ResolveReference(routeURL)
+	resolvedURL.Scheme = cr.root.Scheme
+	return resolvedURL, nil
 }
 
 // appendValuesURL appends the parameters to the url.
@@ -324,15 +338,4 @@ func appendValuesURL(u *url.URL, values ...url.Values) *url.URL {
 
 	u.RawQuery = merged.Encode()
 	return u
-}
-
-// appendValues appends the parameters to the url. Panics if the string is not
-// a url.
-func appendValues(u string, values ...url.Values) string {
-	up, err := url.Parse(u)
-	if err != nil {
-		panic(err) // should never happen
-	}
-
-	return appendValuesURL(up, values...).String()
 }

@@ -42,6 +42,8 @@ const CurrentVersion Version = "0.1"
 // of a StorageDriver
 type StorageDriver interface {
 	StorageDeleter
+	StorageLister
+	StorageEnumerator
 
 	// Name returns the human-readable "name" of the driver, useful in error
 	// messages and logging. By convention, this will just be the registration
@@ -63,15 +65,11 @@ type StorageDriver interface {
 
 	// Writer returns a FileWriter which will store the content written to it
 	// at the location designated by "path" after the call to Commit.
-	Writer(ctx context.Context, path string, append bool) (FileWriter, error)
+	Writer(context.Context, string, bool) (FileWriter, error)
 
 	// Stat retrieves the FileInfo for the given path, including the current
 	// size in bytes and the creation time.
 	Stat(ctx context.Context, path string) (FileInfo, error)
-
-	// List returns a list of the objects that are direct descendants of the
-	// given path.
-	List(ctx context.Context, path string) ([]string, error)
 
 	// Move moves an object stored at sourcePath to destPath, removing the
 	// original object.
@@ -83,24 +81,7 @@ type StorageDriver interface {
 	// the given path, possibly using the given options.
 	// May return an ErrUnsupportedMethod in certain StorageDriver
 	// implementations.
-	URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error)
-
-	// Walk traverses a filesystem defined within driver, starting
-	// from the given path, calling f on each file.
-	// If the returned error from the WalkFn is ErrSkipDir and fileInfo refers
-	// to a directory, the directory will not be entered and Walk
-	// will continue the traversal.  If fileInfo refers to a normal file, processing stops
-	// Files are processed in a stable, lexicographically sorted order.
-	Walk(ctx context.Context, path string, f WalkFn) error
-
-	// WalkParallel is similar to walk, but the filesystem will be traversed in
-	// parallel. This enables improved performance, but the order which files are
-	// processed is not stable and WalkFn must be thread-safe.
-	WalkParallel(ctx context.Context, path string, f WalkFn) error
-
-	// ExistsPath is a performance optimized version of Stat to be used specifically for checking
-	// if a given path (not object) exists.
-	ExistsPath(ctx context.Context, path string) (bool, error)
+	URLFor(ctx context.Context, path string, options map[string]any) (string, error)
 }
 
 // StorageDeleter defines methods that a Storage Driver must implement to delete objects.
@@ -119,6 +100,31 @@ type StorageDeleter interface {
 	// files and any errors. This method is idempotent, no error is returned if
 	// a file does not exist.
 	DeleteFiles(ctx context.Context, paths []string) (int, error)
+}
+
+// StorageLister defines methods that a storage driver must implement to list
+// objects under a path.
+type StorageLister interface {
+	// List returns a list of the objects that are direct descendants of the
+	// given path.
+	List(ctx context.Context, path string) ([]string, error)
+}
+
+// StorageEnumerator defines methods that a storage driver must implement to
+// traverse filesystem paths.
+type StorageEnumerator interface {
+	// Walk traverses a filesystem defined within driver, starting
+	// from the given path, calling f on each file.
+	// If the returned error from the WalkFn is ErrSkipDir and fileInfo refers
+	// to a directory, the directory will not be entered and Walk
+	// will continue the traversal.  If fileInfo refers to a normal file, processing stops
+	// Files are processed in a stable, lexicographically sorted order.
+	Walk(ctx context.Context, path string, f WalkFn) error
+
+	// WalkParallel is similar to walk, but the filesystem will be traversed in
+	// parallel. This enables improved performance, but the order which files are
+	// processed is not stable and WalkFn must be thread-safe.
+	WalkParallel(ctx context.Context, path string, f WalkFn) error
 }
 
 // FileWriter provides an abstraction for an opened writable file-like object in
@@ -216,3 +222,9 @@ func (err Error) Error() string {
 func (err Error) Unwrap() error {
 	return err.Enclosed
 }
+
+var (
+	ErrAlreadyClosed   = fmt.Errorf("already closed")
+	ErrAlreadyCommited = fmt.Errorf("already committed")
+	ErrAlreadyCanceled = fmt.Errorf("already canceled")
+)

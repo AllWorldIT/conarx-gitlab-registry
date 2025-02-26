@@ -19,14 +19,8 @@ middleware:storage-googlecdn:
   extends: .go-version-matrix
   stage: integration
   variables: &storage-driver-variables
-    TEST_SHORT_FLAG: "-test.short"
     TEST_TIMEOUT: "30m"
-  rules:
-    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
-      variables:
-        TEST_SHORT_FLAG: ""
-    - when: always
-  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE $TEST_SHORT_FLAG
+  script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
 
 filesystem:
   <<: *storage-driver-test
@@ -73,11 +67,91 @@ gcs:
   variables:
     <<: *storage-driver-variables
     REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
-    TEST_SHORT_FLAG: "-test.short"
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/gcs"
     TEST_TIMEOUT: "35m"
   before_script:
     - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
+
+# NOTE(prozlach): Azure storage container used in tests has a auto-cleanup policy set
+# - all blobs older than 24h will be deleted, so even if CI task fails, there
+# is no risk that we will keep being billed for the storage indefinatelly.
+azure:default-runner:
+  <<: *storage-driver-test
+  parallel:
+    matrix:
+      # Regular combinations
+      - GO_VERSION: [ "1.22", "1.23" ]
+        AZURE_DRIVER_VERSION: [ "azure", "azure_v2" ]
+        AZURE_CREDENTIALS_TYPE: [ "shared_key" ]
+      - GO_VERSION: [ "1.22", "1.23" ]
+        AZURE_DRIVER_VERSION: [ "azure_v2" ]
+        AZURE_CREDENTIALS_TYPE: [ "client_secret" ]
+  variables:
+    <<: *storage-driver-variables
+    PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
+    AZURE_DRIVER_VERSION: $AZURE_DRIVER_VERSION
+    AZURE_CREDENTIALS_TYPE: $AZURE_CREDENTIALS_TYPE
+    # NOTE(prozlach): Code supports `AZURE_DEBUGLOG` environment variable which
+    # can be toggled in the CI via CI enviroment variables for debugging
+    # if/when needed. It is currently set to `false`, set it to `true` to
+    # enable debug logging.
+    # NOTE(prozlach): From what I noticed, if the tests do not finish within 45
+    # minutes, they will not finish in 60 minutes either. A lot depends on the
+    # latency between the Gitlab runner and azure store account. Moving Azure
+    # storage closer to Gitlab runners (i.e. us-east Azure zone) decreased run
+    # time from ~40m to around 9m. 
+    
+# NOTE(prozlach): Do not run all azure jobs on the azure runner as it does not
+# have enough capacity and is not secure enough to be exposed to shared_key
+# credentials.
+# NOTE(prozlach): Access credentials for the VM are stored in 1Password, entry
+# `container-registry-cirunner`.
+# NOTE(prozlach): Setting up custom runner follows the standard steps
+# documented for setting up custom gitlab runner with few extra steps:
+# * the host must be assigned managed identy access with level Data Contributor
+# to the blob storage account we use for testing
+# * the runner must be configured to use docker executor in host network mode
+# * the concurency level for the runner should be set to at least 6
+# * the runner should have at least 4 vCPU and 16GiB RAM
+# * running untagged jobs on this runner must be disabled
+# * runner must be tagged with `azure-managed_identity_auth` tag
+azure:managed-identity:
+  <<: *storage-driver-test
+  parallel:
+    matrix:
+      # Managed identity combinations
+      - GO_VERSION: [ "1.22", "1.23" ]
+        AZURE_DRIVER_VERSION: [ "azure_v2" ]
+        AZURE_CREDENTIALS_TYPE: [ "default_credentials" ]
+  variables:
+    <<: *storage-driver-variables
+    PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
+    AZURE_DRIVER_VERSION: $AZURE_DRIVER_VERSION
+    AZURE_CREDENTIALS_TYPE: $AZURE_CREDENTIALS_TYPE
+    # NOTE(prozlach): Code supports `AZURE_DEBUGLOG` environment variable which
+    # can be toggled in the CI via CI enviroment variables for debugging
+    # if/when needed. It is currently set to `false`, set it to `true` to
+    # enable debug logging.
+    # NOTE(prozlach): From what I noticed, if the tests do not finish within 45
+    # minutes, they will not finish in 60 minutes either. A lot depends on the
+    # latency between the Gitlab runner and azure store account. Moving Azure
+    # storage closer to Gitlab runners (i.e. us-east Azure zone) decreased run
+    # time from ~40m to around 9m. 
+  tags:
+    # NOTE(prozlach): run on a custom runner, that runs on Azure VM which has
+    # managed credentials set up for the storage account and container that CI
+    # variables define.
+    - azure-managed_identity_auth
+  script:
+    # NOTE(prozlach): we need to make sure that Azure SDK will not try to auth
+    # with creds from environment and instead tries to obtain managed
+    # credentials from the VM itself.
+    - |
+      unset AZURE_ACCOUNT_KEY
+      unset AZURE_TENANT_ID
+      unset AZURE_CLIENT_ID
+      unset AZURE_CLIENT_SECRET
+      $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
 
 api:
   extends: .go-version-matrix
@@ -193,6 +267,7 @@ database:background-migrations:
     POSTGRESQL_DATABASE: "registry_test"
     POSTGRESQL_REPLICATION_USER: "repluser"
     POSTGRESQL_REPLICATION_PASSWORD: "replpassword"
+    POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
     REGISTRY_DATABASE_HOST: "primary"
     REGISTRY_DATABASE_LOADBALANCING_ENABLED: "true"
     REGISTRY_REDIS_CACHE_ENABLED:  "true"
@@ -206,16 +281,19 @@ database:background-migrations:
       alias: "primary"
       variables:
         POSTGRESQL_REPLICATION_MODE: "master"
+        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
     - name: bitnami/postgresql:${PG_VERSION}
       alias: "replica1"
       variables:
         POSTGRESQL_REPLICATION_MODE: "slave"
         POSTGRESQL_MASTER_HOST: "primary"
+        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
     - name: bitnami/postgresql:${PG_VERSION}
       alias: "replica2"
       variables:
         POSTGRESQL_REPLICATION_MODE: "slave"
         POSTGRESQL_MASTER_HOST: "primary"
+        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
     # not needed for all scenarios but avoids having to declare all services in each as `services` can't be extended
     - name: registry.gitlab.com/gitlab-org/container-registry/test-dns-server:28d4a455
       alias: "test-dns-server"

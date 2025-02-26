@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -9,31 +10,31 @@ import (
 	"github.com/docker/distribution/cmd/internal/release-cli/slack"
 	"github.com/docker/distribution/cmd/internal/release-cli/utils"
 	"github.com/spf13/cobra"
-	"github.com/xanzy/go-gitlab"
+	gitlab "gitlab.com/gitlab-org/api/client-go"
 )
 
 var gdkCmd = &cobra.Command{
 	Use:   "gdk",
 	Short: "Manage GDK release",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		version := os.Getenv("CI_COMMIT_TAG")
 		if version == "" {
-			log.Fatal("Version is empty. Aborting.")
+			return errors.New("version is empty, aborting")
 		}
 
 		accessTokenGDK, err := cmd.Flags().GetString("gdk-access-token")
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("getting `gdk-access-token`: %w", err)
 		}
 
 		accessTokenRegistry, err := cmd.Flags().GetString("registry-access-token")
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("getting flag `registry-access-token`: %w", err)
 		}
 
-		webhookUrl, err := cmd.Flags().GetString("slack-webhook-url")
+		webhookURL, err := cmd.Flags().GetString("slack-webhook-url")
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("getting flag `slack-webhook-url`: %w", err)
 		}
 
 		labels := &gitlab.LabelOptions{
@@ -46,73 +47,78 @@ var gdkCmd = &cobra.Command{
 
 		release, err := readConfig(cmd.Use, version)
 		if err != nil {
-			log.Fatalf("Error reading config: %v", err)
-			return
+			return fmt.Errorf("error reading config: %w", err)
 		}
 
-		gdkClient := client.NewClient(accessTokenGDK)
-		registryClient := client.NewClient(accessTokenRegistry)
+		gdkClient, err := client.NewClient(accessTokenGDK)
+		if err != nil {
+			return err
+		}
+		registryClient, err := client.NewClient(accessTokenRegistry)
+		if err != nil {
+			return err
+		}
 
 		exists, err := gdkClient.BranchExists(release.ProjectID, release.BranchName)
 		if err != nil {
-			log.Printf("Error checking if branch exists: %v", err)
+			return fmt.Errorf("checking if branch exists: %w", err)
 		}
 
 		if exists {
-			log.Printf("Branch %s already exists. Aborting.", release.BranchName)
-			return
+			return fmt.Errorf("branch %s already exists", release.BranchName)
 		}
 
 		branch, err := gdkClient.CreateBranch(release.ProjectID, release.BranchName, release.Ref)
 		if err != nil {
-			log.Fatalf("Failed to create branch: %v", err)
+			return fmt.Errorf("creating branch: %w", err)
 		}
 
 		desc, err := registryClient.GetChangelog(version)
 		if err != nil {
-			log.Fatalf("Failed to get changelog: %v", err)
+			return fmt.Errorf("getting changelog: %w", err)
 		}
 
 		for i := range release.Paths {
 			fileName, err := gdkClient.GetFile(release.Paths[i], release.Ref, release.ProjectID)
 			if err != nil {
-				log.Fatalf("Failed to get the file: %v", err)
+				return fmt.Errorf("getting file: %w", err)
 			}
 
 			fileChange, err := utils.UpdateFileInGDK(fileName, version)
 			if err != nil {
-				log.Fatalf("Failed to update file: %v", err)
+				return fmt.Errorf("updating file: %w", err)
 			}
 
 			_, err = gdkClient.CreateCommit(release.ProjectID, fileChange, release.Paths[i], release.CommitMessage, branch)
 			if err != nil {
-				log.Fatalf("Failed to create commit: %v", err)
+				return fmt.Errorf("creating commit: %w", err)
 			}
 		}
 
 		mr, err := gdkClient.CreateMergeRequest(release.ProjectID, branch, desc, release.Ref, release.MRTitle, labels, reviewerIDs)
 		if err != nil {
-			msg := fmt.Sprintf("%s release: Failed to create GDK version bump MR: %s", version, err.Error())
-			err = slack.SendSlackNotification(webhookUrl, msg)
-			if err != nil {
-				log.Printf("Failed to send error notification to Slack: %v", err)
+			errIn := fmt.Errorf("%s release: Failed to create GDK version bump MR: %w", version, err)
+			errSlack := slack.SendSlackNotification(webhookURL, errIn.Error())
+			if errSlack != nil {
+				log.Printf("Failed to send error notification to Slack: %v", errSlack)
 			}
-			log.Fatalf(msg)
+			return errIn
 		}
 
 		msg := fmt.Sprintf("%s release: GDK version bump MR: %s", version, mr.WebURL)
-		err = slack.SendSlackNotification(webhookUrl, msg)
+		err = slack.SendSlackNotification(webhookURL, msg)
 		if err != nil {
 			log.Printf("Failed to send notification to Slack: %v", err)
 		}
 
 		log.Println(msg)
+		return nil
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(gdkCmd)
+	RootCmd.AddCommand(gdkCmd)
 
 	gdkCmd.Flags().StringP("gdk-access-token", "", "", "Access token for GDK")
-	gdkCmd.MarkFlagRequired("gdk-access-token")
+	_ = gdkCmd.MarkFlagRequired("gdk-access-token")
 }

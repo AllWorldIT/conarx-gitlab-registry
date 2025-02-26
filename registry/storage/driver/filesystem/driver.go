@@ -43,7 +43,7 @@ func init() {
 // filesystemDriverFactory implements the factory.StorageDriverFactory interface
 type filesystemDriverFactory struct{}
 
-func (factory *filesystemDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (*filesystemDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -65,7 +65,7 @@ type Driver struct {
 // Optional Parameters:
 // - rootdirectory
 // - maxthreads
-func FromParameters(parameters map[string]interface{}) (*Driver, error) {
+func FromParameters(parameters map[string]any) (*Driver, error) {
 	params, err := fromParametersImpl(parameters)
 	if err != nil || params == nil {
 		return nil, err
@@ -73,7 +73,7 @@ func FromParameters(parameters map[string]interface{}) (*Driver, error) {
 	return New(*params), nil
 }
 
-func fromParametersImpl(parameters map[string]interface{}) (*DriverParameters, error) {
+func fromParametersImpl(parameters map[string]any) (*DriverParameters, error) {
 	var (
 		err           error
 		maxThreads    = defaultMaxThreads
@@ -113,24 +113,24 @@ func New(params DriverParameters) *Driver {
 
 // Implement the storagedriver.StorageDriver interface
 
-func (d *driver) Name() string {
+func (*driver) Name() string {
 	return driverName
 }
 
-// GetContent retrieves the content stored at "path" as a []byte.
-func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
-	rc, err := d.Reader(ctx, path, 0)
+// GetContent retrieves the content stored at "targetPath" as a []byte.
+func (d *driver) GetContent(ctx context.Context, targetPath string) ([]byte, error) {
+	rc, err := d.Reader(ctx, targetPath, 0)
 	if err != nil {
 		return nil, err
 	}
 	defer rc.Close()
 
-	p, err := io.ReadAll(rc)
+	data, err := io.ReadAll(rc)
 	if err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return data, nil
 }
 
 // PutContent stores the []byte content at a location designated by "path".
@@ -142,19 +142,20 @@ func (d *driver) PutContent(ctx context.Context, subPath string, contents []byte
 	defer writer.Close()
 	_, err = io.Copy(writer, bytes.NewReader(contents))
 	if err != nil {
-		writer.Cancel()
+		_ = writer.Cancel()
 		return err
 	}
 	return writer.Commit()
 }
 
-// Reader retrieves an io.ReadCloser for the content stored at "path" with a
+// Reader retrieves an io.ReadCloser for the content stored at "targetPath" with a
 // given byte offset.
-func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
-	file, err := os.OpenFile(d.fullPath(path), os.O_RDONLY, 0o644)
+func (d *driver) Reader(_ context.Context, targetPath string, offset int64) (io.ReadCloser, error) {
+	// NOTE(prozlach): mode does not matter as we do not pass O_CREATE flag anyway
+	file, err := os.OpenFile(d.fullPath(targetPath), os.O_RDONLY, 0o600)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+			return nil, storagedriver.PathNotFoundError{Path: targetPath, DriverName: driverName}
 		}
 
 		return nil, err
@@ -162,23 +163,25 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 
 	seekPos, err := file.Seek(offset, io.SeekStart)
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, err
 	} else if seekPos < offset {
-		file.Close()
-		return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
+		_ = file.Close()
+		return nil, storagedriver.InvalidOffsetError{Path: targetPath, Offset: offset, DriverName: driverName}
 	}
 
 	return file, nil
 }
 
-func (d *driver) Writer(ctx context.Context, subPath string, append bool) (storagedriver.FileWriter, error) {
+func (d *driver) Writer(_ context.Context, subPath string, doAppend bool) (storagedriver.FileWriter, error) {
 	fullPath := d.fullPath(subPath)
 	parentDir := path.Dir(fullPath)
+	// nolint:gosec // needs some more research so that we do not break anything
 	if err := os.MkdirAll(parentDir, 0o777); err != nil {
 		return nil, err
 	}
 
+	// nolint: gosec
 	fp, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE, 0o666)
 	if err != nil {
 		return nil, err
@@ -186,16 +189,16 @@ func (d *driver) Writer(ctx context.Context, subPath string, append bool) (stora
 
 	var offset int64
 
-	if !append {
+	if !doAppend {
 		err := fp.Truncate(0)
 		if err != nil {
-			fp.Close()
+			_ = fp.Close()
 			return nil, err
 		}
 	} else {
 		n, err := fp.Seek(0, io.SeekEnd)
 		if err != nil {
-			fp.Close()
+			_ = fp.Close()
 			return nil, err
 		}
 		offset = n
@@ -206,7 +209,7 @@ func (d *driver) Writer(ctx context.Context, subPath string, append bool) (stora
 
 // Stat retrieves the FileInfo for the given path, including the current size
 // in bytes and the creation time.
-func (d *driver) Stat(ctx context.Context, subPath string) (storagedriver.FileInfo, error) {
+func (d *driver) Stat(_ context.Context, subPath string) (storagedriver.FileInfo, error) {
 	fullPath := d.fullPath(subPath)
 
 	fi, err := os.Stat(fullPath)
@@ -226,9 +229,10 @@ func (d *driver) Stat(ctx context.Context, subPath string) (storagedriver.FileIn
 
 // List returns a list of the objects that are direct descendants of the given
 // path.
-func (d *driver) List(ctx context.Context, subPath string) ([]string, error) {
+func (d *driver) List(_ context.Context, subPath string) ([]string, error) {
 	fullPath := d.fullPath(subPath)
 
+	// nolint: gosec
 	dir, err := os.Open(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -257,7 +261,7 @@ func (d *driver) List(ctx context.Context, subPath string) ([]string, error) {
 
 // Move moves an object stored at sourcePath to destPath, removing the original
 // object.
-func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
+func (d *driver) Move(_ context.Context, sourcePath, destPath string) error {
 	source := d.fullPath(sourcePath)
 	dest := d.fullPath(destPath)
 
@@ -265,6 +269,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 		return storagedriver.PathNotFoundError{Path: sourcePath, DriverName: driverName}
 	}
 
+	// nolint:gosec // needs some more research so that we do not break anything
 	if err := os.MkdirAll(path.Dir(dest), 0o755); err != nil {
 		return err
 	}
@@ -274,7 +279,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 }
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
-func (d *driver) Delete(ctx context.Context, subPath string) error {
+func (d *driver) Delete(_ context.Context, subPath string) error {
 	fullPath := d.fullPath(subPath)
 
 	_, err := os.Stat(fullPath)
@@ -293,8 +298,8 @@ func (d *driver) Delete(ctx context.Context, subPath string) error {
 // directories not included) and any errors. This method is idempotent, no error is returned if a file does not exist.
 func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 	count := 0
-	for _, path := range paths {
-		if err := d.Delete(ctx, path); err != nil {
+	for _, p := range paths {
+		if err := d.Delete(ctx, p); err != nil {
 			if !errors.As(err, new(storagedriver.PathNotFoundError)) {
 				return count, err
 			}
@@ -302,7 +307,8 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 		count++
 
 		// delete parent directory as well if empty
-		p := d.fullPath(filepath.Dir(path))
+		p := d.fullPath(filepath.Dir(p))
+		// nolint:gosec
 		f, err := os.Open(p)
 		if err != nil {
 			// ignore if not found
@@ -316,50 +322,34 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 		// if err is of type io.EOF than the directory is empty.
 		if _, err = f.Readdir(1); err == io.EOF {
 			if err := os.Remove(p); err != nil {
-				f.Close()
+				_ = f.Close()
 				return count, err
 			}
 		}
-		f.Close()
+		_ = f.Close()
 	}
 	return count, nil
 }
 
 // URLFor returns a URL which may be used to retrieve the content stored at the given path.
 // May return an UnsupportedMethodErr in certain StorageDriver implementations.
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (*driver) URLFor(_ context.Context, _ string, _ map[string]any) (string, error) {
 	return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 }
 
-// Walk traverses a filesystem defined within driver, starting
-// from the given path, calling f on each file
-func (d *driver) Walk(ctx context.Context, path string, f storagedriver.WalkFn) error {
-	return storagedriver.WalkFallback(ctx, d, path, f)
+// Walk traverses a filesystem defined within driver, starting from the given
+// path, calling f on each file
+func (d *driver) Walk(ctx context.Context, targetPath string, f storagedriver.WalkFn) error {
+	return storagedriver.WalkFallback(ctx, d, targetPath, f)
 }
 
 // WalkParallel traverses a filesystem defined within driver in parallel, starting
 // from the given path, calling f on each file.
-func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.WalkFn) error {
-	// TODO: Verify that this driver can reliably handle parallel workloads before
-	// using storagedriver.WalkFallbackParallel
-	return d.Walk(ctx, path, f)
-}
-
-// ExistsPath is a performance optimized version of Stat to be used specifically for checking if a given path (not
-// object) exists. For the filesystem driver, which we use for the test suite, this falls back to Stat.
-func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
-	fi, err := d.Stat(ctx, path)
-	if err != nil {
-		if errors.As(err, &storagedriver.PathNotFoundError{}) {
-			return false, nil
-		}
-		return false, err
-	}
-	if fi == nil {
-		return false, nil
-	}
-
-	return true, nil
+func (d *driver) WalkParallel(ctx context.Context, targetPath string, f storagedriver.WalkFn) error {
+	// NOTE(prozlach): WalkParallel will go away at some point, see
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/1182#note_2258251909
+	// for more context.
+	return d.Walk(ctx, targetPath, f)
 }
 
 // fullPath returns the absolute path of a key within the Driver's storage.
@@ -419,12 +409,13 @@ func newFileWriter(file *os.File, size int64) *fileWriter {
 }
 
 func (fw *fileWriter) Write(p []byte) (int, error) {
-	if fw.closed {
-		return 0, fmt.Errorf("already closed")
-	} else if fw.committed {
-		return 0, fmt.Errorf("already committed")
-	} else if fw.canceled {
-		return 0, fmt.Errorf("already canceled")
+	switch {
+	case fw.closed:
+		return 0, storagedriver.ErrAlreadyClosed
+	case fw.committed:
+		return 0, storagedriver.ErrAlreadyCommited
+	case fw.canceled:
+		return 0, storagedriver.ErrAlreadyCanceled
 	}
 	n, err := fw.bw.Write(p)
 	fw.size += int64(n)
@@ -437,7 +428,7 @@ func (fw *fileWriter) Size() int64 {
 
 func (fw *fileWriter) Close() error {
 	if fw.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	}
 
 	if err := fw.bw.Flush(); err != nil {
@@ -457,21 +448,22 @@ func (fw *fileWriter) Close() error {
 
 func (fw *fileWriter) Cancel() error {
 	if fw.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	}
 
 	fw.canceled = true
-	fw.file.Close()
+	_ = fw.file.Close()
 	return os.Remove(fw.file.Name())
 }
 
 func (fw *fileWriter) Commit() error {
-	if fw.closed {
-		return fmt.Errorf("already closed")
-	} else if fw.committed {
-		return fmt.Errorf("already committed")
-	} else if fw.canceled {
-		return fmt.Errorf("already canceled")
+	switch {
+	case fw.closed:
+		return storagedriver.ErrAlreadyClosed
+	case fw.committed:
+		return storagedriver.ErrAlreadyCommited
+	case fw.canceled:
+		return storagedriver.ErrAlreadyCanceled
 	}
 
 	if err := fw.bw.Flush(); err != nil {

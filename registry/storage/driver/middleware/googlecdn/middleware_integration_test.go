@@ -67,7 +67,7 @@ func newGCSDriver(t *testing.T) (driver.StorageDriver, string) {
 	// generate unique root directory for each test to make them safe for parallel execution
 	root := t.TempDir()
 
-	d, err := gcs.FromParameters(map[string]interface{}{
+	d, err := gcs.FromParameters(map[string]any{
 		"bucket":        os.Getenv("REGISTRY_STORAGE_GCS_BUCKET"),
 		"keyfile":       os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 		"rootdirectory": root,
@@ -99,7 +99,7 @@ func TestURLFor(t *testing.T) {
 	testutil.StubClock(t, &systemClock, clockMock)
 
 	// default behavior
-	cdnDriver, err := newGoogleCDNStorageMiddleware(gcsDriver, map[string]interface{}{
+	cdnDriver, err := newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":    baseURL,
 		"privatekey": keyFile,
 		"keyname":    keyName,
@@ -113,7 +113,7 @@ func TestURLFor(t *testing.T) {
 		baseURL+root+objectPath,
 		keyName,
 		keyBytes,
-		systemClock.Now().Add(defaultDuration),
+		clockMock.Now().Add(defaultDuration),
 	)
 
 	require.NoError(t, err)
@@ -121,7 +121,7 @@ func TestURLFor(t *testing.T) {
 
 	// custom duration
 	d := 5 * time.Second
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]interface{}{
+	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":    baseURL,
 		"privatekey": keyFile,
 		"keyname":    keyName,
@@ -143,14 +143,14 @@ func TestURLFor(t *testing.T) {
 
 	// IP filter ON - generate GCS URL on IP match
 	srv := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			resp := `{"prefixes": [{"ipv4Prefix": "10.0.0.0/24"}]}`
-			fmt.Fprintln(w, resp)
+			_, _ = fmt.Fprintln(w, resp)
 		}),
 	)
 	defer srv.Close()
 
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]interface{}{
+	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":      baseURL,
 		"privatekey":   keyFile,
 		"keyname":      keyName,
@@ -183,7 +183,7 @@ func TestURLFor(t *testing.T) {
 	require.Equal(t, expectedURL, cdnURL)
 
 	// IP filter OFF - generate CDN URL even if IP matches
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]interface{}{
+	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":      baseURL,
 		"privatekey":   keyFile,
 		"keyname":      keyName,
@@ -262,7 +262,7 @@ func TestURLFor_Download(t *testing.T) {
 	baseURL := os.Getenv("REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_BASEURL")
 	keyFile := os.Getenv("REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_PRIVATEKEY")
 	keyName := os.Getenv("REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_KEYNAME")
-	opts := map[string]interface{}{
+	opts := map[string]any{
 		"baseurl":    baseURL,
 		"privatekey": keyFile,
 		"keyname":    keyName,
@@ -298,6 +298,7 @@ func TestURLFor_Download(t *testing.T) {
 			require.Regexp(t, fmt.Sprintf("^%s.*", baseURL), cdnURL)
 			verifyCustomURLParamsExist(t, cdnURL, test.opts)
 
+			// nolint: bodyclose // body is! closed
 			resp, err = http.Get(cdnURL)
 			require.NoError(t, err)
 			defer resp.Body.Close()

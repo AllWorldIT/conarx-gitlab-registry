@@ -2,48 +2,42 @@ package filesystem
 
 import (
 	"context"
-	"os"
 	"path"
 	"testing"
 
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 func TestFilesystemDriverSuite(t *testing.T) {
-	root, err := os.MkdirTemp("", "fsdriver-test-")
-	require.NoError(t, err)
+	root := t.TempDir()
 
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return FromParameters(map[string]interface{}{
+			return FromParameters(map[string]any{
 				"rootdirectory": root,
 			})
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 	suite.Run(t, ts)
 }
 
 func BenchmarkFilesystemDriverSuite(b *testing.B) {
-	root, err := os.MkdirTemp("", "fsdriver-bench-")
-	require.NoError(b, err)
+	root := b.TempDir()
 
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return FromParameters(map[string]interface{}{
+			return FromParameters(map[string]any{
 				"rootdirectory": root,
 			})
 		},
-		func() error {
-			return os.Remove(root)
-		},
+		nil,
 	)
 
 	ts.SetupSuiteWithB(b)
@@ -60,13 +54,13 @@ func BenchmarkFilesystemDriverSuite(b *testing.B) {
 
 func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 	tests := []struct {
-		params   map[string]interface{} // technically the yaml can contain anything
+		params   map[string]any // technically the yaml can contain anything
 		expected DriverParameters
 		pass     bool
 	}{
 		// check we use default threads and root dirs
 		{
-			params: map[string]interface{}{},
+			params: make(map[string]any, 0),
 			expected: DriverParameters{
 				RootDirectory: defaultRootDirectory,
 				MaxThreads:    defaultMaxThreads,
@@ -75,14 +69,14 @@ func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 		},
 		// Testing initiation with a string maxThreads which can't be parsed
 		{
-			params: map[string]interface{}{
+			params: map[string]any{
 				"maxthreads": "fail",
 			},
 			expected: DriverParameters{},
 			pass:     false,
 		},
 		{
-			params: map[string]interface{}{
+			params: map[string]any{
 				"maxthreads": "100",
 			},
 			expected: DriverParameters{
@@ -92,7 +86,7 @@ func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 			pass: true,
 		},
 		{
-			params: map[string]interface{}{
+			params: map[string]any{
 				"maxthreads": 100,
 			},
 			expected: DriverParameters{
@@ -103,7 +97,7 @@ func TestFilesystemDriverFromParametersImpl(t *testing.T) {
 		},
 		// check that we use minimum thread counts
 		{
-			params: map[string]interface{}{
+			params: map[string]any{
 				"maxthreads": 1,
 			},
 			expected: DriverParameters{
@@ -187,12 +181,8 @@ func TestFilesystemDriverDeleteFilesNonExistingParentDir(t *testing.T) {
 
 	fp := path.Join("/non-existing-dir", "non-existing-file")
 	count, err := d.DeleteFiles(context.Background(), []string{fp})
-	if err != nil {
-		t.Errorf("unexpected error deleting files: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("expected deleted count to be 1, got %d", count)
-	}
+	require.NoError(t, err, "unexpected error deleting files")
+	assert.Equal(t, 1, count, "expected deleted count to be 1, got %d", count)
 }
 
 func newTempDirDriver(t *testing.T) *Driver {
@@ -200,7 +190,7 @@ func newTempDirDriver(t *testing.T) *Driver {
 
 	rootDir := t.TempDir()
 
-	d, err := FromParameters(map[string]interface{}{
+	d, err := FromParameters(map[string]any{
 		"rootdirectory": rootDir,
 	})
 	require.NoError(t, err)

@@ -4,7 +4,8 @@ include:
   - local: .gitlab/ci/integration.yml
   - local: .gitlab/ci/release.yml
   - local: .gitlab/ci/document.yml
-  - component: ${CI_SERVER_FQDN}/gitlab-org/components/danger-review/danger-review@1.4.1
+  - local: .gitlab/ci/child_jobs.yml
+  - component: ${CI_SERVER_FQDN}/gitlab-org/components/danger-review/danger-review@2.0.0
     inputs:
       job_allow_failure: true
 
@@ -23,6 +24,7 @@ default:
     policy: pull
 
 variables:
+  FF_TIMESTAMPS: 1
   # default Go version
   GO_VERSION: "1.22"
   BUILDTAGS: "include_gcs,continuous_profiler_stackdriver"
@@ -31,7 +33,7 @@ variables:
   GOTESTSUM_VERSION: v1.12.0
   PG_PREV_VERSION: "14"
   PG_CURR_VERSION: "16"
-  PG_NEXT_VERSION: "15" # TODO: change to 17 once the stable version is out and the `bitnami/postgresql:17` image is available
+  PG_NEXT_VERSION: "17"
 
 stages:
   - validate

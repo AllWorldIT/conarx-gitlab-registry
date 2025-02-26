@@ -84,9 +84,26 @@ storage:
   azure:
     accountname: accountname
     accountkey: base64encodedaccountkey
+    realm: realm
+    serviceurl: serviceurl
     container: containername
     rootdirectory: /azure/virtual/container
     legacyrootprefix: false
+    trimlegacyrootprefix: false
+  azure_v2:
+    credentialstype: shared_key
+    accountname: accountname
+    accountkey: base64encodedaccountkey
+    realm: realm
+    serviceurl: serviceurl
+    container: containername
+    rootdirectory: /azure/virtual/container
+    legacyrootprefix: false
+    trimlegacyrootprefix: false
+    apipoolinitialinterval: 500ms
+    apipoolmaxinterval: 15s
+    apipoolmaxelapsedtime: 5m
+    debuglog: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -228,6 +245,9 @@ http:
         - /path/to/ca.pem
         - /path/to/another/ca.pem
       minimumtls: tls1.2
+      ciphersuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
     prometheus:
       enabled: true
       path: /metrics
@@ -347,6 +367,13 @@ options marked as **required**. In these cases, you can omit the parent with
 all its children. However, if the parent is included, you must also include all
 the children marked **required**.
 
+<!--- start_remove The following content will be removed on remove_date: '2025/08/15' -->
+
+WARNING:
+Support for authenticating requests using Amazon S3 Signature Version 2 in the container registry is deprecated in GitLab 17.8 and is planned for removal in 18.0. Use Signature Version 4 instead. This is a breaking change. For more information, see [issue 1449](https://gitlab.com/gitlab-org/container-registry/-/issues/1449).
+
+<!--- end_remove -->
+
 ## `version`
 
 ```none
@@ -419,9 +446,26 @@ storage:
   azure:
     accountname: accountname
     accountkey: base64encodedaccountkey
+    realm: realm
+    serviceurl: serviceurl
     container: containername
     rootdirectory: /azure/virtual/container
     legacyrootprefix: false
+    trimlegacyrootprefix: false
+  azure_v2:
+    credentialstype: shared_key
+    accountname: accountname
+    accountkey: base64encodedaccountkey
+    realm: realm
+    serviceurl: serviceurl
+    container: containername
+    rootdirectory: /azure/virtual/container
+    legacyrootprefix: false
+    trimlegacyrootprefix: false
+    apipoolinitialinterval: 500ms
+    apipoolmaxinterval: 15s
+    apipoolmaxelapsedtime: 5m
+    debuglog: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -473,31 +517,21 @@ storage:
     expirydelay: 20m
 ```
 
-The `storage` option is **required** and defines which storage backend is in
-use. You must configure exactly one backend. If you configure more, the registry
-returns an error. You can choose any of these backend storage drivers:
+The `storage` option is **required** and defines which storage backend is in use.
+You must configure exactly one backend.
+If you configure more, the registry returns an error.
+You can choose any of these backend storage drivers:
 
 | Storage driver         | Description                                                                                                                                                                                                                                                                              |
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `filesystem`           | Uses the local disk to store registry files. It is ideal for development and may be appropriate for some small-scale production applications. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md). |
-| `azure`                | Uses Microsoft Azure Blob Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/azure.md).                                                                                                                 |
+| `azure`                | Uses Microsoft Azure Blob Storage. See the [driver's reference documentation](./storage-drivers/azure_v1.md).                                                                                                                 |
+| `azure_v2`             | Improved Microsoft Azure Blob Storage. See the [driver's reference documentation](./storage-drivers/azure_v2.md).                                                                                                                 |
 | `gcs`                  | Uses Google Cloud Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/gcs.md).                                                                                                                           |
 | `s3`                   | Uses Amazon Simple Storage Service (S3) and compatible Storage Services. See the [driver's reference documentation](https://github.com/distribution/distribution/blob/main/docs/storage-drivers/s3.md), or the [extra parameters documentation](#s3)                                 |
 
 For testing only, you can use the [`inmemory` storage driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/inmemory.md).
-If you would like to run a registry from volatile memory, use the
-[`filesystem` driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md)
-on a ramdisk.
-
-If you are deploying a registry on Windows, a Windows volume mounted from the
-host is not recommended. Instead, you can use a S3 or Azure backing
-data-store. If you do use a Windows volume, the length of the `PATH` to
-the mount point must be within the `MAX_PATH` limits (typically 255 characters),
-or this error will occur:
-
-```none
-mkdir /XXX protocol error and your registry will not function properly.
-```
+If you would like to run a registry from volatile memory, use the [`filesystem` driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md) on a ramdisk.
 
 ### `s3`
 
@@ -809,7 +843,7 @@ middleware:
 Each middleware entry has `name` and `options` entries. The `name` must
 correspond to the name under which the middleware registers itself. The
 `options` field is a map that details custom configuration required to
-initialize the middleware. It is treated as a `map[string]interface{}`. As such,
+initialize the middleware. It is treated as a `map[string]any`. As such,
 it supports any interesting structures desired, leaving it up to the middleware
 initialization function to best determine how to handle the specific
 interpretation of the options.
@@ -938,6 +972,9 @@ http:
       - /path/to/ca.pem
       - /path/to/another/ca.pem
     minimumtls: tls1.2
+    ciphersuites:
+      - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+      - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
     letsencrypt:
       cachefile: /path/to/cache-file
       email: emailused@letsencrypt.com
@@ -984,6 +1021,35 @@ and proxy connections to the registry server.
 | `key`         | yes  | Absolute path to the X.509 private key file.           |
 | `clientcas`   | no   | An array of absolute paths to X.509 CA files.          |
 | `minimumtls`  | no   | Minimum TLS version allowed (tls1.2, tls1.3). Defaults to tls1.2. |
+| `ciphersuites` | no   | Cipher suites allowed. Please see below for allowed values and defaults. In case TLS 1.3 version is chosen, `ciphersuites` is ignored as TLS 1.3 cipher suites are automatically enabled and do not need explicit configuration. |
+
+Available TLS 1.2 cipher suites:
+
+- TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
+- TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+- TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+- TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
+- TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+- TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+- TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+- TLS_RSA_WITH_3DES_EDE_CBC_SHA
+- TLS_RSA_WITH_AES_128_CBC_SHA
+- TLS_RSA_WITH_AES_128_GCM_SHA256
+- TLS_RSA_WITH_AES_256_CBC_SHA
+- TLS_RSA_WITH_AES_256_GCM_SHA384
+
+Default cipher suites selected for secure communication:
+
+- TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+- TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+- TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+- TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
 
 ### `letsencrypt`
 

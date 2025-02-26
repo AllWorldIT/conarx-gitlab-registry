@@ -5567,7 +5567,9 @@ CREATE TABLE public.batched_background_migrations (
     job_signature_name text NOT NULL,
     table_name text NOT NULL,
     column_name text NOT NULL,
-    failure_error_code smallint
+    failure_error_code smallint,
+    started_at timestamp with time zone,
+    finished_at timestamp with time zone
 );
 
 ALTER TABLE public.batched_background_migrations

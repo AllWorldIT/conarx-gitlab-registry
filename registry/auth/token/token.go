@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -67,6 +68,14 @@ type Meta struct {
 	ProjectID int64 `json:"project_id"`
 	// NamespaceID contains the GitLab root namespace ID of a repository that a token was issued for.
 	NamespaceID int64 `json:"root_namespace_id"`
+	// TagDenyAccessPatterns contains the patterns used to deny access to specific tags.
+	TagDenyAccessPatterns *TagDenyAccessPatterns `json:"tag_deny_access_patterns"`
+}
+
+// TagDenyAccessPatterns stores the patterns used to deny access to specific tags for push and/or delete actions.
+type TagDenyAccessPatterns struct {
+	Push   []string `json:"push,omitempty"`
+	Delete []string `json:"delete,omitempty"`
 }
 
 // Header describes the header section of a JSON Web Token.
@@ -154,14 +163,14 @@ func (t *Token) Verify(verifyOpts VerifyOptions) error {
 	logger := log.GetLogger()
 
 	// Verify that the Issuer claim is a trusted authority.
-	if !contains(verifyOpts.TrustedIssuers, t.Claims.Issuer) {
+	if !slices.Contains(verifyOpts.TrustedIssuers, t.Claims.Issuer) {
 		logger.WithFields(log.Fields{"issuer": t.Claims.Issuer, "trusted_issuers": verifyOpts.TrustedIssuers}).
 			Error("token from untrusted issuer")
 		return ErrInvalidToken
 	}
 
 	// Verify that the Audience claim is allowed.
-	if !contains(verifyOpts.AcceptedAudiences, t.Claims.Audience) {
+	if !slices.Contains(verifyOpts.AcceptedAudiences, t.Claims.Audience) {
 		logger.WithFields(log.Fields{"audience": t.Claims.Audience, "accepted_audiences": verifyOpts.AcceptedAudiences}).
 			Error("token intended for another audience")
 		return ErrInvalidToken
@@ -170,15 +179,15 @@ func (t *Token) Verify(verifyOpts VerifyOptions) error {
 	// Verify that the token is currently usable and not expired.
 	currentTime := time.Now()
 
-	ExpWithLeeway := time.Unix(t.Claims.Expiration, 0).Add(Leeway)
-	if currentTime.After(ExpWithLeeway) {
-		logger.WithFields(log.Fields{"valid_until": ExpWithLeeway}).Warn("token has expired")
+	expWithLeeway := time.Unix(t.Claims.Expiration, 0).Add(Leeway)
+	if currentTime.After(expWithLeeway) {
+		logger.WithFields(log.Fields{"valid_until": expWithLeeway}).Warn("token has expired")
 		return ErrInvalidToken
 	}
 
-	NotBeforeWithLeeway := time.Unix(t.Claims.NotBefore, 0).Add(-Leeway)
-	if currentTime.Before(NotBeforeWithLeeway) {
-		logger.WithFields(log.Fields{"valid_after": NotBeforeWithLeeway}).Warn("token used before time")
+	notBeforeWithLeeway := time.Unix(t.Claims.NotBefore, 0).Add(-Leeway)
+	if currentTime.Before(notBeforeWithLeeway) {
+		logger.WithFields(log.Fields{"valid_after": notBeforeWithLeeway}).Warn("token used before time")
 		return ErrInvalidToken
 	}
 
@@ -217,7 +226,10 @@ func (t *Token) Verify(verifyOpts VerifyOptions) error {
 //
 // Each of these methods are tried in that order of preference until the
 // signing key is found or an error is returned.
-func (t *Token) VerifySigningKey(verifyOpts VerifyOptions) (signingKey libtrust.PublicKey, err error) {
+func (t *Token) VerifySigningKey(verifyOpts VerifyOptions) (libtrust.PublicKey, error) {
+	var signingKey libtrust.PublicKey
+	var err error
+
 	// First attempt to get an x509 certificate chain from the header.
 	var (
 		x5c    = t.Header.X5c
@@ -239,10 +251,10 @@ func (t *Token) VerifySigningKey(verifyOpts VerifyOptions) (signingKey libtrust.
 		err = errors.New("unable to get token signing key")
 	}
 
-	return
+	return signingKey, err
 }
 
-func parseAndVerifyCertChain(x5c []string, roots *x509.CertPool) (leafKey libtrust.PublicKey, err error) {
+func parseAndVerifyCertChain(x5c []string, roots *x509.CertPool) (libtrust.PublicKey, error) {
 	if len(x5c) == 0 {
 		return nil, errors.New("empty x509 certificate chain")
 	}
@@ -293,22 +305,21 @@ func parseAndVerifyCertChain(x5c []string, roots *x509.CertPool) (leafKey libtru
 		return nil, errors.New("unable to get leaf cert public key value")
 	}
 
-	leafKey, err = libtrust.FromCryptoPublicKey(leafCryptoKey)
+	leafKey, err := libtrust.FromCryptoPublicKey(leafCryptoKey)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make libtrust public key from leaf certificate: %s", err)
 	}
-
-	return
+	return leafKey, nil
 }
 
-func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (pubKey libtrust.PublicKey, err error) {
-	pubKey, err = libtrust.UnmarshalPublicKeyJWK([]byte(*rawJWK))
+func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (libtrust.PublicKey, error) {
+	pubKey, err := libtrust.UnmarshalPublicKeyJWK([]byte(*rawJWK))
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode raw JWK value: %s", err)
 	}
 
 	// Check to see if the key includes a certificate chain.
-	x5cVal, ok := pubKey.GetExtendedField("x5c").([]interface{})
+	x5cVal, ok := pubKey.GetExtendedField("x5c").([]any)
 	if !ok {
 		// The JWK should be one of the trusted root keys.
 		if _, trusted := verifyOpts.TrustedKeys[pubKey.KeyID()]; !trusted {
@@ -316,7 +327,7 @@ func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (pu
 		}
 
 		// The JWK is one of the trusted keys.
-		return
+		return pubKey, nil
 	}
 
 	// Ensure each item in the chain is of the correct type.
@@ -341,7 +352,7 @@ func parseAndVerifyRawJWK(rawJWK *json.RawMessage, verifyOpts VerifyOptions) (pu
 		return nil, errors.New("leaf certificate public key ID does not match JWK key ID")
 	}
 
-	return
+	return pubKey, nil
 }
 
 // accessSet returns a set of actions available for the resource
@@ -378,7 +389,7 @@ func (t *Token) resources() []auth.Resource {
 		return nil
 	}
 
-	resourceSet := map[auth.Resource]struct{}{}
+	resourceSet := make(map[auth.Resource]struct{}, 0)
 	for _, resourceActions := range t.Claims.Access {
 		resource := auth.Resource{
 			Type:  resourceActions.Type,

@@ -2,6 +2,9 @@ package urls
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseForwardedHeader(t *testing.T) {
@@ -13,8 +16,9 @@ func TestParseForwardedHeader(t *testing.T) {
 		expectedError bool
 	}{
 		{
-			name: "empty",
-			raw:  "",
+			name:     "empty",
+			raw:      "",
+			expected: make(map[string]string),
 		},
 		{
 			name:     "one pair",
@@ -65,6 +69,7 @@ func TestParseForwardedHeader(t *testing.T) {
 		{
 			name:         "empty element - be tolerant",
 			raw:          " , key=val",
+			expected:     make(map[string]string),
 			expectedRest: " key=val",
 		},
 		{
@@ -128,34 +133,24 @@ func TestParseForwardedHeader(t *testing.T) {
 			expectedError: true,
 		},
 	} {
-		parsed, rest, err := parseForwardedHeader(tc.raw)
-		if err != nil && !tc.expectedError {
-			t.Errorf("[%s] got unexpected error: %v", tc.name, err)
-		}
-		if err == nil && tc.expectedError {
-			t.Errorf("[%s] got unexpected non-error", tc.name)
-		}
-		if err != nil || tc.expectedError {
-			continue
-		}
-		for key, value := range tc.expected {
-			v, exists := parsed[key]
-			if !exists {
-				t.Errorf("[%s] missing expected parameter %q", tc.name, key)
-				continue
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, rest, err := parseForwardedHeader(tc.raw)
+			if tc.expectedError {
+				require.Error(t, err)
+				// NOTE(prozlach) if error is there, we are done too
+				return
 			}
-			if v != value {
-				t.Errorf("[%s] got unexpected value for parameter %q: %q != %q", tc.name, key, v, value)
-			}
-		}
-		for key, value := range parsed {
-			if _, exists := tc.expected[key]; !exists {
-				t.Errorf("[%s] got unexpected key/value pair: %q=%q", tc.name, key, value)
-			}
-		}
+			require.NoError(t, err)
 
-		if rest != tc.expectedRest {
-			t.Errorf("[%s] got unexpected unparsed string: %q != %q", tc.name, rest, tc.expectedRest)
-		}
+			assert.Equal(t, tc.expected, parsed)
+			assert.Len(t, parsed, len(tc.expected))
+
+			for key, value := range tc.expected {
+				assert.Contains(t, parsed, key)
+				assert.Equal(t, value, parsed[key])
+			}
+
+			assert.Equal(t, tc.expectedRest, rest)
+		})
 	}
 }

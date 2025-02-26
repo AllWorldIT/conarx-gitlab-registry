@@ -20,6 +20,7 @@ var (
 
 type node interface {
 	name() string
+	// nolint: revive // import-shadowing, unfortunate name, but too much work to change it
 	path() string
 	isdir() bool
 	modtime() time.Time
@@ -35,7 +36,7 @@ type dir struct {
 
 var _ node = &dir{}
 
-func (d *dir) isdir() bool {
+func (*dir) isdir() bool {
 	return true
 }
 
@@ -120,6 +121,7 @@ func (d *dir) mkfile(p string) (*file, error) {
 			return nil, errIsDir
 		}
 
+		// nolint: revive // unchecked-type-assertion
 		return n.(*file), nil
 	}
 
@@ -130,6 +132,7 @@ func (d *dir) mkfile(p string) (*file, error) {
 		return nil, fmt.Errorf("mkdirs failed: %w", err)
 	}
 
+	// nolint: revive // unchecked-type-assertion
 	dd := n.(*dir)
 	n = &file{
 		common: common{
@@ -139,6 +142,7 @@ func (d *dir) mkfile(p string) (*file, error) {
 	}
 
 	dd.add(n)
+	// nolint: revive // unchecked-type-assertion
 	return n.(*file), nil
 }
 
@@ -153,11 +157,12 @@ func (d *dir) mkdirs(p string) (*dir, error) {
 		return nil, fmt.Errorf("mkdirs found non-directory element at path %s: %w", n.path(), errIsNotDir)
 	}
 
-	if n.path() == p {
-		return n.(*dir), nil
-	}
-
+	// nolint: revive // unchecked-type-assertion
 	dd := n.(*dir)
+
+	if n.path() == p {
+		return dd, nil
+	}
 
 	relative := strings.Trim(strings.TrimPrefix(p, n.path()), "/")
 
@@ -272,19 +277,6 @@ func (d *dir) delete(p string) error {
 	return nil
 }
 
-// dump outputs a primitive directory structure to stdout.
-func (d *dir) dump(indent string) {
-	fmt.Println(indent, d.name()+"/")
-
-	for _, child := range d.children {
-		if child.isdir() {
-			child.(*dir).dump(indent + "\t")
-		} else {
-			fmt.Println(indent, child.name())
-		}
-	}
-}
-
 func (d *dir) String() string {
 	return fmt.Sprintf("&dir{path: %v, children: %v}", d.p, d.children)
 }
@@ -299,7 +291,7 @@ type file struct {
 
 var _ node = &file{}
 
-func (f *file) isdir() bool {
+func (*file) isdir() bool {
 	return false
 }
 

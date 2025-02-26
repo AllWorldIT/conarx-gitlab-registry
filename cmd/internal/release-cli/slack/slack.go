@@ -16,15 +16,16 @@ type SlackRequestBody struct {
 	Text string `json:"text"`
 }
 
-func SendSlackNotification(webhookUrl, msg string) error {
+func SendSlackNotification(webhookURL, msg string) error {
 	slackBody, err := json.Marshal(SlackRequestBody{Text: msg})
 	if err != nil {
 		return err
 	}
-	resp, err := httpClient.Post(webhookUrl, "application/json", bytes.NewBuffer(slackBody))
+	resp, err := httpClient.Post(webhookURL, "application/json", bytes.NewBuffer(slackBody))
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		buf := new(bytes.Buffer)

@@ -25,8 +25,8 @@ func InvalidQueryParamValueErrorDetail(key string, validValues []string) string 
 	return fmt.Sprintf("the '%s' query parameter must be set to one of: %s", key, strings.Join(validValues, ", "))
 }
 
-func InvalidQueryParamValueRangeErrorDetail(key string, min, max int) string {
-	return fmt.Sprintf("the '%s' query parameter value must be between %d and %d", key, min, max)
+func InvalidQueryParamValueRangeErrorDetail(key string, minimum, maximum int) string {
+	return fmt.Sprintf("the '%s' query parameter value must be between %d and %d", key, minimum, maximum)
 }
 
 func InvalidQueryParamValuePatternErrorDetail(key string, pattern *regexp.Regexp) string {

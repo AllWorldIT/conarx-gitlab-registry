@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"reflect"
 	"strconv"
 	"testing"
 
@@ -12,52 +11,42 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLinkedBlobStoreCreateWithMountFrom(t *testing.T) {
 	fooRepoName, _ := reference.WithName("nm/foo")
-	fooEnv := newManifestStoreTestEnv(t, fooRepoName, "thetag")
+	fooEnv := newManifestStoreTestEnv(t, fooRepoName)
 	ctx := context.Background()
 	stats, err := mockRegistry(t, fooEnv.registry)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Build up some test layers and add them to the manifest, saving the
 	// readseekers for upload later.
-	testLayers := map[digest.Digest]io.ReadSeeker{}
+	testLayers := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < 2; i++ {
-		rs, ds, err := testutil.CreateRandomTarFile()
-		if err != nil {
-			t.Fatalf("unexpected error generating test layer file")
-		}
-		dgst := digest.Digest(ds)
-
-		testLayers[digest.Digest(dgst)] = rs
+		rs, dgst, err := testutil.CreateRandomTarFile()
+		require.NoError(t, err, "unexpected error generating test layer file")
+		testLayers[dgst] = rs
 	}
 
 	// upload the layers to foo/bar
 	for dgst, rs := range testLayers {
 		wr, err := fooEnv.repository.Blobs(fooEnv.ctx).Create(fooEnv.ctx)
-		if err != nil {
-			t.Fatalf("unexpected error creating test upload: %v", err)
-		}
+		require.NoError(t, err, "unexpected error creating test upload")
 
-		if _, err := io.Copy(wr, rs); err != nil {
-			t.Fatalf("unexpected error copying to upload: %v", err)
-		}
+		_, err = io.Copy(wr, rs)
+		require.NoError(t, err, "unexpected error copying to upload")
 
-		if _, err := wr.Commit(fooEnv.ctx, distribution.Descriptor{Digest: dgst}); err != nil {
-			t.Fatalf("unexpected error finishing upload: %v", err)
-		}
+		_, err = wr.Commit(fooEnv.ctx, distribution.Descriptor{Digest: dgst})
+		require.NoError(t, err, "unexpected error finishing upload")
 	}
 
 	// create another repository nm/bar
 	barRepoName, _ := reference.WithName("nm/bar")
 	barRepo, err := fooEnv.registry.Repository(ctx, barRepoName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 
 	// cross-repo mount the test layers into a nm/bar
 	for dgst := range testLayers {
@@ -65,29 +54,20 @@ func TestLinkedBlobStoreCreateWithMountFrom(t *testing.T) {
 		option := WithMountFrom(fooCanonical)
 		// ensure we can instrospect it
 		createOpts := distribution.CreateOptions{}
-		if err := option.Apply(&createOpts); err != nil {
-			t.Fatalf("failed to apply MountFrom option: %v", err)
-		}
-		if !createOpts.Mount.ShouldMount || createOpts.Mount.From.String() != fooCanonical.String() {
-			t.Fatalf("unexpected create options: %#+v", createOpts.Mount)
-		}
+		require.NoError(t, option.Apply(&createOpts), "failed to apply MountFrom option")
+		require.True(t, createOpts.Mount.ShouldMount)
+		require.Equal(t, fooCanonical.String(), createOpts.Mount.From.String())
 
 		_, err := barRepo.Blobs(ctx).Create(ctx, WithMountFrom(fooCanonical))
-		if err == nil {
-			t.Fatalf("unexpected non-error while mounting from %q: %v", fooRepoName.String(), err)
-		}
-		if _, ok := err.(distribution.ErrBlobMounted); !ok {
-			t.Fatalf("expected ErrMountFrom error, not %T: %v", err, err)
-		}
+		require.Error(t, err)
+		_, ok := err.(distribution.ErrBlobMounted)
+		require.True(t, ok, "expected ErrMountFrom error, not %T", err)
 	}
 	for dgst := range testLayers {
 		fooCanonical, _ := reference.WithDigest(fooRepoName, dgst)
 		count, exists := stats[fooCanonical.String()]
-		if !exists {
-			t.Errorf("expected entry %q not found among handled stat calls", fooCanonical.String())
-		} else if count != 1 {
-			t.Errorf("expected exactly one stat call for entry %q, not %d", fooCanonical.String(), count)
-		}
+		require.True(t, exists, "expected entry %q not found among handled stat calls", fooCanonical.String())
+		require.Equal(t, 1, count, "expected exactly one stat call for entry %q, not %d", fooCanonical.String(), count)
 	}
 
 	clearStats(stats)
@@ -95,17 +75,13 @@ func TestLinkedBlobStoreCreateWithMountFrom(t *testing.T) {
 	// create yet another repository nm/baz
 	bazRepoName, _ := reference.WithName("nm/baz")
 	bazRepo, err := fooEnv.registry.Repository(ctx, bazRepoName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 
 	// cross-repo mount them into a nm/baz and provide a prepopulated blob descriptor
 	for dgst := range testLayers {
 		fooCanonical, _ := reference.WithDigest(fooRepoName, dgst)
 		size, err := strconv.ParseInt("0x"+dgst.Hex()[:8], 0, 64)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		prepolutatedDescriptor := distribution.Descriptor{
 			Digest:    dgst,
 			Size:      size,
@@ -115,18 +91,14 @@ func TestLinkedBlobStoreCreateWithMountFrom(t *testing.T) {
 			desc: prepolutatedDescriptor,
 		})
 		blobMounted, ok := err.(distribution.ErrBlobMounted)
+		assert.True(t, ok, "expected ErrMountFrom error, not %T", err)
 		if !ok {
-			t.Errorf("expected ErrMountFrom error, not %T: %v", err, err)
 			continue
 		}
-		if !reflect.DeepEqual(blobMounted.Descriptor, prepolutatedDescriptor) {
-			t.Errorf("unexpected descriptor: %#+v != %#+v", blobMounted.Descriptor, prepolutatedDescriptor)
-		}
+		assert.Equal(t, blobMounted.Descriptor, prepolutatedDescriptor, "unexpected descriptor")
 	}
 	// this time no stat calls will be made
-	if len(stats) != 0 {
-		t.Errorf("unexpected number of stats made: %d != %d", len(stats), len(testLayers))
-	}
+	assert.Empty(t, stats, "unexpected number of stats made")
 }
 
 func clearStats(stats map[string]int) {
@@ -200,7 +172,7 @@ type statCrossMountCreateOption struct {
 
 var _ distribution.BlobCreateOption = statCrossMountCreateOption{}
 
-func (f statCrossMountCreateOption) Apply(v interface{}) error {
+func (f statCrossMountCreateOption) Apply(v any) error {
 	opts, ok := v.(*distribution.CreateOptions)
 	if !ok {
 		return fmt.Errorf("Unexpected create options: %#v", v)

@@ -18,6 +18,7 @@ func createTmpKeyFile(t *testing.T) *os.File {
 	f, err := os.CreateTemp("", "")
 	require.NoError(t, err)
 
+	// nolint: revive // unhandled-error
 	t.Cleanup(func() { os.Remove(f.Name()) })
 
 	key := `c29tZS1zZWNyZXQ=`
@@ -32,19 +33,19 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 
 	tt := []struct {
 		name             string
-		options          map[string]interface{}
+		options          map[string]any
 		expectedError    bool
 		expectedErrorMsg string
 	}{
 		{
 			name:             "no baseurl",
-			options:          map[string]interface{}{},
+			options:          make(map[string]any, 0),
 			expectedError:    true,
 			expectedErrorMsg: "no baseurl provided",
 		},
 		{
 			name: "baseurl not a string",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl": 1,
 			},
 			expectedError:    true,
@@ -52,7 +53,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "no privatekey",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl": "https://my.google.cdn.com",
 			},
 			expectedError:    true,
@@ -60,7 +61,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "privatekey not a string",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":    "https://my.google.cdn.com",
 				"privatekey": 1,
 			},
@@ -69,7 +70,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "privatekey not a file",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":    "https://my.google.cdn.com",
 				"privatekey": "/path/to/key",
 			},
@@ -78,7 +79,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "no keyname",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":    "https://my.google.cdn.com",
 				"privatekey": keyFile.Name(),
 			},
@@ -87,7 +88,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "keyname not a string",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":    "https://my.google.cdn.com",
 				"privatekey": keyFile.Name(),
 				"keyname":    1,
@@ -97,7 +98,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "duration not a duration string",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":    "https://my.google.cdn.com",
 				"privatekey": keyFile.Name(),
 				"keyname":    "my-key",
@@ -108,7 +109,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "duration is a duration",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":    "https://my.google.cdn.com",
 				"privatekey": keyFile.Name(),
 				"keyname":    "my-key",
@@ -118,7 +119,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "updatefrequency not a duration string",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":         "https://my.google.cdn.com",
 				"privatekey":      keyFile.Name(),
 				"keyname":         "my-key",
@@ -129,7 +130,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "updatefrequency is a duration",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":         "https://my.google.cdn.com",
 				"privatekey":      keyFile.Name(),
 				"keyname":         "my-key",
@@ -139,7 +140,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "iprangesurl not a string",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":     "https://my.google.cdn.com",
 				"privatekey":  keyFile.Name(),
 				"keyname":     "my-key",
@@ -150,7 +151,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "ipfilteredby not a string",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":      "https://my.google.cdn.com",
 				"privatekey":   keyFile.Name(),
 				"keyname":      "my-key",
@@ -161,7 +162,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "ipfilteredby invalid value",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":      "https://my.google.cdn.com",
 				"privatekey":   keyFile.Name(),
 				"keyname":      "my-key",
@@ -172,7 +173,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "ipfilteredby set to none",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":      "https://my.google.cdn.com",
 				"privatekey":   keyFile.Name(),
 				"keyname":      "my-key",
@@ -182,7 +183,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "ipfilteredby set to gcp",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":      "https://my.google.cdn.com",
 				"privatekey":   keyFile.Name(),
 				"keyname":      "my-key",
@@ -192,7 +193,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 		{
 			name: "full valid options",
-			options: map[string]interface{}{
+			options: map[string]any{
 				"baseurl":         "https://my.google.cdn.com",
 				"privatekey":      keyFile.Name(),
 				"keyname":         "my-key",
@@ -221,7 +222,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 
 func TestNewGoogleCDNStorageMiddlewareWrapsInnerDriver(t *testing.T) {
 	inner := testdriver.New()
-	outer, err := newGoogleCDNStorageMiddleware(inner, map[string]interface{}{
+	outer, err := newGoogleCDNStorageMiddleware(inner, map[string]any{
 		"baseurl":    "https://my.google.cdn.com",
 		"privatekey": createTmpKeyFile(t).Name(),
 		"keyname":    "my-key",
@@ -235,11 +236,12 @@ func TestNewGoogleCDNStorageMiddlewareWrapsInnerDriver(t *testing.T) {
 
 func TestURLForBypassIfNotGCSDriver(t *testing.T) {
 	inMemDriver := testdriver.New()
-	d, err := newGoogleCDNStorageMiddleware(inMemDriver, map[string]interface{}{
+	d, err := newGoogleCDNStorageMiddleware(inMemDriver, map[string]any{
 		"baseurl":    "https://my.google.cdn.com",
 		"privatekey": createTmpKeyFile(t).Name(),
 		"keyname":    "my-key",
 	})
+	require.NoError(t, err)
 
 	u, err := d.URLFor(context.Background(), "/foo/bar", nil)
 

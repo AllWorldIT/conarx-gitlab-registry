@@ -23,11 +23,11 @@ type httpBlobUpload struct {
 	closed   bool
 }
 
-func (hbu *httpBlobUpload) Reader() (io.ReadCloser, error) {
+func (*httpBlobUpload) Reader() (io.ReadCloser, error) {
 	panic("Not implemented")
 }
 
-func (hbu *httpBlobUpload) handleErrorResponse(resp *http.Response) error {
+func (*httpBlobUpload) handleErrorResponse(resp *http.Response) error {
 	if resp.StatusCode == http.StatusNotFound {
 		return distribution.ErrBlobUploadUnknown
 	}
@@ -139,7 +139,7 @@ func (hbu *httpBlobUpload) Commit(ctx context.Context, desc distribution.Descrip
 	return hbu.statter.Stat(ctx, desc.Digest)
 }
 
-func (hbu *httpBlobUpload) Cancel(ctx context.Context) error {
+func (hbu *httpBlobUpload) Cancel(_ context.Context) error {
 	req, err := http.NewRequest(http.MethodDelete, hbu.location, nil)
 	if err != nil {
 		return err

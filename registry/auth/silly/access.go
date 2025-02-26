@@ -27,7 +27,7 @@ type accessController struct {
 
 var _ auth.AccessController = &accessController{}
 
-func newAccessController(options map[string]interface{}) (auth.AccessController, error) {
+func newAccessController(options map[string]any) (auth.AccessController, error) {
 	realm, present := options["realm"]
 	if _, ok := realm.(string); !present || !ok {
 		return nil, fmt.Errorf(`"realm" must be set for silly access controller`)
@@ -81,7 +81,7 @@ type challenge struct {
 var _ auth.Challenge = challenge{}
 
 // SetHeaders sets a simple bearer challenge on the response.
-func (ch challenge) SetHeaders(r *http.Request, w http.ResponseWriter) {
+func (ch challenge) SetHeaders(_ *http.Request, w http.ResponseWriter) {
 	header := fmt.Sprintf("Bearer realm=%q,service=%q", ch.realm, ch.service)
 
 	if ch.scope != "" {
@@ -97,5 +97,5 @@ func (ch challenge) Error() string {
 
 // init registers the silly auth backend.
 func init() {
-	auth.Register("silly", newAccessController)
+	_ = auth.Register("silly", newAccessController)
 }

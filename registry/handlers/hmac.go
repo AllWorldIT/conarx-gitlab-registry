@@ -46,7 +46,10 @@ func (secret hmacKey) unpackUploadState(token string) (blobUploadState, error) {
 	macBytes := tokenBytes[:mac.Size()]
 	messageBytes := tokenBytes[mac.Size():]
 
-	mac.Write(messageBytes)
+	_, err = mac.Write(messageBytes)
+	if err != nil {
+		return state, fmt.Errorf("writing message bytes: %w", err)
+	}
 	if !hmac.Equal(mac.Sum(nil), macBytes) {
 		return state, errInvalidSecret
 	}
@@ -68,7 +71,10 @@ func (secret hmacKey) packUploadState(lus blobUploadState) (string, error) {
 		return "", err
 	}
 
-	mac.Write(p)
+	_, err = mac.Write(p)
+	if err != nil {
+		return "", fmt.Errorf("writing message bytes: %w", err)
+	}
 
 	return base64.URLEncoding.EncodeToString(append(mac.Sum(nil), p...)), nil
 }

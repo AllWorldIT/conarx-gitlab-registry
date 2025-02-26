@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -44,25 +45,52 @@ var tlsLookup = map[string]uint16{
 	"tls1.3": tls.VersionTLS13,
 }
 
+// a map of TLS cipher suite names to constants in https://golang.org/pkg/crypto/tls/#pkg-constants
+var cipherSuites = map[string]uint16{
+	// These are insecure:
+	// "TLS_RSA_WITH_RC4_128_SHA",
+	// "TLS_RSA_WITH_AES_128_CBC_SHA256",
+	// "TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
+	// "TLS_ECDHE_RSA_WITH_RC4_128_SHA",
+	// "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
+	// "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+
+	// TLS 1.0 - 1.2 cipher suites
+	"TLS_RSA_WITH_3DES_EDE_CBC_SHA":                 tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+	"TLS_RSA_WITH_AES_128_CBC_SHA":                  tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+	"TLS_RSA_WITH_AES_256_CBC_SHA":                  tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+	"TLS_RSA_WITH_AES_128_GCM_SHA256":               tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+	"TLS_RSA_WITH_AES_256_GCM_SHA384":               tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA":          tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+	"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA":          tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+	"TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA":           tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
+	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":            tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+	"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":            tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+	"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":         tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256":       tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":         tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384":       tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256":   tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256": tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+}
+
 // ServeCmd is a cobra command for running the registry.
 var ServeCmd = &cobra.Command{
 	Use:   "serve <config>",
 	Short: "`serve` stores and distributes Docker images",
 	Long:  "`serve` stores and distributes Docker images.",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		// setup context
 		ctx := dcontext.WithVersion(dcontext.Background(), version.Version)
 
 		config, err := resolveConfiguration(args)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-			cmd.Usage()
-			os.Exit(1)
+			return fmt.Errorf("configuration error: %w", err)
 		}
 
 		registry, err := NewRegistry(ctx, config)
 		if err != nil {
-			log.Fatalln(err)
+			return fmt.Errorf("creating new registry instance: %w", err)
 		}
 
 		go func() {
@@ -81,8 +109,9 @@ var ServeCmd = &cobra.Command{
 		fips.Check()
 
 		if err = registry.ListenAndServe(); err != nil {
-			log.Fatalln(err)
+			return fmt.Errorf("running http server: %w", err)
 		}
+		return nil
 	},
 }
 
@@ -128,7 +157,9 @@ func NewRegistry(ctx context.Context, config *configuration.Configuration) (*Reg
 	handler = correlation.InjectCorrelationID(handler, correlation.WithPropagation())
 
 	server := &http.Server{
-		Handler: handler,
+		// NOTE(prozlach): prevent slow-loris attack, but be conservative at it
+		ReadHeaderTimeout: 60 * time.Second,
+		Handler:           handler,
 	}
 
 	return &Registry{
@@ -177,16 +208,16 @@ func (registry *Registry) ListenAndServe() error {
 	case err := <-serveErr:
 		return err
 	case s := <-quit:
-		log := log.WithFields(log.Fields{
+		l := log.WithFields(log.Fields{
 			"quit_signal":            s.String(),
 			"http_drain_timeout":     registry.config.HTTP.DrainTimeout,
 			"database_drain_timeout": registry.config.Database.DrainTimeout,
 		})
-		log.Info("attempting to stop server gracefully...")
+		l.Info("attempting to stop server gracefully...")
 
 		// shutdown the server with a grace period of configured timeout
 		if registry.config.HTTP.DrainTimeout != 0 {
-			log.Info("draining http connections")
+			l.Info("draining http connections")
 			ctx, cancel := context.WithTimeout(context.Background(), registry.config.HTTP.DrainTimeout)
 			defer cancel()
 			if err := registry.server.Shutdown(ctx); err != nil {
@@ -195,7 +226,7 @@ func (registry *Registry) ListenAndServe() error {
 		}
 
 		if registry.config.Database.Enabled {
-			log.Info("closing database connections")
+			l.Info("closing database connections")
 
 			ctx := context.Background()
 			var cancel context.CancelFunc
@@ -211,7 +242,7 @@ func (registry *Registry) ListenAndServe() error {
 			}
 		}
 
-		log.Info("graceful shutdown successful")
+		l.Info("graceful shutdown successful")
 		return nil
 	}
 }
@@ -230,19 +261,25 @@ func getTLSConfig(ctx context.Context, config configuration.TLS, http2Disabled b
 		dcontext.GetLogger(ctx).WithFields(log.Fields{"minimum_tls": config.MinimumTLS}).Info("restricting minimum TLS version")
 	}
 
+	var tlsCipherSuites []uint16
+	// configuring cipher suites are no longer supported after the tls1.3.
+	if tlsMinVersion > tls.VersionTLS12 {
+		dcontext.GetLogger(ctx).Warnf("ignoring configured TLS cipher suites as they are not configurable in %s", config.MinimumTLS)
+	} else {
+		tlsCipherSuites, err := getCipherSuites(config.CipherSuites)
+		if err != nil {
+			return nil, fmt.Errorf("parsing cipher suites: %w", err)
+		}
+		dcontext.GetLogger(ctx).Infof("restricting TLS cipher suites to: %s", strings.Join(getCipherSuiteNames(tlsCipherSuites), ","))
+	}
+
+	// nolint gosec,G402
 	tlsConf := &tls.Config{
 		ClientAuth:               tls.NoClientCert,
 		NextProtos:               nextProtos(http2Disabled),
 		MinVersion:               tlsMinVersion,
 		PreferServerCipherSuites: true,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		},
+		CipherSuites:             tlsCipherSuites,
 	}
 
 	if config.LetsEncrypt.CacheFile != "" {
@@ -270,6 +307,7 @@ func getTLSConfig(ctx context.Context, config configuration.TLS, http2Disabled b
 		pool := x509.NewCertPool()
 
 		for _, ca := range config.ClientCAs {
+			// nolint: gosec
 			caPem, err := os.ReadFile(ca)
 			if err != nil {
 				return nil, err
@@ -330,7 +368,7 @@ func configureLogging(ctx context.Context, config *configuration.Configuration) 
 
 	if len(config.Log.Fields) > 0 {
 		// build up the static fields, if present.
-		var fields []interface{}
+		var fields []any
 		for k := range config.Log.Fields {
 			fields = append(fields, k)
 		}
@@ -499,6 +537,7 @@ func panicHandler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
+				// nolint: revive // deep-exit
 				log.Panic(fmt.Sprintf("%v", err))
 			}
 		}()
@@ -536,6 +575,7 @@ func resolveConfiguration(args []string, opts ...configuration.ParseOption) (*co
 		return nil, fmt.Errorf("configuration path unspecified")
 	}
 
+	// nolint: gosec
 	fp, err := os.Open(configurationPath)
 	if err != nil {
 		return nil, err
@@ -569,6 +609,7 @@ func validate(config *configuration.Configuration) error {
 			switch val := v.(type) {
 			case time.Duration:
 			case string:
+				// nolint: revive // max-control-nesting
 				if _, err := time.ParseDuration(val); err != nil {
 					errs = multierror.Append(fmt.Errorf("%q value for 'storage.redirect.expirydelay' is not a valid duration", val))
 				}
@@ -606,6 +647,7 @@ func validate(config *configuration.Configuration) error {
 
 			// conflict: user explicitly enabled legacyrootprefix but also enabled trimlegacyrootprefix (or disabled both).
 			if legacyPrefixIsBool && trimLegacyPrefixIsBool {
+				// nolint: revive // max-control-nesting
 				if legacyPrefix == trimLegacyPrefix {
 					errs = multierror.Append(fmt.Errorf("storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be %v", legacyPrefix))
 				}
@@ -674,4 +716,30 @@ func migrationDBFromConfig(config *configuration.Configuration) (*datastore.DB, 
 	}
 
 	return dbFromConfig(&primaryConfig)
+}
+
+// takes a list of cipher suites and converts it to a list of respective tls constants
+// if an empty list is provided, then the defaults will be used
+func getCipherSuites(names []string) ([]uint16, error) {
+	cipherSuiteConsts := make([]uint16, len(names))
+	for i, name := range names {
+		cipherSuiteConst, ok := cipherSuites[name]
+		if !ok {
+			return nil, fmt.Errorf("unknown TLS cipher suite %q specified for http.tls.ciphersuites", name)
+		}
+		cipherSuiteConsts[i] = cipherSuiteConst
+	}
+	return cipherSuiteConsts, nil
+}
+
+// takes a list of cipher suite ids and converts it to a list of respective names
+func getCipherSuiteNames(ids []uint16) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	names := make([]string, len(ids))
+	for i, id := range ids {
+		names[i] = tls.CipherSuiteName(id)
+	}
+	return names
 }

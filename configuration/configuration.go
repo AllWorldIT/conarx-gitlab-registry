@@ -48,7 +48,7 @@ type Configuration struct {
 
 		// Fields allows users to specify static string fields to include in
 		// the logger context.
-		Fields map[string]interface{} `yaml:"fields,omitempty"`
+		Fields map[string]any `yaml:"fields,omitempty"`
 	}
 
 	// Loglevel is the level at which registry operations are logged.
@@ -153,8 +153,8 @@ type Configuration struct {
 
 	// Validation configures validation options for the registry.
 	Validation struct {
-		// Enabled enables the other options in this section. This field is
-		// deprecated in favor of Disabled.
+		// Enabled enables the other options in this section.
+		// This field is deprecated in favor of Disabled.
 		Enabled bool `yaml:"enabled,omitempty"`
 		// Disabled disables the other options in this section.
 		Disabled bool `yaml:"disabled,omitempty"`
@@ -209,6 +209,9 @@ type TLS struct {
 
 	// Specifies the lowest TLS version allowed
 	MinimumTLS string `yaml:"minimumtls,omitempty"`
+
+	// Specifies a list of cipher suites allowed
+	CipherSuites []string `yaml:"ciphersuites,omitempty"`
 
 	// LetsEncrypt is used to configuration setting up TLS through
 	// Let's Encrypt instead of manually specifying certificate and
@@ -613,7 +616,7 @@ type v0_1Configuration Configuration
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 // Unmarshals a string of the form X.Y into a Version, validating that X and Y can represent unsigned integers
-func (version *Version) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (version *Version) UnmarshalYAML(unmarshal func(any) error) error {
 	var versionString string
 	err := unmarshal(&versionString)
 	if err != nil {
@@ -621,11 +624,11 @@ func (version *Version) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	newVersion := Version(versionString)
-	if _, err := newVersion.major(); err != nil {
+	if _, err := newVersion.majorImpl(); err != nil {
 		return err
 	}
 
-	if _, err := newVersion.minor(); err != nil {
+	if _, err := newVersion.minorImpl(); err != nil {
 		return err
 	}
 
@@ -672,7 +675,7 @@ func (l Loglevel) isValid() bool {
 
 // UnmarshalYAML implements the yaml.Umarshaler interface for Loglevel, parsing it and validating that it represents a
 // valid log level.
-func (l *Loglevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (l *Loglevel) UnmarshalYAML(unmarshal func(any) error) error {
 	var val string
 	err := unmarshal(&val)
 	if err != nil {
@@ -728,7 +731,7 @@ func (out logOutput) isValid() bool {
 
 // UnmarshalYAML implements the yaml.Umarshaler interface for logOutput, parsing it and validating that it represents a
 // valid log output destination.
-func (out *logOutput) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (out *logOutput) UnmarshalYAML(unmarshal func(any) error) error {
 	var val string
 	if err := unmarshal(&val); err != nil {
 		return err
@@ -773,7 +776,7 @@ func (ft logFormat) isValid() bool {
 
 // UnmarshalYAML implements the yaml.Umarshaler interface for logFormat, parsing it and validating that it
 // represents a valid application log output format.
-func (ft *logFormat) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (ft *logFormat) UnmarshalYAML(unmarshal func(any) error) error {
 	var val string
 	if err := unmarshal(&val); err != nil {
 		return err
@@ -818,7 +821,7 @@ func (ft accessLogFormat) isValid() bool {
 
 // UnmarshalYAML implements the yaml.Umarshaler interface for accessLogFormat, parsing it and validating that it
 // represents a valid access log output format.
-func (ft *accessLogFormat) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (ft *accessLogFormat) UnmarshalYAML(unmarshal func(any) error) error {
 	var val string
 	if err := unmarshal(&val); err != nil {
 		return err
@@ -834,7 +837,7 @@ func (ft *accessLogFormat) UnmarshalYAML(unmarshal func(interface{}) error) erro
 }
 
 // Parameters defines a key-value parameters mapping
-type Parameters map[string]interface{}
+type Parameters map[string]any
 
 // Storage defines the configuration for registry object storage
 type Storage map[string]Parameters
@@ -873,13 +876,13 @@ func (storage Storage) Parameters() Parameters {
 }
 
 // setParameter changes the parameter at the provided key to the new value
-func (storage Storage) setParameter(key string, value interface{}) {
+func (storage Storage) setParameter(key string, value any) {
 	storage[storage.Type()][key] = value
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 // Unmarshals a single item map into a Storage or a string into a Storage type with no parameters
-func (storage *Storage) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (storage *Storage) UnmarshalYAML(unmarshal func(any) error) error {
 	var storageMap map[string]Parameters
 	err := unmarshal(&storageMap)
 	if err == nil {
@@ -911,7 +914,7 @@ func (storage *Storage) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var storageType string
 	err = unmarshal(&storageType)
 	if err == nil {
-		*storage = Storage{storageType: Parameters{}}
+		*storage = Storage{storageType: make(Parameters)}
 		return nil
 	}
 
@@ -919,7 +922,7 @@ func (storage *Storage) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // MarshalYAML implements the yaml.Marshaler interface
-func (storage Storage) MarshalYAML() (interface{}, error) {
+func (storage Storage) MarshalYAML() (any, error) {
 	if storage.Parameters() == nil {
 		return storage.Type(), nil
 	}
@@ -944,13 +947,13 @@ func (auth Auth) Parameters() Parameters {
 }
 
 // setParameter changes the parameter at the provided key to the new value
-func (auth Auth) setParameter(key string, value interface{}) {
+func (auth Auth) setParameter(key string, value any) {
 	auth[auth.Type()][key] = value
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 // Unmarshals a single item map into a Storage or a string into a Storage type with no parameters
-func (auth *Auth) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (auth *Auth) UnmarshalYAML(unmarshal func(any) error) error {
 	var m map[string]Parameters
 	err := unmarshal(&m)
 	if err == nil {
@@ -969,7 +972,7 @@ func (auth *Auth) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var authType string
 	err = unmarshal(&authType)
 	if err == nil {
-		*auth = Auth{authType: Parameters{}}
+		*auth = Auth{authType: make(Parameters)}
 		return nil
 	}
 
@@ -977,7 +980,7 @@ func (auth *Auth) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // MarshalYAML implements the yaml.Marshaler interface
-func (auth Auth) MarshalYAML() (interface{}, error) {
+func (auth Auth) MarshalYAML() (any, error) {
 	if auth.Parameters() == nil {
 		return auth.Type(), nil
 	}
@@ -1004,7 +1007,7 @@ type Endpoint struct {
 	URL      string        `yaml:"url"`      // post url for the endpoint.
 	Headers  http.Header   `yaml:"headers"`  // static headers that should be added to all requests
 	Timeout  time.Duration `yaml:"timeout"`  // HTTP timeout
-	// DEPRECATED: use maxretries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243.
+	// Deprecated: use maxretries instead https://gitlab.com/gitlab-org/container-registry/-/issues/1243.
 	Threshold         int           `yaml:"threshold"`         // Circuit breaker threshold before backing off on failure
 	MaxRetries        int           `yaml:"maxretries"`        // maximum number of times to retry sending a failed event
 	Backoff           time.Duration `yaml:"backoff"`           // backoff duration
@@ -1086,7 +1089,7 @@ func Parse(rd io.Reader, opts ...ParseOption) (*Configuration, error) {
 		{
 			Version: MajorMinorVersion(0, 1),
 			ParseAs: reflect.TypeOf(v0_1Configuration{}),
-			ConversionFunc: func(c interface{}) (interface{}, error) {
+			ConversionFunc: func(c any) (any, error) {
 				if v0_1, ok := c.(*v0_1Configuration); ok {
 					if v0_1.Log.Level == Loglevel("") {
 						if v0_1.Loglevel != Loglevel("") {
@@ -1130,6 +1133,18 @@ const (
 	defaultDLBReplicaCheckInterval         = 1 * time.Minute
 )
 
+// defaultCipherSuites is here just to make slice "a constant"
+func defaultCipherSuites() []string {
+	return []string{
+		"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+		"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+		"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+		"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+	}
+}
+
 func ApplyDefaults(config *Configuration) {
 	if config.Log.Level == "" {
 		config.Log.Level = defaultLogLevel
@@ -1148,6 +1163,14 @@ func ApplyDefaults(config *Configuration) {
 	}
 	if config.Redis.Addr != "" && config.Redis.Pool.Size == 0 {
 		config.Redis.Pool.Size = 10
+	}
+
+	// If no custom cipher suites are specified in the configuration,
+	// default to a secure set of TLS 1.2 cipher suites. TLS 1.3 cipher
+	// suites are automatically enabled in Go and do not need explicit
+	// configuration.
+	if len(config.HTTP.TLS.CipherSuites) == 0 {
+		config.HTTP.TLS.CipherSuites = defaultCipherSuites()
 	}
 
 	// copy TLS config to debug server when enabled and debug TLS certificate is empty

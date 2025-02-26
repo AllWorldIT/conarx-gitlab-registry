@@ -33,44 +33,46 @@ type ParserSuite struct {
 	suite.Suite
 }
 
-func (suite *ParserSuite) TestParserOverwriteIninitializedPoiner() {
+func (s *ParserSuite) TestParserOverwriteIninitializedPoiner() {
 	config := localConfiguration{}
 
-	os.Setenv("REGISTRY_LOG_FORMATTER", "json")
+	err := os.Setenv("REGISTRY_LOG_FORMATTER", "json")
+	require.NoError(s.T(), err)
 	defer os.Unsetenv("REGISTRY_LOG_FORMATTER")
 
 	p := NewParser("registry", []VersionedParseInfo{
 		{
 			Version: "0.1",
 			ParseAs: reflect.TypeOf(config),
-			ConversionFunc: func(c interface{}) (interface{}, error) {
+			ConversionFunc: func(c any) (any, error) {
 				return c, nil
 			},
 		},
 	})
 
-	err := p.Parse([]byte(`{version: "0.1", log: {formatter: "text"}}`), &config)
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), expectedConfig, config)
+	err = p.Parse([]byte(`{version: "0.1", log: {formatter: "text"}}`), &config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), expectedConfig, config)
 }
 
-func (suite *ParserSuite) TestParseOverwriteUnininitializedPoiner() {
+func (s *ParserSuite) TestParseOverwriteUnininitializedPoiner() {
 	config := localConfiguration{}
 
-	os.Setenv("REGISTRY_LOG_FORMATTER", "json")
+	err := os.Setenv("REGISTRY_LOG_FORMATTER", "json")
+	require.NoError(s.T(), err)
 	defer os.Unsetenv("REGISTRY_LOG_FORMATTER")
 
 	p := NewParser("registry", []VersionedParseInfo{
 		{
 			Version: "0.1",
 			ParseAs: reflect.TypeOf(config),
-			ConversionFunc: func(c interface{}) (interface{}, error) {
+			ConversionFunc: func(c any) (any, error) {
 				return c, nil
 			},
 		},
 	})
 
-	err := p.Parse([]byte(`{version: "0.1"}`), &config)
-	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), expectedConfig, config)
+	err = p.Parse([]byte(`{version: "0.1"}`), &config)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), expectedConfig, config)
 }

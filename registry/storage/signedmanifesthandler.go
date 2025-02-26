@@ -24,7 +24,7 @@ type signedManifestHandler struct {
 
 var _ ManifestHandler = &signedManifestHandler{}
 
-func (ms *signedManifestHandler) Unmarshal(ctx context.Context, dgst digest.Digest, content []byte) (distribution.Manifest, error) {
+func (ms *signedManifestHandler) Unmarshal(_ context.Context, _ digest.Digest, content []byte) (distribution.Manifest, error) {
 	log := dcontext.GetLogger(ms.ctx)
 	log.Debug("(*signedManifestHandler).Unmarshal")
 
@@ -112,7 +112,7 @@ func (ms *signedManifestHandler) verifyManifest(ctx context.Context, mnfst schem
 
 	if _, err := schema1.Verify(&mnfst); err != nil {
 		switch err {
-		case libtrust.ErrMissingSignatureKey, libtrust.ErrInvalidJSONContent, libtrust.ErrMissingSignatureKey:
+		case libtrust.ErrMissingSignatureKey, libtrust.ErrInvalidJSONContent:
 			errs = append(errs, distribution.ErrManifestUnverified{})
 		default:
 			if err.Error() == "invalid signature" {

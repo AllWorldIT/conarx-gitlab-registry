@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -41,16 +42,16 @@ func withNoExponentialBackoff() backoff.BackOff {
 type noBackoff struct{}
 
 // NextBackOff always returns backoff.Stop to signal the caller not to retry the operation.
-func (n *noBackoff) NextBackOff() time.Duration {
+func (*noBackoff) NextBackOff() time.Duration {
 	return backoff.Stop
 }
 
 // Reset to initial state.
-func (n *noBackoff) Reset() {}
+func (*noBackoff) Reset() {}
 
-func withExponentialBackoff(max int64) wrapperOpt {
-	if max < 0 {
-		max = 0
+func withExponentialBackoff(maximum int64) wrapperOpt {
+	if maximum < 0 {
+		maximum = 0
 	}
 
 	b := backoff.NewExponentialBackOff()
@@ -62,7 +63,8 @@ func withExponentialBackoff(max int64) wrapperOpt {
 
 	return func(w *s3wrapper) {
 		w.backoff = func() backoff.BackOff {
-			return backoff.WithMaxRetries(b, uint64(max))
+			// nolint:gosec // there is no overflow here, max is always positive
+			return backoff.WithMaxRetries(b, uint64(maximum))
 		}
 	}
 }
@@ -78,9 +80,9 @@ type s3wrapper struct {
 
 type wrapperOpt func(*s3wrapper)
 
-func withRateLimit(max int64, burst int) wrapperOpt {
+func withRateLimit(maximum int64, burst int) wrapperOpt {
 	return func(w *s3wrapper) {
-		w.Limiter = rate.NewLimiter(rate.Limit(max), burst)
+		w.Limiter = rate.NewLimiter(rate.Limit(maximum), burst)
 	}
 }
 
@@ -90,9 +92,9 @@ func withBackoffNotify(n backoff.Notify) wrapperOpt {
 	}
 }
 
-func newS3Wrapper(s3 s3iface.S3API, opts ...wrapperOpt) *s3wrapper {
+func newS3Wrapper(s3API s3iface.S3API, opts ...wrapperOpt) *s3wrapper {
 	w := &s3wrapper{
-		s3:      s3,
+		s3:      s3API,
 		Limiter: rate.NewLimiter(rate.Inf, 0),
 		backoff: withNoExponentialBackoff,
 	}
@@ -280,8 +282,7 @@ func (w *s3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteOb
 
 		for _, e := range out.Errors {
 			if e != nil {
-				// TODO: switch to using the the core package `slice.Contains` function introduced in https://tip.golang.org/doc/go1.21 after dropping support for go1.20
-				if contains(retryableErrors, *e.Code) {
+				if slices.Contains(retryableErrors, *e.Code) {
 					return errors.New(*e.Code)
 				}
 			}
@@ -290,7 +291,7 @@ func (w *s3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteOb
 		return err
 	})
 
-	if err != nil && !contains(retryableErrors, err.Error()) {
+	if err != nil && !slices.Contains(retryableErrors, err.Error()) {
 		return out, err
 	}
 
@@ -399,14 +400,4 @@ func wrapAWSerr(e error) error {
 
 func nilRespError(s3API string) error {
 	return fmt.Errorf("received a nil response for %q from s3", s3API)
-}
-
-func contains(list []string, s string) bool {
-	for _, l := range list {
-		if s == l {
-			return true
-		}
-	}
-
-	return false
 }

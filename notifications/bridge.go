@@ -56,15 +56,15 @@ func NewRequestRecord(id string, r *http.Request) RequestRecord {
 	}
 }
 
-func (b *bridge) ManifestPushed(repo reference.Named, sm distribution.Manifest, options ...distribution.ManifestServiceOption) error {
+func (*bridge) ManifestPushed(_ reference.Named, _ distribution.Manifest, _ ...distribution.ManifestServiceOption) error {
 	return nil
 }
 
-func (b *bridge) ManifestPulled(repo reference.Named, sm distribution.Manifest, options ...distribution.ManifestServiceOption) error {
+func (*bridge) ManifestPulled(_ reference.Named, _ distribution.Manifest, _ ...distribution.ManifestServiceOption) error {
 	return nil
 }
 
-func (b *bridge) ManifestDeleted(repo reference.Named, dgst digest.Digest) error {
+func (*bridge) ManifestDeleted(_ reference.Named, _ digest.Digest) error {
 	return nil
 }
 
@@ -89,7 +89,7 @@ func (b *bridge) BlobDeleted(repo reference.Named, dgst digest.Digest) error {
 	return b.createBlobDeleteEventAndWrite(EventActionDelete, repo, dgst)
 }
 
-func (b *bridge) TagDeleted(repo reference.Named, tag string) error {
+func (*bridge) TagDeleted(_ reference.Named, _ string) error {
 	return nil
 }
 
@@ -98,59 +98,6 @@ func (b *bridge) RepoDeleted(repo reference.Named) error {
 	event.Target.Repository = repo.Name()
 
 	return b.sink.Write(event)
-}
-
-func (b *bridge) createManifestEventAndWrite(action string, repo reference.Named, sm distribution.Manifest) error {
-	manifestEvent, err := b.createManifestEvent(action, repo, sm)
-	if err != nil {
-		return err
-	}
-
-	return b.sink.Write(manifestEvent)
-}
-
-func (b *bridge) createManifestDeleteEventAndWrite(action string, repo reference.Named, dgst digest.Digest) error {
-	event := b.createEvent(action)
-	event.Target.Repository = repo.Name()
-	event.Target.Digest = dgst
-
-	return b.sink.Write(event)
-}
-
-func (b *bridge) createManifestEvent(action string, repo reference.Named, sm distribution.Manifest) (*Event, error) {
-	event := b.createEvent(action)
-	event.Target.Repository = repo.Name()
-
-	mt, p, err := sm.Payload()
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure we have the canonical manifest descriptor here
-	manifest, desc, err := distribution.UnmarshalManifest(mt, p)
-	if err != nil {
-		return nil, err
-	}
-
-	event.Target.MediaType = mt
-	event.Target.Length = desc.Size
-	event.Target.Size = desc.Size
-	event.Target.Digest = desc.Digest
-	if b.includeReferences {
-		event.Target.References = append(event.Target.References, manifest.References()...)
-	}
-
-	ref, err := reference.WithDigest(repo, event.Target.Digest)
-	if err != nil {
-		return nil, err
-	}
-
-	event.Target.URL, err = b.ub.BuildManifestURL(ref)
-	if err != nil {
-		return nil, err
-	}
-
-	return event, nil
 }
 
 func (b *bridge) createBlobDeleteEventAndWrite(action string, repo reference.Named, dgst digest.Digest) error {

@@ -5,6 +5,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestWithTrace ensures that tracing has the expected values in the context.
@@ -64,7 +66,7 @@ func TestWithTrace(t *testing.T) {
 
 type valueTestCase struct {
 	key           string
-	expected      interface{}
+	expected      any
 	notnilorempty bool // just check not empty/not nil
 }
 
@@ -72,14 +74,11 @@ func checkContextForValues(ctx context.Context, t *testing.T, values []valueTest
 	for _, testcase := range values {
 		v := ctx.Value(testcase.key)
 		if testcase.notnilorempty {
-			if v == nil || v == "" {
-				t.Fatalf("value was nil or empty for %q: %#v", testcase.key, v)
-			}
+			require.NotNilf(t, v, "value was nil for %q", testcase.key)
+			require.NotEmptyf(t, v, "value was empty for %q", testcase.key)
 			continue
 		}
 
-		if v != testcase.expected {
-			t.Fatalf("unexpected value for key %q: %v != %v", testcase.key, v, testcase.expected)
-		}
+		require.Equalf(t, testcase.expected, v, "unexpected value for key %q", testcase.key)
 	}
 }

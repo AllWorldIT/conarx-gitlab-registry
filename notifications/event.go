@@ -68,7 +68,7 @@ type Event struct {
 }
 
 // Meta is the event meta type
-type Meta interface{}
+type Meta any
 
 // Target uniquely describes the target of the event.
 type Target struct {

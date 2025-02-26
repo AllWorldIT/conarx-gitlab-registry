@@ -33,6 +33,7 @@ import (
 	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,83 +44,83 @@ func TestAPIConformance(t *testing.T) {
 		baseURLAuth,
 		baseURLPrefix,
 
-		manifest_Put_Schema1_ByTag,
-		manifest_Put_Schema1_ByDigest,
-		manifest_Put_Schema2_ByDigest,
-		manifest_Put_Schema2_ByDigest_ConfigNotAssociatedWithRepository,
-		manifest_Put_Schema2_ByDigest_LayersNotAssociatedWithRepository,
-		manifest_Put_Schema2_ByTag,
-		manifest_Put_Schema2_ByTag_IsIdempotent,
-		manifest_Put_Schema2_ByTag_SameDigest_Parallel_IsIdempotent,
-		manifest_Put_Schema2_MissingConfig,
-		manifest_Put_Schema2_MissingConfigAndLayers,
-		manifest_Put_Schema2_MissingLayers,
-		manifest_Put_Schema2_ReuseTagManifestToManifest,
-		manifest_Put_Schema2_ReferencesExceedLimit,
-		manifest_Put_Schema2_PayloadSizeExceedsLimit,
-		manifest_Head_Schema2,
-		manifest_Head_Schema2_MissingManifest,
-		manifest_Get_Schema2_ByDigest_MissingManifest,
-		manifest_Get_Schema2_ByDigest_MissingRepository,
-		manifest_Get_Schema2_NoAcceptHeaders,
-		manifest_Get_Schema2_ByDigest_NotAssociatedWithRepository,
-		manifest_Get_Schema2_ByTag_MissingRepository,
-		manifest_Get_Schema2_ByTag_MissingTag,
-		manifest_Get_Schema2_ByTag_NotAssociatedWithRepository,
-		manifest_Get_Schema2_MatchingEtag,
-		manifest_Get_Schema2_NonMatchingEtag,
-		manifest_Delete_Schema2,
-		manifest_Delete_Schema2_AlreadyDeleted,
-		manifest_Delete_Schema2_Reupload,
-		manifest_Delete_Schema2_MissingManifest,
-		manifest_Delete_Schema2_ClearsTags,
-		manifest_Delete_Schema2_DeleteDisabled,
+		manifestPutSchema1ByTag,
+		manifestPutSchema1ByDigest,
+		manifestPutSchema2ByDigest,
+		manifestPutSchema2ByDigestConfigNotAssociatedWithRepository,
+		manifestPutSchema2ByDigestLayersNotAssociatedWithRepository,
+		manifestPutSchema2ByTag,
+		manifestPutSchema2ByTagIsIdempotent,
+		manifestPutSchema2ByTagSameDigestParallelIsIdempotent,
+		manifestPutSchema2MissingConfig,
+		manifestPutSchema2MissingConfigAndLayers,
+		manifestPutSchema2MissingLayers,
+		manifestPutSchema2ReuseTagManifestToManifest,
+		manifestPutSchema2ReferencesExceedLimit,
+		manifestPutSchema2PayloadSizeExceedsLimit,
+		manifestHeadSchema2,
+		manifestHeadSchema2MissingManifest,
+		manifestGetSchema2ByDigestMissingManifest,
+		manifestGetSchema2ByDigestMissingRepository,
+		manifestGetSchema2NoAcceptHeaders,
+		manifestGetSchema2ByDigestNotAssociatedWithRepository,
+		manifestGetSchema2ByTagMissingRepository,
+		manifestGetSchema2ByTagMissingTag,
+		manifestGetSchema2ByTagNotAssociatedWithRepository,
+		manifestGetSchema2MatchingEtag,
+		manifestGetSchema2NonMatchingEtag,
+		manifestDeleteSchema2,
+		manifestDeleteSchema2AlreadyDeleted,
+		manifestDeleteSchema2Reupload,
+		manifestDeleteSchema2MissingManifest,
+		manifestDeleteSchema2ClearsTags,
+		manifestDeleteSchema2DeleteDisabled,
 
-		manifest_Delete_Tag,
-		manifest_Delete_Tag_Unknown,
-		manifest_Delete_Tag_DeleteDisabled,
-		manifest_Delete_Tag_UnknownRepository,
-		manifest_Delete_Tag_Notification,
-		manifest_Delete_Tag_Notification_WithAuth,
-		manifest_Delete_Tag_WithSameImageID,
+		manifestDeleteTag,
+		manifestDeleteTagUnknown,
+		manifestDeleteTagDeleteDisabled,
+		manifestDeleteTagUnknownRepository,
+		manifestDeleteTagNotification,
+		manifestDeleteTagNotificationWithAuth,
+		manifestDeleteTagWithSameImageID,
 
-		manifest_Put_Schema2_WithNonDistributableLayers,
-		manifest_Put_OCI_ByDigest,
-		manifest_Put_OCI_ByTag,
-		manifest_Put_OCI_WithSubject,
-		manifest_Put_OCI_WithV2Subject,
-		manifest_Put_OCI_WithNonMatchingSubject,
-		manifest_Put_OCI_WithArtifactType,
-		manifest_Get_OCI_MatchingEtag,
-		manifest_Get_OCI_NonMatchingEtag,
+		manifestPutSchema2WithNonDistributableLayers,
+		manifestPutOCIByDigest,
+		manifestPutOCIByTag,
+		manifestPutOCIWithSubject,
+		manifestPutOCIWithV2Subject,
+		manifestPutOCIWithNonMatchingSubject,
+		manifestPutOCIWithArtifactType,
+		manifestGetOCIMatchingEtag,
+		manifestGetOCINonMatchingEtag,
 
-		manifest_Put_OCIImageIndex_ByDigest,
-		manifest_Put_OCIImageIndex_ByTag,
-		manifest_Get_OCIIndex_MatchingEtag,
-		manifest_Get_OCIIndex_NonMatchingEtag,
-		manifest_Put_OCI_WithNonDistributableLayers,
+		manifestPutOCIImageIndexByDigest,
+		manifestPutOCIImageIndexByTag,
+		manifestGetOCIIndexMatchingEtag,
+		manifestGetOCIIndexNonMatchingEtag,
+		manifestPutOCIWithNonDistributableLayers,
 
-		manifest_Get_ManifestList_FallbackToSchema2,
-		manifest_Put_ManifestList_ByTag_SameDigest_Parallel_IsIdempotent,
+		manifestGetManifestListFallbackToSchema2,
+		manifestPutManifestListByTagSameDigestParallelIsIdempotent,
 
-		blob_Head,
-		blob_Head_BlobNotFound,
-		blob_Head_RepositoryNotFound,
-		blob_Get,
-		blob_Get_BlobNotFound,
-		blob_Get_RepositoryNotFound,
-		blob_Delete,
-		blob_Delete_AlreadyDeleted,
-		blob_Delete_Disabled,
-		blob_Delete_UnknownRepository,
+		blobHead,
+		blobHeadBlobNotFound,
+		blobHeadRepositoryNotFound,
+		blobGet,
+		blobGetBlobNotFound,
+		blobGetRepositoryNotFound,
+		blobDelete,
+		blobDeleteAlreadyDeleted,
+		blobDeleteDisabled,
+		blobDeleteUnknownRepository,
 
-		tags_Get,
-		tags_Get_EmptyRepository,
-		tags_Get_RepositoryNotFound,
+		tagsGet,
+		tagsGetEmptyRepository,
+		tagsGetRepositoryNotFound,
 
-		catalog_Get,
-		catalog_Get_Empty,
-		catalog_Get_TooLarge,
+		catalogGet,
+		catalogGetEmpty,
+		catalogGetTooLarge,
 	}
 
 	type envOpt struct {
@@ -131,11 +132,11 @@ func TestAPIConformance(t *testing.T) {
 	envOpts := []envOpt{
 		{
 			name: "all",
-			opts: []configOpt{},
+			opts: make([]configOpt, 0),
 		},
 		{
 			name:                 "with webhook notifications enabled",
-			opts:                 []configOpt{},
+			opts:                 make([]configOpt, 0),
 			webhookNotifications: true,
 		},
 		{
@@ -197,7 +198,7 @@ func funcName(f func(*testing.T, ...configOpt)) string {
 	return segments[len(segments)-1]
 }
 
-func manifest_Put_Schema2_ByTag_IsIdempotent(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2ByTagIsIdempotent(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -217,7 +218,8 @@ func manifest_Put_Schema2_ByTag_IsIdempotent(t *testing.T, opts ...configOpt) {
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
 	testFunc := func() {
-		resp := putManifest(t, "putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+		resp, err := putManifest("putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -235,7 +237,7 @@ func manifest_Put_Schema2_ByTag_IsIdempotent(t *testing.T, opts ...configOpt) {
 	testFunc()
 }
 
-func manifest_Put_Schema2_ByTag_SameDigest_Parallel_IsIdempotent(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2ByTagSameDigestParallelIsIdempotent(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -262,12 +264,14 @@ func manifest_Put_Schema2_ByTag_SameDigest_Parallel_IsIdempotent(t *testing.T, o
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp := putManifest(t, "putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			resp, err := putManifest("putting manifest by tag no error", manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+			assert.NoError(t, err)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusCreated, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-			require.Equal(t, manifestDigestURL, resp.Header.Get("Location"))
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			// NOTE(prozlach): we can't use require in a goroutine.
+			assert.Equal(t, http.StatusCreated, resp.StatusCode)
+			assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			assert.Equal(t, manifestDigestURL, resp.Header.Get("Location"))
+			assert.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
 		}()
 	}
 
@@ -276,7 +280,7 @@ func manifest_Put_Schema2_ByTag_SameDigest_Parallel_IsIdempotent(t *testing.T, o
 
 // proof for https://gitlab.com/gitlab-org/container-registry/-/issues/1132 where creating the same manifest list
 // with the same digest in parallel can cause a race condition
-func manifest_Put_ManifestList_ByTag_SameDigest_Parallel_IsIdempotent(t *testing.T, opts ...configOpt) {
+func manifestPutManifestListByTagSameDigestParallelIsIdempotent(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -325,19 +329,21 @@ func manifest_Put_ManifestList_ByTag_SameDigest_Parallel_IsIdempotent(t *testing
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp := putManifest(t, "putting manifest list by tag no error", manifestListURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+			resp, err := putManifest("putting manifest list by tag no error", manifestListURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+			assert.NoError(t, err)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusCreated, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-			require.Equal(t, expectedManifestListURL, resp.Header.Get("Location"))
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			// NOTE(prozlach): we can't use require in a goroutine.
+			assert.Equal(t, http.StatusCreated, resp.StatusCode)
+			assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			assert.Equal(t, expectedManifestListURL, resp.Header.Get("Location"))
+			assert.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
 		}()
 	}
 
 	wg.Wait()
 }
 
-func manifest_Put_Schema2_ReuseTagManifestToManifest(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2ReuseTagManifestToManifest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -400,7 +406,7 @@ func manifest_Put_Schema2_ReuseTagManifestToManifest(t *testing.T, opts ...confi
 	require.NotEqual(t, originalPayload, newPayload)
 }
 
-func manifest_Put_Schema2_ByTag(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2ByTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -412,7 +418,7 @@ func manifest_Put_Schema2_ByTag(t *testing.T, opts ...configOpt) {
 	seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
 }
 
-func manifest_Put_Schema2_ByDigest(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2ByDigest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -423,7 +429,7 @@ func manifest_Put_Schema2_ByDigest(t *testing.T, opts ...configOpt) {
 	seedRandomSchema2Manifest(t, env, repoPath, putByDigest)
 }
 
-func manifest_Get_Schema2_NonMatchingEtag(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2NonMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -515,7 +521,7 @@ func manifest_Get_Schema2_NonMatchingEtag(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Get_Schema2_MatchingEtag(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2MatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -712,7 +718,7 @@ func baseURLPrefix(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Put_Schema1_ByTag(t *testing.T, opts ...configOpt) {
+func manifestPutSchema1ByTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -757,14 +763,15 @@ func manifest_Put_Schema1_ByTag(t *testing.T, opts ...configOpt) {
 
 	manifestURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	resp := putManifest(t, "putting schema1 manifest bad request error", manifestURL, schema1.MediaTypeManifest, signedManifest)
+	resp, err := putManifest("putting schema1 manifest bad request error", manifestURL, schema1.MediaTypeManifest, signedManifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	checkBodyHasErrorCodes(t, "invalid manifest", resp, v2.ErrorCodeManifestInvalid)
 }
 
-func manifest_Put_Schema2_ByDigest_ConfigNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2ByDigestConfigNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -777,7 +784,7 @@ func manifest_Put_Schema2_ByDigest_ConfigNotAssociatedWithRepository(t *testing.
 	repoRef2, err := reference.WithName(repoPath2)
 	require.NoError(t, err)
 
-	manifest := &schema2.Manifest{
+	testManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -788,35 +795,36 @@ func manifest_Put_Schema2_ByDigest_ConfigNotAssociatedWithRepository(t *testing.
 	cfgPayload, cfgDesc := schema2Config()
 	uploadURLBase, _ := startPushLayer(t, env, repoRef2)
 	pushLayer(t, env.builder, repoRef2, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Create and push up 2 random layers.
-	manifest.Layers = make([]distribution.Descriptor, 2)
+	testManifest.Layers = make([]distribution.Descriptor, 2)
 
-	for i := range manifest.Layers {
+	for i := range testManifest.Layers {
 		rs, dgst, size := createRandomSmallLayer()
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef1)
 		pushLayer(t, env.builder, repoRef1, dgst, uploadURLBase, rs)
 
-		manifest.Layers[i] = distribution.Descriptor{
+		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: schema2.MediaTypeLayer,
 			Size:      size,
 		}
 	}
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath1, deserializedManifest)
 
-	resp := putManifest(t, "putting manifest whose config is not present in the repository", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	resp, err := putManifest("putting manifest whose config is not present in the repository", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
-func manifest_Put_Schema2_MissingConfig(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2MissingConfig(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -826,7 +834,7 @@ func manifest_Put_Schema2_MissingConfig(t *testing.T, opts ...configOpt) {
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	manifest := &schema2.Manifest{
+	testManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -835,18 +843,18 @@ func manifest_Put_Schema2_MissingConfig(t *testing.T, opts ...configOpt) {
 
 	// Create a manifest config but do not push up its content.
 	_, cfgDesc := schema2Config()
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Create and push up 2 random layers.
-	manifest.Layers = make([]distribution.Descriptor, 2)
+	testManifest.Layers = make([]distribution.Descriptor, 2)
 
-	for i := range manifest.Layers {
+	for i := range testManifest.Layers {
 		rs, dgst, size := createRandomSmallLayer()
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
 
-		manifest.Layers[i] = distribution.Descriptor{
+		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: schema2.MediaTypeLayer,
 			Size:      size,
@@ -856,7 +864,7 @@ func manifest_Put_Schema2_MissingConfig(t *testing.T, opts ...configOpt) {
 	// Build URLs.
 	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
@@ -878,7 +886,8 @@ func manifest_Put_Schema2_MissingConfig(t *testing.T, opts ...configOpt) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest with only the layer blobs pushed up.
-			resp := putManifest(t, "putting missing config manifest", test.manifestURL, schema2.MediaTypeManifest, manifest)
+			resp, err := putManifest("putting missing config manifest", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -892,7 +901,7 @@ func manifest_Put_Schema2_MissingConfig(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Put_Schema2_MissingLayers(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2MissingLayers(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -902,7 +911,7 @@ func manifest_Put_Schema2_MissingLayers(t *testing.T, opts ...configOpt) {
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	manifest := &schema2.Manifest{
+	testManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -913,15 +922,15 @@ func manifest_Put_Schema2_MissingLayers(t *testing.T, opts ...configOpt) {
 	cfgPayload, cfgDesc := schema2Config()
 	uploadURLBase, _ := startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Create and push up 2 random layers, but do not push their content.
-	manifest.Layers = make([]distribution.Descriptor, 2)
+	testManifest.Layers = make([]distribution.Descriptor, 2)
 
-	for i := range manifest.Layers {
+	for i := range testManifest.Layers {
 		_, dgst, size := createRandomSmallLayer()
 
-		manifest.Layers[i] = distribution.Descriptor{
+		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: schema2.MediaTypeLayer,
 			Size:      size,
@@ -931,7 +940,7 @@ func manifest_Put_Schema2_MissingLayers(t *testing.T, opts ...configOpt) {
 	// Build URLs.
 	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
@@ -953,7 +962,8 @@ func manifest_Put_Schema2_MissingLayers(t *testing.T, opts ...configOpt) {
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest with only the config blob pushed up.
-			resp := putManifest(t, "putting missing layers", test.manifestURL, schema2.MediaTypeManifest, manifest)
+			resp, err := putManifest("putting missing layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -967,14 +977,14 @@ func manifest_Put_Schema2_MissingLayers(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Put_Schema2_MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
 	tagName := "schema2missingconfigandlayerstag"
 	repoPath := "schema2/missingconfigandlayers"
 
-	manifest := &schema2.Manifest{
+	testManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -993,15 +1003,15 @@ func manifest_Put_Schema2_MissingConfigAndLayers(t *testing.T, opts ...configOpt
 
 	// Create a manifest config, but do not push up its content.
 	_, cfgDesc := schema2Config()
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Create and push up 2 random layers, but do not push their content.
-	manifest.Layers = make([]distribution.Descriptor, 2)
+	testManifest.Layers = make([]distribution.Descriptor, 2)
 
-	for i := range manifest.Layers {
+	for i := range testManifest.Layers {
 		_, dgst, size := createRandomSmallLayer()
 
-		manifest.Layers[i] = distribution.Descriptor{
+		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: schema2.MediaTypeLayer,
 			Size:      size,
@@ -1011,7 +1021,7 @@ func manifest_Put_Schema2_MissingConfigAndLayers(t *testing.T, opts ...configOpt
 	// Build URLs.
 	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
@@ -1033,7 +1043,8 @@ func manifest_Put_Schema2_MissingConfigAndLayers(t *testing.T, opts ...configOpt
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest with only the config blob pushed up.
-			resp := putManifest(t, "putting missing layers", test.manifestURL, schema2.MediaTypeManifest, manifest)
+			resp, err := putManifest("putting missing layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1047,7 +1058,7 @@ func manifest_Put_Schema2_MissingConfigAndLayers(t *testing.T, opts ...configOpt
 	}
 }
 
-func manifest_Put_Schema2_ReferencesExceedLimit(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2ReferencesExceedLimit(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withReferenceLimit(5))
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1058,7 +1069,7 @@ func manifest_Put_Schema2_ReferencesExceedLimit(t *testing.T, opts ...configOpt)
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	manifest := &schema2.Manifest{
+	testManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -1069,18 +1080,18 @@ func manifest_Put_Schema2_ReferencesExceedLimit(t *testing.T, opts ...configOpt)
 	cfgPayload, cfgDesc := schema2Config()
 	uploadURLBase, _ := startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Create and push up 10 random layers.
-	manifest.Layers = make([]distribution.Descriptor, 10)
+	testManifest.Layers = make([]distribution.Descriptor, 10)
 
-	for i := range manifest.Layers {
+	for i := range testManifest.Layers {
 		rs, dgst, size := createRandomSmallLayer()
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
 
-		manifest.Layers[i] = distribution.Descriptor{
+		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: schema2.MediaTypeLayer,
 			Size:      size,
@@ -1090,7 +1101,7 @@ func manifest_Put_Schema2_ReferencesExceedLimit(t *testing.T, opts ...configOpt)
 	// Build URLs.
 	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
@@ -1112,7 +1123,8 @@ func manifest_Put_Schema2_ReferencesExceedLimit(t *testing.T, opts ...configOpt)
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest.
-			resp := putManifest(t, "putting manifest with too many layers", test.manifestURL, schema2.MediaTypeManifest, manifest)
+			resp, err := putManifest("putting manifest with too many layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1126,7 +1138,7 @@ func manifest_Put_Schema2_ReferencesExceedLimit(t *testing.T, opts ...configOpt)
 	}
 }
 
-func manifest_Put_Schema2_PayloadSizeExceedsLimit(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2PayloadSizeExceedsLimit(t *testing.T, opts ...configOpt) {
 	payloadLimit := 5
 
 	opts = append(opts, withPayloadSizeLimit(payloadLimit))
@@ -1139,7 +1151,7 @@ func manifest_Put_Schema2_PayloadSizeExceedsLimit(t *testing.T, opts ...configOp
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	manifest := &schema2.Manifest{
+	testManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -1150,12 +1162,12 @@ func manifest_Put_Schema2_PayloadSizeExceedsLimit(t *testing.T, opts ...configOp
 	cfgPayload, cfgDesc := schema2Config()
 	uploadURLBase, _ := startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Build URLs.
 	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	_, payload, err := deserializedManifest.Payload()
@@ -1181,7 +1193,8 @@ func manifest_Put_Schema2_PayloadSizeExceedsLimit(t *testing.T, opts ...configOp
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
 			// Push up the manifest.
-			resp := putManifest(t, "putting oversized manifest", test.manifestURL, schema2.MediaTypeManifest, manifest)
+			resp, err := putManifest("putting oversized manifest", test.manifestURL, schema2.MediaTypeManifest, testManifest)
+			require.NoError(t, err)
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1206,7 +1219,7 @@ func manifest_Put_Schema2_PayloadSizeExceedsLimit(t *testing.T, opts ...configOp
 	}
 }
 
-func manifest_Get_Schema2_ByDigest_MissingManifest(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2ByDigestMissingManifest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1241,7 +1254,7 @@ func manifest_Get_Schema2_ByDigest_MissingManifest(t *testing.T, opts ...configO
 	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, v2.ErrorCodeManifestUnknown)
 }
 
-func manifest_Get_Schema2_ByDigest_MissingRepository(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2ByDigestMissingRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1266,7 +1279,7 @@ func manifest_Get_Schema2_ByDigest_MissingRepository(t *testing.T, opts ...confi
 	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, v2.ErrorCodeManifestUnknown)
 }
 
-func manifest_Get_Schema2_ByTag_MissingRepository(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2ByTagMissingRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1291,7 +1304,7 @@ func manifest_Get_Schema2_ByTag_MissingRepository(t *testing.T, opts ...configOp
 	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, v2.ErrorCodeManifestUnknown)
 }
 
-func manifest_Get_Schema2_ByTag_MissingTag(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2ByTagMissingTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1316,7 +1329,7 @@ func manifest_Get_Schema2_ByTag_MissingTag(t *testing.T, opts ...configOpt) {
 	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, v2.ErrorCodeManifestUnknown)
 }
 
-func manifest_Get_Schema2_ByDigest_NotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2ByDigestNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1346,7 +1359,7 @@ func manifest_Get_Schema2_ByDigest_NotAssociatedWithRepository(t *testing.T, opt
 	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, v2.ErrorCodeManifestUnknown)
 }
 
-func manifest_Get_Schema2_ByTag_NotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2ByTagNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1376,7 +1389,7 @@ func manifest_Get_Schema2_ByTag_NotAssociatedWithRepository(t *testing.T, opts .
 	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, v2.ErrorCodeManifestUnknown)
 }
 
-func manifest_Put_Schema2_ByDigest_LayersNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2ByDigestLayersNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1389,7 +1402,7 @@ func manifest_Put_Schema2_ByDigest_LayersNotAssociatedWithRepository(t *testing.
 	repoRef2, err := reference.WithName(repoPath2)
 	require.NoError(t, err)
 
-	manifest := &schema2.Manifest{
+	testManifest := &schema2.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     schema2.MediaTypeManifest,
@@ -1400,35 +1413,36 @@ func manifest_Put_Schema2_ByDigest_LayersNotAssociatedWithRepository(t *testing.
 	cfgPayload, cfgDesc := schema2Config()
 	uploadURLBase, _ := startPushLayer(t, env, repoRef1)
 	pushLayer(t, env.builder, repoRef1, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Create and push up 2 random layers.
-	manifest.Layers = make([]distribution.Descriptor, 2)
+	testManifest.Layers = make([]distribution.Descriptor, 2)
 
-	for i := range manifest.Layers {
+	for i := range testManifest.Layers {
 		rs, dgst, size := createRandomSmallLayer()
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef2)
 		pushLayer(t, env.builder, repoRef2, dgst, uploadURLBase, rs)
 
-		manifest.Layers[i] = distribution.Descriptor{
+		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
 			MediaType: schema2.MediaTypeLayer,
 			Size:      size,
 		}
 	}
 
-	deserializedManifest, err := schema2.FromStruct(*manifest)
+	deserializedManifest, err := schema2.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath1, deserializedManifest)
 
-	resp := putManifest(t, "putting manifest whose layers are not present in the repository", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	resp, err := putManifest("putting manifest whose layers are not present in the repository", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
-func manifest_Put_Schema1_ByDigest(t *testing.T, opts ...configOpt) {
+func manifestPutSchema1ByDigest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1472,14 +1486,15 @@ func manifest_Put_Schema1_ByDigest(t *testing.T, opts ...configOpt) {
 
 	manifestURL := buildManifestDigestURL(t, env, repoPath, signedManifest)
 
-	resp := putManifest(t, "putting schema1 manifest bad request error", manifestURL, schema1.MediaTypeManifest, signedManifest)
+	resp, err := putManifest("putting schema1 manifest bad request error", manifestURL, schema1.MediaTypeManifest, signedManifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	checkBodyHasErrorCodes(t, "invalid manifest", resp, v2.ErrorCodeManifestInvalid)
 }
 
-func manifest_Head_Schema2(t *testing.T, opts ...configOpt) {
+func manifestHeadSchema2(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1523,7 +1538,7 @@ func manifest_Head_Schema2(t *testing.T, opts ...configOpt) {
 
 			b, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
-			require.Len(t, b, 0, "body should be empty")
+			require.Empty(t, b, "body should be empty")
 
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1542,7 +1557,7 @@ func manifest_Head_Schema2(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Head_Schema2_MissingManifest(t *testing.T, opts ...configOpt) {
+func manifestHeadSchema2MissingManifest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1596,7 +1611,7 @@ func manifest_Head_Schema2_MissingManifest(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Get_Schema2_NoAcceptHeaders(t *testing.T, opts ...configOpt) {
+func manifestGetSchema2NoAcceptHeaders(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1660,7 +1675,7 @@ func manifest_Get_Schema2_NoAcceptHeaders(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Delete_Schema2(t *testing.T, opts ...configOpt) {
+func manifestDeleteSchema2(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1695,7 +1710,7 @@ func manifest_Delete_Schema2(t *testing.T, opts ...configOpt) {
 
 		dgst := digest.FromBytes(payload)
 
-		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
+		expectedEventByDigest := buildEventSchema2ManifestDeleteByDigest(repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
 		if env.db == nil {
@@ -1705,7 +1720,7 @@ func manifest_Delete_Schema2(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Delete_Schema2_AlreadyDeleted(t *testing.T, opts ...configOpt) {
+func manifestDeleteSchema2AlreadyDeleted(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1729,7 +1744,7 @@ func manifest_Delete_Schema2_AlreadyDeleted(t *testing.T, opts ...configOpt) {
 
 		dgst := digest.FromBytes(payload)
 
-		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
+		expectedEventByDigest := buildEventSchema2ManifestDeleteByDigest(repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
 		if env.db == nil {
@@ -1745,7 +1760,7 @@ func manifest_Delete_Schema2_AlreadyDeleted(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func manifest_Delete_Schema2_Reupload(t *testing.T, opts ...configOpt) {
+func manifestDeleteSchema2Reupload(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1769,7 +1784,7 @@ func manifest_Delete_Schema2_Reupload(t *testing.T, opts ...configOpt) {
 
 		dgst := digest.FromBytes(payload)
 
-		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
+		expectedEventByDigest := buildEventSchema2ManifestDeleteByDigest(repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
 		if env.db == nil {
@@ -1779,7 +1794,8 @@ func manifest_Delete_Schema2_Reupload(t *testing.T, opts ...configOpt) {
 	}
 
 	// Re-upload manifest by digest
-	resp = putManifest(t, "reuploading manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	resp, err = putManifest("reuploading manifest no error", manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -1797,7 +1813,7 @@ func manifest_Delete_Schema2_Reupload(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func manifest_Delete_Schema2_MissingManifest(t *testing.T, opts ...configOpt) {
+func manifestDeleteSchema2MissingManifest(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1825,7 +1841,7 @@ func manifest_Delete_Schema2_MissingManifest(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func manifest_Delete_Schema2_ClearsTags(t *testing.T, opts ...configOpt) {
+func manifestDeleteSchema2ClearsTags(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1870,7 +1886,7 @@ func manifest_Delete_Schema2_ClearsTags(t *testing.T, opts ...configOpt) {
 
 		dgst := digest.FromBytes(payload)
 
-		expectedEventByDigest := buildEventManifestDeleteByDigest(schema2.MediaTypeManifest, repoPath, dgst)
+		expectedEventByDigest := buildEventSchema2ManifestDeleteByDigest(repoPath, dgst)
 		env.ns.AssertEventNotification(t, expectedEventByDigest)
 
 		if env.db == nil {
@@ -1892,7 +1908,7 @@ func manifest_Delete_Schema2_ClearsTags(t *testing.T, opts ...configOpt) {
 	require.Empty(t, tagsResponse.Tags)
 }
 
-func manifest_Delete_Schema2_DeleteDisabled(t *testing.T, opts ...configOpt) {
+func manifestDeleteSchema2DeleteDisabled(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -1910,7 +1926,7 @@ func manifest_Delete_Schema2_DeleteDisabled(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 }
 
-func manifest_Delete_Tag(t *testing.T, opts ...configOpt) {
+func manifestDeleteTag(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1945,10 +1961,11 @@ func manifest_Delete_Tag(t *testing.T, opts ...configOpt) {
 
 	resp, err = http.Head(u)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func manifest_Delete_Tag_Unknown(t *testing.T, opts ...configOpt) {
+func manifestDeleteTagUnknown(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1973,7 +1990,7 @@ func manifest_Delete_Tag_Unknown(t *testing.T, opts ...configOpt) {
 	checkBodyHasErrorCodes(t, "deleting unknown tag", resp, v2.ErrorCodeManifestUnknown)
 }
 
-func manifest_Delete_Tag_UnknownRepository(t *testing.T, opts ...configOpt) {
+func manifestDeleteTagUnknownRepository(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -1996,7 +2013,7 @@ func manifest_Delete_Tag_UnknownRepository(t *testing.T, opts ...configOpt) {
 	checkBodyHasErrorCodes(t, "repository not found", resp, v2.ErrorCodeNameUnknown)
 }
 
-func manifest_Delete_Tag_DeleteDisabled(t *testing.T, opts ...configOpt) {
+func manifestDeleteTagDeleteDisabled(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2014,7 +2031,7 @@ func manifest_Delete_Tag_DeleteDisabled(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 }
 
-func manifest_Put_OCI_ByTag(t *testing.T, opts ...configOpt) {
+func manifestPutOCIByTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2025,7 +2042,7 @@ func manifest_Put_OCI_ByTag(t *testing.T, opts ...configOpt) {
 	seedRandomOCIManifest(t, env, repoPath, putByTag(tagName))
 }
 
-func manifest_Put_OCI_ByDigest(t *testing.T, opts ...configOpt) {
+func manifestPutOCIByDigest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2035,7 +2052,7 @@ func manifest_Put_OCI_ByDigest(t *testing.T, opts ...configOpt) {
 	seedRandomOCIManifest(t, env, repoPath, putByDigest)
 }
 
-func manifest_Put_OCI_WithSubject(t *testing.T, opts ...configOpt) {
+func manifestPutOCIWithSubject(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2070,7 +2087,7 @@ func manifest_Put_OCI_WithSubject(t *testing.T, opts ...configOpt) {
 	require.Equal(t, digest.FromBytes(subjPayload), fetchedManifest.Subject().Digest)
 }
 
-func manifest_Put_OCI_WithV2Subject(t *testing.T, opts ...configOpt) {
+func manifestPutOCIWithV2Subject(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2105,7 +2122,7 @@ func manifest_Put_OCI_WithV2Subject(t *testing.T, opts ...configOpt) {
 	require.Equal(t, digest.FromBytes(subjPayload), fetchedManifest.Subject().Digest)
 }
 
-func manifest_Put_OCI_WithNonMatchingSubject(t *testing.T, opts ...configOpt) {
+func manifestPutOCIWithNonMatchingSubject(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2114,7 +2131,7 @@ func manifest_Put_OCI_WithNonMatchingSubject(t *testing.T, opts ...configOpt) {
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	manifest := &ocischema.Manifest{
+	testManifest := &ocischema.Manifest{
 		Versioned: manifest.Versioned{
 			SchemaVersion: 2,
 			MediaType:     v1.MediaTypeImageManifest,
@@ -2125,39 +2142,40 @@ func manifest_Put_OCI_WithNonMatchingSubject(t *testing.T, opts ...configOpt) {
 	cfgPayload, cfgDesc := ociConfig()
 	uploadURLBase, _ := startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
-	manifest.Config = cfgDesc
+	testManifest.Config = cfgDesc
 
 	// Create one random layer for this manifest
-	manifest.Layers = make([]distribution.Descriptor, 1)
+	testManifest.Layers = make([]distribution.Descriptor, 1)
 	rs, dgst, size := createRandomSmallLayer()
 	uploadURLBase, _ = startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
-	manifest.Layers[0] = distribution.Descriptor{
+	testManifest.Layers[0] = distribution.Descriptor{
 		Digest:    dgst,
 		MediaType: v1.MediaTypeImageLayer,
 		Size:      size,
 	}
 
 	// Set subject as a nonexistent manifest reference
-	manifest.Subject = &distribution.Descriptor{
+	testManifest.Subject = &distribution.Descriptor{
 		Digest:    digest.Digest("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
 		MediaType: v1.MediaTypeImageManifest,
 		Size:      42,
 	}
 
-	deserializedManifest, err := ocischema.FromStruct(*manifest)
+	deserializedManifest, err := ocischema.FromStruct(*testManifest)
 	require.NoError(t, err)
 
 	manifestDigestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	resp := putManifest(t, "putting manifest with missing subject", manifestDigestURL, v1.MediaTypeImageManifest, deserializedManifest)
+	resp, err := putManifest("putting manifest with missing subject", manifestDigestURL, v1.MediaTypeImageManifest, deserializedManifest)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	checkBodyHasErrorCodes(t, "putting manifest with missing subject", resp, v2.ErrorCodeManifestBlobUnknown)
 }
 
-func manifest_Put_OCI_WithArtifactType(t *testing.T, opts ...configOpt) {
+func manifestPutOCIWithArtifactType(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2185,7 +2203,7 @@ func manifest_Put_OCI_WithArtifactType(t *testing.T, opts ...configOpt) {
 	require.EqualValues(t, mfst, fetchedManifest)
 }
 
-func manifest_Get_OCI_NonMatchingEtag(t *testing.T, opts ...configOpt) {
+func manifestGetOCINonMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2277,7 +2295,7 @@ func manifest_Get_OCI_NonMatchingEtag(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Get_OCI_MatchingEtag(t *testing.T, opts ...configOpt) {
+func manifestGetOCIMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2344,7 +2362,7 @@ func manifest_Get_OCI_MatchingEtag(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Put_OCIImageIndex_ByTag(t *testing.T, opts ...configOpt) {
+func manifestPutOCIImageIndexByTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2355,7 +2373,7 @@ func manifest_Put_OCIImageIndex_ByTag(t *testing.T, opts ...configOpt) {
 	seedRandomOCIImageIndex(t, env, repoPath, putByTag(tagName))
 }
 
-func manifest_Put_OCIImageIndex_ByDigest(t *testing.T, opts ...configOpt) {
+func manifestPutOCIImageIndexByDigest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2370,7 +2388,8 @@ func validateManifestPutWithNonDistributableLayers(t *testing.T, env *testEnv, r
 
 	// push manifest
 	u := buildManifestDigestURL(t, env, repoRef.Name(), m)
-	resp := putManifest(t, "putting manifest no error", u, mediaType, m)
+	resp, err := putManifest("putting manifest no error", u, mediaType, m)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -2393,6 +2412,8 @@ func validateManifestPutWithNonDistributableLayers(t *testing.T, env *testEnv, r
 
 		res, err := http.Head(u)
 		require.NoError(t, err)
+		// nolint: revive // defer
+		defer res.Body.Close()
 
 		if desc.Digest == foreignDigest {
 			require.Equal(t, http.StatusNotFound, res.StatusCode)
@@ -2402,7 +2423,7 @@ func validateManifestPutWithNonDistributableLayers(t *testing.T, env *testEnv, r
 	}
 }
 
-func manifest_Put_OCI_WithNonDistributableLayers(t *testing.T, opts ...configOpt) {
+func manifestPutOCIWithNonDistributableLayers(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withoutManifestURLValidation)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -2436,10 +2457,11 @@ func manifest_Put_OCI_WithNonDistributableLayers(t *testing.T, opts ...configOpt
 	})
 
 	dm, err := ocischema.FromStruct(*m)
+	require.NoError(t, err)
 	validateManifestPutWithNonDistributableLayers(t, env, repoRef, dm, v1.MediaTypeImageManifest, d)
 }
 
-func manifest_Put_Schema2_WithNonDistributableLayers(t *testing.T, opts ...configOpt) {
+func manifestPutSchema2WithNonDistributableLayers(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withoutManifestURLValidation)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -2473,10 +2495,11 @@ func manifest_Put_Schema2_WithNonDistributableLayers(t *testing.T, opts ...confi
 	})
 
 	dm, err := schema2.FromStruct(*m)
+	require.NoError(t, err)
 	validateManifestPutWithNonDistributableLayers(t, env, repoRef, dm, schema2.MediaTypeManifest, d)
 }
 
-func manifest_Get_OCIIndex_NonMatchingEtag(t *testing.T, opts ...configOpt) {
+func manifestGetOCIIndexNonMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2568,7 +2591,7 @@ func manifest_Get_OCIIndex_NonMatchingEtag(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Get_OCIIndex_MatchingEtag(t *testing.T, opts ...configOpt) {
+func manifestGetOCIIndexMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2635,7 +2658,7 @@ func manifest_Get_OCIIndex_MatchingEtag(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Get_ManifestList_FallbackToSchema2(t *testing.T, opts ...configOpt) {
+func manifestGetManifestListFallbackToSchema2(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2676,7 +2699,8 @@ func manifest_Get_ManifestList_FallbackToSchema2(t *testing.T, opts ...configOpt
 	manifestTagURL := buildManifestTagURL(t, env, repoPath, tagName)
 
 	// Push up manifest list.
-	resp := putManifest(t, "putting manifest list no error", manifestTagURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+	resp, err := putManifest("putting manifest list no error", manifestTagURL, manifestlist.MediaTypeManifestList, deserializedManifestList)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
@@ -2721,7 +2745,7 @@ func manifest_Get_ManifestList_FallbackToSchema2(t *testing.T, opts ...configOpt
 	}
 }
 
-func blob_Get(t *testing.T, opts ...configOpt) {
+func blobGet(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2743,11 +2767,11 @@ func blob_Get(t *testing.T, opts ...configOpt) {
 	_, err = buf.ReadFrom(args.layerFile)
 	require.NoError(t, err)
 
-	require.Equal(t, res.Header.Get("Content-Length"), strconv.Itoa(buf.Len()))
-	require.Equal(t, res.Header.Get("Content-Type"), "application/octet-stream")
-	require.Equal(t, res.Header.Get("Docker-Content-Digest"), args.layerDigest.String())
-	require.Equal(t, res.Header.Get("ETag"), fmt.Sprintf(`"%s"`, args.layerDigest))
-	require.Equal(t, res.Header.Get("Cache-Control"), "max-age=31536000")
+	require.Equal(t, strconv.Itoa(buf.Len()), res.Header.Get("Content-Length"))
+	require.Equal(t, "application/octet-stream", res.Header.Get("Content-Type"))
+	require.Equal(t, args.layerDigest.String(), res.Header.Get("Docker-Content-Digest"))
+	require.Equal(t, fmt.Sprintf(`"%s"`, args.layerDigest), res.Header.Get("ETag"))
+	require.Equal(t, "max-age=31536000", res.Header.Get("Cache-Control"))
 
 	// verify response body
 	v := args.layerDigest.Verifier()
@@ -2756,7 +2780,7 @@ func blob_Get(t *testing.T, opts ...configOpt) {
 	require.True(t, v.Verified())
 }
 
-func blob_Get_RepositoryNotFound(t *testing.T, opts ...configOpt) {
+func blobGetRepositoryNotFound(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2774,7 +2798,7 @@ func blob_Get_RepositoryNotFound(t *testing.T, opts ...configOpt) {
 	checkBodyHasErrorCodes(t, "repository not found", resp, v2.ErrorCodeBlobUnknown)
 }
 
-func blob_Get_BlobNotFound(t *testing.T, opts ...configOpt) {
+func blobGetBlobNotFound(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -2798,7 +2822,7 @@ func blob_Get_BlobNotFound(t *testing.T, opts ...configOpt) {
 	checkBodyHasErrorCodes(t, "blob not found", res, v2.ErrorCodeBlobUnknown)
 }
 
-func blob_Head(t *testing.T, opts ...configOpt) {
+func blobHead(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2810,6 +2834,7 @@ func blob_Head(t *testing.T, opts ...configOpt) {
 	// check if layer exists
 	res, err := http.Head(blobURL)
 	require.NoError(t, err)
+	defer res.Body.Close()
 	require.Equal(t, http.StatusOK, res.StatusCode)
 
 	// verify headers
@@ -2819,11 +2844,11 @@ func blob_Head(t *testing.T, opts ...configOpt) {
 	_, err = buf.ReadFrom(args.layerFile)
 	require.NoError(t, err)
 
-	require.Equal(t, res.Header.Get("Content-Type"), "application/octet-stream")
-	require.Equal(t, res.Header.Get("Content-Length"), strconv.Itoa(buf.Len()))
-	require.Equal(t, res.Header.Get("Docker-Content-Digest"), args.layerDigest.String())
-	require.Equal(t, res.Header.Get("ETag"), fmt.Sprintf(`"%s"`, args.layerDigest))
-	require.Equal(t, res.Header.Get("Cache-Control"), "max-age=31536000")
+	require.Equal(t, "application/octet-stream", res.Header.Get("Content-Type"))
+	require.Equal(t, strconv.Itoa(buf.Len()), res.Header.Get("Content-Length"))
+	require.Equal(t, args.layerDigest.String(), res.Header.Get("Docker-Content-Digest"))
+	require.Equal(t, fmt.Sprintf(`"%s"`, args.layerDigest), res.Header.Get("ETag"))
+	require.Equal(t, "max-age=31536000", res.Header.Get("Cache-Control"))
 
 	// verify body
 	body, err := io.ReadAll(res.Body)
@@ -2831,7 +2856,7 @@ func blob_Head(t *testing.T, opts ...configOpt) {
 	require.Empty(t, body)
 }
 
-func blob_Head_RepositoryNotFound(t *testing.T, opts ...configOpt) {
+func blobHeadRepositoryNotFound(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2844,6 +2869,7 @@ func blob_Head_RepositoryNotFound(t *testing.T, opts ...configOpt) {
 
 	res, err := http.Head(blobURL)
 	require.NoError(t, err)
+	defer res.Body.Close()
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 
 	body, err := io.ReadAll(res.Body)
@@ -2851,7 +2877,7 @@ func blob_Head_RepositoryNotFound(t *testing.T, opts ...configOpt) {
 	require.Empty(t, body)
 }
 
-func blob_Head_BlobNotFound(t *testing.T, opts ...configOpt) {
+func blobHeadBlobNotFound(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -2878,7 +2904,7 @@ func blob_Head_BlobNotFound(t *testing.T, opts ...configOpt) {
 	require.Empty(t, body)
 }
 
-func blob_Delete_Disabled(t *testing.T, opts ...configOpt) {
+func blobDeleteDisabled(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -2894,7 +2920,7 @@ func blob_Delete_Disabled(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusMethodNotAllowed, res.StatusCode)
 }
 
-func blobDelete(t *testing.T, opts ...configOpt) string {
+func blobDeleteImpl(t *testing.T, opts ...configOpt) string {
 	t.Helper()
 
 	opts = append(opts, withDelete)
@@ -2925,12 +2951,12 @@ func blobDelete(t *testing.T, opts ...configOpt) string {
 	return location
 }
 
-func blob_Delete(t *testing.T, opts ...configOpt) {
-	blobDelete(t, opts...)
+func blobDelete(t *testing.T, opts ...configOpt) {
+	blobDeleteImpl(t, opts...)
 }
 
-func blob_Delete_AlreadyDeleted(t *testing.T, opts ...configOpt) {
-	location := blobDelete(t, opts...)
+func blobDeleteAlreadyDeleted(t *testing.T, opts ...configOpt) {
+	location := blobDeleteImpl(t, opts...)
 
 	// Attempt to delete blob link from repository again.
 	res, err := httpDelete(location)
@@ -2939,7 +2965,7 @@ func blob_Delete_AlreadyDeleted(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
-func blob_Delete_UnknownRepository(t *testing.T, opts ...configOpt) {
+func blobDeleteUnknownRepository(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -2963,8 +2989,7 @@ func blob_Delete_UnknownRepository(t *testing.T, opts ...configOpt) {
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
-func tags_Get(t *testing.T, opts ...configOpt) {
-	opts = append(opts)
+func tagsGet(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3111,7 +3136,7 @@ func tags_Get(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func tags_Get_RepositoryNotFound(t *testing.T, opts ...configOpt) {
+func tagsGetRepositoryNotFound(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3130,7 +3155,7 @@ func tags_Get_RepositoryNotFound(t *testing.T, opts ...configOpt) {
 	checkBodyHasErrorCodes(t, "repository not found", resp, v2.ErrorCodeNameUnknown)
 }
 
-func tags_Get_EmptyRepository(t *testing.T, opts ...configOpt) {
+func tagsGetEmptyRepository(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
@@ -3175,26 +3200,26 @@ func tags_Get_EmptyRepository(t *testing.T, opts ...configOpt) {
 	require.Equal(t, tagsAPIResponse{Name: imageName.Name()}, body)
 }
 
-func manifest_Delete_Tag_Notification(t *testing.T, opts ...configOpt) {
+func manifestDeleteTagNotification(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
 	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
+	require.NoError(t, err, "building named object")
 
 	tag := "latest"
 	createRepository(t, env, imageName.Name(), tag)
 
 	ref, err := reference.WithTag(imageName, tag)
-	checkErr(t, err, "building tag reference")
+	require.NoError(t, err, "building tag reference")
 
 	manifestURL, err := env.builder.BuildManifestURL(ref)
-	checkErr(t, err, "building tag URL")
+	require.NoError(t, err, "building tag URL")
 
 	resp, err := httpDelete(manifestURL)
 	msg := "checking tag delete"
-	checkErr(t, err, msg)
+	require.NoError(t, err, msg)
 
 	defer resp.Body.Close()
 
@@ -3210,33 +3235,34 @@ func manifest_Delete_Tag_Notification(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func manifest_Delete_Tag_Notification_WithAuth(t *testing.T, opts ...configOpt) {
+func manifestDeleteTagNotificationWithAuth(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
 	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
+	require.NoError(t, err, "building named object")
 
 	tag := "latest"
 	createRepository(t, env, imageName.Name(), tag)
 
 	ref, err := reference.WithTag(imageName, tag)
-	checkErr(t, err, "building tag reference")
+	require.NoError(t, err, "building tag reference")
 
-	tokenProvider := NewAuthTokenProvider(t)
-	opts = append(opts, withTokenAuth(tokenProvider.CertPath(), defaultIssuerProps()))
+	tokenProvider := newAuthTokenProvider(t)
+	opts = append(opts, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// override registry config/setup to use token based authorization for all proceeding requests
 	env = newTestEnv(t, opts...)
 
 	manifestURL, err := env.builder.BuildManifestURL(ref)
-	checkErr(t, err, "building tag URL")
+	require.NoError(t, err, "building tag URL")
 
 	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
+	require.NoError(t, err)
 
 	// attach authourization header to request
-	req = tokenProvider.RequestWithAuthActions(req, deleteAccessToken("foo/bar"))
+	req = tokenProvider.requestWithAuthActions(req, deleteAccessToken("foo/bar"))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -3263,15 +3289,15 @@ func manifest_Delete_Tag_Notification_WithAuth(t *testing.T, opts ...configOpt) 
 	}
 }
 
-// manifest_Delete_Tag_WithSameImageID tests that deleting a single image tag will not cause the deletion of other tags
+// manifestDeleteTagWithSameImageID tests that deleting a single image tag will not cause the deletion of other tags
 // pointing to the same image ID.
-func manifest_Delete_Tag_WithSameImageID(t *testing.T, opts ...configOpt) {
+func manifestDeleteTagWithSameImageID(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
 	imageName, err := reference.WithName("foo/bar")
-	checkErr(t, err, "building named object")
+	require.NoError(t, err, "building named object")
 
 	// build two tags pointing to the same image
 	tag1 := "1.0.0"
@@ -3280,14 +3306,14 @@ func manifest_Delete_Tag_WithSameImageID(t *testing.T, opts ...configOpt) {
 
 	// delete one of the tags
 	ref, err := reference.WithTag(imageName, tag1)
-	checkErr(t, err, "building tag reference")
+	require.NoError(t, err, "building tag reference")
 
 	manifestURL, err := env.builder.BuildManifestURL(ref)
-	checkErr(t, err, "building tag URL")
+	require.NoError(t, err, "building tag URL")
 
 	resp, err := httpDelete(manifestURL)
 	msg := "checking tag delete"
-	checkErr(t, err, msg)
+	require.NoError(t, err, msg)
 
 	defer resp.Body.Close()
 
@@ -3299,40 +3325,26 @@ func manifest_Delete_Tag_WithSameImageID(t *testing.T, opts ...configOpt) {
 	}
 	// check the other tag is still there
 	tagsURL, err := env.builder.BuildTagsURL(imageName)
-	if err != nil {
-		t.Fatalf("unexpected error building tags url: %v", err)
-	}
+	require.NoError(t, err, "unexpected error building tags url")
 	resp, err = http.Get(tagsURL)
-	if err != nil {
-		t.Fatalf("unexpected error getting tags: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting tags")
 	defer resp.Body.Close()
 
 	dec := json.NewDecoder(resp.Body)
 	var tagsResponse tagsAPIResponse
-	if err := dec.Decode(&tagsResponse); err != nil {
-		t.Fatalf("unexpected error decoding response: %v", err)
-	}
-
-	if tagsResponse.Name != imageName.Name() {
-		t.Fatalf("tags name should match image name: %v != %v", tagsResponse.Name, imageName)
-	}
-
-	if len(tagsResponse.Tags) != 1 {
-		t.Fatalf("expected 1 tag, got %d: %v", len(tagsResponse.Tags), tagsResponse.Tags)
-	}
-
-	if tagsResponse.Tags[0] != tag2 {
-		t.Fatalf("expected tag to be %q, got %q", tagsResponse.Tags[0], tag2)
-	}
+	err = dec.Decode(&tagsResponse)
+	require.NoError(t, err, "unexpected error decoding response")
+	require.Equal(t, tagsResponse.Name, imageName.Name(), "tags name should match image name")
+	require.Len(t, tagsResponse.Tags, 1)
+	require.Equal(t, tagsResponse.Tags[0], tag2)
 }
 
 type catalogAPIResponse struct {
 	Repositories []string `json:"repositories"`
 }
 
-// catalog_Get tests the /v2/_catalog endpoint
-func catalog_Get(t *testing.T, opts ...configOpt) {
+// catalogGet tests the /v2/_catalog endpoint
+func catalogGet(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3472,7 +3484,7 @@ func catalog_Get(t *testing.T, opts ...configOpt) {
 	}
 }
 
-func catalog_Get_Empty(t *testing.T, opts ...configOpt) {
+func catalogGetEmpty(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 
@@ -3490,11 +3502,11 @@ func catalog_Get_Empty(t *testing.T, opts ...configOpt) {
 	err = dec.Decode(&body)
 	require.NoError(t, err)
 
-	require.Len(t, body.Repositories, 0)
+	require.Empty(t, body.Repositories)
 	require.Empty(t, resp.Header.Get("Link"))
 }
 
-func catalog_Get_TooLarge(t *testing.T, opts ...configOpt) {
+func catalogGetTooLarge(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
 	defer env.Shutdown()
 

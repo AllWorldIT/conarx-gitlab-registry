@@ -50,7 +50,7 @@ func TestReferences(t *testing.T) {
 					Digest:    digest.FromString("OCI Manifest 2"),
 				},
 			},
-			expectedBlobs: []distribution.Descriptor{},
+			expectedBlobs: make([]distribution.Descriptor, 0),
 		},
 		{
 			name: "Buildx Cache Manifest",
@@ -77,7 +77,7 @@ func TestReferences(t *testing.T) {
 					},
 				},
 			},
-			expectedManifests: []distribution.Descriptor{},
+			expectedManifests: make([]distribution.Descriptor, 0),
 			expectedBlobs: []distribution.Descriptor{
 				{
 					MediaType: v1.MediaTypeImageLayer,
@@ -139,7 +139,9 @@ func TestReferences(t *testing.T) {
 		require.ElementsMatch(t, tt.expectedManifests, splitRef.Manifests)
 		require.ElementsMatch(t, tt.expectedBlobs, splitRef.Blobs)
 
-		allRef := append(splitRef.Manifests, splitRef.Blobs...)
+		allRef := make([]distribution.Descriptor, len(splitRef.Manifests), len(splitRef.Manifests)+len(splitRef.Blobs))
+		copy(allRef, splitRef.Manifests)
+		allRef = append(allRef, splitRef.Blobs...)
 
 		require.ElementsMatch(t, ml.References(), allRef)
 	}
@@ -363,7 +365,7 @@ func TestOCIManifestFromBuildkitIndex(t *testing.T) {
 						SchemaVersion: 2,
 						MediaType:     v1.MediaTypeImageIndex,
 					},
-					Manifests: []manifestlist.ManifestDescriptor{},
+					Manifests: make([]manifestlist.ManifestDescriptor, 0),
 				},
 			},
 			wantErr: true,

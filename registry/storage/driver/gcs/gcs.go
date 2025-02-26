@@ -2,7 +2,7 @@
 // store blobs in Google cloud storage.
 //
 // This package leverages the google.golang.org/cloud/storage client library
-//for interfacing with gcs.
+// for interfacing with gcs.
 //
 // Because gcs is a key, value store the Stat call does not support last modification
 // time for directories (directories are an abstraction for key, value stores)
@@ -17,6 +17,8 @@ package gcs
 import (
 	"bytes"
 	"context"
+
+	// nolint: revive,gosec // imports-blocklist
 	"crypto/md5"
 	"encoding/json"
 	"errors"
@@ -88,7 +90,6 @@ var customParamKeys = map[string]string{
 // driverParameters is a struct that encapsulates all the driver parameters after all values have been set
 type driverParameters struct {
 	bucket        string
-	config        *jwt.Config
 	email         string
 	privateKey    []byte
 	client        *http.Client
@@ -114,7 +115,7 @@ func init() {
 type gcsDriverFactory struct{}
 
 // Create StorageDriver from parameters
-func (factory *gcsDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (*gcsDriverFactory) Create(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	return FromParameters(parameters)
 }
 
@@ -144,7 +145,7 @@ type baseEmbed struct {
 // FromParameters constructs a new Driver with a given parameters map
 // Required parameters:
 // - bucket
-func FromParameters(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, error) {
 	params, err := parseParameters(parameters)
 	if err != nil {
 		return nil, err
@@ -153,10 +154,10 @@ func FromParameters(parameters map[string]interface{}) (storagedriver.StorageDri
 	return New(params)
 }
 
-func parseParameters(parameters map[string]interface{}) (*driverParameters, error) {
+func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	bucket, ok := parameters["bucket"]
 	if !ok || fmt.Sprint(bucket) == "" {
-		return nil, fmt.Errorf("No bucket parameter provided")
+		return nil, fmt.Errorf("no bucket parameter provided")
 	}
 
 	rootDirectory, ok := parameters["rootdirectory"]
@@ -181,7 +182,7 @@ func parseParameters(parameters map[string]interface{}) (*driverParameters, erro
 		}
 
 		if chunkSize < minChunkSize {
-			return nil, fmt.Errorf("The chunksize %#v parameter should be a number that is larger than or equal to %d", chunkSize, minChunkSize)
+			return nil, fmt.Errorf("the chunksize %#v parameter should be a number that is larger than or equal to %d", chunkSize, minChunkSize)
 		}
 
 		if chunkSize%minChunkSize != 0 {
@@ -202,23 +203,23 @@ func parseParameters(parameters map[string]interface{}) (*driverParameters, erro
 		}
 		ts = jwtConf.TokenSource(context.Background())
 	} else if credentials, ok := parameters["credentials"]; ok {
-		credentialMap, ok := credentials.(map[interface{}]interface{})
+		credentialMap, ok := credentials.(map[any]any)
 		if !ok {
-			return nil, fmt.Errorf("The credentials were not specified in the correct format")
+			return nil, fmt.Errorf("the credentials were not specified in the correct format")
 		}
 
-		stringMap := map[string]interface{}{}
+		stringMap := make(map[string]any, 0)
 		for k, v := range credentialMap {
 			key, ok := k.(string)
 			if !ok {
-				return nil, fmt.Errorf("One of the credential keys was not a string: %s", fmt.Sprint(k))
+				return nil, fmt.Errorf("one of the credential keys was not a string: %s", fmt.Sprint(k))
 			}
 			stringMap[key] = v
 		}
 
 		data, err := json.Marshal(stringMap)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to marshal gcs credentials to json")
+			return nil, fmt.Errorf("failed to marshal gcs credentials to json")
 		}
 
 		jwtConf, err = google.JWTConfigFromJSON(data, storage.ScopeFullControl)
@@ -269,7 +270,7 @@ func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 		rootDirectory += "/"
 	}
 	if params.chunkSize <= 0 || params.chunkSize%minChunkSize != 0 {
-		return nil, fmt.Errorf("Invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
+		return nil, fmt.Errorf("invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
 	}
 	d := &driver{
 		bucket:        params.bucket,
@@ -293,7 +294,7 @@ func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 
 // Implement the storagedriver.StorageDriver interface
 
-func (d *driver) Name() string {
+func (*driver) Name() string {
 	return driverName
 }
 
@@ -328,8 +329,12 @@ func (d *driver) PutContent(ctx context.Context, path string, contents []byte) e
 	return retry(func() error {
 		wc := d.storageClient.Bucket(d.bucket).Object(d.pathToKey(path)).NewWriter(ctx)
 		wc.ContentType = "application/octet-stream"
+		// nolint: gosec
 		h := md5.New()
-		h.Write(contents)
+		_, err := h.Write(contents)
+		if err != nil {
+			return fmt.Errorf("calculating hash: %w", err)
+		}
 		wc.MD5 = h.Sum(nil)
 
 		if len(contents) == 0 {
@@ -351,23 +356,24 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 	res, err := getObject(d.client, d.bucket, d.pathToKey(path), offset)
 	if err != nil {
 		var gcsErr *googleapi.Error
-		if errors.As(err, &gcsErr) {
-			if gcsErr.Code == http.StatusNotFound {
-				return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
-			}
-
-			if gcsErr.Code == http.StatusRequestedRangeNotSatisfiable {
-				obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
-				if err != nil {
-					return nil, err
-				}
-				if offset == int64(obj.Size) {
-					return io.NopCloser(bytes.NewReader([]byte{})), nil
-				}
-				return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
-			}
+		if !errors.As(err, &gcsErr) {
+			return nil, err
 		}
-		return nil, err
+
+		if gcsErr.Code == http.StatusNotFound {
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+		}
+
+		if gcsErr.Code == http.StatusRequestedRangeNotSatisfiable {
+			obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
+			if err != nil {
+				return nil, err
+			}
+			if offset == obj.Size {
+				return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
+			}
+			return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
+		}
 	}
 	if res.Header.Get("Content-Type") == uploadSessionContentType {
 		defer res.Body.Close()
@@ -394,6 +400,7 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 	var res *http.Response
 	err = retry(func() error {
 		var err error
+		// nolint: bodyclose // body is closed bit later in the code
 		res, err = client.Do(req)
 		return err
 	})
@@ -401,7 +408,7 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 		return nil, err
 	}
 	if err := googleapi.CheckMediaResponse(res); err != nil {
-		res.Body.Close()
+		_ = res.Body.Close()
 		return nil, err
 	}
 	return res, nil
@@ -409,7 +416,7 @@ func getObject(client *http.Client, bucket, name string, offset int64) (*http.Re
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (d *driver) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
+func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	writer := &writer{
 		client:        d.client,
 		storageClient: d.storageClient,
@@ -418,7 +425,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 		buffer:        make([]byte, d.chunkSize),
 	}
 
-	if append {
+	if doAppend {
 		err := writer.init(path)
 		if err != nil {
 			return nil, err
@@ -505,6 +512,7 @@ func putContentsClose(wc *storage.Writer, contents []byte) error {
 		}
 	}
 	if err != nil {
+		// nolint: staticcheck,gosec // this needs some refactoring and a deeper research
 		wc.CloseWithError(err)
 		return err
 	}
@@ -659,9 +667,10 @@ func retry(req request) error {
 			metrics.StorageRatelimit()
 		}
 
+		// nolint:gosec // this is just a random number for rety backoff
 		time.Sleep(backoff - time.Second + (time.Duration(rand.Int31n(1000)) * time.Millisecond))
 		if i <= 4 {
-			backoff = backoff * 2
+			backoff *= 2
 		}
 	}
 
@@ -694,8 +703,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 	// try to get as folder
 	dirpath := d.pathToDirKey(path)
 
-	var query *storage.Query
-	query = &storage.Query{}
+	query := &storage.Query{}
 	query.Prefix = dirpath
 
 	it, err := storageListObjects(ctx, d.storageClient, d.bucket, query)
@@ -725,8 +733,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 // List returns a list of the objects that are direct descendants of the
 // given path.
 func (d *driver) List(ctx context.Context, path string) ([]string, error) {
-	var query *storage.Query
-	query = &storage.Query{}
+	query := &storage.Query{}
 	query.Delimiter = "/"
 	query.Prefix = d.pathToDirKey(path)
 	list := make([]string, 0, 64)
@@ -771,7 +778,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 // Move moves an object stored at sourcePath to destPath, removing the
 // original object.
 func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
-	_, err := storageCopyObject(ctx, d.storageClient, d.bucket, d.pathToKey(sourcePath), d.bucket, d.pathToKey(destPath), nil)
+	_, err := storageCopyObject(ctx, d.storageClient, d.bucket, d.pathToKey(sourcePath), d.bucket, d.pathToKey(destPath))
 	if err != nil {
 		var gerr *googleapi.Error
 		if errors.As(err, &gerr) {
@@ -940,7 +947,7 @@ func storageListObjects(ctx context.Context, client *storage.Client, bucket stri
 	return objs, err
 }
 
-func storageCopyObject(ctx context.Context, client *storage.Client, srcBucket, srcName, destBucket, destName string, attrs *storage.ObjectAttrs) (*storage.ObjectAttrs, error) {
+func storageCopyObject(ctx context.Context, client *storage.Client, srcBucket, srcName, destBucket, destName string) (*storage.ObjectAttrs, error) {
 	var obj *storage.ObjectAttrs
 	err := retry(func() error {
 		var err error
@@ -958,7 +965,7 @@ var systemClock internal.Clock = clock.New()
 // URLFor returns a URL which may be used to retrieve the content stored at
 // the given path, possibly using the given options.
 // Returns ErrUnsupportedMethod if this driver has no privateKey
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (d *driver) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
 	if d.privateKey == nil {
 		return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 	}
@@ -1008,38 +1015,6 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 	}
 
 	return storagedriver.WalkFallbackParallel(ctx, d, maxWalkConcurrency, path, f)
-}
-
-// ExistsPath is a performance optimized version of Stat to be used specifically for checking if a given path (not
-// object) exists. For GCS this means doing a single list request with no recursion and minimum attribute retrieval.
-func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
-	prefix := d.pathToDirKey(path)
-
-	var query *storage.Query
-	query = &storage.Query{
-		Prefix:     prefix,
-		Delimiter:  "/",                     // do not walk into child prefixes (if any)
-		Projection: storage.ProjectionNoACL, // no need for Owner and ACL data (faster)
-	}
-
-	// We don't care about attributes, we only care if the prefix exists, but we have to explicitly request one
-	// attribute as the default is all and that comes with a performance penalty.
-	if err := query.SetAttrSelection([]string{"Name"}); err != nil {
-		return false, err
-	}
-
-	it := d.storageClient.Bucket(d.bucket).Objects(ctx, query)
-	it.PageInfo().MaxSize = 1
-
-	// we only fetch one page, we don't care if there are others
-	if _, err := it.Next(); err != nil {
-		if errors.Is(err, iterator.Done) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	return true, nil
 }
 
 func startSession(client *http.Client, bucket, name string) (uri string, err error) {

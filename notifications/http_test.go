@@ -8,13 +8,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/docker/distribution/manifest/schema1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,32 +22,34 @@ import (
 func TestHTTPSink(t *testing.T) {
 	serverHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		if r.Method != http.MethodPost {
+
+		// NOTE(prozlach): we can't use require (which internally uses
+		// `FailNow` from testing package) in a goroutine as we may get an
+		// undefined behavior
+
+		if !assert.Equal(t, http.MethodPost, r.Method, "unexpected request method") {
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			t.Fatalf("unexpected request method: %v", r.Method)
 			return
 		}
 
 		// Extract the content type and make sure it matches
 		contentType := r.Header.Get("Content-Type")
 		mediaType, _, err := mime.ParseMediaType(contentType)
-		if err != nil {
+		if !assert.NoError(t, err, "error parsing media type: contenttype=%q", contentType) {
 			w.WriteHeader(http.StatusBadRequest)
-			t.Fatalf("error parsing media type: %v, contenttype=%q", err, contentType)
 			return
 		}
 
-		if mediaType != EventsMediaType {
+		if !assert.Equal(t, EventsMediaType, mediaType, "incorrect media type") {
 			w.WriteHeader(http.StatusUnsupportedMediaType)
-			t.Fatalf("incorrect media type: %q != %q", mediaType, EventsMediaType)
 			return
 		}
 
 		var envelope Envelope
 		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(&envelope); err != nil {
+
+		if !assert.NoError(t, dec.Decode(&envelope), "error decoding request body") {
 			w.WriteHeader(http.StatusBadRequest)
-			t.Fatalf("error decoding request body: %v", err)
 			return
 		}
 
@@ -72,12 +73,8 @@ func TestHTTPSink(t *testing.T) {
 	// first make sure that the default transport gives x509 untrusted cert error
 	event := &Event{}
 	err := sink.Write(event)
-	if !strings.Contains(err.Error(), "x509") && !strings.Contains(err.Error(), "unknown ca") {
-		t.Fatal("TLS server with default transport should give unknown CA error")
-	}
-	if err := sink.Close(); err != nil {
-		t.Fatalf("unexpected error closing http sink: %v", err)
-	}
+	require.Regexp(t, "x509|unknown ca", err.Error())
+	require.NoError(t, sink.Close())
 
 	// make sure that passing in the transport no longer gives this error
 	tr := &http.Transport{
@@ -86,9 +83,7 @@ func TestHTTPSink(t *testing.T) {
 	sink = newHTTPSink(server.URL, 0, nil, tr,
 		&endpointMetricsHTTPStatusListener{safeMetrics: metrics})
 	err = sink.Write(event)
-	if err != nil {
-		t.Fatalf("unexpected error writing events: %v", err)
-	}
+	require.NoError(t, err)
 
 	server.Close()
 
@@ -105,9 +100,7 @@ func TestHTTPSink(t *testing.T) {
 	expectedMetrics.Statuses = make(map[string]int)
 
 	closeL, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("unexpected error creating listener: %v", err)
-	}
+	require.NoError(t, err)
 	defer closeL.Close()
 	go func() {
 		for {
@@ -115,7 +108,7 @@ func TestHTTPSink(t *testing.T) {
 			if err != nil {
 				return
 			}
-			c.Close()
+			_ = c.Close()
 		}
 	}()
 
@@ -130,30 +123,30 @@ func TestHTTPSink(t *testing.T) {
 			name:       "single_200",
 			statusCode: http.StatusOK,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+				createTestEvent("push", schema1.MediaTypeSignedManifest),
 			},
 		},
 		{
 			name:       "multiple_200",
 			statusCode: http.StatusOK,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
-				createTestEvent("push", "library/test", layerMediaType),
-				createTestEvent("push", "library/test", layerMediaType),
+				createTestEvent("push", schema1.MediaTypeSignedManifest),
+				createTestEvent("push", layerMediaType),
+				createTestEvent("push", layerMediaType),
 			},
 		},
 		{
 			name:       "redirect_307",
 			statusCode: http.StatusTemporaryRedirect,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+				createTestEvent("push", schema1.MediaTypeSignedManifest),
 			},
 		},
 		{
 			name:       "bad_request_400",
 			statusCode: http.StatusBadRequest,
 			events: []Event{
-				createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
+				createTestEvent("push", schema1.MediaTypeSignedManifest),
 			},
 			failure: true,
 		},
@@ -186,37 +179,27 @@ func TestHTTPSink(t *testing.T) {
 		// Try a simple event emission.
 		for _, ev := range tc.events {
 			err := sink.Write(&ev)
-			if !tc.failure {
-				if err != nil {
-					t.Fatalf("unexpected error send event: %v", err)
-				}
+			if tc.failure {
+				require.Error(t, err)
 			} else {
-				if err == nil {
-					t.Fatalf("the endpoint should have rejected the request")
-				}
+				require.NoError(t, err)
 			}
 		}
 
-		if !reflect.DeepEqual(metrics.EndpointMetrics, expectedMetrics) {
-			t.Fatalf("metrics not as expected: %#v != got: %#v", metrics.EndpointMetrics, expectedMetrics)
-		}
+		require.Equal(t, expectedMetrics, metrics.EndpointMetrics)
 	}
 
-	if err := sink.Close(); err != nil {
-		t.Fatalf("unexpected error closing http sink: %v", err)
-	}
+	require.NoError(t, sink.Close())
 
 	// double close returns error
-	if err := sink.Close(); err == nil {
-		t.Fatalf("second close should have returned error: %v", err)
-	}
+	require.Error(t, sink.Close())
 }
 
-func createTestEvent(action, repo, typ string) Event {
+func createTestEvent(action, mt string) Event {
 	event := createEvent(action)
 
-	event.Target.MediaType = typ
-	event.Target.Repository = repo
+	event.Target.MediaType = mt
+	event.Target.Repository = "library/test"
 
 	return *event
 }
@@ -244,9 +227,9 @@ func TestHTTPSink_Errors(t *testing.T) {
 	defer sink.Close()
 
 	events := []Event{
-		createTestEvent("push", "library/test", schema1.MediaTypeSignedManifest),
-		createTestEvent("push", "library/test", layerMediaType),
-		createTestEvent("push", "library/test", layerMediaType),
+		createTestEvent("push", schema1.MediaTypeSignedManifest),
+		createTestEvent("push", layerMediaType),
+		createTestEvent("push", layerMediaType),
 	}
 
 	// all events should time out
@@ -261,5 +244,5 @@ func TestHTTPSink_Errors(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	require.Equal(t, metrics.EndpointMetrics, expectedMetrics)
+	require.Equal(t, expectedMetrics, metrics.EndpointMetrics)
 }

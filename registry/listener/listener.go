@@ -16,26 +16,32 @@ type tcpKeepAliveListener struct {
 	*net.TCPListener
 }
 
-func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
+func (ln tcpKeepAliveListener) Accept() (net.Conn, error) {
 	tc, err := ln.AcceptTCP()
 	if err != nil {
-		return
+		return nil, err
 	}
-	tc.SetKeepAlive(true)
-	tc.SetKeepAlivePeriod(3 * time.Minute)
+	err = tc.SetKeepAlive(true)
+	if err != nil {
+		return nil, err
+	}
+	err = tc.SetKeepAlivePeriod(3 * time.Minute)
+	if err != nil {
+		return nil, err
+	}
 	return tc, nil
 }
 
 // NewListener announces on laddr and net. Accepted values of the net are
 // 'unix' and 'tcp'
-func NewListener(net, laddr string) (net.Listener, error) {
-	switch net {
+func NewListener(socketType, laddr string) (net.Listener, error) {
+	switch socketType {
 	case "unix":
 		return newUnixListener(laddr)
 	case "tcp", "": // an empty net means tcp
 		return newTCPListener(laddr)
 	default:
-		return nil, fmt.Errorf("unknown address type %s", net)
+		return nil, fmt.Errorf("unknown socket type %q", socketType)
 	}
 }
 

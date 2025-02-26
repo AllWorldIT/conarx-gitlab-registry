@@ -3,8 +3,9 @@
 package datastore_test
 
 import (
-	"errors"
+	"cmp"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/docker/distribution/manifest/manifestlist"
@@ -15,6 +16,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,17 +24,28 @@ func reloadManifestFixtures(tb testing.TB) {
 	testutil.ReloadFixtures(
 		tb, suite.db, suite.basePath,
 		// Manifest has a relationship with Repository and ManifestLayer (insert order matters)
-		testutil.NamespacesTable, testutil.RepositoriesTable, testutil.BlobsTable, testutil.ManifestsTable,
-		testutil.TagsTable, testutil.ManifestReferencesTable, testutil.LayersTable,
+		testutil.NamespacesTable,
+		testutil.RepositoriesTable,
+		testutil.BlobsTable,
+		testutil.ManifestsTable,
+		testutil.TagsTable,
+		testutil.ManifestReferencesTable,
+		testutil.LayersTable,
 	)
 }
 
 func unloadManifestFixtures(tb testing.TB) {
 	require.NoError(tb, testutil.TruncateTables(
 		suite.db,
-		// Manifest has a relationship with Repository and ManifestLayer (insert order matters)
-		testutil.NamespacesTable, testutil.RepositoriesTable, testutil.BlobsTable, testutil.ManifestsTable,
-		testutil.TagsTable, testutil.ManifestReferencesTable, testutil.LayersTable,
+		// Manifest has a relationship with Repository and ManifestLayer
+		// (insert order matters)
+		testutil.NamespacesTable,
+		testutil.RepositoriesTable,
+		testutil.BlobsTable,
+		testutil.ManifestsTable,
+		testutil.TagsTable,
+		testutil.ManifestReferencesTable,
+		testutil.LayersTable,
 	))
 }
 
@@ -517,6 +530,20 @@ func TestManifestStore_References(t *testing.T) {
 	require.NoError(t, err)
 
 	local := mm[0].CreatedAt.Location()
+	slices.SortFunc(mm, func(a, b *models.Manifest) int {
+		// NOTE(prozlach): In theory we could sort by just the ID, in practice
+		// let's be paranoid.
+		if n := cmp.Compare(a.NamespaceID, b.NamespaceID); n != 0 {
+			return n
+		}
+		// If namespaces are equal, order by age
+		if n := cmp.Compare(a.RepositoryID, b.RepositoryID); n != 0 {
+			return n
+		}
+
+		return cmp.Compare(a.ID, b.ID)
+	})
+
 	expected := models.Manifests{
 		{
 			ID:            1,
@@ -556,14 +583,18 @@ func TestManifestStore_References(t *testing.T) {
 	// lead to flaky time comparisons in CI. By doing this we can rely on Time.Equal which is the best comparison
 	// mechanism as explained in https://pkg.go.dev/time#Time.
 	for i, manifest := range expected {
-		require.Equal(t, manifest.ID, mm[i].ID)
-		require.Equal(t, manifest.NamespaceID, mm[i].NamespaceID)
-		require.Equal(t, manifest.RepositoryID, mm[i].RepositoryID)
-		require.Equal(t, manifest.TotalSize, mm[i].TotalSize)
-		require.Equal(t, manifest.SchemaVersion, mm[i].SchemaVersion)
-		require.Equal(t, manifest.MediaType, mm[i].MediaType)
-		require.Equal(t, manifest.Digest, mm[i].Digest)
-		require.True(t, manifest.CreatedAt.Equal(mm[i].CreatedAt))
+		assert.Equal(t, manifest.ID, mm[i].ID)
+		assert.Equal(t, manifest.NamespaceID, mm[i].NamespaceID)
+		assert.Equal(t, manifest.RepositoryID, mm[i].RepositoryID)
+		assert.Equal(t, manifest.TotalSize, mm[i].TotalSize)
+		assert.Equal(t, manifest.SchemaVersion, mm[i].SchemaVersion)
+		assert.Equal(t, manifest.MediaType, mm[i].MediaType)
+		assert.Equal(t, manifest.Digest, mm[i].Digest)
+		assert.True(
+			t,
+			manifest.CreatedAt.Equal(mm[i].CreatedAt),
+			"expected CreatedAt: %s, got CreatedAt: %s, diff: %s", manifest.CreatedAt.String(), mm[i].CreatedAt.String(), manifest.CreatedAt.Sub(mm[i].CreatedAt).String(),
+		)
 	}
 }
 
@@ -637,7 +668,7 @@ func TestManifestStore_Create_InvalidMediaType(t *testing.T) {
 	}
 	err := s.Create(suite.ctx, m)
 	var mtErr datastore.ErrUnknownMediaType
-	require.True(t, errors.As(err, &mtErr))
+	require.ErrorAs(t, err, &mtErr)
 	require.Equal(t, m.MediaType, mtErr.MediaType)
 }
 
@@ -660,8 +691,9 @@ func TestManifestStore_Create_InvalidConfigMediaType(t *testing.T) {
 		},
 	}
 	err := s.Create(suite.ctx, m)
+	require.Error(t, err)
 	var mtErr datastore.ErrUnknownMediaType
-	require.True(t, errors.As(err, &mtErr))
+	require.ErrorAs(t, err, &mtErr)
 	require.Equal(t, m.Configuration.MediaType, mtErr.MediaType)
 }
 
@@ -738,6 +770,7 @@ func TestManifestStore_CreateOrFind_InvalidConfigMediaType(t *testing.T) {
 		},
 	}
 	err := s.CreateOrFind(suite.ctx, m)
+	require.Error(t, err)
 	var mtErr datastore.ErrUnknownMediaType
 	require.ErrorAs(t, err, &mtErr)
 	require.Equal(t, m.Configuration.MediaType, mtErr.MediaType)

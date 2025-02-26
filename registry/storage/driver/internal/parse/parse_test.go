@@ -8,7 +8,7 @@ import (
 
 func TestBool(t *testing.T) {
 	tests := map[string]struct {
-		param          interface{}
+		param          any
 		defaultt       bool
 		expected       bool
 		expectedErrMsg string
@@ -76,7 +76,7 @@ func TestBool(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			got, err := Bool(
-				map[string]interface{}{
+				map[string]any{
 					"param": test.param,
 				},
 				"param",

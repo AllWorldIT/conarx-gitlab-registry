@@ -48,8 +48,8 @@ func parseForwardedHeader(forwarded string) (map[string]string, string, error) {
 	var (
 		parameter string
 		value     string
-		parse     = forwarded[:]
-		res       = map[string]string{}
+		parse     = forwarded
+		res       = make(map[string]string)
 		state     = stateElement
 	)
 
@@ -97,6 +97,7 @@ Loop:
 
 		// parse value or quoted value
 		case stateValue:
+			// nolint: revive // max-control-nesting
 			if parse[0] == '"' {
 				parse = parse[1:]
 				state = stateQuotedValue

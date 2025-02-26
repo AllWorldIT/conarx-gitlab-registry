@@ -19,7 +19,7 @@ func TestInjectCustomKeyOpts(t *testing.T) {
 	}{
 		{
 			name:        "custom keys in context",
-			opt:         map[string]any{},
+			opt:         make(map[string]any),
 			extraOptMap: map[string]any{SizeBytesKey: int64(123)},
 			expectedOpt: map[string]any{
 				ProjectIdKey:   int64(123),
@@ -38,7 +38,7 @@ func TestInjectCustomKeyOpts(t *testing.T) {
 		},
 		{
 			name: "extra options",
-			opt:  map[string]any{},
+			opt:  make(map[string]any),
 			extraOptMap: map[string]any{
 				SizeBytesKey: int64(456),
 				"custom":     "custom",
@@ -47,6 +47,7 @@ func TestInjectCustomKeyOpts(t *testing.T) {
 				SizeBytesKey: int64(456),
 				"custom":     "custom",
 			},
+			// nolint: gocritic // business logic
 			ctx: func() context.Context {
 				return context.Background()
 			},

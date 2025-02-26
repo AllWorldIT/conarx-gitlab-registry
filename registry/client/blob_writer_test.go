@@ -10,6 +10,8 @@ import (
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Test implements distribution.BlobWriter
@@ -132,80 +134,46 @@ func TestUploadReadFrom(t *testing.T) {
 	// Valid case
 	blobUpload.location = e + locationPath
 	n, err := blobUpload.ReadFrom(bytes.NewReader(b))
-	if err != nil {
-		t.Fatalf("Error calling ReadFrom: %s", err)
-	}
-	if n != 64 {
-		t.Fatalf("Wrong length returned from ReadFrom: %d, expected 64", n)
-	}
+	require.NoError(t, err, "error calling ReadFrom")
+	require.Equal(t, int64(64), n, "wrong length returned from ReadFrom")
 
 	// Bad range
 	blobUpload.location = e + locationPath
 	_, err = blobUpload.ReadFrom(bytes.NewReader(b))
-	if err == nil {
-		t.Fatalf("Expected error when bad range received")
-	}
+	require.Error(t, err, "expected error when bad range received")
 
 	// 404
 	blobUpload.location = e + locationPath
 	_, err = blobUpload.ReadFrom(bytes.NewReader(b))
-	if err == nil {
-		t.Fatalf("Expected error when not found")
-	}
-	if err != distribution.ErrBlobUploadUnknown {
-		t.Fatalf("Wrong error thrown: %s, expected %s", err, distribution.ErrBlobUploadUnknown)
-	}
+	require.Error(t, err, "expected error when not found")
+	require.ErrorIs(t, err, distribution.ErrBlobUploadUnknown, "wrong error thrown")
 
 	// 400 valid json
 	blobUpload.location = e + locationPath
 	_, err = blobUpload.ReadFrom(bytes.NewReader(b))
-	if err == nil {
-		t.Fatalf("Expected error when not found")
-	}
-	if uploadErr, ok := err.(errcode.Errors); !ok {
-		t.Fatalf("Wrong error type %T: %s", err, err)
-	} else if len(uploadErr) != 1 {
-		t.Fatalf("Unexpected number of errors: %d, expected 1", len(uploadErr))
-	} else {
-		v2Err, ok := uploadErr[0].(errcode.Error)
-		if !ok {
-			t.Fatalf("Not an 'Error' type: %#v", uploadErr[0])
-		}
-		if v2Err.Code != v2.ErrorCodeBlobUploadInvalid {
-			t.Fatalf("Unexpected error code: %s, expected %d", v2Err.Code.String(), v2.ErrorCodeBlobUploadInvalid)
-		}
-		if expected := "blob upload invalid"; v2Err.Message != expected {
-			t.Fatalf("Unexpected error message: %q, expected %q", v2Err.Message, expected)
-		}
-		if expected := "more detail"; v2Err.Detail.(string) != expected {
-			t.Fatalf("Unexpected error message: %q, expected %q", v2Err.Detail.(string), expected)
-		}
-	}
+	require.Error(t, err, "expected error when not found")
+	var uploadErr errcode.Errors
+	require.ErrorAs(t, err, &uploadErr, "wrong error type %T", err)
+	assert.Len(t, uploadErr, 1, "unexpected number of errors")
+	var v2Err errcode.Error
+	require.ErrorAs(t, uploadErr[0], &v2Err)
+	assert.Equal(t, v2.ErrorCodeBlobUploadInvalid, v2Err.Code, "unexpected error code")
+	assert.Equal(t, "blob upload invalid", v2Err.Message, "unexpected error message")
+	assert.Equal(t, "more detail", v2Err.Detail.(string), "unexpected error detail")
 
 	// 400 invalid json
 	blobUpload.location = e + locationPath
 	_, err = blobUpload.ReadFrom(bytes.NewReader(b))
-	if err == nil {
-		t.Fatalf("Expected error when not found")
-	}
-	if uploadErr, ok := err.(*UnexpectedHTTPResponseError); !ok {
-		t.Fatalf("Wrong error type %T: %s", err, err)
-	} else {
-		respStr := string(uploadErr.Response)
-		if expected := "something bad happened"; respStr != expected {
-			t.Fatalf("Unexpected response string: %s, expected: %s", respStr, expected)
-		}
-	}
+	require.Error(t, err, "expected error when not found")
+	uploadErr2 := new(UnexpectedHTTPResponseError)
+	require.ErrorAs(t, err, &uploadErr2)
+	assert.Equal(t, "something bad happened", string(uploadErr2.Response), "unexpected response string")
 
 	// 500
 	blobUpload.location = e + locationPath
 	_, err = blobUpload.ReadFrom(bytes.NewReader(b))
-	if err == nil {
-		t.Fatalf("Expected error when not found")
-	}
-	if uploadErr, ok := err.(*UnexpectedHTTPStatusError); !ok {
-		t.Fatalf("Wrong error type %T: %s", err, err)
-	} else if expected := "500 " + http.StatusText(http.StatusInternalServerError); uploadErr.Status != expected {
-		t.Fatalf("Unexpected response status: %s, expected %s", uploadErr.Status, expected)
-	}
+	require.Error(t, err, "expected error when not found")
+	uploadErr3 := new(UnexpectedHTTPStatusError)
+	require.ErrorAs(t, err, &uploadErr3)
+	assert.Equal(t, "500 "+http.StatusText(http.StatusInternalServerError), uploadErr3.Status, "unexpected response status")
 }

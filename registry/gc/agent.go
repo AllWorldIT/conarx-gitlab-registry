@@ -128,6 +128,7 @@ func (a *Agent) Start(ctx context.Context) error {
 	l := a.logger.WithFields(log.Fields{"worker": a.worker.Name()})
 	b := backoffConstructor(a.initialInterval, a.maxBackoff)
 
+	// nolint: gosec // used only for jitter calculation
 	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
 	jitter := time.Duration(r.Intn(startJitterMaxSeconds)) * time.Second
 	l.WithFields(log.Fields{"jitter_s": jitter.Seconds()}).Info("starting online GC agent")
@@ -138,7 +139,7 @@ func (a *Agent) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			l.Warn("context cancelled, exiting")
+			l.Warn("context canceled, exiting")
 			return ctx.Err()
 		default:
 			start := systemClock.Now()
@@ -151,6 +152,7 @@ func (a *Agent) Start(ctx context.Context) error {
 
 			report := metrics.WorkerRun(a.worker.Name())
 			res := a.worker.Run(wCtx)
+			// nolint: revive // max-control-nesting
 			if res.Err != nil {
 				l.WithError(res.Err).Error("failed run")
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/notifications"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
@@ -28,6 +29,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
@@ -41,7 +43,7 @@ func repositoryDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	}
 
 	return handlers.MethodHandler{
-		http.MethodGet:   http.HandlerFunc(repositoryHandler.GetRepository),
+		http.MethodGet:   http.HandlerFunc(repositoryHandler.HandleGetRepository),
 		http.MethodPatch: http.HandlerFunc(repositoryHandler.RenameRepository),
 	}
 }
@@ -141,8 +143,8 @@ func isQueryParamTypeInt(value string) (int, bool) {
 	return i, err == nil
 }
 
-func isQueryParamIntValueInBetween(value, min, max int) bool {
-	return value >= min && value <= max
+func isQueryParamIntValueInBetween(value, minimum, maximum int) bool {
+	return value >= minimum && value <= maximum
 }
 
 func queryParamValueMatchesPattern(value string, pattern *regexp.Regexp) bool {
@@ -184,9 +186,9 @@ func replacePathName(originPath, newName string) string {
 // extractDryRunQueryParamValue extracts a valid `dry_run` query parameter value from `url`.
 // when no `dry_run` key is found it returns flase by default, when a key is found the function
 // returns the value of the key or returns an error if the vaues are neither "true" or "false".
-func extractDryRunQueryParamValue(url url.Values) (dryRun bool, err error) {
-	if url.Has(dryRunParamKey) {
-		dryRun, err = queryParamDryRunValue(url.Get(dryRunParamKey))
+func extractDryRunQueryParamValue(urlValues url.Values) (dryRun bool, err error) {
+	if urlValues.Has(dryRunParamKey) {
+		dryRun, err = queryParamDryRunValue(urlValues.Get(dryRunParamKey))
 	}
 	return dryRun, err
 }
@@ -200,9 +202,9 @@ const (
 	sizePrecisionUntagged = "untagged"
 )
 
-func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request) {
+func (h *repositoryHandler) HandleGetRepository(w http.ResponseWriter, r *http.Request) {
 	l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"path": h.Repository.Named().Name()})
-	l.Debug("GetRepository")
+	l.Debug("HandleGetRepository")
 
 	var withSize bool
 	sizeVal := sizeQueryParamValue(r)
@@ -287,6 +289,7 @@ func (h *repositoryHandler) GetRepository(w http.ResponseWriter, r *http.Request
 			if err != nil {
 				var pgErr *pgconn.PgError
 				// if this same query has timed out in the last 24h OR times out now, fallback to estimation
+				// nolint: revive // max-control-nesting
 				if errors.Is(err, datastore.ErrSizeHasTimedOut) || (errors.As(err, &pgErr) && pgErr.Code == pgerrcode.QueryCanceled) {
 					size, err = store.EstimatedSizeWithDescendants(ctx, repo)
 					precision = sizePrecisionUntagged
@@ -332,7 +335,7 @@ func repositoryTagsDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	}
 
 	return handlers.MethodHandler{
-		http.MethodGet: http.HandlerFunc(repositoryTagsHandler.GetTags),
+		http.MethodGet: http.HandlerFunc(repositoryTagsHandler.HandleGetTags),
 	}
 }
 
@@ -489,25 +492,18 @@ func filterParamsFromRequest(r *http.Request) (datastore.FilterParams, error) {
 	return filters, nil
 }
 
-func getSortOrderParams(sort string) (string, datastore.SortOrder) {
-	orderBy := tagNameQueryParamKey
-	sortOrder := datastore.OrderAsc
-
-	values := strings.Split(sort, sortOrderDescPrefix)
+func getSortOrderParams(sortP string) (string, datastore.SortOrder) {
+	values := strings.Split(sortP, sortOrderDescPrefix)
 	if len(values) == 2 {
-		sortOrder = datastore.OrderDesc
-		orderBy = values[1]
-	} else {
-		orderBy = sort
+		return values[1], datastore.OrderDesc
 	}
-
-	return orderBy, sortOrder
+	return sortP, datastore.OrderAsc
 }
 
-// GetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
+// HandleGetTags retrieves a list of tag details for a given repository. This includes support for marker-based pagination
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution tags list API. `n` is capped
 // to 100 entries by default.
-func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
+func (h *repositoryTagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
 	filters, err := filterParamsFromRequest(r)
 	if err != nil {
 		h.Errors = append(h.Errors, err)
@@ -519,14 +515,14 @@ func (h *repositoryTagsHandler) GetTags(w http.ResponseWriter, r *http.Request) 
 		opts = append(opts, datastore.WithRepositoryCache(h.GetRepoCache()))
 	}
 	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
-	path := h.Repository.Named().Name()
-	repo, err := rStore.FindByPath(h.Context, path)
+	p := h.Repository.Named().Name()
+	repo, err := rStore.FindByPath(h.Context, p)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
 	if repo == nil {
-		h.Errors = append(h.Errors, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": path}))
+		h.Errors = append(h.Errors, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": p}))
 		return
 	}
 
@@ -625,14 +621,14 @@ func subRepositoriesDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	}
 
 	return handlers.MethodHandler{
-		http.MethodGet: http.HandlerFunc(subRepositoriesHandler.GetSubRepositories),
+		http.MethodGet: http.HandlerFunc(subRepositoriesHandler.HandleGetSubRepositories),
 	}
 }
 
-// GetSubRepositories retrieves a list of repositories for a given repository base path. This includes support for marker-based pagination
+// HandleGetSubRepositories retrieves a list of repositories for a given repository base path. This includes support for marker-based pagination
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution catalog list API. `n` can not exceed 1000.
 // if no `n` query parameter is specified the default of `100` is used.
-func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *http.Request) {
+func (h *subRepositoriesHandler) HandleGetSubRepositories(w http.ResponseWriter, r *http.Request) {
 	filters, err := filterParamsFromRequest(r)
 	if err != nil {
 		h.Errors = append(h.Errors, err)
@@ -640,8 +636,8 @@ func (h *subRepositoriesHandler) GetSubRepositories(w http.ResponseWriter, r *ht
 	}
 
 	// extract the repository name to create the a preliminary repository
-	path := h.Repository.Named().Name()
-	repo := &models.Repository{Path: path}
+	p := h.Repository.Named().Name()
+	repo := &models.Repository{Path: p}
 
 	// try to find the namespaceid for the repo if it exists
 	topLevelPathSegment := repo.TopLevelPathSegment()
@@ -900,12 +896,12 @@ func executeRenameOperation(ctx context.Context, tx datastore.Transactor, repo *
 }
 
 // inferRepository infers a repository object (using the `path` argument) from either the repository store or the namesapce store
-func inferRepository(context context.Context, path string, rStore datastore.RepositoryStore, nStore datastore.NamespaceStore) (*models.Repository, bool, error) {
+func inferRepository(ctx context.Context, repositoryPath string, rStore datastore.RepositoryStore, nStore datastore.NamespaceStore) (*models.Repository, bool, error) {
 	// find the base repository for the path to be renamed (if it exists)
 	// if the base path does not exist we still need to update the subrepositories
 	// of the path (if they exist)
 	var renameOriginRepo bool
-	repo, err := rStore.FindByPath(context, path)
+	repo, err := rStore.FindByPath(ctx, repositoryPath)
 	if err != nil {
 		return nil, renameOriginRepo, err
 	}
@@ -917,11 +913,11 @@ func inferRepository(context context.Context, path string, rStore datastore.Repo
 	// if a base repository was not found we infer a repository using the paths namespace
 	if repo == nil {
 		// build a preliminary repository object
-		repo = &models.Repository{Path: path}
+		repo = &models.Repository{Path: repositoryPath}
 		topLevelPathSegment := repo.TopLevelPathSegment()
 
 		// find the repository namespace and update the preliminary repository object
-		namespace, err := nStore.FindByName(context, topLevelPathSegment)
+		namespace, err := nStore.FindByName(ctx, topLevelPathSegment)
 		if err != nil {
 			return nil, renameOriginRepo, err
 		}
@@ -1056,26 +1052,22 @@ func validateRenameRequestAttributes(renameObject *RenameRepositoryAPIRequest, r
 	if isRenameNameRequest && isRenameNamespaceRequest {
 		detail := v1.OnlyOneOfParamsErrorDetail("name", "namespace")
 		return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParam.WithDetail(detail)
-
 	}
 
 	if isRenameNamespaceRequest {
 		if !reference.GitLabNamespacePathRegex.MatchString(newNamespacePath) {
 			detail := v1.InvalidPatchBodyTypeErrorDetail("namespace", reference.GitLabNamespacePathRegex.String())
 			return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
-
 		}
 
 		// requests that attempt to move repositories to a different top-level namespace are not allowed
 		if strings.Split(newNamespacePath, "/")[0] != strings.Split(repoName, "/")[0] {
 			return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParam.WithDetail("top level namespaces can not be changed")
 		}
-	} else {
+	} else if !reference.GitLabProjectNameRegex.MatchString(newName) || !reference.NameComponentRegexp.MatchString(newName) {
 		// Validate the name suggested for the rename operation
-		if !reference.GitLabProjectNameRegex.MatchString(newName) || !reference.NameComponentRegexp.MatchString(newName) {
-			detail := v1.InvalidPatchBodyTypeErrorDetail("name", reference.GitLabProjectNameRegex.String(), reference.NameComponentRegexp.String())
-			return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
-		}
+		detail := v1.InvalidPatchBodyTypeErrorDetail("name", reference.GitLabProjectNameRegex.String(), reference.NameComponentRegexp.String())
+		return isRenameNamespaceRequest, v1.ErrorCodeInvalidBodyParamType.WithDetail(detail)
 	}
 
 	return isRenameNamespaceRequest, nil
@@ -1230,4 +1222,227 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 		}
 	}
 	return isRenamed, nil
+}
+
+type repositoryTagDetailsHandler struct {
+	*Context
+	Tag string
+}
+
+func repositoryTagDetailsDispatcher(ctx *Context, _ *http.Request) http.Handler {
+	repositorySingleTagHandler := &repositoryTagDetailsHandler{
+		Context: ctx,
+		Tag:     getTagName(ctx),
+	}
+
+	return handlers.MethodHandler{
+		http.MethodGet: http.HandlerFunc(repositorySingleTagHandler.HandleGetSingleTag),
+	}
+}
+
+// RepositoryTagDetailAPIResponse describes the API response for the endpoint
+// GET /gitlab/v1/repositories/<path>/tags/detail/<tagName>/
+type RepositoryTagDetailAPIResponse struct {
+	Repository  string `json:"repository"`
+	Name        string `json:"name"`
+	Image       *Image `json:"image"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	PublishedAt string `json:"published_at,omitempty"`
+}
+
+type Image struct {
+	SizeBytes int64     `json:"size_bytes"`
+	Manifest  *Manifest `json:"manifest"`
+	Config    *Config   `json:"config,omitempty"`
+}
+
+type Manifest struct {
+	Digest     string   `json:"digest"`
+	MediaType  string   `json:"media_type"`
+	References []*Image `json:"references,omitempty"`
+}
+
+type Config struct {
+	Digest    string    `json:"digest"`
+	MediaType string    `json:"media_type"`
+	Platform  *Platform `json:"platform,omitempty"`
+}
+
+type Platform struct {
+	Architecture string `json:"architecture"`
+	OS           string `json:"os"`
+}
+
+// HandleGetSingleTag retrieves detailed information about a specific tag in a repository
+func (h *repositoryTagDetailsHandler) HandleGetSingleTag(w http.ResponseWriter, _ *http.Request) {
+	if err := validateTagName(h.Tag); err != nil {
+		h.Errors = append(h.Errors, err)
+		return
+	}
+
+	repo, err := h.getRepository()
+	if err != nil {
+		h.Errors = append(h.Errors, err)
+		return
+	}
+
+	rStore := datastore.NewRepositoryStore(h.db.Primary())
+	std, err := rStore.TagDetail(h.Context, repo, h.Tag)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	if std == nil {
+		h.Errors = append(h.Errors, v2.ErrorTagNameUnknown.WithDetail(map[string]string{"tagName": h.Tag}))
+		return
+	}
+
+	resp, err := h.buildTagResponse(repo, std)
+	if err != nil {
+		h.Errors = append(h.Errors, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+}
+
+func validateTagName(tagName string) error {
+	if !reference.TagRegexp.MatchString(tagName) {
+		return v2.ErrorCodeTagInvalid.WithDetail(tagName)
+	}
+	return nil
+}
+
+func (h *repositoryTagDetailsHandler) getRepository() (*models.Repository, error) {
+	var opts []datastore.RepositoryStoreOption
+	if h.GetRepoCache() != nil {
+		opts = append(opts, datastore.WithRepositoryCache(h.GetRepoCache()))
+	}
+
+	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
+
+	repo, err := rStore.FindByPath(h.Context, h.Repository.Named().Name())
+	if err != nil {
+		return nil, errcode.FromUnknownError(err)
+	}
+	if repo == nil {
+		return nil, v2.ErrorCodeNameUnknown.WithDetail(map[string]string{"name": h.Repository.Named().Name()})
+	}
+	return repo, nil
+}
+
+func (h *repositoryTagDetailsHandler) buildTagResponse(repo *models.Repository, std *models.TagDetail) (*RepositoryTagDetailAPIResponse, error) {
+	cfg, err := parseConfigPayload(std.Configuration)
+	if err != nil {
+		return nil, errcode.FromUnknownError(err)
+	}
+
+	manifest := &models.Manifest{
+		ID:           std.ManifestID,
+		Digest:       std.Digest,
+		NamespaceID:  repo.NamespaceID,
+		RepositoryID: repo.ID,
+		MediaType:    std.MediaType,
+	}
+
+	resp := &RepositoryTagDetailAPIResponse{
+		Repository: h.Repository.Named().Name(),
+		Name:       std.Name,
+		Image: &Image{
+			SizeBytes: std.Size,
+			Manifest:  h.parseManifest(manifest),
+			Config:    cfg,
+		},
+		CreatedAt:   timeToString(std.CreatedAt),
+		PublishedAt: timeToString(std.PublishedAt),
+	}
+
+	if std.UpdatedAt.Valid {
+		resp.UpdatedAt = timeToString(std.UpdatedAt.Time)
+	}
+
+	return resp, nil
+}
+
+func parseConfigPayload(cfg *models.Configuration) (*Config, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+
+	payload, err := cfg.Payload.Value()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Config{
+		Digest:    cfg.Digest.String(),
+		MediaType: cfg.MediaType,
+		Platform:  parsePlatformFromPayload(payload.([]byte)),
+	}, nil
+}
+
+func parsePlatformFromPayload(payload []byte) *Platform {
+	if payload == nil {
+		return nil
+	}
+
+	var d map[string]any
+	if err := json.Unmarshal(payload, &d); err != nil {
+		return nil
+	}
+	// NOTE: asserting that the map key exists is not necessary as this allocates
+	// an empty string if the key does not exist for architecture and os.
+	arch, _ := d["architecture"].(string)
+	os, _ := d["os"].(string)
+
+	return &Platform{
+		Architecture: arch,
+		OS:           os,
+	}
+}
+
+func (h *repositoryTagDetailsHandler) parseManifest(m *models.Manifest) *Manifest {
+	manifest := &Manifest{
+		Digest:    m.Digest.String(),
+		MediaType: m.MediaType,
+	}
+
+	if isManifestList(m.MediaType) {
+		manifest.References = h.getManifestReferences(m)
+	}
+
+	return manifest
+}
+
+func isManifestList(mediaType string) bool {
+	return mediaType == manifestlist.MediaTypeManifestList || mediaType == ociv1.MediaTypeImageIndex
+}
+
+func (h *repositoryTagDetailsHandler) getManifestReferences(m *models.Manifest) []*Image {
+	mStore := datastore.NewManifestStore(h.db.Primary())
+	references, err := mStore.References(h.Context, m)
+	if err != nil {
+		return nil
+	}
+
+	var result []*Image
+	for _, ref := range references {
+		cfg, err := parseConfigPayload(ref.Configuration)
+		if err != nil {
+			continue
+		}
+		result = append(result, &Image{
+			SizeBytes: ref.TotalSize,
+			Manifest:  h.parseManifest(ref),
+			Config:    cfg,
+		})
+	}
+
+	return result
 }

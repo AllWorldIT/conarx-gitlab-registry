@@ -69,7 +69,7 @@ func (base *Base) setDriverName(e error) error {
 	}
 
 	switch {
-	// NOTE(prozlach): These types have field sets in the code already
+	// NOTE(prozlach): These types have field set in the code already
 	case errors.As(e, new(storagedriver.ErrUnsupportedMethod)):
 		return e
 	case errors.As(e, new(storagedriver.PathNotFoundError)):
@@ -137,15 +137,15 @@ func (base *Base) Reader(ctx context.Context, path string, offset int64) (io.Rea
 }
 
 // Writer wraps Writer of underlying storage driver.
-func (base *Base) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
+func (base *Base) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	ctx, done := dcontext.WithTrace(ctx)
-	defer done("%s.Writer(%q, %v)", base.Name(), path, append)
+	defer done("%s.Writer(%q, %v)", base.Name(), path, doAppend)
 
 	if !storagedriver.PathRegexp.MatchString(path) {
 		return nil, storagedriver.InvalidPathError{Path: path, DriverName: base.StorageDriver.Name()}
 	}
 
-	writer, e := base.StorageDriver.Writer(ctx, path, append)
+	writer, e := base.StorageDriver.Writer(ctx, path, doAppend)
 	return writer, base.setDriverName(e)
 }
 
@@ -212,7 +212,7 @@ func (base *Base) Delete(ctx context.Context, path string) error {
 }
 
 // URLFor wraps URLFor of underlying storage driver.
-func (base *Base) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (base *Base) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	ctx, done := dcontext.WithTrace(ctx)
 	defer done("%s.URLFor(%q)", base.Name(), path)
 

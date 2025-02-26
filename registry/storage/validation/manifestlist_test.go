@@ -2,7 +2,6 @@ package validation_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -58,7 +57,7 @@ func TestVerifyManifest_ManifestList_InvalidSchemaVersion(t *testing.T) {
 	registry := createRegistry(t)
 	repo := makeRepository(t, registry, "test")
 
-	descriptors := []manifestlist.ManifestDescriptor{}
+	descriptors := make([]manifestlist.ManifestDescriptor, 0)
 
 	dml, err := manifestlist.FromDescriptors(descriptors)
 	require.NoError(t, err)
@@ -124,7 +123,7 @@ func TestVerifyManifest_ManifestList_ManifestListWithBlobReferences(t *testing.T
 
 	err = v.Validate(ctx, dml)
 	vErr := &distribution.ErrManifestVerification{}
-	require.True(t, errors.As(err, vErr))
+	require.ErrorAs(t, err, vErr)
 
 	// Ensure each later digest is included in the error with the proper error message.
 	for _, l := range descriptors {
@@ -178,7 +177,7 @@ func TestVerifyManifest_ManifestList_ReferenceLimits(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			descriptors := []manifestlist.ManifestDescriptor{}
+			descriptors := make([]manifestlist.ManifestDescriptor, 0)
 
 			// Create a random manifest for each of the specified manifests.
 			for i := 0; i < tt.manifests; i++ {

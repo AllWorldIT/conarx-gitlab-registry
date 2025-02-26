@@ -25,7 +25,7 @@ func init() {
 // inMemoryDriverFacotry implements the factory.StorageDriverFactory interface.
 type inMemoryDriverFactory struct{}
 
-func (factory *inMemoryDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+func (*inMemoryDriverFactory) Create(_ map[string]any) (storagedriver.StorageDriver, error) {
 	return New(), nil
 }
 
@@ -67,7 +67,7 @@ func New() *Driver {
 
 // Implement the storagedriver.StorageDriver interface.
 
-func (d *driver) Name() string {
+func (*driver) Name() string {
 	return driverName
 }
 
@@ -76,7 +76,7 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 
-	rc, err := d.reader(ctx, path, 0)
+	rc, err := d.readerImpl(ctx, path, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -85,12 +85,12 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 	return io.ReadAll(rc)
 }
 
-// PutContent stores the []byte content at a location designated by "path".
-func (d *driver) PutContent(ctx context.Context, p string, contents []byte) error {
+// PutContent stores the []byte content at a location designated by "targetPath".
+func (d *driver) PutContent(_ context.Context, targetPath string, contents []byte) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
-	normalized := normalize(p)
+	normalized := normalize(targetPath)
 
 	f, err := d.root.mkfile(normalized)
 	if err != nil {
@@ -98,7 +98,10 @@ func (d *driver) PutContent(ctx context.Context, p string, contents []byte) erro
 	}
 
 	f.truncate()
-	f.WriteAt(contents, 0)
+	_, err = f.WriteAt(contents, 0)
+	if err != nil {
+		return fmt.Errorf("writing contents: %w", err)
+	}
 
 	return nil
 }
@@ -109,10 +112,10 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 
-	return d.reader(ctx, path, offset)
+	return d.readerImpl(ctx, path, offset)
 }
 
-func (d *driver) reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
+func (d *driver) readerImpl(_ context.Context, path string, offset int64) (io.ReadCloser, error) {
 	if offset < 0 {
 		return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
 	}
@@ -133,7 +136,7 @@ func (d *driver) reader(ctx context.Context, path string, offset int64) (io.Read
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (d *driver) Writer(ctx context.Context, path string, append bool) (storagedriver.FileWriter, error) {
+func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
@@ -144,7 +147,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 		return nil, fmt.Errorf("not a file")
 	}
 
-	if !append {
+	if !doAppend {
 		f.truncate()
 	}
 
@@ -152,7 +155,7 @@ func (d *driver) Writer(ctx context.Context, path string, append bool) (storaged
 }
 
 // Stat returns info about the provided path.
-func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
+func (d *driver) Stat(_ context.Context, path string) (storagedriver.FileInfo, error) {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 
@@ -178,7 +181,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 
 // List returns a list of the objects that are direct descendants of the given
 // path.
-func (d *driver) List(ctx context.Context, path string) ([]string, error) {
+func (d *driver) List(_ context.Context, path string) ([]string, error) {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 
@@ -207,7 +210,7 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 
 // Move moves an object stored at sourcePath to destPath, removing the original
 // object.
-func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
+func (d *driver) Move(_ context.Context, sourcePath, destPath string) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
@@ -217,7 +220,7 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 }
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
-func (d *driver) Delete(ctx context.Context, path string) error {
+func (d *driver) Delete(_ context.Context, path string) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
@@ -244,7 +247,7 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 
 // URLFor returns a URL which may be used to retrieve the content stored at the given path.
 // May return an UnsupportedMethodErr in certain StorageDriver implementations.
-func (d *driver) URLFor(ctx context.Context, path string, options map[string]interface{}) (string, error) {
+func (*driver) URLFor(_ context.Context, _ string, _ map[string]any) (string, error) {
 	return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
 }
 
@@ -258,23 +261,6 @@ func (d *driver) Walk(ctx context.Context, path string, f storagedriver.WalkFn) 
 // from the given path, calling f on each file.
 func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.WalkFn) error {
 	return storagedriver.WalkFallbackParallel(ctx, d, maxWalkConcurrency, path, f)
-}
-
-// ExistsPath is a performance optimized version of Stat to be used specifically for checking if a given path (not
-// object) exists. For the inmemory driver, which we use for the test suite, this falls back to Stat.
-func (d *driver) ExistsPath(ctx context.Context, path string) (bool, error) {
-	fi, err := d.Stat(ctx, path)
-	if err != nil {
-		if errors.As(err, &storagedriver.PathNotFoundError{}) {
-			return false, nil
-		}
-		return false, err
-	}
-	if fi == nil {
-		return false, nil
-	}
-
-	return true, nil
 }
 
 type writer struct {
@@ -293,12 +279,13 @@ func (d *driver) newWriter(f *file) storagedriver.FileWriter {
 }
 
 func (w *writer) Write(p []byte) (int, error) {
-	if w.closed {
-		return 0, fmt.Errorf("already closed")
-	} else if w.committed {
-		return 0, fmt.Errorf("already committed")
-	} else if w.canceled {
-		return 0, fmt.Errorf("already canceled")
+	switch {
+	case w.closed:
+		return 0, storagedriver.ErrAlreadyClosed
+	case w.committed:
+		return 0, storagedriver.ErrAlreadyCommited
+	case w.canceled:
+		return 0, storagedriver.ErrAlreadyCanceled
 	}
 
 	w.d.mutex.Lock()
@@ -317,7 +304,7 @@ func (w *writer) Size() int64 {
 
 func (w *writer) Close() error {
 	if w.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
 	return nil
@@ -325,9 +312,9 @@ func (w *writer) Close() error {
 
 func (w *writer) Cancel() error {
 	if w.closed {
-		return fmt.Errorf("already closed")
+		return storagedriver.ErrAlreadyClosed
 	} else if w.committed {
-		return fmt.Errorf("already committed")
+		return storagedriver.ErrAlreadyCommited
 	}
 	w.canceled = true
 
@@ -338,12 +325,13 @@ func (w *writer) Cancel() error {
 }
 
 func (w *writer) Commit() error {
-	if w.closed {
-		return fmt.Errorf("already closed")
-	} else if w.committed {
-		return fmt.Errorf("already committed")
-	} else if w.canceled {
-		return fmt.Errorf("already canceled")
+	switch {
+	case w.closed:
+		return storagedriver.ErrAlreadyClosed
+	case w.committed:
+		return storagedriver.ErrAlreadyCommited
+	case w.canceled:
+		return storagedriver.ErrAlreadyCanceled
 	}
 	w.committed = true
 	return nil

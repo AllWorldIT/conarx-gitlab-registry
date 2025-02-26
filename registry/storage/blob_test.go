@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"reflect"
 	"testing"
 
 	"github.com/docker/distribution"
@@ -16,6 +15,7 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/testdriver"
 	"github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/require"
 )
 
 // TestWriteSeek tests that the current file size can be
@@ -25,225 +25,144 @@ func TestWriteSeek(t *testing.T) {
 	imageName, _ := reference.WithName("foo/bar")
 	driver := testdriver.New()
 	registry, err := NewRegistry(ctx, driver, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 	repository, err := registry.Repository(ctx, imageName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 	bs := repository.Blobs(ctx)
 
 	blobUpload, err := bs.Create(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error starting layer upload: %s", err)
-	}
+	require.NoError(t, err, "unexpected error starting layer upload")
 	contents := []byte{1, 2, 3}
 	blobUpload.Write(contents)
 	blobUpload.Close()
 	offset := blobUpload.Size()
-	if offset != int64(len(contents)) {
-		t.Fatalf("unexpected value for blobUpload offset:  %v != %v", offset, len(contents))
-	}
+	require.Equal(t, int64(len(contents)), offset, "unexpected value for blobUpload offset")
 }
 
 // TestSimpleBlobUpload covers the blob upload process, exercising common
 // error paths that might be seen during an upload.
 func TestSimpleBlobUpload(t *testing.T) {
 	randomDataReader, dgst, err := testutil.CreateRandomTarFile()
-	if err != nil {
-		t.Fatalf("error creating random reader: %v", err)
-	}
+	require.NoError(t, err, "error creating random reader")
 
 	ctx := context.Background()
 	imageName, _ := reference.WithName("foo/bar")
 	driver := testdriver.New()
 	registry, err := NewRegistry(ctx, driver, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 	repository, err := registry.Repository(ctx, imageName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 	bs := repository.Blobs(ctx)
 
 	h := sha256.New()
 	rd := io.TeeReader(randomDataReader, h)
 
 	blobUpload, err := bs.Create(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error starting layer upload: %s", err)
-	}
+	require.NoError(t, err, "unexpected error starting layer upload")
 
 	// Cancel the upload then restart it
-	if err := blobUpload.Cancel(ctx); err != nil {
-		t.Fatalf("unexpected error during upload cancellation: %v", err)
-	}
+	require.NoError(t, blobUpload.Cancel(ctx), "unexpected error during upload cancellation")
 
 	// get the enclosing directory
 	uploadPath := path.Dir(blobUpload.(*blobWriter).path)
 
 	// ensure state was cleaned up
 	_, err = driver.List(ctx, uploadPath)
-	if err == nil {
-		t.Fatal("files in upload path after cleanup")
-	}
+	require.Error(t, err, "files in upload path after cleanup")
 
 	// Do a resume, get unknown upload
 	_, err = bs.Resume(ctx, blobUpload.ID())
-	if err != distribution.ErrBlobUploadUnknown {
-		t.Fatalf("unexpected error resuming upload, should be unknown: %v", err)
-	}
+	require.ErrorIs(t, err, distribution.ErrBlobUploadUnknown)
 
 	// Restart!
 	blobUpload, err = bs.Create(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error starting layer upload: %s", err)
-	}
+	require.NoError(t, err, "unexpected error starting layer upload")
 
 	// Get the size of our random tarfile
 	randomDataSize, err := seekerSize(randomDataReader)
-	if err != nil {
-		t.Fatalf("error getting seeker size of random data: %v", err)
-	}
+	require.NoError(t, err, "error getting seeker size of random data")
 
 	nn, err := io.Copy(blobUpload, rd)
-	if err != nil {
-		t.Fatalf("unexpected error uploading layer data: %v", err)
-	}
+	require.NoError(t, err, "unexpected error uploading layer data")
 
-	if nn != randomDataSize {
-		t.Fatalf("layer data write incomplete")
-	}
+	require.Equal(t, randomDataSize, nn, "layer data write incomplete")
 
 	blobUpload.Close()
 
 	offset := blobUpload.Size()
-	if offset != nn {
-		t.Fatalf("blobUpload not updated with correct offset: %v != %v", offset, nn)
-	}
+	require.Equal(t, nn, offset, "blobUpload not updated with correct offset")
 
 	// Do a resume, for good fun
 	blobUpload, err = bs.Resume(ctx, blobUpload.ID())
-	if err != nil {
-		t.Fatalf("unexpected error resuming upload: %v", err)
-	}
+	require.NoError(t, err, "unexpected error resuming upload")
 
 	sha256Digest := digest.NewDigest("sha256", h)
 	desc, err := blobUpload.Commit(ctx, distribution.Descriptor{Digest: dgst})
-	if err != nil {
-		t.Fatalf("unexpected error finishing layer upload: %v", err)
-	}
+	require.NoError(t, err, "unexpected error finishing layer upload")
 
 	// ensure state was cleaned up
 	uploadPath = path.Dir(blobUpload.(*blobWriter).path)
 	_, err = driver.List(ctx, uploadPath)
-	if err == nil {
-		t.Fatal("files in upload path after commit")
-	}
+	require.Error(t, err, "files in upload path after commit")
 
 	// After finishing an upload, it should no longer exist.
-	if _, err := bs.Resume(ctx, blobUpload.ID()); err != distribution.ErrBlobUploadUnknown {
-		t.Fatalf("expected layer upload to be unknown, got %v", err)
-	}
+	_, err = bs.Resume(ctx, blobUpload.ID())
+	require.ErrorIs(t, err, distribution.ErrBlobUploadUnknown, "expected layer upload to be unknown")
 
 	// Test for existence.
 	statDesc, err := bs.Stat(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("unexpected error checking for existence: %v, %#v", err, bs)
-	}
+	require.NoError(t, err, "unexpected error checking for existence")
 
-	if !reflect.DeepEqual(statDesc, desc) {
-		t.Fatalf("descriptors not equal: %v != %v", statDesc, desc)
-	}
+	require.Equal(t, statDesc, desc, "descriptors not equal")
 
 	rc, err := bs.Open(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("unexpected error opening blob for read: %v", err)
-	}
+	require.NoError(t, err, "unexpected error opening blob for read")
 	defer rc.Close()
 
 	h.Reset()
 	nn, err = io.Copy(h, rc)
-	if err != nil {
-		t.Fatalf("error reading layer: %v", err)
-	}
+	require.NoError(t, err, "error reading layer")
 
-	if nn != randomDataSize {
-		t.Fatalf("incorrect read length")
-	}
+	require.Equal(t, randomDataSize, nn, "incorrect read length")
 
-	if digest.NewDigest("sha256", h) != sha256Digest {
-		t.Fatalf("unexpected digest from uploaded layer: %q != %q", digest.NewDigest("sha256", h), sha256Digest)
-	}
+	require.Equal(t, sha256Digest, digest.NewDigest("sha256", h), "unexpected digest from uploaded layer")
 
 	// Delete a blob
 	err = bs.Delete(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("Unexpected error deleting blob")
-	}
+	require.NoError(t, err, "unexpected error deleting blob")
 
 	d, err := bs.Stat(ctx, desc.Digest)
-	if err == nil {
-		t.Fatalf("unexpected non-error stating deleted blob: %v", d)
-	}
+	require.Errorf(t, err, "unexpected non-error stating deleted blob: %v", d)
 
-	switch err {
-	case distribution.ErrBlobUnknown:
-		break
-	default:
-		t.Errorf("Unexpected error type stat-ing deleted manifest: %#v", err)
-	}
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 
 	_, err = bs.Open(ctx, desc.Digest)
-	if err == nil {
-		t.Fatalf("unexpected success opening deleted blob for read")
-	}
+	require.Error(t, err, "unexpected success opening deleted blob for read")
 
-	switch err {
-	case distribution.ErrBlobUnknown:
-		break
-	default:
-		t.Errorf("Unexpected error type getting deleted manifest: %#v", err)
-	}
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 
 	// Re-upload the blob
 	randomBlob, err := io.ReadAll(randomDataReader)
-	if err != nil {
-		t.Fatalf("Error reading all of blob %s", err.Error())
-	}
+	require.NoError(t, err, "error reading all of blob")
 	expectedDigest := digest.FromBytes(randomBlob)
 	simpleUpload(t, bs, randomBlob, expectedDigest)
 
 	d, err = bs.Stat(ctx, expectedDigest)
-	if err != nil {
-		t.Errorf("unexpected error stat-ing blob")
-	}
-	if d.Digest != expectedDigest {
-		t.Errorf("Mismatching digest with restored blob")
-	}
+	require.NoError(t, err, "unexpected error stat-ing blob")
+	require.Equal(t, expectedDigest, d.Digest, "mismatching digest with restored blob")
 
 	br, err := bs.Open(ctx, expectedDigest)
-	if err != nil {
-		t.Errorf("Unexpected error opening blob")
-	}
+	require.NoError(t, err, "unexpected error opening blob")
 	defer br.Close()
 
 	// Reuse state to test delete with a delete-disabled registry
 	registry, err = NewRegistry(ctx, driver, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableRedirect)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 	repository, err = registry.Repository(ctx, imageName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 	bs = repository.Blobs(ctx)
 	err = bs.Delete(ctx, desc.Digest)
-	if err == nil {
-		t.Errorf("Unexpected success deleting while disabled")
-	}
+	require.Error(t, err, "unexpected success deleting while disabled")
 }
 
 // TestSimpleBlobRead just creates a simple blob file and ensures that basic
@@ -254,260 +173,160 @@ func TestSimpleBlobRead(t *testing.T) {
 	imageName, _ := reference.WithName("foo/bar")
 	driver := testdriver.New()
 	registry, err := NewRegistry(ctx, driver, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 	repository, err := registry.Repository(ctx, imageName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 	bs := repository.Blobs(ctx)
 
 	randomLayerReader, dgst, err := testutil.CreateRandomTarFile()
-	if err != nil {
-		t.Fatalf("error creating random data: %v", err)
-	}
+	require.NoError(t, err, "error creating random data")
 
 	// Test for existence.
-	desc, err := bs.Stat(ctx, dgst)
-	if err != distribution.ErrBlobUnknown {
-		t.Fatalf("expected not found error when testing for existence: %v", err)
-	}
+	_, err = bs.Stat(ctx, dgst)
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 
 	_, err = bs.Open(ctx, dgst)
-	if err != distribution.ErrBlobUnknown {
-		t.Fatalf("expected not found error when opening non-existent blob: %v", err)
-	}
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 
 	randomLayerSize, err := seekerSize(randomLayerReader)
-	if err != nil {
-		t.Fatalf("error getting seeker size for random layer: %v", err)
-	}
+	require.NoError(t, err, "error getting seeker size for random layer")
 
 	descBefore := distribution.Descriptor{Digest: dgst, MediaType: "application/octet-stream", Size: randomLayerSize}
 	t.Logf("desc: %v", descBefore)
 
-	desc, err = addBlob(ctx, bs, descBefore, randomLayerReader)
-	if err != nil {
-		t.Fatalf("error adding blob to blobservice: %v", err)
-	}
+	desc, err := addBlob(ctx, bs, descBefore, randomLayerReader)
+	require.NoError(t, err, "error adding blob to blobservice")
 
-	if desc.Size != randomLayerSize {
-		t.Fatalf("committed blob has incorrect length: %v != %v", desc.Size, randomLayerSize)
-	}
+	require.Equal(t, desc.Size, randomLayerSize, "committed blob has incorrect length")
 
 	rc, err := bs.Open(ctx, desc.Digest) // note that we are opening with original digest.
-	if err != nil {
-		t.Fatalf("error opening blob with %v: %v", dgst, err)
-	}
+	require.NoError(t, err, "error opening blob with %v", dgst)
 	defer rc.Close()
 
 	// Now check the sha digest and ensure its the same
 	h := sha256.New()
 	nn, err := io.Copy(h, rc)
-	if err != nil {
-		t.Fatalf("unexpected error copying to hash: %v", err)
-	}
+	require.NoError(t, err, "unexpected error copying to hash")
 
-	if nn != randomLayerSize {
-		t.Fatalf("stored incorrect number of bytes in blob: %d != %d", nn, randomLayerSize)
-	}
+	require.Equal(t, nn, randomLayerSize, "stored incorrect number of bytes in blob")
 
 	sha256Digest := digest.NewDigest("sha256", h)
-	if sha256Digest != desc.Digest {
-		t.Fatalf("fetched digest does not match: %q != %q", sha256Digest, desc.Digest)
-	}
+	require.Equal(t, sha256Digest, desc.Digest, "fetched digest does not match")
 
 	// Now seek back the blob, read the whole thing and check against randomLayerData
 	offset, err := rc.Seek(0, io.SeekStart)
-	if err != nil {
-		t.Fatalf("error seeking blob: %v", err)
-	}
+	require.NoError(t, err, "error seeking blob")
 
-	if offset != 0 {
-		t.Fatalf("seek failed: expected 0 offset, got %d", offset)
-	}
+	require.Zerof(t, offset, "seek failed: expected 0 offset, got %d", offset)
 
 	p, err := io.ReadAll(rc)
-	if err != nil {
-		t.Fatalf("error reading all of blob: %v", err)
-	}
+	require.NoError(t, err, "error reading all of blob")
 
-	if len(p) != int(randomLayerSize) {
-		t.Fatalf("blob data read has different length: %v != %v", len(p), randomLayerSize)
-	}
+	require.Len(t, p, int(randomLayerSize), "blob data read has different length")
 
 	// Reset the randomLayerReader and read back the buffer
 	_, err = randomLayerReader.Seek(0, io.SeekStart)
-	if err != nil {
-		t.Fatalf("error resetting layer reader: %v", err)
-	}
+	require.NoError(t, err, "error resetting layer reader")
 
 	randomLayerData, err := io.ReadAll(randomLayerReader)
-	if err != nil {
-		t.Fatalf("random layer read failed: %v", err)
-	}
+	require.NoError(t, err, "random layer read failed")
 
-	if !bytes.Equal(p, randomLayerData) {
-		t.Fatalf("layer data not equal")
-	}
+	require.Equal(t, p, randomLayerData, "layer data not equal")
 }
 
 // TestBlobMount covers the blob mount process, exercising common
 // error paths that might be seen during a mount.
 func TestBlobMount(t *testing.T) {
 	randomDataReader, dgst, err := testutil.CreateRandomTarFile()
-	if err != nil {
-		t.Fatalf("error creating random reader: %v", err)
-	}
+	require.NoError(t, err, "error creating random reader")
 
 	ctx := context.Background()
 	imageName, _ := reference.WithName("foo/bar")
 	sourceImageName, _ := reference.WithName("foo/source")
 	driver := testdriver.New()
 	registry, err := NewRegistry(ctx, driver, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 
 	repository, err := registry.Repository(ctx, imageName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 	sourceRepository, err := registry.Repository(ctx, sourceImageName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 
 	sbs := sourceRepository.Blobs(ctx)
 
 	blobUpload, err := sbs.Create(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error starting layer upload: %s", err)
-	}
+	require.NoError(t, err, "unexpected error starting layer upload")
 
 	// Get the size of our random tarfile
 	randomDataSize, err := seekerSize(randomDataReader)
-	if err != nil {
-		t.Fatalf("error getting seeker size of random data: %v", err)
-	}
+	require.NoError(t, err, "error getting seeker size of random data")
 
 	_, err = io.Copy(blobUpload, randomDataReader)
-	if err != nil {
-		t.Fatalf("unexpected error uploading layer data: %v", err)
-	}
+	require.NoError(t, err, "unexpected error uploading layer data")
 
 	desc, err := blobUpload.Commit(ctx, distribution.Descriptor{Digest: dgst})
-	if err != nil {
-		t.Fatalf("unexpected error finishing layer upload: %v", err)
-	}
+	require.NoError(t, err, "unexpected error finishing layer upload")
 
 	// Test for existence.
 	statDesc, err := sbs.Stat(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("unexpected error checking for existence: %v, %#v", err, sbs)
-	}
+	require.NoErrorf(t, err, "unexpected error checking for existence (sbs: %#v)", sbs)
 
-	if !reflect.DeepEqual(statDesc, desc) {
-		t.Fatalf("descriptors not equal: %v != %v", statDesc, desc)
-	}
+	require.Equal(t, statDesc, desc, "descriptors not equal")
 
 	bs := repository.Blobs(ctx)
 	// Test destination for existence.
 	_, err = bs.Stat(ctx, desc.Digest)
-	if err == nil {
-		t.Fatalf("unexpected non-error stating unmounted blob: %v", desc)
-	}
+	require.Errorf(t, err, "unexpected non-error stating unmounted blob: %v", desc)
 
 	canonicalRef, err := reference.WithDigest(sourceRepository.Named(), desc.Digest)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	bw, err := bs.Create(ctx, WithMountFrom(canonicalRef))
-	if bw != nil {
-		t.Fatal("unexpected blobwriter returned from Create call, should mount instead")
-	}
+	require.Nil(t, bw, "unexpected blobwriter returned from Create call, should mount instead")
 
-	ebm, ok := err.(distribution.ErrBlobMounted)
-	if !ok {
-		t.Fatalf("unexpected error mounting layer: %v", err)
-	}
+	var ebm distribution.ErrBlobMounted
+	require.ErrorAs(t, err, &ebm)
 
-	if !reflect.DeepEqual(ebm.Descriptor, desc) {
-		t.Fatalf("descriptors not equal: %v != %v", ebm.Descriptor, desc)
-	}
+	require.Equal(t, ebm.Descriptor, desc, "descriptors not equal")
 
 	// Test for existence.
 	statDesc, err = bs.Stat(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("unexpected error checking for existence: %v, %#v", err, bs)
-	}
+	require.NoErrorf(t, err, "unexpected error checking for existence (bs: %#v)", bs)
 
-	if !reflect.DeepEqual(statDesc, desc) {
-		t.Fatalf("descriptors not equal: %v != %v", statDesc, desc)
-	}
+	require.Equal(t, statDesc, desc, "descriptors not equal")
 
 	rc, err := bs.Open(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("unexpected error opening blob for read: %v", err)
-	}
+	require.NoError(t, err, "unexpected error opening blob for read")
 	defer rc.Close()
 
 	h := sha256.New()
 	nn, err := io.Copy(h, rc)
-	if err != nil {
-		t.Fatalf("error reading layer: %v", err)
-	}
+	require.NoError(t, err, "error reading layer")
 
-	if nn != randomDataSize {
-		t.Fatalf("incorrect read length")
-	}
+	require.Equal(t, nn, randomDataSize, "incorrect read length")
 
-	if digest.NewDigest("sha256", h) != dgst {
-		t.Fatalf("unexpected digest from uploaded layer: %q != %q", digest.NewDigest("sha256", h), dgst)
-	}
+	require.Equal(t, digest.NewDigest("sha256", h), dgst, "unexpected digest from uploaded layer")
 
 	// Delete the blob from the source repo
 	err = sbs.Delete(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("Unexpected error deleting blob")
-	}
+	require.NoError(t, err, "Unexpected error deleting blob")
 
 	_, err = bs.Stat(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("unexpected error stating blob deleted from source repository: %v", err)
-	}
+	require.NoError(t, err, "unexpected error stating blob deleted from source repository")
 
 	d, err := sbs.Stat(ctx, desc.Digest)
-	if err == nil {
-		t.Fatalf("unexpected non-error stating deleted blob: %v", d)
-	}
+	require.Errorf(t, err, "unexpected non-error stating deleted blob: %v", d)
 
-	switch err {
-	case distribution.ErrBlobUnknown:
-		break
-	default:
-		t.Errorf("Unexpected error type stat-ing deleted manifest: %#v", err)
-	}
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown, "Unexpected error type stat-ing deleted manifest")
 
 	// Delete the blob from the dest repo
 	err = bs.Delete(ctx, desc.Digest)
-	if err != nil {
-		t.Fatalf("Unexpected error deleting blob")
-	}
+	require.NoError(t, err, "Unexpected error deleting blob")
 
 	d, err = bs.Stat(ctx, desc.Digest)
-	if err == nil {
-		t.Fatalf("unexpected non-error stating deleted blob: %v", d)
-	}
+	require.Errorf(t, err, "unexpected non-error stating deleted blob: %v", d)
 
-	switch err {
-	case distribution.ErrBlobUnknown:
-		break
-	default:
-		t.Errorf("Unexpected error type stat-ing deleted manifest: %#v", err)
-	}
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown, "Unexpected error type stat-ing deleted manifest")
 }
 
 // TestLayerUploadZeroLength uploads zero-length
@@ -516,52 +335,34 @@ func TestLayerUploadZeroLength(t *testing.T) {
 	imageName, _ := reference.WithName("foo/bar")
 	driver := testdriver.New()
 	registry, err := NewRegistry(ctx, driver, BlobDescriptorCacheProvider(memory.NewInMemoryBlobDescriptorCacheProvider()), EnableDelete, EnableRedirect)
-	if err != nil {
-		t.Fatalf("error creating registry: %v", err)
-	}
+	require.NoError(t, err, "error creating registry")
 	repository, err := registry.Repository(ctx, imageName)
-	if err != nil {
-		t.Fatalf("unexpected error getting repo: %v", err)
-	}
+	require.NoError(t, err, "unexpected error getting repo")
 	bs := repository.Blobs(ctx)
 
-	simpleUpload(t, bs, []byte{}, digestSha256Empty)
+	simpleUpload(t, bs, make([]byte, 0), digestSha256Empty)
 }
 
 func simpleUpload(t *testing.T, bs distribution.BlobIngester, blob []byte, expectedDigest digest.Digest) {
 	ctx := context.Background()
 	wr, err := bs.Create(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error starting upload: %v", err)
-	}
+	require.NoError(t, err, "unexpected error starting upload")
 
 	nn, err := io.Copy(wr, bytes.NewReader(blob))
-	if err != nil {
-		t.Fatalf("error copying into blob writer: %v", err)
-	}
+	require.NoError(t, err, "error copying into blob writer")
 
-	if nn != 0 {
-		t.Fatalf("unexpected number of bytes copied: %v > 0", nn)
-	}
+	require.Zero(t, nn, "unexpected number of bytes copied")
 
 	dgst, err := digest.FromReader(bytes.NewReader(blob))
-	if err != nil {
-		t.Fatalf("error getting digest: %v", err)
-	}
+	require.NoError(t, err, "error getting digest")
 
-	if dgst != expectedDigest {
-		// sanity check on zero digest
-		t.Fatalf("digest not as expected: %v != %v", dgst, expectedDigest)
-	}
+	// sanity check on zero digest
+	require.Equal(t, expectedDigest, dgst)
 
 	desc, err := wr.Commit(ctx, distribution.Descriptor{Digest: dgst})
-	if err != nil {
-		t.Fatalf("unexpected error committing write: %v", err)
-	}
+	require.NoError(t, err, "unexpected error committing write")
 
-	if desc.Digest != dgst {
-		t.Fatalf("unexpected digest: %v != %v", desc.Digest, dgst)
-	}
+	require.Equal(t, desc.Digest, dgst)
 }
 
 // seekerSize seeks to the end of seeker, checks the size and returns it to

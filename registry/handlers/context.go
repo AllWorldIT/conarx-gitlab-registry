@@ -49,7 +49,7 @@ type Context struct {
 
 // Value overrides context.Context.Value to ensure that calls are routed to
 // correct context.
-func (ctx *Context) Value(key interface{}) interface{} {
+func (ctx *Context) Value(key any) any {
 	return ctx.Context.Value(key)
 }
 
@@ -61,12 +61,12 @@ func getName(ctx context.Context) (name string) {
 	return dcontext.GetStringValue(ctx, "vars.name")
 }
 
-func getReference(ctx context.Context) (reference string) {
-	return dcontext.GetStringValue(ctx, "vars.reference")
+func getTagName(ctx context.Context) string {
+	return dcontext.GetStringValue(ctx, "vars.tagName")
 }
 
-func getTag(ctx context.Context) (reference string) {
-	return dcontext.GetStringValue(ctx, "vars.tag")
+func getReference(ctx context.Context) (reference string) {
+	return dcontext.GetStringValue(ctx, "vars.reference")
 }
 
 var errDigestNotAvailable = fmt.Errorf("digest not available in context")

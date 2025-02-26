@@ -80,21 +80,21 @@ func TestDisabledBlobMetadataLinking(t *testing.T) {
 	layer, dgst, err := testutil.CreateRandomTarFile()
 	require.NoError(t, err)
 
-	testLayerUpload(t, env, layer, dgst)
+	testLayerUploadImpl(t, env, layer, dgst)
 
 	// Test that blob is **not** linked to the repository after a successful
 	// upload to content addressible storage.
 	blobService := env.repo.Blobs(env.ctx)
 
 	_, err = blobService.Stat(env.ctx, dgst)
-	require.Error(t, err, distribution.ErrBlobUnknown)
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 }
 
 func testFilesystemLayerUpload(t *testing.T, env *env) {
 	layer, dgst, err := testutil.CreateRandomTarFile()
 	require.NoError(t, err)
 
-	testLayerUpload(t, env, layer, dgst)
+	testLayerUploadImpl(t, env, layer, dgst)
 	testLayerLinked(t, env, dgst)
 }
 
@@ -110,18 +110,13 @@ func testIdempotentUpload(t *testing.T, env *env) {
 	dgst := digest.FromBytes(dockerPayload)
 
 	for i := 0; i < 30; i++ {
-		go func() {
-			testLayerUpload(t, env, bytes.NewReader(dockerPayload), dgst)
-			testLayerLinked(t, env, dgst)
-		}()
+		// NOTE(prozlach): Pararelizing this requires rewriting both functions
+		// to return an error and doing the assertion in the main goroutine.
+		// Otherwise we may get an undefined behavior from require calling
+		// FailNow() from the testing package in a goroutine.
+		testLayerUploadImpl(t, env, bytes.NewReader(dockerPayload), dgst)
+		testLayerLinked(t, env, dgst)
 	}
-}
-
-func testEmptyLayerUpload(t *testing.T, env *env) {
-	dgst := digest.FromBytes([]byte{})
-
-	testLayerUpload(t, env, bytes.NewReader([]byte{}), dgst)
-	testLayerLinked(t, env, dgst)
 }
 
 func testDockerConfigurationPaylodUpload(t *testing.T, env *env) {
@@ -135,7 +130,7 @@ func testDockerConfigurationPaylodUpload(t *testing.T, env *env) {
 
 	dgst := digest.FromBytes(dockerPayload)
 
-	testLayerUpload(t, env, bytes.NewReader(dockerPayload), dgst)
+	testLayerUploadImpl(t, env, bytes.NewReader(dockerPayload), dgst)
 	testLayerLinked(t, env, dgst)
 }
 
@@ -143,7 +138,7 @@ func testHelmConfigurationPaylodUpload(t *testing.T, env *env) {
 	helmPayload := `{"name":"e-helm","version":"latest","description":"Sample Helm Chart","apiVersion":"v2","appVersion":"1.16.0","type":"application"}`
 	dgst := digest.FromString(helmPayload)
 
-	testLayerUpload(t, env, strings.NewReader(helmPayload), dgst)
+	testLayerUploadImpl(t, env, strings.NewReader(helmPayload), dgst)
 	testLayerLinked(t, env, dgst)
 }
 
@@ -151,7 +146,7 @@ func testMalformedPayloadUpload(t *testing.T, env *env) {
 	malformedPayload := `{"invalid":"json",`
 	dgst := digest.FromString(malformedPayload)
 
-	testLayerUpload(t, env, strings.NewReader(malformedPayload), dgst)
+	testLayerUploadImpl(t, env, strings.NewReader(malformedPayload), dgst)
 	testLayerLinked(t, env, dgst)
 }
 
@@ -159,11 +154,11 @@ func testUnformattedPayloadUpload(t *testing.T, env *env) {
 	unformattedPayload := "unformatted string"
 	dgst := digest.FromString(unformattedPayload)
 
-	testLayerUpload(t, env, strings.NewReader(unformattedPayload), dgst)
+	testLayerUploadImpl(t, env, strings.NewReader(unformattedPayload), dgst)
 	testLayerLinked(t, env, dgst)
 }
 
-func testLayerUpload(t *testing.T, env *env, layer io.ReadSeeker, dgst digest.Digest) {
+func testLayerUploadImpl(t *testing.T, env *env, layer io.ReadSeeker, dgst digest.Digest) {
 	blobService := env.repo.Blobs(env.ctx)
 	wr, err := blobService.Create(env.ctx)
 	require.NoError(t, err)
@@ -181,7 +176,7 @@ func testLayerUpload(t *testing.T, env *env, layer io.ReadSeeker, dgst digest.Di
 
 	assert.Equal(t, desc.Size, wr.Size(), "blob size and writer size should match")
 
-	assert.Equal(t, desc.MediaType, "application/octet-stream", "blob mediaType should be application/octet-stream")
+	assert.Equal(t, "application/octet-stream", desc.MediaType, "blob mediaType should be application/octet-stream")
 }
 
 func testLayerLinked(t *testing.T, env *env, dgst digest.Digest) {

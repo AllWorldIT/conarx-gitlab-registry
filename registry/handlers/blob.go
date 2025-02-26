@@ -16,16 +16,16 @@ import (
 )
 
 // blobDispatcher uses the request context to build a blobHandler.
-func blobDispatcher(ctx *Context, r *http.Request) http.Handler {
+func blobDispatcher(ctx *Context, _ *http.Request) http.Handler {
 	dgst, err := getDigest(ctx)
 	if err != nil {
 		if err == errDigestNotAvailable {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 				ctx.Errors = append(ctx.Errors, v2.ErrorCodeDigestInvalid.WithDetail(err))
 			})
 		}
 
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			ctx.Errors = append(ctx.Errors, v2.ErrorCodeDigestInvalid.WithDetail(err))
 		})
 	}
@@ -36,8 +36,8 @@ func blobDispatcher(ctx *Context, r *http.Request) http.Handler {
 	}
 
 	mhandler := handlers.MethodHandler{
-		http.MethodGet:  http.HandlerFunc(blobHandler.GetBlob),
-		http.MethodHead: http.HandlerFunc(blobHandler.GetBlob),
+		http.MethodGet:  http.HandlerFunc(blobHandler.HandleGetBlob),
+		http.MethodHead: http.HandlerFunc(blobHandler.HandleGetBlob),
 	}
 
 	if !ctx.readOnly {
@@ -86,10 +86,10 @@ func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string
 	return nil
 }
 
-// GetBlob fetches the binary data from backend storage returns it in the
+// HandleGetBlob fetches the binary data from backend storage returns it in the
 // response.
-func (bh *blobHandler) GetBlob(w http.ResponseWriter, r *http.Request) {
-	log.GetLogger(log.WithContext(bh)).Debug("GetBlob")
+func (bh *blobHandler) HandleGetBlob(w http.ResponseWriter, r *http.Request) {
+	log.GetLogger(log.WithContext(bh)).Debug("HandleGetBlob")
 
 	var dgst digest.Digest
 	blobs := bh.Repository.Blobs(bh)
@@ -172,10 +172,10 @@ func deleteEnabled(config *configuration.Configuration) bool {
 }
 
 // DeleteBlob deletes a layer blob
-func (bh *blobHandler) DeleteBlob(w http.ResponseWriter, r *http.Request) {
+func (bh *blobHandler) DeleteBlob(w http.ResponseWriter, _ *http.Request) {
 	log.GetLogger(log.WithContext(bh)).Debug("DeleteBlob")
 
-	err := bh.deleteBlob()
+	err := bh.deleteBlobImpl()
 	if err != nil {
 		switch err {
 		case distribution.ErrUnsupported:
@@ -198,7 +198,7 @@ func (bh *blobHandler) DeleteBlob(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (bh *blobHandler) deleteBlob() error {
+func (bh *blobHandler) deleteBlobImpl() error {
 	if !bh.useDatabase {
 		blobs := bh.Repository.Blobs(bh)
 		return blobs.Delete(bh, bh.Digest)

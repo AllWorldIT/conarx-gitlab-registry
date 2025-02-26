@@ -1,6 +1,11 @@
 package handlers
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 var blobUploadStates = []blobUploadState{
 	{
@@ -47,14 +52,10 @@ func TestLayerUploadTokens(t *testing.T) {
 
 	for _, testcase := range blobUploadStates {
 		token, err := secret.packUploadState(testcase)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		lus, err := secret.unpackUploadState(token)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		assertBlobUploadStateEquals(t, testcase, lus)
 	}
@@ -70,48 +71,30 @@ func TestHMACValidation(t *testing.T) {
 
 		for _, testcase := range blobUploadStates {
 			token, err := secret1.packUploadState(testcase)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			lus, err := secret2.unpackUploadState(token)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			assertBlobUploadStateEquals(t, testcase, lus)
 
 			_, err = badSecret.unpackUploadState(token)
-			if err == nil {
-				t.Fatalf("Expected token provider to fail at retrieving state from token: %s", token)
-			}
+			require.Error(t, err, "expected token provider to fail at retrieving state from token: %s", token)
 
 			badToken, err := badSecret.packUploadState(lus)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			_, err = secret1.unpackUploadState(badToken)
-			if err == nil {
-				t.Fatalf("Expected token provider to fail at retrieving state from token: %s", badToken)
-			}
+			require.Error(t, err, "expected token provider to fail at retrieving state from token: %s", badToken)
 
 			_, err = secret2.unpackUploadState(badToken)
-			if err == nil {
-				t.Fatalf("Expected token provider to fail at retrieving state from token: %s", badToken)
-			}
+			require.Error(t, err, "expected token provider to fail at retrieving state from token: %s", badToken)
 		}
 	}
 }
 
 func assertBlobUploadStateEquals(t *testing.T, expected, received blobUploadState) {
-	if expected.Name != received.Name {
-		t.Fatalf("Expected Name=%q, Received Name=%q", expected.Name, received.Name)
-	}
-	if expected.UUID != received.UUID {
-		t.Fatalf("Expected UUID=%q, Received UUID=%q", expected.UUID, received.UUID)
-	}
-	if expected.Offset != received.Offset {
-		t.Fatalf("Expected Offset=%d, Received Offset=%d", expected.Offset, received.Offset)
-	}
+	assert.Equal(t, expected.Name, received.Name)
+	assert.Equal(t, expected.UUID, received.UUID)
+	assert.Equal(t, expected.Offset, received.Offset)
 }

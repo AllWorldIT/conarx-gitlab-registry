@@ -33,7 +33,7 @@ type namespaceStore struct {
 }
 
 // NewNamespaceStore builds a new repositoryStore.
-func NewNamespaceStore(db Queryer) *namespaceStore {
+func NewNamespaceStore(db Queryer) NamespaceStore {
 	return &namespaceStore{db: db}
 }
 

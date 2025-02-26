@@ -26,6 +26,7 @@ func (m mockIPRangeHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
+	// nolint: revive // unhandled-error
 	w.Write(bytes)
 }
 
@@ -56,8 +57,8 @@ func TestTryUpdate(t *testing.T) {
 
 	ips := newGoogleIPs(serverIPRanges(server), time.Hour)
 
-	require.Equal(t, 1, len(ips.ipv4))
-	require.Equal(t, 0, len(ips.ipv6))
+	require.Len(t, ips.ipv4, 1)
+	require.Empty(t, ips.ipv6)
 }
 
 func TestMatchIPV6(t *testing.T) {
@@ -73,9 +74,9 @@ func TestMatchIPV6(t *testing.T) {
 	err := ips.tryUpdate()
 	require.NoError(t, err)
 
-	require.Equal(t, true, ips.contains(net.ParseIP("ff00::")))
-	require.Equal(t, 1, len(ips.ipv6))
-	require.Equal(t, 0, len(ips.ipv4))
+	require.True(t, ips.contains(net.ParseIP("ff00::")))
+	require.Len(t, ips.ipv6, 1)
+	require.Empty(t, ips.ipv4)
 }
 
 func TestMatchIPV4(t *testing.T) {
@@ -91,9 +92,9 @@ func TestMatchIPV4(t *testing.T) {
 	err := ips.tryUpdate()
 	require.NoError(t, err)
 
-	require.Equal(t, true, ips.contains(net.ParseIP("192.168.0.0")))
-	require.Equal(t, true, ips.contains(net.ParseIP("192.168.0.1")))
-	require.Equal(t, false, ips.contains(net.ParseIP("192.169.0.0")))
+	require.True(t, ips.contains(net.ParseIP("192.168.0.0")))
+	require.True(t, ips.contains(net.ParseIP("192.168.0.1")))
+	require.False(t, ips.contains(net.ParseIP("192.169.0.0")))
 }
 
 func TestInvalidData(t *testing.T) {
@@ -111,7 +112,7 @@ func TestInvalidData(t *testing.T) {
 	err := ips.tryUpdate()
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(ips.ipv4))
+	require.Len(t, ips.ipv4, 1)
 }
 
 func TestInvalidNetworkType(t *testing.T) {
@@ -126,9 +127,9 @@ func TestInvalidNetworkType(t *testing.T) {
 	defer server.Close()
 
 	ips := newGoogleIPs(serverIPRanges(server), time.Hour)
-	require.Equal(t, 0, len(ips.getCandidateNetworks(make([]byte, 17)))) // 17 bytes does not correspond to any net type
-	require.Equal(t, 1, len(ips.getCandidateNetworks(make([]byte, 4))))  // netv4 networks
-	require.Equal(t, 2, len(ips.getCandidateNetworks(make([]byte, 16)))) // netv6 networks
+	require.Empty(t, ips.getCandidateNetworks(make([]byte, 17)))  // 17 bytes does not correspond to any net type
+	require.Len(t, ips.getCandidateNetworks(make([]byte, 4)), 1)  // netv4 networks
+	require.Len(t, ips.getCandidateNetworks(make([]byte, 16)), 2) // netv6 networks
 }
 
 func TestParsing(t *testing.T) {
@@ -146,7 +147,8 @@ func TestParsing(t *testing.T) {
 	   }]
 	 }`
 	rawMockHandler := http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
+			// nolint: revive // unhandled-error
 			w.Write([]byte(data))
 		},
 	)
@@ -170,8 +172,9 @@ func TestUpdateCalledRegularly(t *testing.T) {
 
 	updateCount := 0
 	server := httptest.NewServer(http.HandlerFunc(
-		func(rw http.ResponseWriter, req *http.Request) {
+		func(rw http.ResponseWriter, _ *http.Request) {
 			updateCount++
+			// nolint: revive // unhandled-error
 			rw.Write([]byte("ok"))
 		},
 	))
@@ -256,7 +259,7 @@ func TestResponseNotOK(t *testing.T) {
 	t.Parallel()
 
 	mockHandler := http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		},
 	)
@@ -310,8 +313,10 @@ func BenchmarkContainsRandom(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		rand.Read(ipv4[i])
-		rand.Read(ipv6[i])
+		_, err := rand.Read(ipv4[i])
+		require.NoError(b, err)
+		_, err = rand.Read(ipv6[i])
+		require.NoError(b, err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -327,8 +332,10 @@ func BenchmarkContainsProd(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ipv4[i] = make([]byte, 4)
 		ipv6[i] = make([]byte, 16)
-		rand.Read(ipv4[i])
-		rand.Read(ipv6[i])
+		_, err := rand.Read(ipv4[i])
+		require.NoError(b, err)
+		_, err = rand.Read(ipv6[i])
+		require.NoError(b, err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

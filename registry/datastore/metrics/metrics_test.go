@@ -32,7 +32,7 @@ func TestInstrumentQuery(t *testing.T) {
 	InstrumentQuery(queryName)()
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_database_queries_total A counter for database queries.
 # TYPE registry_database_queries_total counter
 registry_database_queries_total{name="foo_find_by_id"} 2
@@ -53,10 +53,11 @@ registry_database_query_duration_seconds_bucket{name="foo_find_by_id",le="+Inf"}
 registry_database_query_duration_seconds_sum{name="foo_find_by_id"} 0.03
 registry_database_query_duration_seconds_count{name="foo_find_by_id"} 2
 `)
+	require.NoError(t, err)
 	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, queryDurationName)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, queryTotalName)
 
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName, totalFullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName, totalFullName)
 	require.NoError(t, err)
 }
 
@@ -64,13 +65,14 @@ func TestReplicaPoolSize(t *testing.T) {
 	ReplicaPoolSize(10)
 
 	var expected bytes.Buffer
-	expected.WriteString(`
+	_, err := expected.WriteString(`
 # HELP registry_database_lb_pool_size A gauge for the current number of replicas in the load balancer pool.
 # TYPE registry_database_lb_pool_size gauge
 registry_database_lb_pool_size 10
 `)
+	require.NoError(t, err)
 	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbPoolSizeName)
-	err := testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, fullName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, fullName)
 	require.NoError(t, err)
 }
 

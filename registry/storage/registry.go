@@ -181,7 +181,7 @@ func UseDatabase(registry *registry) error {
 // resulting registry may be shared by multiple goroutines but is cheap to
 // allocate. If the Redirect option is specified, the backend blob server will
 // attempt to use (StorageDriver).URLFor to serve all blobs.
-func NewRegistry(ctx context.Context, driver storagedriver.StorageDriver, options ...RegistryOption) (distribution.Namespace, error) {
+func NewRegistry(_ context.Context, driver storagedriver.StorageDriver, options ...RegistryOption) (distribution.Namespace, error) {
 	// create global statter
 	statter := &blobStatter{
 		driver: driver,
@@ -219,7 +219,7 @@ func NewRegistry(ctx context.Context, driver storagedriver.StorageDriver, option
 
 // Scope returns the namespace scope for a registry. The registry
 // will only serve repositories contained within this scope.
-func (reg *registry) Scope() distribution.Scope {
+func (*registry) Scope() distribution.Scope {
 	return distribution.GlobalScope
 }
 
@@ -265,7 +265,7 @@ func (repo *repository) Named() reference.Named {
 	return repo.name
 }
 
-func (repo *repository) Tags(ctx context.Context) distribution.TagService {
+func (repo *repository) Tags(_ context.Context) distribution.TagService {
 	tags := &tagStore{
 		repository: repo,
 		blobStore:  repo.registry.blobStore,
@@ -415,19 +415,4 @@ func (repo *repository) Blobs(ctx context.Context) distribution.BlobStore {
 		resumableDigestEnabled: repo.resumableDigestEnabled,
 		useDatabase:            repo.useDatabase,
 	}
-}
-
-// RepositoryValidator provides an interface for validating repositories.
-type RepositoryValidator interface {
-	// Exists determines whether the repository exists in the storage backend or not.
-	Exists(ctx context.Context) (bool, error)
-}
-
-// Exists determines whether the repository exists in the storage backend or not.
-func (repo *repository) Exists(ctx context.Context) (bool, error) {
-	p, err := pathFor(manifestTagsPathSpec{name: repo.name.Name()})
-	if err != nil {
-		return false, err
-	}
-	return repo.driver.ExistsPath(ctx, p)
 }

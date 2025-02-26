@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,8 @@ import (
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/health"
 	dtestutil "github.com/docker/distribution/testutil"
+	"github.com/docker/distribution/version"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,15 +21,13 @@ func TestFileHealthCheck(t *testing.T) {
 	interval := time.Second
 
 	tmpfile, err := os.CreateTemp(t.TempDir(), "healthcheck")
-	if err != nil {
-		t.Fatalf("could not create temporary file: %v", err)
-	}
+	require.NoError(t, err, "could not create temporary file")
 	defer tmpfile.Close()
 
 	config := &configuration.Configuration{
 		Storage: configuration.Storage{
 			"inmemory": configuration.Parameters{},
-			"maintenance": configuration.Parameters{"uploadpurging": map[interface{}]interface{}{
+			"maintenance": configuration.Parameters{"uploadpurging": map[any]any{
 				"enabled": false,
 			}},
 		},
@@ -44,35 +45,36 @@ func TestFileHealthCheck(t *testing.T) {
 
 	app, err := NewApp(ctx, config)
 	require.NoError(t, err)
+	t.Cleanup(
+		func() {
+			err := app.GracefulShutdown(ctx)
+			require.NoError(t, err)
+		},
+	)
+
 	healthRegistry := health.NewRegistry()
-	app.RegisterHealthChecks(healthRegistry)
+	err = app.RegisterHealthChecks(healthRegistry)
+	require.NoError(t, err)
 
 	// Wait for health check to happen
 	<-time.After(2 * interval)
 
 	status := healthRegistry.CheckStatus()
-	if len(status) != 1 {
-		t.Fatal("expected 1 item in health check results")
-	}
-	if status[tmpfile.Name()] != "file exists" {
-		t.Fatal(`did not get "file exists" result for health check`)
-	}
+	require.Len(t, status, 1, "expected 1 item in health check results")
+	assert.Equal(t, "file exists", status[tmpfile.Name()], `did not get "file exists" result for health check`)
 
-	os.Remove(tmpfile.Name())
+	err = os.Remove(tmpfile.Name())
+	require.NoError(t, err)
 
 	<-time.After(2 * interval)
-	if len(healthRegistry.CheckStatus()) != 0 {
-		t.Fatal("expected 0 items in health check results")
-	}
+	assert.Empty(t, healthRegistry.CheckStatus(), "expected 0 items in health check results")
 }
 
 func TestTCPHealthCheck(t *testing.T) {
 	interval := time.Second
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("could not create listener: %v", err)
-	}
+	require.NoError(t, err, "could not create listener")
 	addrStr := ln.Addr().String()
 
 	// Start accepting
@@ -90,7 +92,7 @@ func TestTCPHealthCheck(t *testing.T) {
 	config := &configuration.Configuration{
 		Storage: configuration.Storage{
 			"inmemory": configuration.Parameters{},
-			"maintenance": configuration.Parameters{"uploadpurging": map[interface{}]interface{}{
+			"maintenance": configuration.Parameters{"uploadpurging": map[any]any{
 				"enabled": false,
 			}},
 		},
@@ -109,106 +111,170 @@ func TestTCPHealthCheck(t *testing.T) {
 
 	app, err := NewApp(ctx, config)
 	require.NoError(t, err)
+	t.Cleanup(
+		func() {
+			err := app.GracefulShutdown(ctx)
+			require.NoError(t, err)
+		},
+	)
+
 	healthRegistry := health.NewRegistry()
-	app.RegisterHealthChecks(healthRegistry)
+	err = app.RegisterHealthChecks(healthRegistry)
+	require.NoError(t, err)
 
 	// Wait for health check to happen
 	<-time.After(2 * interval)
 
-	if len(healthRegistry.CheckStatus()) != 0 {
-		t.Fatal("expected 0 items in health check results")
-	}
+	require.Empty(t, healthRegistry.CheckStatus(), "expected 0 items in health check results")
 
-	ln.Close()
+	err = ln.Close()
+	require.NoError(t, err)
 	<-time.After(2 * interval)
 
 	// Health check should now fail
 	status := healthRegistry.CheckStatus()
-	if len(status) != 1 {
-		t.Fatal("expected 1 item in health check results")
-	}
-	if status[addrStr] != "connection to "+addrStr+" failed" {
-		t.Fatal(`did not get "connection failed" result for health check`)
-	}
+	require.Len(t, status, 1, "expected 1 item in health check results")
+	assert.Equal(t, "connection to "+addrStr+" failed", status[addrStr], `did not get "connection failed" result for health check`)
 }
 
 func TestHTTPHealthCheck(t *testing.T) {
-	interval := time.Second
-	threshold := 3
-
-	stopFailing := make(chan struct{})
-
-	checkedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodHead {
-			t.Fatalf("expected HEAD request, got %s", r.Method)
-		}
-		select {
-		case <-stopFailing:
-			w.WriteHeader(http.StatusOK)
-		default:
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}))
-	t.Cleanup(checkedServer.Close)
-
-	config := &configuration.Configuration{
-		Storage: configuration.Storage{
-			"inmemory": configuration.Parameters{},
-			"maintenance": configuration.Parameters{"uploadpurging": map[interface{}]interface{}{
-				"enabled": false,
-			}},
+	testcases := []struct {
+		name            string
+		headersConfig   http.Header
+		expectedHeaders http.Header
+	}{
+		{
+			name:          "default user agent",
+			headersConfig: http.Header{},
+			expectedHeaders: http.Header{
+				"User-Agent": []string{
+					fmt.Sprintf("container-registry-httpcheck/%s-%s", version.Version, version.Revision),
+				},
+			},
 		},
-		Health: configuration.Health{
-			HTTPCheckers: []configuration.HTTPChecker{
-				{
-					Interval:  interval,
-					URI:       checkedServer.URL,
-					Threshold: threshold,
+		{
+			name: "custom user agent",
+			headersConfig: http.Header{
+				"User-Agent": []string{"marynian sodowy/1.1"},
+			},
+			expectedHeaders: http.Header{
+				"User-Agent": []string{"marynian sodowy/1.1"},
+			},
+		},
+		{
+			name: "custom header set",
+			headersConfig: http.Header{
+				"boryna": []string{"maryna"},
+			},
+			expectedHeaders: http.Header{
+				"Boryna": []string{"maryna"},
+				"User-Agent": []string{
+					fmt.Sprintf("container-registry-httpcheck/%s-%s", version.Version, version.Revision),
+				},
+			},
+		},
+		// Below results in:
+		// Host: 127.0.0.1:37117
+		// User-Agent: container-registry-httpcheck/unknown-
+		// Boryna: maryna1
+		// Boryna: maryna2
+		// Boryna: maryna3
+		{
+			name: "repetitive custom headers set",
+			headersConfig: http.Header{
+				"boryna": []string{"maryna1", "maryna2", "maryna3"},
+			},
+			expectedHeaders: http.Header{
+				"Boryna": []string{"maryna1", "maryna2", "maryna3"},
+				"User-Agent": []string{
+					fmt.Sprintf("container-registry-httpcheck/%s-%s", version.Version, version.Revision),
 				},
 			},
 		},
 	}
 
-	ctx := dtestutil.NewContextWithLogger(t)
+	interval := time.Second
+	threshold := 3
 
-	app, err := NewApp(ctx, config)
-	require.NoError(t, err)
-	healthRegistry := health.NewRegistry()
-	app.RegisterHealthChecks(healthRegistry)
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			stopFailing := make(chan struct{})
 
-	for i := 0; ; i++ {
-		<-time.After(interval)
+			checkedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodHead, r.Method, "expected HEAD request")
+				// NOTE(prozlach): we can't use require (which internally uses
+				// `FailNow` from testing package) in a goroutine as we may get
+				// an undefined behavior
+				assert.Equal(t, test.expectedHeaders, r.Header)
+				select {
+				case <-stopFailing:
+					w.WriteHeader(http.StatusOK)
+				default:
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}))
+			t.Cleanup(checkedServer.Close)
 
-		status := healthRegistry.CheckStatus()
-
-		if i < threshold-1 {
-			// definitely shouldn't have hit the threshold yet
-			if len(status) != 0 {
-				t.Fatal("expected 1 item in health check results")
+			config := &configuration.Configuration{
+				Storage: configuration.Storage{
+					"inmemory": configuration.Parameters{},
+					"maintenance": configuration.Parameters{"uploadpurging": map[any]any{
+						"enabled": false,
+					}},
+				},
+				Health: configuration.Health{
+					HTTPCheckers: []configuration.HTTPChecker{
+						{
+							Interval:  interval,
+							URI:       checkedServer.URL,
+							Threshold: threshold,
+							Headers:   test.headersConfig,
+						},
+					},
+				},
 			}
-			continue
-		}
-		if i < threshold+1 {
-			// right on the threshold - don't expect a failure yet
-			continue
-		}
 
-		if len(status) != 1 {
-			t.Fatal("expected 1 item in health check results")
-		}
-		if status[checkedServer.URL] != "downstream service returned unexpected status: 500" {
-			t.Fatal("did not get expected result for health check")
-		}
+			ctx := dtestutil.NewContextWithLogger(t)
 
-		break
-	}
+			app, err := NewApp(ctx, config)
+			require.NoError(t, err)
+			t.Cleanup(
+				func() {
+					err := app.GracefulShutdown(ctx)
+					require.NoError(t, err)
+				},
+			)
 
-	// Signal HTTP handler to start returning 200
-	close(stopFailing)
+			healthRegistry := health.NewRegistry()
+			app.RegisterHealthChecks(healthRegistry)
 
-	<-time.After(2 * interval)
+			for i := 0; ; i++ {
+				<-time.After(interval)
 
-	if len(healthRegistry.CheckStatus()) != 0 {
-		t.Fatal("expected 0 items in health check results")
+				status := healthRegistry.CheckStatus()
+
+				if i < threshold-1 {
+					// definitely shouldn't have hit the threshold yet
+					assert.Empty(t, status, "expected 1 item in health check results")
+					continue
+				}
+				if i < threshold+1 {
+					// right on the threshold - don't expect a failure yet
+					continue
+				}
+
+				require.Len(t, status, 1, "expected 1 item in health check results")
+				require.Equal(t, "downstream service returned unexpected status: 500", status[checkedServer.URL], "did not get expected result for health check")
+
+				break
+			}
+
+			// Signal HTTP handler to start returning 200
+			close(stopFailing)
+
+			<-time.After(2 * interval)
+
+			assert.Empty(t, healthRegistry.CheckStatus(), "expected 0 items in health check results")
+		})
 	}
 }

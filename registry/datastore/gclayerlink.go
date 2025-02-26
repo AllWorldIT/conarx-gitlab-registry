@@ -8,13 +8,13 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 )
 
-type gcLayerLinkStore struct {
+type GCLayerLinkStore struct {
 	db Queryer
 }
 
-// NewGCLayerLinkStore builds a new gcLayerLinkStore.
-func NewGCLayerLinkStore(db Queryer) *gcLayerLinkStore {
-	return &gcLayerLinkStore{db: db}
+// NewGCLayerLinkStore builds a new GCLayerLinkStore.
+func NewGCLayerLinkStore(db Queryer) *GCLayerLinkStore {
+	return &GCLayerLinkStore{db: db}
 }
 
 func scanFullGCLayerLinks(rows *sql.Rows) ([]*models.GCLayerLink, error) {
@@ -46,7 +46,7 @@ func scanFullGCLayerLinks(rows *sql.Rows) ([]*models.GCLayerLink, error) {
 }
 
 // FindAll finds all GC layer links.
-func (s *gcLayerLinkStore) FindAll(ctx context.Context) ([]*models.GCLayerLink, error) {
+func (s *GCLayerLinkStore) FindAll(ctx context.Context) ([]*models.GCLayerLink, error) {
 	q := `SELECT
 			id,
 			top_level_namespace_id,
@@ -64,7 +64,7 @@ func (s *gcLayerLinkStore) FindAll(ctx context.Context) ([]*models.GCLayerLink, 
 }
 
 // Count counts all GC layer links.
-func (s *gcLayerLinkStore) Count(ctx context.Context) (int, error) {
+func (s *GCLayerLinkStore) Count(ctx context.Context) (int, error) {
 	q := "SELECT COUNT(*) FROM gc_blobs_layers"
 	var count int
 

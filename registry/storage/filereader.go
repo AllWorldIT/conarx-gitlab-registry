@@ -36,13 +36,13 @@ type fileReader struct {
 // takes on the size and path that must be determined externally with a stat
 // call. The reader operates optimistically, assuming that the file is already
 // there.
-func newFileReader(ctx context.Context, driver storagedriver.StorageDriver, path string, size int64) (*fileReader, error) {
+func newFileReader(ctx context.Context, driver storagedriver.StorageDriver, path string, size int64) *fileReader {
 	return &fileReader{
 		ctx:    ctx,
 		driver: driver,
 		path:   path,
 		size:   size,
-	}, nil
+	}
 }
 
 func (fr *fileReader) Read(p []byte) (n int, err error) {
@@ -120,7 +120,7 @@ func (fr *fileReader) reader() (io.Reader, error) {
 			// reader that returns io.EOF. However, we do not set fr.rc,
 			// allowing future attempts at getting a reader to possibly
 			// succeed if the file turns up later.
-			return io.NopCloser(bytes.NewReader([]byte{})), nil
+			return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
 		}
 
 		return nil, err
@@ -146,7 +146,7 @@ func (fr *fileReader) reset() {
 		return
 	}
 	if fr.rc != nil {
-		fr.rc.Close()
+		_ = fr.rc.Close()
 		fr.rc = nil
 	}
 }
@@ -160,7 +160,10 @@ func (fr *fileReader) closeWithErr(err error) error {
 
 	// close and release reader chain
 	if fr.rc != nil {
-		fr.rc.Close()
+		err := fr.rc.Close()
+		if err != nil {
+			return fmt.Errorf("closing file reader: %w", err)
+		}
 	}
 
 	fr.rc = nil

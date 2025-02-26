@@ -15,23 +15,23 @@ import (
 // Logger provides a leveled-logging interface.
 type Logger interface {
 	// standard logger methods
-	Print(args ...interface{})
+	Print(args ...any)
 
-	Fatal(args ...interface{})
-	Fatalln(args ...interface{})
+	Fatal(args ...any)
+	Fatalln(args ...any)
 
-	Panic(args ...interface{})
+	Panic(args ...any)
 
 	// Leveled methods, from logrus
-	Trace(args ...interface{})
+	Trace(args ...any)
 
-	Debug(args ...interface{})
+	Debug(args ...any)
 
-	Error(args ...interface{})
+	Error(args ...any)
 
-	Info(args ...interface{})
+	Info(args ...any)
 
-	Warn(args ...interface{})
+	Warn(args ...any)
 
 	WithError(error) Logger
 	WithFields(Fields) Logger
@@ -78,14 +78,14 @@ func WithLogger(ctx context.Context, logger Logger) context.Context {
 
 type logOptions struct {
 	ctx    context.Context
-	keys   []interface{}
+	keys   []any
 	writer io.Writer
 }
 
-type logOpt func(o *logOptions)
+type LogOpt func(o *logOptions)
 
 // WithContext returns the logger from the current context, if present.
-func WithContext(ctx context.Context) logOpt {
+func WithContext(ctx context.Context) LogOpt {
 	return func(o *logOptions) {
 		o.ctx = ctx
 	}
@@ -96,20 +96,20 @@ func WithContext(ctx context.Context) logOpt {
 // interface, any key argument passed to GetLogger will be passed to fmt.Sprint
 // when expanded as a logging key field. If context keys are integer constants,
 // for example, its recommended that a String method is implemented.
-func WithKeys(keys ...interface{}) logOpt {
+func WithKeys(keys ...any) LogOpt {
 	return func(o *logOptions) {
 		o.keys = keys
 	}
 }
 
-func WithWriter(w io.Writer) logOpt {
+func WithWriter(w io.Writer) LogOpt {
 	return func(o *logOptions) {
 		o.writer = w
 	}
 }
 
 // GetLogger returns a Logger based on a logrus Entry.
-func GetLogger(opts ...logOpt) Logger {
+func GetLogger(opts ...LogOpt) Logger {
 	cfg := &logOptions{ctx: context.Background()}
 	for _, o := range opts {
 		o(cfg)
@@ -127,7 +127,7 @@ func GetLogger(opts ...logOpt) Logger {
 // are provided, they will be resolved on the context and included in the
 // logger. Only use this function if specific logrus functionality is
 // required.
-func getLogrusLogger(ctx context.Context, keys ...interface{}) *logrus.Entry {
+func getLogrusLogger(ctx context.Context, keys ...any) *logrus.Entry {
 	var logger *logrus.Entry
 
 	// Get a logger, if it is present.

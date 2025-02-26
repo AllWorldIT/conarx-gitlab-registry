@@ -4,6 +4,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"path"
 	"time"
@@ -20,8 +21,8 @@ import (
 // https://en.wikipedia.org/wiki/Consistency_model
 
 // NewVacuum creates a new Vacuum
-func NewVacuum(driver driver.StorageDeleter) *Vacuum {
-	return &Vacuum{driver: driver}
+func NewVacuum(d driver.StorageDeleter) *Vacuum {
+	return &Vacuum{driver: d}
 }
 
 // BlobRemover defines methods that Vacuum must implement to delete blobs from the storage backend.
@@ -34,7 +35,6 @@ type BlobRemover interface {
 // Vacuum removes content from the filesystem. Implements BlobRemover.
 type Vacuum struct {
 	driver driver.StorageDeleter
-	logger dcontext.Logger
 }
 
 // RemoveBlob removes a blob from the filesystem
@@ -49,7 +49,7 @@ func (v Vacuum) RemoveBlob(ctx context.Context, dgst digest.Digest) error {
 		"path":   blobPath,
 	}).Info("deleting blob")
 	if err := v.driver.Delete(ctx, blobPath); err != nil {
-		return err
+		return fmt.Errorf("deleting blob: %w", err)
 	}
 
 	return nil
@@ -120,7 +120,9 @@ func (v Vacuum) removeManifestsBatch(ctx context.Context, batchNo int, mm []Mani
 		}
 	}
 
-	allLinks = append(manifestLinks, tagLinks...)
+	allLinks = make([]string, 0, len(manifestLinks)+len(tagLinks))
+	allLinks = append(allLinks, manifestLinks...)
+	allLinks = append(allLinks, tagLinks...)
 	total := len(allLinks)
 	if total == 0 {
 		return nil
@@ -147,13 +149,6 @@ func (v Vacuum) removeManifestsBatch(ctx context.Context, batchNo int, mm []Mani
 	}
 
 	return err
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // RemoveManifests removes a series of manifests from the filesystem. Unlike RemoveManifest, this bundles all related

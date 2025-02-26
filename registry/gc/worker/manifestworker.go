@@ -137,7 +137,7 @@ func (w *ManifestWorker) processTask(ctx context.Context) RunResult {
 	return res
 }
 
-func (w *ManifestWorker) deleteManifest(ctx context.Context, tx datastore.Transactor, t *models.GCManifestTask) error {
+func (*ManifestWorker) deleteManifest(ctx context.Context, tx datastore.Transactor, t *models.GCManifestTask) error {
 	l := log.GetLogger(log.WithContext(ctx))
 
 	ms := manifestStoreConstructor(tx)

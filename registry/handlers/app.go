@@ -92,6 +92,8 @@ var (
 	ErrDatabaseInUse = errors.New(`registry metadata database in use, please enable the database https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html`)
 )
 
+type shutdownFunc func(app *App, errCh chan error, l dlog.Logger)
+
 // App is a global registry application object. Shared resources can be placed
 // on this object that will be accessible from all requests. Any writable
 // fields should be protected.
@@ -130,6 +132,13 @@ type App struct {
 
 	// redisCache is the abstraction for manipulating cached data on Redis.
 	redisCache *iredis.Cache
+
+	healthRegistry *health.Registry
+
+	// shutdownFuncs is the slice of functions/code that needs to be called
+	// during app object termination in order to gracefully clean up
+	// resources/terminate goroutines
+	shutdownFuncs []shutdownFunc
 }
 
 // NewApp takes a configuration and returns a configured app, ready to serve
@@ -139,6 +148,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	app := &App{
 		Config:  config,
 		Context: ctx,
+
+		shutdownFuncs: make([]shutdownFunc, 0),
 	}
 
 	if err := app.initMetaRouter(); err != nil {
@@ -161,16 +172,17 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	purgeConfig := uploadPurgeDefaultConfig()
 	if mc, ok := config.Storage["maintenance"]; ok {
 		if v, ok := mc["uploadpurging"]; ok {
-			purgeConfig, ok = v.(map[interface{}]interface{})
+			purgeConfig, ok = v.(map[any]any)
 			if !ok {
 				return nil, fmt.Errorf("uploadpurging config key must contain additional keys")
 			}
 		}
 		if v, ok := mc["readonly"]; ok {
-			readOnly, ok := v.(map[interface{}]interface{})
+			readOnly, ok := v.(map[any]any)
 			if !ok {
 				return nil, fmt.Errorf("readonly config key must contain additional keys")
 			}
+			// nolint: revive // max-control-nesting
 			if readOnlyEnabled, ok := readOnly["enabled"]; ok {
 				app.readOnly, ok = readOnlyEnabled.(bool)
 				if !ok {
@@ -259,7 +271,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	} else {
 		l := log
 		exceptions := config.Storage["redirect"]["exceptions"]
-		if exceptions, ok := exceptions.([]interface{}); ok && len(exceptions) > 0 {
+		if exceptions, ok := exceptions.([]any); ok && len(exceptions) > 0 {
 			s := make([]string, len(exceptions))
 			for i, v := range exceptions {
 				s[i] = fmt.Sprint(v)
@@ -306,6 +318,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			app.manifestURLs.Allow = regexp.MustCompile("^$")
 			options = append(options, storage.ManifestURLsAllowRegexp(app.manifestURLs.Allow))
 		} else {
+			// nolint: revive // max-control-nesting
 			if len(config.Validation.Manifests.URLs.Allow) > 0 {
 				for i, s := range config.Validation.Manifests.URLs.Allow {
 					// Validate via compilation.
@@ -318,6 +331,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				app.manifestURLs.Allow = regexp.MustCompile(strings.Join(config.Validation.Manifests.URLs.Allow, "|"))
 				options = append(options, storage.ManifestURLsAllowRegexp(app.manifestURLs.Allow))
 			}
+			// nolint: revive // max-control-nesting
 			if len(config.Validation.Manifests.URLs.Deny) > 0 {
 				for i, s := range config.Validation.Manifests.URLs.Deny {
 					// Validate via compilation.
@@ -391,6 +405,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			}),
 		}
 
+		// nolint: revive // max-control-nesting
 		if config.Database.LoadBalancing.Enabled {
 			if app.redisCache == nil {
 				return nil, errors.New("redis cache required for enabling database load balancing")
@@ -436,9 +451,24 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			startDBReplicaChecking(ctx, db)
 		}
 
+		inRecovery, err := datastore.IsInRecovery(ctx, db.Primary())
+		if err != nil {
+			log.WithError(err).Error("could not check database recovery status")
+			return nil, err
+		}
+
+		if inRecovery {
+			err = errors.New("the database is in read-only mode (in recovery)")
+			log.WithError(err).Error("could not connect to database")
+			log.Warn("if this is a Geo secondary instance, the registry must not point to the default replicated database. Please configure the registry to connect to a separate, writable database on the Geo secondary site.")
+
+			log.Warn("if this is not a Geo secondary instance, the database must not be in read-only mode. Please ensure the database is correctly configured and set to read-write mode.")
+			return nil, err
+		}
+
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
-		m := migrations.NewMigrator(db.Primary(), migrations.SkipPostDeployment)
+		m := migrations.NewMigrator(db.Primary(), migrations.SkipPostDeployment())
 		pending, err := m.HasPending()
 		if err != nil {
 			return nil, fmt.Errorf("failed to check database migrations status: %w", err)
@@ -449,6 +479,18 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		}
 
 		app.db = db
+		app.registerShutdownFunc(
+			func(app *App, errCh chan error, l dlog.Logger) {
+				l.Info("closing database connections")
+				err := app.db.Close()
+				if err != nil {
+					err = fmt.Errorf("database shutdown: %w", err)
+				} else {
+					l.Info("database component has been shut down")
+				}
+				errCh <- err
+			},
+		)
 		options = append(options, storage.Database(app.db))
 
 		// update online GC settings (if needed) in the background to avoid delaying the app start
@@ -516,7 +558,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				return nil, fmt.Errorf("redis configuration required to use for layerinfo cache")
 			}
 			cacheProvider := rediscache.NewRedisBlobDescriptorCacheProvider(app.redis)
-			localOptions := append(options, storage.BlobDescriptorCacheProvider(cacheProvider))
+			localOptions := make([]storage.RegistryOption, len(options), len(options)+1)
+			copy(localOptions, options)
+			localOptions = append(localOptions, storage.BlobDescriptorCacheProvider(cacheProvider))
 			app.registry, err = storage.NewRegistry(app, app.driver, localOptions...)
 			if err != nil {
 				return nil, fmt.Errorf("could not create registry: %w", err)
@@ -524,7 +568,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			log.Info("using redis blob descriptor cache")
 		case "inmemory":
 			cacheProvider := memorycache.NewInMemoryBlobDescriptorCacheProvider()
-			localOptions := append(options, storage.BlobDescriptorCacheProvider(cacheProvider))
+			localOptions := make([]storage.RegistryOption, len(options), len(options)+1)
+			copy(localOptions, options)
+			localOptions = append(localOptions, storage.BlobDescriptorCacheProvider(cacheProvider))
 			app.registry, err = storage.NewRegistry(app, app.driver, localOptions...)
 			if err != nil {
 				return nil, fmt.Errorf("could not create registry: %w", err)
@@ -597,6 +643,7 @@ func updateOnlineGCSettings(ctx context.Context, db datastore.Queryer, config *c
 	log := dcontext.GetLogger(ctx)
 
 	// execute DB update after a randomized jitter of up to 60 seconds to ease concurrency in clustered environments
+	// nolint: gosec // G404: used only for jitter calculation
 	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
 	jitter := time.Duration(r.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
 
@@ -717,6 +764,7 @@ func startDBReplicaChecking(ctx context.Context, lb datastore.LoadBalancer) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
 	// delay startup using a randomized jitter to ease concurrency in clustered environments
+	// nolint: gosec // G404: used only for jitter calculation
 	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
 	jitter := time.Duration(r.Intn(dlbReplicaCheckJitterMaxSeconds)) * time.Second
 
@@ -765,10 +813,25 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 	if len(healthRegistries) > 1 {
 		return fmt.Errorf("RegisterHealthChecks called with more than one registry")
 	}
-	healthRegistry := health.DefaultRegistry
-	if len(healthRegistries) == 1 {
-		healthRegistry = healthRegistries[0]
+
+	// Allow for dependency injection:
+	if len(healthRegistries) > 0 {
+		app.healthRegistry = healthRegistries[0]
+	} else {
+		app.healthRegistry = health.DefaultRegistry
 	}
+	app.registerShutdownFunc(
+		func(app *App, errCh chan error, l dlog.Logger) {
+			l.Info("closing healthchecks registry")
+			err := app.healthRegistry.Shutdown()
+			if err != nil {
+				err = fmt.Errorf("healthchecks registry shutdown: %w", err)
+			} else {
+				l.Info("healthchecks registry has been shut down")
+			}
+			errCh <- err
+		},
+	)
 
 	if app.Config.Health.StorageDriver.Enabled {
 		interval := app.Config.Health.StorageDriver.Interval
@@ -777,9 +840,12 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 		}
 
 		storageDriverCheck := func() error {
-			_, err := app.driver.Stat(app, "/") // "/" should always exist
+			_, err := app.driver.Stat(app, "/")
 			if errors.As(err, new(storagedriver.PathNotFoundError)) {
 				err = nil // pass this through, backend is responding, but this path doesn't exist.
+			}
+			if err != nil {
+				logger.Errorf("storage driver health check: %v", err)
 			}
 			return err
 		}
@@ -791,9 +857,9 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			},
 		).Info("configuring storage health check")
 		if app.Config.Health.StorageDriver.Threshold != 0 {
-			healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
+			app.healthRegistry.RegisterPeriodicThresholdFunc("storagedriver_"+app.Config.Storage.Type(), interval, app.Config.Health.StorageDriver.Threshold, storageDriverCheck)
 		} else {
-			healthRegistry.RegisterPeriodicFunc("storagedriver_"+app.Config.Storage.Type(), interval, storageDriverCheck)
+			app.healthRegistry.RegisterPeriodicFunc("storagedriver_"+app.Config.Storage.Type(), interval, storageDriverCheck)
 		}
 	}
 
@@ -819,9 +885,9 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 				},
 			).Info("configuring database health check")
 			if app.Config.Health.Database.Threshold != 0 {
-				healthRegistry.RegisterPeriodicThresholdFunc("database_connection", interval, app.Config.Health.Database.Threshold, check)
+				app.healthRegistry.RegisterPeriodicThresholdFunc("database_connection", interval, app.Config.Health.Database.Threshold, check)
 			} else {
-				healthRegistry.RegisterPeriodicFunc("database_connection", interval, check)
+				app.healthRegistry.RegisterPeriodicFunc("database_connection", interval, check)
 			}
 		}
 	}
@@ -832,7 +898,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			interval = defaultCheckInterval
 		}
 		dcontext.GetLogger(app).Infof("configuring file health check path=%s, interval=%d", fileChecker.File, interval/time.Second)
-		healthRegistry.Register(fileChecker.File, health.PeriodicChecker(checks.FileChecker(fileChecker.File), interval))
+		app.healthRegistry.Register(fileChecker.File, health.PeriodicChecker(checks.FileChecker(fileChecker.File), interval))
 	}
 
 	for _, httpChecker := range app.Config.Health.HTTPCheckers {
@@ -850,10 +916,10 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 		if httpChecker.Threshold != 0 {
 			dcontext.GetLogger(app).Infof("configuring HTTP health check uri=%s, interval=%d, threshold=%d", httpChecker.URI, interval/time.Second, httpChecker.Threshold)
-			healthRegistry.Register(httpChecker.URI, health.PeriodicThresholdChecker(checker, interval, httpChecker.Threshold))
+			app.healthRegistry.Register(httpChecker.URI, health.PeriodicThresholdChecker(checker, interval, httpChecker.Threshold))
 		} else {
 			dcontext.GetLogger(app).Infof("configuring HTTP health check uri=%s, interval=%d", httpChecker.URI, interval/time.Second)
-			healthRegistry.Register(httpChecker.URI, health.PeriodicChecker(checker, interval))
+			app.healthRegistry.Register(httpChecker.URI, health.PeriodicChecker(checker, interval))
 		}
 	}
 
@@ -867,10 +933,10 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 
 		if tcpChecker.Threshold != 0 {
 			dcontext.GetLogger(app).Infof("configuring TCP health check addr=%s, interval=%d, threshold=%d", tcpChecker.Addr, interval/time.Second, tcpChecker.Threshold)
-			healthRegistry.Register(tcpChecker.Addr, health.PeriodicThresholdChecker(checker, interval, tcpChecker.Threshold))
+			app.healthRegistry.Register(tcpChecker.Addr, health.PeriodicThresholdChecker(checker, interval, tcpChecker.Threshold))
 		} else {
 			dcontext.GetLogger(app).Infof("configuring TCP health check addr=%s, interval=%d", tcpChecker.Addr, interval/time.Second)
-			healthRegistry.Register(tcpChecker.Addr, health.PeriodicChecker(checker, interval))
+			app.healthRegistry.Register(tcpChecker.Addr, health.PeriodicChecker(checker, interval))
 		}
 	}
 	return nil
@@ -917,10 +983,10 @@ func (app *App) registerGitlab(route v1.Route, dispatch dispatchFunc) {
 }
 
 // configureEvents prepares the event sink for action.
-func (app *App) configureEvents(configuration *configuration.Configuration) {
+func (app *App) configureEvents(registryConfig *configuration.Configuration) {
 	// Configure all of the endpoint sinks.
 	var sinks []notifications.Sink
-	for _, endpoint := range configuration.Notifications.Endpoints {
+	for _, endpoint := range registryConfig.Notifications.Endpoints {
 		if endpoint.Disabled {
 			dcontext.GetLogger(app).Infof("endpoint %s disabled, skipping", endpoint.Name)
 			continue
@@ -928,7 +994,8 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 
 		dcontext.GetLogger(app).Infof("configuring endpoint %v (%v), timeout=%s, headers=%v", endpoint.Name, endpoint.URL, endpoint.Timeout, endpoint.Headers)
 		endpoint := notifications.NewEndpoint(endpoint.Name, endpoint.URL, notifications.EndpointConfig{
-			Timeout:           endpoint.Timeout,
+			Timeout: endpoint.Timeout,
+			// nolint: staticcheck // needs more thorough investigation and fix
 			Threshold:         endpoint.Threshold,
 			MaxRetries:        endpoint.MaxRetries,
 			Backoff:           endpoint.Backoff,
@@ -939,23 +1006,34 @@ func (app *App) configureEvents(configuration *configuration.Configuration) {
 		})
 
 		sinks = append(sinks, endpoint)
-
 	}
 
 	// TODO: replace broadcaster with a new worker that will consume events from the queue
 	// https://gitlab.com/gitlab-org/container-registry/-/issues/765
 	app.events.sink = notifications.NewBroadcaster(
-		configuration.Notifications.FanoutTimeout,
+		registryConfig.Notifications.FanoutTimeout,
 		sinks...,
+	)
+	app.registerShutdownFunc(
+		func(app *App, errCh chan error, l dlog.Logger) {
+			l.Info("closing events notification sink")
+			err := app.events.sink.Close()
+			if err != nil {
+				err = fmt.Errorf("events notification sink shutdown: %w", err)
+			} else {
+				l.Info("events notification sink has been shut down")
+			}
+			errCh <- err
+		},
 	)
 
 	// Populate registry event source
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = configuration.HTTP.Addr
+		hostname = registryConfig.HTTP.Addr
 	} else {
 		// try to pick the port off the config
-		_, port, err := net.SplitHostPort(configuration.HTTP.Addr)
+		_, port, err := net.SplitHostPort(registryConfig.HTTP.Addr)
 		if err == nil {
 			hostname = net.JoinHostPort(hostname, port)
 		}
@@ -986,6 +1064,8 @@ func (app *App) configureRedisRateLimiter(ctx context.Context, config *configura
 	}
 	if config.Redis.RateLimiter.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
+			// FIXME(prozlach) This requires investigation
+			// nolint: gosec
 			InsecureSkipVerify: config.Redis.RateLimiter.TLS.Insecure,
 		}
 	}
@@ -1042,6 +1122,8 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 	}
 	if config.Redis.Cache.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
+			// FIXME(prozlach) This requires investigation
+			// nolint: gosec
 			InsecureSkipVerify: config.Redis.Cache.TLS.Insecure,
 		}
 	}
@@ -1076,30 +1158,32 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 	return nil
 }
 
-func (app *App) configureRedis(configuration *configuration.Configuration) {
-	if configuration.Redis.Addr == "" {
+func (app *App) configureRedis(registryConfig *configuration.Configuration) {
+	if registryConfig.Redis.Addr == "" {
 		return
 	}
 
 	opts := &redis.UniversalOptions{
-		Addrs:           strings.Split(configuration.Redis.Addr, ","),
-		DB:              configuration.Redis.DB,
-		Username:        configuration.Redis.Username,
-		Password:        configuration.Redis.Password,
-		DialTimeout:     configuration.Redis.DialTimeout,
-		ReadTimeout:     configuration.Redis.ReadTimeout,
-		WriteTimeout:    configuration.Redis.WriteTimeout,
-		PoolSize:        configuration.Redis.Pool.Size,
-		ConnMaxLifetime: configuration.Redis.Pool.MaxLifetime,
-		MasterName:      configuration.Redis.MainName,
+		Addrs:           strings.Split(registryConfig.Redis.Addr, ","),
+		DB:              registryConfig.Redis.DB,
+		Username:        registryConfig.Redis.Username,
+		Password:        registryConfig.Redis.Password,
+		DialTimeout:     registryConfig.Redis.DialTimeout,
+		ReadTimeout:     registryConfig.Redis.ReadTimeout,
+		WriteTimeout:    registryConfig.Redis.WriteTimeout,
+		PoolSize:        registryConfig.Redis.Pool.Size,
+		ConnMaxLifetime: registryConfig.Redis.Pool.MaxLifetime,
+		MasterName:      registryConfig.Redis.MainName,
 	}
-	if configuration.Redis.TLS.Enabled {
+	if registryConfig.Redis.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
-			InsecureSkipVerify: configuration.Redis.TLS.Insecure,
+			// FIXME(prozlach) This requires investigation
+			// nolint: gosec
+			InsecureSkipVerify: registryConfig.Redis.TLS.Insecure,
 		}
 	}
-	if configuration.Redis.Pool.IdleTimeout > 0 {
-		opts.ConnMaxIdleTime = configuration.Redis.Pool.IdleTimeout
+	if registryConfig.Redis.Pool.IdleTimeout > 0 {
+		opts.ConnMaxIdleTime = registryConfig.Redis.Pool.IdleTimeout
 	}
 	// NewUniversalClient will take care of returning the appropriate client type (simple or sentinel) depending on the
 	// configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
@@ -1111,10 +1195,10 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 		registry = expvar.NewMap("registry")
 	}
 
-	registry.(*expvar.Map).Set("redis", expvar.Func(func() interface{} {
+	registry.(*expvar.Map).Set("redis", expvar.Func(func() any {
 		poolStats := app.redis.PoolStats()
-		return map[string]interface{}{
-			"Config": configuration.Redis,
+		return map[string]any{
+			"Config": registryConfig.Redis,
 			"Active": poolStats.TotalConns - poolStats.IdleConns,
 		}
 	}))
@@ -1124,13 +1208,13 @@ func (app *App) configureRedis(configuration *configuration.Configuration) {
 
 // configureSecret creates a random secret if a secret wasn't included in the
 // configuration.
-func (app *App) configureSecret(configuration *configuration.Configuration) error {
-	if configuration.HTTP.Secret == "" {
+func (app *App) configureSecret(registryConfig *configuration.Configuration) error {
+	if registryConfig.HTTP.Secret == "" {
 		var secretBytes [randomSecretSize]byte
 		if _, err := cryptorand.Read(secretBytes[:]); err != nil {
 			return fmt.Errorf("could not generate random bytes for HTTP secret: %w", err)
 		}
-		configuration.HTTP.Secret = string(secretBytes[:])
+		registryConfig.HTTP.Secret = string(secretBytes[:])
 		dcontext.GetLogger(app).Warn("No HTTP secret provided - generated random secret. This may cause problems with uploads if multiple registries are behind a load-balancer. To provide a shared secret, fill in http.secret in the configuration file or set the REGISTRY_HTTP_SECRET environment variable.")
 	}
 	return nil
@@ -1209,12 +1293,13 @@ func (app *App) initMetaRouter() error {
 
 	h := dbAssertionhandler{dbEnabled: app.Config.Database.Enabled}
 
-	app.registerGitlab(v1.Base, h.wrap(func(ctx *Context, r *http.Request) http.Handler {
+	app.registerGitlab(v1.Base, h.wrap(func(*Context, *http.Request) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			apiBase(w, r)
 		})
 	}))
 	app.registerGitlab(v1.RepositoryTags, h.wrap(repositoryTagsDispatcher))
+	app.registerGitlab(v1.RepositoryTagDetail, h.wrap(repositoryTagDetailsDispatcher))
 	app.registerGitlab(v1.Repositories, h.wrap(repositoryDispatcher))
 	app.registerGitlab(v1.SubRepositories, h.wrap(subRepositoriesDispatcher))
 
@@ -1267,8 +1352,8 @@ type dbAssertionhandler struct{ dbEnabled bool }
 func (h dbAssertionhandler) wrap(child func(ctx *Context, r *http.Request) http.Handler) func(ctx *Context, r *http.Request) http.Handler {
 	// Return a 404, signaling that the database is disabled and GitLab v1 API features are not available.
 	if !h.dbEnabled {
-		return func(ctx *Context, r *http.Request) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return func(*Context, *http.Request) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Gitlab-Container-Registry-Version", strings.TrimPrefix(version.Version, "v"))
 				w.WriteHeader(http.StatusNotFound)
 			})
@@ -1484,8 +1569,8 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 	})
 }
 
-func (app *App) logError(ctx context.Context, r *http.Request, errors errcode.Errors) {
-	for _, e := range errors {
+func (*App) logError(ctx context.Context, r *http.Request, errs errcode.Errors) {
+	for _, e := range errs {
 		var code errcode.ErrorCode
 		var message, detail string
 
@@ -1521,7 +1606,7 @@ func (app *App) logError(ctx context.Context, r *http.Request, errors errcode.Er
 		// only report 500 errors to Sentry
 		if code == errcode.ErrorCodeUnknown {
 			// Encode detail in error message so that it shows up in Sentry. This is a hack until we refactor error
-			// handling across the whole application to enforce consistent behaviour and formatting.
+			// handling across the whole application to enforce consistent behavior and formatting.
 			// see https://gitlab.com/gitlab-org/container-registry/-/issues/198
 			detailSuffix := ""
 			if detail != "" {
@@ -1535,11 +1620,11 @@ func (app *App) logError(ctx context.Context, r *http.Request, errors errcode.Er
 
 // context constructs the context object for the application. This only be
 // called once per request.
-func (app *App) context(w http.ResponseWriter, r *http.Request) *Context {
+func (app *App) context(_ http.ResponseWriter, r *http.Request) *Context {
 	ctx := r.Context()
 	ctx = dcontext.WithVars(ctx, r)
 	name := dcontext.GetStringValue(ctx, "vars.name")
-	//nolint: staticcheck // SA1029: should not use built-in type string as key for value
+	// nolint: staticcheck,revive // SA1029: should not use built-in type string as key for value
 	ctx = context.WithValue(ctx, "root_repo", strings.Split(name, "/")[0])
 	ctx = dcontext.WithLogger(ctx, dcontext.GetLogger(ctx,
 		"root_repo",
@@ -1548,7 +1633,7 @@ func (app *App) context(w http.ResponseWriter, r *http.Request) *Context {
 		"vars.digest",
 		"vars.uuid"))
 
-	context := &Context{
+	appContext := &Context{
 		App:     app,
 		Context: ctx,
 	}
@@ -1557,20 +1642,20 @@ func (app *App) context(w http.ResponseWriter, r *http.Request) *Context {
 		// A "host" item in the configuration takes precedence over
 		// X-Forwarded-Proto and X-Forwarded-Host headers, and the
 		// hostname in the request.
-		context.urlBuilder = urls.NewBuilder(&app.httpHost, false)
+		appContext.urlBuilder = urls.NewBuilder(&app.httpHost, false)
 	} else {
-		context.urlBuilder = urls.NewBuilderFromRequest(r, app.Config.HTTP.RelativeURLs)
+		appContext.urlBuilder = urls.NewBuilderFromRequest(r, app.Config.HTTP.RelativeURLs)
 	}
 
-	return context
+	return appContext
 }
 
 // authorized checks if the request can proceed with access to the requested
 // repository. If it succeeds, the context may access the requested
 // repository. An error will be returned if access is not available.
-func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Context) error {
-	dcontext.GetLogger(context).Debug("authorizing request")
-	repo := getName(context)
+func (app *App) authorized(w http.ResponseWriter, r *http.Request, appContext *Context) error {
+	dcontext.GetLogger(appContext).Debug("authorizing request")
+	repo := getName(appContext)
 
 	if app.accessController == nil {
 		return nil // access controller is not enabled.
@@ -1588,7 +1673,7 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 		accessRecords, err, errCode = appendRepositoryNamespaceAccessRecords(accessRecords, r)
 		if err != nil {
 			if err := errcode.ServeJSON(w, errCode); err != nil {
-				dcontext.GetLogger(context).Errorf("error serving error json: %v (from %v)", err, context.Errors)
+				dcontext.GetLogger(appContext).Errorf("error serving error json: %v (from %v)", err, appContext.Errors)
 			}
 			return fmt.Errorf("error creating access records: %w", err)
 		}
@@ -1608,14 +1693,14 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 			// that mistake elsewhere in the code, allowing any operation to
 			// proceed.
 			if err := errcode.ServeJSON(w, errcode.ErrorCodeUnauthorized); err != nil {
-				dcontext.GetLogger(context).Errorf("error serving error json: %v (from %v)", err, context.Errors)
+				dcontext.GetLogger(appContext).Errorf("error serving error json: %v (from %v)", err, appContext.Errors)
 			}
 			return fmt.Errorf("forbidden: no repository name")
 		}
 		accessRecords = appendCatalogAccessRecord(accessRecords, r)
 	}
 
-	ctx, err := app.accessController.Authorized(context.Context, accessRecords...)
+	ctx, err := app.accessController.Authorized(appContext.Context, accessRecords...)
 	if err != nil {
 		switch err := err.(type) {
 		case auth.Challenge:
@@ -1623,14 +1708,14 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 			err.SetHeaders(r, w)
 
 			if err := errcode.ServeJSON(w, errcode.ErrorCodeUnauthorized.WithDetail(accessRecords)); err != nil {
-				dcontext.GetLogger(context).Errorf("error serving error json: %v (from %v)", err, context.Errors)
+				dcontext.GetLogger(appContext).Errorf("error serving error json: %v (from %v)", err, appContext.Errors)
 			}
 		default:
 			// This condition is a potential security problem either in
 			// the configuration or whatever is backing the access
 			// controller. Just return a bad request with no information
 			// to avoid exposure. The request should not proceed.
-			dcontext.GetLogger(context).Errorf("error checking authorization: %v", err)
+			dcontext.GetLogger(appContext).Errorf("error checking authorization: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
 		}
 
@@ -1638,7 +1723,7 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, context *Cont
 	}
 
 	dcontext.GetLogger(ctx, auth.UserNameKey, auth.UserTypeKey, auth.ResourceProjectPathsKey).Info("authorized request")
-	context.Context = ctx
+	appContext.Context = ctx
 	return nil
 }
 
@@ -1666,7 +1751,7 @@ func (app *App) queueBridge(ctx *Context, r *http.Request) *notifications.QueueB
 }
 
 // nameRequired returns true if the route requires a name.
-func (app *App) nameRequired(r *http.Request) bool {
+func (*App) nameRequired(r *http.Request) bool {
 	route := mux.CurrentRoute(r)
 	if route == nil {
 		return true
@@ -1693,7 +1778,7 @@ func distributionAPIBase(dbEnabled bool) http.HandlerFunc {
 
 // apiBase implements a simple yes-man for doing overall checks against the
 // api. This can support auth roundtrips to support docker login.
-func apiBase(w http.ResponseWriter, r *http.Request) {
+func apiBase(w http.ResponseWriter, _ *http.Request) {
 	const emptyJSON = "{}"
 
 	// Provide a simple /v2/ 200 OK response with empty json response.
@@ -1702,7 +1787,7 @@ func apiBase(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Gitlab-Container-Registry-Version", strings.TrimPrefix(version.Version, "v"))
 
-	fmt.Fprint(w, emptyJSON)
+	_, _ = fmt.Fprint(w, emptyJSON)
 }
 
 // appendAccessRecords checks the method and adds the appropriate Access records to the records list.
@@ -1868,8 +1953,8 @@ func applyStorageMiddleware(driver storagedriver.StorageDriver, middlewares []co
 // uploadPurgeDefaultConfig provides a default configuration for upload
 // purging to be used in the absence of configuration in the
 // configuration file
-func uploadPurgeDefaultConfig() map[interface{}]interface{} {
-	config := map[interface{}]interface{}{}
+func uploadPurgeDefaultConfig() map[any]any {
+	config := make(map[any]any)
 	config["enabled"] = true
 	config["age"] = "168h"
 	config["interval"] = "24h"
@@ -1883,8 +1968,8 @@ func badPurgeUploadConfig(reason string) error {
 
 // startUploadPurger schedules a goroutine which will periodically
 // check upload directories for old files and delete them
-func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageDriver, log dcontext.Logger, config map[interface{}]interface{}) error {
-	if config["enabled"] == false {
+func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageDriver, log dcontext.Logger, config map[any]any) error {
+	if v, ok := (config["enabled"]).(bool); ok && !v {
 		return nil
 	}
 
@@ -1922,16 +2007,16 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 
 	var dryRunBool bool
 	dryRun, ok := config["dryrun"]
-	if ok {
-		dryRunBool, ok = dryRun.(bool)
-		if !ok {
-			return badPurgeUploadConfig("cannot parse dryrun")
-		}
-	} else {
+	if !ok {
 		return badPurgeUploadConfig("dryrun missing")
+	}
+	dryRunBool, ok = dryRun.(bool)
+	if !ok {
+		return badPurgeUploadConfig("cannot parse dryrun")
 	}
 
 	go func() {
+		// nolint: gosec // used only for jitter calculation
 		jitter := time.Duration(rand.Int()%60) * time.Minute
 		log.Infof("Starting upload purge in %s", jitter)
 		time.Sleep(jitter)
@@ -1946,47 +2031,24 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 	return nil
 }
 
+func (app *App) registerShutdownFunc(f shutdownFunc) {
+	app.shutdownFuncs = append(app.shutdownFuncs, f)
+}
+
 // GracefulShutdown allows the app to free any resources before shutdown.
 func (app *App) GracefulShutdown(ctx context.Context) error {
-	// TODO(prozlach): There are probably more components that need/will need
-	// graceful shutdown, hence making this function extendable.
-	numberOfComponentsToShutdown := 2
-
 	errs := new(multierror.Error)
 	l := dlog.GetLogger(dlog.WithContext(ctx))
-	errCh := make(chan error, numberOfComponentsToShutdown)
+	errCh := make(chan error, len(app.shutdownFuncs))
 
-	if app.db != nil {
-		// NOTE(prozlach): Database is enabled, let's shut it down
-		go func() {
-			l.Info("closing database connections")
-			err := app.db.Close()
-			if err != nil {
-				err = fmt.Errorf("database shutdown: %w", err)
-			} else {
-				l.Info("database component has been shut down")
-			}
-			errCh <- err
-		}()
-	} else {
-		errCh <- nil
+	// NOTE(prozlach): it is important that we are quick during shutdown, as
+	// e.g. k8s can forcefully terminate the pod with SIGKILL if the shutdown
+	// takes too long.
+	for _, f := range app.shutdownFuncs {
+		go f(app, errCh, l)
 	}
 
-	// NOTE(prozlach): Events Broadcaster sink is always there, it may simply
-	// not have any dependent sinks attached if notifications are not
-	// configured.
-	go func() {
-		l.Info("closing events notification sink")
-		err := app.events.sink.Close()
-		if err != nil {
-			err = fmt.Errorf("events notification sink shutdown: %w", err)
-		} else {
-			l.Info("events notification sink has been shut down")
-		}
-		errCh <- err
-	}()
-
-	for i := 0; i < numberOfComponentsToShutdown; i++ {
+	for i := 0; i < len(app.shutdownFuncs); i++ {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("app shutdown failed: %w", ctx.Err())
@@ -2046,8 +2108,8 @@ func repositoryFromContextWithRegistry(ctx *Context, w http.ResponseWriter, regi
 func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *configuration.Configuration) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
-	// register all work functions with worker
-	worker, err := bbm.RegisterWork(bbm.AllWork(),
+	// register all work functions with bbmWorker
+	bbmWorker, err := bbm.RegisterWork(bbm.AllWork(),
 		bbm.WithDB(db),
 		bbm.WithLogger(dlog.GetLogger(dlog.WithContext(ctx))),
 		bbm.WithJobInterval(config.Database.BackgroundMigrations.JobInterval),
@@ -2065,7 +2127,7 @@ func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *co
 	go bbmListenForShutdown(ctx, sigChan, doneCh)
 
 	// start looking for background migrations
-	gracefulFinish, err := worker.ListenForBackgroundMigration(ctx, doneCh)
+	gracefulFinish, err := bbmWorker.ListenForBackgroundMigration(ctx, doneCh)
 	if err != nil {
 		l.WithError(err).Error("background migration worker exited abruptly")
 	}

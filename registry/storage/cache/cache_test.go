@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/opencontainers/go-digest"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCacheSet(t *testing.T) {
@@ -17,31 +18,20 @@ func TestCacheSet(t *testing.T) {
 
 	dgst := digest.Digest("dontvalidate")
 	_, err := st.Stat(ctx, dgst)
-	if err != distribution.ErrBlobUnknown {
-		t.Fatalf("Unexpected error %v, expected %v", err, distribution.ErrBlobUnknown)
-	}
+	require.ErrorIs(t, err, distribution.ErrBlobUnknown)
 
 	desc := distribution.Descriptor{
 		Digest: dgst,
 	}
-	if err := backend.SetDescriptor(ctx, dgst, desc); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, backend.SetDescriptor(ctx, dgst, desc))
 
 	actual, err := st.Stat(ctx, dgst)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if actual.Digest != desc.Digest {
-		t.Fatalf("Unexpected descriptor %v, expected %v", actual, desc)
-	}
+	require.NoError(t, err)
+	require.Equal(t, desc.Digest, actual.Digest, "unexpected descriptor")
 
-	if len(cache.sets) != 1 || len(cache.sets[dgst]) == 0 {
-		t.Fatalf("Expected cache set")
-	}
-	if cache.sets[dgst][0].Digest != desc.Digest {
-		t.Fatalf("Unexpected descriptor %v, expected %v", cache.sets[dgst][0], desc)
-	}
+	require.Len(t, cache.sets, 1)
+	require.NotEmpty(t, cache.sets[dgst])
+	require.Equal(t, desc.Digest, cache.sets[dgst][0].Digest, "unexpected descriptor")
 
 	desc2 := distribution.Descriptor{
 		Digest: digest.Digest("dontvalidate 2"),
@@ -49,12 +39,8 @@ func TestCacheSet(t *testing.T) {
 	cache.sets[dgst] = append(cache.sets[dgst], desc2)
 
 	actual, err = st.Stat(ctx, dgst)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if actual.Digest != desc2.Digest {
-		t.Fatalf("Unexpected descriptor %v, expected %v", actual, desc)
-	}
+	require.NoError(t, err)
+	require.Equal(t, desc2.Digest, actual.Digest, "unexpected descriptor")
 }
 
 func TestCacheError(t *testing.T) {
@@ -65,40 +51,30 @@ func TestCacheError(t *testing.T) {
 
 	dgst := digest.Digest("dontvalidate")
 	_, err := st.Stat(ctx, dgst)
-	if err != distribution.ErrBlobUnknown {
-		t.Fatalf("Unexpected error %v, expected %v", err, distribution.ErrBlobUnknown)
-	}
+	require.Equal(t, err, distribution.ErrBlobUnknown)
 
 	desc := distribution.Descriptor{
 		Digest: dgst,
 	}
-	if err := backend.SetDescriptor(ctx, dgst, desc); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, backend.SetDescriptor(ctx, dgst, desc))
 
 	actual, err := st.Stat(ctx, dgst)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if actual.Digest != desc.Digest {
-		t.Fatalf("Unexpected descriptor %v, expected %v", actual, desc)
-	}
+	require.NoError(t, err)
+	require.Equal(t, desc.Digest, actual.Digest, "unexpected descriptor")
 
-	if len(cache.sets) > 0 {
-		t.Fatalf("Set should not be called after stat error")
-	}
+	require.Empty(t, cache.sets, "set should not be called after stat error")
 }
 
 func newTestStatter() *testStatter {
 	return &testStatter{
-		stats: []digest.Digest{},
-		sets:  map[digest.Digest][]distribution.Descriptor{},
+		stats: make([]digest.Digest, 0),
+		sets:  make(map[digest.Digest][]distribution.Descriptor),
 	}
 }
 
 func newErrTestStatter(err error) *testStatter {
 	return &testStatter{
-		sets: map[digest.Digest][]distribution.Descriptor{},
+		sets: make(map[digest.Digest][]distribution.Descriptor),
 		err:  err,
 	}
 }
@@ -109,7 +85,7 @@ type testStatter struct {
 	err   error
 }
 
-func (s *testStatter) Stat(ctx context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
+func (s *testStatter) Stat(_ context.Context, dgst digest.Digest) (distribution.Descriptor, error) {
 	if s.err != nil {
 		return distribution.Descriptor{}, s.err
 	}
@@ -121,11 +97,11 @@ func (s *testStatter) Stat(ctx context.Context, dgst digest.Digest) (distributio
 	return distribution.Descriptor{}, distribution.ErrBlobUnknown
 }
 
-func (s *testStatter) SetDescriptor(ctx context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
+func (s *testStatter) SetDescriptor(_ context.Context, dgst digest.Digest, desc distribution.Descriptor) error {
 	s.sets[dgst] = append(s.sets[dgst], desc)
 	return s.err
 }
 
-func (s *testStatter) Clear(ctx context.Context, dgst digest.Digest) error {
+func (s *testStatter) Clear(_ context.Context, _ digest.Digest) error {
 	return s.err
 }

@@ -22,13 +22,14 @@ The current `/v2/` and other `/vN/` prefixes are reserved for implementing the O
 
 A list of methods and URIs are covered in the table below:
 
- Method   | Path                                                    | Description                                                                                     |
-----------|---------------------------------------------------------|-------------------------------------------------------------------------------------------------|
- `GET`    | `/gitlab/v1/`                                           | Check that the registry implements this API specification.                                      |
- `GET`    | `/gitlab/v1/repositories/<path>/`                       | Obtain details about the repository identified by `path`.                                       |
- `PATCH`  | `/gitlab/v1/repositories/<path>/`                       | Rename a repository origin `path` and all sub repositories under it.  |
- `GET`    | `/gitlab/v1/repositories/<path>/tags/list/`             | Obtain the list of tags for the repository identified by `path`.                                |
- `GET`    | `/gitlab/v1/repository-paths/<path>/repositories/list/` | Obtain the list of repositories under a base repository path identified by `path`.              |
+ Method   | Path                                                    | Description                                                                        |
+----------|---------------------------------------------------------|------------------------------------------------------------------------------------|
+ `GET`    | `/gitlab/v1/`                                           | Check that the registry implements this API specification.                         |
+ `GET`    | `/gitlab/v1/repositories/<path>/`                       | Obtain details about the repository identified by `path`.                          |
+ `PATCH`  | `/gitlab/v1/repositories/<path>/`                       | Rename a repository origin `path` and all sub repositories under it.               |
+ `GET`    | `/gitlab/v1/repositories/<path>/tags/detail/<tagName>`  | Obtain a repository single tag details.                                            |
+ `GET`    | `/gitlab/v1/repositories/<path>/tags/list/`             | Obtain the list of tags for the repository identified by `path`.                   |
+ `GET`    | `/gitlab/v1/repository-paths/<path>/repositories/list/` | Obtain the list of repositories under a base repository path identified by `path`. |
 
 By design, any feature that incurs additional processing time, such as query parameters that allow obtaining additional data, is opt-*in*.
 
@@ -122,6 +123,81 @@ curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitla
  `created_at`        | The timestamp at which the repository was created.                                                                                                                                                                                                                                                                                                                                                                                                                                                | String | ISO 8601 with millisecond precision |                                                                                    |
  `updated_at`        | The timestamp at which the repository details were last updated.                                                                                                                                                                                                                                                                                                                                                                                                                                  | String | ISO 8601 with millisecond precision | Only present if updated at least once.                                             |
  `last_published_at` | The timestamp at which a repository tag was last created or updated.                                                                                                                                                                                                                                                                                                                                                                                                                              | String | ISO 8601 with millisecond precision | Only present for repositories that had tags created or updated after GitLab 16.11. |
+
+## Get repository tag details
+
+Obtain details of a repository tag by name.
+
+### Request
+
+```shell
+GET /gitlab/v1/repositories/<path>/tags/detail/<tagName>/
+```
+
+ Attribute | Type   | Required | Default | Description                                                                                                                                                                                                                                         |
+-----------|--------|----------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+ `path`    | String | Yes      |         | The full path of the target repository. Equivalent to the `name` parameter in the `/v2/` API, described in the [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md). The same pattern validation applies. |
+ `tagName` | String | Yes      |         | The `tagName` of the image to get details from. For example `v1.0.2`.                                                                                                             `                                                                  |
+
+#### Example
+
+```shell
+curl --header "Authorization: Bearer <token>" \
+     "https://registry.gitlab.com/gitlab/v1/repositories/gitlab-org/build/cng/gitlab-container-registry/tags/detail/v1.2.3"
+```
+
+### Response
+
+#### Header
+
+ Status Code        | Reason                                                                                                           |
+ ------------------ |------------------------------------------------------------------------------------------------------------------|
+ `200 OK`           | The repository was found. The response body includes the requested details.                                      |
+ `401 Unauthorized` | The client should take action based on the contents of the `WWW-Authenticate` header and try the endpoint again. |
+ `400 Bad Request`  | The value of the `tagName` is not a valid tag name.                                                                 |
+ `404 Not Found`    | The repository or tag name was not found.                                                                        |
+
+#### Body
+
+ Key                 | Value                                                                             | Type   | Format                              | Condition                                                           |
+---------------------|-----------------------------------------------------------------------------------|--------|-------------------------------------|---------------------------------------------------------------------|
+ `repository`        | The repository path, for example `gitlab-org/build/cng/gitlab-container-registry` | String |                                     |                                                                     |
+ `name`              | The tag name, for example `v1.2.3`.                                               | String |                                     |                                                                     |
+ `image`             | The attributes of the tagged image.                                               | Object | [`image`](#image-object).           |                                                                     |
+ `created_at`        | The timestamp at which the tag was created.                                       | String | ISO 8601 with millisecond precision |                                                                     |
+ `updated_at`        | The timestamp at which the tag was last updated.                                  | String | ISO 8601 with millisecond precision | Only present if updated at least once.                              |
+ `published_at`      | The latest timestamp when the tag was published.                                  | String | ISO 8601 with millisecond precision | Must match the latest value of either `created_at` or `updated_at`. |
+
+##### Image Object
+
+ Key                 | Value                                                                                  | Type   | Format                         | Condition                                                                                                         |
+ --------------------|----------------------------------------------------------------------------------------|--------|--------------------------------|-------------------------------------------------------------------------------------------------------------------|
+ `size_bytes`        | The deduplicated size of the tagged image.                                             | Number | Bytes                          |                                                                                                                   |
+ `manifest`          | The `manifest` object of the tagged image.                                             | Object | [`manifest`](#manifest-object) |                                                                                                                   |
+ `config`            | The `config` object of the tagged image.                                               | Object | [`config`](#config-object)     | Optional. Only present for [image manifests](https://github.com/opencontainers/image-spec/blob/main/manifest.md). |
+
+##### Manifest Object
+
+ Key                 | Value                                   | Type   | Format                                    | Condition                                                                                                          |
+---------------------|-----------------------------------------|--------|-------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
+ `digest`        | The digest of the tagged manifest.      | String |                                           |                                                                                                                    |
+ `media_type`    | The media type of the tagged manifest.  | String |                                           |                                                                                                                    |
+ `references`    | The `references` is a list of `image`. | List   | List of [`image`](#image-object) objects. | Optional. Only present for [image indexes](https://github.com/opencontainers/image-spec/blob/main/image-index.md). |
+
+##### Config Object
+
+ Key                 | Value                                             | Type    |
+---------------------|---------------------------------------------------|---------|
+ `digest`        | The digest of the manifest configuration.         | String  |
+ `media_type`    | The media type of the manifest configuration.     | String  |
+ `platform`      | The image's [platform details](#platform-object). | Object  |
+
+##### Platform Object
+
+ Key                 | Value                                         | Type    |
+---------------------|-----------------------------------------------|---------|
+ `architecture`  | The image targeted architecture.                  | String  |
+ `os`            | The image targeted OS.                            | String  |
 
 ## List Repository Tags
 
@@ -612,6 +688,10 @@ Code|Message|Description|
 `INVALID_QUERY_PARAMETER_TYPE` | `the value of a query parameter is of an invalid type` | The value of a request query parameter is of an invalid type. The error detail identifies the concerning parameter and the list of possible types.|
 
 ## Changes
+
+### 2024-12-10
+
+- Add get single tag details endpoint.
 
 ### 2024-03-21
 

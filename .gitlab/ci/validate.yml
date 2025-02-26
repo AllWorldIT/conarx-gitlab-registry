@@ -64,13 +64,13 @@ commitlint:
   rules:
     - if: $CI_MERGE_REQUEST_IID
 
-golangci-lint:
+codelint:
   variables:
-    GOLANGCI_LINT_VERSION: 'v1.59.1'
+    GOLANGCI_LINT_VERSION: 'v1.62.0'
+    TESTIFYLINT_VERSION: 'v1.5.2'
   cache: {}
   image: golangci/golangci-lint:$GOLANGCI_LINT_VERSION
   stage: validate
-  allow_failure: true
   needs: []
   before_script:
     - apt update
@@ -111,15 +111,6 @@ modules:download:
       - .GOPATH/pkg/mod/
     policy: push
 
-modules:outdated:
-  stage: validate
-  needs: ['modules:download']
-  allow_failure: true
-  before_script:
-    - go install github.com/psampaz/go-mod-outdated@v0.8.0
-    - export PATH="$PATH:$GOPATH/bin"
-  script: go list -u -m -json all | go-mod-outdated -update -direct -ci
-
 mocks:
   needs: ['modules:download']
   stage: validate
@@ -133,6 +124,16 @@ mocks:
 .schema-migrations:
   needs: ['modules:download']
   extends: .go-pg-version-matrix
+  # TODO: We're overriding the `.go-pg-version-matrix` build matrix to get rid of the flake described in https://gitlab.com/gitlab-org/container-registry/-/issues/1420
+  # by pinning the Postgres 14 version to 14.3. Remove this once we drop support for Postgres 14 in GitLab 18.0 (https://gitlab.com/gitlab-org/container-registry/-/issues/1466).
+  parallel:
+    matrix:
+      - PG_VERSION: "14.3"
+        GO_VERSION: [ "1.22", "1.23" ]
+      - PG_VERSION: $PG_CURR_VERSION
+        GO_VERSION: [ "1.22", "1.23" ]
+      - PG_VERSION: $PG_NEXT_VERSION
+        GO_VERSION: [ "1.22", "1.23" ]
   variables:
     FF_NETWORK_PER_BUILD: 1
     POSTGRES_PASSWORD: "secret"
@@ -146,7 +147,7 @@ mocks:
     REGISTRY_DATABASE_DBNAME: "registry"
     REGISTRY_DATABASE_SSLMODE: "disable"
   services:
-    - name: postgres:${PG_VERSION}-alpine
+    - name: postgres:${PG_VERSION}
       alias: "db"
   before_script:
     - "echo 'version: 0.1' > config.yml"
