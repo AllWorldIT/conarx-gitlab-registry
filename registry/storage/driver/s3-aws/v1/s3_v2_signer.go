@@ -1,4 +1,4 @@
-package s3
+package v1
 
 // Source: https://github.com/pivotal-golang/s3cli
 

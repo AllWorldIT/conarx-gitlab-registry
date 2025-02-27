@@ -1,4 +1,4 @@
-package s3
+package common
 
 import (
 	"errors"
@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	"golang.org/x/time/rate"
 )
 
@@ -50,19 +49,33 @@ func (*noBackoff) NextBackOff() time.Duration {
 // Reset to initial state.
 func (*noBackoff) Reset() {}
 
-func withExponentialBackoff(maximum int64) wrapperOpt {
+type WrapperOpt func(*S3wrapper)
+
+func WithRateLimit(maximum int64, burst int) WrapperOpt {
+	return func(w *S3wrapper) {
+		w.Limiter = rate.NewLimiter(rate.Limit(maximum), burst)
+	}
+}
+
+func WithBackoffNotify(n backoff.Notify) WrapperOpt {
+	return func(w *S3wrapper) {
+		w.notify = n
+	}
+}
+
+func WithExponentialBackoff(maximum int64) WrapperOpt {
 	if maximum < 0 {
 		maximum = 0
 	}
 
-	return func(w *s3wrapper) {
+	return func(w *S3wrapper) {
 		w.backoff = func() backoff.BackOff {
 			b := backoff.NewExponentialBackOff()
-			b.InitialInterval = defaultInitialInterval
-			b.RandomizationFactor = defaultRandomizationFactor
-			b.Multiplier = defaultMultiplier
-			b.MaxInterval = defaultMaxInterval
-			b.MaxElapsedTime = defaultMaxElapsedTime
+			b.InitialInterval = DefaultInitialInterval
+			b.RandomizationFactor = DefaultRandomizationFactor
+			b.Multiplier = DefaultMultiplier
+			b.MaxInterval = DefaultMaxInterval
+			b.MaxElapsedTime = DefaultMaxElapsedTime
 
 			// nolint:gosec // there is no overflow here, max is always positive
 			return backoff.WithMaxRetries(b, uint64(maximum))
@@ -70,33 +83,19 @@ func withExponentialBackoff(maximum int64) wrapperOpt {
 	}
 }
 
-var _ common.S3WrapperIf = (*s3wrapper)(nil)
+var _ S3WrapperIf = (*S3wrapper)(nil)
 
-// s3wrapper implements a subset of s3iface.S3API allowing us to rate limit,
+// S3wrapper implements a subset of s3iface.S3API allowing us to rate limit,
 // retry, add trace logging, or otherwise improve s3 calls made by the driver.
-type s3wrapper struct {
+type S3wrapper struct {
 	s3 s3iface.S3API
 	*rate.Limiter
 	backoff backoffConstructor
 	notify  backoff.Notify
 }
 
-type wrapperOpt func(*s3wrapper)
-
-func withRateLimit(maximum int64, burst int) wrapperOpt {
-	return func(w *s3wrapper) {
-		w.Limiter = rate.NewLimiter(rate.Limit(maximum), burst)
-	}
-}
-
-func withBackoffNotify(n backoff.Notify) wrapperOpt {
-	return func(w *s3wrapper) {
-		w.notify = n
-	}
-}
-
-func newS3Wrapper(s3API s3iface.S3API, opts ...wrapperOpt) *s3wrapper {
-	w := &s3wrapper{
+func NewS3Wrapper(s3API s3iface.S3API, opts ...WrapperOpt) *S3wrapper {
+	w := &S3wrapper{
 		s3:      s3API,
 		Limiter: rate.NewLimiter(rate.Inf, 0),
 		backoff: withNoExponentialBackoff,
@@ -109,7 +108,7 @@ func newS3Wrapper(s3API s3iface.S3API, opts ...wrapperOpt) *s3wrapper {
 	return w
 }
 
-func (w *s3wrapper) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error) {
+func (w *S3wrapper) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error) {
 	var out *s3.PutObjectOutput
 
 	err := w.waitRetryNotify(
@@ -129,7 +128,7 @@ func (w *s3wrapper) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInp
 	return out, err
 }
 
-func (w *s3wrapper) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error) {
+func (w *S3wrapper) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error) {
 	var out *s3.GetObjectOutput
 
 	err := w.waitRetryNotify(
@@ -149,7 +148,7 @@ func (w *s3wrapper) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInp
 	return out, err
 }
 
-func (w *s3wrapper) CreateMultipartUploadWithContext(ctx aws.Context, input *s3.CreateMultipartUploadInput, opts ...request.Option) (*s3.CreateMultipartUploadOutput, error) {
+func (w *S3wrapper) CreateMultipartUploadWithContext(ctx aws.Context, input *s3.CreateMultipartUploadInput, opts ...request.Option) (*s3.CreateMultipartUploadOutput, error) {
 	var out *s3.CreateMultipartUploadOutput
 
 	err := w.waitRetryNotify(
@@ -169,7 +168,7 @@ func (w *s3wrapper) CreateMultipartUploadWithContext(ctx aws.Context, input *s3.
 	return out, err
 }
 
-func (w *s3wrapper) ListMultipartUploadsWithContext(ctx aws.Context, input *s3.ListMultipartUploadsInput, opts ...request.Option) (*s3.ListMultipartUploadsOutput, error) {
+func (w *S3wrapper) ListMultipartUploadsWithContext(ctx aws.Context, input *s3.ListMultipartUploadsInput, opts ...request.Option) (*s3.ListMultipartUploadsOutput, error) {
 	var out *s3.ListMultipartUploadsOutput
 
 	err := w.waitRetryNotify(
@@ -189,7 +188,7 @@ func (w *s3wrapper) ListMultipartUploadsWithContext(ctx aws.Context, input *s3.L
 	return out, err
 }
 
-func (w *s3wrapper) ListPartsWithContext(ctx aws.Context, input *s3.ListPartsInput, opts ...request.Option) (*s3.ListPartsOutput, error) {
+func (w *S3wrapper) ListPartsWithContext(ctx aws.Context, input *s3.ListPartsInput, opts ...request.Option) (*s3.ListPartsOutput, error) {
 	var out *s3.ListPartsOutput
 
 	err := w.waitRetryNotify(
@@ -215,7 +214,7 @@ func (w *s3wrapper) ListPartsWithContext(ctx aws.Context, input *s3.ListPartsInp
 	return out, err
 }
 
-func (w *s3wrapper) ListObjectsV2WithContext(ctx aws.Context, input *s3.ListObjectsV2Input, opts ...request.Option) (*s3.ListObjectsV2Output, error) {
+func (w *S3wrapper) ListObjectsV2WithContext(ctx aws.Context, input *s3.ListObjectsV2Input, opts ...request.Option) (*s3.ListObjectsV2Output, error) {
 	var out *s3.ListObjectsV2Output
 
 	err := w.waitRetryNotify(
@@ -235,7 +234,7 @@ func (w *s3wrapper) ListObjectsV2WithContext(ctx aws.Context, input *s3.ListObje
 	return out, err
 }
 
-func (w *s3wrapper) CopyObjectWithContext(ctx aws.Context, input *s3.CopyObjectInput, opts ...request.Option) (*s3.CopyObjectOutput, error) {
+func (w *S3wrapper) CopyObjectWithContext(ctx aws.Context, input *s3.CopyObjectInput, opts ...request.Option) (*s3.CopyObjectOutput, error) {
 	var out *s3.CopyObjectOutput
 
 	err := w.waitRetryNotify(
@@ -255,7 +254,7 @@ func (w *s3wrapper) CopyObjectWithContext(ctx aws.Context, input *s3.CopyObjectI
 	return out, err
 }
 
-func (w *s3wrapper) UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadPartCopyInput, opts ...request.Option) (*s3.UploadPartCopyOutput, error) {
+func (w *S3wrapper) UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadPartCopyInput, opts ...request.Option) (*s3.UploadPartCopyOutput, error) {
 	var out *s3.UploadPartCopyOutput
 
 	err := w.waitRetryNotify(
@@ -275,7 +274,7 @@ func (w *s3wrapper) UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadP
 	return out, err
 }
 
-func (w *s3wrapper) CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.CompleteMultipartUploadInput, opts ...request.Option) (*s3.CompleteMultipartUploadOutput, error) {
+func (w *S3wrapper) CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.CompleteMultipartUploadInput, opts ...request.Option) (*s3.CompleteMultipartUploadOutput, error) {
 	var out *s3.CompleteMultipartUploadOutput
 
 	err := w.waitRetryNotify(
@@ -295,7 +294,7 @@ func (w *s3wrapper) CompleteMultipartUploadWithContext(ctx aws.Context, input *s
 	return out, err
 }
 
-func (w *s3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteObjectsInput, opts ...request.Option) (*s3.DeleteObjectsOutput, error) {
+func (w *S3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteObjectsInput, opts ...request.Option) (*s3.DeleteObjectsOutput, error) {
 	var out *s3.DeleteObjectsOutput
 
 	f := func() error {
@@ -330,23 +329,23 @@ func (w *s3wrapper) DeleteObjectsWithContext(ctx aws.Context, input *s3.DeleteOb
 	return out, nil
 }
 
-func (w *s3wrapper) GetObjectRequest(input *s3.GetObjectInput) (*request.Request, *s3.GetObjectOutput) {
+func (w *S3wrapper) GetObjectRequest(input *s3.GetObjectInput) (*request.Request, *s3.GetObjectOutput) {
 	// This does not make network calls, no need to rate limit.
 	return w.s3.GetObjectRequest(input)
 }
 
-func (w *s3wrapper) HeadObjectRequest(input *s3.HeadObjectInput) (*request.Request, *s3.HeadObjectOutput) {
+func (w *S3wrapper) HeadObjectRequest(input *s3.HeadObjectInput) (*request.Request, *s3.HeadObjectOutput) {
 	// This does not make network calls, no need to rate limit.
 	return w.s3.HeadObjectRequest(input)
 }
 
-func (w *s3wrapper) ListObjectsV2PagesWithContext(ctx aws.Context, input *s3.ListObjectsV2Input, f func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error {
+func (w *S3wrapper) ListObjectsV2PagesWithContext(ctx aws.Context, input *s3.ListObjectsV2Input, f func(*s3.ListObjectsV2Output, bool) bool, opts ...request.Option) error {
 	return w.waitRetryNotify(ctx, func() error {
 		return w.s3.ListObjectsV2PagesWithContext(ctx, input, f, opts...)
 	})
 }
 
-func (w *s3wrapper) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error) {
+func (w *S3wrapper) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error) {
 	var out *s3.AbortMultipartUploadOutput
 
 	err := w.waitRetryNotify(
@@ -367,7 +366,7 @@ func (w *s3wrapper) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.A
 	return out, err
 }
 
-func (w *s3wrapper) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error) {
+func (w *S3wrapper) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error) {
 	var out *s3.UploadPartOutput
 
 	err := w.waitRetryNotify(
@@ -388,7 +387,7 @@ func (w *s3wrapper) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartI
 	return out, err
 }
 
-func (w *s3wrapper) waitRetryNotify(ctx aws.Context, f backoff.Operation) error {
+func (w *S3wrapper) waitRetryNotify(ctx aws.Context, f backoff.Operation) error {
 	err := backoff.RetryNotify(
 		func() error {
 			if err := w.Wait(ctx); err != nil {
