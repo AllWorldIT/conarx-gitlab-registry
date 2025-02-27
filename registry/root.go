@@ -102,7 +102,10 @@ var (
 	maxBBMJobRetry     *int
 )
 
-var parallelwalkKey = "parallelwalk"
+var (
+	parallelwalkKey       = "parallelwalk"
+	errPendingPDMigration = errors.New("pending post-deployment migrations must be run to unblock other available migrations")
+)
 
 // nullableInt implements spf13/pflag#Value as a custom nullable integer to capture spf13/cobra command flags.
 // https://pkg.go.dev/github.com/spf13/pflag?tab=doc#Value
@@ -280,12 +283,27 @@ var MigrateUpCmd = &cobra.Command{
 		}
 		m := migrations.NewMigrator(db, opts...)
 
+		var havePendingPostDeploy bool
+		if skipPostDeployment {
+			canSkip, acceptableMigrationLimit, err := m.CanSkipPostDeploy(*maxNumMigrations)
+			if !canSkip {
+				fmt.Printf("WARNING: %v\n", err)
+				if acceptableMigrationLimit == -1 { // -1 means there is no safe non-post deployment to run
+					return errPendingPDMigration
+				}
+				*maxNumMigrations = acceptableMigrationLimit
+				fmt.Printf("Will only apply the first %d migration(s)\n", acceptableMigrationLimit)
+				havePendingPostDeploy = true
+			}
+		}
+
 		plan, err := m.UpNPlan(*maxNumMigrations)
 		if err != nil {
 			return fmt.Errorf("failed to prepare Up plan: %w", err)
 		}
 
 		if len(plan) > 0 {
+			_, _ = fmt.Println("The following migrations will be applied:")
 			_, _ = fmt.Println(strings.Join(plan, "\n"))
 		}
 
@@ -296,6 +314,9 @@ var MigrateUpCmd = &cobra.Command{
 				return fmt.Errorf("failed to run database migrations: %w", err)
 			}
 			fmt.Printf("OK: applied %d migrations and %d background migrations in %.3fs\n", mr.AppliedCount, mr.AppliedBBMCount, time.Since(start).Seconds())
+			if havePendingPostDeploy {
+				return errPendingPDMigration
+			}
 		}
 		return nil
 	},
