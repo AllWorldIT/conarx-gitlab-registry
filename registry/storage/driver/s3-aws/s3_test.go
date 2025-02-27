@@ -38,14 +38,16 @@ import (
 	"github.com/docker/distribution/context"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
+	v1 "github.com/docker/distribution/registry/storage/driver/s3-aws/v1"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 )
 
 var (
 	// Driver version control
-	driverVersion     string
-	parseParametersFn func(map[string]any) (*common.DriverParameters, error)
-	newDriverFn       func(*common.DriverParameters) (storagedriver.StorageDriver, error)
+	driverVersion    string
+	fromParametersFn func(map[string]any) (storagedriver.StorageDriver, error)
+	newDriverFn      func(*common.DriverParameters) (storagedriver.StorageDriver, error)
+	newS3APIFn       func(*common.DriverParameters) (s3iface.S3API, error)
 
 	// Credentials
 	accessKey    string
@@ -90,13 +92,14 @@ func init() {
 func fetchEnvVarsConfiguration() {
 	driverVersion = os.Getenv(common.EnvDriverVersion)
 	switch driverVersion {
-	case driverName:
+	case v1.DriverName, v1.DriverNameAlt:
 		// v1 is the default
 		fallthrough
 	default:
 		// backwards compatibility - if no version is defined, default to v2
-		parseParametersFn = common.ParseParameters
-		newDriverFn = New
+		fromParametersFn = v1.FromParameters
+		newDriverFn = v1.New
+		newS3APIFn = v1.NewS3API
 	}
 
 	vars := []envConfig{
@@ -197,7 +200,7 @@ func fetchDriverConfig(rootDirectory, storageClass string) (*common.DriverParame
 		rawParams[common.ParamLogLevel] = aws.LogOff
 	}
 
-	parsedParams, err := parseParametersFn(rawParams)
+	parsedParams, err := common.ParseParameters(rawParams)
 	if err != nil {
 		return nil, fmt.Errorf("parsing s3 parameters: %w", err)
 	}
@@ -384,7 +387,7 @@ func TestS3DriverPathStyle(t *testing.T) {
 				params[k] = v
 			}
 
-			d, err := FromParameters(params)
+			d, err := fromParametersFn(params)
 			require.NoError(t, err, "unable to create driver")
 
 			// Generate a signed URL to verify the path style and endpoint behavior
@@ -459,7 +462,7 @@ func TestS3DriverStorageClassStandard(t *testing.T) {
 	// native S3 client to do that.
 	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard)
 	require.NoError(t, err)
-	s3API, err := NewS3API(parsedParams)
+	s3API, err := newS3APIFn(parsedParams)
 	require.NoError(t, err)
 
 	resp, err := s3API.GetObjectWithContext(
@@ -497,7 +500,7 @@ func TestS3DriverStorageClassReducedRedundancy(t *testing.T) {
 	// native S3 client to do that.
 	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard)
 	require.NoError(t, err)
-	s3API, err := NewS3API(parsedParams)
+	s3API, err := newS3APIFn(parsedParams)
 	require.NoError(t, err)
 
 	resp, err := s3API.GetObjectWithContext(
@@ -559,7 +562,7 @@ func TestS3DriverURLFor_Expiry(t *testing.T) {
 
 	mock := clock.NewMock()
 	mock.Set(time.Now())
-	testutil.StubClock(t, &systemClock, mock)
+	testutil.StubClock(t, &common.SystemClock, mock)
 
 	// default
 	s, err := d.URLFor(ctx, fp, nil)
@@ -626,7 +629,7 @@ func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, 
 	}
 
 	// mock the underlying S3 client
-	d := prefixedMockedS3DriverConstructorT(t, newS3Wrapper(mock))
+	d := prefixedMockedS3DriverConstructorT(t, common.NewS3Wrapper(mock))
 
 	// simulate deleting numFiles files
 	paths := make([]string, 0, numFiles)
@@ -639,8 +642,8 @@ func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, 
 
 // TestDeleteFilesError checks that DeleteFiles handles network/service errors correctly.
 func TestS3DriverDeleteFilesError(t *testing.T) {
-	// Simulate deleting 2*deleteMax files, should run two iterations even if the first errors out.
-	count, err := testDeleteFilesError(t, &mockDeleteObjectsError{}, 2*deleteMax)
+	// Simulate deleting 2*common.DeleteMax files, should run two iterations even if the first errors out.
+	count, err := testDeleteFilesError(t, &mockDeleteObjectsError{}, 2*common.DeleteMax)
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -695,9 +698,9 @@ func (*mockDeleteObjectsPartialError) DeleteObjectsWithContext(_ aws.Context, in
 
 // TestDeleteFilesPartialError checks that DeleteFiles handles partial deletion errors correctly.
 func TestS3DriverDeleteFilesPartialError(t *testing.T) {
-	// Simulate deleting 2*deleteMax files, should run two iterations even if
+	// Simulate deleting 2*common.DeleteMax files, should run two iterations even if
 	// the first response contains inner errors.
-	n := 2 * deleteMax
+	n := 2 * common.DeleteMax
 	half := n / 2
 	count, err := testDeleteFilesError(t, &mockDeleteObjectsPartialError{}, n)
 	if err == nil {
@@ -747,9 +750,9 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 	// mock the underlying S3 client
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		newS3Wrapper(
+		common.NewS3Wrapper(
 			&mockPutObjectWithContextRetryableError{},
-			withBackoffNotify(notifyFn),
+			common.WithBackoffNotify(notifyFn),
 		),
 	)
 
@@ -772,10 +775,10 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 	// mock the underlying S3 client
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		newS3Wrapper(
+		common.NewS3Wrapper(
 			&mockPutObjectWithContextRetryableError{},
-			withExponentialBackoff(0),
-			withBackoffNotify(notifyFn),
+			common.WithExponentialBackoff(0),
+			common.WithBackoffNotify(notifyFn),
 		),
 	)
 
@@ -798,10 +801,10 @@ func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
 	// mock the underlying S3 client
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		newS3Wrapper(
+		common.NewS3Wrapper(
 			&mockPutObjectWithContextRetryableError{},
-			withBackoffNotify(notifyFn),
-			withExponentialBackoff(common.DefaultMaxRetries),
+			common.WithBackoffNotify(notifyFn),
+			common.WithExponentialBackoff(common.DefaultMaxRetries),
 		),
 	)
 
@@ -843,10 +846,10 @@ func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		newS3Wrapper(
+		common.NewS3Wrapper(
 			&mockPutObjectWithContextPermanentError{},
-			withBackoffNotify(notifyFn),
-			withExponentialBackoff(200),
+			common.WithBackoffNotify(notifyFn),
+			common.WithExponentialBackoff(200),
 		),
 	)
 
@@ -872,10 +875,10 @@ func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
 
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		newS3Wrapper(
+		common.NewS3Wrapper(
 			&mockDeleteObjectsError{},
-			withBackoffNotify(notifyFn),
-			withExponentialBackoff(200),
+			common.WithBackoffNotify(notifyFn),
+			common.WithExponentialBackoff(200),
 		),
 	)
 
