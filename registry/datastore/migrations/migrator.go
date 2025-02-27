@@ -428,3 +428,98 @@ func (m *MigratorImpl) applyMigration(src *migrate.MemoryMigrationSource, migrat
 	}
 	return nil
 }
+
+// CanSkipPostDeploy checks whether post-deployment migrations (PDM) can be safely skipped.
+// It ensures that all pending PDM are positioned at the end of the migration list.
+// If a PDM appears between non-PDM, skipping is unsafe.
+// TODO (suleimiahmed): this is a roundabout way of ensuring that users do not harm themselves when skipping PDM
+// due to the sequential way that PDM and non-PDM are applied. We should revisit this and only rely on
+// strictly defined functional dependencies when skipping post-deploy migrations. https://gitlab.com/gitlab-org/container-registry/-/issues/1521.
+func (m *MigratorImpl) CanSkipPostDeploy(migrationlimit int) (bool, int, error) {
+	// retrieve applied migration records from the database.
+	records, err := migrate.GetMigrationRecords(m.db, dialect)
+	if err != nil {
+		return false, 0, fmt.Errorf("skip-post-deployment migration check failed: %w", err)
+	}
+
+	// sort pending migrations and classify post-deployment migrations.
+	sortedMigrations, pendingPDSet := classifyPendingMigrations(migrationlimit, records, m.migrations)
+
+	// validate that all post-deployment migrations appear in the correct order.
+	if failure, valid := validatePostDeployMigrationOrder(sortedMigrations, pendingPDSet); !valid {
+		return false, failure.SafeToMigrateLimit, fmt.Errorf("cannot safely skip post-deployment migration: %s", failure.MigrationID)
+	}
+
+	return true, 0, nil
+}
+
+// PostDeployOrderFailure represents a failure case where a post-deployment migration is incorrectly ordered.
+type PostDeployOrderFailure struct {
+	MigrationID        string // id of the improperly ordered migration
+	SafeToMigrateLimit int    // number of non-PDM that can be safely applied before failure
+}
+
+// validatePostDeployOrder ensures that post-deployment migrations are correctly positioned.
+// It returns an error if a non-PDM appears after an pending PDM.
+func validatePostDeployMigrationOrder(sortedMigrations []*migrate.Migration, pendingPDSet map[string]struct{}) (*PostDeployOrderFailure, bool) {
+	var (
+		lastPDID         string
+		safeMigrateLimit int
+		pdSeen           bool
+	)
+
+	for _, migration := range sortedMigrations {
+		if _, isPostDeploy := pendingPDSet[migration.Id]; isPostDeploy {
+			// mark the first occurrence of a post-deployment migration.
+			lastPDID = migration.Id
+			pdSeen = true
+		} else if pdSeen {
+			// a non-PDM appearing after a PDM is a violation.
+			if safeMigrateLimit == 0 {
+				safeMigrateLimit = -1 // no safe non-PDM can be applied.
+			}
+			return &PostDeployOrderFailure{
+				MigrationID:        lastPDID,
+				SafeToMigrateLimit: safeMigrateLimit,
+			}, false
+		}
+		if !pdSeen {
+			// Only count non-PDM that come before encountering a PDM.
+			safeMigrateLimit++
+		}
+	}
+
+	return nil, true
+}
+
+// classifyPendingMigrations sorts pending migrations and identifies post-deployment migrations.
+func classifyPendingMigrations(migrationlimit int, appliedRecords []*migrate.MigrationRecord, allMigrations []*Migration) ([]*migrate.Migration, map[string]struct{}) {
+	src := &migrate.MemoryMigrationSource{}
+	pendingPDSet := make(map[string]struct{})
+	pendingNonPDCount := 0
+
+	// identify pending migrations
+	for _, migration := range allMigrations {
+		if migrationApplied(appliedRecords, migration.Id) {
+			continue // skip already applied migrations
+		}
+		if migration.PostDeployment {
+			pendingPDSet[migration.Id] = struct{}{} // track pending post-deployment migrations
+		} else {
+			pendingNonPDCount++
+		}
+
+		src.Migrations = append(src.Migrations, migration.Migration)
+
+		// stop early if we've already reached the migration limit for non-post-deployment migrations
+		if migrationlimit != 0 && pendingNonPDCount >= migrationlimit {
+			// migrationlimit == 0 means no limit
+			break
+		}
+	}
+
+	// sort the migrations by ID
+	sortedMigrations, _ := src.FindMigrations()
+
+	return sortedMigrations, pendingPDSet
+}
