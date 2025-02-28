@@ -1309,6 +1309,10 @@ func (imp *Importer) importBlobsImpl(ctx context.Context) error {
 }
 
 func (imp *Importer) handleLockers(ctx context.Context, err error) error {
+	if !feature.EnforceLockfiles.Enabled() {
+		return nil
+	}
+
 	if err != nil || imp.dryRun {
 		if err := imp.RestoreLockfiles(ctx); err != nil {
 			return fmt.Errorf("could not restore lockfiles: %w", err)

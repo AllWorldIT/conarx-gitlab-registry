@@ -5,12 +5,14 @@ package handlers_test
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/driver/factory"
@@ -18,29 +20,46 @@ import (
 
 func TestNewApp_Lockfiles(t *testing.T) {
 	tcs := map[string]struct {
-		path        string
-		dbEnabled   bool
-		expectedErr error
+		path               string
+		dbEnabled          bool
+		ffEnforceLockfiles bool
+		expectedErr        error
 	}{
-		"filesystem-in-use with db disabled": {
-			path:        "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:   false,
-			expectedErr: nil,
+		"filesystem-in-use with db disabled and ff enabled": {
+			path:               "../datastore/testdata/fixtures/importer/happy-path",
+			dbEnabled:          false,
+			ffEnforceLockfiles: true,
+			expectedErr:        nil,
 		},
-		"filesystem-in-use with db enabled": {
-			path:        "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:   true,
-			expectedErr: handlers.ErrFilesystemInUse,
+		"filesystem-in-use with db enabled and ff enabled": {
+			path:               "../datastore/testdata/fixtures/importer/happy-path",
+			dbEnabled:          true,
+			ffEnforceLockfiles: true,
+			expectedErr:        handlers.ErrFilesystemInUse,
 		},
-		"database-in-use with db disabled": {
-			path:        "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:   false,
-			expectedErr: handlers.ErrDatabaseInUse,
+		"filesystem-in-use with db enabled and ff disabled": {
+			path:               "../datastore/testdata/fixtures/importer/happy-path",
+			dbEnabled:          true,
+			ffEnforceLockfiles: false,
+			expectedErr:        nil,
 		},
-		"database-in-use with db enabled": {
-			path:        "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:   true,
-			expectedErr: nil,
+		"database-in-use with db disabled and ff enabled": {
+			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			dbEnabled:          false,
+			ffEnforceLockfiles: true,
+			expectedErr:        handlers.ErrDatabaseInUse,
+		},
+		"database-in-use with db disabled and ff disabled": {
+			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			dbEnabled:          false,
+			ffEnforceLockfiles: false,
+			expectedErr:        nil,
+		},
+		"database-in-use with db enabled and ff enabled": {
+			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			dbEnabled:          true,
+			ffEnforceLockfiles: true,
+			expectedErr:        nil,
 		},
 	}
 
@@ -49,6 +68,8 @@ func TestNewApp_Lockfiles(t *testing.T) {
 			if os.Getenv("REGISTRY_DATABASE_ENABLED") != "true" {
 				t.Skip("Skipping test as database is disabled")
 			}
+
+			t.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
 
 			opts := []configOpt{withFSDriver(tc.path)}
 			if !tc.dbEnabled {
