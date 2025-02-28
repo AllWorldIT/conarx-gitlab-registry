@@ -1638,87 +1638,129 @@ func (s *DriverSuite) TestDeleteOnlyDeletesSubpaths() {
 func (s *DriverSuite) TestStatCall() {
 	// NOTE(prozlach): We explicitly need a different blob here to confirm that
 	// in-place overwrite was indeed successful.
+	// NOTE(prozlach): The idea is to create a hierarchy in the s3 bucket
+	// where:
+	// * there is one common directory for all the blobs (dirPathBase)
+	// * there are two files in two different "subdirectories" under the same
+	// common directory (dirA, dirB and filePath, filePathAux)
+	// * both subdirectories should share the same prefix so that we could test
+	// a stat on inexistant dir which is actually a common prefix for existing
+	// subdirectories (DirPartialPrefix)
 	contentAB := s.blobberFactory.GetBlobber(4096 * 2).GetAllBytes()
 	contentA := contentAB[:4096]
 	contentB := contentAB[4096:]
-	dirPath := dtestutil.RandomPath(1, 32)
+	dirPathBase := dtestutil.RandomPath(1, 24)
+	dirA := "foo" + dtestutil.RandomFilename(13)
+	dirB := "foo" + dtestutil.RandomFilename(13)
+	dirPath := path.Join(dirPathBase, dirA)
+	dirPathAux := path.Join(dirPathBase, dirB)
 	fileName := dtestutil.RandomFilename(32)
 	filePath := path.Join(dirPath, fileName)
-	s.T().Logf("directory: %s, filename: %s", dirPath, fileName)
+	// Trigger a case where for given prefix there is more than one object
+	filePathAux := path.Join(dirPathAux, fileName)
+	s.T().Logf("directory: %s, filename: %s, filename aux: %s", dirPath, fileName, filePathAux)
+
+	err := s.StorageDriver.PutContent(s.ctx, filePath, contentA)
+	require.NoError(s.T(), err)
+
+	err = s.StorageDriver.PutContent(s.ctx, filePathAux, contentA)
+	require.NoError(s.T(), err)
 
 	defer s.deletePath(s.StorageDriver, firstPart(dirPath))
 
-	// Call to stat on root directory
-	// The storage healthcheck performs this exact call to Stat.
+	// Call to stat on root directory. The storage healthcheck performs this
+	// exact call to Stat.
 	// PathNotFoundErrors are not considered health check failures. Some
 	// drivers will return a not found here, while others will not return an
 	// error at all. If we get an error, ensure it's a not found.
-	fi, err := s.StorageDriver.Stat(s.ctx, "/")
-	if err != nil {
-		require.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
-	} else {
+	s.Run("RootDirectory", func() {
+		fi, err := s.StorageDriver.Stat(s.ctx, "/")
+		if err != nil {
+			assert.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
+		} else {
+			assert.NotNil(s.T(), fi)
+			assert.Equal(s.T(), "/", fi.Path())
+			assert.True(s.T(), fi.IsDir())
+		}
+	})
+
+	s.Run("NonExistentDir", func() {
+		fi, err := s.StorageDriver.Stat(s.ctx, dirPath+"foo")
+		require.Error(s.T(), err)
+		assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
+			DriverName: s.StorageDriver.Name(),
+			Path:       dirPath + "foo",
+		})
+		assert.Nil(s.T(), fi)
+	})
+
+	s.Run("NonExistentPath", func() {
+		fi, err := s.StorageDriver.Stat(s.ctx, filePath+"bar")
+		require.Error(s.T(), err)
+		assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
+			DriverName: s.StorageDriver.Name(),
+			Path:       filePath + "bar",
+		})
+		assert.Nil(s.T(), fi)
+	})
+
+	s.Run("FileExists", func() {
+		fi, err := s.StorageDriver.Stat(s.ctx, filePath)
+		require.NoError(s.T(), err)
 		require.NotNil(s.T(), fi)
-		require.Equal(s.T(), "/", fi.Path())
-		require.True(s.T(), fi.IsDir())
-	}
-
-	// Call on non-existent file/dir, check error.
-	fi, err = s.StorageDriver.Stat(s.ctx, dirPath)
-	require.Error(s.T(), err)
-	require.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{
-		DriverName: s.StorageDriver.Name(),
-		Path:       dirPath,
+		assert.Equal(s.T(), filePath, fi.Path())
+		assert.Equal(s.T(), int64(len(contentA)), fi.Size())
+		assert.False(s.T(), fi.IsDir())
 	})
-	require.Nil(s.T(), fi)
 
-	fi, err = s.StorageDriver.Stat(s.ctx, filePath)
-	require.Error(s.T(), err)
-	require.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{
-		DriverName: s.StorageDriver.Name(),
-		Path:       filePath,
+	s.Run("ModTime", func() {
+		fi, err := s.StorageDriver.Stat(s.ctx, filePath)
+		require.NoError(s.T(), err)
+		assert.NotNil(s.T(), fi)
+		createdTime := fi.ModTime()
+
+		// Sleep and modify the file
+		time.Sleep(time.Second * 10)
+		err = s.StorageDriver.PutContent(s.ctx, filePath, contentB)
+		require.NoError(s.T(), err)
+
+		fi, err = s.StorageDriver.Stat(s.ctx, filePath)
+		require.NoError(s.T(), err)
+		require.NotNil(s.T(), fi)
+		modTime := fi.ModTime()
+
+		// Check if the modification time is after the creation time.
+		// In case of cloud storage services, storage frontend nodes might have
+		// time drift between them, however that should be solved with sleeping
+		// before update.
+		assert.Greaterf(
+			s.T(),
+			modTime,
+			createdTime,
+			"modtime (%s) is before the creation time (%s)", modTime, createdTime,
+		)
 	})
-	require.Nil(s.T(), fi)
 
-	err = s.StorageDriver.PutContent(s.ctx, filePath, contentA)
-	require.NoError(s.T(), err)
+	// Call on directory with one "file"
+	// (do not check ModTime as dirs don't need to support it)
+	s.Run("DirWithFile", func() {
+		fi, err := s.StorageDriver.Stat(s.ctx, dirPath)
+		require.NoError(s.T(), err)
+		require.NotNil(s.T(), fi)
+		assert.Equal(s.T(), dirPath, fi.Path())
+		assert.Zero(s.T(), fi.Size())
+		assert.True(s.T(), fi.IsDir())
+	})
 
-	// Call on regular file, check results
-	fi, err = s.StorageDriver.Stat(s.ctx, filePath)
-	require.NoError(s.T(), err)
-	require.NotNil(s.T(), fi)
-	require.Equal(s.T(), filePath, fi.Path())
-	require.Equal(s.T(), int64(len(contentA)), fi.Size())
-	require.False(s.T(), fi.IsDir())
-	createdTime := fi.ModTime()
-
-	// Sleep and modify the file
-	time.Sleep(time.Second * 10)
-	err = s.StorageDriver.PutContent(s.ctx, filePath, contentB)
-	require.NoError(s.T(), err)
-	fi, err = s.StorageDriver.Stat(s.ctx, filePath)
-	require.NoError(s.T(), err)
-	require.NotNil(s.T(), fi)
-	time.Sleep(time.Second * 5) // allow changes to propagate (eventual consistency)
-
-	// Check if the modification time is after the creation time.
-	// In case of cloud storage services, storage frontend nodes might have
-	// time drift between them, however that should be solved with sleeping
-	// before update.
-	modTime := fi.ModTime()
-	require.Greaterf(
-		s.T(),
-		modTime,
-		createdTime,
-		"modtime (%s) is before the creation time (%s)", modTime, createdTime,
-	)
-
-	// Call on directory (do not check ModTime as dirs don't need to support it)
-	fi, err = s.StorageDriver.Stat(s.ctx, dirPath)
-	require.NoError(s.T(), err)
-	require.NotNil(s.T(), fi)
-	assert.Equal(s.T(), dirPath, fi.Path())
-	assert.Zero(s.T(), fi.Size())
-	assert.True(s.T(), fi.IsDir())
+	// Call on directory with another "subdirectory"
+	s.Run("DirWithSubDir", func() {
+		fi, err := s.StorageDriver.Stat(s.ctx, dirPathBase)
+		require.NoError(s.T(), err)
+		require.NotNil(s.T(), fi)
+		assert.Equal(s.T(), dirPathBase, fi.Path())
+		assert.Zero(s.T(), fi.Size())
+		assert.True(s.T(), fi.IsDir())
+	})
 }
 
 // TestPutContentMultipleTimes checks that if storage driver can overwrite the content
