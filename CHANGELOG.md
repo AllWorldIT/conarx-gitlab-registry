@@ -1,3 +1,34 @@
+## [4.17.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.16.0-gitlab...v4.17.0-gitlab) (2025-02-28)
+
+### ✨ Features ✨
+
+* make azure v2 driver retries configurable ([4f3a71a](https://gitlab.com/gitlab-org/container-registry/commit/4f3a71adbaeef695c5af1bcce4ae9739bfd593b3))
+* remove REGISTRY_FF_ENFORCE_LOCKFILES ([f81524e](https://gitlab.com/gitlab-org/container-registry/commit/f81524e87206449c474e5dce888181258f8e00c9))
+* use SKIP_POST_DEPLOYMENT_MIGRATIONS env var to skip post-deployment migrations ([b81570d](https://gitlab.com/gitlab-org/container-registry/commit/b81570d24d08abe59b56f882e670796f464c87e9))
+
+### 🐛 Bug Fixes 🐛
+
+* allow only safe skip of post deploy migrations ([3a0275f](https://gitlab.com/gitlab-org/container-registry/commit/3a0275fe4e7c42b2b705c2ca8c44dbf33058eb4f))
+* fix handling of Azure Blob Storage operation timeouts in azure_v2 driver ([06940d6](https://gitlab.com/gitlab-org/container-registry/commit/06940d679a40f4361bf1ccdbf7226dd8e7e82842))
+* fix race issues in s3 retry code ([529df00](https://gitlab.com/gitlab-org/container-registry/commit/529df00a00daa8abe816f81078bda3a94b5f925b))
+* **gcs:** do not wrap nil error when canceling writer ([9e578ef](https://gitlab.com/gitlab-org/container-registry/commit/9e578efa85b855cac4d6de586586f02515a4235c))
+* permit logging of some of the headers by azure v2 driver ([335fc1a](https://gitlab.com/gitlab-org/container-registry/commit/335fc1a5bfe8e2d5e0c4926878f75a2784902ae0))
+
+### ⏮️️ Reverts ⏮️️
+
+* remove and enable REGISTRY_FF_ENFORCE_LOCKFILES by default ([3586c13](https://gitlab.com/gitlab-org/container-registry/commit/3586c137e4ad81a1640eab0233906207a2c9f875))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azidentity to v1.8.2 ([4397052](https://gitlab.com/gitlab-org/container-registry/commit/4397052f36aba1affeba3d138d2b4f53036e4365))
+* **deps:** update module github.com/prometheus/client_golang to v1.21.0 ([4071a44](https://gitlab.com/gitlab-org/container-registry/commit/4071a4448cc943a510cb0aa49cc210f42f8b4b02))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.7.1 ([cd6cd8d](https://gitlab.com/gitlab-org/container-registry/commit/cd6cd8dc199be5f60471a63ad00039c2920e42fe))
+* **deps:** update module github.com/spf13/cobra to v1.9.1 ([8d282d7](https://gitlab.com/gitlab-org/container-registry/commit/8d282d7bee03cf262d07afde241aa10db9f1695f))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.123.0 ([c829a02](https://gitlab.com/gitlab-org/container-registry/commit/c829a02b2a800bf7fb60f6de7477b607078cbcda))
+* **deps:** update module golang.org/x/crypto to v0.34.0 ([8ad06f4](https://gitlab.com/gitlab-org/container-registry/commit/8ad06f4a6e353d47f9bbaac6f40f6336554a9b7d))
+* **deps:** update module golang.org/x/crypto to v0.35.0 ([85af5ac](https://gitlab.com/gitlab-org/container-registry/commit/85af5ac24fd373a1678fbd3eee16cb360139accb))
+* **deps:** update module golang.org/x/oauth2 to v0.27.0 ([742336b](https://gitlab.com/gitlab-org/container-registry/commit/742336b266633c280bab70a2be3a92294cc203d7))
+
 ## [4.16.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.15.2-gitlab...v4.16.0-gitlab) (2025-02-13)
 
 
