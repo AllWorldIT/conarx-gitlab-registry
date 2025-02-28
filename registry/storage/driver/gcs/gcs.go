@@ -468,8 +468,10 @@ func (w *writer) Cancel() error {
 		if errors.As(err, &gerr) && gerr.Code == http.StatusNotFound {
 			return nil
 		}
+
+		return fmt.Errorf("deleting object while canceling writer: %w", err)
 	}
-	return fmt.Errorf("deleting object while canceling writer: %w", err)
+	return nil
 }
 
 func (w *writer) Close() error {
