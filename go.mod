@@ -41,7 +41,7 @@ require (
 	github.com/trim21/go-redis-prometheus v0.0.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	gitlab.com/gitlab-org/api/client-go v0.124.0
-	gitlab.com/gitlab-org/labkit v1.21.2
+	gitlab.com/gitlab-org/labkit v1.22.0
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.35.0
