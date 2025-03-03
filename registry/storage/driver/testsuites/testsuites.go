@@ -1652,6 +1652,7 @@ func (s *DriverSuite) TestStatCall() {
 	dirPathBase := dtestutil.RandomPath(1, 24)
 	dirA := "foo" + dtestutil.RandomFilename(13)
 	dirB := "foo" + dtestutil.RandomFilename(13)
+	partialPath := path.Join(dirPathBase, "foo")
 	dirPath := path.Join(dirPathBase, dirA)
 	dirPathAux := path.Join(dirPathBase, dirB)
 	fileName := dtestutil.RandomFilename(32)
@@ -1760,6 +1761,18 @@ func (s *DriverSuite) TestStatCall() {
 		assert.Equal(s.T(), dirPathBase, fi.Path())
 		assert.Zero(s.T(), fi.Size())
 		assert.True(s.T(), fi.IsDir())
+	})
+
+	// Call on a partial name of the directory. This should result in
+	// not-found, as partial match is still not a match for a directory.
+	s.Run("DirPartialPrefix", func() {
+		fi, err := s.StorageDriver.Stat(s.ctx, partialPath)
+		require.Error(s.T(), err)
+		assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
+			DriverName: s.StorageDriver.Name(),
+			Path:       partialPath,
+		})
+		assert.Nil(s.T(), fi)
 	})
 }
 
