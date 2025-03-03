@@ -356,11 +356,15 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 // Stat retrieves the FileInfo for the given path, including the current size
 // in bytes and the creation time.
 func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
+	s3Path := d.s3Path(path)
 	resp, err := d.S3.ListObjectsV2WithContext(
 		ctx,
 		&s3.ListObjectsV2Input{
-			Bucket:  aws.String(d.Bucket),
-			Prefix:  aws.String(d.s3Path(path)),
+			Bucket: aws.String(d.Bucket),
+			Prefix: aws.String(s3Path),
+			// NOTE(prozlach): Yes, AWS returns objects in lexicographical
+			// order based on their key names for general purpose buckets.
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 			MaxKeys: aws.Int64(1),
 		})
 	if err != nil {
@@ -371,18 +375,19 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 		Path: path,
 	}
 
-	switch {
-	case len(resp.Contents) == 1:
-		if *resp.Contents[0].Key != d.s3Path(path) {
+	if len(resp.Contents) == 1 {
+		entry := resp.Contents[0]
+		if *entry.Key != s3Path {
+			if len(*entry.Key) > len(s3Path) && (*entry.Key)[len(s3Path)] != '/' {
+				return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
+			}
 			fi.IsDir = true
 		} else {
 			fi.IsDir = false
-			fi.Size = *resp.Contents[0].Size
-			fi.ModTime = *resp.Contents[0].LastModified
+			fi.Size = *entry.Size
+			fi.ModTime = *entry.LastModified
 		}
-	case len(resp.CommonPrefixes) == 1:
-		fi.IsDir = true
-	default:
+	} else {
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
 	}
 
@@ -599,6 +604,9 @@ ListLoop:
 		for _, key := range resp.Contents {
 			// Stop if we encounter a key that is not a subpath (so that
 			// deleting "/a" does not delete "/ab").
+			// NOTE(prozlach): Yes, AWS returns objects in lexicographical
+			// order based on their key names for general purpose buckets.
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 			if len(*key.Key) > len(s3Path) && (*key.Key)[len(s3Path)] != '/' {
 				break ListLoop
 			}
