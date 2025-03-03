@@ -75,43 +75,8 @@ gcs:
 .if-fork-merge-request: &if-fork-merge-request
   if: '($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE != "merge_train") && $CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
 
-# NOTE(prozlach): Azure storage container used in tests has an auto-cleanup policy set
-# - all blobs older than 24h will be deleted, so even if CI task fails, there
-# is no risk that we will keep being billed for the storage indefinatelly.
-azure:default-runner:
-  <<: *storage-driver-test
-  parallel:
-    matrix:
-      # Regular combinations
-      - GO_VERSION: [ "1.23", "1.24" ]
-        AZURE_DRIVER_VERSION: [ "azure", "azure_v2" ]
-        AZURE_CREDENTIALS_TYPE: [ "shared_key" ]
-      - GO_VERSION: [ "1.23", "1.24" ]
-        AZURE_DRIVER_VERSION: [ "azure_v2" ]
-        AZURE_CREDENTIALS_TYPE: [ "client_secret" ]
-  variables:
-    <<: *storage-driver-variables
-    PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
-    AZURE_DRIVER_VERSION: $AZURE_DRIVER_VERSION
-    AZURE_CREDENTIALS_TYPE: $AZURE_CREDENTIALS_TYPE
-    # NOTE(prozlach): Code supports `AZURE_DEBUGLOG` environment variable which
-    # can be toggled in the CI via CI enviroment variables for debugging
-    # if/when needed. It is currently set to `false`, set it to `true` to
-    # enable debug logging.
-    # NOTE(prozlach): From what I noticed, if the tests do not finish within 45
-    # minutes, they will not finish in 60 minutes either. A lot depends on the
-    # latency between the Gitlab runner and azure store account. Moving Azure
-    # storage closer to Gitlab runners (i.e. us-east Azure zone) decreased run
-    # time from ~40m to around 9m. 
-  # TODO: remove allow_failure once the test setup is fixed
-  # https://gitlab.com/gitlab-org/container-registry/-/issues/1478
-  allow_failure: true
-
-# NOTE(prozlach): Do not run all azure jobs on the azure runner as it does not
-# have enough capacity and is not secure enough to be exposed to shared_key
-# credentials.
 # NOTE(prozlach): Access credentials for the VM are stored in 1Password, entry
-# `container-registry-cirunner`.
+# `container-registry-cirunner-azure`.
 # NOTE(prozlach): Setting up custom runner follows the standard steps
 # documented for setting up custom gitlab runner with few extra steps:
 # * the host must be assigned managed identy access with level Data Contributor
@@ -121,19 +86,29 @@ azure:default-runner:
 # * the runner should have at least 4 vCPU and 16GiB RAM
 # * running untagged jobs on this runner must be disabled
 # * runner must be tagged with `azure-managed_identity_auth` tag
-azure:managed-identity:
+# NOTE(prozlach): Azure storage container used in tests has an auto-cleanup policy set
+# - all blobs older than 24h will be deleted, so even if CI task fails, there
+# is no risk that we will keep being billed for the storage indefinatelly.
+azure:
   <<: *storage-driver-test
   parallel:
     matrix:
-      # Managed identity combinations
+      # Regular combinations
+      - GO_VERSION: [ "1.23", "1.24" ]
+        AZURE_DRIVER_VERSION: [ "azure", "azure_v2" ]
+        AZURE_CREDENTIALS_TYPE: [ "shared_key" ]
       - GO_VERSION: [ "1.23", "1.24" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
-        AZURE_CREDENTIALS_TYPE: [ "default_credentials" ]
-  # Do not run in forked projects, as they can't use the custom runner:
+        AZURE_CREDENTIALS_TYPE: [ "client_secret", "default_credentials" ]
+  # Do not run in forked projects, as we are running on custom runner with
+ # instance-level credentials
   rules:
     - <<: *if-fork-merge-request
       when: never
     - when: on_success
+      changes:
+        - registry/storage/driver/azure/*
+        - registry/storage/driver/azure/**/*
   variables:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
@@ -143,25 +118,24 @@ azure:managed-identity:
     # can be toggled in the CI via CI enviroment variables for debugging
     # if/when needed. It is currently set to `false`, set it to `true` to
     # enable debug logging.
-    # NOTE(prozlach): From what I noticed, if the tests do not finish within 45
-    # minutes, they will not finish in 60 minutes either. A lot depends on the
-    # latency between the Gitlab runner and azure store account. Moving Azure
-    # storage closer to Gitlab runners (i.e. us-east Azure zone) decreased run
-    # time from ~40m to around 9m. 
   tags:
     # NOTE(prozlach): run on a custom runner, that runs on Azure VM which has
     # managed credentials set up for the storage account and container that CI
-    # variables define.
+    # variables define. Other variants run here as well in order to save $$ on
+    # bandwith costs.
     - azure-managed_identity_auth
   script:
-    # NOTE(prozlach): we need to make sure that Azure SDK will not try to auth
-    # with creds from environment and instead tries to obtain managed
+    # NOTE(prozlach): In case when we test managed credentials variant, we need
+    # to make sure that Azure SDK will not try to auth with creds from
+    # environment and instead tries to obtain managed
     # credentials from the VM itself.
     - |
-      unset AZURE_ACCOUNT_KEY
-      unset AZURE_TENANT_ID
-      unset AZURE_CLIENT_ID
-      unset AZURE_CLIENT_SECRET
+      if [[ "$AZURE_CREDENTIALS_TYPE" == "default_credentials" ]]; then
+        unset AZURE_ACCOUNT_KEY
+        unset AZURE_TENANT_ID
+        unset AZURE_CLIENT_ID
+        unset AZURE_CLIENT_SECRET
+      fi
       $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
   # TODO: remove allow_failure once the test setup is fixed
   # https://gitlab.com/gitlab-org/container-registry/-/issues/1478
