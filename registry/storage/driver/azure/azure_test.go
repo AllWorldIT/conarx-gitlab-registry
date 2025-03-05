@@ -26,6 +26,7 @@ import (
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 	btestutil "github.com/docker/distribution/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -742,7 +743,12 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 	rootDirectory := t.TempDir()
 	blobber := btestutil.NewBlober(btestutil.RandomBlob(t, v2.MaxChunkSize*2+1<<20))
 
-	testFuncMoveAllOK := func(tt *testing.T, sDriver storagedriver.StorageDriver, filename string) {
+	testFuncMoveAllOK := func(
+		tt *testing.T,
+		sDriver storagedriver.StorageDriver,
+		filename string,
+		isTestValidf func() bool,
+	) bool {
 		contents := blobber.GetAllBytes()
 		sourcePath := filename + "_src"
 		destPath := filename + "_dst"
@@ -751,6 +757,9 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 		require.NoError(tt, err)
 
 		err = sDriver.Move(ctx, sourcePath, destPath)
+		if !isTestValidf() {
+			return false
+		}
 		require.NoError(tt, err)
 
 		received, err := sDriver.GetContent(ctx, destPath)
@@ -762,13 +771,22 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			DriverName: sDriver.Name(),
 			Path:       sourcePath,
 		})
+		return true
 	}
 
-	testFuncWriterAllOK := func(tt *testing.T, sDriver storagedriver.StorageDriver, filename string) {
+	testFuncWriterAllOK := func(
+		tt *testing.T,
+		sDriver storagedriver.StorageDriver,
+		filename string,
+		isTestValidf func() bool,
+	) bool {
 		writer, err := sDriver.Writer(ctx, filename, false)
 		require.NoError(tt, err)
 
 		nn, err := io.Copy(writer, blobber.GetReader())
+		if !isTestValidf() {
+			return false
+		}
 		require.NoError(tt, err)
 		require.EqualValues(tt, blobber.Size(), nn)
 
@@ -782,16 +800,26 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 		require.NoError(tt, err)
 		defer reader.Close()
 
-		blobber.AssertStreamEqual(tt, reader, 0, fmt.Sprintf("filename: %s", filename))
+		blobber.RequireStreamEqual(tt, reader, 0, fmt.Sprintf("filename: %s", filename))
+		return true
 	}
 
-	testFuncWriterErrorContains := func(errMsg string) func(tt *testing.T, sDriver storagedriver.StorageDriver, filename string) {
-		return func(tt *testing.T, sDriver storagedriver.StorageDriver, filename string) {
+	testFuncWriterErrorContains := func(errMsg string) func(*testing.T, storagedriver.StorageDriver, string, func() bool) bool {
+		return func(
+			tt *testing.T,
+			sDriver storagedriver.StorageDriver,
+			filename string,
+			isTestValidf func() bool,
+		) bool {
 			writer, err := sDriver.Writer(ctx, filename, false)
 			require.NoError(tt, err)
 
 			_, err = io.Copy(writer, blobber.GetReader())
-			require.ErrorContains(tt, err, errMsg)
+			if !isTestValidf() {
+				return false
+			}
+			assert.ErrorContains(tt, err, errMsg)
+			return true
 		}
 	}
 
@@ -852,73 +880,98 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 	}
 
 	makeResponseOperationTimeout := func(tt *testing.T) dtestutil.ResponseModifier {
-		return func(resp *http.Response) *http.Response {
+		return func(resp *http.Response) (*http.Response, bool) {
+			if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusAccepted {
+				tt.Logf("makeResponseOperationTimeout, response not matched: %d", resp.StatusCode)
+				return resp, false
+			}
+
 			resp.StatusCode = http.StatusInternalServerError
 			resp.Status = "Operation timed out"
 			resp.Header.Set("x-ms-error-code", string(bloberror.OperationTimedOut))
 			tt.Log("response marked as timed out")
 
-			return resp
+			return resp, true
 		}
 	}
 
 	makeResponseNonretryableError := func(tt *testing.T) dtestutil.ResponseModifier {
-		return func(resp *http.Response) *http.Response {
+		return func(resp *http.Response) (*http.Response, bool) {
+			if resp.StatusCode != http.StatusCreated {
+				tt.Logf("makeResponseNonretryableError, response not matched: %d", resp.StatusCode)
+				return resp, false
+			}
+
 			// Make sure this is not a retryable error for Azure:
 			resp.StatusCode = http.StatusInsufficientStorage
 			resp.Header.Set("x-ms-error-code", "Boryna ran out of Maryna")
 			tt.Log("response marked as non-retryable error")
 
-			return resp
+			return resp, true
 		}
 	}
 
 	corruptWriterUploadedChunk := func(tt *testing.T) dtestutil.RequestModifier {
-		return func(req *http.Request) *http.Request {
+		return func(req *http.Request) (*http.Request, bool) {
 			var err error
 
 			req.Body, err = dtestutil.RandomizeTail(req.Body)
 			require.NoError(tt, err)
 			tt.Log("body data has been corrupted")
 
-			return req
+			return req, true
 		}
 	}
 
 	removeMd5header := func(tt *testing.T) dtestutil.ResponseModifier {
-		return func(resp *http.Response) *http.Response {
+		return func(resp *http.Response) (*http.Response, bool) {
+			if resp.Header.Get("Content-Md5") == "" {
+				tt.Logf("removeMd5header, response not matched")
+				return resp, false
+			}
 			resp.Header.Del("Content-Md5")
 			tt.Log("Content-Md5 header has been removed")
-			return resp
+			return resp, true
 		}
 	}
 
 	makeAppenBlockRequestInvalid := func(tt *testing.T) dtestutil.RequestModifier {
-		return func(req *http.Request) *http.Request {
+		return func(req *http.Request) (*http.Request, bool) {
 			q := req.URL.Query()
+
+			if q.Get("comp") != "appendblock" {
+				tt.Logf("makeAppenBlockRequestInvalid, response not matched: %s", q.Get("comp"))
+				return req, false
+			}
+
 			q.Set("comp", "fooBar")
 			req.URL.RawQuery = q.Encode()
 			tt.Log("request marked as invalid")
-			return req
+			return req, true
 		}
 	}
 
+	// (╯°□°)╯︵ ┻━┻
+	// nolint: staticcheck // no, keys are not always canonicalized
 	makeStartCopyRequestInvalid := func(tt *testing.T) dtestutil.RequestModifier {
-		return func(req *http.Request) *http.Request {
-			// (╯°□°)╯︵ ┻━┻
-			// nolint: staticcheck // no, keys are not always canonicalized it
-			// would seem
+		return func(req *http.Request) (*http.Request, bool) {
+			_, okLowercase := req.Header["x-ms-copy-source"]
+			okCanonicalized := req.Header.Get("x-ms-copy-source") != ""
+			if !okLowercase && !okCanonicalized {
+				return req, false
+			}
+
 			delete(req.Header, "x-ms-copy-source")
 			req.Header.Del("x-ms-copy-source")
 			tt.Log("x-ms-copy-source header has been removed")
-			return req
+			return req, true
 		}
 	}
 
 	tests := []struct {
 		name               string
 		interceptorConfigs []dtestutil.InterceptorConfig
-		testFunc           func(*testing.T, storagedriver.StorageDriver, string)
+		testFunc           func(*testing.T, storagedriver.StorageDriver, string, func() bool) bool
 	}{
 		{
 			name:               "writer happy path - no injected failure",
@@ -929,9 +982,11 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			name: "unrecoverable error from server",
 			interceptorConfigs: []dtestutil.InterceptorConfig{
 				{
-					Matcher:          matchWriterSecondUploadRequest,
-					RequestModifier:  nil,
-					ResponseModifier: makeResponseNonretryableError,
+					Matcher:                            matchWriterSecondUploadRequest,
+					RequestModifier:                    nil,
+					ResponseModifier:                   makeResponseNonretryableError,
+					ExpectedRequestModificationsCount:  0,
+					ExpectedResponseModificationsCount: 1,
 				},
 			},
 			testFunc: testFuncWriterErrorContains("Boryna ran out of Maryna"),
@@ -940,9 +995,11 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			name: "recovered retry",
 			interceptorConfigs: []dtestutil.InterceptorConfig{
 				{
-					Matcher:          matchWriterSecondUploadRequest,
-					RequestModifier:  nil,
-					ResponseModifier: makeResponseOperationTimeout,
+					Matcher:                            matchWriterSecondUploadRequest,
+					RequestModifier:                    nil,
+					ResponseModifier:                   makeResponseOperationTimeout,
+					ExpectedRequestModificationsCount:  0,
+					ExpectedResponseModificationsCount: 1,
 				},
 			},
 			testFunc: testFuncWriterAllOK,
@@ -951,9 +1008,11 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			name: "corrupted data using MD5 header",
 			interceptorConfigs: []dtestutil.InterceptorConfig{
 				{
-					Matcher:          matchWriterSecondUploadRequest,
-					RequestModifier:  corruptWriterUploadedChunk,
-					ResponseModifier: makeResponseOperationTimeout,
+					Matcher:                            matchWriterSecondUploadRequest,
+					RequestModifier:                    corruptWriterUploadedChunk,
+					ResponseModifier:                   makeResponseOperationTimeout,
+					ExpectedRequestModificationsCount:  1,
+					ExpectedResponseModificationsCount: 1,
 				},
 			},
 			testFunc: testFuncWriterErrorContains("corrupted data found in the uploaded data"),
@@ -962,14 +1021,18 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			name: "corrupted data using direct md5 calculation",
 			interceptorConfigs: []dtestutil.InterceptorConfig{
 				{
-					Matcher:          matchAlways,
-					RequestModifier:  nil,
-					ResponseModifier: removeMd5header,
+					Matcher:                            matchAlways,
+					RequestModifier:                    nil,
+					ResponseModifier:                   removeMd5header,
+					ExpectedRequestModificationsCount:  2,
+					ExpectedResponseModificationsCount: 1,
 				},
 				{
-					Matcher:          matchWriterSecondUploadRequest,
-					RequestModifier:  corruptWriterUploadedChunk,
-					ResponseModifier: makeResponseOperationTimeout,
+					Matcher:                            matchWriterSecondUploadRequest,
+					RequestModifier:                    corruptWriterUploadedChunk,
+					ResponseModifier:                   makeResponseOperationTimeout,
+					ExpectedRequestModificationsCount:  1,
+					ExpectedResponseModificationsCount: 1,
 				},
 			},
 			testFunc: testFuncWriterErrorContains("corrupted data found in the uploaded data"),
@@ -978,9 +1041,11 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			name: "no data uploaded",
 			interceptorConfigs: []dtestutil.InterceptorConfig{
 				{
-					Matcher:          matchWriterSecondUploadRequest,
-					RequestModifier:  makeAppenBlockRequestInvalid,
-					ResponseModifier: makeResponseOperationTimeout,
+					Matcher:                            matchWriterSecondUploadRequest,
+					RequestModifier:                    makeAppenBlockRequestInvalid,
+					ResponseModifier:                   makeResponseOperationTimeout,
+					ExpectedRequestModificationsCount:  1,
+					ExpectedResponseModificationsCount: 1,
 				},
 			},
 			testFunc: testFuncWriterAllOK,
@@ -996,9 +1061,11 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			name: "move call timeouts are retried",
 			interceptorConfigs: []dtestutil.InterceptorConfig{
 				{
-					Matcher:          matchMoveFirstStartCopyRequest,
-					RequestModifier:  makeStartCopyRequestInvalid,
-					ResponseModifier: makeResponseOperationTimeout,
+					Matcher:                            matchMoveFirstStartCopyRequest,
+					RequestModifier:                    makeStartCopyRequestInvalid,
+					ResponseModifier:                   makeResponseOperationTimeout,
+					ExpectedRequestModificationsCount:  1,
+					ExpectedResponseModificationsCount: 1,
 				},
 			},
 			testFunc: testFuncMoveAllOK,
@@ -1010,9 +1077,11 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			name: "move call timeout duplicates are handled",
 			interceptorConfigs: []dtestutil.InterceptorConfig{
 				{
-					Matcher:          matchMoveFirstStartCopyRequest,
-					RequestModifier:  nil,
-					ResponseModifier: makeResponseOperationTimeout,
+					Matcher:                            matchMoveFirstStartCopyRequest,
+					RequestModifier:                    nil,
+					ResponseModifier:                   makeResponseOperationTimeout,
+					ExpectedRequestModificationsCount:  0,
+					ExpectedResponseModificationsCount: 1,
 				},
 			},
 			testFunc: testFuncMoveAllOK,
@@ -1022,19 +1091,24 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 	fetchDriver := func(
 		tt *testing.T,
 		interceptorConfigs []dtestutil.InterceptorConfig,
-	) storagedriver.StorageDriver {
+	) (storagedriver.StorageDriver, func() bool) {
 		parsedParams, err := fetchDriverConfig(rootDirectory, true)
 		require.NoError(t, err)
 		typedParsedParams := parsedParams.(*v2.DriverParameters)
 
 		interceptor, err := dtestutil.NewInterceptor()
 		require.NoError(tt, err)
+
+		expectedRequestModificationsCount := 0
+		expectedResponseModificationsCount := 0
 		for _, ic := range interceptorConfigs {
 			if ic.RequestModifier != nil {
 				interceptor.AddRequestHook(ic.Matcher(tt), ic.RequestModifier(tt))
+				expectedRequestModificationsCount += ic.ExpectedRequestModificationsCount
 			}
 			if ic.ResponseModifier != nil {
 				interceptor.AddResponseHook(ic.Matcher(tt), ic.ResponseModifier(tt))
+				expectedResponseModificationsCount += ic.ExpectedResponseModificationsCount
 			}
 		}
 
@@ -1042,19 +1116,43 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 		sDriver, err := newDriverFn(typedParsedParams)
 		require.NoError(t, err)
 
-		return sDriver
+		isTestValidf := func() bool {
+			if expectedRequestModificationsCount != interceptor.GetRequestHooksMatchedCount() {
+				tt.Logf("expected vs. got request modifications: %d != %d", expectedRequestModificationsCount, interceptor.GetRequestHooksMatchedCount())
+				return false
+			}
+			if expectedResponseModificationsCount != interceptor.GetResponseHooksMatchedCount() {
+				tt.Logf("expected vs. got response modifications: %d != %d", expectedResponseModificationsCount, interceptor.GetResponseHooksMatchedCount())
+				return false
+			}
+			return true
+		}
+
+		return sDriver, isTestValidf
 	}
 
+	maxAttempts := 3
 	for _, test := range tests {
-		t.Run(test.name, func(tt *testing.T) {
-			filename := dtestutil.RandomPath(4, 32)
-			tt.Logf("blob path used for testing: %s", filename)
+		testIsValid := false
+		for i := 0; i < maxAttempts && !testIsValid; i++ {
+			testName := fmt.Sprintf("%s_attempt_%d", test.name, i)
+			t.Run(testName, func(tt *testing.T) {
+				filename := dtestutil.RandomPath(4, 32)
+				tt.Logf("blob path used for testing: %s", filename)
 
-			sDriver := fetchDriver(tt, test.interceptorConfigs)
+				sDriver, isTestValidf := fetchDriver(tt, test.interceptorConfigs)
 
-			defer dtestutil.EnsurePathDeleted(ctx, tt, sDriver, rootDirectory)
+				defer dtestutil.EnsurePathDeleted(ctx, tt, sDriver, rootDirectory)
 
-			test.testFunc(tt, sDriver, filename)
-		})
+				testIsValid = test.testFunc(tt, sDriver, filename, isTestValidf)
+				if !testIsValid {
+					if i+1 == maxAttempts { // last iteration
+						require.FailNowf(tt, "number of attempts exceeded", "despite %d attempts, preconditions for this test were not reached", maxAttempts)
+					} else {
+						tt.Skipf("preconditions required to continue were not met, skipping this attempt")
+					}
+				}
+			})
+		}
 	}
 }

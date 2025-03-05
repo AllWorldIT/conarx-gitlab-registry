@@ -24,10 +24,10 @@ const EnvMITMProxyURL = "ENV_MITM_PROXY_URL"
 type RequestMatcher func(*http.Request) bool
 
 // RequestModifier is a function type that can modify an HTTP request
-type RequestModifier func(*http.Request) *http.Request
+type RequestModifier func(*http.Request) (*http.Request, bool)
 
 // ResponseModifier is a function type that can modify an HTTP response
-type ResponseModifier func(*http.Response) *http.Response
+type ResponseModifier func(*http.Response) (*http.Response, bool)
 
 // Hook represents a modification hook with its matching criteria
 type Hook struct {
@@ -41,14 +41,19 @@ type Hook struct {
 type Interceptor struct {
 	core http.RoundTripper
 
+	requestHooksApplied  int
+	responseHooksApplied int
+
 	mu    sync.RWMutex
 	hooks []Hook
 }
 
 type InterceptorConfig struct {
-	Matcher          func(*testing.T) RequestMatcher
-	RequestModifier  func(*testing.T) RequestModifier
-	ResponseModifier func(*testing.T) ResponseModifier
+	Matcher                            func(*testing.T) RequestMatcher
+	RequestModifier                    func(*testing.T) RequestModifier
+	ExpectedRequestModificationsCount  int
+	ResponseModifier                   func(*testing.T) ResponseModifier
+	ExpectedResponseModificationsCount int
 }
 
 // NewInterceptor creates a new Interceptor with the given RoundTripper
@@ -128,7 +133,11 @@ func (i *Interceptor) applyRequestHooks(req, reqClone *http.Request) *http.Reque
 
 	for _, hook := range i.hooks {
 		if hook.reqMod != nil && hook.matcher(req) {
-			reqClone = hook.reqMod(reqClone)
+			applied := false
+			reqClone, applied = hook.reqMod(reqClone)
+			if applied {
+				i.requestHooksApplied++
+			}
 		}
 	}
 	return reqClone
@@ -141,7 +150,11 @@ func (i *Interceptor) applyResponseHooks(req *http.Request, resp *http.Response)
 
 	for _, hook := range i.hooks {
 		if hook.respMod != nil && hook.matcher(req) {
-			resp = hook.respMod(resp)
+			applied := false
+			resp, applied = hook.respMod(resp)
+			if applied {
+				i.responseHooksApplied++
+			}
 		}
 	}
 	return resp
@@ -163,6 +176,20 @@ func (i *Interceptor) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// Apply response hooks
 	return i.applyResponseHooks(req, resp), nil
+}
+
+func (i *Interceptor) GetRequestHooksMatchedCount() int {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+
+	return i.requestHooksApplied
+}
+
+func (i *Interceptor) GetResponseHooksMatchedCount() int {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+
+	return i.responseHooksApplied
 }
 
 // RandomizeTail returns a new io.ReadCloser that reads from the input reader
