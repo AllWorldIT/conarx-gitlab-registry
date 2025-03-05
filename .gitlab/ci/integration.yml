@@ -139,6 +139,10 @@ azure:
   rules:
     - <<: *if-fork-merge-request
       when: never
+    # Cover the case when there is an MR merged to the default branch:
+    # https://docs.gitlab.com/ci/yaml/#ruleschanges
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: on_success
     - when: on_success
       changes:
         - registry/storage/driver/azure/*
