@@ -58,8 +58,8 @@ func NewBlobberFactory(initialRngCacheSize int64, seed SeedT) *BlobberFactory {
 	return res
 }
 
-func (bf *BlobberFactory) GetBlobber(rngCacheSize int) *Blobber {
-	if rngCacheSize > len(bf.rngCache) {
+func (bf *BlobberFactory) GetBlobber(rngCacheSize int64) *Blobber {
+	if rngCacheSize > int64(len(bf.rngCache)) {
 		panic(fmt.Sprintf(
 			"Blober of size %d was requested, while the factory was initialized "+
 				"with cache size equal to %d. In order to avoid unnecessary memory "+
@@ -93,12 +93,12 @@ func (b *Blobber) GetReader() *bytes.Reader {
 }
 
 // AssertStreamEqual reads data from the provided reader and compares it to the cached rngCache starting from the specified offset.
-func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int, streamID string) bool {
+func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int64, streamID string) bool {
 	// Check if offset is valid
-	if !assert.GreaterOrEqualf(t, offset, 0, "offset must not be negative, streamID: %s", streamID) {
+	if !assert.GreaterOrEqualf(t, offset, int64(0), "offset must not be negative, streamID: %s", streamID) {
 		return false
 	}
-	if !assert.LessOrEqualf(t, offset, len(b.rngCache), "offset exceeds rng cache length, streamID: %s", streamID) {
+	if !assert.LessOrEqualf(t, offset, int64(len(b.rngCache)), "offset exceeds rng cache length, streamID: %s", streamID) {
 		return false
 	}
 
@@ -112,30 +112,30 @@ func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int, strea
 	// a tight loop that is executed many, many times when comparing large
 	// streams, hence we optimize using ifs and abort early in case when
 	// assertion fails.
-	for chunkNumber, currentOffset := 0, offset; currentOffset < len(b.rngCache); {
+	for chunkNumber, currentOffset := 0, offset; currentOffset < int64(len(b.rngCache)); {
 		// Calculate how many bytes we can actually compare
-		remainingBytes := len(b.rngCache) - currentOffset
+		remainingBytes := int64(len(b.rngCache)) - currentOffset
 
 		// Read from the provided reader
 		bytesRead, err := r.Read(readBuffer)
-		if bytesRead > remainingBytes {
+		if int64(bytesRead) > remainingBytes {
 			return assert.LessOrEqualf(t, bytesRead, remainingBytes, "input stream is longer than cached data, streamID: %s", streamID)
 		}
-		if bytesRead > 0 && !bytes.Equal(b.rngCache[currentOffset:currentOffset+bytesRead], readBuffer[:bytesRead]) {
+		if bytesRead > 0 && !bytes.Equal(b.rngCache[currentOffset:currentOffset+int64(bytesRead)], readBuffer[:bytesRead]) {
 			return assert.Equalf(
 				t,
-				b.rngCache[currentOffset:currentOffset+bytesRead], readBuffer[:bytesRead],
+				b.rngCache[currentOffset:currentOffset+int64(bytesRead)], readBuffer[:bytesRead],
 				"difference between streams found. Chunk number %d, current offset: %d, starting offset %d, streamID: %s", chunkNumber, currentOffset, offset, streamID,
 			)
 		}
 
-		currentOffset += bytesRead
+		currentOffset += int64(bytesRead)
 		chunkNumber++
 
 		if err != nil {
 			if err == io.EOF {
 				// nolint: testifylint // we are comparing offsets here
-				return assert.Equal(t, currentOffset, len(b.rngCache), "input stream is longer than cached data, streamID: %s", streamID)
+				return assert.EqualValues(t, currentOffset, len(b.rngCache), "input stream is longer than cached data, streamID: %s", streamID)
 			}
 			return assert.NoError(t, err, "reading input stream failed, streamID: %s", streamID)
 		}
@@ -144,7 +144,7 @@ func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int, strea
 	return true
 }
 
-func (b *Blobber) RequireStreamEqual(t testing.TB, r io.Reader, offset int, streamID string) {
+func (b *Blobber) RequireStreamEqual(t testing.TB, r io.Reader, offset int64, streamID string) {
 	if !b.AssertStreamEqual(t, r, offset, streamID) {
 		t.FailNow()
 	}
