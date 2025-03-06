@@ -22,14 +22,14 @@ Setting up a custom runner follows the standard GitLab Runner installation proce
 
 ### Hardware Requirements
 
-- At least 4 vCPU
-- Minimum 16GiB RAM
+- At least 8 vCPU
+- Minimum 32GiB RAM
 - 60GiB general purpose storage
 
 ### Configuration Requirements
 
 - Use Docker executor in host network mode
-- Set concurrency level to 6-7 jobs
+- Set concurrency level to 6 jobs
 - Disable running untagged jobs
 - Apply the appropriate tag:
   - For AWS S3: `s3-managed_identity_auth`
