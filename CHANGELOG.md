@@ -1,3 +1,17 @@
+## [4.17.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.17.0-gitlab...v4.17.1-gitlab) (2025-03-06)
+
+### 🐛 Bug Fixes 🐛
+
+* **catalog:** list repositories with no unique layers ([5e6d53e](https://gitlab.com/gitlab-org/container-registry/commit/5e6d53eb5621e98f169fd929afc9dd1ded7b7441))
+* fix bug in partial matching of a path in s3 driver's Stat call. ([acbf5e9](https://gitlab.com/gitlab-org/container-registry/commit/acbf5e9e380c0f0df6a977050cee655c75c780bd))
+
+### ⚙️ Build ⚙️
+
+* **deps:** add modified copy of redis_rate ([020b136](https://gitlab.com/gitlab-org/container-registry/commit/020b136935aef10a8f4a7c764530f9566b437a07))
+* **deps:** update module github.com/opencontainers/image-spec to v1.1.1 ([a03242f](https://gitlab.com/gitlab-org/container-registry/commit/a03242f0de746601ba77865322006d055d9f538b))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.124.0 ([841e634](https://gitlab.com/gitlab-org/container-registry/commit/841e63428e00094bf358dbdfb3502e13091d7079))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.22.0 ([93af326](https://gitlab.com/gitlab-org/container-registry/commit/93af326d23fa9e0aebe15f0f8ceee1348d101336))
+
 ## [4.17.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.16.0-gitlab...v4.17.0-gitlab) (2025-02-28)
 
 ### ✨ Features ✨
