@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -183,9 +184,14 @@ func (p *Parser) overwriteFields(v reflect.Value, fullpath string, path []string
 	return nil
 }
 
+// Ensures special `inline` flag is matched correctly, regardless of its position.
+var inlineRegex = regexp.MustCompile(`,inline(,.*)*`)
+
 func (p *Parser) overwriteStruct(v reflect.Value, fullpath string, path []string, payload string) error {
 	// Generate case-insensitive map of struct fields
 	byUpperCase := make(map[string]int)
+	var inlinedFields []int
+
 	for i := 0; i < v.NumField(); i++ {
 		sf := v.Type().Field(i)
 		upper := strings.ToUpper(sf.Name)
@@ -193,20 +199,37 @@ func (p *Parser) overwriteStruct(v reflect.Value, fullpath string, path []string
 			panic(fmt.Sprintf("field name collision in configuration object: %s", sf.Name))
 		}
 		byUpperCase[upper] = i
+
+		// Check if this field is inlined using regex-based detection
+		if tag, ok := sf.Tag.Lookup("yaml"); ok && inlineRegex.MatchString(tag) {
+			inlinedFields = append(inlinedFields, i)
+		}
 	}
 
+	// First, try to find a direct match
 	fieldIndex, present := byUpperCase[path[0]]
 	if !present {
+		// If no direct match, iterate over inlined fields and try to match recursively
+		for _, inlineIndex := range inlinedFields {
+			inlineField := v.Field(inlineIndex)
+			if err := p.overwriteFields(inlineField, fullpath, path, payload); err == nil {
+				return nil
+			}
+		}
+
+		// If still not found, log a warning
 		if !feature.KnownEnvVar(fullpath) {
 			log.GetLogger().WithFields(log.Fields{"name": fullpath}).Warn("ignoring unrecognized environment variable")
 		}
 		return nil
 	}
+
+	// Found a direct field match, set its value
 	field := v.Field(fieldIndex)
 	sf := v.Type().Field(fieldIndex)
 
 	if len(path) == 1 {
-		// Env var specifies this field directly
+		// Directly set the field's value
 		fieldVal := reflect.New(sf.Type)
 		err := yaml.Unmarshal([]byte(payload), fieldVal.Interface())
 		if err != nil {
@@ -216,7 +239,7 @@ func (p *Parser) overwriteStruct(v reflect.Value, fullpath string, path []string
 		return nil
 	}
 
-	// If the field is nil, must create an object
+	// Handle nested fields
 	switch sf.Type.Kind() {
 	case reflect.Map:
 		if field.IsNil() {
@@ -228,12 +251,7 @@ func (p *Parser) overwriteStruct(v reflect.Value, fullpath string, path []string
 		}
 	}
 
-	err := p.overwriteFields(field, fullpath, path[1:], payload)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return p.overwriteFields(field, fullpath, path[1:], payload)
 }
 
 func (p *Parser) overwriteMap(m reflect.Value, fullpath string, path []string, payload string) error {

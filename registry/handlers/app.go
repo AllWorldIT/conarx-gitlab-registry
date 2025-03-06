@@ -84,6 +84,10 @@ const defaultDBCheckTimeout = 5 * time.Second
 // redisCacheTTL is the global expiry duration for objects cached in Redis.
 const redisCacheTTL = 6 * time.Hour
 
+// redisPingTimeout is the timeout applied to the connection health check performed when creating a Redis client.
+// TODO: reduce this as part of https://gitlab.com/gitlab-org/container-registry/-/issues/1530
+const redisPingTimeout = 1 * time.Second
+
 var (
 	// ErrFilesystemInUse is returned when the registry attempts to start with an existing filesystem-in-use lockfile
 	// and the database is also enabled.
@@ -121,7 +125,7 @@ type App struct {
 		source notifications.SourceRecord
 	}
 
-	redis redis.UniversalClient
+	redisBlobDesc redis.UniversalClient
 
 	// readOnly is true if the registry is in a read-only maintenance mode
 	readOnly bool
@@ -213,7 +217,9 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		return nil, err
 	}
 	app.configureEvents(config)
-	app.configureRedis(config)
+	if err := app.configureRedisBlobDesc(ctx, config); err != nil {
+		return nil, err
+	}
 
 	if err := app.configureRedisCache(ctx, config); err != nil {
 		// Because the Redis cache is not a strictly required dependency (data will be served from the metadata DB if
@@ -555,10 +561,10 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		switch v {
 		case "redis":
-			if app.redis == nil {
+			if app.redisBlobDesc == nil {
 				return nil, fmt.Errorf("redis configuration required to use for layerinfo cache")
 			}
-			cacheProvider := rediscache.NewRedisBlobDescriptorCacheProvider(app.redis)
+			cacheProvider := rediscache.NewRedisBlobDescriptorCacheProvider(app.redisBlobDesc)
 			localOptions := make([]storage.RegistryOption, len(options), len(options)+1)
 			copy(localOptions, options)
 			localOptions = append(localOptions, storage.BlobDescriptorCacheProvider(cacheProvider))
@@ -1046,58 +1052,68 @@ func (app *App) configureEvents(registryConfig *configuration.Configuration) {
 	}
 }
 
-func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
-	if !config.Redis.RateLimiter.Enabled {
-		return nil
-	}
-
+func configureRedisClient(ctx context.Context, config configuration.RedisCommon, metricsEnabled bool, instanceName string) (redis.UniversalClient, error) {
 	opts := &redis.UniversalOptions{
-		Username:        config.Redis.RateLimiter.Username,
-		Addrs:           strings.Split(config.Redis.RateLimiter.Addr, ","),
-		DB:              config.Redis.RateLimiter.DB,
-		Password:        config.Redis.RateLimiter.Password,
-		DialTimeout:     config.Redis.RateLimiter.DialTimeout,
-		ReadTimeout:     config.Redis.RateLimiter.ReadTimeout,
-		WriteTimeout:    config.Redis.RateLimiter.WriteTimeout,
-		PoolSize:        config.Redis.RateLimiter.Pool.Size,
-		ConnMaxLifetime: config.Redis.RateLimiter.Pool.MaxLifetime,
-		MasterName:      config.Redis.RateLimiter.MainName,
+		Addrs:            strings.Split(config.Addr, ","),
+		DB:               config.DB,
+		Username:         config.Username,
+		Password:         config.Password,
+		DialTimeout:      config.DialTimeout,
+		ReadTimeout:      config.ReadTimeout,
+		WriteTimeout:     config.WriteTimeout,
+		PoolSize:         config.Pool.Size,
+		ConnMaxLifetime:  config.Pool.MaxLifetime,
+		MasterName:       config.MainName,
+		SentinelUsername: config.SentinelUsername,
+		SentinelPassword: config.SentinelPassword,
 	}
-	if config.Redis.RateLimiter.TLS.Enabled {
+	if config.TLS.Enabled {
 		opts.TLSConfig = &tls.Config{
-			// FIXME(prozlach) This requires investigation
-			// nolint: gosec
-			InsecureSkipVerify: config.Redis.RateLimiter.TLS.Insecure,
+			// nolint: gosec // used for development purposes only
+			InsecureSkipVerify: config.TLS.Insecure,
 		}
 	}
-	if config.Redis.RateLimiter.Pool.IdleTimeout > 0 {
-		opts.ConnMaxIdleTime = config.Redis.RateLimiter.Pool.IdleTimeout
+	if config.Pool.IdleTimeout > 0 {
+		opts.ConnMaxIdleTime = config.Pool.IdleTimeout
 	}
 
 	// redis.NewUniversalClient will take care of returning the appropriate client type (single, cluster or sentinel)
 	// depending on the configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
-	redisClient := redis.NewUniversalClient(opts)
+	client := redis.NewUniversalClient(opts)
 
-	if config.HTTP.Debug.Prometheus.Enabled {
+	if metricsEnabled {
 		redismetrics.InstrumentClient(
-			redisClient,
-			redismetrics.WithInstanceName("ratelimiting"),
+			client,
+			redismetrics.WithInstanceName(instanceName),
 			redismetrics.WithMaxConns(opts.PoolSize),
 		)
 	}
 
 	// Ensure the client is correctly configured and the server is reachable. We use a new local context here with a
 	// tight timeout to avoid blocking the application start for too long.
-	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	pingCtx, cancel := context.WithTimeout(ctx, redisPingTimeout)
 	defer cancel()
-	if cmd := redisClient.Ping(pingCtx); cmd.Err() != nil {
-		return cmd.Err()
+	if cmd := client.Ping(pingCtx); cmd.Err() != nil {
+		return nil, cmd.Err()
+	}
+
+	return client, nil
+}
+
+func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
+	if !config.Redis.RateLimiter.Enabled {
+		return nil
+	}
+
+	_, err := configureRedisClient(ctx, config.Redis.RateLimiter, config.HTTP.Debug.Prometheus.Enabled, "ratelimiting")
+	if err != nil {
+		return fmt.Errorf("failed to configure Redis for rate limiting: %w", err)
 	}
 
 	// TODO: add rate-limiter instance to the app
 	// https://gitlab.com/gitlab-org/container-registry/-/issues/1225
 
-	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis rate-limiter configured successfully")
+	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis configured successfully for rate limiting")
 
 	return nil
 }
@@ -1107,88 +1123,27 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 		return nil
 	}
 
-	opts := &redis.UniversalOptions{
-		Addrs:            strings.Split(config.Redis.Cache.Addr, ","),
-		DB:               config.Redis.Cache.DB,
-		Username:         config.Redis.Cache.Username,
-		Password:         config.Redis.Cache.Password,
-		DialTimeout:      config.Redis.Cache.DialTimeout,
-		ReadTimeout:      config.Redis.Cache.ReadTimeout,
-		WriteTimeout:     config.Redis.Cache.WriteTimeout,
-		PoolSize:         config.Redis.Cache.Pool.Size,
-		ConnMaxLifetime:  config.Redis.Cache.Pool.MaxLifetime,
-		MasterName:       config.Redis.Cache.MainName,
-		SentinelUsername: config.Redis.Cache.SentinelUsername,
-		SentinelPassword: config.Redis.Cache.SentinelPassword,
-	}
-	if config.Redis.Cache.TLS.Enabled {
-		opts.TLSConfig = &tls.Config{
-			// FIXME(prozlach) This requires investigation
-			// nolint: gosec
-			InsecureSkipVerify: config.Redis.Cache.TLS.Insecure,
-		}
-	}
-	if config.Redis.Cache.Pool.IdleTimeout > 0 {
-		opts.ConnMaxIdleTime = config.Redis.Cache.Pool.IdleTimeout
+	client, err := configureRedisClient(ctx, config.Redis.Cache, config.HTTP.Debug.Prometheus.Enabled, "cache")
+	if err != nil {
+		return fmt.Errorf("failed to configure Redis for caching: %w", err)
 	}
 
-	// redis.NewUniversalClient will take care of returning the appropriate client type (single, cluster or sentinel)
-	// depending on the configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
-	redisClient := redis.NewUniversalClient(opts)
-
-	if config.HTTP.Debug.Prometheus.Enabled {
-		redismetrics.InstrumentClient(
-			redisClient,
-			redismetrics.WithInstanceName("cache"),
-			redismetrics.WithMaxConns(opts.PoolSize),
-		)
-	}
-
-	// Ensure the client is correctly configured and the server is reachable. We use a new local context here with a
-	// tight timeout to avoid blocking the application start for too long.
-	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
-	defer cancel()
-	if cmd := redisClient.Ping(pingCtx); cmd.Err() != nil {
-		return cmd.Err()
-	}
-
-	app.redisCache = iredis.NewCache(redisClient, iredis.WithDefaultTTL(redisCacheTTL))
-
-	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis cache configured successfully")
+	app.redisCache = iredis.NewCache(client, iredis.WithDefaultTTL(redisCacheTTL))
+	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis configured successfully for caching")
 
 	return nil
 }
 
-func (app *App) configureRedis(registryConfig *configuration.Configuration) {
-	if registryConfig.Redis.Addr == "" {
-		return
+func (app *App) configureRedisBlobDesc(ctx context.Context, config *configuration.Configuration) error {
+	if config.Redis.Addr == "" {
+		return nil
 	}
 
-	opts := &redis.UniversalOptions{
-		Addrs:           strings.Split(registryConfig.Redis.Addr, ","),
-		DB:              registryConfig.Redis.DB,
-		Username:        registryConfig.Redis.Username,
-		Password:        registryConfig.Redis.Password,
-		DialTimeout:     registryConfig.Redis.DialTimeout,
-		ReadTimeout:     registryConfig.Redis.ReadTimeout,
-		WriteTimeout:    registryConfig.Redis.WriteTimeout,
-		PoolSize:        registryConfig.Redis.Pool.Size,
-		ConnMaxLifetime: registryConfig.Redis.Pool.MaxLifetime,
-		MasterName:      registryConfig.Redis.MainName,
+	client, err := configureRedisClient(ctx, config.Redis.RedisCommon, false, "")
+	if err != nil {
+		return fmt.Errorf("failed to configure Redis for blob descriptor cache: %w", err)
 	}
-	if registryConfig.Redis.TLS.Enabled {
-		opts.TLSConfig = &tls.Config{
-			// FIXME(prozlach) This requires investigation
-			// nolint: gosec
-			InsecureSkipVerify: registryConfig.Redis.TLS.Insecure,
-		}
-	}
-	if registryConfig.Redis.Pool.IdleTimeout > 0 {
-		opts.ConnMaxIdleTime = registryConfig.Redis.Pool.IdleTimeout
-	}
-	// NewUniversalClient will take care of returning the appropriate client type (simple or sentinel) depending on the
-	// configuration options. See https://pkg.go.dev/github.com/go-redis/redis/v9#NewUniversalClient.
-	app.redis = redis.NewUniversalClient(opts)
+	app.redisBlobDesc = client
 
 	// setup expvar
 	registry := expvar.Get("registry")
@@ -1197,14 +1152,16 @@ func (app *App) configureRedis(registryConfig *configuration.Configuration) {
 	}
 
 	registry.(*expvar.Map).Set("redis", expvar.Func(func() any {
-		poolStats := app.redis.PoolStats()
+		poolStats := app.redisBlobDesc.PoolStats()
 		return map[string]any{
-			"Config": registryConfig.Redis,
+			"Config": config.Redis,
 			"Active": poolStats.TotalConns - poolStats.IdleConns,
 		}
 	}))
 
-	dlog.GetLogger(dlog.WithContext(app.Context)).Info("main redis configured successfully")
+	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis configured successfully for blob descriptor caching")
+
+	return nil
 }
 
 // configureSecret creates a random secret if a secret wasn't included in the
