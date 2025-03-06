@@ -43,7 +43,7 @@ s3:minio:
     matrix:
       # Regular combinations
       - GO_VERSION: [ "1.23", "1.24" ]
-        S3_DRIVER_VERSION: [ "s3" ]
+        S3_DRIVER_VERSION: [ "s3", "s3_v2" ]
   rules:
     - if: $CI_COMMIT_REF_NAME != $CI_DEFAULT_BRANCH
       when: on_success
@@ -92,7 +92,7 @@ s3:aws:
     matrix:
       # Regular combinations
       - GO_VERSION: [ "1.23", "1.24" ]
-        S3_DRIVER_VERSION: [ "s3" ]
+        S3_DRIVER_VERSION: [ "s3", "s3_v2" ]
   rules:
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
       when: on_success
