@@ -272,7 +272,7 @@ type RedisPool struct {
 }
 
 type RedisCommon struct {
-	// Enabled is a simple toggle for the Redis cache. Defaults to false.
+	// Enabled is a simple toggle for the Redis connection. Defaults to false.
 	Enabled bool `yaml:"enabled,omitempty"`
 	// Addr specifies the redis instance available to the application. For Sentinel, it should be a list of
 	// addresses separated by commas.
@@ -297,41 +297,20 @@ type RedisCommon struct {
 	Pool RedisPool `yaml:"pool,omitempty"`
 	// SentinelUsername configures the username for Sentinel authentication.
 	SentinelUsername string `yaml:"sentinelusername,omitempty"`
-	// SentinelUsername configures the password for Sentinel authentication.
+	// SentinelPassword configures the password for Sentinel authentication.
 	SentinelPassword string `yaml:"sentinelpassword,omitempty"`
 }
 
 // Redis configures the redis instance(s) available to the application. Separate Redis instances for different
 // persistence classes (e.g. caching) can be used.
 type Redis struct {
-	// Addr specifies the redis instance available to the application. For Sentinel it should be a list of
-	// addresses separated by commas.
-	Addr string `yaml:"addr,omitempty"`
-	// MainName specifies the main server name. Only for Sentinel connections.
-	MainName string `yaml:"mainname,omitempty"`
-	// Username string to connect as to the Redis instance or cluster.
-	Username string `yaml:"username,omitempty"`
-	// Password string to use when making a connection.
-	Password string `yaml:"password,omitempty"`
-	// DB specifies the database to connect to on the redis instance.
-	DB int `yaml:"db,omitempty"`
-	// DialTimeout is the timeout for establishing connections.
-	DialTimeout time.Duration `yaml:"dialtimeout,omitempty"`
-	// ReadTimeout is the timeout for reading data.
-	ReadTimeout time.Duration `yaml:"readtimeout,omitempty"`
-	// WriteTimeout is the timeout for writing data.
-	WriteTimeout time.Duration `yaml:"writetimeout,omitempty"`
-	// TLS specifies settings for TLS connections.
-	TLS RedisTLS `yaml:"tls,omitempty"`
-	// Pool configures the behavior of the redis connection pool.
-	Pool RedisPool `yaml:"pool,omitempty"`
-	// SentinelUsername configures the username for Sentinel authentication.
-	SentinelUsername string `yaml:"sentinelusername,omitempty"`
-	// SentinelUsername configures the password for Sentinel authentication.
-	SentinelPassword string `yaml:"sentinelpassword,omitempty"`
-	// Cache specifies custom settings for a Redis instance to be used for caching features.
+	// The RedisCommon attributes are embedded here to specify settings for a Redis connection for the legacy blob
+	// descriptor cache feature. Although the `RedisCommon.Enabled` attribute is not supported at this level, we simply
+	// ignore it instead of making the config structure even more complex with yet another Redis related struct.
+	RedisCommon `yaml:",inline"`
+	// Cache specifies settings for a Redis connection for caching purposes.
 	Cache RedisCommon `yaml:"cache,omitempty"`
-	// RateLimiter configures custom settings for Redis instance used for rate limiting.
+	// RateLimiter specifies settings for a Redis connection for rate limiting purposes.
 	RateLimiter RedisCommon `yaml:"ratelimiter,omitempty"`
 }
 
