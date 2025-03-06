@@ -563,6 +563,10 @@ issues:
   exclude-dirs:
     - bin/
     - .GOPATH/
+    # redis_rate is a modified copy of https://github.com/go-redis/redis_rate/
+    # skip all linters while https://gitlab.com/gitlab-org/container-registry/-/issues/1527
+    # is addressed.
+    - internal/redis_rate
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
     # Exclude some linters from running on tests files.

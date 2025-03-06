@@ -435,3 +435,20 @@ base-driver:
   variables:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/base"
+
+# Temporary integration tests for modified copy of redis_rate
+# See https://gitlab.com/gitlab-org/container-registry/-/issues/1527.
+redis:rate:
+  extends: .go-version-matrix
+  rules:
+    - when: on_success
+      changes:
+        - internal/redis_rate/*
+  stage: integration
+  variables:
+    REDIS_ADDR: "redis:6379"
+    PACKAGE: "github.com/docker/distribution/internal/redis_rate"
+  services:
+    - name: redis:alpine
+      alias: "redis"
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration

@@ -9,9 +9,13 @@ backed by Redis. This document specifies the behavior of such limiting.
 
 ## Algorithm
 
-The registry uses the official [redis_rate](https://github.com/go-redis/redis_rate) package to
-implement rate-limiting as middleware for every request received. The `redis_rate`
-package implements a [Generic cell rate algorithm (GCRA)](https://en.wikipedia.org/wiki/Generic_cell_rate_algorithm),
+The registry uses a modified copy of the
+[redis_rate](https://github.com/go-redis/redis_rate) package
+available as an [internal package](../../../internal/redis_rate/),
+see the [README](../../../internal/redis_rate/README.md) for reasoning behind this.
+
+The `redis_rate` package implements a
+[Generic cell rate algorithm (GCRA)](https://en.wikipedia.org/wiki/Generic_cell_rate_algorithm),
 also known as `leaky bucket`.
 
 The leaky bucket name is an analogy that helps understand how requests are counted. In short:
