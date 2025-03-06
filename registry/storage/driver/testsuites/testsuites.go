@@ -420,7 +420,7 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 	defer s.deletePath(s.StorageDriver, firstPart(filename))
 	s.T().Logf("blob path used for testing: %s", filename)
 
-	fileSize := 2 * 1 << 30
+	var fileSize int64 = 2 * 1 << 30
 	if testing.Short() {
 		fileSize = 256 * 1 << 20
 		s.T().Log("Reducing file size to 256MiB for short mode")
@@ -469,7 +469,7 @@ func (s *DriverSuite) TestWriteReadSmallStream() {
 	defer s.deletePath(s.StorageDriver, firstPart(filename))
 	s.T().Logf("blob path used for testing: %s", filename)
 
-	fileSize := 2 * 1 << 10
+	var fileSize int64 = 2 * 1 << 10
 	blobber := s.blobberFactory.GetBlobber(fileSize)
 
 	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
@@ -511,7 +511,7 @@ func (s *DriverSuite) TestConcurentWriteCausesError() {
 
 	// Must be greater than chunk size so that there is more than one request
 	// to the backend while writing:
-	fileSize := 32 * 1 << 20
+	var fileSize int64 = 32 * 1 << 20
 	contentsAB := s.blobberFactory.GetBlobber(fileSize).GetAllBytes()
 	blobberA1 := testutil.NewBlober(contentsAB[:fileSize>>2])
 	blobberA2 := testutil.NewBlober(contentsAB[fileSize>>2 : fileSize>>1])
@@ -564,7 +564,7 @@ func (s *DriverSuite) TestReaderWithOffset() {
 	defer s.deletePath(s.StorageDriver, firstPart(filename))
 	s.T().Logf("blob path used for testing: %s", filename)
 
-	chunkSize := 32
+	var chunkSize int64 = 32
 	blobber := s.blobberFactory.GetBlobber(3 * chunkSize)
 	contentsChunk123 := blobber.GetAllBytes()
 	contentsChunk1 := contentsChunk123[0:chunkSize]
@@ -580,13 +580,13 @@ func (s *DriverSuite) TestReaderWithOffset() {
 
 	blobber.RequireStreamEqual(s.T(), reader, 0, "offset 0")
 
-	reader, err = s.StorageDriver.Reader(s.ctx, filename, int64(chunkSize))
+	reader, err = s.StorageDriver.Reader(s.ctx, filename, chunkSize)
 	require.NoError(s.T(), err)
 	defer reader.Close()
 
 	blobber.RequireStreamEqual(s.T(), reader, chunkSize, "offset equal to chunkSize")
 
-	reader, err = s.StorageDriver.Reader(s.ctx, filename, int64(chunkSize*2))
+	reader, err = s.StorageDriver.Reader(s.ctx, filename, chunkSize*2)
 	require.NoError(s.T(), err)
 	defer reader.Close()
 
@@ -604,7 +604,7 @@ func (s *DriverSuite) TestReaderWithOffset() {
 
 	// Read past the end of the content and make sure we get a reader that
 	// returns 0 bytes and io.EOF
-	reader, err = s.StorageDriver.Reader(s.ctx, filename, int64(chunkSize*3))
+	reader, err = s.StorageDriver.Reader(s.ctx, filename, chunkSize*3)
 	require.NoError(s.T(), err)
 	defer reader.Close()
 
@@ -614,7 +614,7 @@ func (s *DriverSuite) TestReaderWithOffset() {
 	require.Zero(s.T(), n)
 
 	// Check the N-1 boundary condition, ensuring we get 1 byte then io.EOF.
-	reader, err = s.StorageDriver.Reader(s.ctx, filename, int64(chunkSize*3-1))
+	reader, err = s.StorageDriver.Reader(s.ctx, filename, chunkSize*3-1)
 	require.NoError(s.T(), err)
 	defer reader.Close()
 
@@ -645,7 +645,7 @@ func (s *DriverSuite) TestContinueStreamAppendSmall() {
 	s.testContinueStreamAppend(s.T(), 32)
 }
 
-func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int) {
+func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
 	filename := dtestutil.RandomPath(1, 32)
 	defer s.deletePath(s.StorageDriver, firstPart(filename))
 	t.Logf("blob path used for testing: %s", filename)
@@ -1345,7 +1345,7 @@ func (s *DriverSuite) testDeleteDir(t *testing.T, numFiles int) {
 
 // buildFiles builds a num amount of test files with a size of size under
 // parentDir. Returns a slice with the path of the created files.
-func (s *DriverSuite) buildFiles(t require.TestingT, parentDirectory string, numFiles, size int) []string {
+func (s *DriverSuite) buildFiles(t require.TestingT, parentDirectory string, numFiles int, size int64) []string {
 	// NOTE(prozlach): chosen empirically, basing on how many CI tasks can run
 	// in pararell before we hit limits.
 	const concurencyFactor = 32
@@ -1804,7 +1804,7 @@ func (s *DriverSuite) TestPutContentMultipleTimes() {
 // TestConcurrentStreamReads checks that multiple clients can safely read from
 // the same file simultaneously with various offsets.
 func (s *DriverSuite) TestConcurrentStreamReads() {
-	fileSize := 128 * 1 << 20
+	var fileSize int64 = 128 * 1 << 20
 
 	if testing.Short() {
 		fileSize = 10 * 1 << 20
@@ -1825,8 +1825,8 @@ func (s *DriverSuite) TestConcurrentStreamReads() {
 	readContents := func() {
 		defer wg.Done()
 		/* #nosec G404 */
-		offset := mrand.IntN(fileSize)
-		reader, err := s.StorageDriver.Reader(s.ctx, filename, int64(offset))
+		offset := mrand.Int64N(fileSize)
+		reader, err := s.StorageDriver.Reader(s.ctx, filename, offset)
 		// nolint: testifylint // require-error
 		if !assert.NoError(s.T(), err) {
 			return
@@ -1855,14 +1855,14 @@ func (s *DriverSuite) TestConcurrentFileStreams() {
 
 	var wg sync.WaitGroup
 
-	testStream := func(size int) {
+	testStream := func(size int64) {
 		defer wg.Done()
 		s.testFileStreams(s.T(), size)
 	}
 
 	wg.Add(numStreams)
 	for i := numStreams; i > 0; i-- {
-		go testStream(numStreams * 1 << 20)
+		go testStream(int64(numStreams) * 1 << 20)
 	}
 
 	wg.Wait()
@@ -1940,7 +1940,7 @@ func (s *DriverSuite) TestWalkParallel() {
 		}
 
 		/* #nosec G404 */
-		err := s.StorageDriver.PutContent(s.ctx, wantedFiles[i], s.blobberFactory.GetBlobber(8+mrand.IntN(8)).GetAllBytes())
+		err := s.StorageDriver.PutContent(s.ctx, wantedFiles[i], s.blobberFactory.GetBlobber(8+mrand.Int64N(8)).GetAllBytes())
 		require.NoError(s.T(), err)
 	}
 
@@ -2009,7 +2009,7 @@ func (s *DriverSuite) TestWalkParallelError() {
 
 	for _, file := range wantedFiles {
 		/* #nosec G404 */
-		err := s.StorageDriver.PutContent(s.ctx, file, s.blobberFactory.GetBlobber(8+mrand.IntN(8)).GetAllBytes())
+		err := s.StorageDriver.PutContent(s.ctx, file, s.blobberFactory.GetBlobber(8+mrand.Int64N(8)).GetAllBytes())
 		require.NoError(s.T(), err)
 	}
 
@@ -2063,7 +2063,7 @@ func (s *DriverSuite) TestWalkParallelStopsProcessingOnError() {
 
 	for _, file := range wantedFiles {
 		/* #nosec G404 */
-		err := s.StorageDriver.PutContent(s.ctx, file, s.blobberFactory.GetBlobber(8+mrand.IntN(8)).GetAllBytes())
+		err := s.StorageDriver.PutContent(s.ctx, file, s.blobberFactory.GetBlobber(8+mrand.Int64N(8)).GetAllBytes())
 		require.NoError(s.T(), err)
 	}
 
@@ -2119,7 +2119,7 @@ func (s *DriverSuite) benchmarkPutGetFiles(b *testing.B, size int64) {
 
 	for i := 0; i < b.N; i++ {
 		filename := path.Join(parentDir, dtestutil.RandomPath(4, 32))
-		err := s.StorageDriver.PutContent(s.ctx, filename, s.blobberFactory.GetBlobber(int(size)).GetAllBytes())
+		err := s.StorageDriver.PutContent(s.ctx, filename, s.blobberFactory.GetBlobber(size).GetAllBytes())
 		require.NoError(b, err)
 
 		_, err = s.StorageDriver.GetContent(s.ctx, filename)
@@ -2162,7 +2162,7 @@ func (s *DriverSuite) benchmarkStreamFiles(b *testing.B, size int64) {
 		filename := path.Join(parentDir, dtestutil.RandomPath(4, 32))
 		writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
 		require.NoError(b, err)
-		written, err := io.Copy(writer, s.blobberFactory.GetBlobber(int(size)).GetReader())
+		written, err := io.Copy(writer, s.blobberFactory.GetBlobber(size).GetReader())
 		require.NoError(b, err)
 		require.Equal(b, size, written)
 
@@ -2263,7 +2263,7 @@ func (s *DriverSuite) benchmarkWalkParallel(b *testing.B, numFiles int, f storag
 		// NOTE(prozlach): We are creating random size blobs, so we
 		// pre-allocate blobber that is able to accommodate the worst-case where
 		// all blobs have maximum size.
-		blobber := s.blobberFactory.GetBlobber(numFiles * (8 + 8))
+		blobber := s.blobberFactory.GetBlobber(int64(numFiles * (8 + 8)))
 		offset := 0
 		for i := 0; i < numFiles; i++ {
 			/* #nosec G404 */
@@ -2693,7 +2693,7 @@ func (s *DriverSuite) BenchmarkRemoveManifests100Manifests20TagsEach(b *testing.
 
 // NOTE(prozlach) testFileStreams is used in a goroutine, we can't use
 // `require` here
-func (s *DriverSuite) testFileStreams(t *testing.T, size int) {
+func (s *DriverSuite) testFileStreams(t *testing.T, size int64) {
 	filename := dtestutil.RandomPath(4, 32)
 	defer s.deletePath(s.StorageDriver, firstPart(filename))
 	s.T().Logf("blob path for this stream: %s", filename)

@@ -198,14 +198,14 @@ func TestInt32(t *testing.T) {
 			expectedErrMsg: `the param 142 parameter should be a number between 0 and 100 (inclusive)`,
 		},
 		"int_exceeds_max": {
-			param:          2147483648,
+			param:          int64(2147483648),
 			minimum:        0,
 			maximum:        math.MaxInt32,
 			expected:       0,
 			expectedErrMsg: `value 2147483648 for "param" exceeds int32 range`,
 		},
 		"int_exceeds_min": {
-			param:          -2147483649,
+			param:          int64(-2147483649),
 			minimum:        math.MinInt32,
 			maximum:        0,
 			expected:       0,
