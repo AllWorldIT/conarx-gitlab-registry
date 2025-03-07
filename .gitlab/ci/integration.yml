@@ -141,12 +141,22 @@ azure:
       when: never
     # Cover the case when there is an MR merged to the default branch:
     # https://docs.gitlab.com/ci/yaml/#ruleschanges
-    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
-      when: on_success
-    - when: on_success
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $AZURE_DRIVER_VERSION == "azure_v2"
+      allow_failure: false
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $AZURE_DRIVER_VERSION == "azure"
+      allow_failure: true
+    - if: $AZURE_DRIVER_VERSION == "azure_v2"
       changes:
         - registry/storage/driver/azure/*
-        - registry/storage/driver/azure/**/*
+        - registry/storage/driver/azure/common/*
+        - registry/storage/driver/azure/v2/*
+      allow_failure: false
+    - if: $AZURE_DRIVER_VERSION == "azure"
+      changes:
+        - registry/storage/driver/azure/*
+        - registry/storage/driver/azure/common/*
+        - registry/storage/driver/azure/v1/*
+      allow_failure: true
   variables:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
@@ -175,9 +185,6 @@ azure:
         unset AZURE_CLIENT_SECRET
       fi
       $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
-  # TODO: remove allow_failure once the test setup is fixed
-  # https://gitlab.com/gitlab-org/container-registry/-/issues/1478
-  allow_failure: true
 
 api:
   extends: .go-version-matrix
