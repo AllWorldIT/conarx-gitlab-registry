@@ -102,11 +102,11 @@ func (rbds *redisBlobDescriptorService) statImpl(ctx context.Context, dgst diges
 	}
 	desc.Digest = dgst
 
-	val, err := strconv.Atoi(fmt.Sprintf("%v", reply[1]))
+	val, err := strconv.ParseInt(fmt.Sprintf("%v", reply[1]), 10, 64)
 	if err != nil {
 		return distribution.Descriptor{}, err
 	}
-	desc.Size = int64(val)
+	desc.Size = val
 
 	if reply[2] != nil {
 		desc.MediaType = fmt.Sprintf("%v", reply[2])

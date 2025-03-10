@@ -626,8 +626,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 }
 
 var (
-	onlineGCUpdateJitterMaxSeconds = 60
-	onlineGCUpdateTimeout          = 2 * time.Second
+	onlineGCUpdateJitterMaxSeconds int64 = 60
+	onlineGCUpdateTimeout                = 2 * time.Second
 	// for testing purposes (mocks)
 	systemClock                internal.Clock = clock.New()
 	gcSettingsStoreConstructor                = datastore.NewGCSettingsStore
@@ -652,7 +652,7 @@ func updateOnlineGCSettings(ctx context.Context, db datastore.Queryer, config *c
 	// execute DB update after a randomized jitter of up to 60 seconds to ease concurrency in clustered environments
 	// nolint: gosec // G404: used only for jitter calculation
 	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(systemClock.Now().UnixNano())))
-	jitter := time.Duration(r.IntN(onlineGCUpdateJitterMaxSeconds)) * time.Second
+	jitter := time.Duration(r.Int64N(onlineGCUpdateJitterMaxSeconds)) * time.Second
 
 	log.WithField("jitter_s", jitter.Seconds()).Info("preparing to update online GC settings")
 	systemClock.Sleep(jitter)
@@ -773,7 +773,7 @@ func startDBReplicaChecking(ctx context.Context, lb datastore.LoadBalancer) {
 	// delay startup using a randomized jitter to ease concurrency in clustered environments
 	// nolint: gosec // G404: used only for jitter calculation
 	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(systemClock.Now().UnixNano())))
-	jitter := time.Duration(r.IntN(dlbReplicaCheckJitterMaxSeconds)) * time.Second
+	jitter := time.Duration(r.Int64N(dlbReplicaCheckJitterMaxSeconds)) * time.Second
 
 	l.WithFields(dlog.Fields{"jitter_s": jitter.Seconds()}).
 		Info("preparing to start database load balancing replica checking")

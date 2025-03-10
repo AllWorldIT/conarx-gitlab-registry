@@ -338,7 +338,7 @@ func (irw *instrumentedResponseWriter) Write(p []byte) (n int, err error) {
 	n, err = irw.ResponseWriter.Write(p)
 
 	irw.mu.Lock()
-	irw.written += int64(n)
+	irw.written += int64(n) // nolint: gosec // Write will always return non-negative number of bytes written
 
 	// Guess the likely status if not set.
 	if irw.status == 0 {

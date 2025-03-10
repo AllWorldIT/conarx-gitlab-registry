@@ -56,7 +56,7 @@ func (fr *fileReader) Read(p []byte) (n int, err error) {
 	}
 
 	n, err = rd.Read(p)
-	fr.offset += int64(n)
+	fr.offset += int64(n) // nolint: gosec // Read() is always going to return non-negative value of n
 
 	// Simulate io.EOR error if we reach filesize.
 	if err == nil && fr.offset >= fr.size {

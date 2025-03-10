@@ -598,7 +598,7 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 	defer d.Delete(ctx, destPath)
 
 	// An object larger than d's MultipartCopyThresholdSize will cause d.Move() to perform a multipart copy.
-	contents := rngtestutil.RandomBlob(t, int(2*common.DefaultMultipartCopyThresholdSize))
+	contents := rngtestutil.RandomBlob(t, 2*common.DefaultMultipartCopyThresholdSize)
 
 	err := d.PutContent(ctx, sourcePath, contents)
 	require.NoError(t, err, "unexpected error creating content")

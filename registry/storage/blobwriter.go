@@ -124,7 +124,7 @@ func (bw *blobWriter) Write(p []byte) (int, error) {
 	}
 
 	n, err := bw.digester.Hash().Write(p)
-	bw.written += int64(n)
+	bw.written += int64(n) // nolint: gosec // len() is always going to be non-negative
 
 	return n, err
 }

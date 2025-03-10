@@ -72,7 +72,7 @@ func (hbu *httpBlobUpload) Write(p []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("Content-Range", fmt.Sprintf("%d-%d", hbu.offset, hbu.offset+int64(len(p)-1)))
+	req.Header.Set("Content-Range", fmt.Sprintf("%d-%d", hbu.offset, hbu.offset+int64(len(p))-1)) // nolint: gosec // len() is always going to be non-negative
 	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(p)))
 	req.Header.Set("Content-Type", "application/octet-stream")
 

@@ -64,10 +64,43 @@ commitlint:
   rules:
     - if: $CI_MERGE_REQUEST_IID
 
-codelint:
+codelint:multiarch:
   variables:
-    GOLANGCI_LINT_VERSION: 'v1.62.0'
-    TESTIFYLINT_VERSION: 'v1.5.2'
+    GOLANGCI_VERSION: '1.64.6'
+    BUILDTAGS: "integration,handlers_test,api_gitlab_test,include_gcs,online_gc_test,api_conformance_test,toxiproxy"
+    GOOS: linux
+  parallel:
+    matrix:
+      - GOARCH: ["386","amd64","arm","arm64"]
+  cache: {}
+  stage: validate
+  needs: []
+  before_script:
+    - apt-get update
+    - wget https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_VERSION}/golangci-lint-${GOLANGCI_VERSION}-linux-amd64.deb
+    - apt-get install -y ./golangci-lint-${GOLANGCI_VERSION}-linux-amd64.deb
+  script:
+    - |
+      if [ "$GOARCH" = "386" ]; then
+        apt-get install -y gcc-multilib libc6-dev-i386
+      elif [ "$GOARCH" = "amd64" ]; then
+        # amd64 is the native architecture, no special packages needed
+        echo "Using native amd64 architecture"
+      elif [ "$GOARCH" = "arm" ]; then
+        apt-get install -y gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi libc6-armel-cross
+        export CC=arm-linux-gnueabi-gcc
+        export CXX=arm-linux-gnueabi-g++
+      elif [ "$GOARCH" = "arm64" ]; then
+        apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-arm64-cross
+        export CC=aarch64-linux-gnu-gcc
+        export CXX=aarch64-linux-gnu-g++
+      fi
+    - golangci-lint run
+
+
+codelint:ui_report:
+  variables:
+    GOLANGCI_LINT_VERSION: 'v1.64.6'
   cache: {}
   image: golangci/golangci-lint:$GOLANGCI_LINT_VERSION
   stage: validate
@@ -84,7 +117,7 @@ codelint:
       codequality: gl-code-quality-report.json
     paths:
       - gl-code-quality-report.json
-
+      
 modules:tidy:
   stage: validate
   needs: ['modules:download']
@@ -121,9 +154,9 @@ mocks:
     - go generate ./...
     - git diff --exit-code **/mocks/*.go
 
-# NOTE(prozlach): Distribution builds CR on some exotic archs like arm(Raspi).
-# Lets make sure that the compilation does not break in an embarrasing way like
-# e.g. integer overflows:
+# NOTE(prozlach): Distribution builds container registry on some exotic archs
+# like 32bit Arm (older RaspberryPis). Lets make sure that the compilation
+# does not break in an embarrasing way like e.g. integer overflows:
 build_smoketest:
   needs: ['modules:download']
   stage: validate

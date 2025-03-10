@@ -276,7 +276,7 @@ func (s *manifestStore) Create(ctx context.Context, m *models.Manifest) error {
 			return fmt.Errorf("mapping manifest artifact type: %w", err)
 		}
 		artifactTypeID.Valid = true
-		artifactTypeID.Int64 = int64(aid)
+		artifactTypeID.Int64 = int64(aid) // nolint: gosec // media type id will always be non-negative
 	}
 
 	var configDgst sql.NullString
@@ -343,7 +343,7 @@ func (s *manifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) er
 			return fmt.Errorf("mapping manifest artifact type: %w", err)
 		}
 		artifactTypeID.Valid = true
-		artifactTypeID.Int64 = int64(aid)
+		artifactTypeID.Int64 = int64(aid) // nolint: gosec // media type id will always be non-negative
 	}
 
 	var configDgst sql.NullString

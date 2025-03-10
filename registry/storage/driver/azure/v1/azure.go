@@ -525,7 +525,7 @@ func (w *writer) Write(p []byte) (int, error) {
 	}
 
 	n, err := w.bw.Write(p)
-	w.size += int64(n)
+	w.size += int64(n) // nolint: gosec // number of bytes written will never be negative
 	return n, err
 }
 

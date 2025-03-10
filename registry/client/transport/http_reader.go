@@ -82,8 +82,8 @@ func (hrs *httpReadSeeker) Read(p []byte) (n int, err error) {
 	}
 
 	n, err = rd.Read(p)
-	hrs.seekOffset += int64(n)
-	hrs.readerOffset += int64(n)
+	hrs.seekOffset += int64(n)   // nolint: gosec // The Read() method in Go's standard library should always return a non-negative number for n
+	hrs.readerOffset += int64(n) // nolint: gosec // The Read() method in Go's standard library should always return a non-negative number for n
 
 	return n, err
 }
