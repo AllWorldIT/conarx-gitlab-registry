@@ -159,6 +159,36 @@ Some operations, such as creating an index concurrently, cannot be executed insi
 a transaction. To disable transaction mode you can set the migration
 `DisableTransactionUp` and/or `DisableTransactionDown` attributes to `true`.
 
+### Partitioned Tables
+
+Integration tests use 4 partitions per table instead of the default 64 to reduce bootstrap and teardown time while maintaining test coverage.
+
+When modifying partitioned tables, create separate migration files:
+
+1. For integration tests (4 partitions):
+   - Use build tag `//go:build integration`
+   - Only included when building for integration CI jobs
+
+1. For production (64 partitions):
+   - Use build tag `//go:build !integration`
+   - Excluded from integration tests
+
+#### Example
+
+When adding an index on column `foo` to the `tags` table:
+
+- `YYYYMMDDHHMMSS_create_tags_foo_index_testing.go`
+  - Creates index for partitions 0..3
+  - Build tag: `//go:build integration`
+
+- `YYYYMMDDHHMMSS_post_create_tags_partitions_foo_index.go`
+  - Creates index for partitions 0..64
+  - Build tag: `//go:build !integration`
+
+- `YYYYMMDDHHMMSS_post_create_tags_foo_index.go`
+  - Creates index for parent table
+  - No build tag (applies to all environments)
+
 ## Administration
 
 Database migrations are managed through the `registry` CLI, using the `database
