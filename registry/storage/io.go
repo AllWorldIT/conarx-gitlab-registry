@@ -58,13 +58,13 @@ func (l *limitedReader) Read(p []byte) (n int, err error) {
 	}
 	n, err = l.r.Read(p)
 
-	if int64(n) <= l.n {
-		l.n -= int64(n)
+	if int64(n) <= l.n { // nolint: gosec // The Read() method should always return a non-negative number for n
+		l.n -= int64(n) // nolint: gosec // The Read() method should always return a non-negative number for n
 		l.err = err
 		return n, err
 	}
 
-	n = int(l.n)
+	n = int(l.n) // nolint: gosec // as long as limitedReader is correctly initialized (n>=0), l.n will always be non-negative
 	l.n = 0
 
 	l.err = errors.New("storage: read exceeds limit")

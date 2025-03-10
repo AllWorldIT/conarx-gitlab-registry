@@ -131,7 +131,7 @@ func (a *Agent) Start(ctx context.Context) error {
 
 	// nolint: gosec // used only for jitter calculation
 	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(systemClock.Now().UnixNano())))
-	jitter := time.Duration(r.IntN(startJitterMaxSeconds)) * time.Second
+	jitter := time.Duration(r.Int64N(startJitterMaxSeconds)) * time.Second
 	l.WithFields(log.Fields{"jitter_s": jitter.Seconds()}).Info("starting online GC agent")
 	systemClock.Sleep(jitter)
 

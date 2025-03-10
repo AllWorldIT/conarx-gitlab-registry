@@ -38,18 +38,18 @@ type S3BucketKeyer interface {
 const (
 	// MinChunkSize defines the minimum multipart upload chunk size S3 API
 	// requires multipart upload chunks to be at least 5MB
-	MinChunkSize = 5 << 20
+	MinChunkSize int64 = 5 << 20
 
 	// MaxChunkSize defines the maximum multipart upload chunk size allowed by
 	// S3.
-	MaxChunkSize = 5 << 30
+	MaxChunkSize int64 = 5 << 30
 
-	DefaultChunkSize = 2 * MinChunkSize
+	DefaultChunkSize int64 = 2 * MinChunkSize
 
 	// DefaultMultipartCopyChunkSize defines the default chunk size for all but
 	// the last Upload Part - Copy operation of a multipart copy. Empirically,
 	// 32 MB is optimal.
-	DefaultMultipartCopyChunkSize = 32 << 20
+	DefaultMultipartCopyChunkSize int64 = 32 << 20
 
 	// DefaultMultipartCopyMaxConcurrency defines the default maximum number of
 	// concurrent Upload Part - Copy operations for a multipart copy.
@@ -58,7 +58,7 @@ const (
 	// DefaultMultipartCopyThresholdSize defines the default object size above
 	// which multipart copy will be used. (PUT Object - Copy is used for
 	// objects at or below this size.)  Empirically, 32 MB is optimal.
-	DefaultMultipartCopyThresholdSize = 32 << 20
+	DefaultMultipartCopyThresholdSize int64 = 32 << 20
 
 	// DefaultMaxRequestsPerSecond defines the default maximum number of
 	// requests per second that can be made to the S3 API per driver instance.

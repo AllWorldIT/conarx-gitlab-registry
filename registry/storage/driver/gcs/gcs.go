@@ -59,14 +59,14 @@ import (
 const (
 	driverName = "gcs"
 
-	uploadSessionContentType = "application/x-docker-upload-session"
-	minChunkSize             = 256 * 1024
-	defaultChunkSize         = 20 * minChunkSize
-	defaultMaxConcurrency    = 50
-	minConcurrency           = 25
-	maxDeleteConcurrency     = 150
-	maxWalkConcurrency       = 100
-	maxTries                 = 5
+	uploadSessionContentType       = "application/x-docker-upload-session"
+	minChunkSize             int64 = 256 * 1024
+	defaultChunkSize               = 20 * minChunkSize
+	defaultMaxConcurrency          = 50
+	minConcurrency                 = 25
+	maxDeleteConcurrency           = 150
+	maxWalkConcurrency             = 100
+	maxTries                       = 5
 )
 
 var rangeHeader = regexp.MustCompile(`^bytes=([0-9])+-([0-9]+)$`)
@@ -95,7 +95,7 @@ type driverParameters struct {
 	client        *http.Client
 	storageClient *storage.Client
 	rootDirectory string
-	chunkSize     int
+	chunkSize     int64
 
 	// maxConcurrency limits the number of concurrent driver operations
 	// to GCS, which ultimately increases reliability of many simultaneous
@@ -128,7 +128,7 @@ type driver struct {
 	email         string
 	privateKey    []byte
 	rootDirectory string
-	chunkSize     int
+	chunkSize     int64
 	parallelWalk  bool
 }
 
@@ -170,13 +170,13 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	if ok {
 		switch v := chunkSizeParam.(type) {
 		case string:
-			vv, err := strconv.Atoi(v)
+			vv, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("chunksize parameter must be an integer, %v invalid", chunkSizeParam)
 			}
 			chunkSize = vv
 		case int, uint, int32, uint32, uint64, int64:
-			chunkSize = int(reflect.ValueOf(v).Convert(reflect.TypeOf(chunkSize)).Int())
+			chunkSize = reflect.ValueOf(v).Convert(reflect.TypeOf(chunkSize)).Int()
 		default:
 			return nil, fmt.Errorf("invalid valud for chunksize: %#v", chunkSizeParam)
 		}
@@ -446,7 +446,7 @@ type writer struct {
 	canceled      bool
 	sessionURI    string
 	buffer        []byte
-	buffSize      int
+	buffSize      int64
 }
 
 // Cancel removes any written content from this FileWriter.
@@ -518,7 +518,7 @@ func (w *writer) Close() error {
 	if err != nil {
 		return fmt.Errorf("writing contents while closing writer: %w", err)
 	}
-	w.size = w.offset + int64(w.buffSize)
+	w.size = w.offset + w.buffSize
 	w.buffSize = 0
 	return nil
 }
@@ -567,21 +567,21 @@ func (w *writer) Commit() error {
 		if err != nil {
 			return err
 		}
-		w.size = w.offset + int64(w.buffSize)
+		w.size = w.offset + w.buffSize
 		w.buffSize = 0
 		return nil
 	}
-	size := w.offset + int64(w.buffSize)
-	var nn int
+	size := w.offset + w.buffSize
+	var nn int64
 	// loop must be performed at least once to ensure the file is committed even when
 	// the buffer is empty
 	for {
 		n, err := putChunk(w.client, w.sessionURI, w.buffer[nn:w.buffSize], w.offset, size)
-		nn += int(n)
+		nn += n
 		w.offset += n
 		w.size = w.offset
 		if err != nil {
-			w.buffSize = copy(w.buffer, w.buffer[nn:w.buffSize])
+			w.buffSize = int64(copy(w.buffer, w.buffer[nn:w.buffSize])) // nolint: gosec // copy() is always going to be non-negative
 			return err
 		}
 		if nn == w.buffSize {
@@ -613,7 +613,7 @@ func (w *writer) writeChunk() error {
 		w.size = w.offset
 	}
 	// shift the remaining bytes to the start of the buffer
-	w.buffSize = copy(w.buffer, w.buffer[int(nn):w.buffSize])
+	w.buffSize = int64(copy(w.buffer, w.buffer[nn:w.buffSize])) // nolint: gosec // copy() is always going to be non-negative
 
 	return err
 }
@@ -633,8 +633,8 @@ func (w *writer) Write(p []byte) (int, error) {
 
 	for nn < len(p) {
 		n := copy(w.buffer[w.buffSize:], p[nn:])
-		w.buffSize += n
-		if w.buffSize == cap(w.buffer) {
+		w.buffSize += int64(n) // nolint: gosec // copy() is always going to be non-negative
+		if w.buffSize == int64(cap(w.buffer)) {
 			err = w.writeChunk()
 			if err != nil {
 				break
@@ -673,9 +673,9 @@ func (w *writer) init(path string) error {
 		return err
 	}
 	w.sessionURI = res.Header.Get("X-Goog-Meta-Session-URI")
-	w.buffSize = copy(w.buffer, buffer)
+	w.buffSize = int64(copy(w.buffer, buffer)) // nolint: gosec // copy() is always going to be non-negative
 	w.offset = offset
-	w.size = offset + int64(w.buffSize)
+	w.size = offset + w.buffSize
 	return nil
 }
 

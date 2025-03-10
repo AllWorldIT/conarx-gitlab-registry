@@ -311,17 +311,16 @@ func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 }
 
 func (f *file) WriteAt(p []byte, offset int64) (n int, err error) {
-	off := int(offset)
-	if cap(f.data) < off+len(p) {
-		data := make([]byte, len(f.data), off+len(p))
+	if int64(cap(f.data)) < offset+int64(len(p)) {
+		data := make([]byte, len(f.data), offset+int64(len(p)))
 		copy(data, f.data)
 		f.data = data
 	}
 
 	f.mod = time.Now()
-	f.data = f.data[:off+len(p)]
+	f.data = f.data[:offset+int64(len(p))]
 
-	return copy(f.data[off:off+len(p)], p), nil
+	return copy(f.data[offset:offset+int64(len(p))], p), nil
 }
 
 func (f *file) Append(p []byte) {

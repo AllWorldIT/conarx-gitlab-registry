@@ -1,7 +1,7 @@
 # Root directory of the project (absolute path).
 ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-GOLANGCI_VERSION ?= v1.62.0
+GOLANGCI_VERSION ?= v1.64.6
 DOCSLINT_VERSION ?= registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.20-vale-3.6.1-markdownlint2-0.13.0-lychee-0.15.1
 
 # Used to populate version variable in main package.

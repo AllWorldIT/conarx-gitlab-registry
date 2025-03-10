@@ -34,7 +34,7 @@ var ErrCorruptedData = errors.New("corrupted data found in the uploaded data")
 const DriverName = "azure_v2"
 
 const (
-	MaxChunkSize = 4 << 20
+	MaxChunkSize int64 = 4 << 20
 
 	// NOTE(prozlach): values chosen arbitrarily
 	DefaultPoolInitialInterval = 100 * time.Millisecond
@@ -691,7 +691,7 @@ func (d *driver) newWriter(ctx context.Context, path string, size int64, eTag *a
 		path:   path,
 		size:   new(atomic.Int64),
 		ctx:    ctx,
-		bw:     bufio.NewWriterSize(bw, MaxChunkSize),
+		bw:     bufio.NewWriterSize(bw, int(MaxChunkSize)),
 	}
 	res.size.Store(size)
 
@@ -709,7 +709,7 @@ func (w *writer) Write(p []byte) (int, error) {
 	}
 
 	n, err := w.bw.Write(p)
-	w.size.Add(int64(n))
+	w.size.Add(int64(n)) // nolint: gosec // Write will always return non-negative number of bytes written
 	return n, err
 }
 
@@ -785,17 +785,17 @@ type blockWriter struct {
 
 func (bw *blockWriter) Write(p []byte) (int, error) {
 	appendBlobRef := bw.client.NewAppendBlobClient(bw.path)
-	n := 0
+	var n int64
 	offsetRetryCount := int32(0)
 
-	for n < len(p) {
+	for n < int64(len(p)) {
 		appendPos := bw.appenPos.Load()
-		chunkSize := min(MaxChunkSize, len(p)-n)
+		chunkSize := min(MaxChunkSize, int64(len(p))-n)
 		timeoutFromCtx := false
 		ctxTimeoutNotify := withTimeoutNotification(bw.ctx, &timeoutFromCtx)
 
 		if offsetRetryCount >= bw.maxRetries {
-			return n, fmt.Errorf("max number of retries (%d) reached while handling backend operation timeout", bw.maxRetries)
+			return int(n), fmt.Errorf("max number of retries (%d) reached while handling backend operation timeout", bw.maxRetries) // nolint: gosec // n is always going to be non-negative
 		}
 
 		resp, err := appendBlobRef.AppendBlock(
@@ -815,7 +815,7 @@ func (bw *blockWriter) Write(p []byte) (int, error) {
 		if err == nil {
 			n += chunkSize // number of bytes uploaded in this call to Write()
 			bw.eTag = resp.ETag
-			bw.appenPos.Add(int64(chunkSize)) // total size of the blob in the backend
+			bw.appenPos.Add(chunkSize) // total size of the blob in the backend
 			continue
 		}
 		// NOTE(prozlach): These conditions could have triggered because
@@ -837,12 +837,12 @@ func (bw *blockWriter) Write(p []byte) (int, error) {
 		etagFailed := bloberror.HasCode(err, bloberror.ConditionNotMet)
 		if !(appendposFailed || etagFailed) || !timeoutFromCtx {
 			// Error was not caused by an operation timeout, abort!
-			return n, fmt.Errorf("appending blob: %w", err)
+			return int(n), fmt.Errorf("appending blob: %w", err) // nolint: gosec // n is always going to be non-negative
 		}
 
 		correctlyUploadedBytes, msg, newEtag, err := bw.chunkUploadVerify(appendPos, p[n:n+chunkSize])
 		if err != nil {
-			return n, fmt.Errorf("%s while handling operation timeout during append of data to blob: %w", msg, err)
+			return int(n), fmt.Errorf("%s while handling operation timeout during append of data to blob: %w", msg, err) // nolint: gosec // n is always going to be non-negative
 		}
 		bw.eTag = newEtag
 		if correctlyUploadedBytes == 0 {
@@ -853,11 +853,11 @@ func (bw *blockWriter) Write(p []byte) (int, error) {
 
 		// MD5 is correct, data was uploaded. Let's bump the counters and
 		// continue with the upload
-		n += int(correctlyUploadedBytes)        // number of bytes uploaded in this call to Write()
+		n += correctlyUploadedBytes             // number of bytes uploaded in this call to Write()
 		bw.appenPos.Add(correctlyUploadedBytes) // total size of the blob in the backend
 	}
 
-	return n, nil
+	return int(n), nil // nolint: gosec // n is always going to be non-negative
 }
 
 func (bw *blockWriter) chunkUploadVerify(appendPos int64, chunk []byte) (int64, string, *azcore.ETag, error) {

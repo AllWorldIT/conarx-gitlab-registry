@@ -683,7 +683,7 @@ func createRandomSmallLayer(t *testing.T) (io.ReadSeeker, digest.Digest, int64) 
 	// size 0, handfull of shas for layer with size 1, etc... 128-196 bytes
 	// gives enough entropy to make tests reliable.
 	size := 128 + rand.Int64N(64)
-	b := testutil.RandomBlob(t, int(size))
+	b := testutil.RandomBlob(t, size)
 
 	dgst := digest.FromBytes(b)
 	rs := bytes.NewReader(b)

@@ -524,7 +524,7 @@ func (d *driver) copy(ctx context.Context, sourcePath, destPath string) error {
 	limiter := make(chan struct{}, d.MultipartCopyMaxConcurrency)
 
 	for i := range completedParts {
-		i := int64(i)
+		i := int64(i) // nolint: gosec // index will always be a non-negative number
 		go func() {
 			limiter <- struct{}{}
 
@@ -903,7 +903,7 @@ func (d *driver) doWalk(parentCtx context.Context, objectCount *int64, path, pre
 		if objects.KeyCount != nil {
 			count = *objects.KeyCount
 		} else {
-			count = int64(len(objects.Contents) + len(objects.CommonPrefixes))
+			count = int64(len(objects.Contents)) + int64(len(objects.CommonPrefixes)) // nolint: gosec // len() is always going to be non-negative
 		}
 
 		*objectCount += count
@@ -993,7 +993,7 @@ func (d *driver) doWalkParallel(parentCtx context.Context, wg *sync.WaitGroup, c
 			if objects.KeyCount != nil {
 				count = *objects.KeyCount
 			} else {
-				count = int64(len(objects.Contents) + len(objects.CommonPrefixes))
+				count = int64(len(objects.Contents)) + int64(len(objects.CommonPrefixes)) // nolint: gosec // len() is always going to be non-negative
 			}
 			countChan <- count
 
@@ -1154,7 +1154,7 @@ func (w *writer) Write(p []byte) (int, error) {
 
 	// If the last written part is smaller than minChunkSize, we need to make a
 	// new multipart upload
-	if len(w.parts) > 0 && int(*w.parts[len(w.parts)-1].Size) < common.MinChunkSize {
+	if len(w.parts) > 0 && *w.parts[len(w.parts)-1].Size < common.MinChunkSize {
 		var completedUploadedParts completedParts
 		for _, part := range w.parts {
 			completedUploadedParts = append(completedUploadedParts, &s3.CompletedPart{
@@ -1246,42 +1246,42 @@ func (w *writer) Write(p []byte) (int, error) {
 		}
 	}
 
-	var n int
+	var n int64
 
 	for len(p) > 0 {
 		// If no parts are ready to write, fill up the first part
-		if neededBytes := int(w.driver.ChunkSize) - len(w.readyPart); neededBytes > 0 {
-			if len(p) >= neededBytes {
+		if neededBytes := w.driver.ChunkSize - int64(len(w.readyPart)); neededBytes > 0 {
+			if int64(len(p)) >= neededBytes {
 				w.readyPart = append(w.readyPart, p[:neededBytes]...)
 				n += neededBytes
 				p = p[neededBytes:]
 			} else {
 				w.readyPart = append(w.readyPart, p...)
-				n += len(p)
+				n += int64(len(p))
 				p = nil
 			}
 		}
 
-		if neededBytes := int(w.driver.ChunkSize) - len(w.pendingPart); neededBytes > 0 {
-			if len(p) >= neededBytes {
+		if neededBytes := w.driver.ChunkSize - int64(len(w.pendingPart)); neededBytes > 0 {
+			if int64(len(p)) >= neededBytes {
 				w.pendingPart = append(w.pendingPart, p[:neededBytes]...)
 				n += neededBytes
 				p = p[neededBytes:]
 				err := w.flushPart()
 				// nolint: revive // max-control-nesting: control flow nesting exceeds 3
 				if err != nil {
-					w.size += int64(n)
-					return n, err
+					w.size += n
+					return int(n), err // nolint: gosec // n is never going to be negative
 				}
 			} else {
 				w.pendingPart = append(w.pendingPart, p...)
-				n += len(p)
+				n += int64(len(p))
 				p = nil
 			}
 		}
 	}
-	w.size += int64(n)
-	return n, nil
+	w.size += n
+	return int(n), nil // nolint: gosec // n is never going to be negative
 }
 
 func (w *writer) Size() int64 {
@@ -1389,14 +1389,14 @@ func (w *writer) flushPart() error {
 		// nothing to write
 		return nil
 	}
-	if len(w.pendingPart) < int(w.driver.ChunkSize) {
+	if int64(len(w.pendingPart)) < w.driver.ChunkSize {
 		// closing with a small pending part
 		// combine ready and pending to avoid writing a small part
 		w.readyPart = append(w.readyPart, w.pendingPart...)
 		w.pendingPart = nil
 	}
 
-	partNumber := aws.Int64(int64(len(w.parts) + 1))
+	partNumber := aws.Int64(int64(len(w.parts)) + 1) // len() is always going to be non-negative
 	resp, err := w.driver.S3.UploadPartWithContext(
 		context.Background(),
 		&s3.UploadPartInput{

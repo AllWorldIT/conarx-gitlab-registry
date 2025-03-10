@@ -14,7 +14,7 @@ import (
 // RandomBlob is used when we explicitly do not want to re-use pseudo-random
 // sequence (i.e. we need two different blobs), or using BlobFactory would
 // bring too much boilerplate.
-func RandomBlob(t testing.TB, size int) []byte {
+func RandomBlob(t testing.TB, size int64) []byte {
 	t.Helper()
 
 	res := make([]byte, size)
@@ -117,19 +117,20 @@ func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int64, str
 		remainingBytes := int64(len(b.rngCache)) - currentOffset
 
 		// Read from the provided reader
-		bytesRead, err := r.Read(readBuffer)
-		if int64(bytesRead) > remainingBytes {
+		br, err := r.Read(readBuffer)
+		bytesRead := int64(br) // nolint: gosec // The Read() method in Go's standard library should always return a non-negative number for n
+		if bytesRead > remainingBytes {
 			return assert.LessOrEqualf(t, bytesRead, remainingBytes, "input stream is longer than cached data, streamID: %s", streamID)
 		}
-		if bytesRead > 0 && !bytes.Equal(b.rngCache[currentOffset:currentOffset+int64(bytesRead)], readBuffer[:bytesRead]) {
+		if bytesRead > 0 && !bytes.Equal(b.rngCache[currentOffset:currentOffset+bytesRead], readBuffer[:bytesRead]) {
 			return assert.Equalf(
 				t,
-				b.rngCache[currentOffset:currentOffset+int64(bytesRead)], readBuffer[:bytesRead],
+				b.rngCache[currentOffset:currentOffset+bytesRead], readBuffer[:bytesRead],
 				"difference between streams found. Chunk number %d, current offset: %d, starting offset %d, streamID: %s", chunkNumber, currentOffset, offset, streamID,
 			)
 		}
 
-		currentOffset += int64(bytesRead)
+		currentOffset += bytesRead
 		chunkNumber++
 
 		if err != nil {

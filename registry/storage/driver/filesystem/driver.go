@@ -429,7 +429,7 @@ func (fw *fileWriter) Write(p []byte) (int, error) {
 		return 0, storagedriver.ErrAlreadyCanceled
 	}
 	n, err := fw.bw.Write(p)
-	fw.size += int64(n)
+	fw.size += int64(n) // nolint: gosec // Write will always return non-negative number of bytes written
 	return n, err
 }
 

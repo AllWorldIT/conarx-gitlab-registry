@@ -34,7 +34,7 @@ func testServer(rrm testutil.RequestResponseMap) (string, func()) {
 	return s.URL, s.Close
 }
 
-func newRandomBlob(tb testing.TB, size int) (digest.Digest, []byte) {
+func newRandomBlob(tb testing.TB, size int64) (digest.Digest, []byte) {
 	tb.Helper()
 
 	b := testutil.RandomBlob(tb, size)
@@ -477,7 +477,7 @@ func newRandomSchemaV1Manifest(tb testing.TB, name reference.Named, tag string, 
 	history := make([]schema1.History, blobCount)
 
 	for i := 0; i < blobCount; i++ {
-		dgst, blob := newRandomBlob(tb, (i%5)*16)
+		dgst, blob := newRandomBlob(tb, int64((i%5)*16))
 
 		blobs[i] = schema1.FSLayer{BlobSum: dgst}
 		history[i] = schema1.History{V1Compatibility: fmt.Sprintf("{\"Hex\": \"%x\"}", blob)}
