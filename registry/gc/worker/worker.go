@@ -123,8 +123,11 @@ func (w *baseWorker) rollbackOnExit(ctx context.Context, tx datastore.Transactor
 				w.logAndReportErr(ctx, fmt.Errorf("error rolling back database transaction on exit: %w", err))
 			}
 		} else {
-			// There was no sql.ErrTxDone error when "rolling back" the transaction, which means it was not committed or
-			// rolled back before getting here (bad!). Log and report that we're missing a commit/rollback somewhere!
+			// Transaction was neither explicitly committed nor rolled back.
+			// This may happen due to a missing commit/rollback (unexpected, we should find where the problem is) or an
+			// automatic cancellation by Postgres due to an error like a foreign key violation ("expected", we should
+			// focus on the root cause, which should have a separate error log entry and sentry event). Since
+			// distinguishing them programmatically is risky, we log and report all occurrences for visibility.
 			w.logAndReportErr(ctx, errors.New("database transaction not explicitly committed or rolled back"))
 		}
 	}
