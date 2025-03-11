@@ -1479,6 +1479,8 @@ func (imh *manifestHandler) deleteTag() error {
 		l.WithError(err).Error("dispatching tag delete to queue")
 	}
 
+	l.WithFields(log.Fields{"tag_name": imh.Tag}).Info("tag deleted")
+
 	return nil
 }
 
