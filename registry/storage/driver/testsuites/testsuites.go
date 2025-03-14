@@ -1917,8 +1917,8 @@ func (s *DriverSuite) TestConcurrentFileStreams() {
 //  require.NotEqual(suite.T(), 1024, misswrites)
 // }
 
-// TestWalkParallel ensures that all files are visted by WalkParallel.
-func (s *DriverSuite) TestWalkParallel() {
+// TestWalk ensures that all files are visted by WalkParallel.
+func (s *DriverSuite) TestWalk() {
 	rootDirectory := "/" + dtestutil.RandomFilenameRange(8, 8)
 	defer s.deletePath(s.StorageDriver, rootDirectory)
 	s.T().Logf("root directory used for testing: %s", rootDirectory)
@@ -1944,63 +1944,84 @@ func (s *DriverSuite) TestWalkParallel() {
 		require.NoError(s.T(), err)
 	}
 
-	fChan := make(chan string)
-	dChan := make(chan string)
+	verifyResults := func(actualFiles, actualDirectories []string) {
+		require.ElementsMatch(s.T(), wantedFiles, actualFiles)
 
-	var actualFiles []string
-	var actualDirectories []string
+		// Convert from a set of wanted directories into a slice.
+		wantedDirectories := make([]string, len(wantedDirectoriesSet))
 
-	var wg sync.WaitGroup
-
-	go func() {
-		defer wg.Done()
-		wg.Add(1)
-		for f := range fChan {
-			actualFiles = append(actualFiles, f)
+		var i int
+		for k := range wantedDirectoriesSet {
+			wantedDirectories[i] = k
+			i++
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		wg.Add(1)
-		for d := range dChan {
-			actualDirectories = append(actualDirectories, d)
-		}
-	}()
 
-	err := s.StorageDriver.WalkParallel(s.ctx, rootDirectory, func(fInfo storagedriver.FileInfo) error {
-		// Use append here to prevent a panic if walk finds more than we expect.
-		if fInfo.IsDir() {
-			dChan <- fInfo.Path()
-		} else {
-			fChan <- fInfo.Path()
-		}
-		return nil
-	})
-	require.NoError(s.T(), err)
-
-	close(fChan)
-	close(dChan)
-
-	wg.Wait()
-
-	sort.Strings(actualFiles)
-	sort.Strings(wantedFiles)
-	require.Equal(s.T(), wantedFiles, actualFiles)
-
-	// Convert from a set of wanted directories into a slice.
-	wantedDirectories := make([]string, len(wantedDirectoriesSet))
-
-	var i int
-	for k := range wantedDirectoriesSet {
-		wantedDirectories[i] = k
-		i++
+		require.ElementsMatch(s.T(), wantedDirectories, actualDirectories)
 	}
 
-	require.ElementsMatch(s.T(), wantedDirectories, actualDirectories)
+	s.Run("PararellWalk", func() {
+		fChan := make(chan string)
+		dChan := make(chan string)
+
+		var actualFiles []string
+		var actualDirectories []string
+
+		var wg sync.WaitGroup
+
+		go func() {
+			defer wg.Done()
+			wg.Add(1)
+			for f := range fChan {
+				actualFiles = append(actualFiles, f)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			wg.Add(1)
+			for d := range dChan {
+				actualDirectories = append(actualDirectories, d)
+			}
+		}()
+
+		err := s.StorageDriver.WalkParallel(s.ctx, rootDirectory, func(fInfo storagedriver.FileInfo) error {
+			// Use append here to prevent a panic if walk finds more than we expect.
+			if fInfo.IsDir() {
+				dChan <- fInfo.Path()
+			} else {
+				fChan <- fInfo.Path()
+			}
+			return nil
+		})
+		require.NoError(s.T(), err)
+
+		close(fChan)
+		close(dChan)
+
+		wg.Wait()
+
+		verifyResults(actualFiles, actualDirectories)
+	})
+
+	s.Run("PlainWalk", func() {
+		var actualFiles []string
+		var actualDirectories []string
+
+		err := s.StorageDriver.Walk(s.ctx, rootDirectory, func(fInfo storagedriver.FileInfo) error {
+			if fInfo.IsDir() {
+				actualDirectories = append(actualDirectories, fInfo.Path())
+			} else {
+				actualFiles = append(actualFiles, fInfo.Path())
+			}
+			return nil
+		})
+
+		require.NoError(s.T(), err)
+		verifyResults(actualFiles, actualDirectories)
+	})
 }
 
-// TestWalkParallelError ensures that walk reports WalkFn errors.
-func (s *DriverSuite) TestWalkParallelError() {
+// TestWalkError ensures that walk reports WalkFn errors.
+func (s *DriverSuite) TestWalkError() {
 	rootDirectory := "/" + dtestutil.RandomFilenameRange(8, 8)
 	defer s.deletePath(s.StorageDriver, rootDirectory)
 	s.T().Logf("root directory used for testing: %s", rootDirectory)
@@ -2016,17 +2037,165 @@ func (s *DriverSuite) TestWalkParallelError() {
 	innerErr := errors.New("walk: expected test error")
 	errorFile := wantedFiles[0]
 
-	err := s.StorageDriver.WalkParallel(s.ctx, rootDirectory, func(fInfo storagedriver.FileInfo) error {
-		if fInfo.Path() == errorFile {
-			return innerErr
-		}
+	s.Run("PararellWalk", func() {
+		err := s.StorageDriver.WalkParallel(s.ctx, rootDirectory, func(fInfo storagedriver.FileInfo) error {
+			if fInfo.Path() == errorFile {
+				return innerErr
+			}
+			return nil
+		})
 
-		return nil
+		// Drivers may or may not return a multierror here, check that the innerError
+		// is present in the error returned by walk.
+		require.ErrorIs(s.T(), err, innerErr)
 	})
 
-	// Drivers may or may not return a multierror here, check that the innerError
-	// is present in the error returned by walk.
-	require.ErrorContains(s.T(), err, innerErr.Error())
+	s.Run("PlainWalk", func() {
+		err := s.StorageDriver.Walk(s.ctx, rootDirectory, func(fInfo storagedriver.FileInfo) error {
+			if fInfo.Path() == errorFile {
+				return innerErr
+			}
+			return nil
+		})
+
+		// Drivers may or may not return a multierror here, check that the innerError
+		// is present in the error returned by walk.
+		require.ErrorIs(s.T(), err, innerErr)
+	})
+}
+
+// TestWalkSkipDir tests that the Walk and WalkParallel functions
+// properly handle the ErrSkipDir special case.
+func (s *DriverSuite) TestWalkSkipDir() {
+	rootDirectory := "/" + dtestutil.RandomFilenameRange(8, 8)
+	defer s.deletePath(s.StorageDriver, rootDirectory)
+	s.T().Logf("root directory used for testing: %s", rootDirectory)
+
+	// Create directories with a structure like:
+	// rootDirectory/
+	//   ├── dir1/
+	//   │    ├── file1-1
+	//   │    └── file1-2
+	//   ├── dir2/  (this one will be skipped)
+	//   │    ├── file2-1
+	//   │    └── file2-2
+	//   └── dir3/
+	//        ├── file3-1
+	//        └── file3-2
+
+	dir1 := path.Join(rootDirectory, "dir1")
+	dir2 := path.Join(rootDirectory, "dir2") // this will be skipped
+	dir3 := path.Join(rootDirectory, "dir3")
+
+	// Create map of all files to create with full paths
+	fileStructure := map[string][]string{
+		dir1: {
+			path.Join(dir1, "file1-1"),
+			path.Join(dir1, "file1-2"),
+		},
+		dir2: { // dir2 will be skipped during walk
+			path.Join(dir2, "file2-1"),
+			path.Join(dir2, "file2-2"),
+		},
+		dir3: {
+			path.Join(dir3, "file3-1"),
+			path.Join(dir3, "file3-2"),
+		},
+	}
+
+	// Create all files in all directories
+	for _, files := range fileStructure {
+		for _, filePath := range files {
+			err := s.StorageDriver.PutContent(s.ctx, filePath, s.blobberFactory.GetBlobber(32).GetAllBytes())
+			require.NoError(s.T(), err)
+		}
+	}
+
+	// Build expected and unexpected paths
+	expectedPaths := []string{
+		dir1,
+		dir3,
+		fileStructure[dir1][0],
+		fileStructure[dir1][1],
+		fileStructure[dir3][0],
+		fileStructure[dir3][1],
+	}
+
+	// Unexpected paths are dir2 and all its files
+	unexpectedPaths := []string{
+		dir2,
+		fileStructure[dir2][0],
+		fileStructure[dir2][1],
+	}
+
+	// Helper function to create a walk function that skips dir2
+	createWalkFunc := func(pathCollector *sync.Map) storagedriver.WalkFn {
+		return func(fInfo storagedriver.FileInfo) error {
+			path := fInfo.Path()
+
+			// Skip dir2
+			if path == dir2 {
+				return storagedriver.ErrSkipDir
+			}
+
+			// Record this path was visited
+			pathCollector.Store(path, struct{}{})
+			return nil
+		}
+	}
+
+	// Verify all expected paths were visited and unexpected were not
+	verifyPaths := func(visitedPaths *sync.Map) {
+		// Check expected paths were visited
+		for _, expectedPath := range expectedPaths {
+			_, found := visitedPaths.Load(expectedPath)
+			assert.Truef(s.T(), found, "Path %s should have been visited", expectedPath)
+		}
+
+		// Check unexpected paths were not visited
+		for _, unexpectedPath := range unexpectedPaths {
+			_, found := visitedPaths.Load(unexpectedPath)
+			assert.Falsef(s.T(), found, "Path %s should not have been visited", unexpectedPath)
+		}
+	}
+
+	s.Run("PlainWalk", func() {
+		var visitedPaths sync.Map
+		err := s.StorageDriver.Walk(s.ctx, rootDirectory, createWalkFunc(&visitedPaths))
+		require.NoError(s.T(), err)
+		verifyPaths(&visitedPaths)
+	})
+
+	s.Run("ParallelWalk", func() {
+		var visitedPaths sync.Map
+		err := s.StorageDriver.WalkParallel(s.ctx, rootDirectory, createWalkFunc(&visitedPaths))
+		require.NoError(s.T(), err)
+		verifyPaths(&visitedPaths)
+	})
+}
+
+// TestWalkErrorPathNotFound ensures that walk reports an error on a path not
+// found.
+func (s *DriverSuite) TestWalkErrorPathNotFound() {
+	s.Run("PararellWalk", func() {
+		err := s.StorageDriver.WalkParallel(s.ctx, "/maryna/boryna", func(_ storagedriver.FileInfo) error {
+			return nil
+		})
+
+		// Drivers may or may not return a multierror here, check that the innerError
+		// is present in the error returned by walk.
+		require.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
+	})
+
+	s.Run("PlainWalk", func() {
+		err := s.StorageDriver.Walk(s.ctx, "/maryna/boryna", func(_ storagedriver.FileInfo) error {
+			return nil
+		})
+
+		// Drivers may or may not return a multierror here, check that the innerError
+		// is present in the error returned by walk.
+		require.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
+	})
 }
 
 // TestWalkParallelStopsProcessingOnError ensures that walk stops processing when an error is encountered.
