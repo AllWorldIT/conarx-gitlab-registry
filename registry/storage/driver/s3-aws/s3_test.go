@@ -39,6 +39,7 @@ import (
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	v1 "github.com/docker/distribution/registry/storage/driver/s3-aws/v1"
+	v2 "github.com/docker/distribution/registry/storage/driver/s3-aws/v2"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
 )
 
@@ -92,6 +93,10 @@ func init() {
 func fetchEnvVarsConfiguration() {
 	driverVersion = os.Getenv(common.EnvDriverVersion)
 	switch driverVersion {
+	case v2.DriverName:
+		fromParametersFn = v2.FromParameters
+		newDriverFn = v2.New
+		newS3APIFn = v2.NewS3API
 	case v1.DriverName, v1.DriverNameAlt:
 		// v1 is the default
 		fallthrough
@@ -597,8 +602,11 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 	defer d.Delete(ctx, sourcePath)
 	defer d.Delete(ctx, destPath)
 
-	// An object larger than d's MultipartCopyThresholdSize will cause d.Move() to perform a multipart copy.
-	contents := rngtestutil.RandomBlob(t, 2*common.DefaultMultipartCopyThresholdSize)
+	// An object larger than d's MultipartCopyThresholdSize will cause d.Move()
+	// to perform a multipart copy. We should avoid sizes that are a multiply
+	// of common.DefaultMultipartCopyThresholdSize in order to maximize tests
+	// coverage.
+	contents := rngtestutil.RandomBlob(t, 2*common.DefaultMultipartCopyThresholdSize+128)
 
 	err := d.PutContent(ctx, sourcePath, contents)
 	require.NoError(t, err, "unexpected error creating content")
