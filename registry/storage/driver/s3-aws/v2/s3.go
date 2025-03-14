@@ -278,25 +278,29 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 // at the location designated by "path" after the call to Commit.
 func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (storagedriver.FileWriter, error) {
 	key := d.s3Path(path)
-	if !appendParam {
-		// TODO (brianbland): cancel other uploads at this path
 
-		resp, err := d.S3.CreateMultipartUploadWithContext(
-			ctx,
-			&s3.CreateMultipartUploadInput{
-				Bucket:               aws.String(d.Bucket),
-				Key:                  aws.String(key),
-				ContentType:          d.getContentType(),
-				ACL:                  d.getACL(),
-				ServerSideEncryption: d.getEncryptionMode(),
-				SSEKMSKeyId:          d.getSSEKMSKeyID(),
-				StorageClass:         d.getStorageClass(),
-			})
-		if err != nil {
-			return nil, err
-		}
-		return d.newWriter(key, *resp.UploadId, nil), nil
-	}
+	// NOTE(prozlach): The S3 driver uses multipart uploads to implement
+	// Container Registry's blob upload protocol (start -> chunks ->
+	// commit/cancel). Unlike Azure and Filesystem drivers that allow direct
+	// appending to blobs, S3 objects are immutable and this behavior is
+	// worked-around using s3' native multipart upload API.
+	//
+	// Container Registry's abstraction layer permits that data isn't visible
+	// until the final Commit() call. This matches S3's behavior where uploads
+	// aren't accessible as regular objects until the multipart upload is
+	// completed.
+	//
+	// When appendParam is false, we create a new multipart upload after
+	// canceling any existing uploads for this path. This cancellation is
+	// necessary because CR assumes it always appends to the same file path,
+	// and S3 can accumulate multiple incomplete multipart uploads for the same
+	// key. While CR currently uses content-addressable paths (SHAsum) or
+	// random UIDs which mitigates collision risks, explicitly cleaning up
+	// ensures consistent behavior regardless of path construction patterns.
+	//
+	// When appendParam is true, we find and resume the existing upload by
+	// listing parts that have already been uploaded, allowing the writer to
+	// continue where it left off.
 
 	resp, err := d.S3.ListMultipartUploadsWithContext(
 		ctx,
@@ -309,6 +313,45 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 	}
 
 	idx := slices.IndexFunc(resp.Uploads, func(v *s3.MultipartUpload) bool { return *v.Key == key })
+
+	if !appendParam {
+		if idx >= 0 {
+			// Cancel any in-progress uploads for the same path
+			for _, upload := range resp.Uploads[idx:] {
+				if *upload.Key != key {
+					break
+				}
+				_, err := d.S3.AbortMultipartUploadWithContext(
+					context.Background(),
+					&s3.AbortMultipartUploadInput{
+						Bucket:   aws.String(d.Bucket),
+						Key:      aws.String(key),
+						UploadId: aws.String(*upload.UploadId),
+					})
+				if err != nil {
+					return nil, fmt.Errorf("aborting s3 multipart upload %s: %w", *upload.UploadId, err)
+				}
+			}
+		}
+
+		mpUpload, err := d.S3.CreateMultipartUploadWithContext(
+			ctx,
+			&s3.CreateMultipartUploadInput{
+				Bucket:               aws.String(d.Bucket),
+				Key:                  aws.String(key),
+				ContentType:          d.getContentType(),
+				ACL:                  d.getACL(),
+				ServerSideEncryption: d.getEncryptionMode(),
+				SSEKMSKeyId:          d.getSSEKMSKeyID(),
+				StorageClass:         d.getStorageClass(),
+			})
+		if err != nil {
+			return nil, fmt.Errorf("creating new multipart upload: %w", err)
+		}
+
+		return d.newWriter(key, *mpUpload.UploadId, nil), nil
+	}
+
 	if idx == -1 {
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
 	}
