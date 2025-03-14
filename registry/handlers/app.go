@@ -138,6 +138,9 @@ type App struct {
 	// redisCache is the abstraction for manipulating cached data on Redis.
 	redisCache *iredis.Cache
 
+	// redisLBCache is the abstraction for the database load balancing Redis cache.
+	redisLBCache *iredis.Cache
+
 	healthRegistry *health.Registry
 
 	// shutdownFuncs is the slice of functions/code that needs to be called
@@ -414,10 +417,20 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		// nolint: revive // max-control-nesting
 		if config.Database.LoadBalancing.Enabled {
-			if app.redisCache == nil {
-				return nil, errors.New("redis cache required for enabling database load balancing")
+			if err := app.configureRedisLoadBalancingCache(ctx, config); err != nil {
+				return nil, err
 			}
-			dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisCache)))
+			// TODO: remove fallback to `redis.cache` once we're making use of `redis.loadbalancing` in production:
+			// https://gitlab.com/gitlab-org/container-registry/-/issues/1535
+			cache := app.redisLBCache
+			if cache == nil {
+				if app.redisCache == nil {
+					return nil, errors.New("`redis.loadbalancing` required for enabling database load balancing")
+				}
+				log.Warn("redis.loadbalancing configuration is not set, using redis.cache configuration")
+				cache = app.redisCache
+			}
+			dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(cache)))
 
 			// service discovery takes precedence over fixed hosts
 			if config.Database.LoadBalancing.Record != "" {
@@ -1098,6 +1111,22 @@ func configureRedisClient(ctx context.Context, config configuration.RedisCommon,
 	}
 
 	return client, nil
+}
+
+func (app *App) configureRedisLoadBalancingCache(ctx context.Context, config *configuration.Configuration) error {
+	if !config.Redis.LoadBalancing.Enabled {
+		return nil
+	}
+
+	client, err := configureRedisClient(ctx, config.Redis.LoadBalancing, config.HTTP.Debug.Prometheus.Enabled, "loadbalancing")
+	if err != nil {
+		return fmt.Errorf("failed to configure Redis for load balancing: %w", err)
+	}
+
+	app.redisLBCache = iredis.NewCache(client, iredis.WithDefaultTTL(redisCacheTTL))
+	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis configured successfully for load balancing")
+
+	return nil
 }
 
 func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {

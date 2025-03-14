@@ -282,6 +282,14 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 				Password: os.Getenv("REGISTRY_REDIS_CACHE_PASSWORD"),
 			}
 		}
+		if os.Getenv("REGISTRY_REDIS_LOADBALANCING_ENABLED") == "true" {
+			config.Redis.LoadBalancing = configuration.RedisCommon{
+				Enabled:  true,
+				Addr:     os.Getenv("REGISTRY_REDIS_LOADBALANCING_ADDR"),
+				Username: os.Getenv("REGISTRY_REDIS_LOADBALANCING_USERNAME"),
+				Password: os.Getenv("REGISTRY_REDIS_LOADBALANCING_PASSWORD"),
+			}
+		}
 	}
 
 	for _, o := range opts {

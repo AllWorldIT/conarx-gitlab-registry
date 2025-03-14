@@ -312,6 +312,8 @@ type Redis struct {
 	Cache RedisCommon `yaml:"cache,omitempty"`
 	// RateLimiter specifies settings for a Redis connection for rate limiting purposes.
 	RateLimiter RedisCommon `yaml:"ratelimiter,omitempty"`
+	// LoadBalancing specifies settings for a Redis connection for database load balancing purposes.
+	LoadBalancing RedisCommon `yaml:"loadbalancing,omitempty"`
 }
 
 // GC configures online Garbage Collection.
