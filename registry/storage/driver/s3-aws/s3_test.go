@@ -545,7 +545,7 @@ func TestS3DriverOverThousandBlobs(t *testing.T) {
 	require.NoError(t, err, "unexpected error deleting thousand files")
 }
 
-func TestS3DriverURLFor_Expiry(t *testing.T) {
+func TestS3DriverURLFor(t *testing.T) {
 	if skipMsg := skipCheck(); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
@@ -564,23 +564,90 @@ func TestS3DriverURLFor_Expiry(t *testing.T) {
 	mock.Set(time.Now())
 	testutil.StubClock(t, &common.SystemClock, mock)
 
-	// default
-	s, err := d.URLFor(ctx, fp, nil)
-	require.NoError(t, err)
+	t.Run("default expiry", func(tt *testing.T) {
+		s, err := d.URLFor(ctx, fp, nil)
+		require.NoError(tt, err)
 
-	u, err := url.Parse(s)
-	require.NoError(t, err)
-	require.Equal(t, "1200", u.Query().Get(param))
+		u, err := url.Parse(s)
+		require.NoError(tt, err)
+		require.Equal(tt, "1200", u.Query().Get(param))
+	})
 
-	// custom
-	dt := mock.Now().Add(1 * time.Hour)
-	s, err = d.URLFor(ctx, fp, map[string]any{"expiry": dt})
-	require.NoError(t, err)
+	t.Run("custom expiry", func(tt *testing.T) {
+		dt := mock.Now().Add(1 * time.Hour)
+		s, err := d.URLFor(ctx, fp, map[string]any{"expiry": dt})
+		require.NoError(tt, err)
 
-	u, err = url.Parse(s)
-	require.NoError(t, err)
-	expected := dt.Sub(mock.Now()).Seconds()
-	require.Equal(t, fmt.Sprint(expected), u.Query().Get(param))
+		u, err := url.Parse(s)
+		require.NoError(tt, err)
+		expected := dt.Sub(mock.Now()).Seconds()
+		require.Equal(tt, fmt.Sprint(expected), u.Query().Get(param))
+	})
+
+	t.Run("use HTTP HEAD method", func(tt *testing.T) {
+		s, err := d.URLFor(
+			ctx,
+			fp,
+			map[string]any{
+				"method": http.MethodHead,
+			},
+		)
+		require.NoError(tt, err)
+
+		client := &http.Client{}
+
+		req, err := http.NewRequest(http.MethodHead, s, nil)
+		require.NoError(tt, err)
+		respHead, err := client.Do(req)
+		require.NoError(tt, err)
+		defer respHead.Body.Close()
+		require.Equal(tt, http.StatusOK, respHead.StatusCode)
+
+		req, err = http.NewRequest(http.MethodGet, s, nil)
+		require.NoError(tt, err)
+		respGet, err := client.Do(req)
+		require.NoError(tt, err)
+		defer respGet.Body.Close()
+		require.Equal(tt, http.StatusForbidden, respGet.StatusCode)
+	})
+
+	t.Run("use HTTP GET method", func(tt *testing.T) {
+		s, err := d.URLFor(
+			ctx,
+			fp,
+			map[string]any{
+				"method": http.MethodGet,
+			},
+		)
+		require.NoError(tt, err)
+
+		client := &http.Client{}
+
+		req, err := http.NewRequest(http.MethodGet, s, nil)
+		require.NoError(tt, err)
+		respGet, err := client.Do(req)
+		require.NoError(tt, err)
+		defer respGet.Body.Close()
+		require.Equal(tt, http.StatusOK, respGet.StatusCode)
+
+		req, err = http.NewRequest(http.MethodHead, s, nil)
+		require.NoError(tt, err)
+		respHead, err := client.Do(req)
+		require.NoError(tt, err)
+		defer respHead.Body.Close()
+		require.Equal(tt, http.StatusForbidden, respHead.StatusCode)
+	})
+
+	t.Run("use unsupported HTTP method", func(tt *testing.T) {
+		_, err := d.URLFor(
+			ctx,
+			fp,
+			map[string]any{
+				"method": http.MethodPost,
+			},
+		)
+		require.Error(tt, err)
+	})
 }
 
 func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
