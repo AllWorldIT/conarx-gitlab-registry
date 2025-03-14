@@ -2293,6 +2293,436 @@ redis:
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_IDLETIMEOUT", tt, validator)
 }
 
+func TestParseRedisLoadBalancing_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: %s
+`
+	tt := boolParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.LoadBalancing.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_ENABLED", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_Addr(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    addr: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "single",
+			value: "0.0.0.0:6379",
+			want:  "0.0.0.0:6379",
+		},
+		{
+			name:  "multiple",
+			value: "0.0.0.0:16379,0.0.0.0:26379",
+			want:  "0.0.0.0:16379,0.0.0.0:26379",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.Addr)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_ADDR", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_MainName(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    mainname: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "myredismainserver",
+			want:  "myredismainserver",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.MainName)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_MAINNAME", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_Username(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    username: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "myuser",
+			want:  "myuser",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.Username)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_USERNAME", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_Password(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    password: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "mysecret",
+			want:  "mysecret",
+		},
+		{
+			name: "default",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.Password)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_PASSWORD", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_DB(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    db: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "1",
+			want:  1,
+		},
+		{
+			name: "default",
+			want: 0,
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.DB)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_DB", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_DialTimeout(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    dialtimeout: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "300s",
+			want:  300 * time.Second,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.DialTimeout)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_DIALTIMEOUT", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_ReadTimeout(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    readtimeout: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "300s",
+			want:  300 * time.Second,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.ReadTimeout)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_READTIMEOUT", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_WriteTimeout(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    writetimeout: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "300s",
+			want:  300 * time.Second,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.WriteTimeout)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_WRITETIMEOUT", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_SentinelUsername(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    mainname: default
+    sentinelusername: %s
+    sentinelpassword: somepass
+`
+	tt := []parameterTest{
+		{
+			name:  "default",
+			value: "myuser",
+			want:  "myuser",
+		},
+		{
+			name: "empty",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.SentinelUsername)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_SENTINELUSERNAME", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_SentinelPassword(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    mainname: default
+    sentinelpassword: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "default",
+			value: "mypassword",
+			want:  "mypassword",
+		},
+		{
+			name: "empty",
+			want: "",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.SentinelPassword)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_SENTINELPASSWORD", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_TLS_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    tls:
+      enabled: %s
+`
+	tt := boolParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.LoadBalancing.TLS.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_TLS_ENABLED", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_TLS_Insecure(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    tls:
+      insecure: %s
+`
+	tt := boolParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Redis.LoadBalancing.TLS.Insecure))
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_TLS_INSECURE", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_Pool_Size(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    pool:
+      size: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "10",
+			want:  10,
+		},
+		{
+			name: "empty",
+			want: 0,
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.Pool.Size)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_POOL_SIZE", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_Pool_MaxLifeTime(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    pool:
+      maxlifetime: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "1h",
+			want:  1 * time.Hour,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.Pool.MaxLifetime)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_POOL_MAXLIFETIME", tt, validator)
+}
+
+func TestParseRedisLoadBalancing_Pool_IdleTimeout(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+redis:
+  loadbalancing:
+    enabled: true
+    pool:
+      idletimeout: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "300s",
+			want:  300 * time.Second,
+		},
+		{
+			name: "empty",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Redis.LoadBalancing.Pool.IdleTimeout)
+	}
+
+	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_POOL_IDLETIMEOUT", tt, validator)
+}
+
 // TestParseBBMConfig_EnabledDefaults validates that environment variables properly override backgroundmigrations parameters
 func TestParseBBMConfigEnabledDefaults(t *testing.T) {
 	tests := []struct {

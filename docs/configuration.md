@@ -330,6 +330,22 @@ redis:
       size: 10
       maxlifetime: 1h
       idletimeout: 300s
+  load_balancing:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
 health:
   storagedriver:
     enabled: true
@@ -716,7 +732,7 @@ backgroundmigrations:
 
 ### `loadbalancing`
 
-> **Note**: This is an experimental feature and should _not_ be used in production.
+> **Note**: This is an [experimental](https://docs.gitlab.com/policy/development_stages_support/#experiment) feature and should _not_ be used in production.
 
 This subsection allows enabling and configuring Database Load Balancing (DLB). See the corresponding [specification](spec/gitlab/database-load-balancing.md)
 for more details on how it works.
@@ -1264,6 +1280,22 @@ redis:
       size: 10
       maxlifetime: 1h
       idletimeout: 300s
+  loadbalancing:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
 ```
 
 Declare parameters for constructing the `redis` connections. Single instances, Redis Sentinel and Redis Cluster are supported.
@@ -1272,7 +1304,7 @@ For backward compatibility reasons, registry instances use the root Redis connec
 immutable blobs when `storage.cache.blobdescriptor` is set to `redis`. When using this feature, you should configure
 Redis with the `allkeys-lru` eviction policy, because the registry does not set an expiration value on keys.
 
-For other caching purposes/features, please see the new dedicated `redis.cache` and `redis.ratelimiter` subsections.
+For other caching purposes/features, please see the new dedicated `redis.cache`, `redis.ratelimiter` and `redis.loadbalancing` subsections.
 
 | Parameter          | Required | Description                                                                                                           |
 |--------------------|----------|-----------------------------------------------------------------------------------------------------------------------|
@@ -1400,6 +1432,40 @@ Please refer to the documentation for the remaining connection parameters [`here
 | Parameter  | Required | Description                                                                            |
 |------------|----------|----------------------------------------------------------------------------------------|
 | `enabled`  | no       | If the Redis rate-limiting functionality is enabled (boolean). Defaults to `false`.    |
+
+### `loadbalancing`
+
+> **Note**: This is an [experimental](https://docs.gitlab.com/policy/development_stages_support/#experiment) feature and should _not_ be used in production.
+
+```yaml
+redis:
+  loadbalancing:
+    enabled: true
+    addr: localhost:16379,localhost:26379
+    username: registry
+    password: asecret
+    db: 0
+    dialtimeout: 10ms
+    readtimeout: 10ms
+    writetimeout: 10ms
+    tls:
+      enabled: true
+      insecure: true
+    pool:
+      size: 10
+      maxlifetime: 1h
+      idletimeout: 300s
+```
+
+The `loadbalancing` subsection allows configuring a Redis connection specifically for database load balancing purposes.
+
+All the Redis connection parameters in the parent section are also available here. The only addition is a new
+`enabled` parameter to toggle the Redis connection without having to comment or remove the whole subsection. Please
+refer to the documentation for the remaining connection parameters [here](#redis).
+
+| Parameter | Required | Description                                                        |
+|-----------|----------|--------------------------------------------------------------------|
+| `enabled` | no       | If the Redis connection is enabled (boolean). Defaults to `false`. |
 
 ## `health`
 
