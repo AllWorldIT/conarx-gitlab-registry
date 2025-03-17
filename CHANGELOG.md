@@ -1,3 +1,20 @@
+## [4.18.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.17.1-gitlab...v4.18.0-gitlab) (2025-03-17)
+
+### ✨ Features ✨
+
+* **api:** log tag delete events ([045dc26](https://gitlab.com/gitlab-org/container-registry/commit/045dc26a15089af4f3af20adab7e97af0fd565b5))
+* **datastore:** support dedicated redis connection for DB load balancing ([98fa3f0](https://gitlab.com/gitlab-org/container-registry/commit/98fa3f0d6e807648ca25d4ba2d0b0f7a818a3812))
+
+### 🐛 Bug Fixes 🐛
+
+* cancel existing multipart uploads when starting new one for the same path for s3_v2 driver ([44a0d98](https://gitlab.com/gitlab-org/container-registry/commit/44a0d98c48b721acc370d302c3d3f34c5080b7d1))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/prometheus/client_golang to v1.21.1 ([801010a](https://gitlab.com/gitlab-org/container-registry/commit/801010a290771310ae3c606cc610b9202b9ebc69))
+* **deps:** update module golang.org/x/crypto to v0.36.0 ([eb38c8c](https://gitlab.com/gitlab-org/container-registry/commit/eb38c8c7df01e6a1eda5077fbe4ecfbbfcbd8328))
+* **deps:** update module golang.org/x/oauth2 to v0.28.0 ([33c43e9](https://gitlab.com/gitlab-org/container-registry/commit/33c43e97b73c9ca322cedd1e3aa9af9d83f04e1d))
+
 ## [4.17.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.17.0-gitlab...v4.17.1-gitlab) (2025-03-06)
 
 ### 🐛 Bug Fixes 🐛
