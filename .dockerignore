@@ -1,0 +1,16 @@
+# Allowlisting prevents us from adding various unwanted local files, such as
+# generated files, developer configurations or IDE-specific files etc.
+
+# Ignore everything
+*
+
+# But not these files...
+!config/*
+!*.go
+!go.sum
+!go.mod
+!README.md
+!LICENSE
+
+# ...even if they are in subdirectories
+!*/
