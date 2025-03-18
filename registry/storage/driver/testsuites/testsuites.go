@@ -35,6 +35,7 @@ import (
 	azure_v1 "github.com/docker/distribution/registry/storage/driver/azure/v1"
 	azure_v2 "github.com/docker/distribution/registry/storage/driver/azure/v2"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
+	s3_common "github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	s3_v2 "github.com/docker/distribution/registry/storage/driver/s3-aws/v2"
 	"github.com/docker/distribution/testutil"
 )
@@ -637,13 +638,24 @@ func (s *DriverSuite) TestReaderWithOffset() {
 // TestContinueStreamAppendLarge tests that a stream write can be appended to without
 // corrupting the data with a large chunk size.
 func (s *DriverSuite) TestContinueStreamAppendLarge() {
-	s.testContinueStreamAppend(s.T(), 10*1024*1024)
+	// NOTE(prozlach): the size of the stream must be larger than minimum chunk
+	// size for all drivers times three. Otherwise we will not exercise all the
+	// relevant code paths.
+	var streamSize int64 = 25 * 1 << 20
+	require.Greater(s.T(), streamSize, s3_common.MinChunkSize*3)
+	// In case of azure_v2, we want to make sure that the chunking loop executes
+	// at least twice:
+	require.Greater(s.T(), streamSize, azure_v2.MaxChunkSize*3*2)
+	// gcs needs to be refactored, we can't import the constant directly yet as
+	// there are going to be import loops
+	require.Greater(s.T(), streamSize, int64(256*1024*3))
+	s.testContinueStreamAppend(s.T(), streamSize)
 }
 
 // TestContinueStreamAppendSmall is the same as TestContinueStreamAppendLarge, but only
 // with a tiny chunk size in order to test corner cases for some cloud storage drivers.
 func (s *DriverSuite) TestContinueStreamAppendSmall() {
-	s.testContinueStreamAppend(s.T(), 32)
+	s.testContinueStreamAppend(s.T(), 1024)
 }
 
 func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
@@ -653,37 +665,38 @@ func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
 
 	blobber := s.blobberFactory.GetBlobber(3 * chunkSize)
 	contentsChunk123 := blobber.GetAllBytes()
+	// Use uneven sizes to trigger more code paths
 	contentsChunk1 := contentsChunk123[0:chunkSize]
-	contentsChunk2 := contentsChunk123[chunkSize : 2*chunkSize]
-	contentsChunk3 := contentsChunk123[2*chunkSize : 3*chunkSize]
+	contentsChunk2 := contentsChunk123[chunkSize : chunkSize+128]
+	contentsChunk3 := contentsChunk123[chunkSize+128 : 3*chunkSize]
 
 	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
 	require.NoError(t, err)
 	nn, err := io.Copy(writer, bytes.NewReader(contentsChunk1))
 	require.NoError(t, err)
-	require.EqualValues(t, chunkSize, nn)
+	require.EqualValues(t, len(contentsChunk1), nn)
 
 	require.NoError(t, writer.Close())
-	require.EqualValues(t, chunkSize, writer.Size())
+	require.EqualValues(t, len(contentsChunk1), writer.Size())
 
 	writer, err = s.StorageDriver.Writer(s.ctx, filename, true)
 	require.NoError(t, err)
-	require.EqualValues(t, chunkSize, writer.Size())
+	require.EqualValues(t, len(contentsChunk1), writer.Size())
 
 	nn, err = io.Copy(writer, bytes.NewReader(contentsChunk2))
 	require.NoError(t, err)
-	require.EqualValues(t, chunkSize, nn)
+	require.EqualValues(t, len(contentsChunk2), nn)
 
 	require.NoError(t, writer.Close())
-	require.EqualValues(t, 2*chunkSize, writer.Size())
+	require.EqualValues(t, len(contentsChunk2)+len(contentsChunk1), writer.Size())
 
 	writer, err = s.StorageDriver.Writer(s.ctx, filename, true)
 	require.NoError(t, err)
-	require.EqualValues(t, 2*chunkSize, writer.Size())
+	require.EqualValues(t, len(contentsChunk2)+len(contentsChunk1), writer.Size())
 
 	nn, err = io.Copy(writer, bytes.NewReader(contentsChunk3))
 	require.NoError(t, err)
-	require.EqualValues(t, chunkSize, nn)
+	require.EqualValues(t, len(contentsChunk3), nn)
 
 	require.NoError(t, writer.Commit())
 	require.NoError(t, writer.Close())

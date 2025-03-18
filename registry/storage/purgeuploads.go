@@ -57,18 +57,18 @@ func (s *syncUploadData) get(u string) (uploadData, bool) {
 // encountered are returned
 func PurgeUploads(ctx context.Context, sdriver driver.StorageDriver, olderThan time.Time, actuallyDelete bool) ([]string, []error) {
 	logrus.Infof("PurgeUploads starting: olderThan=%s, actuallyDelete=%t", olderThan, actuallyDelete)
-	uploadData, errors := getOutstandingUploads(ctx, sdriver)
+	outstandingUploads, errors := getOutstandingUploads(ctx, sdriver)
 	var deleted []string
-	for _, uploadData := range uploadData {
-		if uploadData.startedAt.Before(olderThan) {
+	for _, outstandingUpload := range outstandingUploads {
+		if outstandingUpload.startedAt.Before(olderThan) {
 			var err error
 			logrus.Infof("Upload files in %s have older date (%s) than purge date (%s).  Removing upload directory.",
-				uploadData.containingDir, uploadData.startedAt, olderThan)
+				outstandingUpload.containingDir, outstandingUpload.startedAt, olderThan)
 			if actuallyDelete {
-				err = sdriver.Delete(ctx, uploadData.containingDir)
+				err = sdriver.Delete(ctx, outstandingUpload.containingDir)
 			}
 			if err == nil {
-				deleted = append(deleted, uploadData.containingDir)
+				deleted = append(deleted, outstandingUpload.containingDir)
 			} else {
 				errors = append(errors, err)
 			}
