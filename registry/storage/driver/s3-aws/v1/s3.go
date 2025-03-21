@@ -77,7 +77,7 @@ type driver struct {
 	Encrypt                     bool
 	KeyID                       string
 	MultipartCopyChunkSize      int64
-	MultipartCopyMaxConcurrency int64
+	MultipartCopyMaxConcurrency int
 	MultipartCopyThresholdSize  int64
 	RootDirectory               string
 	StorageClass                string

@@ -166,7 +166,7 @@ type DriverParameters struct {
 	V4Auth                      bool
 	ChunkSize                   int64
 	MultipartCopyChunkSize      int64
-	MultipartCopyMaxConcurrency int64
+	MultipartCopyMaxConcurrency int
 	MultipartCopyThresholdSize  int64
 	RootDirectory               string
 	StorageClass                string
@@ -319,16 +319,16 @@ func ParseParameters(parameters map[string]any) (*DriverParameters, error) {
 	}
 	res.MultipartCopyChunkSize = multipartCopyChunkSize
 
-	multipartCopyMaxConcurrency, err := parse.Int64(
+	multipartCopyMaxConcurrency, err := parse.Int32(
 		parameters,
 		ParamMultipartCopyMaxConcurrency,
-		DefaultMultipartCopyMaxConcurrency, 1, math.MaxInt64,
+		DefaultMultipartCopyMaxConcurrency, 1, math.MaxInt32,
 	)
 	if err != nil {
 		err := fmt.Errorf("converting %q to valid int64: %w", ParamMultipartCopyMaxConcurrency, err)
 		mErr = multierror.Append(mErr, err)
 	}
-	res.MultipartCopyMaxConcurrency = multipartCopyMaxConcurrency
+	res.MultipartCopyMaxConcurrency = int(multipartCopyMaxConcurrency)
 
 	multipartCopyThresholdSize, err := parse.Int64(
 		parameters,
