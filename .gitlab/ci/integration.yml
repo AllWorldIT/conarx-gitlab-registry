@@ -150,12 +150,14 @@ azure:
         - registry/storage/driver/azure/*
         - registry/storage/driver/azure/common/*
         - registry/storage/driver/azure/v2/*
+        - registry/storage/driver/testsuites/*
       allow_failure: false
     - if: $AZURE_DRIVER_VERSION == "azure"
       changes:
         - registry/storage/driver/azure/*
         - registry/storage/driver/azure/common/*
         - registry/storage/driver/azure/v1/*
+        - registry/storage/driver/testsuites/*
       allow_failure: true
   variables:
     <<: *storage-driver-variables
