@@ -41,6 +41,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"gitlab.com/gitlab-org/labkit/fips"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -76,7 +77,7 @@ type driver struct {
 	Encrypt                     bool
 	KeyID                       string
 	MultipartCopyChunkSize      int64
-	MultipartCopyMaxConcurrency int64
+	MultipartCopyMaxConcurrency int
 	MultipartCopyThresholdSize  int64
 	RootDirectory               string
 	StorageClass                string
@@ -560,49 +561,51 @@ func (d *driver) copy(ctx context.Context, sourcePath, destPath string) error {
 
 	numParts := (fileInfo.Size() + d.MultipartCopyChunkSize - 1) / d.MultipartCopyChunkSize
 	completedParts := make([]*s3.CompletedPart, numParts)
-	errChan := make(chan error, numParts)
+
+	g, gctx := errgroup.WithContext(ctx)
 
 	// Reduce the client/server exposure to long lived connections regardless of
 	// how many requests per second are allowed.
-	limiter := make(chan struct{}, d.MultipartCopyMaxConcurrency)
+	g.SetLimit(d.MultipartCopyMaxConcurrency)
 
 	for i := range completedParts {
 		i := int64(i) // nolint: gosec // index will always be a non-negative number
-		go func() {
-			limiter <- struct{}{}
-
-			firstByte := i * d.MultipartCopyChunkSize
-			lastByte := firstByte + d.MultipartCopyChunkSize - 1
-			if lastByte >= fileInfo.Size() {
-				lastByte = fileInfo.Size() - 1
-			}
-
-			uploadResp, err := d.S3.UploadPartCopyWithContext(
-				ctx,
-				&s3.UploadPartCopyInput{
-					Bucket:          aws.String(d.Bucket),
-					CopySource:      aws.String(d.Bucket + "/" + d.s3Path(sourcePath)),
-					Key:             aws.String(d.s3Path(destPath)),
-					PartNumber:      aws.Int64(i + 1),
-					UploadId:        createResp.UploadId,
-					CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", firstByte, lastByte)),
-				})
-			if err == nil {
-				completedParts[i] = &s3.CompletedPart{
-					ETag:       uploadResp.CopyPartResult.ETag,
-					PartNumber: aws.Int64(i + 1),
+		g.Go(func() error {
+			// Check if any other goroutine has failed
+			select {
+			case <-gctx.Done():
+				return ctx.Err()
+			default:
+				firstByte := i * d.MultipartCopyChunkSize
+				lastByte := firstByte + d.MultipartCopyChunkSize - 1
+				if lastByte >= fileInfo.Size() {
+					lastByte = fileInfo.Size() - 1
 				}
+
+				uploadResp, err := d.S3.UploadPartCopyWithContext(
+					gctx,
+					&s3.UploadPartCopyInput{
+						Bucket:          aws.String(d.Bucket),
+						CopySource:      aws.String(d.Bucket + "/" + d.s3Path(sourcePath)),
+						Key:             aws.String(d.s3Path(destPath)),
+						PartNumber:      aws.Int64(i + 1),
+						UploadId:        createResp.UploadId,
+						CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", firstByte, lastByte)),
+					})
+				if err == nil {
+					completedParts[i] = &s3.CompletedPart{
+						ETag:       uploadResp.CopyPartResult.ETag,
+						PartNumber: aws.Int64(i + 1),
+					}
+					return nil
+				}
+				return fmt.Errorf("multipart upload %d failed: %w", i, err)
 			}
-			errChan <- err
-			<-limiter
-		}()
+		})
 	}
 
-	for range completedParts {
-		err := <-errChan
-		if err != nil {
-			return err
-		}
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	_, err = d.S3.CompleteMultipartUploadWithContext(
