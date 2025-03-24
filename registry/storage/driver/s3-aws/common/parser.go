@@ -300,7 +300,14 @@ func ParseParameters(parameters map[string]any) (*DriverParameters, error) {
 	chunkSize, err := parse.Int64(
 		parameters,
 		ParamChunkSize,
-		DefaultChunkSize, MinChunkSize, MaxChunkSize,
+		// NOTE(prozlach): We are using two buffers, each one can hold up to
+		// chunksize bytes, and in some circumstances their contents may be
+		// concatenated and committed as a single part. For example:
+		//
+		// https://gitlab.com/gitlab-org/container-registry/-/blob/0604f5b44093b9647dcbf5f4f7a0d6ab824ff0a4/registry/storage/driver/s3-aws/v2/s3.go?page=2#L1447-L1450
+		//
+		// We need to halve the limit in order to not to exceed MaxChunkSize.
+		DefaultChunkSize, MinChunkSize, MaxChunkSize/2,
 	)
 	if err != nil {
 		err := fmt.Errorf("converting %q to int64: %w", ParamChunkSize, err)
