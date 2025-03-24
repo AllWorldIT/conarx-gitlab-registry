@@ -37,6 +37,7 @@ import (
 
 	"github.com/docker/distribution/context"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
+	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	v1 "github.com/docker/distribution/registry/storage/driver/s3-aws/v1"
 	v2 "github.com/docker/distribution/registry/storage/driver/s3-aws/v2"
@@ -687,6 +688,48 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 
 	_, err = d.GetContent(ctx, sourcePath)
 	require.ErrorAs(t, err, new(storagedriver.PathNotFoundError))
+}
+
+// TestFlushObjectTwiceChunkSize tests a corner case where both pending and
+// ready part buffers are full and `Close()`/`Commit()` calls are made. It is
+// meant as a preventive measure, just in case we change the code later one and
+// get the inequalities wrong.
+func TestFlushObjectTwiceChunkSize(t *testing.T) {
+	if skipMsg := skipCheck(); skipMsg != "" {
+		t.Skip(skipMsg)
+	}
+
+	rootDir := t.TempDir()
+	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard)
+	require.NoError(t, err)
+	d, err := newDriverFn(parsedParams)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	destPath := "/" + dtestutil.RandomFilename(64)
+	defer dtestutil.EnsurePathDeleted(ctx, t, d, destPath)
+	t.Logf("destination blob path used for testing: %s", destPath)
+	destContents := rngtestutil.RandomBlob(t, 2*2*parsedParams.ChunkSize)
+
+	writer, err := d.Writer(ctx, destPath, false)
+	require.NoError(t, err)
+	_, err = writer.Write(destContents[:2*parsedParams.ChunkSize])
+	require.NoError(t, err)
+	err = writer.Close()
+	require.NoError(t, err, "writer.Close: unexpected error")
+
+	writer, err = d.Writer(ctx, destPath, true)
+	require.NoError(t, err)
+	_, err = writer.Write(destContents[2*parsedParams.ChunkSize:])
+	require.NoError(t, err)
+	err = writer.Commit()
+	require.NoError(t, err)
+	err = writer.Close()
+	require.NoError(t, err)
+
+	received, err := d.GetContent(ctx, destPath)
+	require.NoError(t, err, "unexpected error getting content")
+	require.Equal(t, destContents, received, "content differs")
 }
 
 type mockDeleteObjectsError struct {

@@ -1347,7 +1347,7 @@ func (w *writer) Close() error {
 		return nil
 	}
 
-	err := w.flushPart()
+	err := w.flushEverything()
 	if err != nil {
 		return fmt.Errorf("fluxing buffers while closing writer: %w", err)
 	}
@@ -1386,7 +1386,7 @@ func (w *writer) Commit() error {
 	case w.canceled:
 		return storagedriver.ErrAlreadyCanceled
 	}
-	err := w.flushPart()
+	err := w.flushEverything()
 	if err != nil {
 		return err
 	}
@@ -1428,16 +1428,23 @@ func (w *writer) Commit() error {
 	return nil
 }
 
-// flushPart flushes buffers to write a part to S3.
-// Only called by Write (with both buffers full) and Close/Commit (always)
+// flushPart flushes `readyPart` buffer to S3. Only called in Write() method
 func (w *writer) flushPart() error {
+	return w.flushImpl(false)
+}
+
+// flushEverything flushes both `readyPart` and `pendingPart` buffers. Called
+// on Close() and Commit().
+func (w *writer) flushEverything() error {
+	return w.flushImpl(true)
+}
+
+func (w *writer) flushImpl(emptyAllBuffers bool) error {
 	if len(w.readyPart) == 0 && len(w.pendingPart) == 0 {
 		// nothing to write
 		return nil
 	}
-	if int64(len(w.pendingPart)) < w.driver.ChunkSize {
-		// closing with a small pending part
-		// combine ready and pending to avoid writing a small part
+	if emptyAllBuffers {
 		w.readyPart = append(w.readyPart, w.pendingPart...)
 		w.pendingPart = nil
 	}
