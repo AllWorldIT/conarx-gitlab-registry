@@ -633,12 +633,20 @@ ListLoop:
 	for {
 		// list all the objects
 		resp, err := d.S3.ListObjectsV2WithContext(ctx, listObjectsV2Input)
+		// NOTE(prozlach): According to AWS S3 REST API specs, ListObjectsV2*
+		// may return only a NoSuchBucket error, inexistant paths would be
+		// handled by `len(resp.Contents) == 0` branch below.
+		//
+		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html#API_ListObjectsV2_Errors
+		if err != nil {
+			return parseError(path, err)
+		}
 
 		// resp.Contents can only be empty on the first call if there were no
 		// more results to return after the first call, resp.IsTruncated would
 		// have been false and the loop would be exited without recalling
 		// ListObjects
-		if err != nil || len(resp.Contents) == 0 {
+		if len(resp.Contents) == 0 {
 			return storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
 		}
 
