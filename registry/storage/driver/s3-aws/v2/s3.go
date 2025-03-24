@@ -435,6 +435,7 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 // List returns a list of the objects that are direct descendants of the given path.
 func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 	path := opath
+	// NOTE(prozlach): This prevents issues with partial matching.
 	if path != "/" && path[len(path)-1] != '/' {
 		path += "/"
 	}

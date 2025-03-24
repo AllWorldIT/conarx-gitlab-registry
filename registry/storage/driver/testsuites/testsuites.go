@@ -257,6 +257,26 @@ func (s *DriverSuite) deletePath(driver storagedriver.StorageDriver, targetPath 
 	dtestutil.EnsurePathDeleted(s.ctx, s.T(), driver, targetPath)
 }
 
+func (s *DriverSuite) skipIfWalkParallelIsNotSupported() {
+	d := s.StorageDriver.Name()
+	switch d {
+	case "filesystem", azure_v1.DriverName, azure_v2.DriverName:
+		s.T().Skipf("%s driver does not support true WalkParallel", d)
+	case "gcs":
+		parallelWalk := os.Getenv("GCS_PARALLEL_WALK")
+		var parallelWalkBool bool
+		var err error
+		if parallelWalk != "" {
+			parallelWalkBool, err = strconv.ParseBool(parallelWalk)
+			require.NoError(s.T(), err)
+		}
+
+		if !parallelWalkBool || parallelWalk == "" {
+			s.T().Skipf("%s driver is not configured with parallelwalk", d)
+		}
+	}
+}
+
 // TestInvalidPaths checks that various invalid file paths are rejected by the
 // storage driver.
 func (s *DriverSuite) TestInvalidPaths() {
@@ -773,6 +793,191 @@ func (s *DriverSuite) testList(t *testing.T, numFiles int) {
 	// 1. Ensure that all paths are absolute.
 	// 2. Ensure that listings only include direct children.
 	// 3. Ensure that we only respond to directory listings that end with a slash (maybe?).
+}
+
+// TestListOverlappingPaths checks that listing a directory only returns the paths
+// directly under that directory, not paths with similar prefixes elsewhere.
+func (s *DriverSuite) TestListOverlappingPaths() {
+	rootDirectory := "/" + dtestutil.RandomFilenameRange(8, 8)
+	defer s.deletePath(s.StorageDriver, rootDirectory)
+	s.T().Logf("root directory path used for testing: %s", rootDirectory)
+
+	// Create the structure
+	// /rootDirectory/foo/bar/baz1/baza
+	// /rootDirectory/foo/bar/baz2/bazb
+	// /rootDirectory/foo/bar/baz3
+	// /rootDirectory/foo/barman/baz3/baza
+	// /rootDirectory/foo/barman/baz4/bazb
+	// /rootDirectory/foo/barman/baz5
+
+	basePaths := []string{
+		filepath.Join(rootDirectory, "foo/bar/baz1/baza"),
+		filepath.Join(rootDirectory, "foo/bar/baz2/bazb"),
+		filepath.Join(rootDirectory, "foo/bar/baz3"),
+		filepath.Join(rootDirectory, "foo/barman/baz3/baza"),
+		filepath.Join(rootDirectory, "foo/barman/baz4/bazb"),
+		filepath.Join(rootDirectory, "foo/barman/baz5"),
+	}
+
+	// Create files at each path
+	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
+	for _, basePath := range basePaths {
+		err := s.StorageDriver.PutContent(s.ctx, basePath, contents)
+		require.NoError(s.T(), err)
+	}
+
+	// Test listing /rootDirectory/foo/bar
+	barPath := filepath.Join(rootDirectory, "foo/bar")
+	keys, err := s.StorageDriver.List(s.ctx, barPath)
+	require.NoError(s.T(), err)
+
+	// Expected results for /rootDirectory/foo/bar
+	expectedBarResults := []string{
+		filepath.Join(rootDirectory, "foo/bar/baz1"),
+		filepath.Join(rootDirectory, "foo/bar/baz2"),
+		filepath.Join(rootDirectory, "foo/bar/baz3"),
+	}
+
+	// Sort both slices for comparison
+	sort.Strings(keys)
+	sort.Strings(expectedBarResults)
+
+	require.Equal(s.T(), expectedBarResults, keys, "Listing %s returned unexpected results", barPath)
+
+	// Test listing /rootDirectory/foo
+	fooPath := filepath.Join(rootDirectory, "foo")
+	keys, err = s.StorageDriver.List(s.ctx, fooPath)
+	require.NoError(s.T(), err)
+
+	// Expected results for /rootDirectory/foo
+	expectedFooResults := []string{
+		filepath.Join(rootDirectory, "foo/bar"),
+		filepath.Join(rootDirectory, "foo/barman"),
+	}
+
+	// Sort both slices for comparison
+	sort.Strings(keys)
+	sort.Strings(expectedFooResults)
+
+	require.Equal(s.T(), expectedFooResults, keys, "Listing %s returned unexpected results", fooPath)
+}
+
+// TestWalkOverlappingPaths checks that both Walk and WalkParallel functions
+// correctly handle directories with overlapping path prefixes.
+func (s *DriverSuite) TestWalkOverlappingPaths() {
+	rootDirectory := "/" + dtestutil.RandomFilenameRange(8, 8)
+	defer s.deletePath(s.StorageDriver, rootDirectory)
+	s.T().Logf("root directory path used for testing: %s", rootDirectory)
+
+	// Create the structure
+	// /rootDirectory/foo/bar/baz1/baza
+	// /rootDirectory/foo/bar/baz2/bazb
+	// /rootDirectory/foo/bar/baz3
+	// /rootDirectory/foo/barman/baz3/baza
+	// /rootDirectory/foo/barman/baz4/bazb
+	// /rootDirectory/foo/barman/baz5
+
+	basePaths := []string{
+		filepath.Join(rootDirectory, "foo/bar/baz1/baza"),
+		filepath.Join(rootDirectory, "foo/bar/baz2/bazb"),
+		filepath.Join(rootDirectory, "foo/bar/baz3"),
+		filepath.Join(rootDirectory, "foo/barman/baz3/baza"),
+		filepath.Join(rootDirectory, "foo/barman/baz4/bazb"),
+		filepath.Join(rootDirectory, "foo/barman/baz5"),
+	}
+
+	// Create files at each path
+	contents := s.blobberFactory.GetBlobber(32).GetAllBytes()
+	for _, basePath := range basePaths {
+		err := s.StorageDriver.PutContent(s.ctx, basePath, contents)
+		require.NoError(s.T(), err)
+	}
+
+	// Helper function to verify walking works correctly for a specific path
+	verifyWalk := func(t *testing.T, startPath string, expectedFiles, expectedDirs []string, walkFn func(context.Context, string, storagedriver.WalkFn) error) {
+		var mu sync.Mutex
+		var actualFiles []string
+		var actualDirs []string
+
+		collectFn := func(fileInfo storagedriver.FileInfo) error {
+			mu.Lock()
+			defer mu.Unlock()
+
+			if fileInfo.IsDir() {
+				actualDirs = append(actualDirs, fileInfo.Path())
+			} else {
+				actualFiles = append(actualFiles, fileInfo.Path())
+			}
+			return nil
+		}
+
+		err := walkFn(s.ctx, startPath, collectFn)
+		require.NoError(t, err)
+
+		// Sort the actual results before comparison
+		sort.Strings(actualFiles)
+		sort.Strings(actualDirs)
+
+		require.Equal(t, expectedFiles, actualFiles, "Unexpected files for path %s", startPath)
+		require.Equal(t, expectedDirs, actualDirs, "Unexpected directories for path %s", startPath)
+	}
+
+	// Expected files and directories when walking from foo/bar
+	barExpectedFiles := []string{
+		filepath.Join(rootDirectory, "foo/bar/baz1/baza"),
+		filepath.Join(rootDirectory, "foo/bar/baz2/bazb"),
+		filepath.Join(rootDirectory, "foo/bar/baz3"),
+	}
+	sort.Strings(barExpectedFiles)
+
+	barExpectedDirs := []string{
+		filepath.Join(rootDirectory, "foo/bar/baz1"),
+		filepath.Join(rootDirectory, "foo/bar/baz2"),
+	}
+	sort.Strings(barExpectedDirs)
+
+	// Expected files and directories when walking from foo
+	fooExpectedFiles := []string{
+		filepath.Join(rootDirectory, "foo/barman/baz3/baza"),
+		filepath.Join(rootDirectory, "foo/barman/baz4/bazb"),
+		filepath.Join(rootDirectory, "foo/barman/baz5"),
+	}
+	fooExpectedFiles = append(fooExpectedFiles, barExpectedFiles...)
+	sort.Strings(fooExpectedFiles)
+
+	fooExpectedDirs := []string{
+		filepath.Join(rootDirectory, "foo/bar"),
+		filepath.Join(rootDirectory, "foo/barman"),
+		filepath.Join(rootDirectory, "foo/barman/baz3"),
+		filepath.Join(rootDirectory, "foo/barman/baz4"),
+	}
+	fooExpectedDirs = append(fooExpectedDirs, barExpectedDirs...)
+	sort.Strings(fooExpectedDirs)
+
+	// Run subtests for both Walk and WalkParallel on different paths
+	s.Run("Walk_BarPath", func() {
+		barPath := filepath.Join(rootDirectory, "foo/bar")
+		verifyWalk(s.T(), barPath, barExpectedFiles, barExpectedDirs, s.StorageDriver.Walk)
+	})
+
+	s.Run("WalkParallel_BarPath", func() {
+		s.skipIfWalkParallelIsNotSupported()
+
+		barPath := filepath.Join(rootDirectory, "foo/bar")
+		verifyWalk(s.T(), barPath, barExpectedFiles, barExpectedDirs, s.StorageDriver.WalkParallel)
+	})
+
+	s.Run("Walk_FooPath", func() {
+		fooPath := filepath.Join(rootDirectory, "foo")
+		verifyWalk(s.T(), fooPath, fooExpectedFiles, fooExpectedDirs, s.StorageDriver.Walk)
+	})
+
+	s.Run("WalkParallel_FooPath", func() {
+		s.skipIfWalkParallelIsNotSupported()
+
+		fooPath := filepath.Join(rootDirectory, "foo")
+		verifyWalk(s.T(), fooPath, fooExpectedFiles, fooExpectedDirs, s.StorageDriver.WalkParallel)
+	})
 }
 
 // TestListUnprefixed checks if listing root directory with no prefix
@@ -1974,6 +2179,8 @@ func (s *DriverSuite) TestWalk() {
 	}
 
 	s.Run("PararellWalk", func() {
+		s.skipIfWalkParallelIsNotSupported()
+
 		fChan := make(chan string)
 		dChan := make(chan string)
 
@@ -2052,6 +2259,8 @@ func (s *DriverSuite) TestWalkError() {
 	errorFile := wantedFiles[0]
 
 	s.Run("PararellWalk", func() {
+		s.skipIfWalkParallelIsNotSupported()
+
 		err := s.StorageDriver.WalkParallel(s.ctx, rootDirectory, func(fInfo storagedriver.FileInfo) error {
 			if fInfo.Path() == errorFile {
 				return innerErr
@@ -2181,6 +2390,8 @@ func (s *DriverSuite) TestWalkSkipDir() {
 	})
 
 	s.Run("ParallelWalk", func() {
+		s.skipIfWalkParallelIsNotSupported()
+
 		var visitedPaths sync.Map
 		err := s.StorageDriver.WalkParallel(s.ctx, rootDirectory, createWalkFunc(&visitedPaths))
 		require.NoError(s.T(), err)
@@ -2192,6 +2403,8 @@ func (s *DriverSuite) TestWalkSkipDir() {
 // found.
 func (s *DriverSuite) TestWalkErrorPathNotFound() {
 	s.Run("PararellWalk", func() {
+		s.skipIfWalkParallelIsNotSupported()
+
 		err := s.StorageDriver.WalkParallel(s.ctx, "/maryna/boryna", func(_ storagedriver.FileInfo) error {
 			return nil
 		})
@@ -2214,23 +2427,7 @@ func (s *DriverSuite) TestWalkErrorPathNotFound() {
 
 // TestWalkParallelStopsProcessingOnError ensures that walk stops processing when an error is encountered.
 func (s *DriverSuite) TestWalkParallelStopsProcessingOnError() {
-	d := s.StorageDriver.Name()
-	switch d {
-	case "filesystem", azure_v1.DriverName, azure_v2.DriverName:
-		s.T().Skipf("%s driver does not support true WalkParallel", d)
-	case "gcs":
-		parallelWalk := os.Getenv("GCS_PARALLEL_WALK")
-		var parallelWalkBool bool
-		var err error
-		if parallelWalk != "" {
-			parallelWalkBool, err = strconv.ParseBool(parallelWalk)
-			require.NoError(s.T(), err)
-		}
-
-		if !parallelWalkBool || parallelWalk == "" {
-			s.T().Skipf("%s driver is not configured with parallelwalk", d)
-		}
-	}
+	s.skipIfWalkParallelIsNotSupported()
 
 	rootDirectory := "/" + dtestutil.RandomFilenameRange(8, 8)
 	defer s.deletePath(s.StorageDriver, rootDirectory)
