@@ -1,3 +1,19 @@
+## [4.19.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.18.0-gitlab...v4.19.0-gitlab) (2025-03-24)
+
+
+### ✨ Features ✨
+
+* **datastore:** add index on manifests subject_id field ([e1a5821](https://gitlab.com/gitlab-org/container-registry/commit/e1a58210bdeba2d289d99b5db2fd5c5aba0a5d06))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/redis/go-redis/v9 to v9.7.3 ([58d51a8](https://gitlab.com/gitlab-org/container-registry/commit/58d51a83c84d0ed1b3526052fb566d0cff254860))
+* **deps:** update module github.com/shopify/toxiproxy/v2 to v2.12.0 ([9d5716e](https://gitlab.com/gitlab-org/container-registry/commit/9d5716e4e05670484eb144a2bc77873501596bec))
+* **deps:** update module github.com/spf13/viper to v1.20.0 ([840a550](https://gitlab.com/gitlab-org/container-registry/commit/840a5508e653d1ecfd46c407c9afba002804827a))
+* **deps:** update module google.golang.org/api to v0.226.0 ([9be95f3](https://gitlab.com/gitlab-org/container-registry/commit/9be95f3c0e593bfa90cf6cef6dd584c3dc5f6e4d))
+* update Go version to latest 1.23 minor release ([2cde241](https://gitlab.com/gitlab-org/container-registry/commit/2cde241abd417cac9ea96d30e3c6dc0c870ece28))
+
 ## [4.18.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.17.1-gitlab...v4.18.0-gitlab) (2025-03-17)
 
 ### ✨ Features ✨
