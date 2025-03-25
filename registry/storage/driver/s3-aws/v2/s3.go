@@ -1278,25 +1278,78 @@ func (w *writer) Write(p []byte) (int, error) {
 				return 0, err
 			}
 		} else {
-			// Otherwise we can use the old file as the new first part
-			copyPartResp, err := w.driver.S3.UploadPartCopyWithContext(
-				ctx,
-				&s3.UploadPartCopyInput{
-					Bucket:     aws.String(w.driver.Bucket),
-					CopySource: aws.String(w.driver.Bucket + "/" + w.key),
-					Key:        aws.String(w.key),
-					PartNumber: aws.Int64(1),
-					UploadId:   resp.UploadId,
-				})
-			if err != nil {
-				return 0, err
-			}
-			w.parts = []*s3.Part{
-				{
-					ETag:       copyPartResp.CopyPartResult.ETag,
-					PartNumber: aws.Int64(1),
-					Size:       aws.Int64(w.size),
-				},
+			// nolint: revive // max-control-nesting
+			if w.size > common.MaxChunkSize {
+				// Calculate how many parts we need
+				partCount := w.size/common.MaxChunkSize + 1
+				// NOTE(prozlach): We need to prevent a situatin when the last
+				// part is maller than the minimum part size, so we even things
+				// out:
+				partSize := w.size / partCount
+				w.parts = make([]*s3.Part, partCount)
+
+				startByte := int64(0)
+				endByte := partSize
+
+				// Copy each part individually
+				for i := int64(0); i < partCount; i++ {
+					// Part numbers are positive integers in the range 1 <= n <= 10000
+					partNumber := i + 1
+
+					// Specify the byte range to copy. `CopySourceRange` factors
+					// in both starting and ending byte.
+					byteRange := fmt.Sprintf("bytes=%d-%d", startByte, endByte)
+
+					copyPartResp, err := w.driver.S3.UploadPartCopyWithContext(
+						ctx,
+						&s3.UploadPartCopyInput{
+							Bucket:          aws.String(w.driver.Bucket),
+							CopySource:      aws.String(w.driver.Bucket + "/" + w.key),
+							CopySourceRange: aws.String(byteRange),
+							Key:             aws.String(w.key),
+							PartNumber:      aws.Int64(partNumber),
+							UploadId:        resp.UploadId,
+						})
+					if err != nil {
+						return 0, fmt.Errorf("re-uploading chunk as multipart upload part: %w", err)
+					}
+
+					// Add this part to our list
+					w.parts[i] = &s3.Part{
+						ETag:       copyPartResp.CopyPartResult.ETag,
+						PartNumber: aws.Int64(partNumber),
+						// `CopySourceRange` factors in both starting and
+						// ending byte, hence `+ 1`.
+						Size: aws.Int64(endByte - startByte + 1),
+					}
+
+					startByte = endByte + 1
+					endByte += startByte + partSize
+					if endByte > w.size-1 {
+						endByte = w.size - 1
+					}
+				}
+			} else {
+				// For objects smaller than maxPartSize, use the original code
+				copyPartResp, err := w.driver.S3.UploadPartCopyWithContext(
+					ctx,
+					&s3.UploadPartCopyInput{
+						Bucket:     aws.String(w.driver.Bucket),
+						CopySource: aws.String(w.driver.Bucket + "/" + w.key),
+						Key:        aws.String(w.key),
+						PartNumber: aws.Int64(1),
+						UploadId:   resp.UploadId,
+					})
+				if err != nil {
+					return 0, fmt.Errorf("re-uploading object as first part of the new multipart upload: %w", err)
+				}
+				w.parts = []*s3.Part{
+					{
+						ETag:       copyPartResp.CopyPartResult.ETag,
+						PartNumber: aws.Int64(1),
+						Size:       aws.Int64(w.size),
+					},
+				}
 			}
 		}
 	}
