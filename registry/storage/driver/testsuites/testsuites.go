@@ -84,6 +84,7 @@ type DriverSuite struct {
 	ctx                   context.Context
 
 	blobberFactory *testutil.BlobberFactory
+	seed           [32]byte
 }
 
 // SetupSuite sets up the test suite for tests.
@@ -107,9 +108,9 @@ func (s *DriverSuite) setupSuiteGeneric(t testing.TB) {
 		s.StorageDriverRootless = driver
 	}
 
-	seed := testutil.SeedFromUnixNano(time.Now().UnixNano())
-	t.Logf("using rng seed %v for blobbers", seed)
-	s.blobberFactory = testutil.NewBlobberFactory(rngCacheSize, seed)
+	s.seed = testutil.SeedFromUnixNano(time.Now().UnixNano())
+	t.Logf("using rng seed %v for blobbers", s.seed)
+	s.blobberFactory = testutil.NewBlobberFactory(rngCacheSize, s.seed)
 }
 
 // TearDownSuite tears down the test suite when testing.
@@ -704,6 +705,141 @@ func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
 	received, err := s.StorageDriver.GetContent(s.ctx, filename)
 	require.NoError(t, err)
 	require.Equal(t, blobber.GetAllBytes(), received)
+}
+
+func (s *DriverSuite) TestMaxUploadSize() {
+	if s.StorageDriver.Name() == "inmemory" {
+		s.T().Skip("In-memory driver is known to have OOM issues with large uploads.")
+	}
+	if s.StorageDriver.Name() == "s3aws" {
+		s.T().Skip("S3 v1 driver has chunk size limitations which aren't planned to be fixed")
+	}
+
+	filename := dtestutil.RandomPath(1, 32)
+	defer s.deletePath(s.StorageDriver, firstPart(filename))
+	s.T().Logf("blob path used for testing: %s", filename)
+
+	rng := mrand.NewChaCha8(s.seed)
+
+	bigChunkSize := int64(3 * 1 << 30)
+	smallChunkSize := s3_common.MinChunkSize - 128 // has to be just a little bit smaller than the minimum
+	blobMaxSize := int64(10 * 1 << 30)
+	// Docker blob limits is 10GiB, round it up to simplify logic
+	blobSize := blobMaxSize - (blobMaxSize % (bigChunkSize + smallChunkSize))
+	buf := make([]byte, 32*1<<20)
+	doAppend := false
+	totalWritten := int64(0)
+
+	// We alternate between small and big uploads in order to trigger/test a
+	// specific bug in multipart upload.
+	//
+	// The code was trying to re-upload objects as a single s3 multi-part
+	// upload part irrespective of their size which in certain conditions led
+	// to violating aws max multipart upload chunk size limit. The fix is
+	// simply split the files bigger than 5GiB into 5GiB chunks.
+	//
+	// In order to trigger the bug one could simply:
+	// * upload layer/layers that in total are just below 5 GiB in size
+	// * upload a small layer, < 5MiB in size
+	// * upload a layer that will bring the total size of all layers above 5GiB.
+	for {
+		bigChunk := &io.LimitedReader{
+			R: rng,
+			N: bigChunkSize,
+		}
+		writer, err := s.StorageDriver.Writer(s.ctx, filename, doAppend)
+		require.NoError(s.T(), err)
+		nn, err := io.CopyBuffer(writer, bigChunk, buf)
+		require.NoError(s.T(), err)
+		require.EqualValues(s.T(), bigChunkSize, nn)
+		totalWritten += nn
+		require.NoError(s.T(), writer.Close())
+		require.EqualValues(s.T(), totalWritten, writer.Size())
+
+		if !doAppend {
+			doAppend = true
+		}
+
+		smallChunk := &io.LimitedReader{
+			R: rng,
+			N: smallChunkSize,
+		}
+		writer, err = s.StorageDriver.Writer(s.ctx, filename, doAppend)
+		require.NoError(s.T(), err)
+		nn, err = io.Copy(writer, smallChunk)
+		require.NoError(s.T(), err)
+		require.EqualValues(s.T(), smallChunkSize, nn)
+		totalWritten += nn
+		if totalWritten >= blobSize {
+			// This is the last write, commit the upload:
+			require.NoError(s.T(), writer.Commit())
+		}
+		require.NoError(s.T(), writer.Close())
+		require.EqualValues(s.T(), totalWritten, writer.Size())
+
+		if totalWritten >= blobSize {
+			break
+		}
+	}
+
+	// Verify the uploaded file:
+
+	reader, err := s.StorageDriver.Reader(s.ctx, filename, 0)
+	require.NoError(s.T(), err)
+	rng.Seed(s.seed) // reset the RNG
+
+	readBytesBuffer := make([]byte, 32<<20)
+	expectedBytesBuffer := make([]byte, 32<<20)
+
+	// NOTE(prozlach): `assert.*` calls do a lot in the background, and this is
+	// a tight loop that is executed many times, hence we optimize.
+	for chunkNumber, currentOffset := 0, int64(0); currentOffset < totalWritten; {
+		readBytesRemaining := totalWritten - currentOffset
+
+		rbc, err := reader.Read(readBytesBuffer)
+		readBytesCount := int64(rbc) // nolint: gosec // The Read() method in Go's standard library should always return a non-negative number for n
+
+		if readBytesCount > readBytesRemaining {
+			require.LessOrEqualf(s.T(), readBytesCount, readBytesRemaining, "the object stored in the backend is shorter than expected")
+		}
+
+		limitReader := &io.LimitedReader{
+			R: rng,
+			N: readBytesCount,
+		}
+		_, _ = limitReader.Read(expectedBytesBuffer)
+
+		// nolint: revive // max-control-nesting
+		if readBytesCount > 0 && !bytes.Equal(readBytesBuffer[:readBytesCount], expectedBytesBuffer[:readBytesCount]) {
+			// We can't simply display two 32MiB byte slices side by side and
+			// expect human to be able to parse it, hence we find the first
+			// differing 512 bytes chunk by re-using the code that testify
+			// already provides:
+			chunkSize := int64(512)
+			for i := int64(0); i < (readBytesCount+chunkSize-1)/chunkSize; i++ {
+				startByte := i * chunkSize
+				endByte := startByte + chunkSize
+				if endByte > readBytesCount {
+					endByte = readBytesCount
+				}
+				require.Equalf(
+					s.T(), expectedBytesBuffer[startByte:endByte], readBytesBuffer[startByte:endByte],
+					"difference found. Chunk number %d, offset: %d ", chunkNumber, currentOffset+startByte,
+				)
+			}
+		}
+
+		currentOffset += readBytesCount
+		chunkNumber++
+
+		if err != nil {
+			if err == io.EOF {
+				require.EqualValues(s.T(), currentOffset, totalWritten, "the object stored in the backend is shorter than expected")
+			} else {
+				require.NoError(s.T(), err, "reading data back failed")
+			}
+		}
+	}
 }
 
 // TestReadNonexistentStream tests that reading a stream for a nonexistent path
