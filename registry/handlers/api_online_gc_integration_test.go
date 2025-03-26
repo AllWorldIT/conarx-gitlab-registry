@@ -4,7 +4,7 @@ package handlers_test
 
 import (
 	"bytes"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"testing"
 	"time"
@@ -160,7 +160,7 @@ func TestManifestsAPI_DeleteList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list
 	refs := ml.References()
-	ref := refs[rand.Intn(len(refs))]
+	ref := refs[rand.IntN(len(refs))]
 	mt, tx := findAndLockGCManifestTask(t, env, repoName, ref.Digest)
 	defer tx.Rollback()
 
@@ -204,7 +204,7 @@ func TestManifestsAPI_DeleteList_OnlineGC_TimeoutOnProlongedReview(t *testing.T)
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list
 	refs := ml.References()
-	ref := refs[rand.Intn(len(refs))]
+	ref := refs[rand.IntN(len(refs))]
 	_, tx := findAndLockGCManifestTask(t, env, repoName, ref.Digest)
 	defer tx.Rollback()
 
@@ -387,7 +387,7 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview(t *testi
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list
 	dgsts := []digest.Digest{dgst1, dgst2}
-	dgst := dgsts[rand.Intn(len(dgsts))]
+	dgst := dgsts[rand.IntN(len(dgsts))]
 	mt, tx := findAndLockGCManifestTask(t, env, repoName, dgst)
 	defer tx.Rollback()
 
@@ -467,7 +467,7 @@ func TestManifestsAPI_CreateList_OnlineGC_TimeoutOnProlongedReview(t *testing.T)
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list (indefinitely)
 	dgsts := []digest.Digest{dgst1, dgst2}
-	dgst := dgsts[rand.Intn(len(dgsts))]
+	dgst := dgsts[rand.IntN(len(dgsts))]
 	_, tx := findAndLockGCManifestTask(t, env, repoName, dgst)
 	defer tx.Rollback()
 
@@ -539,7 +539,7 @@ func TestManifestsAPI_CreateList_OnlineGC_BlocksAndResumesAfterGCReview_Dangling
 
 	// simulate GC process by locking the review record of one of the manifests referenced in the list
 	dgsts := []digest.Digest{dgst1, dgst2}
-	dgst := dgsts[rand.Intn(len(dgsts))]
+	dgst := dgsts[rand.IntN(len(dgsts))]
 	mt, tx := findAndLockGCManifestTask(t, env, repoName, dgst)
 	defer tx.Rollback()
 

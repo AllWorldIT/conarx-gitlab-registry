@@ -784,13 +784,13 @@ func (lb *DBLoadBalancer) Primary() *DB {
 // Replica returns a round-robin elected replica database handler. If no replicas are configured, then the primary
 // database handler is returned.
 func (lb *DBLoadBalancer) Replica(ctx context.Context) *DB {
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
 	if len(lb.replicas) == 0 {
 		lb.logger(ctx).Info("no replicas available, falling back to primary")
 		return lb.primary
 	}
-
-	lb.replicaMutex.Lock()
-	defer lb.replicaMutex.Unlock()
 
 	replica := lb.replicas[lb.replicaIndex]
 	lb.replicaIndex = (lb.replicaIndex + 1) % len(lb.replicas)

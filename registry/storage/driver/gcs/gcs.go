@@ -24,7 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -668,7 +668,7 @@ func retry(req request) error {
 		}
 
 		// nolint:gosec // this is just a random number for rety backoff
-		time.Sleep(backoff - time.Second + (time.Duration(rand.Int31n(1000)) * time.Millisecond))
+		time.Sleep(backoff - time.Second + (time.Duration(rand.Int32N(1000)) * time.Millisecond))
 		if i <= 4 {
 			backoff *= 2
 		}
@@ -736,6 +736,9 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 	query := &storage.Query{}
 	query.Delimiter = "/"
 	query.Prefix = d.pathToDirKey(path)
+	if query.Prefix == "/" {
+		query.Prefix = ""
+	}
 	list := make([]string, 0, 64)
 
 	it, err := storageListObjects(ctx, d.storageClient, d.bucket, query)

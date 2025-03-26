@@ -105,6 +105,9 @@ func TestGCSDriverSuite(t *testing.T) {
 		func() (storagedriver.StorageDriver, error) {
 			return gcsDriverConstructor(root)
 		},
+		func() (storagedriver.StorageDriver, error) {
+			return gcsDriverConstructor("")
+		},
 		nil,
 	)
 	suite.Run(t, ts)
@@ -121,6 +124,9 @@ func BenchmarkGCSDriverSuite(b *testing.B) {
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
 			return gcsDriverConstructor(root)
+		},
+		func() (storagedriver.StorageDriver, error) {
+			return gcsDriverConstructor("")
 		},
 		nil,
 	)

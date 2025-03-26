@@ -1,3 +1,27 @@
+## [4.15.2](https://gitlab.com/gitlab-org/container-registry/compare/v4.15.1-gitlab...v4.15.2-gitlab) (2025-01-21)
+
+
+### 🐛 Bug Fixes 🐛
+
+* correctly assess parallelwalk config presence and value ([a5b0835](https://gitlab.com/gitlab-org/container-registry/commit/a5b0835f5c26c353f22ac0dab691944b22d3aafd))
+* fix handling of unprefixed List() in gcs, add regression test ([ed37774](https://gitlab.com/gitlab-org/container-registry/commit/ed3777447f4fa1120d6256a8beb532315d2e569e))
+* race condition while accessing dlb replicas ([21fce72](https://gitlab.com/gitlab-org/container-registry/commit/21fce72221d74237d04244a68872d0d2f96ba9f4))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.50.0 ([bf16e52](https://gitlab.com/gitlab-org/container-registry/commit/bf16e525e3d116035cc7e52c02927ec8fc134b0d))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azidentity to v1.8.1 ([eb57f54](https://gitlab.com/gitlab-org/container-registry/commit/eb57f5450ec50e6bc50a82521f84613bbcd39693))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.120.0 ([f5cf1ad](https://gitlab.com/gitlab-org/container-registry/commit/f5cf1ad1cf481e5012b4dcb992704ab4fe78ca84))
+* **deps:** update module google.golang.org/api to v0.217.0 ([75129dd](https://gitlab.com/gitlab-org/container-registry/commit/75129dda2f05da0f316bf243e360efa921e17ad3))
+
+## [4.15.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.15.0-gitlab...v4.15.1-gitlab) (2025-01-14)
+
+
+### 🐛 Bug Fixes 🐛
+
+* add stack trace to a panic log ([bd70777](https://gitlab.com/gitlab-org/container-registry/commit/bd70777944c1d047dd8874ee94baea237fde5a54))
+
 ## [4.15.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.14.0-gitlab...v4.15.0-gitlab) (2025-01-14)
 
 

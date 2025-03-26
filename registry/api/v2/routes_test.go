@@ -3,7 +3,7 @@ package v2
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -322,7 +322,7 @@ type charRange struct {
 // given randomness source.
 func (r *charRange) choose() rune {
 	count := int64(r.last - r.first)
-	return r.first + rune(rand.Int63n(count))
+	return r.first + rune(rand.Int64N(count))
 }
 
 var unicodeRanges = []charRange{
@@ -333,7 +333,7 @@ var unicodeRanges = []charRange{
 func randomString(length int) string {
 	runes := make([]rune, length)
 	for i := range runes {
-		runes[i] = unicodeRanges[rand.Intn(len(unicodeRanges))].choose()
+		runes[i] = unicodeRanges[rand.IntN(len(unicodeRanges))].choose()
 	}
 	return string(runes)
 }

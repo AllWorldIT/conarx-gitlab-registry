@@ -46,11 +46,16 @@ type DriverConstructor func() (storagedriver.StorageDriver, error)
 // storagedriver.StorageDriver.
 type DriverTeardown func() error
 
-func NewDriverSuite(ctx context.Context, constructor DriverConstructor, destructor DriverTeardown) *DriverSuite {
+func NewDriverSuite(
+	ctx context.Context,
+	constructor, constructorRootLess DriverConstructor,
+	destructor DriverTeardown,
+) *DriverSuite {
 	return &DriverSuite{
-		ctx:         ctx,
-		Constructor: constructor,
-		Teardown:    destructor,
+		ctx:                 ctx,
+		Constructor:         constructor,
+		ConstructorRootless: constructorRootLess,
+		Teardown:            destructor,
 	}
 }
 
@@ -59,10 +64,16 @@ func NewDriverSuite(ctx context.Context, constructor DriverConstructor, destruct
 type DriverSuite struct {
 	suite.Suite
 
-	Constructor   DriverConstructor
-	Teardown      DriverTeardown
-	StorageDriver storagedriver.StorageDriver
-	ctx           context.Context
+	Constructor DriverConstructor
+	// The purpose for ConstructorRootless is to enable testing un-prefixed
+	// functionality of storage drivers. Care needs to be taken though as the
+	// tests are going to use the same storage container so there is a risk for
+	// collisions.
+	ConstructorRootless   DriverConstructor
+	Teardown              DriverTeardown
+	StorageDriver         storagedriver.StorageDriver
+	StorageDriverRootless storagedriver.StorageDriver
+	ctx                   context.Context
 }
 
 // SetupSuite sets up the test suite for tests.
@@ -79,6 +90,10 @@ func (s *DriverSuite) setupSuiteGeneric(t require.TestingT) {
 	driver, err := s.Constructor()
 	require.NoError(t, err)
 	s.StorageDriver = driver
+
+	driver, err = s.ConstructorRootless()
+	require.NoError(t, err)
+	s.StorageDriverRootless = driver
 }
 
 // TearDownSuite tears down the test suite when testing.
@@ -213,7 +228,7 @@ func (s *DriverSuite) TestValidPaths() {
 	for _, filename := range validFiles {
 		err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 		// nolint: revive // defer
-		defer s.deletePath(s.T(), firstPart(filename))
+		defer s.deletePath(s.T(), firstPart(filename), false)
 		require.NoError(s.T(), err)
 
 		received, err := s.StorageDriver.GetContent(s.ctx, filename)
@@ -222,11 +237,17 @@ func (s *DriverSuite) TestValidPaths() {
 	}
 }
 
-func (s *DriverSuite) deletePath(t require.TestingT, targetPath string) {
+// nolint: unparam // this will be addressed in the next MR, as the changes
+// were splitted into two parts
+func (s *DriverSuite) deletePath(t require.TestingT, targetPath string, skipPrefix bool) {
+	driver := s.StorageDriver
+	if skipPrefix {
+		driver = s.StorageDriverRootless
+	}
 	// NOTE(prozlach): We want to make sure that we do not do an accidental
 	// retry of the Delete call, hence it is outside of the
 	// require.EventuallyWithT block.
-	err := s.StorageDriver.Delete(s.ctx, targetPath)
+	err := driver.Delete(s.ctx, targetPath)
 	if err != nil {
 		if !errors.As(err, new(storagedriver.PathNotFoundError)) {
 			// Handover the termination of the execution to require.NoError call
@@ -240,7 +261,7 @@ func (s *DriverSuite) deletePath(t require.TestingT, targetPath string) {
 	// NOTE(prozlach): do the first check imediatelly as an optimization, so
 	// that we avoid the 1s wait even if the blobs were removed, and thus speed
 	// up the tests.
-	paths, err := s.StorageDriver.List(s.ctx, targetPath)
+	paths, err := driver.List(s.ctx, targetPath)
 	if errors.As(err, new(storagedriver.PathNotFoundError)) {
 		return
 	}
@@ -250,7 +271,7 @@ func (s *DriverSuite) deletePath(t require.TestingT, targetPath string) {
 	require.EventuallyWithT(
 		t,
 		func(c *assert.CollectT) {
-			_, err := s.StorageDriver.List(s.ctx, targetPath)
+			_, err := driver.List(s.ctx, targetPath)
 			assert.ErrorAs(c, err, new(storagedriver.PathNotFoundError))
 		},
 		4200*time.Millisecond,
@@ -277,7 +298,7 @@ func (s *DriverSuite) TestInvalidPaths() {
 		// only delete if file was successfully written
 		if err == nil {
 			// nolint: revive // defer
-			defer s.deletePath(s.T(), firstPart(filename))
+			defer s.deletePath(s.T(), firstPart(filename), false)
 		}
 		require.Error(s.T(), err)
 		require.ErrorIs(s.T(), err, storagedriver.InvalidPathError{
@@ -395,7 +416,7 @@ func (s *DriverSuite) TestWriteReadStreamsNonUTF8() {
 // driver safely.
 func (s *DriverSuite) TestWriteReadLargeStreams() {
 	filename := randomPath(1, 32)
-	defer s.deletePath(s.T(), firstPart(filename))
+	defer s.deletePath(s.T(), firstPart(filename), false)
 
 	checksum := sha256.New()
 
@@ -433,7 +454,7 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 // reading with a given offset.
 func (s *DriverSuite) TestReaderWithOffset() {
 	filename := randomPath(1, 32)
-	defer s.deletePath(s.T(), firstPart(filename))
+	defer s.deletePath(s.T(), firstPart(filename), false)
 
 	chunkSize := int64(32)
 
@@ -525,7 +546,7 @@ func (s *DriverSuite) TestContinueStreamAppendSmall() {
 
 func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
 	filename := randomPath(1, 32)
-	defer s.deletePath(t, firstPart(filename))
+	defer s.deletePath(t, firstPart(filename), false)
 
 	contentsChunk1 := randomContents(chunkSize)
 	contentsChunk2 := randomContents(chunkSize)
@@ -610,7 +631,7 @@ func (s *DriverSuite) TestList1200Files() {
 // testList checks the returned list of keys after populating a directory tree.
 func (s *DriverSuite) testList(t *testing.T, numFiles int) {
 	rootDirectory := "/" + randomFilenameRange(8, 8)
-	defer s.deletePath(t, rootDirectory)
+	defer s.deletePath(t, rootDirectory, false)
 
 	doesnotexist := path.Join(rootDirectory, "nonexistent")
 	_, err := s.StorageDriver.List(s.ctx, doesnotexist)
@@ -644,6 +665,25 @@ func (s *DriverSuite) testList(t *testing.T, numFiles int) {
 	// 3. Ensure that we only respond to directory listings that end with a slash (maybe?).
 }
 
+// TestListUnprefixed checks if listing root directory with no prefix
+// configured works.
+func (s *DriverSuite) TestListUnprefixed() {
+	// NOTE(prozlach): we are sharing the storage root with other tests, so the
+	// idea is to create a very uniqe file name and simply look for it in the
+	// results. This way there should be no collisions.
+	destPath := "/" + randomFilename(64)
+	destContents := randomContents(64)
+
+	defer s.deletePath(s.T(), destPath, true)
+
+	err := s.StorageDriverRootless.PutContent(s.ctx, destPath, destContents)
+	require.NoError(s.T(), err)
+
+	keys, err := s.StorageDriverRootless.List(s.ctx, "/")
+	require.NoError(s.T(), err)
+	require.Contains(s.T(), keys, destPath)
+}
+
 // TestMovePutContentBlob checks that driver can indeed move an object, and
 // that the object no longer exists at the source path and does exist at the
 // destination after the move.
@@ -656,8 +696,8 @@ func (s *DriverSuite) TestMovePutContentBlob() {
 	sourcePath := randomPath(1, 32)
 	destPath := randomPath(1, 32)
 
-	defer s.deletePath(s.T(), firstPart(sourcePath))
-	defer s.deletePath(s.T(), firstPart(destPath))
+	defer s.deletePath(s.T(), firstPart(sourcePath), false)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, sourcePath, contents)
 	require.NoError(s.T(), err)
@@ -689,8 +729,8 @@ func (s *DriverSuite) TestMoveWritterBlob() {
 	sourcePath := randomPath(1, 32)
 	destPath := randomPath(1, 32)
 
-	defer s.deletePath(s.T(), firstPart(sourcePath))
-	defer s.deletePath(s.T(), firstPart(destPath))
+	defer s.deletePath(s.T(), firstPart(sourcePath), false)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
 
 	writer, err := s.StorageDriver.Writer(s.ctx, sourcePath, false)
 	require.NoError(s.T(), err, "unexpected error from driver.Writer")
@@ -729,7 +769,7 @@ func (s *DriverSuite) TestOverwriteAppendBlob() {
 	contentsBlock := randomContents(32)
 	destPath := randomPath(1, 32)
 
-	defer s.deletePath(s.T(), firstPart(destPath))
+	defer s.deletePath(s.T(), firstPart(destPath), false)
 
 	writer, err := s.StorageDriver.Writer(s.ctx, destPath, false)
 	require.NoError(s.T(), err, "unexpected error from driver.Writer")
@@ -761,7 +801,7 @@ func (s *DriverSuite) TestOverwriteBlockBlob() {
 	contentsBlock := randomContents(32)
 	destPath := randomPath(1, 32)
 
-	defer s.deletePath(s.T(), firstPart(destPath))
+	defer s.deletePath(s.T(), firstPart(destPath), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, destPath, contentsBlock)
 	require.NoError(s.T(), err)
@@ -792,8 +832,8 @@ func (s *DriverSuite) TestMoveOverwrite() {
 	sourceContents := randomContents(32)
 	destContents := randomContents(64)
 
-	defer s.deletePath(s.T(), firstPart(sourcePath))
-	defer s.deletePath(s.T(), firstPart(destPath))
+	defer s.deletePath(s.T(), firstPart(sourcePath), false)
+	defer s.deletePath(s.T(), firstPart(destPath), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, sourcePath, sourceContents)
 	require.NoError(s.T(), err)
@@ -823,7 +863,7 @@ func (s *DriverSuite) TestMoveNonexistent() {
 	sourcePath := randomPath(1, 32)
 	destPath := randomPath(1, 32)
 
-	defer s.deletePath(s.T(), firstPart(destPath))
+	defer s.deletePath(s.T(), firstPart(destPath), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, destPath, contents)
 	require.NoError(s.T(), err)
@@ -847,7 +887,7 @@ func (s *DriverSuite) TestMoveInvalid() {
 	// Create a regular file.
 	err := s.StorageDriver.PutContent(s.ctx, "/notadir", contents)
 	require.NoError(s.T(), err)
-	defer s.deletePath(s.T(), "/notadir")
+	defer s.deletePath(s.T(), "/notadir", false)
 
 	// Now try to move a non-existent file under it.
 	err = s.StorageDriver.Move(s.ctx, "/notadir/foo", "/notadir/bar")
@@ -860,7 +900,7 @@ func (s *DriverSuite) TestDelete() {
 	filename := randomPath(1, 32)
 	contents := randomContents(32)
 
-	defer s.deletePath(s.T(), firstPart(filename))
+	defer s.deletePath(s.T(), firstPart(filename), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 	require.NoError(s.T(), err)
@@ -890,7 +930,7 @@ func (s *DriverSuite) TestDeleteDir1200Files() {
 
 func (s *DriverSuite) testDeleteDir(t *testing.T, numFiles int) {
 	rootDirectory := "/" + randomFilenameRange(8, 8)
-	defer s.deletePath(t, rootDirectory)
+	defer s.deletePath(t, rootDirectory, false)
 
 	parentDirectory := rootDirectory + "/" + randomFilenameRange(8, 8)
 	childFiles := s.buildFiles(t, parentDirectory, numFiles, 8)
@@ -981,7 +1021,7 @@ func (s *DriverSuite) assertPathNotFound(t require.TestingT, p ...string) {
 // TestDeleteFiles checks that DeleteFiles removes data from the storage driver for a random (<10) number of files.
 func (s *DriverSuite) TestDeleteFiles() {
 	parentDir := randomPath(1, 8)
-	defer s.deletePath(s.T(), firstPart(parentDir))
+	defer s.deletePath(s.T(), firstPart(parentDir), false)
 
 	/* #nosec G404 */
 	blobPaths := s.buildFiles(s.T(), parentDir, mrand.Intn(10), 32)
@@ -999,7 +1039,7 @@ func (s *DriverSuite) TestDeleteFileEqualFolderFileName() {
 	parentDir := randomPath(1, 8)
 	fileName := "Maryna"
 	p := path.Join(parentDir, fileName, fileName)
-	defer s.deletePath(s.T(), firstPart(parentDir))
+	defer s.deletePath(s.T(), firstPart(parentDir), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, p, randomContents(32))
 	require.NoError(s.T(), err)
@@ -1013,13 +1053,13 @@ func (s *DriverSuite) TestDeleteFileEqualFolderFileName() {
 // TestDeleteFilesNotFound checks that DeleteFiles is idempotent and doesn't return an error if a file was not found.
 func (s *DriverSuite) TestDeleteFilesNotFound() {
 	parentDir := randomPath(1, 8)
-	defer s.deletePath(s.T(), firstPart(parentDir))
+	defer s.deletePath(s.T(), firstPart(parentDir), false)
 
 	blobPaths := s.buildFiles(s.T(), parentDir, 5, 32)
 	// delete the 1st, 3rd and last file so that they don't exist anymore
-	s.deletePath(s.T(), blobPaths[0])
-	s.deletePath(s.T(), blobPaths[2])
-	s.deletePath(s.T(), blobPaths[4])
+	s.deletePath(s.T(), blobPaths[0], false)
+	s.deletePath(s.T(), blobPaths[2], false)
+	s.deletePath(s.T(), blobPaths[4], false)
 
 	count, err := s.StorageDriver.DeleteFiles(s.ctx, blobPaths)
 	require.NoError(s.T(), err)
@@ -1031,7 +1071,7 @@ func (s *DriverSuite) TestDeleteFilesNotFound() {
 // benchmarkDeleteFiles benchmarks DeleteFiles for an amount of num files.
 func (s *DriverSuite) benchmarkDeleteFiles(b *testing.B, num int) {
 	parentDir := randomPath(1, 8)
-	defer s.deletePath(b, firstPart(parentDir))
+	defer s.deletePath(b, firstPart(parentDir), false)
 
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -1061,7 +1101,7 @@ func (s *DriverSuite) TestURLFor() {
 	filename := randomPath(1, 32)
 	contents := randomContents(32)
 
-	defer s.deletePath(s.T(), firstPart(filename))
+	defer s.deletePath(s.T(), firstPart(filename), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 	require.NoError(s.T(), err)
@@ -1113,7 +1153,7 @@ func (s *DriverSuite) TestDeleteFolder() {
 	filename3 := randomPath(1, 32)
 	contents := randomContents(32)
 
-	defer s.deletePath(s.T(), firstPart(dirname))
+	defer s.deletePath(s.T(), firstPart(dirname), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, path.Join(dirname, filename1), contents)
 	require.NoError(s.T(), err)
@@ -1174,7 +1214,7 @@ func (s *DriverSuite) TestDeleteOnlyDeletesSubpaths() {
 	filename := randomPath(1, 32)
 	contents := randomContents(32)
 
-	defer s.deletePath(s.T(), firstPart(dirname))
+	defer s.deletePath(s.T(), firstPart(dirname), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, path.Join(dirname, filename), contents)
 	require.NoError(s.T(), err)
@@ -1222,7 +1262,7 @@ func (s *DriverSuite) TestStatCall() {
 	fileName := randomFilename(32)
 	filePath := path.Join(dirPath, fileName)
 
-	defer s.deletePath(s.T(), firstPart(dirPath))
+	defer s.deletePath(s.T(), firstPart(dirPath), false)
 
 	// Call to stat on root directory
 	// The storage healthcheck performs this exact call to Stat.
@@ -1306,7 +1346,7 @@ func (s *DriverSuite) TestPutContentMultipleTimes() {
 	filename := randomPath(1, 32)
 	contents := randomContents(4096)
 
-	defer s.deletePath(s.T(), firstPart(filename))
+	defer s.deletePath(s.T(), firstPart(filename), false)
 	err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 	require.NoError(s.T(), err)
 
@@ -1332,7 +1372,7 @@ func (s *DriverSuite) TestConcurrentStreamReads() {
 	filename := randomPath(1, 32)
 	contents := randomContents(filesize)
 
-	defer s.deletePath(s.T(), firstPart(filename))
+	defer s.deletePath(s.T(), firstPart(filename), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 	require.NoError(s.T(), err)
@@ -1393,7 +1433,7 @@ func (s *DriverSuite) TestConcurrentFileStreams() {
 // 	}
 //
 // 	filename := randomPath(1,32)
-// 	defer suite.deletePath(suite.T(), firstPart(filename))
+// 	defer suite.deletePath(suite.T(), firstPart(filename), false)
 //
 // 	var offset int64
 // 	var misswrites int
@@ -1436,7 +1476,7 @@ func (s *DriverSuite) TestConcurrentFileStreams() {
 // TestWalkParallel ensures that all files are visted by WalkParallel.
 func (s *DriverSuite) TestWalkParallel() {
 	rootDirectory := "/" + randomFilenameRange(8, 8)
-	defer s.deletePath(s.T(), rootDirectory)
+	defer s.deletePath(s.T(), rootDirectory, false)
 
 	numWantedFiles := 10
 	wantedFiles := randomBranchingFiles(rootDirectory, numWantedFiles)
@@ -1517,7 +1557,7 @@ func (s *DriverSuite) TestWalkParallel() {
 // TestWalkParallelError ensures that walk reports WalkFn errors.
 func (s *DriverSuite) TestWalkParallelError() {
 	rootDirectory := "/" + randomFilenameRange(8, 8)
-	defer s.deletePath(s.T(), rootDirectory)
+	defer s.deletePath(s.T(), rootDirectory, false)
 
 	wantedFiles := randomBranchingFiles(rootDirectory, 100)
 
@@ -1564,7 +1604,7 @@ func (s *DriverSuite) TestWalkParallelStopsProcessingOnError() {
 	}
 
 	rootDirectory := "/" + randomFilenameRange(8, 8)
-	defer s.deletePath(s.T(), rootDirectory)
+	defer s.deletePath(s.T(), rootDirectory, false)
 
 	numWantedFiles := 1000
 	wantedFiles := randomBranchingFiles(rootDirectory, numWantedFiles)
@@ -1734,7 +1774,7 @@ func (s *DriverSuite) benchmarkDelete(b *testing.B, numFiles int64) {
 	for i := 0; i < b.N; i++ {
 		parentDir := randomPath(4, 12)
 		// nolint: revive// defer
-		defer s.deletePath(b, firstPart(parentDir))
+		defer s.deletePath(b, firstPart(parentDir), false)
 
 		b.StopTimer()
 		for j := int64(0); j < numFiles; j++ {
@@ -1767,7 +1807,7 @@ func (s *DriverSuite) benchmarkWalkParallel(b *testing.B, numFiles int, f storag
 	for i := 0; i < b.N; i++ {
 		rootDirectory := "/" + randomFilenameRange(8, 8)
 		// nolint: revive // defer
-		defer s.deletePath(b, rootDirectory)
+		defer s.deletePath(b, rootDirectory, false)
 
 		b.StopTimer()
 
@@ -1825,7 +1865,7 @@ func (s *DriverSuite) BenchmarkMarkAndSweep50ImagesKeepUntagged(b *testing.B) {
 func (s *DriverSuite) benchmarkMarkAndSweep(b *testing.B, numImages int, removeUntagged bool) {
 	// Setup for this test takes a long time, even with small numbers of images,
 	// so keep the skip logic here in the sub test.
-	defer s.deletePath(b, firstPart("docker/"))
+	defer s.deletePath(b, firstPart("docker/"), false)
 
 	for n := 0; n < b.N; n++ {
 		b.StopTimer()
@@ -1882,7 +1922,7 @@ func (*DriverSuite) buildBlobs(t require.TestingT, repo distribution.Repository,
 
 // TestRemoveBlob checks that storage.Vacuum is able to delete a single blob.
 func (s *DriverSuite) TestRemoveBlob() {
-	defer s.deletePath(s.T(), firstPart("docker/"))
+	defer s.deletePath(s.T(), firstPart("docker/"), false)
 
 	registry := s.createRegistry(s.T())
 	repo := s.makeRepository(s.T(), registry, randomFilename(5))
@@ -1909,7 +1949,7 @@ func (s *DriverSuite) TestRemoveBlob() {
 }
 
 func (s *DriverSuite) benchmarkRemoveBlob(b *testing.B, numBlobs int) {
-	defer s.deletePath(b, firstPart("docker/"))
+	defer s.deletePath(b, firstPart("docker/"), false)
 
 	registry := s.createRegistry(b)
 	repo := s.makeRepository(b, registry, randomFilename(5))
@@ -1944,7 +1984,7 @@ func (s *DriverSuite) BenchmarkRemoveBlob100Blobs(b *testing.B) {
 
 // TestRemoveBlobs checks that storage.Vacuum is able to delete a set of blobs in bulk.
 func (s *DriverSuite) TestRemoveBlobs() {
-	defer s.deletePath(s.T(), firstPart("docker/"))
+	defer s.deletePath(s.T(), firstPart("docker/"), false)
 
 	registry := s.createRegistry(s.T())
 	repo := s.makeRepository(s.T(), registry, randomFilename(5))
@@ -1974,7 +2014,7 @@ func (s *DriverSuite) TestRemoveBlobs() {
 }
 
 func (s *DriverSuite) benchmarkRemoveBlobs(b *testing.B, numBlobs int) {
-	defer s.deletePath(b, firstPart("docker/"))
+	defer s.deletePath(b, firstPart("docker/"), false)
 
 	registry := s.createRegistry(b)
 	repo := s.makeRepository(b, registry, randomFilename(5))
@@ -2047,7 +2087,7 @@ func (s *DriverSuite) buildManifests(t require.TestingT, repo distribution.Repos
 
 // TestRemoveManifests checks that storage.Vacuum is able to delete a set of manifests in bulk.
 func (s *DriverSuite) TestRemoveManifests() {
-	defer s.deletePath(s.T(), firstPart("docker/"))
+	defer s.deletePath(s.T(), firstPart("docker/"), false)
 
 	registry := s.createRegistry(s.T())
 	repo := s.makeRepository(s.T(), registry, randomFilename(5))
@@ -2124,7 +2164,7 @@ func (s *DriverSuite) TestRemoveManifestsPathBuildLargeScale() {
 }
 
 func (s *DriverSuite) benchmarkRemoveManifests(b *testing.B, numManifests, numTagsPerManifest int) {
-	defer s.deletePath(b, firstPart("docker/"))
+	defer s.deletePath(b, firstPart("docker/"), false)
 
 	registry := s.createRegistry(b)
 	repo := s.makeRepository(b, registry, randomFilename(5))
@@ -2191,7 +2231,7 @@ func (s *DriverSuite) testFileStreams(t *testing.T, size int64) {
 	defer tf.Close()
 
 	filename := randomPath(4, 32)
-	defer s.deletePath(t, firstPart(filename))
+	defer s.deletePath(t, firstPart(filename), false)
 
 	contents := randomContents(size)
 
@@ -2225,7 +2265,7 @@ func (s *DriverSuite) testFileStreams(t *testing.T, size int64) {
 }
 
 func (s *DriverSuite) writeReadCompare(t *testing.T, filename string, contents []byte) {
-	defer s.deletePath(t, firstPart(filename))
+	defer s.deletePath(t, firstPart(filename), false)
 
 	err := s.StorageDriver.PutContent(s.ctx, filename, contents)
 	require.NoError(t, err)
@@ -2237,7 +2277,7 @@ func (s *DriverSuite) writeReadCompare(t *testing.T, filename string, contents [
 }
 
 func (s *DriverSuite) writeReadCompareStreams(t *testing.T, filename string, contents []byte) {
-	defer s.deletePath(t, firstPart(filename))
+	defer s.deletePath(t, firstPart(filename), false)
 
 	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
 	require.NoError(t, err)

@@ -139,7 +139,10 @@ func (d *driver) PutContent(ctx context.Context, path string, contents []byte) e
 	}
 
 	_, err = d.client.NewBlockBlobClient(blobName).UploadBuffer(ctx, contents, nil)
-	return err
+	if err != nil {
+		return fmt.Errorf("creating new block blob client: %w", err)
+	}
+	return nil
 }
 
 // Reader retrieves an io.ReadCloser for the content stored at "path" with a
