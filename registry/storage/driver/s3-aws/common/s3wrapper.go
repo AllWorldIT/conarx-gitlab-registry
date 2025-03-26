@@ -188,6 +188,26 @@ func (w *S3wrapper) ListMultipartUploadsWithContext(ctx aws.Context, input *s3.L
 	return out, err
 }
 
+func (w *S3wrapper) HeadObjectWithContext(ctx aws.Context, input *s3.HeadObjectInput, opts ...request.Option) (*s3.HeadObjectOutput, error) {
+	var out *s3.HeadObjectOutput
+
+	err := w.waitRetryNotify(
+		ctx,
+		func() error {
+			var err error
+			out, err = w.s3.HeadObjectWithContext(ctx, input, opts...)
+
+			// a nil response must be captured as an error (if no error is provided)
+			if out == nil && err == nil {
+				err = nilRespError("HeadObjectWithContext")
+			}
+			return err
+		},
+	)
+
+	return out, err
+}
+
 func (w *S3wrapper) ListPartsWithContext(ctx aws.Context, input *s3.ListPartsInput, opts ...request.Option) (*s3.ListPartsOutput, error) {
 	var out *s3.ListPartsOutput
 
