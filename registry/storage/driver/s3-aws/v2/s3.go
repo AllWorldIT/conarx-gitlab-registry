@@ -370,7 +370,7 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 	listResp := &s3.ListPartsOutput{
 		IsTruncated: aws.Bool(true),
 	}
-	for *listResp.IsTruncated {
+	for resp.IsTruncated != nil && *listResp.IsTruncated {
 		// error out if we have pushed more than 100GB of parts
 		if respLoopCount > maxListRespLoop {
 			return nil, ErrMaxListRespExceeded
@@ -519,7 +519,7 @@ func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 			directories = append(directories, strings.Replace(commonPrefix[0:len(commonPrefix)-1], d.s3Path(""), prefix, 1))
 		}
 
-		if !*resp.IsTruncated {
+		if resp.IsTruncated == nil || !*resp.IsTruncated {
 			break
 		}
 
@@ -713,8 +713,9 @@ ListLoop:
 		// returned not found
 		listObjectsV2Input.StartAfter = resp.Contents[len(resp.Contents)-1].Key
 
-		// from the s3 api docs, IsTruncated "specifies whether (true) or not (false) all of the results were returned"
-		// if everything has been returned, break
+		// from the s3 api docs, IsTruncated "specifies whether (true) or not
+		// (false) all of the results were returned" if everything has been
+		// returned, break
 		if resp.IsTruncated == nil || !*resp.IsTruncated {
 			break
 		}
