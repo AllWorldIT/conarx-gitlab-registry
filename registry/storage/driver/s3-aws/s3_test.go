@@ -17,9 +17,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,6 +34,7 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/hashicorp/go-multierror"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -435,13 +438,13 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 	defer rootedDriver.Delete(ctx, filename)
 
 	keys, _ := emptyRootDriver.List(ctx, "/")
-	for _, path := range keys {
-		require.Truef(t, storagedriver.PathRegexp.MatchString(path), "unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
+	for _, key := range keys {
+		require.Truef(t, storagedriver.PathRegexp.MatchString(key), "unexpected string in path: %q != %q", key, storagedriver.PathRegexp)
 	}
 
 	keys, _ = slashRootDriver.List(ctx, "/")
-	for _, path := range keys {
-		require.Truef(t, storagedriver.PathRegexp.MatchString(path), "unexpected string in path: %q != %q", path, storagedriver.PathRegexp)
+	for _, key := range keys {
+		require.Truef(t, storagedriver.PathRegexp.MatchString(key), "unexpected string in path: %q != %q", key, storagedriver.PathRegexp)
 	}
 }
 
@@ -1154,4 +1157,131 @@ func generateSelfSignedCert(addresses []string) (tls.Certificate, error) {
 		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}),
 		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privDER}),
 	)
+}
+
+// TestWalkEmptyDir tests that the Walk and WalkParallel functions
+// properly handle the "empty" directories - i.e. objects with zero size that
+// are meant as placeholders.
+func TestWalkEmptyDir(t *testing.T) {
+	if driverVersion != v2.DriverName {
+		t.Skip("this issue has been fixed only for s3_v2 driver")
+	}
+
+	if skipMsg := skipCheck(); skipMsg != "" {
+		t.Skip(skipMsg)
+	}
+
+	rootDirectory := t.TempDir()
+	parsedParams, err := fetchDriverConfig(rootDirectory, s3.StorageClassStandard)
+	require.NoError(t, err)
+	driver, err := newDriverFn(parsedParams)
+	require.NoError(t, err)
+	s3API, err := newS3APIFn(parsedParams)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	destPath := "/" + dtestutil.RandomFilename(64)
+	defer dtestutil.EnsurePathDeleted(ctx, t, driver, destPath)
+
+	t.Logf("root dir used for testing: %s", rootDirectory)
+	destContents := rngtestutil.RandomBlob(t, 32)
+
+	// Create directories with a structure like:
+	// rootDirectory/
+	//   ├── dir1/
+	//   │    ├── file1-1
+	//   │    └── file1-2
+	//   ├── dir2/  (this one will be empty)
+	//   └── dir3/
+	//        ├── file3-1
+	//        └── file3-2
+
+	dir1 := "/dir1"
+	dir2 := "/dir2"
+	dir3 := "/dir3"
+
+	// Create map of all files to create with full paths
+	fileStructure := map[string][]string{
+		dir1: {
+			path.Join(dir1, "file1-1"),
+			path.Join(dir1, "file1-2"),
+		},
+		dir3: {
+			path.Join(dir3, "file3-1"),
+			path.Join(dir3, "file3-2"),
+		},
+	}
+
+	// Create all files in all directories
+	for _, files := range fileStructure {
+		for _, filePath := range files {
+			err := driver.PutContent(ctx, filePath, destContents)
+			require.NoError(t, err)
+		}
+	}
+	// we use the s3 sdk directly because the driver doesn't allow creation of
+	// empty directories due to trailing slash
+	_, err = s3API.PutObjectWithContext(
+		ctx,
+		&s3.PutObjectInput{
+			Bucket: aws.String(parsedParams.Bucket),
+			Key:    aws.String(path.Join(rootDirectory, dir2) + "/"),
+		},
+	)
+	require.NoError(t, err)
+
+	// Build expected and unexpected paths
+	expectedPaths := []string{
+		dir1,
+		dir2,
+		dir3,
+		fileStructure[dir1][0],
+		fileStructure[dir1][1],
+		fileStructure[dir3][0],
+		fileStructure[dir3][1],
+	}
+
+	// Helper function to create a walk function that skips dir2
+	createWalkFunc := func(pathCollector *sync.Map) storagedriver.WalkFn {
+		return func(fInfo storagedriver.FileInfo) error {
+			// attempt to split filepath into dir and filename, just like purgeuploads would.
+			filePath := fInfo.Path()
+			_, file := path.Split(filePath)
+			assert.NotEmptyf(t, file, "File part of fileInfo.Path()==%q had zero length", filePath)
+
+			// Record that this path was visited
+			pathCollector.Store(filePath, struct{}{})
+			return nil
+		}
+	}
+
+	// Verify all expected paths were visited and unexpected were not
+	verifyPaths := func(visitedPaths *sync.Map) {
+		// Check expected paths were visited
+		for _, expectedPath := range expectedPaths {
+			_, found := visitedPaths.Load(expectedPath)
+			assert.Truef(t, found, "Path %s should have been visited", expectedPath)
+		}
+
+		visitedPathsKeys := make([]string, 0, len(expectedPaths))
+		visitedPaths.Range(func(key, _ any) bool {
+			visitedPathsKeys = append(visitedPathsKeys, key.(string))
+			return true
+		})
+		assert.ElementsMatch(t, expectedPaths, visitedPathsKeys)
+	}
+
+	t.Run("PlainWalk", func(t *testing.T) {
+		var visitedPaths sync.Map
+		err := driver.Walk(ctx, "/", createWalkFunc(&visitedPaths))
+		require.NoError(t, err)
+		verifyPaths(&visitedPaths)
+	})
+
+	t.Run("ParallelWalk", func(t *testing.T) {
+		var visitedPaths sync.Map
+		err := driver.WalkParallel(ctx, "/", createWalkFunc(&visitedPaths))
+		require.NoError(t, err)
+		verifyPaths(&visitedPaths)
+	})
 }
