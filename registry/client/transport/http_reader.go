@@ -158,7 +158,7 @@ func (hrs *httpReadSeeker) reset() {
 	}
 }
 
-func (hrs *httpReadSeeker) reader() (io.Reader, error) {
+func (hrs *httpReadSeeker) reader() (_ io.Reader, retErr error) {
 	if hrs.err != nil {
 		return nil, hrs.err
 	}
@@ -184,12 +184,20 @@ func (hrs *httpReadSeeker) reader() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if retErr != nil {
+			_ = resp.Body.Close()
+		}
+	}()
 
 	// Normally would use client.SuccessStatus, but that would be a cyclic
 	// import
 	if resp.StatusCode < 200 || resp.StatusCode > 399 {
-		defer resp.Body.Close()
 		if hrs.errorHandler != nil {
+			// Closing the body should be handled by the existing defer, but in
+			// case a custom "errHandler" is used that doesn't return an error,
+			// we close the body regardless.
+			defer resp.Body.Close()
 			return nil, hrs.errorHandler(resp)
 		}
 		return nil, fmt.Errorf("unexpected status resolving reader: %v", resp.Status)
