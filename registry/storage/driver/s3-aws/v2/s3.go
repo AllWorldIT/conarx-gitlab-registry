@@ -620,7 +620,7 @@ func (d *driver) copy(ctx context.Context, sourcePath, destPath string) error {
 			// Check if any other goroutine has failed
 			select {
 			case <-gctx.Done():
-				return ctx.Err()
+				return gctx.Err()
 			default:
 				firstByte := i * d.MultipartCopyChunkSize
 				lastByte := firstByte + d.MultipartCopyChunkSize - 1
