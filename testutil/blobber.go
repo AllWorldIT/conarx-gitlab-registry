@@ -102,11 +102,7 @@ func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int64, str
 		return false
 	}
 
-	// NOTE(prozlach): The size of the readBuffer is dictated by how much a
-	// human can eyeball in one go in case when there are differences in the
-	// data received and the internal state. Beyond that - the higher value
-	// could boost performance but it is not a priority.
-	readBuffer := make([]byte, 512)
+	readBuffer := make([]byte, 32<<20)
 
 	// NOTE(prozlach): `assert.*` calls do a lot in the background, and this is
 	// a tight loop that is executed many, many times when comparing large
@@ -123,11 +119,26 @@ func (b *Blobber) AssertStreamEqual(t testing.TB, r io.Reader, offset int64, str
 			return assert.LessOrEqualf(t, bytesRead, remainingBytes, "input stream is longer than cached data, streamID: %s", streamID)
 		}
 		if bytesRead > 0 && !bytes.Equal(b.rngCache[currentOffset:currentOffset+bytesRead], readBuffer[:bytesRead]) {
-			return assert.Equalf(
-				t,
-				b.rngCache[currentOffset:currentOffset+bytesRead], readBuffer[:bytesRead],
-				"difference between streams found. Chunk number %d, current offset: %d, starting offset %d, streamID: %s", chunkNumber, currentOffset, offset, streamID,
-			)
+			// We can't simply display two 32MiB byte slices side by side and
+			// expect human to be able to parse it, hence we find the first
+			// differing 512 bytes chunk by re-using the code that testify
+			// already provides:
+			chunkSize := int64(512)
+			// nolint: revive // max-control-nesting
+			for i := int64(0); i < (bytesRead+chunkSize-1)/chunkSize; i++ {
+				startByte := i * chunkSize
+				endByte := startByte + chunkSize
+				if endByte > bytesRead {
+					endByte = bytesRead
+				}
+				if !assert.Equalf(
+					t,
+					b.rngCache[currentOffset+startByte:currentOffset+endByte], readBuffer[startByte:endByte],
+					"difference between streams found. Chunk number %d, current offset: %d, starting offset %d, streamID: %s", chunkNumber, currentOffset+startByte, offset, streamID,
+				) {
+					return false
+				}
+			}
 		}
 
 		currentOffset += bytesRead
