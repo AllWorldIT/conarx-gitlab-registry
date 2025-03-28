@@ -138,6 +138,23 @@ storage:
     loglevel: logdebug
     maxretries: 10
     objectownership: false
+  s3_v2:
+    accesskey: awsaccesskey
+    secretkey: awssecretkey
+    region: us-west-1
+    regionendpoint: http://myobjects.local
+    bucket: bucketname
+    encrypt: true
+    keyid: mykeyid
+    secure: true
+    chunksize: 5242880
+    multipartcopychunksize: 33554432
+    multipartcopymaxconcurrency: 100
+    multipartcopythresholdsize: 33554432
+    rootdirectory: /s3/object/name/prefix
+    loglevel: logdebug
+    maxretries: 10
+    objectownership: false
   inmemory:  # This driver takes no parameters
   delete:
     enabled: false
@@ -515,6 +532,23 @@ storage:
     loglevel: logdebug
     maxretries: 10
     objectownership: false
+  s3_v2:
+    accesskey: awsaccesskey
+    secretkey: awssecretkey
+    region: us-west-1
+    regionendpoint: http://myobjects.local
+    bucket: bucketname
+    encrypt: true
+    keyid: mykeyid
+    secure: true
+    chunksize: 5242880
+    multipartcopychunksize: 33554432
+    multipartcopymaxconcurrency: 100
+    multipartcopythresholdsize: 33554432
+    rootdirectory: /s3/object/name/prefix
+    loglevel: logdebug
+    maxretries: 10
+    objectownership: false
   inmemory:
   delete:
     enabled: false
@@ -541,26 +575,14 @@ You can choose any of these backend storage drivers:
 | Storage driver         | Description                                                                                                                                                                                                                                                                              |
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `filesystem`           | Uses the local disk to store registry files. It is ideal for development and may be appropriate for some small-scale production applications. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md). |
-| `azure`                | Uses Microsoft Azure Blob Storage. See the [driver's reference documentation](./storage-drivers/azure_v1.md).                                                                                                                 |
+| `azure`                | Uses Microsoft Azure Blob Storage ([deprecated version](https://docs.gitlab.com/update/deprecations/#azure-storage-driver-for-the-container-registry)). See the [driver's reference documentation](./storage-drivers/azure_v1.md).                                                                                                                 |
 | `azure_v2`             | Improved Microsoft Azure Blob Storage. See the [driver's reference documentation](./storage-drivers/azure_v2.md).                                                                                                                 |
 | `gcs`                  | Uses Google Cloud Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/gcs.md).                                                                                                                           |
-| `s3`                   | Uses Amazon Simple Storage Service (S3) and compatible Storage Services. See the [driver's reference documentation](https://github.com/distribution/distribution/blob/main/docs/storage-drivers/s3.md), or the [extra parameters documentation](#s3)                                 |
+| `s3`                   | Uses Amazon Simple Storage Service (S3) ([deprecated version](https://docs.gitlab.com/update/deprecations/#s3-storage-driver-aws-sdk-v1-for-the-container-registry)). See the [driver's reference documentation](./storage-drivers/s3_v1.md).                                                                  |
+| `s3_v2`                | Improved Amazon Simple Storage Service (S3) driver. See the [driver's reference documentation](./storage-drivers/s3_v2.md).                                 |
 
 For testing only, you can use the [`inmemory` storage driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/inmemory.md).
 If you would like to run a registry from volatile memory, use the [`filesystem` driver](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md) on a ramdisk.
-
-### `s3`
-
-Extra parameters:
-
-| Parameter                     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `multipartcopychunksize`      | Chunk size for all but the last Upload Part - Copy operation of a multipart copy. Empirically, 32 MB is optimal.                                                                                                                                                                                                                                                                                                                                                         |
-| `multipartcopymaxconcurrency` | Maximum number of concurrent Upload Part - Copy operations for a multipart copy.                                                                                                                                                                                                                                                                                                                                                                                         |
-| `multipartcopythresholdsize`  | Object size above which multipart copy will be used. (PUT Object - Copy is used for objects at or below this size.) Empirically, 32 MB is optimal.                                                                                                                                                                                                                                                                                                                      |
-| `loglevel`                    | The possible log levels are the lowercase version of the AWS Go SDK [LogLevelType](https://docs.aws.amazon.com/sdk-for-go/api/aws/#LogLevelType) values (see the documentation for a description of each): `logoff` `logdebug` `logdebugwithsigning` `logdebugwithhttpbody` `logdebugwithrequestretries` `logdebugwithrequesterrors` `logdebugwitheventstreambody`. This configuration setting can be set using the `REGISTRY_STORAGE_S3_LOGLEVEL` environment variable. |
-| `objectacl`                    | The S3 Canned ACL for objects. The default value is "private". If you are using a bucket owned by another AWS account, it is recommended that you set this to `bucket-owner-full-control` so that the bucket owner can access your objects. Other valid options are available in the [AWS S3 documentation](http://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#canned-acl). |
-| `objectownership`              | Indicates whether the S3 storage bucket to be used by the registry disabled access control lists (ACLs). The default value is `false`. This parameter can not be `true` if the `objectacl` parameter is also set. S3 Object Ownership is an Amazon S3 bucket-level setting that you can use to disable access control lists (ACLs) and take ownership of every object in your bucket. More information is available in the [AWS S3 documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html). |
 
 ### `maintenance`
 
