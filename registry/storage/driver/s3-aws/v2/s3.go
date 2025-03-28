@@ -1230,16 +1230,15 @@ func (d *driver) getStorageClass() *string {
 // cleanly resumed in the future. This is violated if Close is called after less
 // than a full chunk is written.
 type writer struct {
-	driver      *driver
-	key         string
-	uploadID    string
-	parts       []*s3.Part
-	size        int64
-	readyPart   []byte
-	pendingPart []byte
-	closed      bool
-	committed   bool
-	canceled    bool
+	driver    *driver
+	key       string
+	uploadID  string
+	parts     []*s3.Part
+	size      int64
+	buffer    *bytes.Buffer
+	closed    bool
+	committed bool
+	canceled  bool
 }
 
 func (d *driver) newWriter(key, uploadID string, parts []*s3.Part) storagedriver.FileWriter {
@@ -1253,6 +1252,7 @@ func (d *driver) newWriter(key, uploadID string, parts []*s3.Part) storagedriver
 		uploadID: uploadID,
 		parts:    parts,
 		size:     size,
+		buffer:   new(bytes.Buffer),
 	}
 }
 
@@ -1340,7 +1340,7 @@ func (w *writer) Write(p []byte) (int, error) {
 			}
 			defer resp.Body.Close()
 			w.parts = nil
-			w.readyPart, err = io.ReadAll(resp.Body)
+			_, err = w.buffer.ReadFrom(resp.Body)
 			if err != nil {
 				return 0, err
 			}
@@ -1425,36 +1425,26 @@ func (w *writer) Write(p []byte) (int, error) {
 
 	for len(p) > 0 {
 		// If no parts are ready to write, fill up the first part
-		if neededBytes := w.driver.ChunkSize - int64(len(w.readyPart)); neededBytes > 0 {
+		if neededBytes := w.driver.ChunkSize - int64(w.buffer.Len()); neededBytes > 0 {
 			if int64(len(p)) >= neededBytes {
-				w.readyPart = append(w.readyPart, p[:neededBytes]...)
+				_, _ = w.buffer.Write(p[:neededBytes]) // err is always nil
 				n += neededBytes
 				p = p[neededBytes:]
-			} else {
-				w.readyPart = append(w.readyPart, p...)
-				n += int64(len(p))
-				p = nil
-			}
-		}
 
-		if neededBytes := w.driver.ChunkSize - int64(len(w.pendingPart)); neededBytes > 0 {
-			if int64(len(p)) >= neededBytes {
-				w.pendingPart = append(w.pendingPart, p[:neededBytes]...)
-				n += neededBytes
-				p = p[neededBytes:]
-				err := w.flushPart()
-				// nolint: revive // max-control-nesting: control flow nesting exceeds 3
+				err := w.flush()
+				// nolint: revive // max-control-nesting
 				if err != nil {
 					w.size += n
 					return int(n), err // nolint: gosec // n is never going to be negative
 				}
 			} else {
-				w.pendingPart = append(w.pendingPart, p...)
+				_, _ = w.buffer.Write(p)
 				n += int64(len(p))
 				p = nil
 			}
 		}
 	}
+
 	w.size += n
 	return int(n), nil // nolint: gosec // n is never going to be negative
 }
@@ -1476,7 +1466,7 @@ func (w *writer) Close() error {
 		return nil
 	}
 
-	err := w.flushEverything()
+	err := w.flush()
 	if err != nil {
 		return fmt.Errorf("fluxing buffers while closing writer: %w", err)
 	}
@@ -1515,7 +1505,7 @@ func (w *writer) Commit() error {
 	case w.canceled:
 		return storagedriver.ErrAlreadyCanceled
 	}
-	err := w.flushEverything()
+	err := w.flush()
 	if err != nil {
 		return err
 	}
@@ -1557,28 +1547,20 @@ func (w *writer) Commit() error {
 	return nil
 }
 
-// flushPart flushes `readyPart` buffer to S3. Only called in Write() method
-func (w *writer) flushPart() error {
-	return w.flushImpl(false)
-}
-
-// flushEverything flushes both `readyPart` and `pendingPart` buffers. Called
-// on Close() and Commit().
-func (w *writer) flushEverything() error {
-	return w.flushImpl(true)
-}
-
-func (w *writer) flushImpl(emptyAllBuffers bool) error {
-	if len(w.readyPart) == 0 && len(w.pendingPart) == 0 {
+// flush flushes the buffer to S3.
+func (w *writer) flush() error {
+	if w.buffer.Len() == 0 {
 		// nothing to write
 		return nil
 	}
-	if emptyAllBuffers {
-		w.readyPart = append(w.readyPart, w.pendingPart...)
-		w.pendingPart = nil
-	}
 
 	partNumber := aws.Int64(int64(len(w.parts)) + 1) // len() is always going to be non-negative
+	part := &s3.Part{
+		PartNumber: partNumber,
+		Size:       aws.Int64(int64(w.buffer.Len())),
+	}
+	r := bytes.NewReader(w.buffer.Bytes())
+
 	resp, err := w.driver.S3.UploadPartWithContext(
 		context.Background(),
 		&s3.UploadPartInput{
@@ -1586,17 +1568,14 @@ func (w *writer) flushImpl(emptyAllBuffers bool) error {
 			Key:        aws.String(w.key),
 			PartNumber: partNumber,
 			UploadId:   aws.String(w.uploadID),
-			Body:       bytes.NewReader(w.readyPart),
+			Body:       r,
 		})
 	if err != nil {
 		return err
 	}
-	w.parts = append(w.parts, &s3.Part{
-		ETag:       resp.ETag,
-		PartNumber: partNumber,
-		Size:       aws.Int64(int64(len(w.readyPart))),
-	})
-	w.readyPart = w.pendingPart
-	w.pendingPart = nil
+
+	part.ETag = resp.ETag
+	w.parts = append(w.parts, part)
+	w.buffer.Reset()
 	return nil
 }
