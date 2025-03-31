@@ -308,7 +308,7 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 		rc, err = d.storageClient.Bucket(d.bucket).Object(name).NewReader(ctx)
 		return err
 	})
-	if err == storage.ErrObjectNotExist {
+	if errors.Is(err, storage.ErrObjectNotExist) {
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if err != nil {
@@ -690,12 +690,12 @@ func retry(req request) error {
 			return nil
 		}
 
-		status, ok := err.(*googleapi.Error)
-		if !ok || (status.Code != 429 && status.Code < http.StatusInternalServerError) {
+		gErr := new(googleapi.Error)
+		if !errors.As(err, &gErr) || (gErr.Code != http.StatusTooManyRequests && gErr.Code < http.StatusInternalServerError) {
 			return err
 		}
 
-		if status.Code == http.StatusTooManyRequests {
+		if gErr.Code == http.StatusTooManyRequests {
 			metrics.StorageRatelimit()
 		}
 
@@ -875,7 +875,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 			// GCS only guarantees eventual consistency, so listAll might return
 			// paths that no longer exist. If this happens, just ignore any not
 			// found error
-			if err == storage.ErrObjectNotExist {
+			if errors.Is(err, storage.ErrObjectNotExist) {
 				err = nil
 			}
 			if err != nil {
@@ -885,7 +885,7 @@ func (d *driver) Delete(ctx context.Context, path string) error {
 		return nil
 	}
 	err = storageDeleteObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
-	if err == storage.ErrObjectNotExist {
+	if errors.Is(err, storage.ErrObjectNotExist) {
 		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	return err
@@ -936,7 +936,7 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 			}()
 
 			if err := storageDeleteObject(ctx, d.storageClient, d.bucket, d.pathToKey(p)); err != nil {
-				if err != storage.ErrObjectNotExist {
+				if !errors.Is(err, storage.ErrObjectNotExist) {
 					errCh <- err
 					return
 				}
