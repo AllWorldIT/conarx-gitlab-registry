@@ -1230,15 +1230,17 @@ func (d *driver) getStorageClass() *string {
 // cleanly resumed in the future. This is violated if Close is called after less
 // than a full chunk is written.
 type writer struct {
-	driver    *driver
-	key       string
-	uploadID  string
-	parts     []*s3.Part
-	size      int64
-	buffer    *bytes.Buffer
-	closed    bool
-	committed bool
-	canceled  bool
+	driver                      *driver
+	key                         string
+	uploadID                    string
+	parts                       []*s3.Part
+	size                        int64
+	buffer                      *bytes.Buffer
+	closed                      bool
+	committed                   bool
+	canceled                    bool
+	chunkSize                   int64
+	multipartCopyMaxConcurrency int
 }
 
 func (d *driver) newWriter(key, uploadID string, parts []*s3.Part) storagedriver.FileWriter {
@@ -1247,12 +1249,14 @@ func (d *driver) newWriter(key, uploadID string, parts []*s3.Part) storagedriver
 		size += *part.Size
 	}
 	return &writer{
-		driver:   d,
-		key:      key,
-		uploadID: uploadID,
-		parts:    parts,
-		size:     size,
-		buffer:   new(bytes.Buffer),
+		driver:                      d,
+		key:                         key,
+		uploadID:                    uploadID,
+		parts:                       parts,
+		size:                        size,
+		buffer:                      new(bytes.Buffer),
+		chunkSize:                   d.ChunkSize,
+		multipartCopyMaxConcurrency: d.MultipartCopyMaxConcurrency,
 	}
 }
 
@@ -1274,9 +1278,9 @@ func (w *writer) Write(p []byte) (int, error) {
 		return 0, storagedriver.ErrAlreadyCanceled
 	}
 
-	// If the last written part is smaller than minChunkSize, we need to make a
-	// new multipart upload
-	if len(w.parts) > 0 && *w.parts[len(w.parts)-1].Size < common.MinChunkSize {
+	// If the length of the last written part is different than chunkSize,
+	// we need to make a new multipart upload to even things out.
+	if len(w.parts) > 0 && *w.parts[len(w.parts)-1].Size != w.chunkSize {
 		var completedUploadedParts completedParts
 		for _, part := range w.parts {
 			completedUploadedParts = append(completedUploadedParts, &s3.CompletedPart{
@@ -1326,98 +1330,100 @@ func (w *writer) Write(p []byte) (int, error) {
 		}
 		w.uploadID = *resp.UploadId
 
-		// If the entire written file is smaller than minChunkSize, we need to make
-		// a new part from scratch
-		if w.size < common.MinChunkSize {
-			resp, err := w.driver.S3.GetObjectWithContext(
-				ctx,
-				&s3.GetObjectInput{
-					Bucket: aws.String(w.driver.Bucket),
-					Key:    aws.String(w.key),
-				})
-			if err != nil {
-				return 0, err
-			}
-			defer resp.Body.Close()
-			w.parts = nil
-			_, err = w.buffer.ReadFrom(resp.Body)
-			if err != nil {
-				return 0, err
-			}
-		} else {
-			// nolint: revive // max-control-nesting
-			if w.size > common.MaxChunkSize {
-				// Calculate how many parts we need
-				partCount := w.size/common.MaxChunkSize + 1
-				// NOTE(prozlach): We need to prevent a situatin when the last
-				// part is maller than the minimum part size, so we even things
-				// out:
-				partSize := w.size / partCount
-				w.parts = make([]*s3.Part, partCount)
+		partCount := (w.size + w.chunkSize - 1) / w.chunkSize
+		w.parts = make([]*s3.Part, 0, partCount)
+		partsMutex := new(sync.Mutex)
 
-				startByte := int64(0)
-				endByte := partSize
+		g, gctx := errgroup.WithContext(ctx)
 
-				// Copy each part individually
-				for i := int64(0); i < partCount; i++ {
-					// Part numbers are positive integers in the range 1 <= n <= 10000
-					partNumber := i + 1
+		// Reduce the client/server exposure to long lived connections regardless of
+		// how many requests per second are allowed.
+		g.SetLimit(w.multipartCopyMaxConcurrency)
 
-					// Specify the byte range to copy. `CopySourceRange` factors
-					// in both starting and ending byte.
+		for i := int64(0); i < partCount; i++ {
+			g.Go(func() error {
+				// Check if any other goroutine has failed
+				select {
+				case <-gctx.Done():
+					return gctx.Err()
+				default:
+				}
+
+				startByte := w.chunkSize * i
+				endByte := startByte + w.chunkSize - 1
+				if endByte > w.size-1 {
+					// NOTE(prozlach): Special case when there is simply not
+					// enough data for a full chunk. It handles both cases when
+					// there is only one chunk and multiple chunks plus partial
+					// a one. We just slurp in what we have and carry on with
+					// the data passed to the Write() call.
 					byteRange := fmt.Sprintf("bytes=%d-%d", startByte, endByte)
-
-					copyPartResp, err := w.driver.S3.UploadPartCopyWithContext(
-						ctx,
-						&s3.UploadPartCopyInput{
-							Bucket:          aws.String(w.driver.Bucket),
-							CopySource:      aws.String(w.driver.Bucket + "/" + w.key),
-							CopySourceRange: aws.String(byteRange),
-							Key:             aws.String(w.key),
-							PartNumber:      aws.Int64(partNumber),
-							UploadId:        resp.UploadId,
+					resp, err := w.driver.S3.GetObjectWithContext(
+						gctx,
+						&s3.GetObjectInput{
+							Bucket: aws.String(w.driver.Bucket),
+							Key:    aws.String(w.key),
+							Range:  aws.String(byteRange),
 						})
 					if err != nil {
-						return 0, fmt.Errorf("re-uploading chunk as multipart upload part: %w", err)
+						return fmt.Errorf("fetching object from backend during re-upload: %w", err)
 					}
+					defer resp.Body.Close()
 
-					// Add this part to our list
-					w.parts[i] = &s3.Part{
-						ETag:       copyPartResp.CopyPartResult.ETag,
-						PartNumber: aws.Int64(partNumber),
-						// `CopySourceRange` factors in both starting and
-						// ending byte, hence `+ 1`.
-						Size: aws.Int64(endByte - startByte + 1),
+					_, err = w.buffer.ReadFrom(resp.Body)
+					if err != nil {
+						return fmt.Errorf("reading remaining bytes during data re-upload: %w", err)
 					}
-
-					startByte = endByte + 1
-					endByte += startByte + partSize
-					if endByte > w.size-1 {
-						endByte = w.size - 1
-					}
+					return nil
 				}
-			} else {
-				// For objects smaller than maxPartSize, use the original code
+
+				// Part numbers are positive integers in the range 1 <= n <= 10000
+				partNumber := i + 1
+
+				// Specify the byte range to copy. `CopySourceRange` factors
+				// in both starting and ending byte.
+				byteRange := fmt.Sprintf("bytes=%d-%d", startByte, endByte)
+
 				copyPartResp, err := w.driver.S3.UploadPartCopyWithContext(
-					ctx,
+					gctx,
 					&s3.UploadPartCopyInput{
-						Bucket:     aws.String(w.driver.Bucket),
-						CopySource: aws.String(w.driver.Bucket + "/" + w.key),
-						Key:        aws.String(w.key),
-						PartNumber: aws.Int64(1),
-						UploadId:   resp.UploadId,
+						Bucket:          aws.String(w.driver.Bucket),
+						CopySource:      aws.String(w.driver.Bucket + "/" + w.key),
+						CopySourceRange: aws.String(byteRange),
+						Key:             aws.String(w.key),
+						PartNumber:      aws.Int64(partNumber),
+						UploadId:        resp.UploadId,
 					})
 				if err != nil {
-					return 0, fmt.Errorf("re-uploading object as first part of the new multipart upload: %w", err)
+					return fmt.Errorf("re-uploading chunk as multipart upload part: %w", err)
 				}
-				w.parts = []*s3.Part{
-					{
-						ETag:       copyPartResp.CopyPartResult.ETag,
-						PartNumber: aws.Int64(1),
-						Size:       aws.Int64(w.size),
-					},
+
+				// NOTE(prozlach): We can't pre-allocate parts slice and then
+				// address it with `i` if we want to handle the case where
+				// there is not enough data for a single chunk. At the expense
+				// of this small extra loop and extra mutex we get the same
+				// path for both cases.
+				partsMutex.Lock()
+				for int64(len(w.parts))-1 < i {
+					w.parts = append(w.parts, (*s3.Part)(nil))
 				}
-			}
+
+				// Add this part to our list
+				w.parts[i] = &s3.Part{
+					ETag:       copyPartResp.CopyPartResult.ETag,
+					PartNumber: aws.Int64(partNumber),
+					// `CopySourceRange` factors in both starting and
+					// ending byte, hence `+ 1`.
+					Size: aws.Int64(endByte - startByte + 1),
+				}
+				partsMutex.Unlock()
+
+				return nil
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return 0, err
 		}
 	}
 
