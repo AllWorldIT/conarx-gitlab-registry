@@ -5,7 +5,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	sdriver "github.com/docker/distribution/registry/storage/driver"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
+	btestutil "github.com/docker/distribution/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -367,6 +369,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.params[sdriver.ParamLogger] = btestutil.NewTestLogger(t)
+
 			result, err := ParseParameters(tt.params)
 
 			if tt.expectedError {
@@ -418,9 +422,10 @@ func TestParseParameters_in_groups(t *testing.T) {
 
 func TestParseParameters_individually(t *testing.T) {
 	p := map[string]any{
-		"region": "us-west-2",
-		"bucket": "test",
-		"v4auth": "true",
+		ParamRegion:         "us-west-2",
+		ParamBucket:         "test",
+		ParamV4Auth:         "true",
+		sdriver.ParamLogger: btestutil.NewTestLogger(t),
 	}
 
 	testFn := func(params map[string]any) (any, error) {
@@ -668,9 +673,10 @@ func TestParseLogLevelParam(t *testing.T) {
 		},
 	}
 
+	logger := btestutil.NewTestLogger(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ParseLogLevelParam(tt.param)
+			result := ParseLogLevelParam(logger, tt.param)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

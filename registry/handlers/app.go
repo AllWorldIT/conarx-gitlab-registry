@@ -169,13 +169,14 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		storageParams = make(configuration.Parameters)
 	}
 
+	log := dcontext.GetLogger(app)
+	storageParams[storagedriver.ParamLogger] = log
+
 	var err error
 	app.driver, err = factory.Create(config.Storage.Type(), storageParams)
 	if err != nil {
 		return nil, err
 	}
-
-	log := dcontext.GetLogger(app)
 
 	purgeConfig := uploadPurgeDefaultConfig()
 	if mc, ok := config.Storage["maintenance"]; ok {

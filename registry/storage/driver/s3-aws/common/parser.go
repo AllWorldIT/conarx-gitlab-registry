@@ -9,9 +9,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/service/s3"
+	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
 	"github.com/hashicorp/go-multierror"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -176,12 +177,13 @@ type DriverParameters struct {
 	MaxRequestsPerSecond        int64
 	MaxRetries                  int64
 	ParallelWalk                bool
+	Logger                      dcontext.Logger
 	LogLevel                    aws.LogLevelType
 	ObjectOwnership             bool
 	S3APIImpl                   S3WrapperIf
 }
 
-func ParseLogLevelParam(param any) aws.LogLevelType {
+func ParseLogLevelParam(logger dcontext.Logger, param any) aws.LogLevelType {
 	logLevel := aws.LogOff
 
 	if param != nil {
@@ -191,28 +193,28 @@ func ParseLogLevelParam(param any) aws.LogLevelType {
 
 		switch strings.ToLower(param.(string)) {
 		case LogLevelOff:
-			log.Infof("S3 logging level set to %q", LogLevelOff)
+			logger.Infof("S3 logging level set to %q", LogLevelOff)
 			logLevel = aws.LogOff
 		case LogLevelDebug:
-			log.Infof("S3 logging level set to %q", LogLevelDebug)
+			logger.Infof("S3 logging level set to %q", LogLevelDebug)
 			logLevel = aws.LogDebug
 		case LogLevelDebugWithSigning:
-			log.Infof("S3 logging level set to %q", LogLevelDebugWithSigning)
+			logger.Infof("S3 logging level set to %q", LogLevelDebugWithSigning)
 			logLevel = aws.LogDebugWithSigning
 		case LogLevelDebugWithHTTPBody:
-			log.Infof("S3 logging level set to %q", LogLevelDebugWithHTTPBody)
+			logger.Infof("S3 logging level set to %q", LogLevelDebugWithHTTPBody)
 			logLevel = aws.LogDebugWithHTTPBody
 		case LogLevelDebugWithRequestRetries:
-			log.Infof("S3 logging level set to %q", LogLevelDebugWithRequestRetries)
+			logger.Infof("S3 logging level set to %q", LogLevelDebugWithRequestRetries)
 			logLevel = aws.LogDebugWithRequestRetries
 		case LogLevelDebugWithRequestErrors:
-			log.Infof("S3 logging level set to %q", LogLevelDebugWithRequestErrors)
+			logger.Infof("S3 logging level set to %q", LogLevelDebugWithRequestErrors)
 			logLevel = aws.LogDebugWithRequestErrors
 		case LogLevelDebugWithEventStreamBody:
-			log.Infof("S3 logging level set to %q", LogLevelDebugWithEventStreamBody)
+			logger.Infof("S3 logging level set to %q", LogLevelDebugWithEventStreamBody)
 			logLevel = aws.LogDebugWithEventStreamBody
 		default:
-			log.Infof("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff)
+			logger.Infof("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff)
 		}
 	}
 
@@ -444,7 +446,9 @@ func ParseParameters(parameters map[string]any) (*DriverParameters, error) {
 		return nil, err
 	}
 
-	res.LogLevel = ParseLogLevelParam(parameters[ParamLogLevel])
+	logger := parameters[driver.ParamLogger].(dcontext.Logger)
+	res.Logger = logger
+	res.LogLevel = ParseLogLevelParam(logger, parameters[ParamLogLevel])
 
 	return res, nil
 }

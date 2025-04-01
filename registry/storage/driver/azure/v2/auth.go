@@ -17,7 +17,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
 	"github.com/docker/distribution/registry/storage/driver/base"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -245,12 +244,9 @@ func commonClientSetup(params *DriverParameters, d *driver) {
 		if len(params.DebugLogEvents) > 0 {
 			azlog.SetEvents(params.DebugLogEvents...)
 		}
-		logrus.SetFormatter(&logrus.TextFormatter{
-			DisableQuote: true,
-		})
-		logrus.SetLevel(logrus.DebugLevel)
+		logger := params.Logger
 		azlog.SetListener(func(cls azlog.Event, msg string) {
-			logrus.WithField("event_type", cls).Debug(msg)
+			logger.WithField("event_type", cls).Debug(msg)
 		})
 	}
 }
