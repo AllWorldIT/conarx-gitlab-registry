@@ -9,7 +9,7 @@ import (
 )
 
 type logWriterType struct {
-	t *testing.T
+	t testing.TB
 }
 
 func (l logWriterType) Write(p []byte) (n int, err error) {
@@ -17,15 +17,22 @@ func (l logWriterType) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func NewContextWithLogger(t *testing.T) context.Context {
+func NewContextWithLogger(t testing.TB) context.Context {
 	ctx := context.Background()
 
-	logger := logrus.New().WithFields(logrus.Fields{
-		"test": true,
-	})
-	logger.Logger.Level = logrus.DebugLevel
-	logger.Logger.SetOutput(logWriterType{t: t})
+	logger := NewTestLogger(t)
 	ctx = dcontext.WithLogger(ctx, logger)
 
 	return ctx
+}
+
+func NewTestLogger(t testing.TB) dcontext.Logger {
+	logger := logrus.New().WithFields(
+		logrus.Fields{
+			"test": true,
+		},
+	)
+	logger.Logger.Level = logrus.DebugLevel
+	logger.Logger.SetOutput(logWriterType{t: t})
+	return logger
 }

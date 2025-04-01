@@ -96,6 +96,25 @@ type Driver struct {
 	baseEmbed
 }
 
+// NewAWSLoggerWrapper returns an aws.Logger which will write log messages to
+// given logger. It is meant as a thin wrapper.
+func NewAWSLoggerWrapper(logger dcontext.Logger) aws.Logger {
+	return &awsLoggerWrapper{
+		logger: logger,
+	}
+}
+
+// A defaultLogger provides a minimalistic logger satisfying the aws.Logger
+// interface.
+type awsLoggerWrapper struct {
+	logger dcontext.Logger
+}
+
+// Log logs the parameters to the configured logger.
+func (l awsLoggerWrapper) Log(args ...any) {
+	l.logger.Debug(args...)
+}
+
 // FromParameters constructs a new Driver with a given parameters map
 // Required parameters:
 // - accesskey
@@ -121,7 +140,9 @@ func NewS3API(params *common.DriverParameters) (s3iface.S3API, error) {
 		return nil, fmt.Errorf("on Amazon S3 this storage driver can only be used with v4 authentication")
 	}
 
-	awsConfig := aws.NewConfig().WithLogLevel(params.LogLevel)
+	awsConfig := aws.NewConfig().
+		WithLogLevel(params.LogLevel).
+		WithLogger(NewAWSLoggerWrapper(params.Logger))
 	if params.AccessKey != "" && params.SecretKey != "" {
 		creds := credentials.NewStaticCredentials(
 			params.AccessKey, params.SecretKey, params.SessionToken,

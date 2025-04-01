@@ -19,6 +19,7 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/storage"
+	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	"github.com/docker/distribution/version"
 	"github.com/docker/libtrust"
@@ -184,24 +185,26 @@ var GCCmd = &cobra.Command{
 			return errors.New("the garbage-collect command is not compatible with database metadata, please use online garbage collection instead")
 		}
 
-		maxParallelManifestGets := 1
-		parameters := config.Storage.Parameters()
-		if v, ok := (parameters[parallelwalkKey]).(bool); ok && v {
-			maxParallelManifestGets = 10
-		}
-
-		driver, err := factory.Create(config.Storage.Type(), parameters)
-		if err != nil {
-			return fmt.Errorf("failed to construct %s driver: %w", config.Storage.Type(), err)
-		}
-
 		ctx := dcontext.Background()
 		ctx, err = configureLogging(ctx, config)
 		if err != nil {
 			return fmt.Errorf("unable to configure logging with config: %w", err)
 		}
 
-		logrus.Debugf("getting a maximum of %d manifests in parallel per repository during the mark phase", maxParallelManifestGets)
+		maxParallelManifestGets := 1
+		parameters := config.Storage.Parameters()
+		if v, ok := (parameters[parallelwalkKey]).(bool); ok && v {
+			maxParallelManifestGets = 10
+		}
+
+		parameters[driver.ParamLogger] = dcontext.GetLogger(ctx)
+
+		driver, err := factory.Create(config.Storage.Type(), parameters)
+		if err != nil {
+			return fmt.Errorf("failed to construct %s driver: %w", config.Storage.Type(), err)
+		}
+
+		dcontext.GetLogger(ctx).Debugf("getting a maximum of %d manifests in parallel per repository during the mark phase", maxParallelManifestGets)
 
 		k, err := libtrust.GenerateECP256PrivateKey()
 		if err != nil {
@@ -510,21 +513,23 @@ var ImportCmd = &cobra.Command{
 			return errors.New("tag-concurrency must be between 1 and 5")
 		}
 
+		ctx := dcontext.Background()
+		ctx, err = configureLogging(ctx, config)
+		if err != nil {
+			return fmt.Errorf("unable to configure logging with config: %w", err)
+		}
+
 		parameters := config.Storage.Parameters()
 		if val, ok := parameters[parallelwalkKey].(bool); ok && val {
 			parameters[parallelwalkKey] = false
 			logrus.Info("the 'parallelwalk' configuration parameter has been disabled")
 		}
 
+		parameters[driver.ParamLogger] = dcontext.GetLogger(ctx)
+
 		driver, err := factory.Create(config.Storage.Type(), parameters)
 		if err != nil {
 			return fmt.Errorf("failed to construct %s driver: %w", config.Storage.Type(), err)
-		}
-
-		ctx := dcontext.Background()
-		ctx, err = configureLogging(ctx, config)
-		if err != nil {
-			return fmt.Errorf("unable to configure logging with config: %w", err)
 		}
 
 		k, err := libtrust.GenerateECP256PrivateKey()

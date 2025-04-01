@@ -5,7 +5,9 @@ import (
 	"time"
 
 	azlog "github.com/Azure/azure-sdk-for-go/sdk/azcore/log"
+	sdriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
+	"github.com/docker/distribution/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -22,6 +24,7 @@ func TestAzureDriverParametersTestSuite(t *testing.T) {
 
 func (s *AzureDriverParametersTestSuite) SetupTest() {
 	s.baseParams = map[string]any{
+		sdriver.ParamLogger:     testutil.NewTestLogger(s.T()),
 		common.ParamAccountName: "testaccount",
 		common.ParamAccountKey:  "testkey",
 		common.ParamContainer:   "testcontainer",
@@ -178,6 +181,8 @@ func (s *AzureDriverParametersTestSuite) TestClientSecretCredentialsMissingParam
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
+			tc.params[sdriver.ParamLogger] = testutil.NewTestLogger(s.T())
+
 			_, err := ParseParameters(tc.params)
 			require.Error(s.T(), err)
 			require.ErrorContains(s.T(), err, tc.expectedError)
@@ -193,6 +198,7 @@ func (s *AzureDriverParametersTestSuite) TestClientSecretCredentials() {
 		common.ParamClientID:        "testclient",
 		common.ParamSecret:          "testsecret",
 		common.ParamContainer:       "testcontainer",
+		sdriver.ParamLogger:         testutil.NewTestLogger(s.T()),
 	}
 
 	result, err := ParseParameters(params)
@@ -208,6 +214,7 @@ func (s *AzureDriverParametersTestSuite) TestClientSecretCredentials() {
 func (s *AzureDriverParametersTestSuite) TestDefaultCredentialsMissingContainer() {
 	params := map[string]any{
 		common.ParamCredentialsType: common.CredentialsTypeDefaultCredentials,
+		sdriver.ParamLogger:         testutil.NewTestLogger(s.T()),
 	}
 
 	_, err := ParseParameters(params)
@@ -220,6 +227,7 @@ func (s *AzureDriverParametersTestSuite) TestDefaultCredentials() {
 		common.ParamAccountName:     "testaccount",
 		common.ParamCredentialsType: common.CredentialsTypeDefaultCredentials,
 		common.ParamContainer:       "testcontainer",
+		sdriver.ParamLogger:         testutil.NewTestLogger(s.T()),
 	}
 
 	result, err := ParseParameters(params)
@@ -356,6 +364,8 @@ func (s *AzureDriverParametersTestSuite) TestRealmAndServiceURL() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
+			tc.params[sdriver.ParamLogger] = testutil.NewTestLogger(s.T())
+
 			result, err := ParseParameters(tc.params)
 
 			if tc.expectError {
@@ -416,6 +426,8 @@ func (s *AzureDriverParametersTestSuite) TestPoolConfiguration() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
+			tc.params[sdriver.ParamLogger] = testutil.NewTestLogger(s.T())
+
 			result, err := ParseParameters(tc.params)
 			if tc.expectError {
 				assert.Error(s.T(), err)
@@ -488,6 +500,7 @@ func (s *AzureDriverParametersTestSuite) TestInvalidDebugLogOption() {
 		common.ParamAccountKey:  "testkey",
 		common.ParamContainer:   "testcontainer",
 		common.ParamDebugLog:    "not_a_bool",
+		sdriver.ParamLogger:     testutil.NewTestLogger(s.T()),
 	}
 
 	_, err := ParseParameters(params)
@@ -500,6 +513,7 @@ func (s *AzureDriverParametersTestSuite) TestEmptyServiceURLAndAccountName() {
 		common.ParamCredentialsType: common.CredentialsTypeDefaultCredentials,
 		common.ParamContainer:       "testcontainer",
 		common.ParamServiceURLKey:   "",
+		sdriver.ParamLogger:         testutil.NewTestLogger(s.T()),
 	}
 
 	_, err := ParseParameters(params)
@@ -537,6 +551,8 @@ func (s *AzureDriverParametersTestSuite) TestInvalidPoolDurations() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
+			tc.params[sdriver.ParamLogger] = testutil.NewTestLogger(s.T())
+
 			_, err := ParseParameters(tc.params)
 			require.Error(s.T(), err)
 			assert.ErrorContains(s.T(), err, tc.expectedError)
@@ -551,6 +567,7 @@ func (s *AzureDriverParametersTestSuite) TestRootPrefixConfigurationError() {
 		common.ParamContainer:            "testcontainer",
 		common.ParamLegacyRootPrefix:     true,
 		common.ParamTrimLegacyRootPrefix: true,
+		sdriver.ParamLogger:              testutil.NewTestLogger(s.T()),
 	}
 
 	_, err := ParseParameters(params)
@@ -636,6 +653,8 @@ func (s *AzureDriverParametersTestSuite) TestRetryConfiguration() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
+			tc.params[sdriver.ParamLogger] = testutil.NewTestLogger(s.T())
+
 			result, err := ParseParameters(tc.params)
 			if tc.expectError {
 				assert.Error(s.T(), err)
