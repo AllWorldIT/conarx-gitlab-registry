@@ -195,16 +195,6 @@ build_smoketest:
 .schema-migrations:
   needs: ['modules:download']
   extends: .go-pg-version-matrix
-  # TODO: We're overriding the `.go-pg-version-matrix` build matrix to get rid of the flake described in https://gitlab.com/gitlab-org/container-registry/-/issues/1420
-  # by pinning the Postgres 14 version to 14.3. Remove this once we drop support for Postgres 14 in GitLab 18.0 (https://gitlab.com/gitlab-org/container-registry/-/issues/1466).
-  parallel:
-    matrix:
-      - PG_VERSION: "14.3"
-        GO_VERSION: [ "1.23", "1.24" ]
-      - PG_VERSION: $PG_CURR_VERSION
-        GO_VERSION: [ "1.23", "1.24" ]
-      - PG_VERSION: $PG_NEXT_VERSION
-        GO_VERSION: [ "1.23", "1.24" ]
   variables:
     FF_NETWORK_PER_BUILD: 1
     POSTGRES_PASSWORD: "secret"

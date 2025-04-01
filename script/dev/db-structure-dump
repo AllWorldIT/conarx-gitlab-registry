@@ -7,7 +7,7 @@ set -eo pipefail
 # Constants
 DB_DIR=./registry/datastore/migrations
 FILE_PATH=$DB_DIR/structure.sql
-PG_CLIENT_REQUIRED_MAJOR_VERSION="${PG_VERSION:-14}"
+PG_CLIENT_REQUIRED_MAJOR_VERSION="${PG_VERSION:-15}"
 PG_FORMAT_REQUIRED_MAJOR_VERSION="5"
 DB_HOST=localhost
 DB_USER=postgres
