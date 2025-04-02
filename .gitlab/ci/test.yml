@@ -87,7 +87,7 @@ oci-conformance:
 
 # Smoke tests for the database import CLI
 # See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/database-import-tool.md
-import:one-step:
+.import-template:
   extends: .go-pg-version-matrix
   needs: ['modules:download']
   stage: test
@@ -107,5 +107,15 @@ import:one-step:
     - make binaries
     - chmod +x ./bin/*
     - ./bin/registry database migrate up config/database-filesystem.yml
+
+import:one-step:
+  extends: .import-template
   script:
     - ./bin/registry database import --log-to-stdout config/database-filesystem.yml
+
+import:three-step:
+  extends: .import-template
+  script:
+    - ./bin/registry database import --step-one --log-to-stdout config/database-filesystem.yml
+    - ./bin/registry database import --step-two --log-to-stdout config/database-filesystem.yml
+    - ./bin/registry database import --step-three --log-to-stdout config/database-filesystem.yml
