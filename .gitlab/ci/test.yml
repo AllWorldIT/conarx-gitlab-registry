@@ -84,3 +84,28 @@ oci-conformance:
       alias: "db"
   script:
     - ./conformance.test
+
+# Smoke tests for the database import CLI
+# See https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/database-import-tool.md
+import:one-step:
+  extends: .go-pg-version-matrix
+  needs: ['modules:download']
+  stage: test
+  variables:
+    FF_NETWORK_PER_BUILD: 1
+    POSTGRES_USER: "registry"
+    POSTGRES_PASSWORD: "apassword"
+    POSTGRES_DB: "registry_dev"
+    REGISTRY_DATABASE_ENABLED: "false"
+    REGISTRY_DATABASE_HOST: "db"
+    REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED: "true"
+    REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: "registry/datastore/testdata/fixtures/importer/happy-path"
+  services:
+    - name: postgres:${PG_VERSION}-alpine
+      alias: "db"
+  before_script:
+    - make binaries
+    - chmod +x ./bin/*
+    - ./bin/registry database migrate up config/database-filesystem.yml
+  script:
+    - ./bin/registry database import --log-to-stdout config/database-filesystem.yml
