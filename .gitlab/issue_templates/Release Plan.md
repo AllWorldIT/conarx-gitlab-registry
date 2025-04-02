@@ -91,6 +91,7 @@ The release documentation can be found [here](https://gitlab.com/gitlab-org/cont
       1. [ ] Version bump for Pre-Production and Staging.
       1. [ ] Version bump for Production Canary.
       1. [ ] Version bump for Production Main Stage.
+1. If this is the last registry release in the milestone, open an MR to update [`REGISTRY_SELF_MANAGED_RELEASE_VERSION`](https://gitlab.com/gitlab-org/container-registry/-/blob/master/.gitlab/ci/migrate.yml?ref_type=heads#L9) to the new self-managed release version.
 
 #### Potentially risky deployments
 
