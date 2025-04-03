@@ -36,7 +36,6 @@ import (
 	azure_v2 "github.com/docker/distribution/registry/storage/driver/azure/v2"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	s3_common "github.com/docker/distribution/registry/storage/driver/s3-aws/common"
-	s3_v2 "github.com/docker/distribution/registry/storage/driver/s3-aws/v2"
 	"github.com/docker/distribution/testutil"
 )
 
@@ -524,7 +523,7 @@ func (s *DriverSuite) TestWriteReadSmallStream() {
 // TestConcurentWriteCausesError tests that a concurent write to the same file
 // will cause an error instead of data corruption.
 func (s *DriverSuite) TestConcurentWriteCausesError() {
-	if !slices.Contains([]string{azure_v2.DriverName, s3_v2.DriverName}, s.StorageDriver.Name()) {
+	if !slices.Contains([]string{azure_v2.DriverName, s3_common.V2DriverName}, s.StorageDriver.Name()) {
 		s.T().Skip("only Azure v2 and S3 v2 drivers supports this strong consistency")
 	}
 

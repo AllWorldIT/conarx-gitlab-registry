@@ -1,13 +1,16 @@
 package common
 
 import (
+	"bytes"
 	"testing"
 
+	v2_aws "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	sdriver "github.com/docker/distribution/registry/storage/driver"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	btestutil "github.com/docker/distribution/testutil"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,13 +18,15 @@ import (
 func TestParseParameters_in_groups(t *testing.T) {
 	tests := []struct {
 		name          string
+		driverVersion string
 		params        map[string]any
 		expected      *DriverParameters
 		expectedError bool
 		errorContains string
 	}{
 		{
-			name: "valid minimal configuration",
+			name:          "valid minimal configuration",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion: "us-west-2",
 				ParamBucket: "test-bucket",
@@ -46,14 +51,15 @@ func TestParseParameters_in_groups(t *testing.T) {
 				MaxRequestsPerSecond:        DefaultMaxRequestsPerSecond,
 				MaxRetries:                  DefaultMaxRetries,
 				ParallelWalk:                false,
-				LogLevel:                    aws.LogOff,
+				LogLevel:                    uint64(aws.LogOff),
 				ObjectOwnership:             false,
 				KeyID:                       "",
 			},
 			expectedError: false,
 		},
 		{
-			name: "full configuration with all parameters",
+			name:          "full configuration with all parameters v1",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:                      "us-east-1",
 				ParamBucket:                      "test-bucket-full",
@@ -99,13 +105,67 @@ func TestParseParameters_in_groups(t *testing.T) {
 				MaxRequestsPerSecond:        500,
 				MaxRetries:                  10,
 				ParallelWalk:                true,
-				LogLevel:                    aws.LogDebug,
+				LogLevel:                    uint64(aws.LogDebug),
 				ObjectOwnership:             false,
 			},
 			expectedError: false,
 		},
 		{
-			name: "configuration with object ownership enabled",
+			name:          "full configuration with all parameters v2",
+			driverVersion: V2DriverName,
+			params: map[string]any{
+				ParamRegion:                      "us-east-1",
+				ParamBucket:                      "test-bucket-full",
+				ParamAccessKey:                   "test-access-key",
+				ParamSecretKey:                   "test-secret-key",
+				ParamEncrypt:                     true,
+				ParamKeyID:                       "test-key-id",
+				ParamSecure:                      false,
+				ParamSkipVerify:                  true,
+				ParamV4Auth:                      false,
+				ParamChunkSize:                   10 << 20, // 10MB
+				ParamMultipartCopyChunkSize:      64 << 20, // 64MB
+				ParamMultipartCopyMaxConcurrency: 50,
+				ParamMultipartCopyThresholdSize:  128 << 20, // 128MB
+				ParamRootDirectory:               "/test/root",
+				ParamStorageClass:                s3.StorageClassReducedRedundancy,
+				ParamObjectACL:                   s3.ObjectCannedACLPublicRead,
+				ParamPathStyle:                   true,
+				ParamMaxRequestsPerSecond:        500,
+				ParamMaxRetries:                  10,
+				ParamParallelWalk:                true,
+				ParamLogLevel:                    LogRequestEventMessage,
+			},
+			expected: &DriverParameters{
+				AccessKey:                   "test-access-key",
+				SecretKey:                   "test-secret-key",
+				Region:                      "us-east-1",
+				RegionEndpoint:              "",
+				Bucket:                      "test-bucket-full",
+				Encrypt:                     true,
+				KeyID:                       "test-key-id",
+				Secure:                      false,
+				SkipVerify:                  true,
+				V4Auth:                      false,
+				ChunkSize:                   10 << 20,
+				MultipartCopyChunkSize:      64 << 20,
+				MultipartCopyMaxConcurrency: 50,
+				MultipartCopyThresholdSize:  128 << 20,
+				RootDirectory:               "/test/root",
+				StorageClass:                s3.StorageClassReducedRedundancy,
+				ObjectACL:                   s3.ObjectCannedACLPublicRead,
+				PathStyle:                   true,
+				MaxRequestsPerSecond:        500,
+				MaxRetries:                  10,
+				ParallelWalk:                true,
+				LogLevel:                    uint64(v2_aws.LogRequestEventMessage),
+				ObjectOwnership:             false,
+			},
+			expectedError: false,
+		},
+		{
+			name:          "configuration with object ownership enabled",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:          "us-west-2",
 				ParamBucket:          "test-bucket",
@@ -137,13 +197,14 @@ func TestParseParameters_in_groups(t *testing.T) {
 				MaxRequestsPerSecond:        DefaultMaxRequestsPerSecond,
 				MaxRetries:                  DefaultMaxRetries,
 				ParallelWalk:                false,
-				LogLevel:                    aws.LogOff,
+				LogLevel:                    uint64(aws.LogOff),
 				ObjectOwnership:             true,
 			},
 			expectedError: false,
 		},
 		{
-			name: "missing required parameters",
+			name:          "missing required parameters",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamAccessKey: "testkey",
 			},
@@ -151,7 +212,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "no \"region\" parameter provided",
 		},
 		{
-			name: "invalid region",
+			name:          "invalid region",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion: "invalid-region",
 				ParamBucket: "test-bucket",
@@ -160,7 +222,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "validating region provided",
 		},
 		{
-			name: "custom endpoint skips region validation",
+			name:          "custom endpoint skips region validation",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:         "custom-region",
 				ParamRegionEndpoint: "https://custom.endpoint",
@@ -185,7 +248,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name: "invalid chunk size",
+			name:          "invalid chunk size",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -195,7 +259,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting \"chunksize\" to int64",
 		},
 		{
-			name: "chunk size below minimum",
+			name:          "chunk size below minimum",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -205,7 +270,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "chunksize",
 		},
 		{
-			name: "invalid encrypt parameter",
+			name:          "invalid encrypt parameter",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:  "us-west-2",
 				ParamBucket:  "test-bucket",
@@ -215,7 +281,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"encrypt\" string as bool",
 		},
 		{
-			name: "invalid secure parameter",
+			name:          "invalid secure parameter",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion: "us-west-2",
 				ParamBucket: "test-bucket",
@@ -225,7 +292,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"secure\" string as bool",
 		},
 		{
-			name: "invalid skip verify parameter",
+			name:          "invalid skip verify parameter",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:     "us-west-2",
 				ParamBucket:     "test-bucket",
@@ -235,7 +303,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"skipverify\" string as bool",
 		},
 		{
-			name: "invalid v4auth parameter",
+			name:          "invalid v4auth parameter",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion: "us-west-2",
 				ParamBucket: "test-bucket",
@@ -245,7 +314,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"v4auth\" string as bool",
 		},
 		{
-			name: "invalid multipart copy chunk size",
+			name:          "invalid multipart copy chunk size",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:                 "us-west-2",
 				ParamBucket:                 "test-bucket",
@@ -255,7 +325,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting \"multipartcopychunksize\" to valid int64",
 		},
 		{
-			name: "invalid multipart copy max concurrency",
+			name:          "invalid multipart copy max concurrency",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:                      "us-west-2",
 				ParamBucket:                      "test-bucket",
@@ -265,7 +336,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting \"multipartcopymaxconcurrency\" to valid int64",
 		},
 		{
-			name: "invalid multipart copy threshold size",
+			name:          "invalid multipart copy threshold size",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:                     "us-west-2",
 				ParamBucket:                     "test-bucket",
@@ -275,7 +347,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting \"multipartcopythresholdsize\" to valid int64",
 		},
 		{
-			name: "storage class not a string",
+			name:          "storage class not a string",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:       "us-west-2",
 				ParamBucket:       "test-bucket",
@@ -285,7 +358,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "the storageclass parameter must be one of",
 		},
 		{
-			name: "object ACL not a string",
+			name:          "object ACL not a string",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -295,7 +369,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "object ACL parameter should be a string",
 		},
 		{
-			name: "invalid object ACL value",
+			name:          "invalid object ACL value",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -305,7 +380,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "object ACL parameter should be one of",
 		},
 		{
-			name: "invalid path style parameter",
+			name:          "invalid path style parameter",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -315,7 +391,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"pathstyle\" string as bool",
 		},
 		{
-			name: "invalid parallel walk parameter",
+			name:          "invalid parallel walk parameter",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:       "us-west-2",
 				ParamBucket:       "test-bucket",
@@ -325,7 +402,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"parallelwalk\" string as bool",
 		},
 		{
-			name: "invalid max requests per second",
+			name:          "invalid max requests per second",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:               "us-west-2",
 				ParamBucket:               "test-bucket",
@@ -335,7 +413,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting maxrequestspersecond to valid int64",
 		},
 		{
-			name: "invalid max retries",
+			name:          "invalid max retries",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:     "us-west-2",
 				ParamBucket:     "test-bucket",
@@ -345,7 +424,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting maxrequestspersecond to valid int64",
 		},
 		{
-			name: "invalid storage class",
+			name:          "invalid storage class",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:       "us-west-2",
 				ParamBucket:       "test-bucket",
@@ -355,7 +435,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "storageclass parameter must be one of",
 		},
 		{
-			name: "object ACL with ownership enabled",
+			name:          "object ACL with ownership enabled",
+			driverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:          "us-west-2",
 				ParamBucket:          "test-bucket",
@@ -371,7 +452,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.params[sdriver.ParamLogger] = btestutil.NewTestLogger(t)
 
-			result, err := ParseParameters(tt.params)
+			result, err := ParseParameters(tt.driverVersion, tt.params)
 
 			if tt.expectedError {
 				assert.Error(t, err)
@@ -429,7 +510,9 @@ func TestParseParameters_individually(t *testing.T) {
 	}
 
 	testFn := func(params map[string]any) (any, error) {
-		return ParseParameters(params)
+		// NOTE(prozlach): We are not testing here loglevel parsing, so it is
+		// OK to hardcode driver version.
+		return ParseParameters(V2DriverName, params)
 	}
 
 	tcs := map[string]struct {
@@ -622,62 +705,211 @@ func TestParseParameters_individually(t *testing.T) {
 
 func TestParseLogLevelParam(t *testing.T) {
 	tests := []struct {
-		name     string
-		param    any
-		expected aws.LogLevelType
+		name            string
+		param           any
+		expectedV1      aws.LogLevelType
+		expectedV2      v2_aws.ClientLogMode
+		expectWarningV1 bool
+		expectWarningV2 bool
 	}{
 		{
-			name:     "nil parameter",
-			param:    nil,
-			expected: aws.LogOff,
+			name:            "nil parameter",
+			param:           nil,
+			expectedV1:      aws.LogOff,
+			expectedV2:      v2_aws.ClientLogMode(0),
+			expectWarningV1: false,
+			expectWarningV2: false,
 		},
 		{
-			name:     "log off",
-			param:    LogLevelOff,
-			expected: aws.LogOff,
+			name:            "log off",
+			param:           LogLevelOff,
+			expectedV1:      aws.LogOff,
+			expectedV2:      v2_aws.ClientLogMode(0),
+			expectWarningV1: false,
+			expectWarningV2: false,
+		},
+		// V1 specific log levels
+		{
+			name:            "log debug",
+			param:           LogLevelDebug,
+			expectedV1:      aws.LogDebug,
+			expectedV2:      v2_aws.ClientLogMode(0), // Not applicable for V2
+			expectWarningV1: false,
+			expectWarningV2: true,
 		},
 		{
-			name:     "log debug",
-			param:    LogLevelDebug,
-			expected: aws.LogDebug,
+			name:            "log debug with signing",
+			param:           LogLevelDebugWithSigning,
+			expectedV1:      aws.LogDebugWithSigning,
+			expectedV2:      v2_aws.ClientLogMode(0), // Not applicable for V2
+			expectWarningV1: false,
+			expectWarningV2: true,
 		},
 		{
-			name:     "log debug with signing",
-			param:    LogLevelDebugWithSigning,
-			expected: aws.LogDebugWithSigning,
+			name:            "log debug with http body",
+			param:           LogLevelDebugWithHTTPBody,
+			expectedV1:      aws.LogDebugWithHTTPBody,
+			expectedV2:      v2_aws.ClientLogMode(0), // Not applicable for V2
+			expectWarningV1: false,
+			expectWarningV2: true,
 		},
 		{
-			name:     "log debug with http body",
-			param:    LogLevelDebugWithHTTPBody,
-			expected: aws.LogDebugWithHTTPBody,
+			name:            "log debug with request retries",
+			param:           LogLevelDebugWithRequestRetries,
+			expectedV1:      aws.LogDebugWithRequestRetries,
+			expectedV2:      v2_aws.ClientLogMode(0), // Not applicable for V2
+			expectWarningV1: false,
+			expectWarningV2: true,
 		},
 		{
-			name:     "log debug with request retries",
-			param:    LogLevelDebugWithRequestRetries,
-			expected: aws.LogDebugWithRequestRetries,
+			name:            "log debug with request errors",
+			param:           LogLevelDebugWithRequestErrors,
+			expectedV1:      aws.LogDebugWithRequestErrors,
+			expectedV2:      v2_aws.ClientLogMode(0), // Not applicable for V2
+			expectWarningV1: false,
+			expectWarningV2: true,
 		},
 		{
-			name:     "log debug with request errors",
-			param:    LogLevelDebugWithRequestErrors,
-			expected: aws.LogDebugWithRequestErrors,
+			name:            "log debug with event stream body",
+			param:           LogLevelDebugWithEventStreamBody,
+			expectedV1:      aws.LogDebugWithEventStreamBody,
+			expectedV2:      v2_aws.ClientLogMode(0), // Not applicable for V2
+			expectWarningV1: false,
+			expectWarningV2: true,
+		},
+		// V2 specific log levels
+		{
+			name:            "log signing",
+			param:           LogSigning,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogSigning,
+			expectWarningV1: false,
+			expectWarningV2: false,
 		},
 		{
-			name:     "log debug with event stream body",
-			param:    LogLevelDebugWithEventStreamBody,
-			expected: aws.LogDebugWithEventStreamBody,
+			name:            "log retries",
+			param:           LogRetries,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogRetries,
+			expectWarningV1: true,
+			expectWarningV2: false,
 		},
 		{
-			name:     "invalid log level",
-			param:    "invalid",
-			expected: aws.LogOff,
+			name:            "log request",
+			param:           LogRequest,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogRequest,
+			expectWarningV1: true,
+			expectWarningV2: false,
+		},
+		{
+			name:            "log request with body",
+			param:           LogRequestWithBody,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogRequestWithBody,
+			expectWarningV1: true,
+			expectWarningV2: false,
+		},
+		{
+			name:            "log response",
+			param:           LogResponse,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogResponse,
+			expectWarningV1: true,
+			expectWarningV2: false,
+		},
+		{
+			name:            "log response with body",
+			param:           LogResponseWithBody,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogResponseWithBody,
+			expectWarningV1: true,
+			expectWarningV2: false,
+		},
+		{
+			name:            "log deprecated usage",
+			param:           LogDeprecatedUsage,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogDeprecatedUsage,
+			expectWarningV1: true,
+			expectWarningV2: false,
+		},
+		{
+			name:            "log request event message",
+			param:           LogRequestEventMessage,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogRequestEventMessage,
+			expectWarningV1: true,
+			expectWarningV2: false,
+		},
+		{
+			name:            "log response event message",
+			param:           LogResponseEventMessage,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogResponseEventMessage,
+			expectWarningV1: true,
+			expectWarningV2: false,
+		},
+		{
+			name:            "invalid log level",
+			param:           "invalid",
+			expectedV1:      aws.LogOff,
+			expectedV2:      v2_aws.ClientLogMode(0),
+			expectWarningV1: false,
+			expectWarningV2: false,
+		},
+		// Test combined log levels
+		{
+			name:            "combined v1 log levels",
+			param:           LogLevelDebug + "," + LogLevelDebugWithSigning,
+			expectedV1:      aws.LogDebug | aws.LogDebugWithSigning,
+			expectedV2:      v2_aws.ClientLogMode(0), // Not applicable for V2
+			expectWarningV1: false,
+			expectWarningV2: true,
+		},
+		{
+			name:            "combined v2 log levels",
+			param:           LogSigning + "," + LogRetries,
+			expectedV1:      aws.LogOff, // Not applicable for V1
+			expectedV2:      v2_aws.LogSigning | v2_aws.LogRetries,
+			expectWarningV1: true,
+			expectWarningV2: false,
+		},
+		{
+			name:            "combined v2 log levels with off",
+			param:           LogSigning + "," + LogRetries + "," + LogLevelOff,
+			expectedV1:      aws.LogOff,
+			expectedV2:      v2_aws.ClientLogMode(0),
+			expectWarningV1: true,
+			expectWarningV2: false,
 		},
 	}
 
-	logger := btestutil.NewTestLogger(t)
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ParseLogLevelParam(logger, tt.param)
-			assert.Equal(t, tt.expected, result)
+	// Create a test logger that we can check for warnings
+	logBuffer := new(bytes.Buffer)
+	logger := logrus.New()
+	logger.SetOutput(logBuffer)
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+	logger.SetLevel(logrus.DebugLevel)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(tt *testing.T) {
+			resultV1 := ParseLogLevelParamV1(logger, tc.param)
+			assert.EqualValues(tt, tc.expectedV1, resultV1)
+
+			if tc.expectWarningV1 {
+				assert.Contains(tt, logBuffer.String(), "has been passed to S3 driver v1. Ignoring.")
+			}
+			logBuffer.Reset()
+
+			resultV2 := ParseLogLevelParamV2(logger, tc.param)
+			assert.EqualValues(tt, tc.expectedV2, resultV2)
+
+			if tc.expectWarningV2 {
+				assert.Contains(tt, logBuffer.String(), "has been passed to S3 driver v2. Ignoring.")
+			}
 		})
 	}
 }

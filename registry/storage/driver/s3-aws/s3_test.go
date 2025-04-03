@@ -97,11 +97,11 @@ func init() {
 func fetchEnvVarsConfiguration() {
 	driverVersion = os.Getenv(common.EnvDriverVersion)
 	switch driverVersion {
-	case v2.DriverName:
+	case common.V2DriverName:
 		fromParametersFn = v2.FromParameters
 		newDriverFn = v2.New
 		newS3APIFn = v2.NewS3API
-	case v1.DriverName, v1.DriverNameAlt:
+	case common.V1DriverName, common.V1DriverNameAlt:
 		// v1 is the default
 		fallthrough
 	default:
@@ -205,12 +205,17 @@ func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logge
 		rawParams[common.ParamObjectACL] = objectACL
 	}
 	if logLevel != "" {
-		rawParams[common.ParamLogLevel] = common.ParseLogLevelParam(logger, logLevel)
+		switch driverVersion {
+		case common.V1DriverName, common.V1DriverNameAlt:
+			rawParams[common.ParamLogLevel] = common.ParseLogLevelParamV1(logger, logLevel)
+		case common.V2DriverName:
+			rawParams[common.ParamLogLevel] = common.ParseLogLevelParamV1(logger, logLevel)
+		}
 	} else {
 		rawParams[common.ParamLogLevel] = aws.LogOff
 	}
 
-	parsedParams, err := common.ParseParameters(rawParams)
+	parsedParams, err := common.ParseParameters(driverVersion, rawParams)
 	if err != nil {
 		return nil, fmt.Errorf("parsing s3 parameters: %w", err)
 	}
@@ -1165,7 +1170,7 @@ func generateSelfSignedCert(addresses []string) (tls.Certificate, error) {
 // properly handle the "empty" directories - i.e. objects with zero size that
 // are meant as placeholders.
 func TestWalkEmptyDir(t *testing.T) {
-	if driverVersion != v2.DriverName {
+	if driverVersion != common.V2DriverName {
 		t.Skip("this issue has been fixed only for s3_v2 driver")
 	}
 
