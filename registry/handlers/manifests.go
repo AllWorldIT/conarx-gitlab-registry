@@ -628,7 +628,7 @@ func (imh *manifestHandler) PutManifest(w http.ResponseWriter, r *http.Request) 
 	l.Debug("PutImageManifest")
 
 	if imh.Tag != "" {
-		if err := imh.validateTagPushProtection(); err != nil {
+		if err := imh.validateTagPushRestriction(); err != nil {
 			imh.Errors = append(imh.Errors, err)
 			return
 		}
@@ -1538,7 +1538,7 @@ func (imh *manifestHandler) HandleDeleteManifest(w http.ResponseWriter, _ *http.
 	}
 
 	if imh.Tag != "" {
-		if err := imh.validateTagDeleteProtection(); err != nil {
+		if err := imh.validateTagDeleteRestriction(); err != nil {
 			imh.Errors = append(imh.Errors, err)
 			return
 		}
@@ -1548,7 +1548,8 @@ func (imh *manifestHandler) HandleDeleteManifest(w http.ResponseWriter, _ *http.
 			return
 		}
 	} else {
-		// Ensure that we don't allow a manifest to be deleted directly unless the user has no tag delete restrictions.
+		// Ensure that we don't allow a manifest to be deleted directly unless the user has no tag delete restrictions
+		// and there are no immutability rules.
 		// Deleting a manifest directly is not a supported operation through the GitLab API or UI. However, it's
 		// technically possible to invoke the corresponding registry API directly (after obtaining a token from Rails).
 		// Manifest deletes cascade to tags (in both filesystem and database-backed metadata modes), deleting any tags
@@ -1558,9 +1559,9 @@ func (imh *manifestHandler) HandleDeleteManifest(w http.ResponseWriter, _ *http.
 		// metadata mode (minor) and increase the already existing locking burden/contention between API and GC. For
 		// this reason and given that deleting a manifest by digest is not part of the official GitLab workflows, we'll
 		// simplify by refusing _all_ manifest delete requests unless the inbound token does not include any deny
-		// patterns for delete operations - in other words, tag protection is either disabled _or_ the invoking user
-		// is allowed to delete any tags.
-		if err := imh.validateManifestDeleteProtection(); err != nil {
+		// patterns for delete operations nor any immutable patterns - in other words, tag immutability is disabled
+		// _and_ tag protection is either disabled _or_ the invoking user is allowed to delete any tags.
+		if err := imh.validateManifestDeleteRestriction(); err != nil {
 			imh.Errors = append(imh.Errors, err)
 			return
 		}
@@ -1574,26 +1575,21 @@ func (imh *manifestHandler) HandleDeleteManifest(w http.ResponseWriter, _ *http.
 }
 
 const (
-	// protectedTagPatternMaxCount defines the maximum allowed number of inbound tag protection regexp patterns.
-	protectedTagPatternMaxCount = 5
-	// protectedTagPatternMaxLen defines the maximum allowed number of chars in the inbound tag protection regexp patterns.
-	protectedTagPatternMaxLen = 100
+	// tagPatternMaxCount defines the maximum allowed number of inbound tag protection and immutability regexp patterns.
+	tagPatternMaxCount = 5
+	// tagPatternMaxLen defines the maximum allowed number of chars in the inbound tag protection and immutability regexp patterns.
+	tagPatternMaxLen = 100
 )
 
-// validateTagProtection checks if the tag that the client is trying to manipulate matches any pattern in the
-// patterns slice of regular expressions.
+// validateTagProtection checks if the tag that the client is trying to manipulate matches any pattern in the deny
+// access patterns slice of regular expressions.
 func validateTagProtection(ctx context.Context, tagName string, patterns []string) error {
 	l := log.GetLogger(log.WithContext(ctx))
 	l.WithFields(log.Fields{"patterns": patterns, "tag_name": tagName}).Info("evaluating tag protection patterns")
 
-	if len(patterns) > protectedTagPatternMaxCount {
-		err := fmt.Errorf("pattern count limit exceeds %d", protectedTagPatternMaxCount)
-		return v2.ErrorCodeTagProtectionPatternCount.WithDetail(err)
-	}
-
 	for _, pattern := range patterns {
-		if len(pattern) > protectedTagPatternMaxLen {
-			err := fmt.Errorf("pattern %q exceeds length limit of %d", pattern, protectedTagPatternMaxLen)
+		if len(pattern) > tagPatternMaxLen {
+			err := fmt.Errorf("pattern %q exceeds length limit of %d", pattern, tagPatternMaxLen)
 			return v2.ErrorCodeInvalidTagProtectionPattern.WithDetail(err)
 		}
 		re, err := regexp.Compile(pattern)
@@ -1609,28 +1605,76 @@ func validateTagProtection(ctx context.Context, tagName string, patterns []strin
 	return nil
 }
 
-func (imh *manifestHandler) validateManifestDeleteProtection() error {
-	patterns, found := dcontext.TagDeleteDenyAccessPatterns(imh.Context, imh.Repository.Named().String())
-	if found && len(patterns) > 0 {
+// validateTagImmutability checks if the tag that the client is trying to manipulate matches any pattern in the
+// immutable patterns slice of regular expressions.
+func validateTagImmutability(ctx context.Context, tagName string, patterns []string) error {
+	l := log.GetLogger(log.WithContext(ctx))
+	l.WithFields(log.Fields{"patterns": patterns, "tag_name": tagName}).Info("evaluating tag immutability patterns")
+
+	for _, pattern := range patterns {
+		if len(pattern) > tagPatternMaxLen {
+			err := fmt.Errorf("pattern %q exceeds length limit of %d", pattern, tagPatternMaxLen)
+			return v2.ErrorCodeInvalidTagImmutabilityPattern.WithDetail(err)
+		}
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return v2.ErrorCodeInvalidTagImmutabilityPattern.WithDetail(fmt.Errorf("failed compiling pattern %q: %w", pattern, err))
+		}
+
+		if re.MatchString(tagName) {
+			return v2.ErrorCodeImmutableTag.WithDetail(fmt.Sprintf("tag %q is immutable", tagName))
+		}
+	}
+
+	return nil
+}
+
+func (imh *manifestHandler) validateManifestDeleteRestriction() error {
+	repoName := imh.Repository.Named().String()
+	denyAccessPatterns, _ := dcontext.TagDeleteDenyAccessPatterns(imh.Context, repoName)
+	immutablePatterns, _ := dcontext.TagImmutablePatterns(imh.Context, repoName)
+
+	if len(denyAccessPatterns) > 0 || len(immutablePatterns) > 0 {
 		return v2.ErrorCodeProtectedManifest
 	}
 	return nil
 }
 
-func (imh *manifestHandler) validateTagDeleteProtection() error {
-	patterns, found := dcontext.TagDeleteDenyAccessPatterns(imh.Context, imh.Repository.Named().String())
-	if found {
-		return validateTagProtection(imh.Context, imh.Tag, patterns)
+func (imh *manifestHandler) validateTagRestriction(denyAccessPatterns, immutablePatterns []string) error {
+	if len(denyAccessPatterns)+len(immutablePatterns) > tagPatternMaxCount {
+		return v2.ErrorCodeTagPatternCount.WithDetail(
+			fmt.Errorf("tag pattern count exceeds %d", tagPatternMaxCount),
+		)
 	}
+
+	if len(denyAccessPatterns) > 0 {
+		if err := validateTagProtection(imh.Context, imh.Tag, denyAccessPatterns); err != nil {
+			return err
+		}
+	}
+	if len(immutablePatterns) > 0 {
+		if err := validateTagImmutability(imh.Context, imh.Tag, immutablePatterns); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
-func (imh *manifestHandler) validateTagPushProtection() error {
-	patterns, found := dcontext.TagPushDenyAccessPatterns(imh.Context, imh.Repository.Named().String())
-	if found {
-		return validateTagProtection(imh.Context, imh.Tag, patterns)
-	}
-	return nil
+func (imh *manifestHandler) validateTagDeleteRestriction() error {
+	repoName := imh.Repository.Named().String()
+	denyAccessPatterns, _ := dcontext.TagDeleteDenyAccessPatterns(imh.Context, repoName)
+	immutablePatterns, _ := dcontext.TagImmutablePatterns(imh.Context, repoName)
+
+	return imh.validateTagRestriction(denyAccessPatterns, immutablePatterns)
+}
+
+func (imh *manifestHandler) validateTagPushRestriction() error {
+	repoName := imh.Repository.Named().String()
+	denyAccessPatterns, _ := dcontext.TagPushDenyAccessPatterns(imh.Context, repoName)
+	immutablePatterns, _ := dcontext.TagImmutablePatterns(imh.Context, repoName)
+
+	return imh.validateTagRestriction(denyAccessPatterns, immutablePatterns)
 }
 
 func (imh *manifestHandler) appendManifestDeleteError(err error) {

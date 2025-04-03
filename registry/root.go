@@ -25,6 +25,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func init() {
@@ -41,10 +42,12 @@ func init() {
 	MigrateCmd.AddCommand(MigrateVersionCmd)
 	MigrateStatusCmd.Flags().BoolVarP(&upToDateCheck, "up-to-date", "u", false, "check if all known migrations are applied")
 	MigrateStatusCmd.Flags().BoolVarP(&skipPostDeployment, "skip-post-deployment", "s", false, "ignore post deployment migrations")
+	MigrateStatusCmd.PreRunE = setBoolFlagWithEnv("SKIP_POST_DEPLOYMENT_MIGRATIONS", "skip-post-deployment")
 	MigrateCmd.AddCommand(MigrateStatusCmd)
 	MigrateUpCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do not commit changes to the database")
 	MigrateUpCmd.Flags().VarP(nullableInt{&maxNumMigrations}, "limit", "n", "limit the number of migrations (all by default)")
 	MigrateUpCmd.Flags().BoolVarP(&skipPostDeployment, "skip-post-deployment", "s", false, "do not apply post deployment migrations")
+	MigrateUpCmd.PreRunE = setBoolFlagWithEnv("SKIP_POST_DEPLOYMENT_MIGRATIONS", "skip-post-deployment")
 	MigrateCmd.AddCommand(MigrateUpCmd)
 	MigrateDownCmd.Flags().BoolVarP(&force, "force", "f", false, "no confirmation message")
 	MigrateDownCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do not commit changes to the database")
@@ -75,6 +78,8 @@ func init() {
 	RootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		return fmt.Errorf("%w\n\n%s", err, c.UsageString())
 	})
+
+	viper.AutomaticEnv()
 }
 
 // Command flag vars
@@ -97,12 +102,35 @@ var (
 	maxBBMJobRetry     *int
 )
 
-var parallelwalkKey = "parallelwalk"
+var (
+	parallelwalkKey       = "parallelwalk"
+	errPendingPDMigration = errors.New("pending post-deployment migrations must be run to unblock other available migrations")
+)
 
 // nullableInt implements spf13/pflag#Value as a custom nullable integer to capture spf13/cobra command flags.
 // https://pkg.go.dev/github.com/spf13/pflag?tab=doc#Value
 type nullableInt struct {
 	ptr **int
+}
+
+// setBoolFlagWithEnv binds a boolean flag to an environment variable and overrides the flag if the env var is set.
+// It returns an error if the binding or setting fails.
+func setBoolFlagWithEnv(envVarKey, flagName string) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, _ []string) error {
+		if err := viper.BindPFlag(envVarKey, cmd.Flags().Lookup(flagName)); err != nil {
+			return fmt.Errorf("error binding env var %q to flag %q: %w", envVarKey, flagName, err)
+		}
+
+		if !cmd.Flags().Changed(flagName) {
+			if viper.IsSet(envVarKey) {
+				value := viper.GetBool(envVarKey)
+				if err := cmd.Flags().Set(flagName, strconv.FormatBool(value)); err != nil {
+					return fmt.Errorf("error setting flag %q from env var %q: %w", flagName, envVarKey, err)
+				}
+			}
+		}
+		return nil
+	}
 }
 
 func (f nullableInt) String() string {
@@ -255,12 +283,27 @@ var MigrateUpCmd = &cobra.Command{
 		}
 		m := migrations.NewMigrator(db, opts...)
 
+		var havePendingPostDeploy bool
+		if skipPostDeployment {
+			canSkip, acceptableMigrationLimit, err := m.CanSkipPostDeploy(*maxNumMigrations)
+			if !canSkip {
+				fmt.Printf("WARNING: %v\n", err)
+				if acceptableMigrationLimit == -1 { // -1 means there is no safe non-post deployment to run
+					return errPendingPDMigration
+				}
+				*maxNumMigrations = acceptableMigrationLimit
+				fmt.Printf("Will only apply the first %d migration(s)\n", acceptableMigrationLimit)
+				havePendingPostDeploy = true
+			}
+		}
+
 		plan, err := m.UpNPlan(*maxNumMigrations)
 		if err != nil {
 			return fmt.Errorf("failed to prepare Up plan: %w", err)
 		}
 
 		if len(plan) > 0 {
+			_, _ = fmt.Println("The following migrations will be applied:")
 			_, _ = fmt.Println(strings.Join(plan, "\n"))
 		}
 
@@ -271,6 +314,9 @@ var MigrateUpCmd = &cobra.Command{
 				return fmt.Errorf("failed to run database migrations: %w", err)
 			}
 			fmt.Printf("OK: applied %d migrations and %d background migrations in %.3fs\n", mr.AppliedCount, mr.AppliedBBMCount, time.Since(start).Seconds())
+			if havePendingPostDeploy {
+				return errPendingPDMigration
+			}
 		}
 		return nil
 	},

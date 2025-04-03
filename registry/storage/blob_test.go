@@ -42,7 +42,7 @@ func TestWriteSeek(t *testing.T) {
 // TestSimpleBlobUpload covers the blob upload process, exercising common
 // error paths that might be seen during an upload.
 func TestSimpleBlobUpload(t *testing.T) {
-	randomDataReader, dgst, err := testutil.CreateRandomTarFile()
+	randomDataReader, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err, "error creating random reader")
 
 	ctx := context.Background()
@@ -178,7 +178,7 @@ func TestSimpleBlobRead(t *testing.T) {
 	require.NoError(t, err, "unexpected error getting repo")
 	bs := repository.Blobs(ctx)
 
-	randomLayerReader, dgst, err := testutil.CreateRandomTarFile()
+	randomLayerReader, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err, "error creating random data")
 
 	// Test for existence.
@@ -237,7 +237,7 @@ func TestSimpleBlobRead(t *testing.T) {
 // TestBlobMount covers the blob mount process, exercising common
 // error paths that might be seen during a mount.
 func TestBlobMount(t *testing.T) {
-	randomDataReader, dgst, err := testutil.CreateRandomTarFile()
+	randomDataReader, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err, "error creating random reader")
 
 	ctx := context.Background()

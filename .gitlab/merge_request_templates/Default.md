@@ -35,6 +35,7 @@ Related to <!-- add the issue URL here -->
   - MR includes DB chagnes
     - **Do not** include code that depends on the schema migrations in the same commit. Split the MR into two or more.
     - [ ] Manually run up and down migrations in a [postgres.ai](https://console.postgres.ai/gitlab/joe-instances/68) production database clone and post a screenshot of the result here.
+    - [ ] If adding new schema migrations make sure the `REGISTRY_SELF_MANAGED_RELEASE_VERSION` CI variable in [migrate.yml](../ci/migrate.yml) is pointing to the latest GitLab self-managed released registry version. Find the correct registry version [here](https://gitlab.com/gitlab-org/omnibus-gitlab/-/blob/master/config/software/registry.rb?ref_type=heads#L22). Make sure to select the branch of the latest GitLab release.
     - [ ] If adding new queries, extract a query plan from [postgres.ai](https://console.postgres.ai/gitlab/joe-instances/68) and post the link here. If changing existing queries, also extract a query plan for the current version for comparison.
       - [ ] I do not have access to postgres.ai and have made a comment on this MR asking for these to be run on my behalf.
     - [ ] If adding new background migration, follow the guide for [performance testing new background migrations](../../docs/spec/gitlab/database-background-migrations.md#performance-testing-guide) and add a report/summary to the MR with your analysis.

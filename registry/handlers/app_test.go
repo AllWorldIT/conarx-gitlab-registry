@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -420,8 +420,8 @@ func Test_updateOnlineGCSettings(t *testing.T) {
 
 	// use fixed time for reproducible rand seeds (used to generate jitter durations)
 	now := time.Time{}
-	r := rand.New(rand.NewSource(now.UnixNano()))
-	expectedJitter := time.Duration(r.Intn(onlineGCUpdateJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewChaCha8(dtestutil.SeedFromUnixNano(now.UnixNano())))
+	expectedJitter := time.Duration(r.IntN(onlineGCUpdateJitterMaxSeconds)) * time.Second
 
 	startTime := now.Add(1 * time.Millisecond)
 
@@ -716,8 +716,8 @@ func Test_startDBReplicaChecking_StartupJitter(t *testing.T) {
 
 	// use fixed time for reproducible rand seeds (used to generate jitter durations)
 	now := time.Time{}
-	r := rand.New(rand.NewSource(now.UnixNano()))
-	expectedJitter := time.Duration(r.Intn(dlbReplicaCheckJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewChaCha8(dtestutil.SeedFromUnixNano(now.UnixNano())))
+	expectedJitter := time.Duration(r.IntN(dlbReplicaCheckJitterMaxSeconds)) * time.Second
 
 	// Create the load balancer with the required options
 	lbMock := dmocks.NewMockLoadBalancer(ctrl)

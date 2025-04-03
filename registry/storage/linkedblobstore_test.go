@@ -26,7 +26,7 @@ func TestLinkedBlobStoreCreateWithMountFrom(t *testing.T) {
 	// readseekers for upload later.
 	testLayers := make(map[digest.Digest]io.ReadSeeker)
 	for i := 0; i < 2; i++ {
-		rs, dgst, err := testutil.CreateRandomTarFile()
+		rs, dgst, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 		require.NoError(t, err, "unexpected error generating test layer file")
 		testLayers[dgst] = rs
 	}

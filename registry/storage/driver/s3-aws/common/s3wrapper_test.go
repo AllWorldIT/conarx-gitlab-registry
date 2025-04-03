@@ -1,4 +1,4 @@
-package s3
+package common
 
 import (
 	"context"
@@ -107,10 +107,10 @@ func (m *mockDeleteObjectsWithContext) DeleteObjectsWithContext(_ aws.Context, _
 func deleteObjectsWithContext(failedRequests, maxRetries int) (*s3.DeleteObjectsOutput, int32, error) {
 	mock := &mockDeleteObjectsWithContext{failedRequests: int32(failedRequests)}
 
-	w := newS3Wrapper(
+	w := NewS3Wrapper(
 		mock,
-		withExponentialBackoff(int64(maxRetries)),
-		withBackoffNotify(func(err error, t time.Duration) {
+		WithExponentialBackoff(int64(maxRetries)),
+		WithBackoffNotify(func(err error, t time.Duration) {
 			log.WithFields(log.Fields{"error": err, "delay_s": t.Seconds()}).Info("S3: retrying after error")
 		}),
 	)

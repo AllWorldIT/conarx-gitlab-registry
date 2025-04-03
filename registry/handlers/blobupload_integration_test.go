@@ -3,22 +3,21 @@
 package handlers
 
 import (
-	"crypto/rand"
-	mrand "math/rand/v2"
+	"io"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
 func buildRepository(t *testing.T, env *env, path string) *models.Repository {
-	t.Helper()
-
 	r, err := env.rStore.CreateByPath(env.ctx, path)
 	require.NoError(t, err)
 	require.NotNil(t, r)
@@ -27,24 +26,18 @@ func buildRepository(t *testing.T, env *env, path string) *models.Repository {
 }
 
 func randomDigest(t *testing.T) digest.Digest {
-	t.Helper()
-
-	bytes := make([]byte, mrand.IntN(10000))
-	_, err := rand.Read(bytes)
-	require.NoError(t, err)
-
-	return digest.FromBytes(bytes)
+	rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(t)))
+	dgst, _ := digest.FromReader(io.LimitReader(rng, rand.Int64N(10000)))
+	return dgst
 }
 
 func buildRandomBlob(t *testing.T, env *env) *models.Blob {
-	t.Helper()
-
 	bStore := datastore.NewBlobStore(env.db)
 
 	b := &models.Blob{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
-		Size:      mrand.Int64N(10000),
+		Size:      rand.Int64N(10000),
 	}
 	err := bStore.Create(env.ctx, b)
 	require.NoError(t, err)
@@ -58,7 +51,7 @@ func randomBlobDescriptor(t *testing.T) distribution.Descriptor {
 	return distribution.Descriptor{
 		MediaType: "application/octet-stream",
 		Digest:    randomDigest(t),
-		Size:      mrand.Int64N(10000),
+		Size:      rand.Int64N(10000),
 	}
 }
 
@@ -73,15 +66,11 @@ func descriptorFromBlob(t *testing.T, b *models.Blob) distribution.Descriptor {
 }
 
 func linkBlob(t *testing.T, env *env, r *models.Repository, d digest.Digest) {
-	t.Helper()
-
 	err := env.rStore.LinkBlob(env.ctx, r, d)
 	require.NoError(t, err)
 }
 
 func isBlobLinked(t *testing.T, env *env, r *models.Repository, d digest.Digest) bool {
-	t.Helper()
-
 	linked, err := env.rStore.ExistsBlob(env.ctx, r, d)
 	require.NoError(t, err)
 
@@ -89,8 +78,6 @@ func isBlobLinked(t *testing.T, env *env, r *models.Repository, d digest.Digest)
 }
 
 func findRepository(t *testing.T, env *env, path string) *models.Repository {
-	t.Helper()
-
 	r, err := env.rStore.FindByPath(env.ctx, path)
 	require.NoError(t, err)
 	require.NotNil(t, r)
@@ -99,8 +86,6 @@ func findRepository(t *testing.T, env *env, path string) *models.Repository {
 }
 
 func findBlob(t *testing.T, env *env, d digest.Digest) *models.Blob {
-	t.Helper()
-
 	bStore := datastore.NewBlobStore(env.db)
 	b, err := bStore.FindByDigest(env.ctx, d)
 	require.NoError(t, err)

@@ -22,9 +22,7 @@ func TestFilesystemDriverSuite(t *testing.T) {
 				"rootdirectory": root,
 			})
 		},
-		func() (storagedriver.StorageDriver, error) {
-			return FromParameters(make(map[string]any))
-		},
+		nil,
 		nil,
 	)
 	suite.Run(t, ts)
@@ -40,9 +38,7 @@ func BenchmarkFilesystemDriverSuite(b *testing.B) {
 				"rootdirectory": root,
 			})
 		},
-		func() (storagedriver.StorageDriver, error) {
-			return FromParameters(make(map[string]any))
-		},
+		nil,
 		nil,
 	)
 
@@ -192,8 +188,6 @@ func TestFilesystemDriverDeleteFilesNonExistingParentDir(t *testing.T) {
 }
 
 func newTempDirDriver(t *testing.T) *Driver {
-	t.Helper()
-
 	rootDir := t.TempDir()
 
 	d, err := FromParameters(map[string]any{

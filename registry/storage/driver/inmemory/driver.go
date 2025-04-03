@@ -142,6 +142,14 @@ func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storaged
 
 	normalized := normalize(path)
 
+	if doAppend {
+		found := d.root.find(normalized)
+
+		if found.path() != normalized {
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+		}
+	}
+
 	f, err := d.root.mkfile(normalized)
 	if err != nil {
 		return nil, fmt.Errorf("not a file")
@@ -307,6 +315,7 @@ func (w *writer) Close() error {
 		return storagedriver.ErrAlreadyClosed
 	}
 	w.closed = true
+
 	return nil
 }
 
@@ -320,8 +329,14 @@ func (w *writer) Cancel() error {
 
 	w.d.mutex.Lock()
 	defer w.d.mutex.Unlock()
-
-	return w.d.root.delete(w.f.path())
+	err := w.d.root.delete(w.f.path())
+	if err != nil {
+		if errors.As(err, new(storagedriver.PathNotFoundError)) {
+			return nil
+		}
+		return fmt.Errorf("removing canceled blob: %w", err)
+	}
+	return nil
 }
 
 func (w *writer) Commit() error {

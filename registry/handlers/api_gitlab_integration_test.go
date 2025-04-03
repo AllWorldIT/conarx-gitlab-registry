@@ -4,10 +4,10 @@ package handlers_test
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"path"
@@ -31,6 +31,7 @@ import (
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/internal/testutil"
+	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -42,8 +43,6 @@ import (
 var iso8601MsFormat = regexp.MustCompile(`^(?:[0-9]{4}-[0-9]{2}-[0-9]{2})?(?:[ T][0-9]{2}:[0-9]{2}:[0-9]{2})?(?:[.][0-9]{3})`)
 
 func testGitlabAPIRepositoryGet(t *testing.T, opts ...configOpt) {
-	t.Helper()
-
 	env := newTestEnv(t, opts...)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
@@ -229,8 +228,6 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingTopLevel(t *tes
 }
 
 func testGitlabAPIRepositoryTagsList(t *testing.T, opts ...configOpt) {
-	t.Helper()
-
 	env := newTestEnv(t, opts...)
 	t.Cleanup(env.Shutdown)
 	env.requireDB(t)
@@ -957,8 +954,6 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 // assertLinkHeaderForPublishedAt formats the expected links according to the response we want from the
 // repositories tags list endpoint with the escaped base64 encoded pagination marker.
 func assertLinkHeaderForPublishedAt(t *testing.T, gotLink, expectedBefore, expectedLast, p, sortOrder string) {
-	t.Helper()
-
 	if expectedBefore == "" && expectedLast == "" {
 		require.Empty(t, gotLink, "Link header should not exist: %s", gotLink)
 	}
@@ -1010,10 +1005,10 @@ func TestGitlabAPI_RepositoryTagsList_DefaultPageSize(t *testing.T) {
 
 	// generate 100+1 random tag names
 	tags := make([]string, 0, 101)
+	rng := rand.NewChaCha8([32]byte(rngtestutil.MustChaChaSeed(t)))
 	for i := 0; i <= 100; i++ {
 		b := make([]byte, 10)
-		_, err := rand.Read(b)
-		require.NoError(t, err)
+		_, _ = rng.Read(b)
 		tags = append(tags, fmt.Sprintf("%x", b)[:10])
 	}
 
@@ -2415,8 +2410,6 @@ func TestGitlabAPI_RepositoryTagDetail(t *testing.T) {
 }
 
 func testNonExistingTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
-	t.Helper()
-
 	// seed an untagged manifest to be able to return v2.ErrorTagNameUnknown
 	seedRandomSchema2Manifest(t, env, repoPath)
 	u, err := env.builder.BuildGitlabV1RepositoryTagDetailURL(repoRef, "unknown")
@@ -2438,8 +2431,6 @@ func testNonExistingTag(t *testing.T, env *testEnv, repoRef reference.Named, rep
 }
 
 func testSingleManifestTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
-	t.Helper()
-
 	tagName := "latest"
 	// Seed initial repository with a manifest
 	expectedManifest := seedRandomSchema2Manifest(t, env, repoPath, putByTag(tagName))
@@ -2459,8 +2450,6 @@ func testSingleManifestTag(t *testing.T, env *testEnv, repoRef reference.Named, 
 }
 
 func testManifestListTag(t *testing.T, env *testEnv, repoRef reference.Named, repoPath string) {
-	t.Helper()
-
 	ociIndexTagName := "oci-index"
 	expectedManifestList := seedRandomOCIImageIndex(t, env, repoRef.Name(), putByTag(ociIndexTagName))
 
@@ -2479,8 +2468,6 @@ func testManifestListTag(t *testing.T, env *testEnv, repoRef reference.Named, re
 }
 
 func decodeJSON(t *testing.T, resp *http.Response, v any) {
-	t.Helper()
-
 	p, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	err = json.Unmarshal(p, v)
@@ -2488,8 +2475,6 @@ func decodeJSON(t *testing.T, resp *http.Response, v any) {
 }
 
 func assertSingleManifestResponse(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse, tagName, repoPath string, expectedManifest *schema2.DeserializedManifest) {
-	t.Helper()
-
 	assert.Equal(t, r.Name, tagName, "tag name did not match")
 	assert.Equal(t, r.Repository, repoPath, "repo path did not match")
 	require.NotNil(t, r.Image)
@@ -2516,8 +2501,6 @@ func assertSingleManifestResponse(t *testing.T, r *handlers.RepositoryTagDetailA
 }
 
 func assertManifestListResponse(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse, tagName, repoPath string, expectedManifestList *manifestlist.DeserializedManifestList) {
-	t.Helper()
-
 	assert.Equal(t, r.Name, tagName, "tag name did not match")
 	assert.Equal(t, r.Repository, repoPath, "repo path did not match")
 	require.NotNil(t, r.Image)
@@ -2543,8 +2526,6 @@ func assertManifestListResponse(t *testing.T, r *handlers.RepositoryTagDetailAPI
 }
 
 func assertManifestReferences(t *testing.T, expectedReferences []distribution.Descriptor, references []*handlers.Image) {
-	t.Helper()
-
 	for i, expectedRef := range expectedReferences {
 		if expectedRef.Digest.String() != references[i].Manifest.Digest {
 			continue
@@ -2569,8 +2550,6 @@ func assertManifestReferences(t *testing.T, expectedReferences []distribution.De
 }
 
 func assertCommonResponseFields(t *testing.T, r *handlers.RepositoryTagDetailAPIResponse) {
-	t.Helper()
-
 	assert.NotEmpty(t, r.CreatedAt, "created_at must exist")
 	assert.Regexp(t, iso8601MsFormat, r.CreatedAt, "created_at must match ISO format")
 	assert.Empty(t, r.UpdatedAt)

@@ -37,18 +37,21 @@ inmemory:
     # and cause a flaky test https://gitlab.com/gitlab-org/container-registry/-/issues/1177
   script: $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE -test.short
 
-s3-aws:
+s3:minio:
   <<: *storage-driver-test
+  parallel:
+    matrix:
+      # Regular combinations
+      - GO_VERSION: [ "1.23", "1.24" ]
+        S3_DRIVER_VERSION: [ "s3", "s3_v2" ]
+  rules:
+    - if: $CI_COMMIT_REF_NAME != $CI_DEFAULT_BRANCH
+      when: on_success
   variables:
     <<: *storage-driver-variables
-    AWS_ACCESS_KEY: "AKIAIOSFODNN7EXAMPLE"
-    AWS_SECRET_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-    MINIO_ACCESS_KEY: $AWS_ACCESS_KEY
-    MINIO_SECRET_KEY: $AWS_SECRET_KEY
+    MINIO_ACCESS_KEY: "AKIAIOSFODNN7EXAMPLE"
+    MINIO_SECRET_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
     REGION_ENDPOINT: "http://minio:9000"
-    AWS_REGION: "us-east-2"
-    S3_BUCKET: "test-bucket"
-    S3_ENCRYPT: "false"
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/s3-aws"
   services:
     - name: minio/minio:latest
@@ -59,8 +62,48 @@ s3-aws:
     - wget --no-verbose https://dl.min.io/client/mc/release/linux-amd64/mc
     - chmod u+x ./mc
     # Configure the minio client to use the local minio service rather than play.minio.io
-    - ./mc config host add s3v4 $REGION_ENDPOINT $AWS_ACCESS_KEY $AWS_SECRET_KEY --api S3v4
-    - ./mc mb s3v4/$S3_BUCKET
+    - |
+      for i in `env | grep -E 'S3|AWS' | cut -d\= -f1`; do unset $i; done;
+      export S3_BUCKET="test-bucket"
+
+      ./mc config host add s3v4 $REGION_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api S3v4
+      ./mc mb s3v4/$S3_BUCKET
+  script:
+    # NOTE(prozlach): Project and group credentials take precedence over job
+    # credentials as per https://docs.gitlab.com/ci/variables/#cicd-variable-precedence
+    # so we need clean up any env vars and set our own before we run the tests.
+    - |
+      for i in `env | grep -E 'S3|AWS' | cut -d\= -f1`; do unset $i; done;
+      export AWS_ACCESS_KEY=$MINIO_ACCESS_KEY
+      export AWS_SECRET_KEY=$MINIO_SECRET_KEY
+      export AWS_REGION="us-east-2"
+      export S3_BUCKET="test-bucket"
+      export S3_ENCRYPT="false"
+      $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
+
+# NOTE(prozlach): S3 bucket used in tests has an auto-cleanup policy set
+# - all blobs older than 24h will be deleted, so even if CI task fails, there
+# is no risk that we will keep being billed for the storage indefinatelly.
+# NOTE(prozlach): Instructions on how to set-up custom runner are in file
+# `docs/custom_runners.md`
+s3:aws:
+  <<: *storage-driver-test
+  parallel:
+    matrix:
+      # Regular combinations
+      - GO_VERSION: [ "1.23", "1.24" ]
+        S3_DRIVER_VERSION: [ "s3", "s3_v2" ]
+  rules:
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: on_success
+  variables:
+    <<: *storage-driver-variables
+    PACKAGE: "github.com/docker/distribution/registry/storage/driver/s3-aws"
+  tags:
+    # NOTE(prozlach): run on a custom runner, that runs on an AWS VM which has
+    # managed credentials set up for the bucket that CI variables point to.
+    # Other variants run here as well in order to save $$ on bandwith costs.
+    - s3-managed_identity_auth
 
 gcs:
   <<: *storage-driver-test
@@ -72,67 +115,38 @@ gcs:
   before_script:
     - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
 
-.if-fork: &if-fork
-  if: '$CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
+.if-fork-merge-request: &if-fork-merge-request
+  if: '($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE != "merge_train") && $CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
 
 # NOTE(prozlach): Azure storage container used in tests has an auto-cleanup policy set
 # - all blobs older than 24h will be deleted, so even if CI task fails, there
 # is no risk that we will keep being billed for the storage indefinatelly.
-azure:default-runner:
+# NOTE(prozlach): Instructions on how to set-up custom runner are in file
+# `docs/custom_runners.md`
+azure:
   <<: *storage-driver-test
   parallel:
     matrix:
       # Regular combinations
-      - GO_VERSION: [ "1.22", "1.23" ]
+      - GO_VERSION: [ "1.23", "1.24" ]
         AZURE_DRIVER_VERSION: [ "azure", "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "shared_key" ]
-      - GO_VERSION: [ "1.22", "1.23" ]
+      - GO_VERSION: [ "1.23", "1.24" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
-        AZURE_CREDENTIALS_TYPE: [ "client_secret" ]
-  variables:
-    <<: *storage-driver-variables
-    PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
-    AZURE_DRIVER_VERSION: $AZURE_DRIVER_VERSION
-    AZURE_CREDENTIALS_TYPE: $AZURE_CREDENTIALS_TYPE
-    # NOTE(prozlach): Code supports `AZURE_DEBUGLOG` environment variable which
-    # can be toggled in the CI via CI enviroment variables for debugging
-    # if/when needed. It is currently set to `false`, set it to `true` to
-    # enable debug logging.
-    # NOTE(prozlach): From what I noticed, if the tests do not finish within 45
-    # minutes, they will not finish in 60 minutes either. A lot depends on the
-    # latency between the Gitlab runner and azure store account. Moving Azure
-    # storage closer to Gitlab runners (i.e. us-east Azure zone) decreased run
-    # time from ~40m to around 9m. 
-  # TODO: remove allow_failure once the test setup is fixed
-  # https://gitlab.com/gitlab-org/container-registry/-/issues/1478
-  allow_failure: true
-
-# NOTE(prozlach): Do not run all azure jobs on the azure runner as it does not
-# have enough capacity and is not secure enough to be exposed to shared_key
-# credentials.
-# NOTE(prozlach): Access credentials for the VM are stored in 1Password, entry
-# `container-registry-cirunner`.
-# NOTE(prozlach): Setting up custom runner follows the standard steps
-# documented for setting up custom gitlab runner with few extra steps:
-# * the host must be assigned managed identy access with level Data Contributor
-# to the blob storage account we use for testing
-# * the runner must be configured to use docker executor in host network mode
-# * the concurency level for the runner should be set to at least 6
-# * the runner should have at least 4 vCPU and 16GiB RAM
-# * running untagged jobs on this runner must be disabled
-# * runner must be tagged with `azure-managed_identity_auth` tag
-azure:managed-identity:
-  <<: *storage-driver-test
-  parallel:
-    matrix:
-      # Managed identity combinations
-      - GO_VERSION: [ "1.22", "1.23" ]
-        AZURE_DRIVER_VERSION: [ "azure_v2" ]
-        AZURE_CREDENTIALS_TYPE: [ "default_credentials" ]
-  # Do not run in forked projects without the required runner.
+        AZURE_CREDENTIALS_TYPE: [ "client_secret", "default_credentials" ]
+  # Do not run in forked projects, as we are running on custom runner with
+ # instance-level credentials
   rules:
-    - <<: *if-fork
+    - <<: *if-fork-merge-request
       when: never
+    # Cover the case when there is an MR merged to the default branch:
+    # https://docs.gitlab.com/ci/yaml/#ruleschanges
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: on_success
+    - when: on_success
+      changes:
+        - registry/storage/driver/azure/*
+        - registry/storage/driver/azure/**/*
   variables:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/azure/..."
@@ -142,25 +156,24 @@ azure:managed-identity:
     # can be toggled in the CI via CI enviroment variables for debugging
     # if/when needed. It is currently set to `false`, set it to `true` to
     # enable debug logging.
-    # NOTE(prozlach): From what I noticed, if the tests do not finish within 45
-    # minutes, they will not finish in 60 minutes either. A lot depends on the
-    # latency between the Gitlab runner and azure store account. Moving Azure
-    # storage closer to Gitlab runners (i.e. us-east Azure zone) decreased run
-    # time from ~40m to around 9m. 
   tags:
     # NOTE(prozlach): run on a custom runner, that runs on Azure VM which has
     # managed credentials set up for the storage account and container that CI
-    # variables define.
+    # variables define. Other variants run here as well in order to save $$ on
+    # bandwith costs.
     - azure-managed_identity_auth
   script:
-    # NOTE(prozlach): we need to make sure that Azure SDK will not try to auth
-    # with creds from environment and instead tries to obtain managed
+    # NOTE(prozlach): In case when we test managed credentials variant, we need
+    # to make sure that Azure SDK will not try to auth with creds from
+    # environment and instead tries to obtain managed
     # credentials from the VM itself.
     - |
-      unset AZURE_ACCOUNT_KEY
-      unset AZURE_TENANT_ID
-      unset AZURE_CLIENT_ID
-      unset AZURE_CLIENT_SECRET
+      if [[ "$AZURE_CREDENTIALS_TYPE" == "default_credentials" ]]; then
+        unset AZURE_ACCOUNT_KEY
+        unset AZURE_TENANT_ID
+        unset AZURE_CLIENT_ID
+        unset AZURE_CLIENT_SECRET
+      fi
       $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
   # TODO: remove allow_failure once the test setup is fixed
   # https://gitlab.com/gitlab-org/container-registry/-/issues/1478
@@ -416,3 +429,26 @@ cache:redis-sentinel-auth:
           sentinel resolve-hostnames yes
           EOF
           redis-sentinel /opt/bitnami/redis-sentinel/etc/sentinel.conf
+
+base-driver:
+  <<: *storage-driver-test
+  variables:
+    <<: *storage-driver-variables
+    PACKAGE: "github.com/docker/distribution/registry/storage/driver/base"
+
+# Temporary integration tests for modified copy of redis_rate
+# See https://gitlab.com/gitlab-org/container-registry/-/issues/1527.
+redis:rate:
+  extends: .go-version-matrix
+  rules:
+    - when: on_success
+      changes:
+        - internal/redis_rate/*
+  stage: integration
+  variables:
+    REDIS_ADDR: "redis:6379"
+    PACKAGE: "github.com/docker/distribution/internal/redis_rate"
+  services:
+    - name: redis:alpine
+      alias: "redis"
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration

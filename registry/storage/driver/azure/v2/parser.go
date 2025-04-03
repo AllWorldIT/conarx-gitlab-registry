@@ -2,6 +2,7 @@ package v2
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -10,109 +11,116 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
 )
 
-type driverParameters struct {
+type DriverParameters struct {
 	// One of `shared_key,client_secret,default_credentials`
-	credentialsType string
+	CredentialsType string
 
 	// client_secret:
-	tenantID string
-	clientID string
-	secret   string
+	TenantID string
+	ClientID string
+	Secret   string
 
 	// shared key:
-	accountName string
-	accountKey  string
+	AccountName string
+	AccountKey  string
 
-	container            string
-	realm                string
-	serviceURL           string
-	root                 string
-	trimLegacyRootPrefix bool
+	Container            string
+	Realm                string
+	ServiceURL           string
+	Root                 string
+	TrimLegacyRootPrefix bool
 
-	poolInitialInterval time.Duration
-	poolMaxInterval     time.Duration
-	poolMaxElapsedTime  time.Duration
+	PoolInitialInterval time.Duration
+	PoolMaxInterval     time.Duration
+	PoolMaxElapsedTime  time.Duration
 
-	debugLog       bool
-	debugLogEvents []azlog.Event
+	MaxRetries      int32
+	RetryTryTimeout time.Duration
+	RetryDelay      time.Duration
+	MaxRetryDelay   time.Duration
+
+	DebugLog       bool
+	DebugLogEvents []azlog.Event
+
+	Transport http.RoundTripper
 }
 
 // ParseParameters parses parameters for v2 driver version, and returns object
 // that is used/should be used only by this package, hence it being private
 func ParseParameters(parameters map[string]any) (any, error) {
 	var err error
-	res := new(driverParameters)
+	res := new(DriverParameters)
 
 	credsTypeRaw, ok := parameters[common.ParamCredentialsType]
 	if !ok {
 		// in case when credentials type was not specified, we default to
 		// shared key creds to keep backwards-compatibility
-		res.credentialsType = common.CredentialsTypeSharedKey
+		res.CredentialsType = common.CredentialsTypeSharedKey
 	} else {
-		res.credentialsType = fmt.Sprint(credsTypeRaw)
+		res.CredentialsType = fmt.Sprint(credsTypeRaw)
 	}
 
-	switch res.credentialsType {
+	switch res.CredentialsType {
 	case common.CredentialsTypeSharedKey, "":
 		tmp, ok := parameters[common.ParamAccountName]
 		if !ok || fmt.Sprint(tmp) == "" {
 			return nil, fmt.Errorf("no %s parameter provided", common.ParamAccountName)
 		}
-		res.accountName = fmt.Sprint(tmp)
+		res.AccountName = fmt.Sprint(tmp)
 
 		tmp, ok = parameters[common.ParamAccountKey]
 		if !ok || fmt.Sprint(tmp) == "" {
 			return nil, fmt.Errorf("no %s parameter provided", common.ParamAccountKey)
 		}
-		res.accountKey = fmt.Sprint(tmp)
+		res.AccountKey = fmt.Sprint(tmp)
 	case common.CredentialsTypeClientSecret:
 		tmp, ok := parameters[common.ParamClientID]
 		if !ok || fmt.Sprint(tmp) == "" {
 			return nil, fmt.Errorf("no %s parameter provided", common.ParamClientID)
 		}
-		res.clientID = fmt.Sprint(tmp)
+		res.ClientID = fmt.Sprint(tmp)
 
 		tmp, ok = parameters[common.ParamTenantID]
 		if !ok || fmt.Sprint(tmp) == "" {
 			return nil, fmt.Errorf("no %s parameter provided", common.ParamTenantID)
 		}
-		res.tenantID = fmt.Sprint(tmp)
+		res.TenantID = fmt.Sprint(tmp)
 
 		tmp, ok = parameters[common.ParamSecret]
 		if !ok || fmt.Sprint(tmp) == "" {
 			return nil, fmt.Errorf("no %s parameter provided", common.ParamSecret)
 		}
-		res.secret = fmt.Sprint(tmp)
+		res.Secret = fmt.Sprint(tmp)
 	case common.CredentialsTypeDefaultCredentials:
 		// Azure SDK will try to auto-detect instnance-credentials, env vars,
 		// etc... So there are no extra config variables here.
 	default:
-		return nil, fmt.Errorf("credentials type %q is invalid", res.credentialsType)
+		return nil, fmt.Errorf("credentials type %q is invalid", res.CredentialsType)
 	}
 
 	_, ok = parameters[common.ParamDebugLog]
 	if ok {
-		res.debugLog, err = parse.Bool(parameters, common.ParamDebugLog, false)
+		res.DebugLog, err = parse.Bool(parameters, common.ParamDebugLog, false)
 		if err != nil {
 			return nil, fmt.Errorf("parsing parameter %s: %w", common.ParamDebugLog, err)
 		}
 	}
-	res.debugLogEvents = make([]azlog.Event, 0)
-	if res.debugLog {
+	res.DebugLogEvents = make([]azlog.Event, 0)
+	if res.DebugLog {
 		debugLogEventsRaw, ok := parameters[common.ParamDebugLogEvents]
 		if ok {
 			for _, debugLogEventRaw := range strings.Split(debugLogEventsRaw.(string), ",") {
 				switch strings.ToLower(debugLogEventRaw) {
 				case strings.ToLower(string(azlog.EventRequest)):
-					res.debugLogEvents = append(res.debugLogEvents, azlog.EventRequest)
+					res.DebugLogEvents = append(res.DebugLogEvents, azlog.EventRequest)
 				case strings.ToLower(string(azlog.EventResponse)):
-					res.debugLogEvents = append(res.debugLogEvents, azlog.EventResponse)
+					res.DebugLogEvents = append(res.DebugLogEvents, azlog.EventResponse)
 				case strings.ToLower(string(azlog.EventResponseError)):
-					res.debugLogEvents = append(res.debugLogEvents, azlog.EventResponseError)
+					res.DebugLogEvents = append(res.DebugLogEvents, azlog.EventResponseError)
 				case strings.ToLower(string(azlog.EventRetryPolicy)):
-					res.debugLogEvents = append(res.debugLogEvents, azlog.EventRetryPolicy)
+					res.DebugLogEvents = append(res.DebugLogEvents, azlog.EventRetryPolicy)
 				case strings.ToLower(string(azlog.EventLRO)):
-					res.debugLogEvents = append(res.debugLogEvents, azlog.EventLRO)
+					res.DebugLogEvents = append(res.DebugLogEvents, azlog.EventLRO)
 				default:
 					return nil, fmt.Errorf("parsing parameter %s: unrecognized event %q", common.ParamDebugLogEvents, debugLogEventRaw)
 				}
@@ -128,13 +136,13 @@ func ParseParameters(parameters map[string]any) (any, error) {
 	if !ok || fmt.Sprint(container) == "" {
 		return nil, fmt.Errorf("no %s parameter provided", common.ParamContainer)
 	}
-	res.container = fmt.Sprint(container)
+	res.Container = fmt.Sprint(container)
 
 	realm, ok := parameters[common.ParamRealm]
 	if !ok || fmt.Sprint(realm) == "" {
-		res.realm = "core.windowns.net"
+		res.Realm = "core.windows.net"
 	} else {
-		res.realm = fmt.Sprint(realm)
+		res.Realm = fmt.Sprint(realm)
 	}
 
 	serviceURL, ok := parameters[common.ParamServiceURLKey]
@@ -148,60 +156,104 @@ func ParseParameters(parameters map[string]any) (any, error) {
 				common.ParamServiceURLKey, common.ParamAccountName,
 			)
 		}
-		res.serviceURL = fmt.Sprintf("https://%s.blob.%s", accountName, res.realm)
+		res.ServiceURL = fmt.Sprintf("https://%s.blob.%s", accountName, res.Realm)
 	} else {
-		res.serviceURL = fmt.Sprint(serviceURL)
+		res.ServiceURL = fmt.Sprint(serviceURL)
 	}
 
 	root, ok := parameters[common.ParamRootDirectory]
 	if !ok {
-		res.root = ""
+		res.Root = ""
 	} else {
 		rootTrimmed := strings.Trim(fmt.Sprint(root), "/")
 		if rootTrimmed != "" {
 			rootTrimmed += "/"
 		}
-		res.root = rootTrimmed
+		res.Root = rootTrimmed
 	}
 
 	poolInitialInterval, ok := parameters[common.ParamPoolInitialInterval]
 	if !ok {
-		res.poolInitialInterval = DefaultPoolInitialInterval
+		res.PoolInitialInterval = DefaultPoolInitialInterval
 	} else {
 		tmp, err := time.ParseDuration(fmt.Sprint(poolInitialInterval))
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamPoolInitialInterval, poolInitialInterval, err)
 		}
-		res.poolInitialInterval = tmp
+		res.PoolInitialInterval = tmp
 	}
 
 	poolMaxInterval, ok := parameters[common.ParamPoolMaxInterval]
 	if !ok {
-		res.poolMaxInterval = DefaultPoolMaxInterval
+		res.PoolMaxInterval = DefaultPoolMaxInterval
 	} else {
 		tmp, err := time.ParseDuration(fmt.Sprint(poolMaxInterval))
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamPoolMaxInterval, poolMaxInterval, err)
 		}
-		res.poolMaxInterval = tmp
+		res.PoolMaxInterval = tmp
 	}
 
 	poolMaxElapsedTime, ok := parameters[common.ParamPoolMaxElapsedTime]
 	if !ok {
-		res.poolMaxElapsedTime = DefaultPoolMaxElapsedTime
+		res.PoolMaxElapsedTime = DefaultPoolMaxElapsedTime
 	} else {
 		tmp, err := time.ParseDuration(fmt.Sprint(poolMaxElapsedTime))
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamPoolMaxElapsedTime, poolMaxElapsedTime, err)
 		}
-		res.poolMaxElapsedTime = tmp
+		res.PoolMaxElapsedTime = tmp
+	}
+
+	maxRetries, ok := parameters[common.ParamMaxRetries]
+	if !ok {
+		res.MaxRetries = DefaultMaxRetries
+	} else {
+		tmp, err := parse.Int32(parameters, common.ParamMaxRetries, DefaultMaxRetries, 0, common.ValidRetriesLimit)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse parameter %q = %v: %w", common.ParamMaxRetries, maxRetries, err)
+		}
+		res.MaxRetries = tmp
+	}
+
+	retryTryTimeout, ok := parameters[common.ParamRetryTryTimeout]
+	if !ok {
+		res.RetryTryTimeout = DefaultRetryTryTimeout
+	} else {
+		tmp, err := time.ParseDuration(fmt.Sprint(retryTryTimeout))
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamRetryTryTimeout, retryTryTimeout, err)
+		}
+		res.RetryTryTimeout = tmp
+	}
+
+	retryDelay, ok := parameters[common.ParamRetryDelay]
+	if !ok {
+		res.RetryDelay = DefaultRetryDelay
+	} else {
+		tmp, err := time.ParseDuration(fmt.Sprint(retryDelay))
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamRetryDelay, retryDelay, err)
+		}
+		res.RetryDelay = tmp
+	}
+
+	maxRetryDelay, ok := parameters[common.ParamMaxRetryDelay]
+	if !ok {
+		res.MaxRetryDelay = DefaultMaxRetryDelay
+	} else {
+		tmp, err := time.ParseDuration(fmt.Sprint(maxRetryDelay))
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse parameter %q = %q: %w", common.ParamMaxRetryDelay, maxRetryDelay, err)
+		}
+		res.MaxRetryDelay = tmp
 	}
 
 	useLegacyRootPrefix, err := common.InferRootPrefixConfiguration(parameters)
 	if err != nil {
 		return nil, err
 	}
-	res.trimLegacyRootPrefix = !useLegacyRootPrefix
+	res.TrimLegacyRootPrefix = !useLegacyRootPrefix
 
 	return res, nil
 }

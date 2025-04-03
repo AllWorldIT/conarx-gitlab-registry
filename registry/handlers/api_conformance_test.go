@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -748,7 +748,7 @@ func manifestPutSchema1ByTag(t *testing.T, opts ...configOpt) {
 	unsignedManifest.FSLayers = make([]schema1.FSLayer, 2)
 
 	for i := range unsignedManifest.FSLayers {
-		rs, dgst, _ := createRandomSmallLayer()
+		rs, dgst, _ := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
@@ -801,7 +801,7 @@ func manifestPutSchema2ByDigestConfigNotAssociatedWithRepository(t *testing.T, o
 	testManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range testManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef1)
 		pushLayer(t, env.builder, repoRef1, dgst, uploadURLBase, rs)
@@ -849,7 +849,7 @@ func manifestPutSchema2MissingConfig(t *testing.T, opts ...configOpt) {
 	testManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range testManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
@@ -928,7 +928,7 @@ func manifestPutSchema2MissingLayers(t *testing.T, opts ...configOpt) {
 	testManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range testManifest.Layers {
-		_, dgst, size := createRandomSmallLayer()
+		_, dgst, size := createRandomSmallLayer(t)
 
 		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
@@ -996,7 +996,7 @@ func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
-	rs, dgst, _ := createRandomSmallLayer()
+	rs, dgst, _ := createRandomSmallLayer(t)
 
 	uploadURLBase, _ := startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
@@ -1009,7 +1009,7 @@ func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 	testManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range testManifest.Layers {
-		_, dgst, size := createRandomSmallLayer()
+		_, dgst, size := createRandomSmallLayer(t)
 
 		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
@@ -1086,7 +1086,7 @@ func manifestPutSchema2ReferencesExceedLimit(t *testing.T, opts ...configOpt) {
 	testManifest.Layers = make([]distribution.Descriptor, 10)
 
 	for i := range testManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
@@ -1419,7 +1419,7 @@ func manifestPutSchema2ByDigestLayersNotAssociatedWithRepository(t *testing.T, o
 	testManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range testManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef2)
 		pushLayer(t, env.builder, repoRef2, dgst, uploadURLBase, rs)
@@ -1471,7 +1471,7 @@ func manifestPutSchema1ByDigest(t *testing.T, opts ...configOpt) {
 	unsignedManifest.FSLayers = make([]schema1.FSLayer, 2)
 
 	for i := range unsignedManifest.FSLayers {
-		rs, dgst, _ := createRandomSmallLayer()
+		rs, dgst, _ := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
@@ -2146,7 +2146,7 @@ func manifestPutOCIWithNonMatchingSubject(t *testing.T, opts ...configOpt) {
 
 	// Create one random layer for this manifest
 	testManifest.Layers = make([]distribution.Descriptor, 1)
-	rs, dgst, size := createRandomSmallLayer()
+	rs, dgst, size := createRandomSmallLayer(t)
 	uploadURLBase, _ = startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
 	testManifest.Layers[0] = distribution.Descriptor{
@@ -2384,8 +2384,6 @@ func manifestPutOCIImageIndexByDigest(t *testing.T, opts ...configOpt) {
 }
 
 func validateManifestPutWithNonDistributableLayers(t *testing.T, env *testEnv, repoRef reference.Named, m distribution.Manifest, mediaType string, foreignDigest digest.Digest) {
-	t.Helper()
-
 	// push manifest
 	u := buildManifestDigestURL(t, env, repoRef.Name(), m)
 	resp, err := putManifest("putting manifest no error", u, mediaType, m)
@@ -2921,8 +2919,6 @@ func blobDeleteDisabled(t *testing.T, opts ...configOpt) {
 }
 
 func blobDeleteImpl(t *testing.T, opts ...configOpt) string {
-	t.Helper()
-
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
 	t.Cleanup(env.Shutdown)

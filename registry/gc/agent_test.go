@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -17,6 +17,7 @@ import (
 	wmocks "github.com/docker/distribution/registry/gc/worker/mocks"
 	regmocks "github.com/docker/distribution/registry/internal/mocks"
 	"github.com/docker/distribution/registry/internal/testutil"
+	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"gitlab.com/gitlab-org/labkit/correlation"
@@ -190,8 +191,8 @@ func TestAgent_Start_Jitter(t *testing.T) {
 
 	// use fixed time for reproducible rand seeds (used to generate jitter durations)
 	now := time.Time{}
-	r := rand.New(rand.NewSource(now.UnixNano()))
-	expectedJitter := time.Duration(r.Intn(startJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewChaCha8(rngtestutil.SeedFromUnixNano(now.UnixNano())))
+	expectedJitter := time.Duration(r.IntN(startJitterMaxSeconds)) * time.Second
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

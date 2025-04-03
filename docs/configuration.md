@@ -91,7 +91,7 @@ storage:
     legacyrootprefix: false
     trimlegacyrootprefix: false
   azure_v2:
-    credentialstype: shared_key
+    credentials_type: shared_key
     accountname: accountname
     accountkey: base64encodedaccountkey
     realm: realm
@@ -100,10 +100,10 @@ storage:
     rootdirectory: /azure/virtual/container
     legacyrootprefix: false
     trimlegacyrootprefix: false
-    apipoolinitialinterval: 500ms
-    apipoolmaxinterval: 15s
-    apipoolmaxelapsedtime: 5m
-    debuglog: false
+    api_pool_initial_interval: 500ms
+    api_pool_max_interval: 15s
+    api_pool_max_elapsed_time: 5m
+    debug_log: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
@@ -453,7 +453,7 @@ storage:
     legacyrootprefix: false
     trimlegacyrootprefix: false
   azure_v2:
-    credentialstype: shared_key
+    credentials_type: shared_key
     accountname: accountname
     accountkey: base64encodedaccountkey
     realm: realm
@@ -462,10 +462,10 @@ storage:
     rootdirectory: /azure/virtual/container
     legacyrootprefix: false
     trimlegacyrootprefix: false
-    apipoolinitialinterval: 500ms
-    apipoolmaxinterval: 15s
-    apipoolmaxelapsedtime: 5m
-    debuglog: false
+    api_pool_initial_interval: 500ms
+    api_pool_max_interval: 15s
+    api_pool_max_elapsed_time: 5m
+    debug_log: false
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile

@@ -3,7 +3,7 @@ package gc
 import (
 	"context"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/benbjohnson/clock"
@@ -13,6 +13,7 @@ import (
 	"github.com/docker/distribution/registry/gc/internal/metrics"
 	"github.com/docker/distribution/registry/gc/worker"
 	reginternal "github.com/docker/distribution/registry/internal"
+	"github.com/docker/distribution/testutil"
 	"github.com/sirupsen/logrus"
 	"gitlab.com/gitlab-org/labkit/correlation"
 )
@@ -129,8 +130,8 @@ func (a *Agent) Start(ctx context.Context) error {
 	b := backoffConstructor(a.initialInterval, a.maxBackoff)
 
 	// nolint: gosec // used only for jitter calculation
-	r := rand.New(rand.NewSource(systemClock.Now().UnixNano()))
-	jitter := time.Duration(r.Intn(startJitterMaxSeconds)) * time.Second
+	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(systemClock.Now().UnixNano())))
+	jitter := time.Duration(r.IntN(startJitterMaxSeconds)) * time.Second
 	l.WithFields(log.Fields{"jitter_s": jitter.Seconds()}).Info("starting online GC agent")
 	systemClock.Sleep(jitter)
 

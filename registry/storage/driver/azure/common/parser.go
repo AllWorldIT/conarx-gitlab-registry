@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	ParamCredentialsType              = "credentialstype"
+	ParamCredentialsType              = "credentials_type"
 	CredentialsTypeSharedKey          = "shared_key"
 	CredentialsTypeClientSecret       = "client_secret"
 	CredentialsTypeDefaultCredentials = "default_credentials"
@@ -15,8 +15,8 @@ const (
 	ParamAccountName = "accountname"
 	ParamAccountKey  = "accountkey"
 
-	ParamTenantID = "tenantid"
-	ParamClientID = "clientid"
+	ParamTenantID = "tenant_id"
+	ParamClientID = "client_id"
 	ParamSecret   = "secret"
 
 	ParamContainer     = "container"
@@ -24,9 +24,14 @@ const (
 	ParamServiceURLKey = "serviceurl"
 	ParamRootDirectory = "rootdirectory"
 
-	ParamPoolInitialInterval = "apipoolinitialinterval"
-	ParamPoolMaxInterval     = "apipoolmaxinterval"
-	ParamPoolMaxElapsedTime  = "apipoolmaxelapsedtime"
+	ParamPoolInitialInterval = "api_pool_initial_interval"
+	ParamPoolMaxInterval     = "api_pool_max_interval"
+	ParamPoolMaxElapsedTime  = "api_pool_max_elapsed_time"
+
+	ParamMaxRetries      = "max_retries"
+	ParamRetryTryTimeout = "retry_try_timeout"
+	ParamRetryDelay      = "retry_delay"
+	ParamMaxRetryDelay   = "max_retry_delay"
 
 	ParamTrimLegacyRootPrefix = "trimlegacyrootprefix"
 	ParamLegacyRootPrefix     = "legacyrootprefix"
@@ -36,9 +41,11 @@ const (
 	// fine-grained control over events that get logged, we want events to be
 	// logged using logrus just like other drivers do and we want logging
 	// configurable from within driver configuration.
-	ParamDebugLog       = "debuglog"
-	ParamDebugLogEvents = "debuglogevents"
+	ParamDebugLog       = "debug_log"
+	ParamDebugLogEvents = "debug_log_events"
+)
 
+const (
 	// NOTE(prozlach): Names of the variables are intentional, in order to
 	// match those required by:
 	// 		github.com/Azure/azure-sdk-for-go/sdk/azidentity.NewEnvironmentCredential()
@@ -74,13 +81,24 @@ const (
 	EnvContainer = "AZURE_CONTAINER"
 	EnvRealm     = "AZURE_REALM"
 
-	// Enables debug logging for Azure SDK. It is possible to filter the events
-	// being printed - check the code in the `ParseParameters()` function,
-	// where we parse the `common.ParamDebugLogEvents` parameter
-	EnvDebugLog = "AZURE_DEBUGLOG"
+	// Enables debug logging for Azure SDK.
+	EnvDebugLog       = "AZURE_DEBUGLOG"
+	EnvDebugLogEvents = "AZURE_DEBUGLOG_EVENTS"
 
 	// specifies driver to use, one of: "azure", "azure_v2"
 	EnvDriverVersion = "AZURE_DRIVER_VERSION"
+
+	// Retry configuration:
+	EnvMaxRetries      = "AZURE_MAX_RETRIES"
+	EnvRetryTryTimeout = "AZURE_RETRY_TRY_TIMEOUT"
+	EnvRetryDelay      = "AZURE_RETRY_DELAY"
+	EnvMaxRetryDelay   = "AZURE_MAX_RETRY_DELAY"
+)
+
+const (
+	// ValidRetriesLimit is the maximum number of retries that can be set,
+	// chosen arbitrarily, 1000 seemed like a moderatelly sane limit
+	ValidRetriesLimit = 1000
 )
 
 // InferRootPrefixConfiguration determines when to use the azure legacy root prefix or not based on the storage driver configurations

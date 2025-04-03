@@ -1,0 +1,118 @@
+# This pipeline is designed to verify the migration continuity between the self-managed version in the `REGISTRY_SELF_MANAGED_RELEASE_VERSION` variable and the current development version. 
+# This is useful for ensuring a smooth upgrade experience between current development versions and current self-manged version. 
+# While not a complete solution, this pipeline is a crucial first step in identifying potential upgrade issues, as discussed in https://gitlab.com/gitlab-org/container-registry/-/issues/1516.
+
+# NOTE: The `REGISTRY_SELF_MANAGED_RELEASE_VERSION` must be updated manually to match the last registry version of the last GitLab release, whenever adding a new schema migration to the registry.
+
+.base_migration_config:
+  variables:
+    REGISTRY_SELF_MANAGED_RELEASE_VERSION: "v4.15.0-gitlab"
+    DOCKER_HOST: tcp://docker:2375
+    POSTGRES_DB: registry_dev
+    POSTGRES_USER: registry
+    POSTGRES_PASSWORD: apassword
+    REGISTRY_DATABASE_HOST: db
+    REGISTRY_OLD_IMAGE: registry.gitlab.com/gitlab-org/build/cng/gitlab-container-registry:${REGISTRY_SELF_MANAGED_RELEASE_VERSION}
+
+#TODO: This job is convoluted because of the nature of dind. Consider building the older registry from source https://gitlab.com/gitlab-org/container-registry/-/issues/1520.
+migrate_old_registry:
+  extends: .base_migration_config
+  image: docker:27.2.0
+  stage: migrate
+  tags:
+    - gitlab-org-docker # For dind runners
+  services:
+      - name: docker:27.2.0-dind
+        alias: docker
+      - name: postgres:${PG_CURR_VERSION}-alpine
+        alias: "db"
+  script:
+    - echo "Pulling old registry image $REGISTRY_OLD_IMAGE"
+    - docker pull $REGISTRY_OLD_IMAGE
+    - echo "Running migrations for old registry version..."
+    # Attempt to extract the IP address of the PostgreSQL service from /etc/hosts so we can link it to the containers spun up by dind
+    - POSTGRES_IP=$(awk '{if ($2 == "db") print $1;}' /etc/hosts | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || true)
+    
+    # Check if POSTGRES_IP is empty (meaning the first method failed)
+    - |
+      if [ -z "$POSTGRES_IP" ]; then
+        echo "No IP found in /etc/hosts for 'db', attempting to resolve using dig..."
+        
+        # Install bind-tools to use dig
+        apk add --no-cache bind-tools
+        
+        # Use dig to resolve the IP address for db (fallback method)
+        POSTGRES_IP=$(dig +short db)
+        
+        # Check if dig was successful in resolving the IP address
+        if [ -z "$POSTGRES_IP" ]; then
+          echo "Error: Could not resolve 'db' IP address using dig."
+          exit 1
+        else
+          echo "Resolved database IP address using dig: $POSTGRES_IP"
+        fi
+      else
+        echo "Found PostgreSQL IP in /etc/hosts: $POSTGRES_IP"
+      fi
+    - ping -w 2 $POSTGRES_IP
+    - docker run --rm --add-host="db:$POSTGRES_IP" -v $(pwd)/config/database-filesystem.yml:/config/database-filesystem.yml -e REGISTRY_DATABASE_HOST=${REGISTRY_DATABASE_HOST} --entrypoint \registry $REGISTRY_OLD_IMAGE \database migrate up /config/database-filesystem.yml
+    - docker run --rm --add-host="db:$POSTGRES_IP" -e PGPASSWORD=$POSTGRES_PASSWORD postgres:${PG_CURR_VERSION}-alpine pg_dump -h $REGISTRY_DATABASE_HOST -U $POSTGRES_USER -d $POSTGRES_DB > db_dump.sql
+  needs: []
+  artifacts:
+    paths:
+      - db_dump.sql
+    expire_in: 1 hour
+
+migrate_new_registry:
+  extends: .base_migration_config
+  needs: [ "migrate_old_registry"]
+  image: golang:$GO_VERSION
+  stage: migrate
+  services:
+      - name: postgres:${PG_CURR_VERSION}-alpine
+        alias: "db"
+  dependencies:
+    - migrate_old_registry  # Ensure the artifact from this job is available
+  script:
+    # Install psql client tools
+    - apt-get update && apt-get install -y lsb-release
+    - apt update && apt -y install gnupg2 wget nano
+    - sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+    - curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc |  gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+    - apt update && apt -y install postgresql-client-${PG_CURR_VERSION}
+    - echo "Restoring database from dump..."
+    - PGPASSWORD=$POSTGRES_PASSWORD psql -h ${REGISTRY_DATABASE_HOST} -U $POSTGRES_USER -d $POSTGRES_DB -f db_dump.sql  # Load the dump file into PostgreSQL
+    - make bin/registry
+    - echo "Running new registry migration..."
+    - ./bin/registry database migrate up --skip-post-deployment config/database-filesystem.yml
+    - echo "Dumping the database after migration..."
+    - PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h db -U $POSTGRES_USER -d $POSTGRES_DB  > db_dump_new.sql
+    
+  artifacts:
+    paths:
+      - db_dump_new.sql  # Save the new dump file
+    expire_in: 1 hour
+
+# This job is purely informational and is used to provide users with an overview of the changes introduced between the current development registry version 
+# and the `REGISTRY_SELF_MANAGED_RELEASE_VERSION`, from the database's perspective.
+compare_dumps:
+  needs: [ "migrate_old_registry", "migrate_new_registry"]
+  image: alpine:latest
+  stage: migrate
+  dependencies:
+    - migrate_old_registry
+    - migrate_new_registry
+  script:
+    - apk add --no-cache colordiff
+    - echo "Comparing old and new database dumps..."
+    - colordiff --fakeexitcode db_dump.sql db_dump_new.sql > db_diff_output.txt
+    - if [ -s db_diff_output.txt ]; then
+        echo "Differences found in the database dumps:";
+        cat db_diff_output.txt;
+      else
+        echo "No differences found in the database dumps.";
+      fi
+  artifacts:
+    paths:
+      - db_diff_output.txt
+    expire_in: 1 hour

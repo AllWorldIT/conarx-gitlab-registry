@@ -6,12 +6,11 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	mrand "math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -598,8 +597,6 @@ func schema2Config() ([]byte, distribution.Descriptor) {
 
 // seedRandomSchema2Manifest generates a random schema2 manifest and puts its config and layers.
 func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts ...manifestOptsFunc) *schema2.DeserializedManifest {
-	t.Helper()
-
 	if env.ns != nil {
 		opts = append(opts, withAssertNotification)
 	}
@@ -637,7 +634,7 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 	tmpManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range tmpManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef, requestOpts...)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs, requestOpts...)
@@ -680,14 +677,13 @@ func seedRandomSchema2Manifest(t *testing.T, env *testEnv, repoPath string, opts
 	return deserializedManifest
 }
 
-func createRandomSmallLayer() (io.ReadSeeker, digest.Digest, int64) {
+func createRandomSmallLayer(t *testing.T) (io.ReadSeeker, digest.Digest, int64) {
 	// NOTE(prozlach): It is crucial to not to make the size of the layer too
 	// small as this will lead to flakes, as there is only one sha for layer
 	// size 0, handfull of shas for layer with size 1, etc... 128-196 bytes
 	// gives enough entropy to make tests reliable.
-	size := 128 + mrand.Int63n(64)
-	b := make([]byte, size)
-	_, _ = rand.Read(b) // always returns err==nil
+	size := 128 + rand.Int64N(64)
+	b := testutil.RandomBlob(t, int(size))
 
 	dgst := digest.FromBytes(b)
 	rs := bytes.NewReader(b)
@@ -757,8 +753,6 @@ func ociConfig() ([]byte, distribution.Descriptor) {
 
 // seedRandomOCIManifest generates a random oci manifest and puts its config and layers.
 func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...manifestOptsFunc) *ocischema.DeserializedManifest {
-	t.Helper()
-
 	if env.ns != nil {
 		opts = append(opts, withAssertNotification)
 	}
@@ -798,7 +792,7 @@ func seedRandomOCIManifest(t *testing.T, env *testEnv, repoPath string, opts ...
 	tmpManifest.Layers = make([]distribution.Descriptor, 2)
 
 	for i := range tmpManifest.Layers {
-		rs, dgst, size := createRandomSmallLayer()
+		rs, dgst, size := createRandomSmallLayer(t)
 
 		uploadURLBase, _ := startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, rs)
@@ -861,8 +855,8 @@ func randomPlatformSpec() manifestlist.PlatformSpec {
 	oses := []string{"aix", "darwin", "linux", "freebsd", "plan9"}
 
 	return manifestlist.PlatformSpec{
-		Architecture: architectures[mrand.Intn(len(architectures))],
-		OS:           oses[mrand.Intn(len(oses))],
+		Architecture: architectures[rand.IntN(len(architectures))],
+		OS:           oses[rand.IntN(len(oses))],
 		// Optional values.
 		OSVersion:  "",
 		OSFeatures: nil,
@@ -873,8 +867,6 @@ func randomPlatformSpec() manifestlist.PlatformSpec {
 
 // seedRandomOCIImageIndex generates a random oci image index and puts its images.
 func seedRandomOCIImageIndex(t *testing.T, env *testEnv, repoPath string, opts ...manifestOptsFunc) *manifestlist.DeserializedManifestList {
-	t.Helper()
-
 	if env.ns != nil {
 		opts = append(opts, withAssertNotification)
 	}
@@ -1022,8 +1014,6 @@ func buildEventManifestDelete(mediaType, repoPath, tagName string, dgst digest.D
 }
 
 func buildManifestTagURL(t *testing.T, env *testEnv, repoPath, tagName string) string {
-	t.Helper()
-
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
@@ -1037,8 +1027,6 @@ func buildManifestTagURL(t *testing.T, env *testEnv, repoPath, tagName string) s
 }
 
 func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, targetManifest distribution.Manifest) string {
-	t.Helper()
-
 	repoRef, err := reference.WithName(repoPath)
 	require.NoError(t, err)
 
@@ -1059,7 +1047,7 @@ func buildManifestDigestURL(t *testing.T, env *testEnv, repoPath string, targetM
 func shuffledCopy(s []string) []string {
 	shuffled := make([]string, len(s))
 	copy(shuffled, s)
-	mrand.Shuffle(len(shuffled), func(i, j int) {
+	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 
@@ -1113,8 +1101,6 @@ func putManifest(msg, targetURL, contentType string, v any, requestopts ...reque
 }
 
 func startPushLayerRequest(t *testing.T, env *testEnv, name reference.Named) *http.Request {
-	t.Helper()
-
 	layerUploadURL, err := env.builder.BuildBlobUploadURL(name)
 	require.NoError(t, err, "unexpected error building layer upload url")
 
@@ -1133,8 +1119,6 @@ func startPushLayerRequest(t *testing.T, env *testEnv, name reference.Named) *ht
 }
 
 func startPushLayer(t *testing.T, env *testEnv, name reference.Named, requestopts ...requestOpt) (location, uuid string) {
-	t.Helper()
-
 	req := startPushLayerRequest(t, env, name)
 	req = newRequest(req, requestopts...)
 
@@ -1284,8 +1268,6 @@ func pushChunk(t *testing.T, uploadURLBase string, body io.Reader, length int64,
 }
 
 func checkResponse(t *testing.T, msg string, resp *http.Response, expectedStatus int) {
-	t.Helper()
-
 	if resp.StatusCode != expectedStatus {
 		maybeDumpResponse(t, resp)
 		require.FailNow(t, fmt.Sprintf("unexpected status: %q", msg))
@@ -1304,8 +1286,6 @@ func checkResponse(t *testing.T, msg string, resp *http.Response, expectedStatus
 // expected error codes, returning the error structure, the json slice and a
 // count of the errors by code.
 func checkBodyHasErrorCodes(t *testing.T, msg string, resp *http.Response, errorCodes ...errcode.ErrorCode) (errcode.Errors, []byte, map[errcode.ErrorCode]int) {
-	t.Helper()
-
 	p, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
@@ -1434,7 +1414,7 @@ type blobArgs struct {
 }
 
 func makeBlobArgs(t *testing.T) blobArgs {
-	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
+	layerFile, layerDigest, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err)
 
 	args := blobArgs{
@@ -1448,7 +1428,7 @@ func makeBlobArgs(t *testing.T) blobArgs {
 }
 
 func makeBlobArgsWithRepoName(t *testing.T, repoName string) blobArgs {
-	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
+	layerFile, layerDigest, err := testutil.CreateRandomTarFile(testutil.MustChaChaSeed(t))
 	require.NoError(t, err)
 
 	args := blobArgs{
@@ -1520,8 +1500,6 @@ func assertGetResponseErr(targetURL string, expectedStatus int, opts ...requestO
 }
 
 func assertHeadResponse(t *testing.T, targetURL string, expectedStatus int, opts ...requestOpt) {
-	t.Helper()
-
 	req, err := http.NewRequest(http.MethodHead, targetURL, nil)
 	require.NoError(t, err)
 	for _, o := range opts {
@@ -1535,8 +1513,6 @@ func assertHeadResponse(t *testing.T, targetURL string, expectedStatus int, opts
 }
 
 func assertPutResponse(t *testing.T, targetURL string, body io.Reader, headers http.Header, expectedStatus int) {
-	t.Helper()
-
 	req, err := http.NewRequest(http.MethodPut, targetURL, body)
 	require.NoError(t, err)
 	for k, vv := range headers {
@@ -1551,8 +1527,6 @@ func assertPutResponse(t *testing.T, targetURL string, body io.Reader, headers h
 }
 
 func assertPostResponse(t *testing.T, targetURL string, body io.Reader, headers http.Header, expectedStatus int) {
-	t.Helper()
-
 	req, err := http.NewRequest(http.MethodPost, targetURL, body)
 	require.NoError(t, err)
 	for k, vv := range headers {
@@ -1567,8 +1541,6 @@ func assertPostResponse(t *testing.T, targetURL string, body io.Reader, headers 
 }
 
 func assertDeleteResponse(t *testing.T, targetURL string, expectedStatus int) {
-	t.Helper()
-
 	resp, err := httpDelete(targetURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -1577,8 +1549,6 @@ func assertDeleteResponse(t *testing.T, targetURL string, expectedStatus int) {
 }
 
 func assertTagDeleteResponse(t *testing.T, env *testEnv, repoName, tagName string, expectedStatus int) {
-	t.Helper()
-
 	tmp, err := reference.WithName(repoName)
 	require.NoError(t, err)
 	named, err := reference.WithTag(tmp, tagName)
@@ -1590,8 +1560,6 @@ func assertTagDeleteResponse(t *testing.T, env *testEnv, repoName, tagName strin
 }
 
 func assertBlobGetResponse(t *testing.T, env *testEnv, repoName string, dgst digest.Digest, expectedStatus int, opts ...requestOpt) {
-	t.Helper()
-
 	tmp, err := reference.WithName(repoName)
 	require.NoError(t, err)
 	ref, err := reference.WithDigest(tmp, dgst)
@@ -1603,8 +1571,6 @@ func assertBlobGetResponse(t *testing.T, env *testEnv, repoName string, dgst dig
 }
 
 func assertBlobHeadResponse(t *testing.T, env *testEnv, repoName string, dgst digest.Digest, expectedStatus int, opts ...requestOpt) {
-	t.Helper()
-
 	tmp, err := reference.WithName(repoName)
 	require.NoError(t, err)
 	ref, err := reference.WithDigest(tmp, dgst)
@@ -1616,8 +1582,6 @@ func assertBlobHeadResponse(t *testing.T, env *testEnv, repoName string, dgst di
 }
 
 func assertBlobDeleteResponse(t *testing.T, env *testEnv, repoName string, dgst digest.Digest, expectedStatus int) {
-	t.Helper()
-
 	tmp, err := reference.WithName(repoName)
 	require.NoError(t, err)
 	ref, err := reference.WithDigest(tmp, dgst)
@@ -1629,8 +1593,6 @@ func assertBlobDeleteResponse(t *testing.T, env *testEnv, repoName string, dgst 
 }
 
 func assertBlobPutResponse(t *testing.T, env *testEnv, repoName string, dgst digest.Digest, body io.ReadSeeker, expectedStatus int) {
-	t.Helper()
-
 	name, err := reference.WithName(repoName)
 	require.NoError(t, err)
 
@@ -1646,8 +1608,6 @@ func assertBlobPutResponse(t *testing.T, env *testEnv, repoName string, dgst dig
 }
 
 func assertBlobPostMountResponse(t *testing.T, env *testEnv, srcRepoName, destRepoName string, dgst digest.Digest, expectedStatus int) {
-	t.Helper()
-
 	name, err := reference.WithName(destRepoName)
 	require.NoError(t, err)
 	u, err := env.builder.BuildBlobUploadURL(name, url.Values{
@@ -1688,8 +1648,6 @@ func assertManifestHeadByTagResponse(t *testing.T, env *testEnv, repoName, tagNa
 }
 
 func assertManifestPutByDigestResponse(t *testing.T, env *testEnv, repoName string, m distribution.Manifest, mediaType string, expectedStatus int) {
-	t.Helper()
-
 	u := buildManifestDigestURL(t, env, repoName, m)
 	_, body, err := m.Payload()
 	require.NoError(t, err)
@@ -1698,8 +1656,6 @@ func assertManifestPutByDigestResponse(t *testing.T, env *testEnv, repoName stri
 }
 
 func assertManifestPutByTagResponse(t *testing.T, env *testEnv, repoName string, m distribution.Manifest, mediaType, tagName string, expectedStatus int) {
-	t.Helper()
-
 	u := buildManifestTagURL(t, env, repoName, tagName)
 	_, body, err := m.Payload()
 	require.NoError(t, err)
@@ -1740,8 +1696,6 @@ func seedMultipleRepositoriesWithTaggedLatestManifest(t *testing.T, env *testEnv
 }
 
 func generateAuthToken(t *testing.T, user string, access []*token.ResourceActions, issuer issuerProps, signingKey libtrust.PrivateKey) string {
-	t.Helper()
-
 	var rawJWK json.RawMessage
 	rawJWK, err := signingKey.PublicKey().MarshalJSON()
 	require.NoError(t, err, "unable to marshal signing key to JSON")
@@ -1752,9 +1706,7 @@ func generateAuthToken(t *testing.T, user string, access []*token.ResourceAction
 		RawJWK:     &rawJWK,
 	}
 
-	randomBytes := make([]byte, 15)
-	_, err = rand.Read(randomBytes)
-	require.NoError(t, err, "unable to read random bytes for jwt")
+	randomBytes := testutil.RandomBlob(t, 15)
 
 	claimSet := &token.ClaimSet{
 		Issuer:     issuer.Issuer,
@@ -1810,8 +1762,6 @@ type authTokenProvider struct {
 // newAuthTokenProvider creates an authTokenProvider that manages the procurement of authorization tokens
 // by holding the necessary private key value and cert path needed to generate/validate a token.
 func newAuthTokenProvider(t *testing.T) *authTokenProvider {
-	t.Helper()
-
 	p, privKey, err := internaltestutil.WriteTempRootCerts()
 	t.Cleanup(func() {
 		err := os.Remove(p)
@@ -1901,7 +1851,6 @@ func deleteAccessTokenWithProjectMeta(projectPath, repositoryName string) []*tok
 //
 // nolint:unparam //(`expectedTTLDuration` always receives `60 * time.Second`)
 func requireRenameTTLInRange(t *testing.T, actualTTL time.Time, expectedTTLDuration time.Duration) {
-	t.Helper()
 	lowerBound := time.Now()
 	upperBound := time.Now().Add(expectedTTLDuration)
 	require.WithinRange(t, actualTTL, lowerBound, upperBound,
@@ -1913,7 +1862,6 @@ func requireRenameTTLInRange(t *testing.T, actualTTL time.Time, expectedTTLDurat
 //
 // nolint:unparam //(`TTL` always receives `1 * time.Hour`)
 func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath string, ttl time.Duration) {
-	t.Helper()
 	// enact a lease on the project path which will be used to block all
 	// write operations to the existing repositories in the given GitLab project.
 
@@ -1932,7 +1880,6 @@ func acquireProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath str
 
 // releaseProjectLease releases an existing project lease for `projectPath` in the `redisCache`
 func releaseProjectLease(t *testing.T, redisCache *iredis.Cache, projectPath string) {
-	t.Helper()
 	plStore, err := datastore.NewProjectLeaseStore(datastore.NewCentralProjectLeaseCache(redisCache))
 	require.NoError(t, err)
 	err = plStore.Invalidate(context.Background(), projectPath)

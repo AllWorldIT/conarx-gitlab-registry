@@ -214,10 +214,13 @@ to apply) will be created and displayed but not executed. Additionally, it is
 possible to limit the number of pending migration to apply using the `--limit`
 flag. By default, all pending migrations are applied.
 
-If using the `--skip-post-deployment` flag, post deployment migrations will
-not be applied. Post deployment migrations can be applied after the registry
+If using the `--skip-post-deployment` flag, post-deployment migrations will
+not be applied. Post-deployment migrations can be applied after the registry
 service is active by running the `up` subcommand again without the
-`--skip-post-deployment` flag. By default, all pending migrations are applied.
+`--skip-post-deployment` flag. Alternatively, the
+`SKIP_POST_DEPLOYMENT_MIGRATIONS` environment variable can be set to `true` or
+`1`, but the flag takes precedence when specified. By default, all pending
+migrations are applied.
 
 #### Example
 
@@ -297,7 +300,9 @@ applied timestamp (if any) is also displayed.
 To facilitate programmatic state checks, when using the `--up-to-date` flag,
 the output is simply `true` or `false`, depending on whether all known
 migrations are applied or not. The `--skip-post-deployment` flag can be used
-to ignore post-deployment migrations.
+to ignore post-deployment migrations. Alternatively, the
+`SKIP_POST_DEPLOYMENT_MIGRATIONS` environment variable can be set to `true` or
+`1`, but the flag takes precedence when specified.
 
 #### Example
 

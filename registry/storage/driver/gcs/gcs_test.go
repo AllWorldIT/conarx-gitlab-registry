@@ -365,8 +365,6 @@ func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 }
 
 func newTempDirDriver(tb testing.TB) storagedriver.StorageDriver {
-	tb.Helper()
-
 	root := tb.TempDir()
 
 	d, err := gcsDriverConstructor(root)
