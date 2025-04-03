@@ -45,10 +45,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	DriverName = "s3_v2"
-)
-
 // maxListRespLoop is the max number of traversed loops/parts-pages allowed to be pushed.
 // It is set to 10000 part pages, which signifies 10000 * 10485760 bytes (i.e. 100GB) of data.
 // This is defined in order to prevent infinite loops (i.e. an unbounded amount of parts-pages).
@@ -124,7 +120,7 @@ func (l awsLoggerWrapper) Log(args ...any) {
 // - bucket
 // - encrypt
 func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, error) {
-	params, err := common.ParseParameters(parameters)
+	params, err := common.ParseParameters(common.V2DriverName, parameters)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +138,7 @@ func NewS3API(params *common.DriverParameters) (s3iface.S3API, error) {
 	}
 
 	awsConfig := aws.NewConfig().
-		WithLogLevel(params.LogLevel).
+		WithLogLevel(aws.LogLevelType(params.LogLevel)).
 		WithLogger(NewAWSLoggerWrapper(params.Logger))
 	if params.AccessKey != "" && params.SecretKey != "" {
 		creds := credentials.NewStaticCredentials(
@@ -247,7 +243,7 @@ func New(params *common.DriverParameters) (storagedriver.StorageDriver, error) {
 // Implement the storagedriver.StorageDriver interface
 
 func (*driver) Name() string {
-	return DriverName
+	return common.V2DriverName
 }
 
 // GetContent retrieves the content stored at "path" as a []byte.
@@ -376,7 +372,7 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 	}
 
 	if idx == -1 {
-		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V2DriverName}
 	}
 	mpUpload := resp.Uploads[idx]
 
@@ -449,7 +445,7 @@ func (d *driver) statList(ctx context.Context, path string) (*storagedriver.File
 	}
 
 	if len(resp.Contents) != 1 {
-		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
+		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V2DriverName}
 	}
 
 	entry := resp.Contents[0]
@@ -459,7 +455,7 @@ func (d *driver) statList(ctx context.Context, path string) (*storagedriver.File
 
 	if *entry.Key != s3Path {
 		if len(*entry.Key) > len(s3Path) && (*entry.Key)[len(s3Path)] != '/' {
-			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V2DriverName}
 		}
 		fi.IsDir = true
 	} else {
@@ -562,7 +558,7 @@ func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 		if len(files) == 0 && len(directories) == 0 {
 			// Treat empty response as missing directory, since we don't actually
 			// have directories in s3.
-			return nil, storagedriver.PathNotFoundError{Path: opath, DriverName: DriverName}
+			return nil, storagedriver.PathNotFoundError{Path: opath, DriverName: common.V2DriverName}
 		}
 	}
 
@@ -713,7 +709,7 @@ ListLoop:
 		// have been false and the loop would be exited without recalling
 		// ListObjects
 		if len(resp.Contents) == 0 {
-			return storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
+			return storagedriver.PathNotFoundError{Path: path, DriverName: common.V2DriverName}
 		}
 
 		for _, key := range resp.Contents {
@@ -840,7 +836,7 @@ func (d *driver) URLFor(_ context.Context, path string, options map[string]any) 
 	if ok {
 		methodString, ok = method.(string)
 		if !ok || (methodString != http.MethodGet && methodString != http.MethodHead) {
-			return "", storagedriver.ErrUnsupportedMethod{DriverName: DriverName}
+			return "", storagedriver.ErrUnsupportedMethod{DriverName: common.V2DriverName}
 		}
 	}
 
@@ -893,7 +889,7 @@ func (d *driver) Walk(ctx context.Context, from string, f storagedriver.WalkFn) 
 
 	// S3 doesn't have the concept of empty directories, so it'll return path not found if there are no objects
 	if objectCount == 0 {
-		return storagedriver.PathNotFoundError{Path: from, DriverName: DriverName}
+		return storagedriver.PathNotFoundError{Path: from, DriverName: common.V2DriverName}
 	}
 
 	return nil
@@ -970,7 +966,7 @@ func (d *driver) WalkParallel(ctx context.Context, from string, f storagedriver.
 
 	// S3 doesn't have the concept of empty directories, so it'll return path not found if there are no objects
 	if objectCount == 0 {
-		return storagedriver.PathNotFoundError{Path: from, DriverName: DriverName}
+		return storagedriver.PathNotFoundError{Path: from, DriverName: common.V2DriverName}
 	}
 
 	return retError
@@ -1205,7 +1201,7 @@ func (d *Driver) S3BucketKey(path string) string {
 
 func parseError(path string, err error) error {
 	if s3Err, ok := err.(awserr.Error); ok && s3Err.Code() == "NoSuchKey" {
-		return storagedriver.PathNotFoundError{Path: path, DriverName: DriverName}
+		return storagedriver.PathNotFoundError{Path: path, DriverName: common.V2DriverName}
 	}
 
 	return err

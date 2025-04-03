@@ -88,3 +88,9 @@ const (
 
 // SystemClock is a stub clock used for tesitng
 var SystemClock internal.Clock = clock.New()
+
+const (
+	V1DriverName    = "s3aws"
+	V1DriverNameAlt = "s3"
+	V2DriverName    = "s3_v2"
+)

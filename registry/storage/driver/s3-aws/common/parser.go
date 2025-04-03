@@ -13,6 +13,8 @@ import (
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
 	"github.com/hashicorp/go-multierror"
+
+	v2_aws "github.com/aws/aws-sdk-go-v2/aws"
 )
 
 const (
@@ -55,13 +57,25 @@ const (
 	ParamLogLevel     = "loglevel"
 
 	// Log level values
-	LogLevelOff                      = "logoff"
+	// * common for v1 and v2:
+	LogLevelOff = "logoff"
+	// * v1-specific
 	LogLevelDebug                    = "logdebug"
 	LogLevelDebugWithSigning         = "logdebugwithsigning"
 	LogLevelDebugWithHTTPBody        = "logdebugwithhttpbody"
 	LogLevelDebugWithRequestRetries  = "logdebugwithrequestretries"
 	LogLevelDebugWithRequestErrors   = "logdebugwithrequesterrors"
 	LogLevelDebugWithEventStreamBody = "logdebugwitheventstreambody"
+	// * v2-specific
+	LogSigning              = "logsigning"
+	LogRetries              = "logretries"
+	LogRequest              = "logrequest"
+	LogRequestWithBody      = "logrequestwithbody"
+	LogResponse             = "logresponse"
+	LogResponseWithBody     = "logresponsewithbody"
+	LogDeprecatedUsage      = "logdeprecatedusage"
+	LogRequestEventMessage  = "logrequesteventmessage"
+	LogResponseEventMessage = "logresponseeventmessage"
 
 	// Storage class values
 	StorageClassNone              = "NONE"
@@ -178,50 +192,140 @@ type DriverParameters struct {
 	MaxRetries                  int64
 	ParallelWalk                bool
 	Logger                      dcontext.Logger
-	LogLevel                    aws.LogLevelType
-	ObjectOwnership             bool
-	S3APIImpl                   S3WrapperIf
+	// In order to keep the code dry, we reuse the same struct field and store
+	// the result in a wider (i.e. uint64 instead of uint) type to accommodate
+	// both sdks.
+	LogLevel        uint64
+	ObjectOwnership bool
+	S3APIImpl       S3WrapperIf
 }
 
-func ParseLogLevelParam(logger dcontext.Logger, param any) aws.LogLevelType {
-	logLevel := aws.LogOff
+// ParseLogLevelParamV1 parses given loglevel into a value that sdk v1 accepts.
+// The parameter itself is a comma-separated list of flags/loglevels that user
+// wants to enable.
+func ParseLogLevelParamV1(logger dcontext.Logger, param any) aws.LogLevelType {
+	if param == nil {
+		logger.Debugf("S3 logging level is not set, defaulting to %q", LogLevelOff)
+		return aws.LogOff
+	}
 
-	if param != nil {
-		if ll, ok := param.(aws.LogLevelType); ok {
-			return ll
-		}
+	if ll, ok := param.(aws.LogLevelType); ok {
+		return ll
+	}
 
-		switch strings.ToLower(param.(string)) {
+	var res aws.LogLevelType
+	var logLevelsSet []string
+
+	for _, v := range strings.Split(strings.ToLower(param.(string)), ",") {
+		switch v {
 		case LogLevelOff:
+			// LogLevelOff in the list of loglevels overrides all other log
+			// levels and disables logging
 			logger.Infof("S3 logging level set to %q", LogLevelOff)
-			logLevel = aws.LogOff
+			return aws.LogOff
 		case LogLevelDebug:
-			logger.Infof("S3 logging level set to %q", LogLevelDebug)
-			logLevel = aws.LogDebug
+			res |= aws.LogDebug
+			logLevelsSet = append(logLevelsSet, LogLevelDebug)
 		case LogLevelDebugWithSigning:
-			logger.Infof("S3 logging level set to %q", LogLevelDebugWithSigning)
-			logLevel = aws.LogDebugWithSigning
+			res |= aws.LogDebugWithSigning
+			logLevelsSet = append(logLevelsSet, LogLevelDebugWithSigning)
 		case LogLevelDebugWithHTTPBody:
-			logger.Infof("S3 logging level set to %q", LogLevelDebugWithHTTPBody)
-			logLevel = aws.LogDebugWithHTTPBody
+			res |= aws.LogDebugWithHTTPBody
+			logLevelsSet = append(logLevelsSet, LogLevelDebugWithHTTPBody)
 		case LogLevelDebugWithRequestRetries:
-			logger.Infof("S3 logging level set to %q", LogLevelDebugWithRequestRetries)
-			logLevel = aws.LogDebugWithRequestRetries
+			res |= aws.LogDebugWithRequestRetries
+			logLevelsSet = append(logLevelsSet, LogLevelDebugWithRequestRetries)
 		case LogLevelDebugWithRequestErrors:
-			logger.Infof("S3 logging level set to %q", LogLevelDebugWithRequestErrors)
-			logLevel = aws.LogDebugWithRequestErrors
+			res |= aws.LogDebugWithRequestErrors
+			logLevelsSet = append(logLevelsSet, LogLevelDebugWithRequestErrors)
 		case LogLevelDebugWithEventStreamBody:
-			logger.Infof("S3 logging level set to %q", LogLevelDebugWithEventStreamBody)
-			logLevel = aws.LogDebugWithEventStreamBody
+			res |= aws.LogDebugWithEventStreamBody
+			logLevelsSet = append(logLevelsSet, LogLevelDebugWithEventStreamBody)
+		// Check for v2 log levels that shouldn't be used with v1
+		case LogSigning, LogRetries, LogRequest, LogRequestWithBody,
+			LogResponse, LogResponseWithBody, LogDeprecatedUsage,
+			LogRequestEventMessage, LogResponseEventMessage:
+			logger.Warnf("S3 driver v2 log level %q has been passed to S3 driver v1. Ignoring. Please adjust your configuration", v)
 		default:
-			logger.Infof("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff)
+			logger.Warnf("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff)
+			return aws.LogOff
 		}
 	}
 
-	return logLevel
+	logger.Infof("S3 logging level set to %q", strings.Join(logLevelsSet, ","))
+
+	return res
 }
 
-func ParseParameters(parameters map[string]any) (*DriverParameters, error) {
+// ParseLogLevelParamV2 parses given loglevel into a value that sdk v2 accepts.
+// The parameter itself is a comma-separated list of flags/loglevels that user
+// wants to enable.
+func ParseLogLevelParamV2(logger dcontext.Logger, param any) v2_aws.ClientLogMode {
+	if param == nil {
+		logger.Debugf("S3 logging level is not set, defaulting to %q", LogLevelOff)
+		// aws sdk v2 does not have a constant for this:
+		return v2_aws.ClientLogMode(0)
+	}
+
+	if ll, ok := param.(v2_aws.ClientLogMode); ok {
+		return ll
+	}
+
+	var res v2_aws.ClientLogMode
+	var logLevelsSet []string
+
+	for _, v := range strings.Split(strings.ToLower(param.(string)), ",") {
+		switch v {
+		// LogLevelOff in the list of loglevels overrides all other log levels
+		// and disables logging
+		case LogLevelOff:
+			logger.Infof("S3 logging level set to %q", LogLevelOff)
+			// aws sdk v2 does not have a constant for this:
+			return v2_aws.ClientLogMode(0)
+		case LogSigning:
+			res |= v2_aws.LogSigning
+			logLevelsSet = append(logLevelsSet, LogSigning)
+		case LogRetries:
+			res |= v2_aws.LogRetries
+			logLevelsSet = append(logLevelsSet, LogRetries)
+		case LogRequest:
+			res |= v2_aws.LogRequest
+			logLevelsSet = append(logLevelsSet, LogRequest)
+		case LogRequestWithBody:
+			res |= v2_aws.LogRequestWithBody
+			logLevelsSet = append(logLevelsSet, LogRequestWithBody)
+		case LogResponse:
+			res |= v2_aws.LogResponse
+			logLevelsSet = append(logLevelsSet, LogResponse)
+		case LogResponseWithBody:
+			res |= v2_aws.LogResponseWithBody
+			logLevelsSet = append(logLevelsSet, LogResponseWithBody)
+		case LogDeprecatedUsage:
+			res |= v2_aws.LogDeprecatedUsage
+			logLevelsSet = append(logLevelsSet, LogDeprecatedUsage)
+		case LogRequestEventMessage:
+			res |= v2_aws.LogRequestEventMessage
+			logLevelsSet = append(logLevelsSet, LogRequestEventMessage)
+		case LogResponseEventMessage:
+			res |= v2_aws.LogResponseEventMessage
+			logLevelsSet = append(logLevelsSet, LogResponseEventMessage)
+		// Check for v1 log levels that shouldn't be used with v2
+		case LogLevelDebug, LogLevelDebugWithSigning, LogLevelDebugWithHTTPBody,
+			LogLevelDebugWithRequestRetries, LogLevelDebugWithRequestErrors,
+			LogLevelDebugWithEventStreamBody:
+			logger.Warnf("S3 driver v1 log level %q has been passed to S3 driver v2. Ignoring. Please adjust your configuration", v)
+		default:
+			logger.Warnf("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff)
+			return v2_aws.ClientLogMode(0)
+		}
+	}
+
+	logger.Infof("S3 logging level set to %q", strings.Join(logLevelsSet, ","))
+
+	return res
+}
+
+func ParseParameters(driverVersion string, parameters map[string]any) (*DriverParameters, error) {
 	var mErr *multierror.Error
 	res := new(DriverParameters)
 
@@ -448,7 +552,12 @@ func ParseParameters(parameters map[string]any) (*DriverParameters, error) {
 
 	logger := parameters[driver.ParamLogger].(dcontext.Logger)
 	res.Logger = logger
-	res.LogLevel = ParseLogLevelParam(logger, parameters[ParamLogLevel])
+	switch driverVersion {
+	case V1DriverName, V1DriverNameAlt:
+		res.LogLevel = uint64(ParseLogLevelParamV1(logger, parameters[ParamLogLevel]))
+	case V2DriverName:
+		res.LogLevel = uint64(ParseLogLevelParamV2(logger, parameters[ParamLogLevel]))
+	}
 
 	return res, nil
 }
