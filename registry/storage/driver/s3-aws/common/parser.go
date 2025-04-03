@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
+	v2_types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -81,6 +83,15 @@ const (
 	StorageClassNone              = "NONE"
 	StorageClassStandard          = s3.StorageClassStandard
 	StorageClassReducedRedundancy = s3.StorageClassReducedRedundancy
+
+	// Content verification
+	ParamChecksumDisabled           = "checksum_disabled"
+	ParamChecksumAlgorithm          = "checksum_algorithm"
+	ParamChecksumAlgorithmCrc32     = string(v2_types.ChecksumAlgorithmCrc32)
+	ParamChecksumAlgorithmCrc32c    = string(v2_types.ChecksumAlgorithmCrc32c)
+	ParamChecksumAlgorithmSha1      = string(v2_types.ChecksumAlgorithmSha1)
+	ParamChecksumAlgorithmSha256    = string(v2_types.ChecksumAlgorithmSha256)
+	ParamChecksumAlgorithmCrc64nvme = string(v2_types.ChecksumAlgorithmCrc64nvme)
 )
 
 const (
@@ -137,6 +148,10 @@ const (
 
 	// EnvObjectOwnership configures the object ownership settings for the S3 bucket
 	EnvObjectOwnership = "S3_OBJECT_OWNERSHIP"
+
+	// EnvChecksumAlgorithm specifies the algorithm to use for checksums
+	EnvChecksumDisabled  = "S3_CHECKSUM_DISABLED"
+	EnvChecksumAlgorithm = "S3_CHECKSUM_ALGORITHM"
 )
 
 // validRegions maps known s3 region identifiers to region descriptors
@@ -144,6 +159,14 @@ var validRegions = make(map[string]struct{})
 
 // validObjectACLs contains known s3 object Acls
 var validObjectACLs = make(map[string]struct{})
+
+var validChecksumAlgorithms = []string{
+	string(v2_types.ChecksumAlgorithmCrc32),
+	string(v2_types.ChecksumAlgorithmCrc32c),
+	string(v2_types.ChecksumAlgorithmSha1),
+	string(v2_types.ChecksumAlgorithmSha256),
+	string(v2_types.ChecksumAlgorithmCrc64nvme),
+}
 
 func init() {
 	partitions := endpoints.DefaultPartitions()
@@ -195,9 +218,11 @@ type DriverParameters struct {
 	// In order to keep the code dry, we reuse the same struct field and store
 	// the result in a wider (i.e. uint64 instead of uint) type to accommodate
 	// both sdks.
-	LogLevel        uint64
-	ObjectOwnership bool
-	S3APIImpl       S3WrapperIf
+	LogLevel          uint64
+	ObjectOwnership   bool
+	S3APIImpl         S3WrapperIf
+	ChecksumDisabled  bool
+	ChecksumAlgorithm string
 }
 
 // ParseLogLevelParamV1 parses given loglevel into a value that sdk v1 accepts.
@@ -481,6 +506,43 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 		storageClass = storageClassString
 	}
 	res.StorageClass = storageClass
+
+	// Parse checksum_disabled parameter
+	checksumDisabled, err := parse.Bool(parameters, ParamChecksumDisabled, false)
+	if err != nil {
+		mErr = multierror.Append(mErr, err)
+	}
+	res.ChecksumDisabled = checksumDisabled
+
+	// Parse checksum algorithm
+	defaultChecksumAlgorithm := ParamChecksumAlgorithmCrc64nvme
+	checksumAlgorithmParam := parameters[ParamChecksumAlgorithm]
+	if checksumDisabled {
+		// If checksum_disabled is true, ignore checksum_algorithm
+		if checksumAlgorithmParam != nil {
+			logger := parameters[driver.ParamLogger].(dcontext.Logger)
+			logger.Warnf("Both %s and %s parameters provided, %s takes precedence",
+				ParamChecksumDisabled, ParamChecksumAlgorithm, ParamChecksumDisabled)
+		}
+		defaultChecksumAlgorithm = ""
+	} else if checksumAlgorithmParam != nil {
+		checksumAlgorithm, ok := checksumAlgorithmParam.(string)
+		if !ok {
+			err := fmt.Errorf("the checksum_algorithm parameter must be a string: %v", checksumAlgorithmParam)
+			mErr = multierror.Append(mErr, err)
+		} else {
+			// Convert to uppercase for consistency and check if it's valid
+			checksumAlgorithm = strings.ToUpper(checksumAlgorithm)
+			// nolint: revive // max-control-nesting
+			if !slices.Contains(validChecksumAlgorithms, checksumAlgorithm) {
+				err := fmt.Errorf("the checksum_algorithm parameter must be one of %v, %q is invalid", validChecksumAlgorithms, checksumAlgorithmParam)
+				mErr = multierror.Append(mErr, err)
+			} else {
+				defaultChecksumAlgorithm = checksumAlgorithm
+			}
+		}
+	}
+	res.ChecksumAlgorithm = defaultChecksumAlgorithm
 
 	objectOwnership, err := parse.Bool(parameters, ParamObjectOwnership, false)
 	if err != nil {

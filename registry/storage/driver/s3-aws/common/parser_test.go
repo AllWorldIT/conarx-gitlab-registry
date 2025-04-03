@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	v2_aws "github.com/aws/aws-sdk-go-v2/aws"
+	v2_types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	sdriver "github.com/docker/distribution/registry/storage/driver"
@@ -54,6 +55,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 				LogLevel:                    uint64(aws.LogOff),
 				ObjectOwnership:             false,
 				KeyID:                       "",
+				ChecksumDisabled:            false,
+				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc64nvme),
 			},
 			expectedError: false,
 		},
@@ -82,6 +85,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 				ParamMaxRetries:                  10,
 				ParamParallelWalk:                true,
 				ParamLogLevel:                    LogLevelDebug,
+				ParamChecksumDisabled:            false,
+				ParamChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc32),
 			},
 			expected: &DriverParameters{
 				AccessKey:                   "test-access-key",
@@ -107,6 +112,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 				ParallelWalk:                true,
 				LogLevel:                    uint64(aws.LogDebug),
 				ObjectOwnership:             false,
+				ChecksumDisabled:            false,
+				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc32),
 			},
 			expectedError: false,
 		},
@@ -199,6 +206,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 				ParallelWalk:                false,
 				LogLevel:                    uint64(aws.LogOff),
 				ObjectOwnership:             true,
+				ChecksumDisabled:            false,
+				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc64nvme),
 			},
 			expectedError: false,
 		},
@@ -244,6 +253,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 				Secure:                      true,
 				StorageClass:                StorageClassStandard,
 				ObjectACL:                   s3.ObjectCannedACLPrivate,
+				ChecksumDisabled:            false,
+				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc64nvme),
 			},
 			expectedError: false,
 		},
@@ -446,6 +457,79 @@ func TestParseParameters_in_groups(t *testing.T) {
 			expectedError: true,
 			errorContains: "object ACL parameter should not be set when object ownership is enabled",
 		},
+		{
+			name: "configuration with checksum_disabled",
+			params: map[string]any{
+				ParamRegion:           "us-west-2",
+				ParamBucket:           "test-bucket",
+				ParamChecksumDisabled: true,
+			},
+			expected: &DriverParameters{
+				Region:                      "us-west-2",
+				Bucket:                      "test-bucket",
+				PathStyle:                   false,
+				MultipartCopyChunkSize:      DefaultMultipartCopyChunkSize,
+				MultipartCopyMaxConcurrency: DefaultMultipartCopyMaxConcurrency,
+				MultipartCopyThresholdSize:  DefaultMultipartCopyThresholdSize,
+				MaxRequestsPerSecond:        DefaultMaxRequestsPerSecond,
+				MaxRetries:                  DefaultMaxRetries,
+				V4Auth:                      true,
+				ChunkSize:                   DefaultChunkSize,
+				Secure:                      true,
+				StorageClass:                StorageClassStandard,
+				ObjectACL:                   s3.ObjectCannedACLPrivate,
+				ChecksumDisabled:            true,
+				ChecksumAlgorithm:           "",
+			},
+			expectedError: false,
+		},
+		{
+			name: "configuration with checksum_disabled and checksum algo specified",
+			params: map[string]any{
+				ParamRegion:            "us-west-2",
+				ParamBucket:            "test-bucket",
+				ParamChecksumDisabled:  true,
+				ParamChecksumAlgorithm: string(v2_types.ChecksumAlgorithmCrc32),
+			},
+			expected: &DriverParameters{
+				Region:                      "us-west-2",
+				Bucket:                      "test-bucket",
+				PathStyle:                   false,
+				MultipartCopyChunkSize:      DefaultMultipartCopyChunkSize,
+				MultipartCopyMaxConcurrency: DefaultMultipartCopyMaxConcurrency,
+				MultipartCopyThresholdSize:  DefaultMultipartCopyThresholdSize,
+				MaxRequestsPerSecond:        DefaultMaxRequestsPerSecond,
+				MaxRetries:                  DefaultMaxRetries,
+				V4Auth:                      true,
+				ChunkSize:                   DefaultChunkSize,
+				Secure:                      true,
+				StorageClass:                StorageClassStandard,
+				ObjectACL:                   s3.ObjectCannedACLPrivate,
+				ChecksumDisabled:            true,
+				ChecksumAlgorithm:           "",
+			},
+			expectedError: false,
+		},
+		{
+			name: "invalid checksum algorithm",
+			params: map[string]any{
+				ParamRegion:            "us-west-2",
+				ParamBucket:            "test-bucket",
+				ParamChecksumAlgorithm: "INVALID_ALGORITHM",
+			},
+			expectedError: true,
+			errorContains: "the checksum_algorithm parameter must be one of",
+		},
+		{
+			name: "checksum algorithm not a string",
+			params: map[string]any{
+				ParamRegion:            "us-west-2",
+				ParamBucket:            "test-bucket",
+				ParamChecksumAlgorithm: 123,
+			},
+			expectedError: true,
+			errorContains: "the checksum_algorithm parameter must be a string",
+		},
 	}
 
 	for _, tt := range tests {
@@ -496,6 +580,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 				// Other configurations
 				assert.Equal(t, tt.expected.KeyID, result.KeyID, "KeyID mismatch")
 				assert.Equal(t, tt.expected.LogLevel, result.LogLevel, "LogLevel mismatch")
+				assert.Equal(t, tt.expected.ChecksumAlgorithm, result.ChecksumAlgorithm, "ChecksumAlgorithm mismatch")
 			}
 		})
 	}
@@ -677,6 +762,24 @@ func TestParseParameters_individually(t *testing.T) {
 			parameters:      p,
 			paramName:       "objectownership",
 			driverParamName: "ObjectOwnership",
+			nilAllowed:      true,
+			emptyAllowed:    false,
+			nonTypeAllowed:  false,
+			defaultt:        false,
+		},
+		"checksumalgorithm": {
+			parameters:      p,
+			paramName:       "checksum_algorithm",
+			driverParamName: "ChecksumAlgorithm",
+			nilAllowed:      true,
+			emptyAllowed:    false,
+			nonTypeAllowed:  false,
+			defaultt:        string(v2_types.ChecksumAlgorithmCrc64nvme),
+		},
+		"checksumdisabled": {
+			parameters:      p,
+			paramName:       "checksum_disabled",
+			driverParamName: "ChecksumDisabled",
 			nilAllowed:      true,
 			emptyAllowed:    false,
 			nonTypeAllowed:  false,
@@ -910,6 +1013,65 @@ func TestParseLogLevelParam(t *testing.T) {
 			if tc.expectWarningV2 {
 				assert.Contains(tt, logBuffer.String(), "has been passed to S3 driver v2. Ignoring.")
 			}
+		})
+	}
+}
+
+func TestChecksumDisabledParameter(t *testing.T) {
+	tests := []struct {
+		name                 string
+		checksumDisabled     any
+		checksumAlgorithm    any
+		expectedDisabled     bool
+		expectedAlgorithm    string
+		expectWarningMessage bool
+	}{
+		{
+			name:              "checksum_disabled true",
+			checksumDisabled:  true,
+			expectedDisabled:  true,
+			expectedAlgorithm: "",
+		},
+		{
+			name:                 "checksum_disabled true with algorithm",
+			checksumDisabled:     true,
+			checksumAlgorithm:    string(v2_types.ChecksumAlgorithmCrc32),
+			expectedDisabled:     true,
+			expectedAlgorithm:    "",
+			expectWarningMessage: true,
+		},
+		{
+			name:              "checksum_disabled false",
+			checksumDisabled:  false,
+			expectedDisabled:  false,
+			expectedAlgorithm: string(v2_types.ChecksumAlgorithmCrc64nvme),
+		},
+		{
+			name:              "checksum_disabled false with algorithm",
+			checksumDisabled:  false,
+			checksumAlgorithm: string(v2_types.ChecksumAlgorithmCrc32),
+			expectedDisabled:  false,
+			expectedAlgorithm: string(v2_types.ChecksumAlgorithmCrc32),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := map[string]any{
+				ParamRegion:           "us-west-2",
+				ParamBucket:           "test-bucket",
+				ParamChecksumDisabled: tt.checksumDisabled,
+				sdriver.ParamLogger:   btestutil.NewTestLogger(t),
+			}
+
+			if tt.checksumAlgorithm != nil {
+				params[ParamChecksumAlgorithm] = tt.checksumAlgorithm
+			}
+
+			result, err := ParseParameters(V2DriverName, params)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedDisabled, result.ChecksumDisabled)
+			assert.Equal(t, tt.expectedAlgorithm, result.ChecksumAlgorithm)
 		})
 	}
 }
