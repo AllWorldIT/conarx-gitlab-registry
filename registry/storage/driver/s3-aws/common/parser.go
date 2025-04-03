@@ -618,7 +618,8 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 	case V1DriverName, V1DriverNameAlt:
 		res.LogLevel = uint64(ParseLogLevelParamV1(logger, parameters[ParamLogLevel]))
 	case V2DriverName:
-		res.LogLevel = uint64(ParseLogLevelParamV2(logger, parameters[ParamLogLevel]))
+		// res.LogLevel = uint64(ParseLogLevelParamV2(logger, parameters[ParamLogLevel]))
+		res.LogLevel = uint64(ParseLogLevelParamV1(logger, parameters[ParamLogLevel]))
 	}
 
 	return res, nil
