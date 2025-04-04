@@ -364,8 +364,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		options = append(options, storage.ManifestPayloadSizeLimit(app.manifestPayloadSizeLimit))
 	}
 
-	fsLocker := storage.FilesystemInUseLocker{Driver: app.driver}
-	dbLocker := storage.DatabaseInUseLocker{Driver: app.driver}
+	fsLocker := &storage.FilesystemInUseLocker{Driver: app.driver}
+	dbLocker := &storage.DatabaseInUseLocker{Driver: app.driver}
 	// Connect to the metadata database, if enabled.
 	if config.Database.Enabled {
 		// Temporary measure to enforce lock files while all the implementation is done
@@ -536,27 +536,6 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
 			startBackgroundMigrations(app.Context, app.db.Primary(), config)
 		}
-	} else {
-		if feature.EnforceLockfiles.Enabled() {
-			dbLocked, err := dbLocker.IsLocked(ctx)
-			if err != nil {
-				log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
-				return nil, err
-			}
-
-			if dbLocked {
-				return nil, ErrDatabaseInUse
-			}
-		}
-
-		// Lock the filesystem metadata to prevent
-		// accidental start up of the registry in database mode
-		// before an import has been completed.
-		if err := fsLocker.Lock(app.Context); err != nil {
-			log.WithError(err).Error("failed to mark filesystem only usage, continuing")
-			return nil, err
-		}
-		log.Info("registry filesystem metadata in use")
 	}
 
 	// configure storage caches
@@ -579,23 +558,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				return nil, fmt.Errorf("redis configuration required to use for layerinfo cache")
 			}
 			cacheProvider := rediscache.NewRedisBlobDescriptorCacheProvider(app.redisBlobDesc)
-			localOptions := make([]storage.RegistryOption, len(options), len(options)+1)
-			copy(localOptions, options)
-			localOptions = append(localOptions, storage.BlobDescriptorCacheProvider(cacheProvider))
-			app.registry, err = storage.NewRegistry(app, app.driver, localOptions...)
-			if err != nil {
-				return nil, fmt.Errorf("could not create registry: %w", err)
-			}
+			options = append(options, storage.BlobDescriptorCacheProvider(cacheProvider))
 			log.Info("using redis blob descriptor cache")
 		case "inmemory":
 			cacheProvider := memorycache.NewInMemoryBlobDescriptorCacheProvider()
-			localOptions := make([]storage.RegistryOption, len(options), len(options)+1)
-			copy(localOptions, options)
-			localOptions = append(localOptions, storage.BlobDescriptorCacheProvider(cacheProvider))
-			app.registry, err = storage.NewRegistry(app, app.driver, localOptions...)
-			if err != nil {
-				return nil, fmt.Errorf("could not create registry: %w", err)
-			}
+			options = append(options, storage.BlobDescriptorCacheProvider(cacheProvider))
 			log.Info("using inmemory blob descriptor cache")
 		default:
 			if v != "" {
@@ -607,11 +574,20 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	}
 
 	if app.registry == nil {
-		// configure the registry if no cache section is available.
+		// Initialize registry once with all options
 		app.registry, err = storage.NewRegistry(app.Context, app.driver, options...)
 		if err != nil {
 			return nil, fmt.Errorf("could not create registry: %w", err)
 		}
+	}
+
+	// Check filesystem lock file after registry is initialized
+	if !config.Database.Enabled {
+		if err := app.handleFilesystemLockFile(ctx, dbLocker, fsLocker); err != nil {
+			return nil, err
+		}
+
+		log.Info("registry filesystem metadata in use")
 	}
 
 	app.registry, err = applyRegistryMiddleware(app, app.registry, config.Middleware["registry"])
@@ -637,6 +613,62 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	}
 
 	return app, nil
+}
+
+// handleFilesystemLockFile checks if the database lock file exists.
+// If it does not, it checks if the filesystem is in use and locks it
+// if there are existing repositories in the filesystem.
+func (app *App) handleFilesystemLockFile(ctx context.Context, dbLocker, fsLocker storage.Locker) error {
+	if !feature.EnforceLockfiles.Enabled() {
+		return nil
+	}
+
+	log := dcontext.GetLogger(app)
+	dbLocked, err := dbLocker.IsLocked(ctx)
+	if err != nil {
+		log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+		return err
+	}
+
+	if dbLocked {
+		return ErrDatabaseInUse
+	}
+
+	repositoryEnumerator, ok := app.registry.(distribution.RepositoryEnumerator)
+	if !ok {
+		return errors.New("error building repository enumerator")
+	}
+
+	// To prevent new installations from locking the filesystem we
+	// try our best to enumerate repositories. Once we have found at
+	// least one repository we know that the filesystem is in use.
+	// See https://gitlab.com/gitlab-org/container-registry/-/issues/1523.
+	err = repositoryEnumerator.Enumerate(
+		ctx,
+		func(string) error {
+			return ErrFilesystemInUse
+		},
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrFilesystemInUse):
+			// Lock the filesystem metadata to prevent
+			// accidental start up of the registry in database mode
+			// before an import has been completed.
+			if err := fsLocker.Lock(app.Context); err != nil {
+				log.WithError(err).Error("failed to mark filesystem only usage, continuing")
+				return err
+			}
+
+			log.Info("there are existing repositories in the filesystem, locking filesystem")
+		case errors.As(err, new(storagedriver.PathNotFoundError)):
+			log.Debug("no filesystem path found, will not lock filesystem until there are repositories present")
+		default:
+			return fmt.Errorf("could not enumerate repositories for filesystem lock check: %w", err)
+		}
+	}
+
+	return nil
 }
 
 var (
