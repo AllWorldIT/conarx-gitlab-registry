@@ -183,7 +183,6 @@ database:
     nameserver: localhost
     port: 8600
     record: db-replica-registry.service.consul
-    recordcheckinterval: 1m
     disconnecttimeout: 2m
     maxreplicalagtime: 1m
     maxreplicalagbytes: 8388608
