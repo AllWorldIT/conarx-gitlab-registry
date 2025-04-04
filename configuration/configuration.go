@@ -1107,7 +1107,6 @@ const (
 	defaultBackgroundMigrationsJobInterval = 1 * time.Minute
 	defaultDLBNameserver                   = "localhost"
 	defaultDLBPort                         = 8600
-	defaultDLBRecordCheckInterval          = 1 * time.Minute
 	defaultDLBDisconnectTimeout            = 2 * time.Minute
 	defaultDLBMaxReplicaLagBytes           = 8 * 1024 * 1024
 	defaultDLBMaxReplicaLagTime            = 1 * time.Minute
