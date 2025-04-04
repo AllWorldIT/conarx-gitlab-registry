@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -964,6 +966,50 @@ func TestNewApp_Locks_Errors(t *testing.T) {
 
 			_, err := NewApp(ctx, config)
 			require.ErrorIs(t, err, tc.expectedError)
+		})
+	}
+}
+
+// Do not lock the filesystem when the _manifests/ directory is empty
+// https://gitlab.com/gitlab-org/container-registry/-/issues/1523
+func TestNewApp_Locks_NoManifestsInFilesystem(t *testing.T) {
+	ctx := context.Background()
+	config := testConfig()
+	delete(config.Storage, "testdriver")
+
+	tcs := []struct {
+		name      string
+		createDir bool
+	}{
+		{
+			name:      "docker directory exists but it's empty",
+			createDir: true,
+		},
+		{
+			// tests when Enumerate returns storagedriver.PathNotFoundError
+			name:      "docker directory does not exist",
+			createDir: false,
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			if tc.createDir {
+				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "docker/registry/v2/repositories"), os.FileMode(0o755)))
+			}
+
+			config.Storage["filesystem"] = map[string]any{
+				"rootdirectory": tmpDir,
+			}
+
+			// Temporary use of FF while other tests are updated and fixed
+			// see https://gitlab.com/gitlab-org/container-registry/-/issues/1335
+			t.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
+
+			_, err := NewApp(ctx, config)
+			require.NoError(t, err)
+
+			require.NoFileExists(t, filepath.Join(tmpDir, "docker/registry/lockfiles/filesystem-in-use"))
 		})
 	}
 }
