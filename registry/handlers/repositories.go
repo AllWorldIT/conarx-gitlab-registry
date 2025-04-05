@@ -1015,7 +1015,9 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 			// See: https://gitlab.com/gitlab-org/container-registry/-/merge_requests/1333#note_1482777410 on the rationale behind this.
 			exist, err := plStore.Exists(h.Context, projectPath)
 			if err != nil {
-				errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r), errortracking.WithStackTrace())
+				if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+					errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r), errortracking.WithStackTrace())
+				}
 				l.WithError(err).Error("ongoing rename check: failed to check lease store for ongoing lease, skipping")
 				handler.ServeHTTP(w, r)
 				return
