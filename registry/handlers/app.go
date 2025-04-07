@@ -1322,6 +1322,7 @@ func (app *App) initMetaRouter() error {
 	app.registerGitlab(v1.RepositoryTagDetail, h.wrap(repositoryTagDetailsDispatcher))
 	app.registerGitlab(v1.Repositories, h.wrap(repositoryDispatcher))
 	app.registerGitlab(v1.SubRepositories, h.wrap(subRepositoriesDispatcher))
+	app.registerGitlab(v1.Statistics, h.wrap(statisticsDispatcher))
 
 	var err error
 	v1PathWithPrefix := fmt.Sprintf("^%s%s.*", strings.TrimSuffix(app.Config.HTTP.Prefix, "/"), v1.Base.Path)
@@ -1779,7 +1780,7 @@ func (*App) nameRequired(r *http.Request) bool {
 	routeName := route.GetName()
 
 	switch routeName {
-	case v2.RouteNameBase, v2.RouteNameCatalog, v1.Base.Name:
+	case v2.RouteNameBase, v2.RouteNameCatalog, v1.Base.Name, v1.Statistics.Name:
 		return false
 	}
 

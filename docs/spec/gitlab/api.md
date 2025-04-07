@@ -689,7 +689,62 @@ Code                              | Message                                     
 `INVALID_LIMIT_PARAMETER_VALUE`   | `invalid limit query parameter value`                   | The value of a limit query parameter is invalid.                                                                                                                          |
 `PAGINATION_NUMBER_INVALID`       | `invalid number of results requested`                    | Returned when the "n" parameter (number of results to return) is not an integer, "n" is negative or "n" is bigger than the maximum allowed.                               |
 
+## Get registry statistics
+
+> [!warning]
+> This is an [experimental](https://docs.gitlab.com/policy/development_stages_support/#experiment) feature.
+
+Obtain usage statistics and build details about a registry instance.
+
+### Request
+
+```shell
+GET /gitlab/v1/statistics/
+```
+
+### Response
+
+#### Body
+
+The response body is an object with several objects containing related statistics:
+
+ Key             | Value                                            | Type   |
+-----------------|--------------------------------------------------|--------|
+ `release`       | Release information.                             | Object |
+ `database`      | Information related to the metadata database.    | Object |
+
+##### Release
+
+ Key            | Value                                                                                                         | Type   | Format                            | Condition |
+----------------|---------------------------------------------------------------------------------------------------------------|--------|-----------------------------------|-----------|
+ `ext_features` | Additional features supported by the GitLab container registry, not supported by OCI distribution registries. | String | Comma separated list.             |           |
+ `version`      | The version of the container registry.                                                                        | String | `v{major}.{minor}.{patch}-gitlab` |           |
+
+##### Database
+
+ Key       | Value                                     | Type    | Format | Condition |
+-----------|-------------------------------------------|---------|--------|-----------|
+ `enabled` | True if the metadata database is enabled. | Boolean |        |           |
+
+#### Example
+
+```json
+{
+  "release": {
+    "ext_features": "tag_delete",
+    "version": "v4.19.0-gitlab"
+  },
+  "database": {
+    "enabled": true
+  }
+}
+```
+
 ## Changes
+
+### 2025-04-07
+
+- Add statistics endpoint.
 
 ### 2025-02-07
 
