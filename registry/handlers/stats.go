@@ -4,10 +4,15 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
+	"github.com/docker/distribution/registry/api/errcode"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/version"
+	"github.com/gorilla/handlers"
 
 	"github.com/opencontainers/go-digest"
 )
@@ -62,4 +67,57 @@ func (*RepositoryStats) key(path, op string) string {
 	nsPrefix := strings.Split(path, "/")[0]
 	hex := digest.FromString(path).Hex()
 	return fmt.Sprintf("registry:api:{repository:%s:%s}:%s", nsPrefix, hex, op)
+}
+
+// StatisticsAPIResponse is the top-level statistics API response.
+type StatisticsAPIResponse struct {
+	Release  ReleaseStats  `json:"release"`
+	Database DatabaseStats `json:"database"`
+}
+
+// ReleaseStats contain information associated with the registry binary itself,
+// such as the version number, supported features, and other things not expected
+// to change based on different configurations or runtime activity.
+type ReleaseStats struct {
+	ExtFeatures string `json:"ext_features"`
+	Version     string `json:"version"`
+}
+
+// DatabaseStats contain information related to the metadata database.
+type DatabaseStats struct {
+	Enabled bool `json:"enabled"`
+}
+
+type statisticsHandler struct {
+	*Context
+}
+
+func statisticsDispatcher(ctx *Context, _ *http.Request) http.Handler {
+	statsHandler := &statisticsHandler{
+		Context: ctx,
+	}
+
+	return handlers.MethodHandler{
+		http.MethodGet: http.HandlerFunc(statsHandler.HandleGetStatistics),
+	}
+}
+
+func (h *statisticsHandler) HandleGetStatistics(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	resp := StatisticsAPIResponse{
+		Release: ReleaseStats{
+			ExtFeatures: version.ExtFeatures,
+			Version:     version.Version,
+		},
+		Database: DatabaseStats{
+			Enabled: h.Config.Database.Enabled,
+		},
+	}
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(resp); err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
 }

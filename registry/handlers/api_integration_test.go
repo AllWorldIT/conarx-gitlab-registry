@@ -31,11 +31,13 @@ import (
 	"github.com/docker/distribution/registry/auth/token"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/registry/handlers"
 	internaltestutil "github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	"github.com/docker/distribution/registry/storage/driver/inmemory"
 	"github.com/docker/distribution/testutil"
+	"github.com/docker/distribution/version"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
@@ -3212,4 +3214,41 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStatisticsAPI_Get(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.Shutdown()
+
+	// gitlab/v1 endpoints always 404 if the database is disabled.
+	if !env.config.Database.Enabled {
+		t.Skip("skipping test because the metadata database is not enabled")
+	}
+
+	req, err := env.builder.BuildGitlabV1StatisticsURL()
+	require.NoError(t, err)
+
+	resp, err := http.Get(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var body handlers.StatisticsAPIResponse
+
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&body)
+	require.NoError(t, err)
+
+	expectedBody := handlers.StatisticsAPIResponse{
+		Release: handlers.ReleaseStats{
+			ExtFeatures: version.ExtFeatures,
+			Version:     version.Version,
+		},
+		Database: handlers.DatabaseStats{
+			Enabled: true,
+		},
+	}
+
+	require.Equal(t, expectedBody, body)
 }
