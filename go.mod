@@ -45,7 +45,7 @@ require (
 	gitlab.com/gitlab-org/api/client-go v0.127.0
 	gitlab.com/gitlab-org/labkit v1.23.2
 	go.uber.org/automaxprocs v1.6.0
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.1
 	golang.org/x/crypto v0.37.0
 	golang.org/x/net v0.38.0
 	golang.org/x/oauth2 v0.28.0
