@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	v2_types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -80,18 +80,16 @@ const (
 	LogResponseEventMessage = "logresponseeventmessage"
 
 	// Storage class values
-	StorageClassNone              = "NONE"
-	StorageClassStandard          = s3.StorageClassStandard
-	StorageClassReducedRedundancy = s3.StorageClassReducedRedundancy
+	StorageClassNone = "NONE"
 
 	// Content verification
 	ParamChecksumDisabled           = "checksum_disabled"
 	ParamChecksumAlgorithm          = "checksum_algorithm"
-	ParamChecksumAlgorithmCrc32     = string(v2_types.ChecksumAlgorithmCrc32)
-	ParamChecksumAlgorithmCrc32c    = string(v2_types.ChecksumAlgorithmCrc32c)
-	ParamChecksumAlgorithmSha1      = string(v2_types.ChecksumAlgorithmSha1)
-	ParamChecksumAlgorithmSha256    = string(v2_types.ChecksumAlgorithmSha256)
-	ParamChecksumAlgorithmCrc64nvme = string(v2_types.ChecksumAlgorithmCrc64nvme)
+	ParamChecksumAlgorithmCrc32     = string(types.ChecksumAlgorithmCrc32)
+	ParamChecksumAlgorithmCrc32c    = string(types.ChecksumAlgorithmCrc32c)
+	ParamChecksumAlgorithmSha1      = string(types.ChecksumAlgorithmSha1)
+	ParamChecksumAlgorithmSha256    = string(types.ChecksumAlgorithmSha256)
+	ParamChecksumAlgorithmCrc64nvme = string(types.ChecksumAlgorithmCrc64nvme)
 )
 
 const (
@@ -161,11 +159,11 @@ var validRegions = make(map[string]struct{})
 var validObjectACLs = make(map[string]struct{})
 
 var validChecksumAlgorithms = []string{
-	string(v2_types.ChecksumAlgorithmCrc32),
-	string(v2_types.ChecksumAlgorithmCrc32c),
-	string(v2_types.ChecksumAlgorithmSha1),
-	string(v2_types.ChecksumAlgorithmSha256),
-	string(v2_types.ChecksumAlgorithmCrc64nvme),
+	string(types.ChecksumAlgorithmCrc32),
+	string(types.ChecksumAlgorithmCrc32c),
+	string(types.ChecksumAlgorithmSha1),
+	string(types.ChecksumAlgorithmSha256),
+	string(types.ChecksumAlgorithmCrc64nvme),
 }
 
 func init() {
@@ -485,25 +483,57 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 	}
 	res.RootDirectory = fmt.Sprint(rootDirectory)
 
-	storageClass := s3.StorageClassStandard
+	var storageClass string
 	storageClassParam := parameters[ParamStorageClass]
 	if storageClassParam != nil {
 		storageClassString, ok := storageClassParam.(string)
-		if !ok {
-			err := fmt.Errorf("the storageclass parameter must be one of %v, %v invalid",
-				[]string{s3.StorageClassStandard, s3.StorageClassReducedRedundancy}, storageClassParam)
+		switch {
+		case !ok:
+			err := fmt.Errorf("the storageclass parameter must be a string: %v", storageClassParam)
 			mErr = multierror.Append(mErr, err)
+		case (driverVersion == V1DriverName || driverVersion == V1DriverNameAlt):
+			// All valid storage class parameters are UPPERCASE, so be a bit more flexible here
+			storageClassString = strings.ToUpper(storageClassString)
+			validStorageClasses := []string{
+				StorageClassNone,
+				s3.StorageClassStandard,
+				s3.StorageClassReducedRedundancy,
+			}
+			if !slices.Contains(validStorageClasses, storageClassString) {
+				err := fmt.Errorf(
+					"the storageclass parameter must be one of %v, %v is invalid",
+					strings.Join(validStorageClasses, ","), storageClassParam,
+				)
+				mErr = multierror.Append(mErr, err)
+			} else {
+				storageClass = storageClassString
+			}
+		case driverVersion == V2DriverName:
+			storageClassString = strings.ToUpper(storageClassString)
+			validStorageClasses := []string{
+				StorageClassNone,
+				string(types.StorageClassStandard),
+				string(types.StorageClassReducedRedundancy),
+			}
+			if !slices.Contains(validStorageClasses, storageClassString) {
+				err := fmt.Errorf(
+					"the storageclass parameter must be one of %v, %v is invalid",
+					strings.Join(validStorageClasses, ","), storageClassParam,
+				)
+				mErr = multierror.Append(mErr, err)
+			} else {
+				storageClass = storageClassString
+			}
+		default:
+			storageClass = storageClassString
 		}
-		// All valid storage class parameters are UPPERCASE, so be a bit more flexible here
-		storageClassString = strings.ToUpper(storageClassString)
-		if storageClassString != StorageClassNone &&
-			storageClassString != s3.StorageClassStandard &&
-			storageClassString != s3.StorageClassReducedRedundancy {
-			err := fmt.Errorf("the storageclass parameter must be one of %v, %v invalid",
-				[]string{StorageClassNone, s3.StorageClassStandard, s3.StorageClassReducedRedundancy}, storageClassParam)
-			mErr = multierror.Append(mErr, err)
+	} else {
+		switch {
+		case (driverVersion == V1DriverName || driverVersion == V1DriverNameAlt):
+			storageClass = string(s3.StorageClassStandard)
+		case driverVersion == V2DriverName:
+			storageClass = string(types.StorageClassStandard)
 		}
-		storageClass = storageClassString
 	}
 	res.StorageClass = storageClass
 
