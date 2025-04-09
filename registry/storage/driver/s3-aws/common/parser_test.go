@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	v2_aws "github.com/aws/aws-sdk-go-v2/aws"
@@ -18,16 +19,15 @@ import (
 
 func TestParseParameters_in_groups(t *testing.T) {
 	tests := []struct {
-		name          string
-		driverVersion string
-		params        map[string]any
-		expected      *DriverParameters
-		expectedError bool
-		errorContains string
+		name                  string
+		restrictDriverVersion string
+		params                map[string]any
+		expected              *DriverParameters
+		expectedError         bool
+		errorContains         string
 	}{
 		{
-			name:          "valid minimal configuration",
-			driverVersion: V1DriverName,
+			name: "valid minimal configuration",
 			params: map[string]any{
 				ParamRegion: "us-west-2",
 				ParamBucket: "test-bucket",
@@ -61,8 +61,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name:          "full configuration with all parameters v1",
-			driverVersion: V1DriverName,
+			name:                  "full configuration with all parameters v1",
+			restrictDriverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:                      "us-east-1",
 				ParamBucket:                      "test-bucket-full",
@@ -116,8 +116,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name:          "configuration with object ownership enabled",
-			driverVersion: V1DriverName,
+			name: "configuration with object ownership enabled",
 			params: map[string]any{
 				ParamRegion:          "us-west-2",
 				ParamBucket:          "test-bucket",
@@ -157,8 +156,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name:          "missing required parameters",
-			driverVersion: V1DriverName,
+			name: "missing required parameters",
 			params: map[string]any{
 				ParamAccessKey: "testkey",
 			},
@@ -166,8 +164,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "no \"region\" parameter provided",
 		},
 		{
-			name:          "invalid region",
-			driverVersion: V1DriverName,
+			name: "invalid region",
 			params: map[string]any{
 				ParamRegion: "invalid-region",
 				ParamBucket: "test-bucket",
@@ -176,8 +173,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "validating region provided",
 		},
 		{
-			name:          "custom endpoint skips region validation",
-			driverVersion: V1DriverName,
+			name: "custom endpoint skips region validation",
 			params: map[string]any{
 				ParamRegion:         "custom-region",
 				ParamRegionEndpoint: "https://custom.endpoint",
@@ -196,7 +192,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 				V4Auth:                      true,
 				ChunkSize:                   DefaultChunkSize,
 				Secure:                      true,
-				StorageClass:                StorageClassStandard,
+				StorageClass:                s3.StorageClassStandard,
 				ObjectACL:                   s3.ObjectCannedACLPrivate,
 				ChecksumDisabled:            false,
 				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc64nvme),
@@ -204,8 +200,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name:          "invalid chunk size",
-			driverVersion: V1DriverName,
+			name: "invalid chunk size",
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -215,8 +210,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting \"chunksize\" to int64",
 		},
 		{
-			name:          "chunk size below minimum",
-			driverVersion: V1DriverName,
+			name: "chunk size below minimum",
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -226,8 +220,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "chunksize",
 		},
 		{
-			name:          "invalid encrypt parameter",
-			driverVersion: V1DriverName,
+			name: "invalid encrypt parameter",
 			params: map[string]any{
 				ParamRegion:  "us-west-2",
 				ParamBucket:  "test-bucket",
@@ -237,8 +230,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"encrypt\" string as bool",
 		},
 		{
-			name:          "invalid secure parameter",
-			driverVersion: V1DriverName,
+			name: "invalid secure parameter",
 			params: map[string]any{
 				ParamRegion: "us-west-2",
 				ParamBucket: "test-bucket",
@@ -248,8 +240,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"secure\" string as bool",
 		},
 		{
-			name:          "invalid skip verify parameter",
-			driverVersion: V1DriverName,
+			name: "invalid skip verify parameter",
 			params: map[string]any{
 				ParamRegion:     "us-west-2",
 				ParamBucket:     "test-bucket",
@@ -259,8 +250,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"skipverify\" string as bool",
 		},
 		{
-			name:          "invalid v4auth parameter",
-			driverVersion: V1DriverName,
+			name:                  "invalid v4auth parameter",
+			restrictDriverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion: "us-west-2",
 				ParamBucket: "test-bucket",
@@ -270,8 +261,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"v4auth\" string as bool",
 		},
 		{
-			name:          "invalid multipart copy chunk size",
-			driverVersion: V1DriverName,
+			name:                  "invalid multipart copy chunk size",
+			restrictDriverVersion: V1DriverName,
 			params: map[string]any{
 				ParamRegion:                 "us-west-2",
 				ParamBucket:                 "test-bucket",
@@ -281,8 +272,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting \"multipartcopychunksize\" to valid int64",
 		},
 		{
-			name:          "invalid multipart copy max concurrency",
-			driverVersion: V1DriverName,
+			name: "invalid multipart copy max concurrency",
 			params: map[string]any{
 				ParamRegion:                      "us-west-2",
 				ParamBucket:                      "test-bucket",
@@ -292,8 +282,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting \"multipartcopymaxconcurrency\" to valid int64",
 		},
 		{
-			name:          "invalid multipart copy threshold size",
-			driverVersion: V1DriverName,
+			name: "invalid multipart copy threshold size",
 			params: map[string]any{
 				ParamRegion:                     "us-west-2",
 				ParamBucket:                     "test-bucket",
@@ -303,19 +292,17 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting \"multipartcopythresholdsize\" to valid int64",
 		},
 		{
-			name:          "storage class not a string",
-			driverVersion: V1DriverName,
+			name: "storage class not a string",
 			params: map[string]any{
 				ParamRegion:       "us-west-2",
 				ParamBucket:       "test-bucket",
 				ParamStorageClass: 123,
 			},
 			expectedError: true,
-			errorContains: "the storageclass parameter must be one of",
+			errorContains: "the storageclass parameter must be a string",
 		},
 		{
-			name:          "object ACL not a string",
-			driverVersion: V1DriverName,
+			name: "object ACL not a string",
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -325,8 +312,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "object ACL parameter should be a string",
 		},
 		{
-			name:          "invalid object ACL value",
-			driverVersion: V1DriverName,
+			name: "invalid object ACL value",
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -336,8 +322,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "object ACL parameter should be one of",
 		},
 		{
-			name:          "invalid path style parameter",
-			driverVersion: V1DriverName,
+			name: "invalid path style parameter",
 			params: map[string]any{
 				ParamRegion:    "us-west-2",
 				ParamBucket:    "test-bucket",
@@ -347,8 +332,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"pathstyle\" string as bool",
 		},
 		{
-			name:          "invalid parallel walk parameter",
-			driverVersion: V1DriverName,
+			name: "invalid parallel walk parameter",
 			params: map[string]any{
 				ParamRegion:       "us-west-2",
 				ParamBucket:       "test-bucket",
@@ -358,8 +342,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "cannot parse \"parallelwalk\" string as bool",
 		},
 		{
-			name:          "invalid max requests per second",
-			driverVersion: V1DriverName,
+			name: "invalid max requests per second",
 			params: map[string]any{
 				ParamRegion:               "us-west-2",
 				ParamBucket:               "test-bucket",
@@ -369,8 +352,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting maxrequestspersecond to valid int64",
 		},
 		{
-			name:          "invalid max retries",
-			driverVersion: V1DriverName,
+			name: "invalid max retries",
 			params: map[string]any{
 				ParamRegion:     "us-west-2",
 				ParamBucket:     "test-bucket",
@@ -380,8 +362,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "converting maxrequestspersecond to valid int64",
 		},
 		{
-			name:          "invalid storage class",
-			driverVersion: V1DriverName,
+			name: "invalid storage class",
 			params: map[string]any{
 				ParamRegion:       "us-west-2",
 				ParamBucket:       "test-bucket",
@@ -391,8 +372,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "storageclass parameter must be one of",
 		},
 		{
-			name:          "object ACL with ownership enabled",
-			driverVersion: V1DriverName,
+			name: "object ACL with ownership enabled",
 			params: map[string]any{
 				ParamRegion:          "us-west-2",
 				ParamBucket:          "test-bucket",
@@ -403,7 +383,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "object ACL parameter should not be set when object ownership is enabled",
 		},
 		{
-			name: "configuration with checksum_disabled",
+			name:                  "configuration with checksum_disabled",
+			restrictDriverVersion: V2DriverName,
 			params: map[string]any{
 				ParamRegion:           "us-west-2",
 				ParamBucket:           "test-bucket",
@@ -421,7 +402,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 				V4Auth:                      true,
 				ChunkSize:                   DefaultChunkSize,
 				Secure:                      true,
-				StorageClass:                StorageClassStandard,
+				StorageClass:                s3.StorageClassStandard,
 				ObjectACL:                   s3.ObjectCannedACLPrivate,
 				ChecksumDisabled:            true,
 				ChecksumAlgorithm:           "",
@@ -429,7 +410,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name: "configuration with checksum_disabled and checksum algo specified",
+			name:                  "configuration with checksum_disabled and checksum algo specified",
+			restrictDriverVersion: V2DriverName,
 			params: map[string]any{
 				ParamRegion:            "us-west-2",
 				ParamBucket:            "test-bucket",
@@ -448,7 +430,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 				V4Auth:                      true,
 				ChunkSize:                   DefaultChunkSize,
 				Secure:                      true,
-				StorageClass:                StorageClassStandard,
+				StorageClass:                s3.StorageClassStandard,
 				ObjectACL:                   s3.ObjectCannedACLPrivate,
 				ChecksumDisabled:            true,
 				ChecksumAlgorithm:           "",
@@ -456,7 +438,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name: "invalid checksum algorithm",
+			name:                  "invalid checksum algorithm",
+			restrictDriverVersion: V2DriverName,
 			params: map[string]any{
 				ParamRegion:            "us-west-2",
 				ParamBucket:            "test-bucket",
@@ -466,7 +449,8 @@ func TestParseParameters_in_groups(t *testing.T) {
 			errorContains: "the checksum_algorithm parameter must be one of",
 		},
 		{
-			name: "checksum algorithm not a string",
+			name:                  "checksum algorithm not a string",
+			restrictDriverVersion: V2DriverName,
 			params: map[string]any{
 				ParamRegion:            "us-west-2",
 				ParamBucket:            "test-bucket",
@@ -478,56 +462,62 @@ func TestParseParameters_in_groups(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.params[sdriver.ParamLogger] = btestutil.NewTestLogger(t)
+		for _, dv := range []string{V1DriverName, V2DriverName} {
+			t.Run(fmt.Sprintf("%s/%s", tt.name, dv), func(t *testing.T) {
+				tt.params[sdriver.ParamLogger] = btestutil.NewTestLogger(t)
 
-			result, err := ParseParameters(tt.driverVersion, tt.params)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains)
+				if tt.restrictDriverVersion != "" && tt.restrictDriverVersion != dv {
+					t.Skip("skipping subtests as it does not apply for this driver")
 				}
-				return
-			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
+				result, err := ParseParameters(dv, tt.params)
 
-			if tt.expected != nil {
-				// Check all fields in DriverParameters
-				assert.Equal(t, tt.expected.AccessKey, result.AccessKey, "AccessKey mismatch")
-				assert.Equal(t, tt.expected.SecretKey, result.SecretKey, "SecretKey mismatch")
-				assert.Equal(t, tt.expected.Region, result.Region, "Region mismatch")
-				assert.Equal(t, tt.expected.RegionEndpoint, result.RegionEndpoint, "RegionEndpoint mismatch")
-				assert.Equal(t, tt.expected.Bucket, result.Bucket, "Bucket mismatch")
-				assert.Equal(t, tt.expected.RootDirectory, result.RootDirectory, "RootDirectory mismatch")
-				assert.Equal(t, tt.expected.StorageClass, result.StorageClass, "StorageClass mismatch")
-				assert.Equal(t, tt.expected.ObjectACL, result.ObjectACL, "ObjectACL mismatch")
-				assert.Equal(t, tt.expected.ObjectOwnership, result.ObjectOwnership, "ObjectOwnership mismatch")
+				if tt.expectedError {
+					assert.Error(t, err)
+					if tt.errorContains != "" {
+						assert.Contains(t, err.Error(), tt.errorContains)
+					}
+					return
+				}
 
-				// Boolean flags
-				assert.Equal(t, tt.expected.Encrypt, result.Encrypt, "Encrypt mismatch")
-				assert.Equal(t, tt.expected.Secure, result.Secure, "Secure mismatch")
-				assert.Equal(t, tt.expected.SkipVerify, result.SkipVerify, "SkipVerify mismatch")
-				assert.Equal(t, tt.expected.V4Auth, result.V4Auth, "V4Auth mismatch")
-				assert.Equal(t, tt.expected.PathStyle, result.PathStyle, "PathStyle mismatch")
-				assert.Equal(t, tt.expected.ParallelWalk, result.ParallelWalk, "ParallelWalk mismatch")
+				require.NoError(t, err)
+				require.NotNil(t, result)
 
-				// Numeric parameters
-				assert.Equal(t, tt.expected.ChunkSize, result.ChunkSize, "ChunkSize mismatch")
-				assert.Equal(t, tt.expected.MultipartCopyChunkSize, result.MultipartCopyChunkSize, "MultipartCopyChunkSize mismatch")
-				assert.Equal(t, tt.expected.MultipartCopyMaxConcurrency, result.MultipartCopyMaxConcurrency, "MultipartCopyMaxConcurrency mismatch")
-				assert.Equal(t, tt.expected.MultipartCopyThresholdSize, result.MultipartCopyThresholdSize, "MultipartCopyThresholdSize mismatch")
-				assert.Equal(t, tt.expected.MaxRequestsPerSecond, result.MaxRequestsPerSecond, "MaxRequestsPerSecond mismatch")
-				assert.Equal(t, tt.expected.MaxRetries, result.MaxRetries, "MaxRetries mismatch")
+				if tt.expected != nil {
+					// Check all fields in DriverParameters
+					assert.Equal(t, tt.expected.AccessKey, result.AccessKey, "AccessKey mismatch")
+					assert.Equal(t, tt.expected.SecretKey, result.SecretKey, "SecretKey mismatch")
+					assert.Equal(t, tt.expected.Region, result.Region, "Region mismatch")
+					assert.Equal(t, tt.expected.RegionEndpoint, result.RegionEndpoint, "RegionEndpoint mismatch")
+					assert.Equal(t, tt.expected.Bucket, result.Bucket, "Bucket mismatch")
+					assert.Equal(t, tt.expected.RootDirectory, result.RootDirectory, "RootDirectory mismatch")
+					assert.Equal(t, tt.expected.StorageClass, result.StorageClass, "StorageClass mismatch")
+					assert.Equal(t, tt.expected.ObjectACL, result.ObjectACL, "ObjectACL mismatch")
+					assert.Equal(t, tt.expected.ObjectOwnership, result.ObjectOwnership, "ObjectOwnership mismatch")
 
-				// Other configurations
-				assert.Equal(t, tt.expected.KeyID, result.KeyID, "KeyID mismatch")
-				assert.Equal(t, tt.expected.LogLevel, result.LogLevel, "LogLevel mismatch")
-				assert.Equal(t, tt.expected.ChecksumAlgorithm, result.ChecksumAlgorithm, "ChecksumAlgorithm mismatch")
-			}
-		})
+					// Boolean flags
+					assert.Equal(t, tt.expected.Encrypt, result.Encrypt, "Encrypt mismatch")
+					assert.Equal(t, tt.expected.Secure, result.Secure, "Secure mismatch")
+					assert.Equal(t, tt.expected.SkipVerify, result.SkipVerify, "SkipVerify mismatch")
+					assert.Equal(t, tt.expected.V4Auth, result.V4Auth, "V4Auth mismatch")
+					assert.Equal(t, tt.expected.PathStyle, result.PathStyle, "PathStyle mismatch")
+					assert.Equal(t, tt.expected.ParallelWalk, result.ParallelWalk, "ParallelWalk mismatch")
+
+					// Numeric parameters
+					assert.Equal(t, tt.expected.ChunkSize, result.ChunkSize, "ChunkSize mismatch")
+					assert.Equal(t, tt.expected.MultipartCopyChunkSize, result.MultipartCopyChunkSize, "MultipartCopyChunkSize mismatch")
+					assert.Equal(t, tt.expected.MultipartCopyMaxConcurrency, result.MultipartCopyMaxConcurrency, "MultipartCopyMaxConcurrency mismatch")
+					assert.Equal(t, tt.expected.MultipartCopyThresholdSize, result.MultipartCopyThresholdSize, "MultipartCopyThresholdSize mismatch")
+					assert.Equal(t, tt.expected.MaxRequestsPerSecond, result.MaxRequestsPerSecond, "MaxRequestsPerSecond mismatch")
+					assert.Equal(t, tt.expected.MaxRetries, result.MaxRetries, "MaxRetries mismatch")
+
+					// Other configurations
+					assert.Equal(t, tt.expected.KeyID, result.KeyID, "KeyID mismatch")
+					assert.Equal(t, tt.expected.LogLevel, result.LogLevel, "LogLevel mismatch")
+					assert.Equal(t, tt.expected.ChecksumAlgorithm, result.ChecksumAlgorithm, "ChecksumAlgorithm mismatch")
+				}
+			})
+		}
 	}
 }
 
