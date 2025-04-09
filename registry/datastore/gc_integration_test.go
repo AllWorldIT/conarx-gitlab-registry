@@ -86,7 +86,8 @@ const (
 
 	// defaultReviewAfterWithMinJitterDelay is the default delay plus the minimum jitter in seconds applied by online GC triggers
 	// to review tasks plus the minimum jitter in seconds that the online GC triggers will use to set a task's review.
-	defaultReviewAfterWithMinJitterDelay = defaultReviewAfterDelay + minReviewAfterJitter
+	// A slack of 500ms is added to avoid flaky tests in the CI environments.
+	defaultReviewAfterWithMinJitterDelay = defaultReviewAfterDelay + minReviewAfterJitter - 500*time.Millisecond
 
 	// defaultReviewAfterWithMaxJitterDelay is the default delay plus the minimum jitter in seconds applied by online GC triggers
 	// to review tasks plus the maximum jitter in seconds that the online GC triggers will use to set a task's review.
