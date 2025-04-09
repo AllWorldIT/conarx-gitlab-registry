@@ -150,27 +150,12 @@ const (
 // validRegions maps known s3 region identifiers to region descriptors
 var validRegions = make(map[string]struct{})
 
-// validObjectACLs contains known s3 object Acls
-var validObjectACLs = make(map[string]struct{})
-
 func init() {
 	partitions := endpoints.DefaultPartitions()
 	for _, p := range partitions {
 		for region := range p.Regions() {
 			validRegions[region] = struct{}{}
 		}
-	}
-
-	for _, objectACL := range []string{
-		s3.ObjectCannedACLPrivate,
-		s3.ObjectCannedACLPublicRead,
-		s3.ObjectCannedACLPublicReadWrite,
-		s3.ObjectCannedACLAuthenticatedRead,
-		s3.ObjectCannedACLAwsExecRead,
-		s3.ObjectCannedACLBucketOwnerRead,
-		s3.ObjectCannedACLBucketOwnerFullControl,
-	} {
-		validObjectACLs[objectACL] = struct{}{}
 	}
 }
 
@@ -567,29 +552,40 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 	}
 	res.ObjectOwnership = objectOwnership
 
-	objectACL := s3.ObjectCannedACLPrivate
+	var objectACL string
 	objectACLParam := parameters[ParamObjectACL]
 	if objectACLParam != nil {
 		if objectOwnership {
 			err := fmt.Errorf("object ACL parameter should not be set when object ownership is enabled")
 			mErr = multierror.Append(mErr, err)
-		}
-
-		objectACLString, ok := objectACLParam.(string)
-		if !ok {
-			err := fmt.Errorf("object ACL parameter should be a string: %v", objectACLParam)
-			mErr = multierror.Append(mErr, err)
-		}
-
-		if _, ok = validObjectACLs[objectACLString]; !ok {
-			var objectACLkeys []string
-			for key := range validObjectACLs {
-				objectACLkeys = append(objectACLkeys, key)
+		} else {
+			objectACLString, ok := objectACLParam.(string)
+			switch {
+			case !ok:
+				err := fmt.Errorf("object ACL parameter should be a string: %v", objectACLParam)
+				mErr = multierror.Append(mErr, err)
+			case (driverVersion == V1DriverName || driverVersion == V1DriverNameAlt) && !slices.Contains(s3.ObjectCannedACL_Values(), objectACLString):
+				err := fmt.Errorf("object ACL parameter should be one of %v: %v", strings.Join(s3.ObjectCannedACL_Values(), ","), objectACLParam)
+				mErr = multierror.Append(mErr, err)
+			case driverVersion == V2DriverName && !slices.Contains(types.ObjectCannedACLPrivate.Values(), (types.ObjectCannedACL)(objectACLString)):
+				// typecast:
+				strValues := make([]string, len(types.ObjectCannedACLPrivate.Values()))
+				for i, v := range types.ObjectCannedACLPrivate.Values() {
+					strValues[i] = string(v)
+				}
+				err := fmt.Errorf("object ACL parameter should be one of %v: %v", strings.Join(strValues, ","), objectACLParam)
+				mErr = multierror.Append(mErr, err)
+			default:
+				objectACL = objectACLString
 			}
-			err := fmt.Errorf("object ACL parameter should be one of %v: %v", objectACLkeys, objectACLParam)
-			mErr = multierror.Append(mErr, err)
 		}
-		objectACL = objectACLString
+	} else {
+		switch {
+		case (driverVersion == V1DriverName || driverVersion == V1DriverNameAlt):
+			objectACL = string(s3.ObjectCannedACLPrivate)
+		case driverVersion == V2DriverName:
+			objectACL = string(types.ObjectCannedACLPrivate)
+		}
 	}
 	res.ObjectACL = objectACL
 
