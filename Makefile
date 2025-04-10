@@ -2,7 +2,7 @@
 ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 GOLANGCI_VERSION ?= v1.64.6
-DOCSLINT_VERSION ?= registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.20-vale-3.6.1-markdownlint2-0.13.0-lychee-0.15.1
+DOCSLINT_VERSION ?= registry.gitlab.com/gitlab-org/technical-writing/docs-gitlab-com/lint-markdown:alpine-3.21-vale-3.11.2-markdownlint2-0.17.2-lychee-0.18.1
 
 # Used to populate version variable in main package.
 VERSION?=$(shell git describe --tags --match 'v[0-9]*' --dirty='.m' --always)
@@ -58,7 +58,6 @@ lint: ## run golangci-lint, with defaults
 
 lint-docs: ## run golangci-lint, with defaults
 	@#There are few issues with installing the tooling natively:
-	@# * lychee is not available for asdf and we do not use asdf in our script in the first place
 	@# * some of us are on Mac (brew), some of us are on Linux (apt/cargo/snap/...)
 	@# * only markdownlint-cli2 can be easily installed using npm
 	@echo "$(WHALE) $@"
