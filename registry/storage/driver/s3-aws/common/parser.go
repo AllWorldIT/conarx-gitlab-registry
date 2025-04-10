@@ -83,13 +83,8 @@ const (
 	StorageClassNone = "NONE"
 
 	// Content verification
-	ParamChecksumDisabled           = "checksum_disabled"
-	ParamChecksumAlgorithm          = "checksum_algorithm"
-	ParamChecksumAlgorithmCrc32     = string(types.ChecksumAlgorithmCrc32)
-	ParamChecksumAlgorithmCrc32c    = string(types.ChecksumAlgorithmCrc32c)
-	ParamChecksumAlgorithmSha1      = string(types.ChecksumAlgorithmSha1)
-	ParamChecksumAlgorithmSha256    = string(types.ChecksumAlgorithmSha256)
-	ParamChecksumAlgorithmCrc64nvme = string(types.ChecksumAlgorithmCrc64nvme)
+	ParamChecksumDisabled  = "checksum_disabled"
+	ParamChecksumAlgorithm = "checksum_algorithm"
 )
 
 const (
@@ -158,14 +153,6 @@ var validRegions = make(map[string]struct{})
 // validObjectACLs contains known s3 object Acls
 var validObjectACLs = make(map[string]struct{})
 
-var validChecksumAlgorithms = []string{
-	string(types.ChecksumAlgorithmCrc32),
-	string(types.ChecksumAlgorithmCrc32c),
-	string(types.ChecksumAlgorithmSha1),
-	string(types.ChecksumAlgorithmSha256),
-	string(types.ChecksumAlgorithmCrc64nvme),
-}
-
 func init() {
 	partitions := endpoints.DefaultPartitions()
 	for _, p := range partitions {
@@ -220,7 +207,7 @@ type DriverParameters struct {
 	ObjectOwnership   bool
 	S3APIImpl         S3WrapperIf
 	ChecksumDisabled  bool
-	ChecksumAlgorithm string
+	ChecksumAlgorithm types.ChecksumAlgorithm
 }
 
 // ParseLogLevelParamV1 parses given loglevel into a value that sdk v1 accepts.
@@ -545,7 +532,7 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 	res.ChecksumDisabled = checksumDisabled
 
 	// Parse checksum algorithm
-	defaultChecksumAlgorithm := ParamChecksumAlgorithmCrc64nvme
+	defaultChecksumAlgorithm := types.ChecksumAlgorithmCrc64nvme
 	checksumAlgorithmParam := parameters[ParamChecksumAlgorithm]
 	if checksumDisabled {
 		// If checksum_disabled is true, ignore checksum_algorithm
@@ -562,13 +549,13 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 			mErr = multierror.Append(mErr, err)
 		} else {
 			// Convert to uppercase for consistency and check if it's valid
-			checksumAlgorithm = strings.ToUpper(checksumAlgorithm)
+			checksumAlgorithmTyped := (types.ChecksumAlgorithm)(strings.ToUpper(checksumAlgorithm))
 			// nolint: revive // max-control-nesting
-			if !slices.Contains(validChecksumAlgorithms, checksumAlgorithm) {
-				err := fmt.Errorf("the checksum_algorithm parameter must be one of %v, %q is invalid", validChecksumAlgorithms, checksumAlgorithmParam)
+			if !slices.Contains(checksumAlgorithmTyped.Values(), checksumAlgorithmTyped) {
+				err := fmt.Errorf("the checksum_algorithm parameter must be one of %v, %q is invalid", checksumAlgorithmTyped.Values(), checksumAlgorithmParam)
 				mErr = multierror.Append(mErr, err)
 			} else {
-				defaultChecksumAlgorithm = checksumAlgorithm
+				defaultChecksumAlgorithm = checksumAlgorithmTyped
 			}
 		}
 	}
