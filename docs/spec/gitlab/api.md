@@ -247,7 +247,7 @@ Link: <https://registry.gitlab.com/gitlab/v1/repositories/app/tags/list/?n=2&las
 ```
 
 Note that `last` is set to `b`, as that was the last tag included in the first page. Invoking this URL will therefore
-give us the second page with tags `c` and `d`. 
+give us the second page with tags `c` and `d`.
 
 Requesting the tags list from the `Link` header will return the list of tags _and_ the `Link` header with the `next` and `previous`
 URLs:
@@ -302,8 +302,8 @@ You can specify the sort parameter as `?sort=published_at` to request the list o
 the latest time when the tag as created or updated.
 
 For pagination purposes, when used in conjunction with the `last` and `before` query parameters, the values must be base64
-encoded with the following format `base64(TIMESTAMP|TAG_NAME)`, where `TIMESTAMP` is a string in ISO 8061 format with 
-microsecond precision, followed by the separator character `|` and finishing with the tag name. For example, for 
+encoded with the following format `base64(TIMESTAMP|TAG_NAME)`, where `TIMESTAMP` is a string in ISO 8061 format with
+microsecond precision, followed by the separator character `|` and finishing with the tag name. For example, for
 the timestamp `2023-02-01T00:00:01.000000Z` and tag name `latest`, the encoded value will be `MjAyMy0wMi0wMVQwMDowMDowMS4wMDAwMDBafGxhdGVzdAo=`
 
 ```shell
@@ -320,7 +320,7 @@ For the example above, the request URL would look like:
 /gitlab/vi/repositories/<path>/tags/list/?sort=published_at&last=MjAyMy0wMi0wMVQwMDowMDowMS4wMDBafGxhdGVzdAo=
 ```
 
-The `Link` header will return and encoded value in the `last` or `before` query parameters of the `next` and `previous` 
+The `Link` header will return and encoded value in the `last` or `before` query parameters of the `next` and `previous`
 URLs.
 
 When two or more tags have the same published at date, they will be ordered by name in ascending or descending order.
@@ -530,7 +530,7 @@ Code|Message|Description|
 
 ## Rename/Move Origin Repository
 
-Rename/Move a repository's origin path and all sub repositories under it. 
+Rename/Move a repository's origin path and all sub repositories under it.
 
 For more information, see the in-depth [flow diagram `rename operation`](../../rename-base-repository-request-flow.md).
 
@@ -577,7 +577,7 @@ For example, the token of a rename/move request with the `path` parameter set to
 
 - `pull` and `push` scopes on `gitlab-org/build/omnibus-mirror/redis`;
 - `pull` scope on `gitlab-org/build/omnibus-mirror/redis/*`;
-- `push` scope on `gitlab-org/build/omnibus/*`. 
+- `push` scope on `gitlab-org/build/omnibus/*`.
 
 Both (`name` ad `namespace`) rename request authentication tokens must also contain access claims with the following attributes:
 
@@ -806,7 +806,7 @@ The response body is an object with several objects containing related statistic
 ### 2022-01-26
 
 - Add get repository import status endpoint.
-- Consolidate statuses across the "get repository import status" endpoint and the sync import notifications. 
+- Consolidate statuses across the "get repository import status" endpoint and the sync import notifications.
 
 ### 2022-01-13
 

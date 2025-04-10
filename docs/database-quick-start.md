@@ -14,7 +14,7 @@ will cause the registry to lose visibility to all images written to it while
 the database was active.
 - **Never** run offline garbage collection at any point after the
 [import step](#import-existing-data) has been completed. That command is not compatible with registries using
-the database and it will delete good data. 
+the database and it will delete good data.
 - Check that you have not used a service, such as cron, to automate offline garbage collection!
 - You are running GitLab Version 17.3 or higher
 - Geo replication is not enabled
@@ -29,7 +29,7 @@ the guide indicates that you are ready to run migrations.
 You may also choose to use a more permanent database instance if you wish to use
 a registry with the database long term. You should be able to follow the guide
 as normal, substituting in the values that are relevant to your database
-instance. Specific recommendations and instructions for this are out of the 
+instance. Specific recommendations and instructions for this are out of the
 scope of this guide.
 
 ## Update Registry Configuration

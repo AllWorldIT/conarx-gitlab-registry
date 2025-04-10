@@ -373,7 +373,7 @@ The tracking process is the same as described for atomic manifests.
 
 ### Uploading a manifest
 
-When uploading a manifest by tag (although uncommon, it can be by digest), we have to consider the scenario where an existing tag is switched from manifest `A` to manifest `B`. 
+When uploading a manifest by tag (although uncommon, it can be by digest), we have to consider the scenario where an existing tag is switched from manifest `A` to manifest `B`.
 
 For example, if we:
 
@@ -576,7 +576,7 @@ With synchronization in place, depending on which process acquires the lock firs
 - The API acquires the lock first, stopping the garbage collector from reviewing the blob:
 
     1. To stop the blob from being deleted between the check for existence and the manifest upload that is expected to follow, the API pushes the `review_after` of the blob review record forward by one day and commits the transaction:
-        
+
        ```sql
        UPDATE
            gc_blob_review_queue
@@ -682,7 +682,7 @@ The process of reviewing and possibly deleting a manifest or a manifest list (it
    ```
 
       The triggers described in [deleting a manifest](#deleting-a-manifest) will take care of queueing all the related blobs and child manifests (if deleting a manifest list) for review by the garbage collector.
-    
+
       Additionally, deletes on `manifests` cascade to `gc_manifest_review_queue`, so we do not need to manually delete the record from the review queue.
 
 #### Race conditions

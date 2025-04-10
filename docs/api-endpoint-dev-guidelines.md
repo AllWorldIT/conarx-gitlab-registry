@@ -14,7 +14,7 @@ users of Geo.
 GitLab Rails is the [authentication service](https://distribution.github.io/distribution/spec/auth/token/)
 for the container registry. We can use this to ensure that new endpoints are not
 available for Geo users prematurely. This can be accomplished by denying
-authentication based on the value of `Gitlab::Geo.geo_database_configured?` 
+authentication based on the value of `Gitlab::Geo.geo_database_configured?`
 
 ### Notifications
 

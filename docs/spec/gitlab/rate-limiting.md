@@ -51,7 +51,7 @@ the originating request. The IP address will be obtained in the following order:
 1. The value of `http.Request.RemoteAddr` as calculated by the Go `net/http` package.
 
 It is important to determine the correct IP address as the registry may be behind a
-reverse proxy or load balancer. The access logs of the registry show the `remote_ip` 
+reverse proxy or load balancer. The access logs of the registry show the `remote_ip`
 field as the IP address of the originating request, this will be the value of the IP
 that will be used to generate the Redis key.
 

@@ -44,6 +44,6 @@ all with enough time between to assert that the corresponding functionality is f
 ## Remove feature flags
 
 Once the feature flag is no longer required, remove its definition from `feature` package along with the source code
-that toggles the feature on the corresponding application code. 
+that toggles the feature on the corresponding application code.
 
 If the feature flag's corresponding environment variable was injected into the registry through the `extraEnv` parameter for Helm deployments (as discussed above), then also make sure to remove those injected environment variables from the deployment configurations for each environment after the necessary cleanup has been completed on the application code and the registry has been re-deployed. This would guarantee that we do not amass a huge number of unused environment variables in our deployment configurations.
