@@ -1,4 +1,4 @@
-## SSH access to the Database and Rails Console
+# SSH access to the Database and Rails Console
 
 Access to the database on staging and production requires access to Teleport.
 

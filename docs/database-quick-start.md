@@ -1,3 +1,5 @@
+# Database quick start
+
 Follow this guide to start using the metadata database with the container registry.
 
 The metadata database enables you make use of many new features, such as
