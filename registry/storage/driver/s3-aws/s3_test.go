@@ -26,7 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/smithy-go/ptr"
 	"github.com/benbjohnson/clock"
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/internal/testutil"
@@ -48,7 +48,6 @@ var (
 	driverVersion    string
 	fromParametersFn func(map[string]any) (storagedriver.StorageDriver, error)
 	newDriverFn      func(*common.DriverParameters) (storagedriver.StorageDriver, error)
-	newS3APIFn       func(*common.DriverParameters) (s3iface.S3API, error)
 
 	// Credentials
 	accessKey    string
@@ -99,7 +98,6 @@ func fetchEnvVarsConfiguration() {
 	case common.V2DriverName:
 		fromParametersFn = v2.FromParameters
 		newDriverFn = v2.New
-		newS3APIFn = v2.NewS3API
 	case common.V1DriverName, common.V1DriverNameAlt:
 		// v1 is the default
 		fallthrough
@@ -107,7 +105,6 @@ func fetchEnvVarsConfiguration() {
 		// backwards compatibility - if no version is defined, default to v2
 		fromParametersFn = v1.FromParameters
 		newDriverFn = v1.New
-		newS3APIFn = v1.NewS3API
 	}
 
 	vars := []envConfig{
@@ -208,14 +205,17 @@ func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logge
 		rawParams[common.ParamObjectACL] = objectACL
 	}
 	if logLevel != "" {
+		// nolint: revive,gocritic // unnecessary-stmt
 		switch driverVersion {
-		case common.V1DriverName, common.V1DriverNameAlt:
-			rawParams[common.ParamLogLevel] = common.ParseLogLevelParamV1(logger, logLevel)
-		case common.V2DriverName:
+		default:
 			rawParams[common.ParamLogLevel] = common.ParseLogLevelParamV1(logger, logLevel)
 		}
 	} else {
-		rawParams[common.ParamLogLevel] = aws.LogOff
+		// nolint: revive,gocritic // unnecessary-stmt
+		switch driverVersion {
+		default:
+			rawParams[common.ParamLogLevel] = aws.LogOff
+		}
 	}
 
 	if checksumAlgorithm != "" {
@@ -332,11 +332,10 @@ func TestS3DriverPathStyle(t *testing.T) {
 	baseParams := map[string]any{
 		"region":                  "us-west-2",
 		"bucket":                  "test-bucket",
-		"v4auth":                  "true",
 		storagedriver.ParamLogger: rngtestutil.NewTestLogger(t),
 	}
 
-	tests := []struct {
+	testCases := []struct {
 		name           string
 		paramOverrides map[string]any
 		wantPathStyle  bool
@@ -361,7 +360,7 @@ func TestS3DriverPathStyle(t *testing.T) {
 		{
 			name: "path style disabled with custom endpoint",
 			paramOverrides: map[string]any{
-				"regionendpoint": "custom-endpoint:9000",
+				"regionendpoint": "https://custom-endpoint:9000",
 				"pathstyle":      "false",
 			},
 			wantPathStyle:  false,
@@ -370,7 +369,7 @@ func TestS3DriverPathStyle(t *testing.T) {
 		{
 			name: "path style enabled with custom endpoint",
 			paramOverrides: map[string]any{
-				"regionendpoint": "custom-endpoint:9000",
+				"regionendpoint": "https://custom-endpoint:9000",
 				"pathstyle":      "true",
 			},
 			wantPathStyle:  true,
@@ -379,42 +378,42 @@ func TestS3DriverPathStyle(t *testing.T) {
 		{
 			name: "default path style with custom endpoint",
 			paramOverrides: map[string]any{
-				"regionendpoint": "custom-endpoint:9000",
+				"regionendpoint": "https://custom-endpoint:9000",
 			},
 			wantPathStyle:  true, // Path style should be forced when endpoint is set
 			wantedEndpoint: "custom-endpoint:9000",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Merge base parameters with test-specific overrides
 			params := make(map[string]any)
 			for k, v := range baseParams {
 				params[k] = v
 			}
-			for k, v := range tt.paramOverrides {
+			for k, v := range tc.paramOverrides {
 				params[k] = v
 			}
 
 			d, err := fromParametersFn(params)
-			require.NoError(t, err, "unable to create driver")
+			require.NoError(tt, err, "unable to create driver")
 
 			// Generate a signed URL to verify the path style and endpoint behavior
 			testPath := "/test/file.txt"
 			urlStr, err := d.URLFor(dcontext.Background(), testPath, map[string]any{
 				"method": "GET",
 			})
-			require.NoError(t, err, "unable to generate URL")
+			require.NoError(tt, err, "unable to generate URL")
 
 			// Verify the endpoint
 			domain := extractDomain(urlStr)
-			require.Equal(t, tt.wantedEndpoint, domain, "unexpected endpoint")
+			require.Equal(tt, tc.wantedEndpoint, domain, "unexpected endpoint")
 
 			// Verify path style vs virtual hosted style
 			bucket := params["bucket"].(string)
 			actualPathStyle := isPathStyle(urlStr, bucket)
-			require.Equal(t, tt.wantPathStyle, actualPathStyle,
+			require.Equal(tt, tc.wantPathStyle, actualPathStyle,
 				"path style mismatch, URL: %s", urlStr)
 		})
 	}
@@ -472,19 +471,32 @@ func TestS3DriverStorageClassStandard(t *testing.T) {
 	// native S3 client to do that.
 	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
 	require.NoError(t, err)
-	s3API, err := newS3APIFn(parsedParams)
-	require.NoError(t, err)
+	var storageClass string
+	// nolint: revive,gocritic // unnecessary-stmt
+	switch driverVersion {
+	// FIXME(prozlach): Single-case switch is just a temporary measure allow
+	// for more gradual merging of the
+	// https://gitlab.com/gitlab-org/container-registry/-/merge_requests/2197
+	default:
+		s3API, err := v1.NewS3API(parsedParams)
+		require.NoError(t, err)
 
-	resp, err := s3API.GetObjectWithContext(
-		ctx,
-		&s3.GetObjectInput{
-			Bucket: aws.String(parsedParams.Bucket),
-			Key:    aws.String(standardDriverKeyer.S3BucketKey(standardFilename)),
-		})
-	require.NoError(t, err, "unexpected error retrieving standard storage file")
-	defer resp.Body.Close()
+		resp, err := s3API.GetObjectWithContext(
+			ctx,
+			&s3.GetObjectInput{
+				Bucket: ptr.String(parsedParams.Bucket),
+				Key:    ptr.String(standardDriverKeyer.S3BucketKey(standardFilename)),
+			})
+		defer resp.Body.Close()
+		require.NoError(t, err, "unexpected error retrieving standard storage file")
+		storageClass = ptr.ToString(resp.StorageClass)
+	}
+
 	// Amazon only populates this header value for non-standard storage classes
-	require.Nil(t, resp.StorageClass, "unexpected storage class for standard file: %v", resp.StorageClass)
+	require.Empty(
+		t, storageClass,
+		"unexpected storage class for standard file: %v", storageClass,
+	)
 }
 
 func TestS3DriverStorageClassReducedRedundancy(t *testing.T) {
@@ -510,19 +522,31 @@ func TestS3DriverStorageClassReducedRedundancy(t *testing.T) {
 	// native S3 client to do that.
 	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
 	require.NoError(t, err)
-	s3API, err := newS3APIFn(parsedParams)
-	require.NoError(t, err)
+	var storageClass string
+	// nolint: revive,gocritic // unnecessary-stmt
+	switch driverVersion {
+	// FIXME(prozlach): Single-case switch is just a temporary measure allow
+	// for more gradual merging of the
+	// https://gitlab.com/gitlab-org/container-registry/-/merge_requests/2197
+	default:
+		s3API, err := v1.NewS3API(parsedParams)
+		require.NoError(t, err)
 
-	resp, err := s3API.GetObjectWithContext(
-		ctx,
-		&s3.GetObjectInput{
-			Bucket: aws.String(parsedParams.Bucket),
-			Key:    aws.String(rrDriverKeyer.S3BucketKey(rrFilename)),
-		})
-	require.NoError(t, err, "unexpected error retrieving reduced-redundancy storage file")
-	defer resp.Body.Close()
-	require.NotNilf(t, resp.StorageClass, "unexpected storage class for reduced-redundancy file: %v", s3.StorageClassStandard)
-	require.Equalf(t, s3.StorageClassReducedRedundancy, *resp.StorageClass, "unexpected storage class for reduced-redundancy file: %v", *resp.StorageClass)
+		resp, err := s3API.GetObjectWithContext(
+			ctx,
+			&s3.GetObjectInput{
+				Bucket: ptr.String(parsedParams.Bucket),
+				Key:    ptr.String(rrDriverKeyer.S3BucketKey(rrFilename)),
+			})
+		defer resp.Body.Close()
+		require.NoError(t, err, "unexpected error retrieving standard storage file")
+		storageClass = ptr.ToString(resp.StorageClass)
+	}
+
+	require.Equalf(
+		t, s3.StorageClassReducedRedundancy, storageClass,
+		"unexpected storage class for reduced-redundancy file: %v", storageClass,
+	)
 }
 
 func TestS3DriverStorageClassNone(t *testing.T) {
@@ -798,9 +822,9 @@ func TestS3DriverClientTransport(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
-			require.NoError(t, err)
+		t.Run(tc.name, func(tt *testing.T) {
+			parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(tt))
+			require.NoError(tt, err)
 
 			parsedParams.SkipVerify = tc.skipVerify
 			parsedParams.RegionEndpoint = server.URL
@@ -808,7 +832,7 @@ func TestS3DriverClientTransport(t *testing.T) {
 			parsedParams.PathStyle = true
 
 			driver, err := newDriverFn(parsedParams)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			// Use List operation to trigger an HTTPS request
 			ctx := dcontext.Background()
@@ -816,19 +840,23 @@ func TestS3DriverClientTransport(t *testing.T) {
 
 			if tc.shouldFail {
 				require.ErrorContainsf(
-					t,
+					tt,
 					err, "x509: certificate signed by unknown authority",
 					"expected certificate verification error, got: %v", err,
 				)
 			} else {
-				require.Error(t, err)
-				var awsErr awserr.Error
-				require.ErrorAsf(t, err, &awsErr,
-					"expected AWS API error, got: %v", err)
-				require.Equal(t, "SignatureDoesNotMatch", awsErr.Code())
-				require.Contains(t, awsErr.Message(),
-					"The request signature we calculated does not match the signature you provided",
-				)
+				require.Error(tt, err)
+				// nolint: revive,gocritic // unnecessary-stmt
+				switch driverVersion {
+				default:
+					var awsErr awserr.Error
+					require.ErrorAsf(tt, err, &awsErr,
+						"expected AWS API error, got: %v", err)
+					require.Equal(tt, "SignatureDoesNotMatch", awsErr.Code())
+					require.Contains(tt, awsErr.Message(),
+						"The request signature we calculated does not match the signature you provided",
+					)
+				}
 			}
 		})
 	}
@@ -904,18 +932,17 @@ func TestWalkEmptyDir(t *testing.T) {
 	require.NoError(t, err)
 	driver, err := newDriverFn(parsedParams)
 	require.NoError(t, err)
-	s3API, err := newS3APIFn(parsedParams)
-	require.NoError(t, err)
 
 	ctx := dcontext.Background()
-	destPath := "/" + dtestutil.RandomFilename(64)
-	defer dtestutil.EnsurePathDeleted(ctx, t, driver, destPath)
+
+	commonDir := "/" + dtestutil.RandomFilenameRange(8, 8)
+	defer dtestutil.EnsurePathDeleted(ctx, t, driver, commonDir)
 
 	t.Logf("root dir used for testing: %s", rootDirectory)
 	destContents := rngtestutil.RandomBlob(t, 32)
 
 	// Create directories with a structure like:
-	// rootDirectory/
+	// rootDirectory/commonDir/
 	//   ├── dir1/
 	//   │    ├── file1-1
 	//   │    └── file1-2
@@ -931,12 +958,12 @@ func TestWalkEmptyDir(t *testing.T) {
 	// Create map of all files to create with full paths
 	fileStructure := map[string][]string{
 		dir1: {
-			path.Join(dir1, "file1-1"),
-			path.Join(dir1, "file1-2"),
+			path.Join(commonDir, dir1, "file1-1"),
+			path.Join(commonDir, dir1, "file1-2"),
 		},
 		dir3: {
-			path.Join(dir3, "file3-1"),
-			path.Join(dir3, "file3-2"),
+			path.Join(commonDir, dir3, "file3-1"),
+			path.Join(commonDir, dir3, "file3-2"),
 		},
 	}
 
@@ -949,20 +976,38 @@ func TestWalkEmptyDir(t *testing.T) {
 	}
 	// we use the s3 sdk directly because the driver doesn't allow creation of
 	// empty directories due to trailing slash
+	// FIXME(prozlach): Just a temporary measure allow for more gradual merging
+	// of the
+	// https://gitlab.com/gitlab-org/container-registry/-/merge_requests/2197
+	//
+	// s3API, err := v2.NewS3API(parsedParams)
+	// require.NoError(t, err)
+	//
+	// filePath := strings.TrimLeft(path.Join(rootDirectory, commonDir, dir2)+"/", "/")
+	// _, err = s3API.PutObject(
+	// 	ctx,
+	// 	&v2_s3.PutObjectInput{
+	// 		Bucket: ptr.String(parsedParams.Bucket),
+	// 		Key:    ptr.String(filePath),
+	// 	},
+	// )
+	// require.NoError(t, err)
+	s3API, err := v1.NewS3API(parsedParams)
+	require.NoError(t, err)
 	_, err = s3API.PutObjectWithContext(
 		ctx,
 		&s3.PutObjectInput{
 			Bucket: aws.String(parsedParams.Bucket),
-			Key:    aws.String(path.Join(rootDirectory, dir2) + "/"),
+			Key:    aws.String(path.Join(rootDirectory, commonDir, dir2) + "/"),
 		},
 	)
 	require.NoError(t, err)
 
-	// Build expected and unexpected paths
 	expectedPaths := []string{
-		dir1,
-		dir2,
-		dir3,
+		commonDir,
+		path.Join(commonDir, dir1),
+		path.Join(commonDir, dir2),
+		path.Join(commonDir, dir3),
 		fileStructure[dir1][0],
 		fileStructure[dir1][1],
 		fileStructure[dir3][0],
@@ -975,7 +1020,9 @@ func TestWalkEmptyDir(t *testing.T) {
 			// attempt to split filepath into dir and filename, just like purgeuploads would.
 			filePath := fInfo.Path()
 			_, file := path.Split(filePath)
-			assert.NotEmptyf(t, file, "File part of fileInfo.Path()==%q had zero length", filePath)
+			if len(file) == 0 {
+				return fmt.Errorf("File part of fileInfo.Path()==%q had zero length", filePath)
+			}
 
 			// Record that this path was visited
 			pathCollector.Store(filePath, struct{}{})
@@ -984,11 +1031,11 @@ func TestWalkEmptyDir(t *testing.T) {
 	}
 
 	// Verify all expected paths were visited and unexpected were not
-	verifyPaths := func(visitedPaths *sync.Map) {
+	verifyPaths := func(ttt *testing.T, visitedPaths *sync.Map) {
 		// Check expected paths were visited
 		for _, expectedPath := range expectedPaths {
 			_, found := visitedPaths.Load(expectedPath)
-			assert.Truef(t, found, "Path %s should have been visited", expectedPath)
+			assert.Truef(ttt, found, "Path %s should have been visited", expectedPath)
 		}
 
 		visitedPathsKeys := make([]string, 0, len(expectedPaths))
@@ -996,20 +1043,20 @@ func TestWalkEmptyDir(t *testing.T) {
 			visitedPathsKeys = append(visitedPathsKeys, key.(string))
 			return true
 		})
-		assert.ElementsMatch(t, expectedPaths, visitedPathsKeys)
+		assert.ElementsMatch(ttt, expectedPaths, visitedPathsKeys)
 	}
 
-	t.Run("PlainWalk", func(t *testing.T) {
+	t.Run("PlainWalk", func(tt *testing.T) {
 		var visitedPaths sync.Map
 		err := driver.Walk(ctx, "/", createWalkFunc(&visitedPaths))
-		require.NoError(t, err)
-		verifyPaths(&visitedPaths)
+		require.NoError(tt, err)
+		verifyPaths(tt, &visitedPaths)
 	})
 
-	t.Run("ParallelWalk", func(t *testing.T) {
+	t.Run("ParallelWalk", func(tt *testing.T) {
 		var visitedPaths sync.Map
 		err := driver.WalkParallel(ctx, "/", createWalkFunc(&visitedPaths))
-		require.NoError(t, err)
-		verifyPaths(&visitedPaths)
+		require.NoError(tt, err)
+		verifyPaths(tt, &visitedPaths)
 	})
 }
