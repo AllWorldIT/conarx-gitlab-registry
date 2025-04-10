@@ -93,17 +93,17 @@ a status code `429 Too Many Requests` and the sample payload:
 
 - IP address limiter
 
-    ```json
-    {
-        "errors": [
-            {
-                "code": "TOOMANYREQUESTS",
-                "message": "too many requests",
-                "detail": {
-                    "limiter": "ip",
-                    "entity": "172.16.123.1"
-                }
-            }
-        ]
-    }
-    ```
+  ```json
+  {
+     "errors": [
+         {
+             "code": "TOOMANYREQUESTS",
+             "message": "too many requests",
+             "detail": {
+                 "limiter": "ip",
+                 "entity": "172.16.123.1"
+             }
+         }
+     ]
+  }
+  ```

@@ -158,28 +158,28 @@ However, for GitLab.com, in case we need to estimate the size of one of these re
 1. Get access to a production database replica, as documented [here](ssh-access-for-debugging.md);
 1. Start a transaction and disable statement timeouts within:
 
-    ```sql
-    begin;
-    set local statement_timeout = 0;
-    ```
+   ```sql
+   begin;
+   set local statement_timeout = 0;
+   ```
 
 1. Now execute the size estimation query for the target namespace. Here we're using `gitlab-org` as example:
 
-    ```sql
-    SELECT
-        coalesce(sum(q.size), 0)
-    FROM ( SELECT DISTINCT ON (digest)
-            size
-        FROM
-            layers
-        WHERE
-            top_level_namespace_id = (
-                SELECT
-                    id
-                FROM
-                    top_level_namespaces
-                WHERE
-                    name = 'gitlab-org')) q;
-    ```
+   ```sql
+   SELECT
+       coalesce(sum(q.size), 0)
+   FROM ( SELECT DISTINCT ON (digest)
+           size
+       FROM
+           layers
+       WHERE
+           top_level_namespace_id = (
+               SELECT
+                   id
+               FROM
+                   top_level_namespaces
+               WHERE
+                   name = 'gitlab-org')) q;
+   ```
 
 1. The output of the query above is the estimated size in bytes.

@@ -21,20 +21,20 @@ and [install documentation](https://golang.org/doc/install) for guidance.
 
 1. Clone repository:
 
-    ```shell
-    git clone git@gitlab.com:gitlab-org/container-registry.git
-    cd container-registry
-    ```
+   ```shell
+   git clone git@gitlab.com:gitlab-org/container-registry.git
+   cd container-registry
+   ```
 
 1. Make binaries:
 
-    ```shell
-    make binaries
-    ```
+   ```shell
+   make binaries
+   ```
 
-    This step should complete without any errors. If not, please double check
-    the official Go install documentation and make sure you have all build
-    dependencies installed on your machine.
+   This step should complete without any errors. If not, please double check
+   the official Go install documentation and make sure you have all build
+   dependencies installed on your machine.
 
 ### Running
 

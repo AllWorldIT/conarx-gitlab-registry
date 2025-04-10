@@ -417,7 +417,7 @@ When introducing new background migrations, itâ€™s essential to assess how they 
 Before running a background migration on a live production/staging database, itâ€™s critical to test the migration in a controlled environment. To do this you will need to:
 
 1. Procure a clone of the production registry Database Lab Instance (`gitlab-production-registry`) database in [postgres.ai](https://console.postgres.ai/gitlab/gitlab-production-registry/instances). Once Procured take note of your chosen `username` `password` and the SSH command to connect your local port to the database instance.
-    - If you are following this process for the first time, you may need to request the necessary access permissions to clone the database and connect to it from your local setup. To obtain the correct access, follow the instructions in the [Database Lab Access documentation](https://docs.gitlab.com/ee/development/database/database_lab.html#access-the-console-with-psql). You'll need to create an access request similar to the example provided here: [Example Access Request](https://gitlab.com/gitlab-com/team-member-epics/access-requests/-/issues/32379).
+   - If you are following this process for the first time, you may need to request the necessary access permissions to clone the database and connect to it from your local setup. To obtain the correct access, follow the instructions in the [Database Lab Access documentation](https://docs.gitlab.com/ee/development/database/database_lab.html#access-the-console-with-psql). You'll need to create an access request similar to the example provided here: [Example Access Request](https://gitlab.com/gitlab-com/team-member-epics/access-requests/-/issues/32379).
 
 1. Start up a local port forwarding connection to the cloned Postgres instance from your local. The specific command to run will have been issued to you in 1 (after cloning the database in postgres.ai) and should look something like: `ssh -NTML 6000:localhost:6000 lab-registry-01-db-db-lab.c.gitlab-db-lab.internal`.
 
@@ -425,21 +425,21 @@ Before running a background migration on a live production/staging database, itâ
 
 1. Edit your `./config/filesystem.yaml` to be able to connect to the cloned database using the credentials obtained in 1, the port forwarded-to in 2, and disable unnecessary background processes like online GC:
 
-    ``` yaml
-    database:
-      enabled: true
-      host: localhost
-      port: 6000 # selected port forwarded to postgres instance used in 2.
-      user: "registry" # username of cloned instance obtained in 1.
-      password: "registrypassword" # password of cloned instance obtained in 1.
-      dbname: "gitlabhq_registry_dblab"
-      sslmode: "disable"
-      backgroundmigrations:
-        enabled: true
-        jobinterval: 10s # Set this to the job interval used on Gitlab.com
-    gc:
-        disabled: true  # Disable garbage collection for this test
-    ```
+   ``` yaml
+   database:
+     enabled: true
+     host: localhost
+     port: 6000 # selected port forwarded to postgres instance used in 2.
+     user: "registry" # username of cloned instance obtained in 1.
+     password: "registrypassword" # password of cloned instance obtained in 1.
+     dbname: "gitlabhq_registry_dblab"
+     sslmode: "disable"
+     backgroundmigrations:
+       enabled: true
+       jobinterval: 10s # Set this to the job interval used on Gitlab.com
+   gc:
+       disabled: true  # Disable garbage collection for this test
+   ```
 
 1. Apply any necessary schema changes (e.g., new indexes, tables) `./bin/registry database migrate up ./config/filesystem.yml`.
 
@@ -450,13 +450,13 @@ Before running a background migration on a live production/staging database, itâ
 1. Use [`pg_activity`](https://github.com/dalibo/pg_activity) (or any database tool of your choice) to monitor server activity and SQL queries are expected.
 
 1. Background migrations may take hours or days to complete depending on the batch size, frequency of the job runs, size of the database and queries being executed. While we do not need to wait for the background migration to run to completion we should allow the migration to run for at least 1 hour. This allows some time to gather enough data to estimate how long the full migration would take. After an hour (or more), stop the migration and collect key metrics:
-    - Total records processed in migrating table.
-    - Total existing records in migrating table.
-    - Number of jobs completed.
-    - Records processed per job (i.e. `batch_size`)
-    - Records migrated per hour.
-    - Extrapolated total migration time if the migration was to run to completion on the migrating table.
-    - Note any errors or potential issues with the migration.
+   - Total records processed in migrating table.
+   - Total existing records in migrating table.
+   - Number of jobs completed.
+   - Records processed per job (i.e. `batch_size`)
+   - Records migrated per hour.
+   - Extrapolated total migration time if the migration was to run to completion on the migrating table.
+   - Note any errors or potential issues with the migration.
 1. Prepare and add a report (of the format below) as a comment on the MR introducing the changes:
 
 ```markdown

@@ -575,23 +575,23 @@ With synchronization in place, depending on which process acquires the lock firs
 
 - The API acquires the lock first, stopping the garbage collector from reviewing the blob:
 
-    1. To stop the blob from being deleted between the check for existence and the manifest upload that is expected to follow, the API pushes the `review_after` of the blob review record forward by one day and commits the transaction:
+  1. To stop the blob from being deleted between the check for existence and the manifest upload that is expected to follow, the API pushes the `review_after` of the blob review record forward by one day and commits the transaction:
 
-       ```sql
-       UPDATE
-           gc_blob_review_queue
-       SET
-           review_after = review_after + INTERVAL '1 day'
-       WHERE
-           digest = ?;
-       COMMIT;
-       ```
-  
-       This will ensure that the blob will not be garbage collected unless it remains unreferenced after that time.
+    ```sql
+    UPDATE
+        gc_blob_review_queue
+    SET
+        review_after = review_after + INTERVAL '1 day'
+    WHERE
+        digest = ?;
+    COMMIT;
+    ```
 
-    1. The API can then search for the blob in `blobs` and find it as expected.
+    This will ensure that the blob will not be garbage collected unless it remains unreferenced after that time.
 
-    1. Possibly in parallel with (2), the garbage collector attempts to pick and lock a record from `gc_blob_review_queue`. This query would either return nothing or a record that is not the one postponed in (1).
+  1. The API can then search for the blob in `blobs` and find it as expected.
+
+  1. Possibly in parallel with (2), the garbage collector attempts to pick and lock a record from `gc_blob_review_queue`. This query would either return nothing or a record that is not the one postponed in (1).
 
 Serializing operations with locks on `gc_blob_review_queue` instead of `blobs` ensures that we do not need to acquire a lock for a blob unless it is in the process of being reviewed by the garbage collector. Because the review queue only contains references to a small subset of `blobs`, lookups are also faster this way.
 
