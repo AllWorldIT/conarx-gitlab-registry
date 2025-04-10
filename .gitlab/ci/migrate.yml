@@ -6,7 +6,7 @@
 
 .base_migration_config:
   variables:
-    REGISTRY_SELF_MANAGED_RELEASE_VERSION: "v4.15.0-gitlab"
+    REGISTRY_SELF_MANAGED_RELEASE_VERSION: "v4.19.0-gitlab"
     DOCKER_HOST: tcp://docker:2375
     POSTGRES_DB: registry_dev
     POSTGRES_USER: registry
