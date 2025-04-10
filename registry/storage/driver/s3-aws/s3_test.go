@@ -78,6 +78,9 @@ var (
 	objectOwnership bool
 
 	missing []string
+
+	checksumDisabled  bool
+	checksumAlgorithm string
 )
 
 type envConfig struct {
@@ -129,6 +132,9 @@ func fetchEnvVarsConfiguration() {
 
 		{common.EnvLogLevel, &logLevel, false},
 		{common.EnvObjectOwnership, &objectOwnership, false},
+
+		{common.EnvChecksumDisabled, &checksumDisabled, false},
+		{common.EnvChecksumAlgorithm, &checksumAlgorithm, false},
 	}
 
 	// Set defaults for boolean values
@@ -195,6 +201,7 @@ func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logge
 		common.ParamMultipartCopyChunkSize:      common.DefaultMultipartCopyChunkSize,
 		common.ParamMultipartCopyMaxConcurrency: common.DefaultMultipartCopyMaxConcurrency,
 		common.ParamMultipartCopyThresholdSize:  common.DefaultMultipartCopyThresholdSize,
+		common.ParamChecksumDisabled:            checksumDisabled,
 	}
 
 	if objectACL != "" {
@@ -209,6 +216,10 @@ func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logge
 		}
 	} else {
 		rawParams[common.ParamLogLevel] = aws.LogOff
+	}
+
+	if checksumAlgorithm != "" {
+		rawParams[common.ParamChecksumAlgorithm] = checksumAlgorithm
 	}
 
 	parsedParams, err := common.ParseParameters(driverVersion, rawParams)

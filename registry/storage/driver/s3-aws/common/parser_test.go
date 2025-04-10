@@ -56,7 +56,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 				ObjectOwnership:             false,
 				KeyID:                       "",
 				ChecksumDisabled:            false,
-				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc64nvme),
+				ChecksumAlgorithm:           v2_types.ChecksumAlgorithmCrc64nvme,
 			},
 			expectedError: false,
 		},
@@ -111,7 +111,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 				LogLevel:                    uint64(aws.LogDebug),
 				ObjectOwnership:             false,
 				ChecksumDisabled:            false,
-				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc64nvme),
+				ChecksumAlgorithm:           v2_types.ChecksumAlgorithmCrc64nvme,
 			},
 			expectedError: false,
 		},
@@ -151,7 +151,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 				LogLevel:                    uint64(aws.LogOff),
 				ObjectOwnership:             true,
 				ChecksumDisabled:            false,
-				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc64nvme),
+				ChecksumAlgorithm:           v2_types.ChecksumAlgorithmCrc64nvme,
 			},
 			expectedError: false,
 		},
@@ -195,7 +195,7 @@ func TestParseParameters_in_groups(t *testing.T) {
 				StorageClass:                s3.StorageClassStandard,
 				ObjectACL:                   s3.ObjectCannedACLPrivate,
 				ChecksumDisabled:            false,
-				ChecksumAlgorithm:           string(v2_types.ChecksumAlgorithmCrc64nvme),
+				ChecksumAlgorithm:           v2_types.ChecksumAlgorithmCrc64nvme,
 			},
 			expectedError: false,
 		},
@@ -956,9 +956,9 @@ func TestChecksumDisabledParameter(t *testing.T) {
 	tests := []struct {
 		name                 string
 		checksumDisabled     any
-		checksumAlgorithm    any
+		checksumAlgorithm    string
 		expectedDisabled     bool
-		expectedAlgorithm    string
+		expectedAlgorithm    v2_types.ChecksumAlgorithm
 		expectWarningMessage bool
 	}{
 		{
@@ -970,7 +970,7 @@ func TestChecksumDisabledParameter(t *testing.T) {
 		{
 			name:                 "checksum_disabled true with algorithm",
 			checksumDisabled:     true,
-			checksumAlgorithm:    string(v2_types.ChecksumAlgorithmCrc32),
+			checksumAlgorithm:    (string)(v2_types.ChecksumAlgorithmCrc32),
 			expectedDisabled:     true,
 			expectedAlgorithm:    "",
 			expectWarningMessage: true,
@@ -979,14 +979,14 @@ func TestChecksumDisabledParameter(t *testing.T) {
 			name:              "checksum_disabled false",
 			checksumDisabled:  false,
 			expectedDisabled:  false,
-			expectedAlgorithm: string(v2_types.ChecksumAlgorithmCrc64nvme),
+			expectedAlgorithm: v2_types.ChecksumAlgorithmCrc64nvme,
 		},
 		{
 			name:              "checksum_disabled false with algorithm",
 			checksumDisabled:  false,
-			checksumAlgorithm: string(v2_types.ChecksumAlgorithmCrc32),
+			checksumAlgorithm: (string)(v2_types.ChecksumAlgorithmCrc32),
 			expectedDisabled:  false,
-			expectedAlgorithm: string(v2_types.ChecksumAlgorithmCrc32),
+			expectedAlgorithm: v2_types.ChecksumAlgorithmCrc32,
 		},
 	}
 
@@ -999,7 +999,7 @@ func TestChecksumDisabledParameter(t *testing.T) {
 				sdriver.ParamLogger:   btestutil.NewTestLogger(t),
 			}
 
-			if tt.checksumAlgorithm != nil {
+			if tt.checksumAlgorithm != "" {
 				params[ParamChecksumAlgorithm] = tt.checksumAlgorithm
 			}
 
