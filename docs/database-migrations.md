@@ -83,7 +83,7 @@ However, if the target tables have a `smallint` as primary key, which is the cas
 for `media_types`, we should avoid unnecessary increments to the primary key
 sequence, which will happen for every insert where the `ON CONFLICT` clause is
 triggered, i.e., the row(s) already exist. Therefore, we should use the following
-strategy for these situations: 
+strategy for these situations:
 
 ```sql
 INSERT INTO media_types (media_type)
@@ -114,7 +114,7 @@ for an example.
 Please make sure to create a `registry_dev` and `registry_test` (naming
 suggestion) database in your development PostgreSQL 13 instance before running
 migrations.
- 
+
 #### Example
 
 ```plaintext
@@ -223,7 +223,7 @@ Use "registry database migrate [command] --help" for more information about a co
 
 ### Apply Up Migrations
 
-To apply pending up migrations use the `up` sub-command: 
+To apply pending up migrations use the `up` sub-command:
 
 ```plaintext
 $ registry database migrate up --help config.yml
@@ -262,7 +262,7 @@ OK: applied 1 migrations in 0.412s
 
 ### Apply Down Migrations
 
-To apply pending down migrations (rollback) use the `down` sub-command: 
+To apply pending down migrations (rollback) use the `down` sub-command:
 
 ```plaintext
 $ registry database migrate down --help config.yml

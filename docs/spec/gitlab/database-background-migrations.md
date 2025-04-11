@@ -145,7 +145,7 @@ Batch Background Migrations (BBMs) are created by adding a new migration into th
          // Implement your migration logic here
      }
      ```
-     
+
    - Register your function in the `AllWork` map within `bbm.go`:
 
      ```go
@@ -156,7 +156,7 @@ Batch Background Migrations (BBMs) are created by adding a new migration into th
      ```
 
    > **Important Notes:**
-   > 
+   >
    > 1. **Function Naming:** The `your_job_signature_name` key in the `AllWork` map must match the `job_signature_name` specified in the BBM record. This ensures proper function lookup and execution.
    >
    > 1. **Idempotency:** Work functions must be idempotent to guarantee safe retries. This means:
@@ -405,7 +405,7 @@ When a background migration encounters issues or fails, the reason for the failu
 
 **Failure Diagnostics:** One of the most important fields to check when debugging failed migrations is the `failure_error_code`, which is present in both the `background_migrations` and `background_migration_jobs` tables. This field provides a specific error code that explains the reason for the failure. By checking the `failure_error_code`, you can quickly pinpoint the root cause of a failure. For example, if the error code is `1`, this indicates that there is an issue with the table definition, whereas `4` would suggest that the job has retried too many times without success, requiring manual intervention or adjustment of retry settings. All possible error codes are detailed in the [migration section's](#migrations) definition of the `failure_error_code` column.
 
-**Attempt and Batch Information**: The `attempts` field in the `background_migration_jobs` table tracks how many times a job has been retried. If a job is repeatedly failing and retrying, it may indicate an underlying issue with the data, the migration logic, or the system configuration. By examining the number of attempts, you can determine if the failure is due to repeated retries and decide whether to adjust the migration parameters, such as retry limits, batch size, or job logic. 
+**Attempt and Batch Information**: The `attempts` field in the `background_migration_jobs` table tracks how many times a job has been retried. If a job is repeatedly failing and retrying, it may indicate an underlying issue with the data, the migration logic, or the system configuration. By examining the number of attempts, you can determine if the failure is due to repeated retries and decide whether to adjust the migration parameters, such as retry limits, batch size, or job logic.
 Additionally, the `min_value` and `max_value` fields in both the `background_migrations` and `background_migration_jobs` tables specify the range of records being processed by the migration or each job. If a migration fails during a specific range of records, these values can help you identify the problematic data. If multiple jobs fail in the same record range, this could indicate a data issue or a problem with the specific batch that needs to be addressed.
 
 By carefully reviewing the `status`, timing, `failure_error_code`, `attempts`, and batch range fields, you can gather crucial insights into why a migration or job has failed and make informed decisions on how to resolve the issue, whether that involves adjusting batch sizes, correcting table or column references, or addressing any underlying data issues.
@@ -417,7 +417,7 @@ When introducing new background migrations, itâ€™s essential to assess how they 
 Before running a background migration on a live production/staging database, itâ€™s critical to test the migration in a controlled environment. To do this you will need to:
 
 1. Procure a clone of the production registry Database Lab Instance (`gitlab-production-registry`) database in [postgres.ai](https://console.postgres.ai/gitlab/gitlab-production-registry/instances). Once Procured take note of your chosen `username` `password` and the SSH command to connect your local port to the database instance.
-    - If you are following this process for the first time, you may need to request the necessary access permissions to clone the database and connect to it from your local setup. To obtain the correct access, follow the instructions in the [Database Lab Access documentation](https://docs.gitlab.com/ee/development/database/database_lab.html#access-the-console-with-psql). You'll need to create an access request similar to the example provided here: [Example Access Request](https://gitlab.com/gitlab-com/team-member-epics/access-requests/-/issues/32379).
+   - If you are following this process for the first time, you may need to request the necessary access permissions to clone the database and connect to it from your local setup. To obtain the correct access, follow the instructions in the [Database Lab Access documentation](https://docs.gitlab.com/ee/development/database/database_lab.html#access-the-console-with-psql). You'll need to create an access request similar to the example provided here: [Example Access Request](https://gitlab.com/gitlab-com/team-member-epics/access-requests/-/issues/32379).
 
 1. Start up a local port forwarding connection to the cloned Postgres instance from your local. The specific command to run will have been issued to you in 1 (after cloning the database in postgres.ai) and should look something like: `ssh -NTML 6000:localhost:6000 lab-registry-01-db-db-lab.c.gitlab-db-lab.internal`.
 
@@ -425,21 +425,21 @@ Before running a background migration on a live production/staging database, itâ
 
 1. Edit your `./config/filesystem.yaml` to be able to connect to the cloned database using the credentials obtained in 1, the port forwarded-to in 2, and disable unnecessary background processes like online GC:
 
-    ``` yaml
-    database:
-      enabled: true
-      host: localhost
-      port: 6000 # selected port forwarded to postgres instance used in 2.
-      user: "registry" # username of cloned instance obtained in 1.
-      password: "registrypassword" # password of cloned instance obtained in 1.
-      dbname: "gitlabhq_registry_dblab"
-      sslmode: "disable"
-      backgroundmigrations:
-        enabled: true
-        jobinterval: 10s # Set this to the job interval used on Gitlab.com
-    gc:
-        disabled: true  # Disable garbage collection for this test
-    ```
+   ``` yaml
+   database:
+     enabled: true
+     host: localhost
+     port: 6000 # selected port forwarded to postgres instance used in 2.
+     user: "registry" # username of cloned instance obtained in 1.
+     password: "registrypassword" # password of cloned instance obtained in 1.
+     dbname: "gitlabhq_registry_dblab"
+     sslmode: "disable"
+     backgroundmigrations:
+       enabled: true
+       jobinterval: 10s # Set this to the job interval used on Gitlab.com
+   gc:
+       disabled: true  # Disable garbage collection for this test
+   ```
 
 1. Apply any necessary schema changes (e.g., new indexes, tables) `./bin/registry database migrate up ./config/filesystem.yml`.
 
@@ -449,14 +449,14 @@ Before running a background migration on a live production/staging database, itâ
 
 1. Use [`pg_activity`](https://github.com/dalibo/pg_activity) (or any database tool of your choice) to monitor server activity and SQL queries are expected.
 
-1. Background migrations may take hours or days to complete depending on the batch size, frequency of the job runs, size of the database and queries being executed. While we do not need to wait for the background migration to run to completion we should allow the migration to run for at least 1 hour. This allows some time to gather enough data to estimate how long the full migration would take. After an hour (or more), stop the migration and collect key metrics: 
-    - Total records processed in migrating table.
-    - Total existing records in migrating table.
-    - Number of jobs completed.
-    - Records processed per job (i.e. `batch_size`)
-    - Records migrated per hour.
-    - Extrapolated total migration time if the migration was to run to completion on the migrating table.
-    - Note any errors or potential issues with the migration.
+1. Background migrations may take hours or days to complete depending on the batch size, frequency of the job runs, size of the database and queries being executed. While we do not need to wait for the background migration to run to completion we should allow the migration to run for at least 1 hour. This allows some time to gather enough data to estimate how long the full migration would take. After an hour (or more), stop the migration and collect key metrics:
+   - Total records processed in migrating table.
+   - Total existing records in migrating table.
+   - Number of jobs completed.
+   - Records processed per job (i.e. `batch_size`)
+   - Records migrated per hour.
+   - Extrapolated total migration time if the migration was to run to completion on the migrating table.
+   - Note any errors or potential issues with the migration.
 1. Prepare and add a report (of the format below) as a comment on the MR introducing the changes:
 
 ```markdown
@@ -496,18 +496,18 @@ For this phase, we have selected a background migration targeting the smallest t
 The rollout of Phase 1 will proceed as follows:
 
 1. **Enable Background Migration Process (Staging and Production)**:
-   
+
    - **Staging**: First, we will enable the background migration system on the staging environment without activating any actual background migrations. This allows us to test the system when no migrations are present.
    - **Production**: Once the staging environment is verified and no issues are encountered, we will enable the background migration process (without activating any actual background migrations) on GitLab.com (production).
 
 1. **Add Required Schema Migrations to Staging and Production**: We will deploy the necessary schema changes to support the background migration, specifically adding the `media_type_id_convert_to_bigint` column to the `manifests` table.
 
 1. **Deploy the Background Migration to Staging**:
-   
+
    - The background migration targeting the `manifests` table will be deployed to the staging environment. The deployment will be closely monitored to ensure it runs smoothly and without issues.
 
 1. **Deploy the Background Migration to Production**:
-   
+
    - After successful monitoring in staging, the background migration will be deployed to GitLab.com (production). We will continue to monitor its progress and ensure the migration completes successfully.
 
 ### Phase 2 (Beta) - Supporting Background Migrations on non-ID Columns
@@ -521,23 +521,23 @@ This phase will introduce a new strategy to handle migrations for non-ID tables.
 #### Rollout Plan
 
 1. **Implement Background Migration Strategy**:
-   
+
    - Develop and implement the new migration strategy for non-ID tables.
 
 1. **Add Required Schema Migrations** :
-   
+
    - We will deploy the necessary schema changes to support the background migration, specifically adding the `id` column to the `blobs` table.
 
 1. **Implement Background Migration on `blobs` table** :
-   
+
    - We will add a background migration on the `blobs` table (using the new strategy) to backfill the table's `id` column.
 
 1. **Deploy Background Migration to Staging**:
-   
+
    - Deploy the background migration to the staging environment and monitor its progress until it completes successfully.
 
 1. **Deploy Background Migration to Production**:
-   
+
    - Once the background migration has completed successfully in staging, deploy it to GitLab.com (production) and monitor its progress until it finishes.
 
 ### Phase 3 - General Availability (GA) & Self-Managed Release (TBD)
@@ -547,23 +547,23 @@ Phase 3 will mark the transition to **General Availability (GA)** and will inclu
 #### Current requirements for GA
 
 1. **Support for Background Migrations in Required Stop Processes**:
-   
+
    - Ensure that the background migration process is integrated with necessary required stop processes, allowing proper handling during upgrades.
 
 1. **Admin Area View**:
-   
+
    - Add an interface in the **Admin Area** to provide administrators with visibility into the status and progress of background migrations.
 
 1. **API for Background Migration Management**:
-   
+
    - Expose a set of API endpoints to allow users to **start**, **stop**, **pause**, and **view the status** of background migrations programmatically.
 
 1. **Migration Estimates**:
-   
+
    - Provide estimation data for each background migration, such as expected duration or completion percentage, to help administrators track progress and make informed decisions.
 
 1. **ChatOps Integration**:
-   
+
    - Integrate ChatOps to allow GitLab developers to manage background migrations directly from Slack. This will provide an easy way for teams to control and gain visibility on background migrations.
 
 ## Out of scope

@@ -14,12 +14,12 @@ myorg/myproj/myimg2: marking blob sha256:a49ff3e0d85f0b60ddf225db3c134ed1735a338
 ...
 ```
 
-In the example above, while scanning the `myorg/myproj/myimg` image, the 
-garbage collector found an invalid link file for revision 
-`e4355b66995c96b4b468159fc5c7e3540fcef961189ca13fee877798649f531a`. 
+In the example above, while scanning the `myorg/myproj/myimg` image, the
+garbage collector found an invalid link file for revision
+`e4355b66995c96b4b468159fc5c7e3540fcef961189ca13fee877798649f531a`.
 
 Each of these log messages has a `path` attribute, whose value is the full
-path to the corresponding invalid file. 
+path to the corresponding invalid file.
 
 ## Parsing the Log and Deleting
 

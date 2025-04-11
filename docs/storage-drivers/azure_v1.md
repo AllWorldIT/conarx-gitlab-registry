@@ -26,4 +26,4 @@ The following configuration parameters are required:
 | `container`  | yes      | Name of the Azure root storage container in which all registry data is stored. Must comply with [Azure container naming rules](https://learn.microsoft.com/en-gb/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata). |
 | `rootdirectory` | no    | Virtual directory prefix under which all registry data will be stored within the container. Must end with a `/`. Defaults to the container root. |
 | `legacyrootprefix` | no | Use legacy registry layout, with a leading `/` before the root directory prefix. Defaults to `false`. |
-| `trimlegacyrootprefix` | no | Trim the legacy registry root prefix. Defaults to `false`. Cannot be used together with `legacyrootprefix`. | 
+| `trimlegacyrootprefix` | no | Trim the legacy registry root prefix. Defaults to `false`. Cannot be used together with `legacyrootprefix`. |

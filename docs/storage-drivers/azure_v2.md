@@ -79,7 +79,7 @@ These settings work alongside the connection pooling configuration to provide fi
 | `container`  | yes      | Name of the Azure root storage container in which all registry data is stored. Must comply with [Azure container naming rules](https://learn.microsoft.com/en-gb/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata). |
 | `rootdirectory` | no    | Virtual directory prefix under which all registry data will be stored within the container. Must end with a `/`. Defaults to the container root. |
 | `legacyrootprefix` | no | Use legacy registry layout, with a leading `/` before the root directory prefix. Defaults to `false`. |
-| `trimlegacyrootprefix` | no | Trim the legacy registry root prefix. Defaults to `false`. Cannot be used together with `legacyrootprefix`. | 
+| `trimlegacyrootprefix` | no | Trim the legacy registry root prefix. Defaults to `false`. Cannot be used together with `legacyrootprefix`. |
 
 ## Debug Logging
 
@@ -95,7 +95,7 @@ The logging functionality uses the `azcore` package from the Azure SDK for Go un
 Alternative way to enable logging is setting `AZURE_SDK_GO_LOGGING` environment variable to `all`.
 It will cause Azure SDK itself to print its debugging information to STDERR.
 
-## Connection Pooling 
+## Connection Pooling
 
 The Azure storage driver uses [pooling for `move` operation](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blob-copy-async-go#about-copying-blobs-with-asynchronous-scheduling) to enhance performance and reliability.
 The behavior of the pool can be tuned using the following parameters:

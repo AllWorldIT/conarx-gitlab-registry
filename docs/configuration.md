@@ -1724,7 +1724,7 @@ This example configures the registry instance to run on port `5000`, binding to
 `/var/lib/registry` directory. Logging is set to `debug` mode, which is the most
 verbose.
 
-See 
+See
 [`config-example.yml`](https://github.com/docker/distribution/blob/master/cmd/registry/config-example.yml)
 for another simple configuration. Both examples are generally useful for local
 development.

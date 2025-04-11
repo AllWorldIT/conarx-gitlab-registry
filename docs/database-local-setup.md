@@ -6,7 +6,7 @@ Follow this guide to enable the Registry with the metadata database configured.
 
 Requirements:
 
-- Standalone development environment setup (see **NOTE** below) 
+- Standalone development environment setup (see **NOTE** below)
 - A container runtime, see [Docker Desktop alternatives](development-environment-setup.md#alternatives-to-docker-desktop)
 - The `docker` CLI
 
@@ -76,7 +76,7 @@ to run the [database migrations](database-migrations.md).
 1. Connect to the database as shown in the last step of the previous section.
 1. Verify that the `registry_dev` database exists (you should already be connected by default), for example type
 `\l` in the psql session:
-   
+
    ```shell
    registry_dev=# \l
                                      List of databases
@@ -119,7 +119,7 @@ database:
 or use `cp config/database-filesystem.yml config.yml` to work with the pre-configured one.
 
 **NOTE**: we use the host's localhost here. If your registry can't connect to
-the database, try using the host's IP address instead (e.g. 192.168.1.100) 
+the database, try using the host's IP address instead (e.g. 192.168.1.100)
 
 1. Compile the `bin/registry` binary
 
@@ -281,7 +281,7 @@ export REGISTRY_DATABASE_PASSWORD=apassword
 export REGISTRY_DATABASE_SSLMODE=disable
 ```
 
-1. Source the environment variables. Please note that environment variables take precedence over the corresponding attributes in the registry configuration file used to execute the `registry` binary. You can consider using a tool to automate the process of loading and unloading variables (such as [direnv](https://direnv.net/)) or configure isolated test commands on your editor/IDE of choice. 
+1. Source the environment variables. Please note that environment variables take precedence over the corresponding attributes in the registry configuration file used to execute the `registry` binary. You can consider using a tool to automate the process of loading and unloading variables (such as [direnv](https://direnv.net/)) or configure isolated test commands on your editor/IDE of choice.
 
 ```shell
 cd /path/to/container/registry
@@ -294,7 +294,7 @@ source /path/to/test.env
 go run gotest.tools/gotestsum@v1.12.0 --format testname -- ./registry/handlers  -timeout 25m -run "TestAPIConformance" --tags api_conformance_test,integration
 ```
 
-The command above is equivalent to the [job `database:api-conformance`](https://gitlab.com/gitlab-org/container-registry/-/blob/ef704fd1c07be20061e677a3cca624f6e24d4c91/.gitlab-ci.yml#L337) 
+The command above is equivalent to the [job `database:api-conformance`](https://gitlab.com/gitlab-org/container-registry/-/blob/ef704fd1c07be20061e677a3cca624f6e24d4c91/.gitlab-ci.yml#L337)
 that we run in the [CI pipelines](https://gitlab.com/gitlab-org/container-registry/-/jobs/3186379779).
 
 There are other database-related test suites you may need to run. Look for jobs prefixed with `database:` in the project `.gitlab-ci.yml` file.
@@ -349,7 +349,7 @@ You have two options, using a fixed hosts list or service discovery. The Redis c
 This option does not rely on service discovery to find the PostgreSQL hosts. Instead, you need to provide a fixed list
 of hosts that should be used as read replicas.
 
-1. Set up GDK following the setup guide [here](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/database_load_balancing.md); 
+1. Set up GDK following the setup guide [here](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/database_load_balancing.md);
 
 1. Run `gdk psql` to get into a `psql` console and then create the registry database:
 
@@ -380,7 +380,7 @@ of hosts that should be used as read replicas.
        enabled: true
        addr: /<full path to gdk root>/redis/redis.socket
    ```
-   
+
    You can optionally add the primary host to `loadbalancing.hosts` to make it part of the read-only pool.
 
 1. Tail PostgreSQL logs in a separate window:

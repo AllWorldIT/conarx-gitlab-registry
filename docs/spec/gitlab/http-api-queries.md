@@ -1,10 +1,10 @@
-## HTTP API Queries
+# HTTP API Queries
 
-### Common Queries
+## Common Queries
 
 Here we list queries used across several operations and refer to them from each operation to avoid repetitions.
 
-#### Check if repository with a given path exists and grab its ID
+### Check if repository with a given path exists and grab its ID
 
 ```sql
 SELECT
@@ -15,12 +15,12 @@ WHERE
     path = $1;
 ```
 
-#### Find or create repository by path
+### Find or create repository by path
 
 This is a safe way to find or create a repository by path for highly concurrent write operations, namely blob and manifest uploads.
 
 1. We start by finding or creating the namespace by `name`. This is the first portion of the path, e.g. `a` for a path of `a/b/c`:
-   
+
    First we search for the target namespace:
 
    ```sql
@@ -34,8 +34,8 @@ This is a safe way to find or create a repository by path for highly concurrent 
     WHERE
         name = $1;
    ```
-   
-   If it exists then we return, otherwise we do an upsert to create the namespace:   
+
+   If it exists then we return, otherwise we do an upsert to create the namespace:
 
    ```sql
    INSERT INTO top_level_namespaces (name)
@@ -46,7 +46,7 @@ This is a safe way to find or create a repository by path for highly concurrent 
        id, created_at;
    ```
 
-   If the result set from the query above has no rows, then we know another concurrent process managed to create it and 
+   If the result set from the query above has no rows, then we know another concurrent process managed to create it and
 we can find it by name:
 
    ```sql
@@ -95,7 +95,7 @@ we can find it by name:
 
 1. Finally, we create the leaf repository, e.g., `c` for a path of `a/b/c`, linking it to `b`. This is done as described in (2).
 
-#### Find manifest by digest in repository
+### Find manifest by digest in repository
 
 ```sql
 SELECT
@@ -123,7 +123,7 @@ WHERE
     AND m.digest = decode($3, 'hex');
 ```
 
-#### Check if manifest exists in repository
+### Check if manifest exists in repository
 
 ```sql
 SELECT
@@ -138,7 +138,7 @@ SELECT
             AND digest = decode($3, 'hex'));
 ```
 
-#### Find blob by digest in repository
+### Find blob by digest in repository
 
 ```sql
 SELECT
@@ -156,7 +156,7 @@ WHERE
     AND b.digest = decode($3, 'hex');
 ```
 
-#### Check if blob exists in repository
+### Check if blob exists in repository
 
 ```sql
 SELECT
@@ -171,7 +171,7 @@ SELECT
             AND blob_digest = decode($3, 'hex'));
 ```
 
-#### Link blob to repository
+### Link blob to repository
 
 This operation is idempotent.
 
@@ -182,9 +182,9 @@ ON CONFLICT (top_level_namespace_id, repository_id, blob_digest)
     DO NOTHING;
 ```
 
-### Repositories
+## Repositories
 
-#### List
+### List
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#get-catalog)
 
@@ -219,9 +219,9 @@ ORDER BY
 LIMIT $2; -- pagination limit
 ```
 
-### Blobs
+## Blobs
 
-#### Pull
+### Pull
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#get-blob)
 
@@ -232,7 +232,7 @@ GET /v2/<name>/blobs/<digest>
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
 1. [Find blob with digest `<digest>` in repository `<name>`](#find-blob-by-digest-in-repository).
 
-#### Check existence
+### Check existence
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#existing-layers)
 
@@ -242,7 +242,7 @@ HEAD /v2/<name>/blobs/<digest>
 
 Same as for pull operation. Although we're just checking for existence, the HTTP response includes headers with metadata, so we need to retrieve it from the database.
 
-#### Push
+### Push
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#put-blob-upload)
 
@@ -267,7 +267,7 @@ PUT /v2/<name>/blobs/uploads/<uuid>?digest=<digest>
 
 1. [Link blob with digest `<digest>` to repository `<name>`](#link-blob-to-repository).
 
-#### Cross repository mount
+### Cross repository mount
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#mount-blob)
 
@@ -280,7 +280,7 @@ POST /v2/<name>/blobs/uploads/?mount=<digest>&from=<repository name>
 1. [Check if blob with digest `<digest>` exists and is linked to the *source* `<repository name>` repository](#check-if-blob-exists-in-repository);
 1. [Link blob with digest `<digest>` to *target* `<name>` repository](#link-blob-to-repository).
 
-#### Delete blob link
+### Delete blob link
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#delete-blob)
 
@@ -301,9 +301,9 @@ DELETE /v2/<name>/blobs/<digest>
 
    If the query affected no rows we know the blob link does not exist and raise the corresponding error. This avoids the need for a separate preceding `SELECT` to find if the link exists.
 
-### Manifests
+## Manifests
 
-#### Pull
+### Pull
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#get-manifest)
 
@@ -313,12 +313,12 @@ GET /v2/<name>/manifests/<reference>
 
 A manifest can be pulled by digest or tag.
 
-##### By digest
+#### By digest
 
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
 1. [Find manifest with digest `<reference>` in repository `<name>`](#find-manifest-by-digest-in-repository);
 
-##### By tag
+#### By tag
 
 1. [Check if repository with `path` `<name>` exists and grab its ID](#check-if-repository-with-a-given-path-exists-and-grab-its-id);
 
@@ -354,7 +354,7 @@ A manifest can be pulled by digest or tag.
        AND t.name = $3;
    ```
 
-#### Check existence
+### Check existence
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#existing-manifests)
 
@@ -364,7 +364,7 @@ HEAD /v2/<name>/manifests/<reference>
 
 Same as for pull operation. Although we're just checking for existence, the HTTP response includes headers with metadata, so we need to retrieve it from the database.
 
-#### Push
+### Push
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#put-manifest)
 
@@ -374,9 +374,9 @@ PUT /v2/<name>/manifests/<reference>
 
 A manifest can be either an atomic/indivisible manifest or a manifest list (e.g. multi-arch image). Regardless, a manifest can be either pushed by digest (untagged) or by tag (tagged).
 
-##### "Atomic" manifests
+#### "Atomic" manifests
 
-###### By digest
+##### By digest
 
 1. [Find or create repository(ies) with `path` `<name>`](#find-or-create-repository-by-path)
 
@@ -412,7 +412,7 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
           DO NOTHING;
       ```
 
-###### By tag
+##### By tag
 
 1. Same steps as by digest;
 
@@ -432,9 +432,9 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
        id, created_at, updated_at;
    ```
 
-##### Manifest lists
+#### Manifest lists
 
-###### By digest
+##### By digest
 
 1. [Find or create repository(ies) with `path` `<name>`](#find-or-create-repository-by-path);
 
@@ -462,12 +462,12 @@ A manifest can be either an atomic/indivisible manifest or a manifest list (e.g.
        DO NOTHING;
     ```
 
-###### By tag
+##### By tag
 
 1. Same steps as by digest;
 1. Upsert tag with name `<reference>` like it's done for atomic manifests.
 
-#### Delete
+### Delete
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#delete-manifest)
 
@@ -488,9 +488,9 @@ DELETE /v2/<name>/manifests/<reference>
 
    If the query affected no rows we know the manifest does not exist and raise the corresponding error. This avoids the need for a separate preceding `SELECT` to find if the manifest exists.
 
-### Tags
+## Tags
 
-#### List
+### List
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#get-tags)
 
@@ -520,7 +520,7 @@ GET /v2/<name>/tags/list
    LIMIT $4; -- pagination limit
    ```
 
-#### Delete
+### Delete
 
 [API docs](https://gitlab.com/gitlab-org/container-registry/-/blob/67bf50f4358c845d3e93a7bfd1318afb7c19786b/docs/spec/api.md#delete-tags)
 

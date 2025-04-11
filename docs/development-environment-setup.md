@@ -21,20 +21,20 @@ and [install documentation](https://golang.org/doc/install) for guidance.
 
 1. Clone repository:
 
-    ```shell
-    git clone git@gitlab.com:gitlab-org/container-registry.git
-    cd container-registry
-    ```
+   ```shell
+   git clone git@gitlab.com:gitlab-org/container-registry.git
+   cd container-registry
+   ```
 
 1. Make binaries:
 
-    ```shell
-    make binaries
-    ```
+   ```shell
+   make binaries
+   ```
 
-    This step should complete without any errors. If not, please double check
-    the official Go install documentation and make sure you have all build
-    dependencies installed on your machine.
+   This step should complete without any errors. If not, please double check
+   the official Go install documentation and make sure you have all build
+   dependencies installed on your machine.
 
 ### Running
 
@@ -94,8 +94,8 @@ docker run -d \
 ```
 
 The host networking driver in the command above [only works on Linux hosts](https://docs.docker.com/network/host/)
-and is not supported on Docker Desktop for Mac, Docker Desktop for Windows, or Docker EE 
-for Windows Server. The reason for this behavior is that on Mac and Windows, Docker daemon is 
+and is not supported on Docker Desktop for Mac, Docker Desktop for Windows, or Docker EE
+for Windows Server. The reason for this behavior is that on Mac and Windows, Docker daemon is
 actually running in a virtual machine, not natively on the host. Thus, it is not actually connected
 to the host ports of your Mac or Windows machine, but rather to the host ports of the virtual machine.
 
