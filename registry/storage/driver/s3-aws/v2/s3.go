@@ -163,14 +163,20 @@ func NewS3API(params *common.DriverParameters) (*s3.Client, error) {
 	}
 
 	// configure http client
-	httpTransport := http.DefaultTransport.(*http.Transport).Clone()
-	httpTransport.MaxIdleConnsPerHost = 10
-	// nolint: gosec
-	httpTransport.TLSClientConfig = &tls.Config{
-		InsecureSkipVerify: params.SkipVerify,
-	}
-	cfg.HTTPClient = &http.Client{
-		Transport: httpTransport,
+	if params.Transport != nil {
+		cfg.HTTPClient = &http.Client{
+			Transport: params.Transport,
+		}
+	} else {
+		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+		httpTransport.MaxIdleConnsPerHost = 10
+		// nolint: gosec
+		httpTransport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: params.SkipVerify,
+		}
+		cfg.HTTPClient = &http.Client{
+			Transport: httpTransport,
+		}
 	}
 
 	// Add user agent

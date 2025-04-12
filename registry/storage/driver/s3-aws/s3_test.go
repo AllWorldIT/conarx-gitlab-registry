@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -258,18 +259,21 @@ func prefixedS3DriverConstructorT(t *testing.T) storagedriver.StorageDriver {
 	return d
 }
 
-func skipCheck() string {
-	if len(missing) > 0 {
+func skipCheck(envVarsRequired bool, runningDriverVersion string, supportedDriverVersions ...string) string {
+	if envVarsRequired && len(missing) > 0 {
 		return fmt.Sprintf(
 			"Invalid value or missing environment values required to run S3 tests: %s",
 			strings.Join(missing, ", "),
 		)
 	}
+	if len(supportedDriverVersions) > 0 && !slices.Contains(supportedDriverVersions, runningDriverVersion) {
+		return fmt.Sprintf("Test is not supported for driver %s", runningDriverVersion)
+	}
 	return ""
 }
 
 func TestS3DriverSuite(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -289,7 +293,7 @@ func TestS3DriverSuite(t *testing.T) {
 }
 
 func BenchmarkS3DriverSuite(b *testing.B) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		b.Skip(skipMsg)
 	}
 
@@ -425,7 +429,7 @@ func TestS3DriverPathStyle(t *testing.T) {
 }
 
 func TestS3DriverEmptyRootList(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -454,7 +458,7 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 }
 
 func TestS3DriverStorageClassStandard(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -514,7 +518,7 @@ func TestS3DriverStorageClassStandard(t *testing.T) {
 }
 
 func TestS3DriverStorageClassReducedRedundancy(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -573,7 +577,7 @@ func TestS3DriverStorageClassReducedRedundancy(t *testing.T) {
 }
 
 func TestS3DriverStorageClassNone(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -583,7 +587,7 @@ func TestS3DriverStorageClassNone(t *testing.T) {
 }
 
 func TestS3DriverOverThousandBlobs(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -603,7 +607,7 @@ func TestS3DriverOverThousandBlobs(t *testing.T) {
 }
 
 func TestS3DriverURLFor(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -708,7 +712,7 @@ func TestS3DriverURLFor(t *testing.T) {
 }
 
 func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -746,7 +750,7 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 // meant as a preventive measure, just in case we change the code later one and
 // get the inequalities wrong.
 func TestFlushObjectTwiceChunkSize(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -784,7 +788,7 @@ func TestFlushObjectTwiceChunkSize(t *testing.T) {
 }
 
 func TestS3DriverClientTransport(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -949,11 +953,7 @@ func generateSelfSignedCert(addresses []string) (tls.Certificate, error) {
 // properly handle the "empty" directories - i.e. objects with zero size that
 // are meant as placeholders.
 func TestWalkEmptyDir(t *testing.T) {
-	if driverVersion != common.V2DriverName {
-		t.Skip("this issue has been fixed only for s3_v2 driver")
-	}
-
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(true, driverVersion, common.V2DriverName); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
