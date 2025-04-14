@@ -220,11 +220,11 @@ func New(params *common.DriverParameters) (storagedriver.StorageDriver, error) {
 		if err != nil {
 			return nil, fmt.Errorf("creating new s3 driver implementation: %w", err)
 		}
-		d.S3 = common.NewS3Wrapper(
+		d.S3 = NewS3Wrapper(
 			s3obj,
-			common.WithRateLimit(params.MaxRequestsPerSecond, common.DefaultBurst),
-			common.WithExponentialBackoff(params.MaxRetries),
-			common.WithBackoffNotify(func(err error, t time.Duration) {
+			WithRateLimit(params.MaxRequestsPerSecond, common.DefaultBurst),
+			WithExponentialBackoff(params.MaxRetries),
+			WithBackoffNotify(func(err error, t time.Duration) {
 				log.WithFields(log.Fields{"error": err, "delay_s": t.Seconds()}).Info("S3: retrying after error")
 			}),
 		)

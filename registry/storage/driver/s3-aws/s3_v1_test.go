@@ -51,7 +51,7 @@ func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, 
 	}
 
 	// mock the underlying S3 client
-	d := prefixedMockedS3DriverConstructorT(t, common.NewS3Wrapper(mock))
+	d := prefixedMockedS3DriverConstructorT(t, v1.NewS3Wrapper(mock))
 
 	// simulate deleting numFiles files
 	paths := make([]string, 0, numFiles)
@@ -172,9 +172,9 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 	// mock the underlying S3 client
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		common.NewS3Wrapper(
+		v1.NewS3Wrapper(
 			&mockPutObjectWithContextRetryableError{},
-			common.WithBackoffNotify(notifyFn),
+			v1.WithBackoffNotify(notifyFn),
 		),
 	)
 
@@ -197,10 +197,10 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 	// mock the underlying S3 client
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		common.NewS3Wrapper(
+		v1.NewS3Wrapper(
 			&mockPutObjectWithContextRetryableError{},
-			common.WithExponentialBackoff(0),
-			common.WithBackoffNotify(notifyFn),
+			v1.WithExponentialBackoff(0),
+			v1.WithBackoffNotify(notifyFn),
 		),
 	)
 
@@ -223,10 +223,10 @@ func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
 	// mock the underlying S3 client
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		common.NewS3Wrapper(
+		v1.NewS3Wrapper(
 			&mockPutObjectWithContextRetryableError{},
-			common.WithBackoffNotify(notifyFn),
-			common.WithExponentialBackoff(common.DefaultMaxRetries),
+			v1.WithBackoffNotify(notifyFn),
+			v1.WithExponentialBackoff(common.DefaultMaxRetries),
 		),
 	)
 
@@ -268,10 +268,10 @@ func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		common.NewS3Wrapper(
+		v1.NewS3Wrapper(
 			&mockPutObjectWithContextPermanentError{},
-			common.WithBackoffNotify(notifyFn),
-			common.WithExponentialBackoff(200),
+			v1.WithBackoffNotify(notifyFn),
+			v1.WithExponentialBackoff(200),
 		),
 	)
 
@@ -297,10 +297,10 @@ func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
 
 	d := prefixedMockedS3DriverConstructorT(
 		t,
-		common.NewS3Wrapper(
+		v1.NewS3Wrapper(
 			&mockDeleteObjectsError{},
-			common.WithBackoffNotify(notifyFn),
-			common.WithExponentialBackoff(200),
+			v1.WithBackoffNotify(notifyFn),
+			v1.WithExponentialBackoff(200),
 		),
 	)
 

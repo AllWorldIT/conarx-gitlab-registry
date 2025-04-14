@@ -1,4 +1,4 @@
-package common
+package v1
 
 import (
 	"errors"
@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	"golang.org/x/time/rate"
 )
 
@@ -71,11 +72,11 @@ func WithExponentialBackoff(maximum int64) WrapperOpt {
 	return func(w *S3wrapper) {
 		w.backoff = func() backoff.BackOff {
 			b := backoff.NewExponentialBackOff()
-			b.InitialInterval = DefaultInitialInterval
-			b.RandomizationFactor = DefaultRandomizationFactor
-			b.Multiplier = DefaultMultiplier
-			b.MaxInterval = DefaultMaxInterval
-			b.MaxElapsedTime = DefaultMaxElapsedTime
+			b.InitialInterval = common.DefaultInitialInterval
+			b.RandomizationFactor = common.DefaultRandomizationFactor
+			b.Multiplier = common.DefaultMultiplier
+			b.MaxInterval = common.DefaultMaxInterval
+			b.MaxElapsedTime = common.DefaultMaxElapsedTime
 
 			// nolint:gosec // there is no overflow here, max is always positive
 			return backoff.WithMaxRetries(b, uint64(maximum))
@@ -83,7 +84,7 @@ func WithExponentialBackoff(maximum int64) WrapperOpt {
 	}
 }
 
-var _ S3WrapperIf = (*S3wrapper)(nil)
+var _ common.S3WrapperIf = (*S3wrapper)(nil)
 
 // S3wrapper implements a subset of s3iface.S3API allowing us to rate limit,
 // retry, add trace logging, or otherwise improve s3 calls made by the driver.
