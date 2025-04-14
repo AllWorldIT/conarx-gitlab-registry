@@ -5,6 +5,7 @@ package datastore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -19,7 +20,9 @@ import (
 	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/hashicorp/go-multierror"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/prometheus/client_golang/prometheus"
@@ -51,6 +54,13 @@ const (
 	// ReplicaResolveTimeout. A quick failure here prevents startup delays, allowing asynchronous retries in
 	// StartReplicaChecking. While these timeouts are currently similar, they remain separate to allow independent tuning.
 	InitReplicaResolveTimeout = 1 * time.Second
+
+	// minReplicaLivenessProbeInterval is the minimum time between replica host liveness probes during load balancing.
+	minReplicaLivenessProbeInterval = 1 * time.Second
+	// minResolveReplicasInterval is the default minimum time between replicas resolution calls during load balancing.
+	minResolveReplicasInterval = 10 * time.Second
+	// replicaLivenessProbeTimeout is the maximum time for a replica liveness probe to run.
+	replicaLivenessProbeTimeout = 100 * time.Millisecond
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -75,10 +85,16 @@ type Transactor interface {
 	Rollback() error
 }
 
+// QueryErrorProcessor defines the interface for handling database query errors.
+type QueryErrorProcessor interface {
+	ProcessQueryError(ctx context.Context, db *DB, query string, err error)
+}
+
 // DB implements Handler.
 type DB struct {
 	*sql.DB
-	DSN *DSN
+	DSN            *DSN
+	errorProcessor QueryErrorProcessor
 }
 
 // BeginTx wraps sql.Tx from the innner sql.DB within a datastore.Tx.
@@ -99,6 +115,32 @@ func (db *DB) Address() string {
 		return ""
 	}
 	return db.DSN.Address()
+}
+
+// QueryContext wraps the underlying QueryContext.
+func (db *DB) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	rows, err := db.DB.QueryContext(ctx, query, args...)
+	if err != nil && db.errorProcessor != nil {
+		db.errorProcessor.ProcessQueryError(ctx, db, query, err)
+	}
+	return rows, err
+}
+
+// ExecContext wraps the underlying ExecContext.
+func (db *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	res, err := db.DB.ExecContext(ctx, query, args...)
+	if err != nil && db.errorProcessor != nil {
+		db.errorProcessor.ProcessQueryError(ctx, db, query, err)
+	}
+	return res, err
+}
+
+// QueryRowContext wraps the underlying QueryRowContext.
+func (db *DB) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	row := db.DB.QueryRowContext(ctx, query, args...)
+	// TODO: We can't check for errors here because QueryRowContext doesn't return an error. The error will be returned
+	//   when Scan is called on the row. We'll need to handle this differently.
+	return row
 }
 
 // Tx implements Transactor.
@@ -182,12 +224,13 @@ type PoolConfig struct {
 
 // LoadBalancingConfig represents the database load balancing configuration.
 type LoadBalancingConfig struct {
-	active               bool
-	hosts                []string
-	resolver             DNSResolver
-	connector            Connector
-	replicaCheckInterval time.Duration
-	lsnStore             RepositoryCache
+	active                     bool
+	hosts                      []string
+	resolver                   DNSResolver
+	connector                  Connector
+	replicaCheckInterval       time.Duration
+	lsnStore                   RepositoryCache
+	minResolveReplicasInterval time.Duration
 }
 
 // Option is used to configure the database connections.
@@ -384,7 +427,7 @@ func (*sqlConnector) Open(ctx context.Context, dsn *DSN, opts ...Option) (*DB, e
 		return nil, fmt.Errorf("verification failed: %w", err)
 	}
 
-	return &DB{db, dsn}, nil
+	return &DB{DB: db, DSN: dsn}, nil
 }
 
 // LoadBalancer represents a database load balancer.
@@ -424,6 +467,17 @@ type DBLoadBalancer struct {
 	metricsEnabled        bool
 	promRegisterer        prometheus.Registerer
 	replicaPromCollectors map[string]prometheus.Collector
+
+	// For controlling replicas liveness probing concurrency
+	replicaLivenessProbesMu         sync.Mutex
+	replicaLivenessProbesInProgress map[string]time.Time // Maps replica address to probe start time
+	minReplicaLivenessProbeInterval time.Duration        // Minimum time between probes for the same replica
+
+	// For controlling replicas resolution concurrency
+	resolveReplicasMu          sync.Mutex
+	resolveReplicasInProgress  bool
+	resolveReplicasLastTime    time.Time
+	minResolveReplicasInterval time.Duration // Minimum time between resolve replicas calls
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
@@ -463,6 +517,14 @@ func WithReplicaCheckInterval(interval time.Duration) Option {
 func WithLSNCache(cache RepositoryCache) Option {
 	return func(opts *opts) {
 		opts.loadBalancing.lsnStore = cache
+	}
+}
+
+// WithMinResolveReplicasInterval configures the minimum time between resolve replicas calls. This prevents excessive
+// replica resolution operations during periods of connection instability.
+func WithMinResolveReplicasInterval(interval time.Duration) Option {
+	return func(opts *opts) {
+		opts.loadBalancing.minResolveReplicasInterval = interval
 	}
 }
 
@@ -578,6 +640,197 @@ func (lb *DBLoadBalancer) metricsCollector(db *DB, hostType string) *sqlmetrics.
 	)
 }
 
+// canProbeReplicaLiveness checks if a liveness probe for the given replica is allowed. It returns false if another
+// probe for this replica is in progress or if a probe was completed too recently (within
+// minReplicaLivenessProbeInterval). If the probe is allowed, it marks the replica as being probed and returns true.
+func (lb *DBLoadBalancer) canProbeReplicaLiveness(replicaAddr string) bool {
+	lb.replicaLivenessProbesMu.Lock()
+	defer lb.replicaLivenessProbesMu.Unlock()
+
+	lastProbe, exists := lb.replicaLivenessProbesInProgress[replicaAddr]
+	if exists && time.Since(lastProbe) < lb.minReplicaLivenessProbeInterval {
+		return false
+	}
+
+	lb.replicaLivenessProbesInProgress[replicaAddr] = time.Now()
+	return true
+}
+
+// completeReplicaLivenessProbe marks a replica liveness probe as completed by removing its entry from the in-progress
+// tracking map, allowing future probes for this replica to proceed (subject to timing constraints).
+func (lb *DBLoadBalancer) completeReplicaLivenessProbe(replicaAddr string) {
+	lb.replicaLivenessProbesMu.Lock()
+	defer lb.replicaLivenessProbesMu.Unlock()
+	delete(lb.replicaLivenessProbesInProgress, replicaAddr)
+}
+
+// livenessProbeReplica performs a health check on a database replica. The probe rate is limited to prevent excessive
+// concurrent probing of the same replica. If the probe fails, the replica is removed from the pool.
+func (lb *DBLoadBalancer) livenessProbeReplica(ctx context.Context, r *DB) {
+	replicaAddr := r.Address()
+	l := lb.logger(ctx).WithFields(log.Fields{"db_replica_addr": replicaAddr})
+
+	// Check if this replica is already being probed and mark it if not
+	if !lb.canProbeReplicaLiveness(replicaAddr) {
+		l.Info("skipping liveness probe, already in progress or too recent")
+		return
+	}
+
+	// When we're done with this function, remove the in-progress marker
+	defer lb.completeReplicaLivenessProbe(replicaAddr)
+
+	// Perform a lightweight health check with a short timeout
+	probeCtx, cancel := context.WithTimeout(ctx, replicaLivenessProbeTimeout)
+	defer cancel()
+
+	l.Info("performing replica liveness probe")
+	start := time.Now()
+	err := r.PingContext(probeCtx)
+	duration := time.Since(start).Seconds()
+	if err == nil {
+		l.WithFields(log.Fields{"duration_s": duration}).Info("replica passed liveness probe; not retiring")
+		return
+	}
+
+	// If we get here, the liveness probe failed - need to remove the replica
+	l.WithFields(log.Fields{"duration_s": duration}).WithError(err).Warn("replica failed liveness probe; retiring")
+
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
+	for i, r := range lb.replicas {
+		if r.Address() == replicaAddr {
+			lb.replicas = append(lb.replicas[:i], lb.replicas[i+1:]...)
+			lb.unregisterReplicaMetricsCollector(r)
+			metrics.ReplicaRemoved()
+			metrics.ReplicaPoolSize(len(lb.replicas))
+
+			if err := r.Close(); err != nil {
+				l.WithError(err).Error("error closing retired replica connection")
+			}
+			break
+		}
+	}
+}
+
+// canResolveReplicas checks if a full replicas resolution operation is currently allowed. It returns false if another
+// resolution is already in progress or if one was completed too recently (within minResolveReplicasInterval). If the
+// resolution is allowed, it marks the operation as in progress and returns true.
+func (lb *DBLoadBalancer) canResolveReplicas() bool {
+	lb.resolveReplicasMu.Lock()
+	defer lb.resolveReplicasMu.Unlock()
+
+	if lb.resolveReplicasInProgress || (time.Since(lb.resolveReplicasLastTime) < lb.minResolveReplicasInterval) {
+		return false
+	}
+	lb.resolveReplicasInProgress = true
+	return true
+}
+
+// completeReplicaResolution marks a replicas resolution operation as complete and updates the timestamp of the last
+// completed to enforce the minimum interval between repetitions.
+func (lb *DBLoadBalancer) completeReplicaResolution() {
+	lb.resolveReplicasMu.Lock()
+	defer lb.resolveReplicasMu.Unlock()
+
+	lb.resolveReplicasInProgress = false
+	lb.resolveReplicasLastTime = time.Now()
+}
+
+// throttledResolveReplicas performs replicas resolution with rate limiting to prevent concurrent operations or
+// excessive frequency.
+func (lb *DBLoadBalancer) throttledResolveReplicas(ctx context.Context) {
+	l := lb.logger(ctx)
+
+	// Check if another resolution is already in progress or happened too recently
+	if !lb.canResolveReplicas() {
+		l.Info("skipping replica resolution, already in progress or too recent")
+		return
+	}
+
+	// When we're done, mark the operation as complete
+	defer lb.completeReplicaResolution()
+
+	// Perform the resolution
+	l.Info("resolving replicas")
+	if err := lb.ResolveReplicas(ctx); err != nil {
+		l.WithError(err).Error("failed to resolve replicas")
+	} else {
+		l.Info("successfully resolved replicas")
+	}
+}
+
+// isConnectivityError determines if the given error is related to database connectivity issues. It checks for specific
+// PostgreSQL error classes that may indicate severe connection problems:
+// - Class 08: Connection Exception (connection failures, protocol violations)
+// - Class 57: Operator Intervention (server shutdown, crash)
+// - Class 53: Insufficient Resources (self-explanatory)
+// - Class 58: System Error (errors external to PostgreSQL itself)
+// - Class XX: Internal Error (self-explanatory)
+// Note: We intentionally don't check for raw network timeout as those can lead to a high rate of false positives. The
+// list of watched errors should be fine-tuned as we experience connectivity issues in production.
+// See https://www.postgresql.org/docs/current/errcodes-appendix.html
+func isConnectivityError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		if pgerrcode.IsConnectionException(pgErr.Code) ||
+			pgerrcode.IsOperatorIntervention(pgErr.Code) ||
+			pgerrcode.IsInsufficientResources(pgErr.Code) ||
+			pgerrcode.IsSystemError(pgErr.Code) ||
+			pgerrcode.IsInternalError(pgErr.Code) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ProcessQueryError handles database connectivity errors during query executions by triggering appropriate responses:
+// - For primary database errors, it initiates a full replica resolution to refresh the pool
+// - For replica database errors, it initiates an individual liveness probe that may retire the (faulty?) replica
+func (lb *DBLoadBalancer) ProcessQueryError(ctx context.Context, db *DB, query string, err error) {
+	if err != nil && isConnectivityError(err) {
+		hostType := lb.TypeOf(db)
+		l := lb.logger(ctx).WithError(err).WithFields(log.Fields{
+			"db_host_type": hostType,
+			"db_host_addr": db.Address(),
+			"query":        query,
+		})
+
+		switch hostType {
+		case HostTypePrimary:
+			// If the primary connection fails (a failover event is possible), proactively refresh all replicas
+			l.Warn("primary database connection error during query execution; initiating replica resolution")
+			go lb.throttledResolveReplicas(context.WithoutCancel(ctx)) // detach from outer context to avoid external cancellation
+		case HostTypeReplica:
+			// For a replica, run a liveness probe and retire it if necessary
+			l.Warn("replica database connection error during query execution; initiating liveness probe")
+			go lb.livenessProbeReplica(context.WithoutCancel(ctx), db)
+		default:
+			// This is not supposed to happen, log and report
+			err := fmt.Errorf("unknown database host type: %w", err)
+			l.Error(err)
+			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		}
+	}
+}
+
+// unregisterReplicaMetricsCollector removes the Prometheus metrics collector associated with a database replica.
+// This should be called when a replica is retired from the pool to ensure metrics are properly cleaned up.
+// If metrics collection is disabled or if no collector exists for the given replica, this is a no-op.
+func (lb *DBLoadBalancer) unregisterReplicaMetricsCollector(r *DB) {
+	if lb.metricsEnabled {
+		if collector, exists := lb.replicaPromCollectors[r.Address()]; exists {
+			lb.promRegisterer.Unregister(collector)
+			delete(lb.replicaPromCollectors, r.Address())
+		}
+	}
+}
+
 // ResolveReplicas initializes or updates the list of available replicas atomically by resolving the provided hosts
 // either through service discovery or using a fixed hosts list. As result, the load balancer replica pool will be
 // up-to-date. Replicas for which we failed to establish a connection to are not included in the pool.
@@ -658,6 +911,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 				lb.replicaPromCollectors[r.Address()] = collector
 			}
 		}
+		r.errorProcessor = lb
 		outputReplicas = append(outputReplicas, r)
 	}
 
@@ -668,12 +922,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 			metrics.ReplicaRemoved()
 
 			// Unregister the metrics collector for the removed replica
-			if lb.metricsEnabled {
-				if collector, exists := lb.replicaPromCollectors[r.Address()]; exists {
-					lb.promRegisterer.Unregister(collector)
-					delete(lb.replicaPromCollectors, r.Address())
-				}
-			}
+			lb.unregisterReplicaMetricsCollector(r)
 
 			// Close handlers for retired replicas
 			l.WithFields(log.Fields{"db_replica_addr": r.Address()}).Info("closing connection handler for retired replica")
@@ -722,10 +971,8 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 			return ctx.Err()
 		case <-t.C:
 			l.WithFields(log.Fields{"interval_ms": lb.replicaCheckInterval.Milliseconds()}).
-				Info("refreshing replicas list")
-			if err := lb.ResolveReplicas(ctx); err != nil {
-				l.WithError(err).Error("failed to refresh replicas list")
-			}
+				Info("scheduled refresh of replicas list")
+			lb.throttledResolveReplicas(ctx)
 		}
 	}
 }
@@ -739,23 +986,27 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	config := applyOptions(opts)
 
 	lb := &DBLoadBalancer{
-		active:                config.loadBalancing.active,
-		primaryDSN:            primaryDSN,
-		connector:             config.loadBalancing.connector,
-		resolver:              config.loadBalancing.resolver,
-		fixedHosts:            config.loadBalancing.hosts,
-		replicaOpenOpts:       opts,
-		replicaCheckInterval:  config.loadBalancing.replicaCheckInterval,
-		lsnCache:              config.loadBalancing.lsnStore,
-		metricsEnabled:        config.metricsEnabled,
-		promRegisterer:        config.promRegisterer,
-		replicaPromCollectors: make(map[string]prometheus.Collector),
+		active:                          config.loadBalancing.active,
+		primaryDSN:                      primaryDSN,
+		connector:                       config.loadBalancing.connector,
+		resolver:                        config.loadBalancing.resolver,
+		fixedHosts:                      config.loadBalancing.hosts,
+		replicaOpenOpts:                 opts,
+		replicaCheckInterval:            config.loadBalancing.replicaCheckInterval,
+		lsnCache:                        config.loadBalancing.lsnStore,
+		metricsEnabled:                  config.metricsEnabled,
+		promRegisterer:                  config.promRegisterer,
+		replicaPromCollectors:           make(map[string]prometheus.Collector),
+		replicaLivenessProbesInProgress: make(map[string]time.Time),
+		minReplicaLivenessProbeInterval: minReplicaLivenessProbeInterval,
+		minResolveReplicasInterval:      minResolveReplicasInterval,
 	}
 
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open primary database connection: %w", err)
 	}
+	primary.errorProcessor = lb
 	lb.primary = primary
 
 	// Conditionally register metrics for the primary database handle
@@ -850,6 +1101,9 @@ func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) e
 // then any queries attempted against `R` after `T+1` would result in a `sql: database is closed` error raised by the
 // `database/sql` package. In such case, it is the caller's responsibility to fall back to Primary and retry.
 func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Repository) *DB {
+	primary := lb.primary
+	primary.errorProcessor = lb
+
 	if !lb.active {
 		return lb.primary
 	}
