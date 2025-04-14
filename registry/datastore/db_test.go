@@ -173,10 +173,10 @@ func TestNewDBLoadBalancer_WithFixedHosts(t *testing.T) {
 
 	// Verify replicas
 	require.NotEmpty(t, lb.Replicas())
-	require.Equal(t, []*datastore.DB{
-		{DB: replica1MockDB, DSN: replica1DSN},
-		{DB: replica2MockDB, DSN: replica2DSN},
-	}, lb.Replicas())
+	replicas := lb.Replicas()
+	require.Len(t, replicas, 2)
+	require.Equal(t, replica1MockDB, replicas[0].DB)
+	require.Equal(t, replica2MockDB, replicas[1].DB)
 
 	// Verify mock expectations (no operations triggered)
 	require.NoError(t, primaryMock.ExpectationsWereMet())
@@ -3567,4 +3567,65 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 
 	// Ensure replica list is empty
 	require.Empty(t, lb.Replicas())
+}
+
+func TestDBLoadBalancer_StartReplicaChecking_WithThrottling(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockResolver := mocks.NewMockDNSResolver(ctrl)
+	mockConnector := mocks.NewMockConnector(ctrl)
+
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	// First lookup during initialization
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return(make([]*net.SRV, 0), nil).Times(1)
+
+	// First scheduled lookup after ticker
+	mockResolver.EXPECT().
+		LookupSRV(gomock.Any()).
+		Return(make([]*net.SRV, 0), nil).Times(1)
+
+	// Mock connections
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
+
+	// Create load balancer with short intervals for testing
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithConnector(mockConnector),
+		datastore.WithServiceDiscovery(mockResolver),
+		datastore.WithReplicaCheckInterval(20*time.Millisecond),
+		datastore.WithMinResolveReplicasInterval(100*time.Millisecond), // Long enough to ensure throttling
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	// Start replica checking
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- lb.StartReplicaChecking(ctx)
+	}()
+
+	// Wait for first scheduled check plus a bit more
+	time.Sleep(30 * time.Millisecond)
+
+	// Cancel and wait for goroutine to exit
+	cancel()
+	require.ErrorIs(t, <-errCh, context.Canceled)
 }
