@@ -94,3 +94,7 @@ const (
 	V1DriverNameAlt = "s3"
 	V2DriverName    = "s3_v2"
 )
+
+// DefaultBurst is how many limiter tokens may be reserved at once. Currently,
+// we only reserve one at a time via Limiter.Wait()
+const DefaultBurst = 1
