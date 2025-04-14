@@ -1325,7 +1325,7 @@ func (w *writer) Close() error {
 
 	err := w.flushPart()
 	if err != nil {
-		return fmt.Errorf("fluxing buffers while closing writer: %w", err)
+		return fmt.Errorf("flushing buffers while closing writer: %w", err)
 	}
 	return nil
 }

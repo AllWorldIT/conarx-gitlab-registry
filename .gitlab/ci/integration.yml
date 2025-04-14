@@ -53,6 +53,8 @@ s3:minio:
     MINIO_SECRET_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
     REGION_ENDPOINT: "http://minio:9000"
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/s3-aws"
+    # NOTE(prozlach): see docs/storage-drivers/s3_v2.md#minio for explanation why:
+    S3_CHECKSUM_DISABLED: "true"
   services:
     - name: minio/minio:latest
       alias: "minio"
