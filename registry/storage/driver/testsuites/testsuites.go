@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1697,43 +1696,15 @@ func (s *DriverSuite) testDeleteDir(t *testing.T, numFiles int) {
 	require.False(t, filesRemaining, "Encountered files remaining after deletion")
 }
 
-// buildFiles builds a num amount of test files with a size of size under
-// parentDir. Returns a slice with the path of the created files.
-func (s *DriverSuite) buildFiles(t require.TestingT, parentDirectory string, numFiles int, size int64) []string {
-	// NOTE(prozlach): chosen empirically, basing on how many CI tasks can run
-	// in pararell before we hit limits.
-	const concurencyFactor = 32
-	var wg sync.WaitGroup
-	var failed atomic.Bool
-
-	sem := make(chan struct{}, concurencyFactor)
-	for i := 0; i < concurencyFactor; i++ {
-		sem <- struct{}{}
-	}
-
-	wg.Add(numFiles)
-
-	childFiles := make([]string, numFiles)
-
-	for i := range childFiles {
-		go func(i int) {
-			defer wg.Done()
-			<-sem
-			defer func() { sem <- struct{}{} }()
-
-			childFile := parentDirectory + "/" + dtestutil.RandomFilenameRange(16, 32)
-			childFiles[i] = childFile
-
-			err := s.StorageDriver.PutContent(s.ctx, childFile, s.blobberFactory.GetBlobber(size).GetAllBytes())
-			if !assert.NoError(t, err) {
-				failed.Store(true)
-			}
-		}(i)
-	}
-	wg.Wait()
-	require.False(t, failed.Load(), "One or more goroutines failed")
-
-	return childFiles
+func (s *DriverSuite) buildFiles(t testing.TB, parentDirectory string, numFiles int, size int64) []string {
+	return dtestutil.BuildFiles(
+		s.ctx,
+		t,
+		s.StorageDriver,
+		parentDirectory,
+		numFiles,
+		s.blobberFactory.GetBlobber(size),
+	)
 }
 
 // assertPathNotFound asserts that path does not exist in the storage driver filesystem.
