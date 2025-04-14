@@ -1098,8 +1098,8 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 		tt *testing.T,
 		interceptorConfigs []dtestutil.InterceptorConfig,
 	) (storagedriver.StorageDriver, func() bool) {
-		parsedParams, err := fetchDriverConfig(rootDirectory, true, btestutil.NewTestLogger(t))
-		require.NoError(t, err)
+		parsedParams, err := fetchDriverConfig(rootDirectory, true, btestutil.NewTestLogger(tt))
+		require.NoError(tt, err)
 		typedParsedParams := parsedParams.(*v2.DriverParameters)
 
 		// Create transport in a way azure does it:
@@ -1148,7 +1148,7 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 
 		typedParsedParams.Transport = interceptor
 		sDriver, err := newDriverFn(typedParsedParams)
-		require.NoError(t, err)
+		require.NoError(tt, err)
 
 		isTestValidf := func() bool {
 			if expectedRequestModificationsCount != interceptor.GetRequestHooksMatchedCount() {
@@ -1173,10 +1173,15 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 			t.Run(testName, func(tt *testing.T) {
 				filename := dtestutil.RandomPath(4, 32)
 				tt.Logf("blob path used for testing: %s", filename)
+				// We can't use `sDriver` below as it has an active interceptor
+				// config that may interfere with cleanup/deletion
+				simpleSDriverConfig, err := fetchDriverConfig(rootDirectory, true, btestutil.NewTestLogger(tt))
+				require.NoError(tt, err)
+				simpleSDriver, err := newDriverFn(simpleSDriverConfig)
+				require.NoError(tt, err)
+				defer dtestutil.EnsurePathDeleted(ctx, tt, simpleSDriver, filename)
 
 				sDriver, isTestValidf := fetchDriver(tt, test.interceptorConfigs)
-
-				defer dtestutil.EnsurePathDeleted(ctx, tt, sDriver, rootDirectory)
 
 				testIsValid = test.testFunc(tt, sDriver, filename, isTestValidf)
 				if !testIsValid {
