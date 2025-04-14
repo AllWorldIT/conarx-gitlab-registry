@@ -51,10 +51,6 @@ const maxListRespLoop = 10000
 // listMax is the largest amount of objects you can request from S3 in a list call
 const listMax = 1000
 
-// defaultBurst is how many limiter tokens may be reserved at once. Currently,
-// we only reserve one at a time via Limiter.Wait()
-const defaultBurst = 1
-
 // ErrMaxListRespExceeded signifies a multi part layer upload has exceeded the allowable maximum size
 var ErrMaxListRespExceeded = fmt.Errorf("layer parts pages exceeds the maximum of %d allowed", maxListRespLoop)
 
@@ -226,7 +222,7 @@ func New(params *common.DriverParameters) (storagedriver.StorageDriver, error) {
 		}
 		d.S3 = common.NewS3Wrapper(
 			s3obj,
-			common.WithRateLimit(params.MaxRequestsPerSecond, defaultBurst),
+			common.WithRateLimit(params.MaxRequestsPerSecond, common.DefaultBurst),
 			common.WithExponentialBackoff(params.MaxRetries),
 			common.WithBackoffNotify(func(err error, t time.Duration) {
 				log.WithFields(log.Fields{"error": err, "delay_s": t.Seconds()}).Info("S3: retrying after error")

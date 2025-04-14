@@ -434,7 +434,8 @@ func wrapAWSerr(e error) error {
 	// Retry any request failures that are server errors.
 	var reqErr awserr.RequestFailure
 	if errors.As(e, &reqErr) {
-		if reqErr.StatusCode() != http.StatusTooManyRequests && reqErr.StatusCode() < http.StatusInternalServerError &&
+		if reqErr.StatusCode() != http.StatusTooManyRequests &&
+			reqErr.StatusCode() < http.StatusInternalServerError &&
 			reqErr.Code() != request.ErrCodeSerialization {
 			return backoff.Permanent(e)
 		}

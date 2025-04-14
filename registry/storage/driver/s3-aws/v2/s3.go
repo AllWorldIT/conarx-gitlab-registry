@@ -132,6 +132,7 @@ func NewS3API(params *common.DriverParameters) (*s3.Client, error) {
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
 		config.WithRegion(params.Region),
+		config.WithRetryer(NewCustomRetryer(params.MaxRetries, params.MaxRequestsPerSecond, common.DefaultBurst)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load aws SDK default config, %w", err)
