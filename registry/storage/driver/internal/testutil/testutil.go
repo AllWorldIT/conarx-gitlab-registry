@@ -12,8 +12,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/testutil"
 )
 
 type Opts struct {
@@ -197,6 +199,47 @@ var (
 	filenameChars  = []byte("abcdefghijklmnopqrstuvwxyz0123456789")
 	separatorChars = []byte("._-")
 )
+
+// BuildFiles builds a num amount of test files with a size of size under
+// parentDir, all of them with the same content. Returns a slice with the path of the created files.
+func BuildFiles(
+	ctx context.Context,
+	tb testing.TB,
+	driver storagedriver.StorageDriver,
+	parentDirectory string,
+	numFiles int,
+	blobber *testutil.Blobber,
+) []string {
+	// NOTE(prozlach): chosen empirically, basing on how many CI tasks can run
+	// in pararell before we hit limits.
+	const concurencyFactor = 32
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(concurencyFactor)
+
+	childFiles := make([]string, numFiles)
+
+	for i := range childFiles {
+		g.Go(func() error {
+			// Check if any other goroutine has failed
+			select {
+			case <-gctx.Done():
+				return gctx.Err()
+			default:
+				childFile := parentDirectory + "/" + RandomFilenameRange(16, 32)
+				childFiles[i] = childFile
+
+				return driver.PutContent(gctx, childFile, blobber.GetAllBytes())
+			}
+		},
+		)
+	}
+
+	err := g.Wait()
+	require.NoError(tb, err)
+
+	return childFiles
+}
 
 func RandomPath(minTldLen, length int) string {
 	// NOTE(prozlach): randomPath() is called in some tests concurrently and it
