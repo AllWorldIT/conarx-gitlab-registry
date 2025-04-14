@@ -3,19 +3,14 @@ package testutil
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"math/rand/v2"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"sync"
 	"testing"
-	"time"
-
-	"golang.org/x/net/http2"
 )
 
 const EnvMITMProxyURL = "ENV_MITM_PROXY_URL"
@@ -57,35 +52,13 @@ type InterceptorConfig struct {
 }
 
 // NewInterceptor creates a new Interceptor with the given RoundTripper
-func NewInterceptor() (*Interceptor, error) {
-	// Create transport in a way azure does it:
-	// https://github.com/Azure/azure-sdk-for-go/blob/c12b01f821a8474239e49d571d7215cebb7c0510/sdk/azcore/runtime/transport_default_http_client.go#L21-L44
-	dialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           dialer.DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig: &tls.Config{
-			MinVersion:    tls.VersionTLS12,
-			Renegotiation: tls.RenegotiateFreelyAsClient,
-		},
-	}
-	// TODO: evaluate removing this once https://github.com/golang/go/issues/59690 has been fixed
-	if http2Transport, err := http2.ConfigureTransports(transport); err == nil {
-		// if the connection has been idle for 10 seconds, send a ping frame for a health check
-		http2Transport.ReadIdleTimeout = 10 * time.Second
-		// if there's no response to the ping within the timeout, the connection will be closed
-		http2Transport.PingTimeout = 5 * time.Second
-	}
+func NewInterceptor(transport *http.Transport) (*Interceptor, error) {
+	// Make sure that we enable inspecting http traffic using tools like
+	// Mitmproxy.
+	transport.Proxy = http.ProxyFromEnvironment
 
+	// Required in case when proxy is listening on localhost, as in this case
+	// Golang ignores HTTP(S)_PROXY settings as a setting measure.
 	if v := os.Getenv(EnvMITMProxyURL); v != "" {
 		proxyURL, err := url.Parse(v)
 		if err != nil {
@@ -93,9 +66,7 @@ func NewInterceptor() (*Interceptor, error) {
 		}
 
 		// Create custom transport with proxy
-		transport = &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
-		}
+		transport.Proxy = http.ProxyURL(proxyURL)
 	}
 
 	return &Interceptor{
