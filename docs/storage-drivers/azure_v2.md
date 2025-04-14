@@ -49,6 +49,8 @@ The driver will automatically try to detect and use the most appropriate credent
 When running in an Azure cloud environment, such as a Virtual Machine or App Service with a managed identity, the registry will automatically use that managed identity to authenticate with Azure storage.
 When running locally for development, the driver will use the credentials of the logged in Azure CLI user.
 
+The service account will need at least `Storage Blob Data Contributor` role on the storage account to read and write to it.
+
 No additional configuration parameters are required.
 
 | Parameter    | Required | Description                                            |
