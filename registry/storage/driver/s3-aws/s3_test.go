@@ -23,9 +23,12 @@ import (
 	"testing"
 	"time"
 
+	v2_aws "github.com/aws/aws-sdk-go-v2/aws"
+	v2_s3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/ptr"
 	"github.com/benbjohnson/clock"
 	dcontext "github.com/docker/distribution/context"
@@ -205,14 +208,16 @@ func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logge
 		rawParams[common.ParamObjectACL] = objectACL
 	}
 	if logLevel != "" {
-		// nolint: revive,gocritic // unnecessary-stmt
 		switch driverVersion {
+		case common.V2DriverName:
+			rawParams[common.ParamLogLevel] = common.ParseLogLevelParamV2(logger, logLevel)
 		default:
 			rawParams[common.ParamLogLevel] = common.ParseLogLevelParamV1(logger, logLevel)
 		}
 	} else {
-		// nolint: revive,gocritic // unnecessary-stmt
 		switch driverVersion {
+		case common.V2DriverName:
+			rawParams[common.ParamLogLevel] = v2_aws.ClientLogMode(0)
 		default:
 			rawParams[common.ParamLogLevel] = aws.LogOff
 		}
@@ -472,11 +477,20 @@ func TestS3DriverStorageClassStandard(t *testing.T) {
 	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
 	require.NoError(t, err)
 	var storageClass string
-	// nolint: revive,gocritic // unnecessary-stmt
 	switch driverVersion {
-	// FIXME(prozlach): Single-case switch is just a temporary measure allow
-	// for more gradual merging of the
-	// https://gitlab.com/gitlab-org/container-registry/-/merge_requests/2197
+	case common.V2DriverName:
+		s3API, err := v2.NewS3API(parsedParams)
+		require.NoError(t, err)
+
+		resp, err := s3API.GetObject(
+			ctx,
+			&v2_s3.GetObjectInput{
+				Bucket: ptr.String(parsedParams.Bucket),
+				Key:    ptr.String(standardDriverKeyer.S3BucketKey(standardFilename)),
+			})
+		defer resp.Body.Close()
+		require.NoError(t, err, "unexpected error retrieving standard storage file")
+		storageClass = string(resp.StorageClass)
 	default:
 		s3API, err := v1.NewS3API(parsedParams)
 		require.NoError(t, err)
@@ -523,11 +537,20 @@ func TestS3DriverStorageClassReducedRedundancy(t *testing.T) {
 	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
 	require.NoError(t, err)
 	var storageClass string
-	// nolint: revive,gocritic // unnecessary-stmt
 	switch driverVersion {
-	// FIXME(prozlach): Single-case switch is just a temporary measure allow
-	// for more gradual merging of the
-	// https://gitlab.com/gitlab-org/container-registry/-/merge_requests/2197
+	case common.V2DriverName:
+		s3API, err := v2.NewS3API(parsedParams)
+		require.NoError(t, err)
+
+		resp, err := s3API.GetObject(
+			ctx,
+			&v2_s3.GetObjectInput{
+				Bucket: ptr.String(parsedParams.Bucket),
+				Key:    ptr.String(rrDriverKeyer.S3BucketKey(rrFilename)),
+			})
+		defer resp.Body.Close()
+		require.NoError(t, err, "unexpected error retrieving standard storage file")
+		storageClass = string(resp.StorageClass)
 	default:
 		s3API, err := v1.NewS3API(parsedParams)
 		require.NoError(t, err)
@@ -846,8 +869,15 @@ func TestS3DriverClientTransport(t *testing.T) {
 				)
 			} else {
 				require.Error(tt, err)
-				// nolint: revive,gocritic // unnecessary-stmt
 				switch driverVersion {
+				case common.V2DriverName:
+					var apiErr smithy.APIError
+					require.ErrorAsf(tt, err, &apiErr,
+						"expected AWS API error, got: %v", err)
+					require.Equal(tt, "SignatureDoesNotMatch", apiErr.ErrorCode())
+					require.Contains(tt, apiErr.ErrorMessage(),
+						"The request signature we calculated does not match the signature you provided",
+					)
 				default:
 					var awsErr awserr.Error
 					require.ErrorAsf(tt, err, &awsErr,
@@ -976,29 +1006,15 @@ func TestWalkEmptyDir(t *testing.T) {
 	}
 	// we use the s3 sdk directly because the driver doesn't allow creation of
 	// empty directories due to trailing slash
-	// FIXME(prozlach): Just a temporary measure allow for more gradual merging
-	// of the
-	// https://gitlab.com/gitlab-org/container-registry/-/merge_requests/2197
-	//
-	// s3API, err := v2.NewS3API(parsedParams)
-	// require.NoError(t, err)
-	//
-	// filePath := strings.TrimLeft(path.Join(rootDirectory, commonDir, dir2)+"/", "/")
-	// _, err = s3API.PutObject(
-	// 	ctx,
-	// 	&v2_s3.PutObjectInput{
-	// 		Bucket: ptr.String(parsedParams.Bucket),
-	// 		Key:    ptr.String(filePath),
-	// 	},
-	// )
-	// require.NoError(t, err)
-	s3API, err := v1.NewS3API(parsedParams)
+	s3API, err := v2.NewS3API(parsedParams)
 	require.NoError(t, err)
-	_, err = s3API.PutObjectWithContext(
+
+	filePath := strings.TrimLeft(path.Join(rootDirectory, commonDir, dir2)+"/", "/")
+	_, err = s3API.PutObject(
 		ctx,
-		&s3.PutObjectInput{
-			Bucket: aws.String(parsedParams.Bucket),
-			Key:    aws.String(path.Join(rootDirectory, commonDir, dir2) + "/"),
+		&v2_s3.PutObjectInput{
+			Bucket: ptr.String(parsedParams.Bucket),
+			Key:    ptr.String(filePath),
 		},
 	)
 	require.NoError(t, err)

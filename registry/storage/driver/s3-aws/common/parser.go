@@ -216,7 +216,7 @@ func ParseLogLevelParamV1(logger dcontext.Logger, param any) aws.LogLevelType {
 		case LogLevelOff:
 			// LogLevelOff in the list of loglevels overrides all other log
 			// levels and disables logging
-			logger.Infof("S3 logging level set to %q", LogLevelOff)
+			logger.Debugf("S3 logging level set to %q", LogLevelOff)
 			return aws.LogOff
 		case LogLevelDebug:
 			res |= aws.LogDebug
@@ -274,7 +274,7 @@ func ParseLogLevelParamV2(logger dcontext.Logger, param any) v2_aws.ClientLogMod
 		// LogLevelOff in the list of loglevels overrides all other log levels
 		// and disables logging
 		case LogLevelOff:
-			logger.Infof("S3 logging level set to %q", LogLevelOff)
+			logger.Debugf("S3 logging level set to %q", LogLevelOff)
 			// aws sdk v2 does not have a constant for this:
 			return v2_aws.ClientLogMode(0)
 		case LogSigning:
@@ -631,8 +631,7 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 	case V1DriverName, V1DriverNameAlt:
 		res.LogLevel = uint64(ParseLogLevelParamV1(logger, parameters[ParamLogLevel]))
 	case V2DriverName:
-		// res.LogLevel = uint64(ParseLogLevelParamV2(logger, parameters[ParamLogLevel]))
-		res.LogLevel = uint64(ParseLogLevelParamV1(logger, parameters[ParamLogLevel]))
+		res.LogLevel = uint64(ParseLogLevelParamV2(logger, parameters[ParamLogLevel]))
 	}
 
 	return res, nil
