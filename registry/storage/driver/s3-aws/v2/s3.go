@@ -1417,6 +1417,7 @@ func (w *writer) Write(p []byte) (int, error) {
 				startByte := w.chunkSize * i
 				endByte := startByte + w.chunkSize - 1
 				if endByte > w.size-1 {
+					endByte = w.size - 1
 					// NOTE(prozlach): Special case when there is simply not
 					// enough data for a full chunk. It handles both cases when
 					// there is only one chunk and multiple chunks plus partial
