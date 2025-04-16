@@ -371,10 +371,10 @@ func TestDBLoadBalancer_ThrottledResolveReplicas(t *testing.T) {
 
 	// Create a load balancer with a custom interval for testing
 	lb := &DBLoadBalancer{
-		primary:                         &DB{DB: primaryDB, DSN: &DSN{Host: "primary"}},
-		resolver:                        stubResolver,
-		minResolveReplicasInterval:      50 * time.Millisecond,
-		replicaLivenessProbesInProgress: make(map[string]time.Time),
+		primary:                    &DB{DB: primaryDB, DSN: &DSN{Host: "primary"}},
+		resolver:                   stubResolver,
+		minResolveReplicasInterval: 50 * time.Millisecond,
+		livenessProber:             NewLivenessProber(),
 	}
 
 	ctx := context.Background()
@@ -393,77 +393,6 @@ func TestDBLoadBalancer_ThrottledResolveReplicas(t *testing.T) {
 	// Now should succeed again
 	lb.throttledResolveReplicas(ctx)
 	require.Equal(t, 2, resolverCallCount)
-}
-
-func TestDBLoadBalancer_LivenessProbeReplica(t *testing.T) {
-	// Create mock databases
-	primaryMockDB, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer primaryMockDB.Close()
-
-	replicaMockDB, replicaMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
-	require.NoError(t, err)
-	defer replicaMockDB.Close()
-
-	// Create load balancer
-	lb := &DBLoadBalancer{
-		primary: &DB{DB: primaryMockDB, DSN: &DSN{Host: "primary"}},
-		replicas: []*DB{
-			{DB: replicaMockDB, DSN: &DSN{Host: "replica1"}},
-		},
-		replicaLivenessProbesInProgress: make(map[string]time.Time),
-		minReplicaLivenessProbeInterval: 50 * time.Millisecond,
-	}
-
-	ctx := context.Background()
-	replica := lb.replicas[0]
-
-	// Test successful liveness probe
-	replicaMock.ExpectPing().WillReturnError(nil)
-	lb.livenessProbeReplica(ctx, replica)
-
-	// Verify replica is still in the pool
-	require.Len(t, lb.replicas, 1)
-	require.Equal(t, replicaMockDB, lb.replicas[0].DB)
-
-	// Test failed liveness probe
-	replicaMock.ExpectPing().WillReturnError(errors.New("connection failed"))
-	replicaMock.ExpectClose()
-
-	lb.livenessProbeReplica(ctx, replica)
-
-	// Verify replica was removed from the pool
-	require.Empty(t, lb.replicas)
-
-	// Verify mock expectations
-	require.NoError(t, replicaMock.ExpectationsWereMet())
-}
-
-func TestDBLoadBalancer_LivenessProbeReplicaThrottling(t *testing.T) {
-	lb := &DBLoadBalancer{
-		replicaLivenessProbesInProgress: make(map[string]time.Time),
-		minReplicaLivenessProbeInterval: 50 * time.Millisecond,
-	}
-
-	replicaAddr := "replica1:5432"
-
-	// First probe should be allowed
-	allowed := lb.canProbeReplicaLiveness(replicaAddr)
-	require.True(t, allowed)
-
-	// Immediate second probe should be throttled
-	allowed = lb.canProbeReplicaLiveness(replicaAddr)
-	require.False(t, allowed)
-
-	// After waiting, next probe should be allowed
-	time.Sleep(60 * time.Millisecond)
-
-	// Complete the first probe
-	lb.completeReplicaLivenessProbe(replicaAddr)
-
-	// Now the next probe should be allowed
-	allowed = lb.canProbeReplicaLiveness(replicaAddr)
-	require.True(t, allowed)
 }
 
 func TestDBLoadBalancer_IsConnectivityError(t *testing.T) {
@@ -548,46 +477,163 @@ func TestDBLoadBalancer_CanResolveReplicas(t *testing.T) {
 	require.False(t, allowed)
 }
 
-func TestDBLoadBalancer_ProcessQueryError(t *testing.T) {
-	// Create mock databases
-	primaryMockDB, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer primaryMockDB.Close()
+func TestNewLivenessProber(t *testing.T) {
+	t.Run("default options", func(t *testing.T) {
+		p := NewLivenessProber()
+		require.NotNil(t, p)
+		require.Equal(t, minLivenessProbeInterval, p.minInterval)
+		require.Equal(t, livenessProbeTimeout, p.timeout)
+		require.Nil(t, p.onUnhealthy)
+	})
 
-	replicaMockDB, replicaMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
-	require.NoError(t, err)
-	defer replicaMockDB.Close()
+	t.Run("custom options", func(t *testing.T) {
+		var callbackCalled bool
+		var callbackDB *DB
 
-	primaryDB := &DB{
-		DB:  primaryMockDB,
-		DSN: &DSN{Host: "primary", Port: 5432},
-	}
-	replicaDB := &DB{
-		DB:  replicaMockDB,
-		DSN: &DSN{Host: "replica1", Port: 5432},
-	}
+		p := NewLivenessProber(
+			WithMinProbeInterval(123*time.Millisecond),
+			WithProbeTimeout(456*time.Millisecond),
+			WithUnhealthyCallback(func(_ context.Context, db *DB) {
+				callbackCalled = true
+				callbackDB = db
+			}),
+		)
 
-	// Create a load balancer
-	lb := &DBLoadBalancer{
-		primary:                         primaryDB,
-		replicas:                        []*DB{replicaDB},
-		replicaLivenessProbesInProgress: make(map[string]time.Time),
-	}
-	replicaDB.errorProcessor = lb
+		require.NotNil(t, p)
+		require.Equal(t, 123*time.Millisecond, p.minInterval)
+		require.Equal(t, 456*time.Millisecond, p.timeout)
+		require.NotNil(t, p.onUnhealthy)
 
-	// Test replica error processing
-	replicaMock.ExpectPing().WillReturnError(errors.New("connection failed"))
-	replicaMock.ExpectClose()
-	lb.ProcessQueryError(context.Background(), replicaDB, "SELECT 1", &pgconn.PgError{Code: pgerrcode.ConnectionFailure})
+		// Test callback directly
+		mockDB := &DB{DSN: &DSN{Host: "test-db"}}
+		p.onUnhealthy(context.Background(), mockDB)
+		require.True(t, callbackCalled, "Callback should be called")
+		require.Equal(t, mockDB, callbackDB, "Callback should receive the input DB")
+	})
+}
 
-	// Give time for the goroutine to execute
-	time.Sleep(50 * time.Millisecond)
+func TestLivenessProber_BeginCheck(t *testing.T) {
+	t.Run("same host", func(t *testing.T) {
+		prober := NewLivenessProber(
+			WithMinProbeInterval(50 * time.Millisecond),
+		)
+		hostAddr := "test-db:5432"
 
-	// Verify the replica was removed due to failed liveness probe
-	require.Empty(t, lb.replicas)
+		require.True(t, prober.BeginCheck(hostAddr), "First probe should be allowed")
+		require.False(t, prober.BeginCheck(hostAddr), "Second immediate probe should be throttled")
+		time.Sleep(30 * time.Millisecond)
+		require.False(t, prober.BeginCheck(hostAddr), "Probe should be throttled when within interval")
+		time.Sleep(30 * time.Millisecond)
+		require.True(t, prober.BeginCheck(hostAddr), "Probe should be allowed after interval expires")
+	})
 
-	// Verify all mock expectations were met
-	require.NoError(t, replicaMock.ExpectationsWereMet())
+	t.Run("different hosts", func(t *testing.T) {
+		prober := NewLivenessProber(
+			WithMinProbeInterval(50 * time.Millisecond),
+		)
+
+		require.True(t, prober.BeginCheck("host1:5432"), "First host should be allowed")
+		require.True(t, prober.BeginCheck("host2:5432"), "Second host should be allowed")
+		require.False(t, prober.BeginCheck("host1:5432"), "First host should be throttled")
+		require.False(t, prober.BeginCheck("host2:5432"), "Second host should be throttled")
+	})
+}
+
+func TestLivenessProber_Probe(t *testing.T) {
+	t.Run("successful", func(t *testing.T) {
+		dbMock, sqlMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		require.NoError(t, err)
+		defer dbMock.Close()
+
+		db := &DB{
+			DB:  dbMock,
+			DSN: &DSN{Host: "test-db", Port: 5432},
+		}
+
+		// Create a prober with a test callback
+		var callbackCalled bool
+		prober := NewLivenessProber(
+			WithUnhealthyCallback(func(_ context.Context, _ *DB) {
+				callbackCalled = true
+			}),
+		)
+
+		// Mock successful ping
+		sqlMock.ExpectPing().WillReturnError(nil)
+		prober.Probe(context.Background(), db)
+
+		require.False(t, callbackCalled, "Callback should not be called for successful probe")
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+
+	t.Run("failed", func(t *testing.T) {
+		dbMock, sqlMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		require.NoError(t, err)
+		defer dbMock.Close()
+
+		db := &DB{
+			DB:  dbMock,
+			DSN: &DSN{Host: "test-db", Port: 5432},
+		}
+
+		// Create a prober with a test callback
+		var callbackCalled bool
+		var callbackDB *DB
+		prober := NewLivenessProber(
+			WithUnhealthyCallback(func(_ context.Context, db *DB) {
+				callbackCalled = true
+				callbackDB = db
+			}),
+		)
+
+		// Mock failed ping
+		sqlMock.ExpectPing().WillReturnError(errors.New("connection failed"))
+		prober.Probe(context.Background(), db)
+
+		require.True(t, callbackCalled, "Callback should be called for failed probe")
+		require.Equal(t, db, callbackDB, "Callback should receive the unhealthy DB")
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		dbMock, sqlMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		require.NoError(t, err)
+		defer dbMock.Close()
+
+		db := &DB{
+			DB:  dbMock,
+			DSN: &DSN{Host: "test-db", Port: 5432},
+		}
+
+		// Create a prober with a test callback
+		var callbackCalled bool
+		prober := NewLivenessProber(
+			WithProbeTimeout(50*time.Millisecond),
+			WithUnhealthyCallback(func(_ context.Context, _ *DB) {
+				callbackCalled = true
+			}),
+		)
+
+		// Mock ping that delays longer than the timeout
+		sqlMock.ExpectPing().WillDelayFor(60 * time.Millisecond).WillReturnError(nil)
+		prober.Probe(context.Background(), db)
+
+		require.True(t, callbackCalled, "Callback should be called when probe times out")
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+}
+
+func TestLivenessProber_EndCheck(t *testing.T) {
+	prober := NewLivenessProber(
+		WithMinProbeInterval(50 * time.Millisecond),
+	)
+	hostAddr := "test-db:5432"
+
+	require.True(t, prober.BeginCheck(hostAddr), "First probe should be allowed")
+	require.Contains(t, prober.inProgress, hostAddr, "Host should be in inProgress map after BeginCheck returns true")
+
+	prober.EndCheck(hostAddr)
+	require.NotContains(t, prober.inProgress, hostAddr, "Host should be removed from inProgress map after EndCheck")
 }
 
 // Implement any other methods required by the error interfaces
