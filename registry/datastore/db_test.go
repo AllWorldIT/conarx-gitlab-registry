@@ -16,6 +16,8 @@ import (
 	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/hashicorp/go-multierror"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
@@ -3628,4 +3630,229 @@ func TestDBLoadBalancer_StartReplicaChecking_WithThrottling(t *testing.T) {
 	// Cancel and wait for goroutine to exit
 	cancel()
 	require.ErrorIs(t, <-errCh, context.Canceled)
+}
+
+func TestDBLoadBalancer_LivenessProbeReplica(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	// Create mock databases
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replicaMockDB, replicaMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	replica1DSN := &datastore.DSN{
+		Host:     "replica1",
+		Port:     5432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	// Mock the expected connections
+	mockConnector := mocks.NewMockConnector(ctrl)
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replicaMockDB, DSN: replica1DSN}, nil)
+
+	// Create load balancer
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithFixedHosts([]string{"replica1"}),
+		datastore.WithConnector(mockConnector),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	ctx := context.Background()
+
+	// Verify replica is in the pool
+	replicas := lb.Replicas()
+	require.Len(t, replicas, 1)
+	require.Equal(t, replicaMockDB, replicas[0].DB)
+
+	// Test successful liveness probe
+	replicaMock.ExpectPing().WillReturnError(nil)
+	// Use ProcessQueryError to trigger the liveness probe
+	pgConnErr := &pgconn.PgError{Code: pgerrcode.ConnectionFailure}
+	lb.ProcessQueryError(ctx, replicas[0], "SELECT 1", pgConnErr)
+
+	// Give some time for the async probe to complete
+	time.Sleep(10 * time.Millisecond)
+
+	// Verify replica is still in the pool after successful probe
+	replicas = lb.Replicas()
+	require.Len(t, replicas, 1)
+	require.Equal(t, replicaMockDB, replicas[0].DB)
+
+	// Test failed liveness probe
+	replicaMock.ExpectPing().WillReturnError(errors.New("connection failed"))
+	replicaMock.ExpectClose()
+
+	// Trigger liveness probe again
+	lb.ProcessQueryError(ctx, replicas[0], "SELECT 1", pgConnErr)
+
+	// Give some time for the async probe to complete
+	time.Sleep(10 * time.Millisecond)
+
+	// Verify replica was removed from the pool
+	replicas = lb.Replicas()
+	require.Empty(t, replicas, "Replica should be removed after failed liveness probe")
+
+	// Verify mock expectations
+	require.NoError(t, replicaMock.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_LivenessProbeThrottling(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	// Create mock databases
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replicaMockDB, replicaMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	replica1DSN := &datastore.DSN{
+		Host:     "replica1",
+		Port:     5432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	// Mock the connections
+	mockConnector := mocks.NewMockConnector(ctrl)
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replicaMockDB, DSN: replica1DSN}, nil)
+
+	// Create load balancer
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithFixedHosts([]string{"replica1"}),
+		datastore.WithConnector(mockConnector),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	ctx := context.Background()
+	replica := lb.Replicas()[0]
+
+	// Set up expectation for exactly one ping - only the first probe should proceed
+	replicaMock.ExpectPing().WillReturnError(nil)
+
+	// Call ProcessQueryError multiple times in quick succession
+	pgConnErr := &pgconn.PgError{Code: pgerrcode.ConnectionFailure}
+	lb.ProcessQueryError(ctx, replica, "SELECT 1", pgConnErr)
+	lb.ProcessQueryError(ctx, replica, "SELECT 1", pgConnErr)
+	lb.ProcessQueryError(ctx, replica, "SELECT 1", pgConnErr)
+
+	// Give some time for any async operations
+	time.Sleep(10 * time.Millisecond)
+
+	// Verify only one ping was executed (throttling worked)
+	require.NoError(t, replicaMock.ExpectationsWereMet(), "Should only execute one ping despite multiple error reports")
+}
+
+func TestDBLoadBalancer_ProcessQueryError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	// Create mock databases
+	primaryMockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	replicaMockDB, replicaMock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer replicaMockDB.Close()
+
+	primaryDSN := &datastore.DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	replica1DSN := &datastore.DSN{
+		Host:     "replica1",
+		Port:     5432,
+		User:     primaryDSN.User,
+		Password: primaryDSN.Password,
+		DBName:   primaryDSN.DBName,
+		SSLMode:  primaryDSN.SSLMode,
+	}
+
+	// Mock the connections
+	mockConnector := mocks.NewMockConnector(ctrl)
+	mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
+		Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil)
+	mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
+		Return(&datastore.DB{DB: replicaMockDB, DSN: replica1DSN}, nil)
+
+	// Create load balancer
+	lb, err := datastore.NewDBLoadBalancer(
+		context.Background(),
+		primaryDSN,
+		datastore.WithFixedHosts([]string{"replica1"}),
+		datastore.WithConnector(mockConnector),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, lb)
+
+	// Set up ping expectation for the liveness probe
+	replicaMock.ExpectPing().WillReturnError(errors.New("connection failed"))
+	replicaMock.ExpectClose() // Expect replica to be closed when removed
+
+	// Process a connectivity error on the replica
+	pgErr := &pgconn.PgError{Code: pgerrcode.ConnectionFailure}
+	replica := lb.Replicas()[0]
+
+	// Make sure we have a replica before processing the error
+	require.NotEmpty(t, lb.Replicas())
+	require.Equal(t, replicaMockDB, replica.DB)
+
+	// Process the error
+	lb.ProcessQueryError(context.Background(), replica, "SELECT 1", pgErr)
+
+	// Allow time for async operations to complete
+	time.Sleep(150 * time.Millisecond)
+
+	// Verify replica was removed
+	replicas := lb.Replicas()
+	require.Empty(t, replicas, "Replica should be removed after failed liveness probe")
+
+	// Verify SQL expectations were met
+	require.NoError(t, replicaMock.ExpectationsWereMet())
 }

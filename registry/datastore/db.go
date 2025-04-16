@@ -55,12 +55,12 @@ const (
 	// StartReplicaChecking. While these timeouts are currently similar, they remain separate to allow independent tuning.
 	InitReplicaResolveTimeout = 1 * time.Second
 
-	// minReplicaLivenessProbeInterval is the minimum time between replica host liveness probes during load balancing.
-	minReplicaLivenessProbeInterval = 1 * time.Second
+	// minLivenessProbeInterval is the minimum time between replica host liveness probes during load balancing.
+	minLivenessProbeInterval = 1 * time.Second
 	// minResolveReplicasInterval is the default minimum time between replicas resolution calls during load balancing.
 	minResolveReplicasInterval = 10 * time.Second
-	// replicaLivenessProbeTimeout is the maximum time for a replica liveness probe to run.
-	replicaLivenessProbeTimeout = 100 * time.Millisecond
+	// livenessProbeTimeout is the maximum time for a replica liveness probe to run.
+	livenessProbeTimeout = 100 * time.Millisecond
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -468,10 +468,8 @@ type DBLoadBalancer struct {
 	promRegisterer        prometheus.Registerer
 	replicaPromCollectors map[string]prometheus.Collector
 
-	// For controlling replicas liveness probing concurrency
-	replicaLivenessProbesMu         sync.Mutex
-	replicaLivenessProbesInProgress map[string]time.Time // Maps replica address to probe start time
-	minReplicaLivenessProbeInterval time.Duration        // Minimum time between probes for the same replica
+	// For controlling replicas liveness probing
+	livenessProber *LivenessProber
 
 	// For controlling replicas resolution concurrency
 	resolveReplicasMu          sync.Mutex
@@ -640,76 +638,110 @@ func (lb *DBLoadBalancer) metricsCollector(db *DB, hostType string) *sqlmetrics.
 	)
 }
 
-// canProbeReplicaLiveness checks if a liveness probe for the given replica is allowed. It returns false if another
-// probe for this replica is in progress or if a probe was completed too recently (within
-// minReplicaLivenessProbeInterval). If the probe is allowed, it marks the replica as being probed and returns true.
-func (lb *DBLoadBalancer) canProbeReplicaLiveness(replicaAddr string) bool {
-	lb.replicaLivenessProbesMu.Lock()
-	defer lb.replicaLivenessProbesMu.Unlock()
+// LivenessProber manages liveness probes for database hosts.
+type LivenessProber struct {
+	sync.Mutex
+	inProgress  map[string]time.Time       // Maps host address to probe start time
+	minInterval time.Duration              // Minimum time between probes for the same host
+	timeout     time.Duration              // Maximum time for a probe to run
+	onUnhealthy func(context.Context, *DB) // Callback for unhealthy hosts
+}
 
-	lastProbe, exists := lb.replicaLivenessProbesInProgress[replicaAddr]
-	if exists && time.Since(lastProbe) < lb.minReplicaLivenessProbeInterval {
+// LivenessProberOption configures a LivenessProber.
+type LivenessProberOption func(*LivenessProber)
+
+// WithMinProbeInterval sets the minimum interval between probes for the same host.
+func WithMinProbeInterval(interval time.Duration) LivenessProberOption {
+	return func(p *LivenessProber) {
+		p.minInterval = interval
+	}
+}
+
+// WithProbeTimeout sets the timeout for a probe operation.
+func WithProbeTimeout(timeout time.Duration) LivenessProberOption {
+	return func(p *LivenessProber) {
+		p.timeout = timeout
+	}
+}
+
+// WithUnhealthyCallback sets the callback to be invoked when a host is determined to be unhealthy.
+func WithUnhealthyCallback(callback func(context.Context, *DB)) LivenessProberOption {
+	return func(p *LivenessProber) {
+		p.onUnhealthy = callback
+	}
+}
+
+// NewLivenessProber creates a new LivenessProber with the given options.
+func NewLivenessProber(opts ...LivenessProberOption) *LivenessProber {
+	prober := &LivenessProber{
+		inProgress:  make(map[string]time.Time),
+		minInterval: minLivenessProbeInterval,
+		timeout:     livenessProbeTimeout,
+	}
+
+	for _, opt := range opts {
+		opt(prober)
+	}
+
+	return prober
+}
+
+// BeginCheck checks if a probe is allowed for the given host. It returns false if another probe for this host is in
+// progress or if a probe was completed too recently (within minInterval). If the probe is allowed, it
+// marks the host as being probed and returns true.
+func (p *LivenessProber) BeginCheck(hostAddr string) bool {
+	p.Lock()
+	defer p.Unlock()
+
+	lastProbe, exists := p.inProgress[hostAddr]
+	if exists && time.Since(lastProbe) < p.minInterval {
 		return false
 	}
 
-	lb.replicaLivenessProbesInProgress[replicaAddr] = time.Now()
+	p.inProgress[hostAddr] = time.Now()
 	return true
 }
 
-// completeReplicaLivenessProbe marks a replica liveness probe as completed by removing its entry from the in-progress
-// tracking map, allowing future probes for this replica to proceed (subject to timing constraints).
-func (lb *DBLoadBalancer) completeReplicaLivenessProbe(replicaAddr string) {
-	lb.replicaLivenessProbesMu.Lock()
-	defer lb.replicaLivenessProbesMu.Unlock()
-	delete(lb.replicaLivenessProbesInProgress, replicaAddr)
+// EndCheck marks a probe as completed by removing its entry from the in-progress tracking map,
+// allowing future probes for this host to proceed (subject to timing constraints).
+func (p *LivenessProber) EndCheck(hostAddr string) {
+	p.Lock()
+	defer p.Unlock()
+	delete(p.inProgress, hostAddr)
 }
 
-// livenessProbeReplica performs a health check on a database replica. The probe rate is limited to prevent excessive
-// concurrent probing of the same replica. If the probe fails, the replica is removed from the pool.
-func (lb *DBLoadBalancer) livenessProbeReplica(ctx context.Context, r *DB) {
-	replicaAddr := r.Address()
-	l := lb.logger(ctx).WithFields(log.Fields{"db_replica_addr": replicaAddr})
+// Probe performs a health check on a database host. The probe rate is limited to prevent excessive
+// concurrent probing of the same host. If the probe fails, the onUnhealthy callback is invoked.
+func (p *LivenessProber) Probe(ctx context.Context, db *DB) {
+	addr := db.Address()
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{"db_host_addr": addr})
 
-	// Check if this replica is already being probed and mark it if not
-	if !lb.canProbeReplicaLiveness(replicaAddr) {
+	// Check if this host is already being probed and mark it if not
+	if !p.BeginCheck(addr) {
 		l.Info("skipping liveness probe, already in progress or too recent")
 		return
 	}
 
 	// When we're done with this function, remove the in-progress marker
-	defer lb.completeReplicaLivenessProbe(replicaAddr)
+	defer p.EndCheck(addr)
 
 	// Perform a lightweight health check with a short timeout
-	probeCtx, cancel := context.WithTimeout(ctx, replicaLivenessProbeTimeout)
+	probeCtx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
-	l.Info("performing replica liveness probe")
+	l.Info("performing liveness probe")
 	start := time.Now()
-	err := r.PingContext(probeCtx)
+	err := db.PingContext(probeCtx)
 	duration := time.Since(start).Seconds()
 	if err == nil {
-		l.WithFields(log.Fields{"duration_s": duration}).Info("replica passed liveness probe; not retiring")
+		l.WithFields(log.Fields{"duration_s": duration}).Info("host passed liveness probe")
 		return
 	}
 
-	// If we get here, the liveness probe failed - need to remove the replica
-	l.WithFields(log.Fields{"duration_s": duration}).WithError(err).Warn("replica failed liveness probe; retiring")
-
-	lb.replicaMutex.Lock()
-	defer lb.replicaMutex.Unlock()
-
-	for i, r := range lb.replicas {
-		if r.Address() == replicaAddr {
-			lb.replicas = append(lb.replicas[:i], lb.replicas[i+1:]...)
-			lb.unregisterReplicaMetricsCollector(r)
-			metrics.ReplicaRemoved()
-			metrics.ReplicaPoolSize(len(lb.replicas))
-
-			if err := r.Close(); err != nil {
-				l.WithError(err).Error("error closing retired replica connection")
-			}
-			break
-		}
+	// If we get here, the liveness probe failed
+	l.WithFields(log.Fields{"duration_s": duration}).WithError(err).Warn("host failed liveness probe; invoking callback")
+	if p.onUnhealthy != nil {
+		p.onUnhealthy(ctx, db)
 	}
 }
 
@@ -809,7 +841,7 @@ func (lb *DBLoadBalancer) ProcessQueryError(ctx context.Context, db *DB, query s
 		case HostTypeReplica:
 			// For a replica, run a liveness probe and retire it if necessary
 			l.Warn("replica database connection error during query execution; initiating liveness probe")
-			go lb.livenessProbeReplica(context.WithoutCancel(ctx), db)
+			go lb.livenessProber.Probe(context.WithoutCancel(ctx), db)
 		default:
 			// This is not supposed to happen, log and report
 			err := fmt.Errorf("unknown database host type: %w", err)
@@ -977,6 +1009,30 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 	}
 }
 
+// removeReplica removes a replica from the pool and closes its connection.
+func (lb *DBLoadBalancer) removeReplica(ctx context.Context, r *DB) {
+	replicaAddr := r.Address()
+	l := lb.logger(ctx).WithFields(log.Fields{"db_replica_addr": replicaAddr})
+
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
+
+	for i, replica := range lb.replicas {
+		if replica.Address() == replicaAddr {
+			l.Warn("removing replica from pool")
+			lb.replicas = append(lb.replicas[:i], lb.replicas[i+1:]...)
+			lb.unregisterReplicaMetricsCollector(r)
+			metrics.ReplicaRemoved()
+			metrics.ReplicaPoolSize(len(lb.replicas))
+
+			if err := r.Close(); err != nil {
+				l.WithError(err).Error("error closing retired replica connection")
+			}
+			break
+		}
+	}
+}
+
 // NewDBLoadBalancer initializes a DBLoadBalancer with primary and replica connections. An error is returned if failed
 // to connect to the primary server. Failures to connect to replica server(s) are handled gracefully, that is, logged,
 // reported and ignored. This is to prevent halting the app start, as it can function with the primary server only.
@@ -986,21 +1042,22 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	config := applyOptions(opts)
 
 	lb := &DBLoadBalancer{
-		active:                          config.loadBalancing.active,
-		primaryDSN:                      primaryDSN,
-		connector:                       config.loadBalancing.connector,
-		resolver:                        config.loadBalancing.resolver,
-		fixedHosts:                      config.loadBalancing.hosts,
-		replicaOpenOpts:                 opts,
-		replicaCheckInterval:            config.loadBalancing.replicaCheckInterval,
-		lsnCache:                        config.loadBalancing.lsnStore,
-		metricsEnabled:                  config.metricsEnabled,
-		promRegisterer:                  config.promRegisterer,
-		replicaPromCollectors:           make(map[string]prometheus.Collector),
-		replicaLivenessProbesInProgress: make(map[string]time.Time),
-		minReplicaLivenessProbeInterval: minReplicaLivenessProbeInterval,
-		minResolveReplicasInterval:      minResolveReplicasInterval,
+		active:                     config.loadBalancing.active,
+		primaryDSN:                 primaryDSN,
+		connector:                  config.loadBalancing.connector,
+		resolver:                   config.loadBalancing.resolver,
+		fixedHosts:                 config.loadBalancing.hosts,
+		replicaOpenOpts:            opts,
+		replicaCheckInterval:       config.loadBalancing.replicaCheckInterval,
+		lsnCache:                   config.loadBalancing.lsnStore,
+		metricsEnabled:             config.metricsEnabled,
+		promRegisterer:             config.promRegisterer,
+		replicaPromCollectors:      make(map[string]prometheus.Collector),
+		minResolveReplicasInterval: minResolveReplicasInterval,
 	}
+
+	// Initialize the replicas liveness prober with a callback to retire unhealthy hosts
+	lb.livenessProber = NewLivenessProber(WithUnhealthyCallback(lb.removeReplica))
 
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
 	if err != nil {
