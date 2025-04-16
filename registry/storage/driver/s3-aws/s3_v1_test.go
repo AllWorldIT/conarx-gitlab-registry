@@ -1,13 +1,10 @@
-package v1
+package s3
 
 import (
-	"fmt"
 	mrand "math/rand/v2"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -23,155 +20,8 @@ import (
 
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
+	v1 "github.com/docker/distribution/registry/storage/driver/s3-aws/v1"
 )
-
-var (
-	// Credentials
-	accessKey    string
-	secretKey    string
-	sessionToken string
-
-	// S3 configuration
-	bucket         string
-	region         string
-	regionEndpoint string
-	objectACL      string
-
-	// Security settings
-	encrypt    bool
-	keyID      string
-	secure     bool
-	skipVerify bool
-	v4Auth     bool
-	pathStyle  bool
-
-	// Performance settings
-	maxRequestsPerSecond int64
-	maxRetries           int64
-
-	// Logging
-	logLevel        string
-	objectOwnership bool
-
-	missing []string
-)
-
-type envConfig struct {
-	env      string
-	value    any
-	required bool
-}
-
-func init() {
-	fetchEnvVarsConfiguration()
-}
-
-func fetchEnvVarsConfiguration() {
-	vars := []envConfig{
-		{common.EnvAccessKey, &accessKey, true},
-		{common.EnvSecretKey, &secretKey, true},
-		{common.EnvSessionToken, &sessionToken, false},
-
-		{common.EnvBucket, &bucket, true},
-		{common.EnvRegion, &region, true},
-		{common.EnvRegionEndpoint, &regionEndpoint, false},
-		{common.EnvEncrypt, &encrypt, true},
-
-		{common.EnvObjectACL, &objectACL, false},
-		{common.EnvKeyID, &keyID, false},
-		{common.EnvSecure, &secure, false},
-		{common.EnvSkipVerify, &skipVerify, false},
-		{common.EnvV4Auth, &v4Auth, false},
-		{common.EnvPathStyle, &pathStyle, false},
-
-		{common.EnvMaxRequestsPerSecond, &maxRequestsPerSecond, false},
-		{common.EnvMaxRetries, &maxRetries, false},
-
-		{common.EnvLogLevel, &logLevel, false},
-		{common.EnvObjectOwnership, &objectOwnership, false},
-	}
-
-	// Set defaults for boolean values
-	secure = true
-	v4Auth = true
-	maxRequestsPerSecond = common.DefaultMaxRequestsPerSecond
-	maxRetries = common.DefaultMaxRetries
-
-	missing = make([]string, 0)
-	for _, v := range vars {
-		val := os.Getenv(v.env)
-		if val == "" {
-			if v.required {
-				missing = append(missing, v.env)
-			}
-			continue
-		}
-
-		var err error
-		switch vv := v.value.(type) {
-		case *string:
-			*vv = val
-		case *bool:
-			*vv, err = strconv.ParseBool(val)
-		case *int64:
-			*vv, err = strconv.ParseInt(val, 10, 64)
-		}
-
-		if err != nil {
-			missing = append(
-				missing,
-				fmt.Sprintf("invalid value for %q: %s", v.env, val),
-			)
-		}
-	}
-
-	if regionEndpoint != "" {
-		pathStyle = true // force pathstyle when endpoint is set
-	}
-}
-
-func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logger) (*common.DriverParameters, error) {
-	rawParams := map[string]any{
-		common.ParamAccessKey:                   accessKey,
-		common.ParamSecretKey:                   secretKey,
-		common.ParamBucket:                      bucket,
-		common.ParamRegion:                      region,
-		common.ParamRootDirectory:               rootDirectory,
-		common.ParamStorageClass:                storageClass,
-		common.ParamSecure:                      secure,
-		common.ParamV4Auth:                      v4Auth,
-		common.ParamEncrypt:                     encrypt,
-		common.ParamKeyID:                       keyID,
-		common.ParamSkipVerify:                  skipVerify,
-		common.ParamPathStyle:                   pathStyle,
-		common.ParamSessionToken:                sessionToken,
-		common.ParamRegionEndpoint:              regionEndpoint,
-		common.ParamMaxRequestsPerSecond:        maxRequestsPerSecond,
-		common.ParamMaxRetries:                  maxRetries,
-		common.ParamParallelWalk:                true,
-		common.ParamObjectOwnership:             objectOwnership,
-		common.ParamChunkSize:                   common.MinChunkSize,
-		storagedriver.ParamLogger:               logger,
-		common.ParamMultipartCopyChunkSize:      common.DefaultMultipartCopyChunkSize,
-		common.ParamMultipartCopyMaxConcurrency: common.DefaultMultipartCopyMaxConcurrency,
-		common.ParamMultipartCopyThresholdSize:  common.DefaultMultipartCopyThresholdSize,
-	}
-
-	if objectACL != "" {
-		rawParams[common.ParamObjectACL] = objectACL
-	}
-	if logLevel != "" {
-		rawParams[common.ParamLogLevel] = common.ParseLogLevelParamV1(logger, logLevel)
-	} else {
-		rawParams[common.ParamLogLevel] = aws.LogOff
-	}
-
-	parsedParams, err := common.ParseParameters(common.V1DriverName, rawParams)
-	if err != nil {
-		return nil, fmt.Errorf("parsing s3 parameters: %w", err)
-	}
-	return parsedParams, nil
-}
 
 func prefixedMockedS3DriverConstructorT(t *testing.T, s3Mock common.S3WrapperIf) storagedriver.StorageDriver {
 	rootDir := t.TempDir()
@@ -180,20 +30,10 @@ func prefixedMockedS3DriverConstructorT(t *testing.T, s3Mock common.S3WrapperIf)
 
 	parsedParams.S3APIImpl = s3Mock
 
-	d, err := New(parsedParams)
+	d, err := v1.New(parsedParams)
 	require.NoError(t, err)
 
 	return d
-}
-
-func skipCheck() string {
-	if len(missing) > 0 {
-		return fmt.Sprintf(
-			"Invalid value or missing environment values required to run S3 tests: %s",
-			strings.Join(missing, ", "),
-		)
-	}
-	return ""
 }
 
 type mockDeleteObjectsError struct {
@@ -206,7 +46,7 @@ func (*mockDeleteObjectsError) DeleteObjectsWithContext(_ aws.Context, _ *s3.Del
 }
 
 func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, error) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -319,7 +159,7 @@ func (*mockPutObjectWithContextRetryableError) ListObjectsV2PagesWithContext(_ a
 }
 
 func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -344,7 +184,7 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 }
 
 func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -370,7 +210,7 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 }
 
 func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -416,7 +256,7 @@ func (*mockPutObjectWithContextPermanentError) ListObjectsV2WithContext(_ aws.Co
 }
 
 func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -445,7 +285,7 @@ func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 }
 
 func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
-	if skipMsg := skipCheck(); skipMsg != "" {
+	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 

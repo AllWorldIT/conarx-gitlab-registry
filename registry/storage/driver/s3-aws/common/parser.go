@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -171,7 +172,6 @@ type DriverParameters struct {
 	KeyID                       string
 	Secure                      bool
 	SkipVerify                  bool
-	V4Auth                      bool
 	ChunkSize                   int64
 	MultipartCopyChunkSize      int64
 	MultipartCopyMaxConcurrency int
@@ -188,11 +188,17 @@ type DriverParameters struct {
 	// In order to keep the code dry, we reuse the same struct field and store
 	// the result in a wider (i.e. uint64 instead of uint) type to accommodate
 	// both sdks.
-	LogLevel          uint64
-	ObjectOwnership   bool
-	S3APIImpl         S3WrapperIf
+	LogLevel        uint64
+	ObjectOwnership bool
+
+	// v1 specific:
+	V4Auth    bool
+	S3APIImpl S3WrapperIf
+
+	// v2 specific:
 	ChecksumDisabled  bool
 	ChecksumAlgorithm types.ChecksumAlgorithm
+	Transport         http.RoundTripper
 }
 
 // ParseLogLevelParamV1 parses given loglevel into a value that sdk v1 accepts.
