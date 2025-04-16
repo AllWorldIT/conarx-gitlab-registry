@@ -1,3 +1,54 @@
+## [4.20.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.19.0-gitlab...v4.20.0-gitlab) (2025-04-16)
+
+### ✨ Features ✨
+
+* allow for specifying more than one event type to log in s3 drivers ([0f88aaa](https://gitlab.com/gitlab-org/container-registry/commit/0f88aaaab73485b44a1f8c76c882a71f7e1847be))
+* optimize aws s3_v2 Write() code ([29d3c47](https://gitlab.com/gitlab-org/container-registry/commit/29d3c47f6820cacfe40ea54d63191fa692376092))
+* refresh replica list on network errors immediately ([819aa46](https://gitlab.com/gitlab-org/container-registry/commit/819aa462a919e55acd127a857278e0651c219a4f))
+* **registry:** add v1 statistics API endpoint ([d155bc9](https://gitlab.com/gitlab-org/container-registry/commit/d155bc982f918a958d09981d093a5d02c1100730))
+* rewrite s3_v2 driver from deprecated aws-sdk-go to aws-sdk-go-v2 ([4d4d339](https://gitlab.com/gitlab-org/container-registry/commit/4d4d3390bd48f59e3785c35f80c8d3bee89f68fc))
+* switch aws cloudfront signer from aws-sdk-go to aws-sdk-go-v2 ([2d7245b](https://gitlab.com/gitlab-org/container-registry/commit/2d7245b62ef590b4da8871dde97e3ead85eda2fc))
+
+### 🐛 Bug Fixes 🐛
+
+* adjust maximum value of chunksize option for s3 storage drivers ([b3a9288](https://gitlab.com/gitlab-org/container-registry/commit/b3a9288c07596a58d82e78530b35dc83a500f0cd))
+* avoid appending directory as file path in s3 driver Walk ([2aad72e](https://gitlab.com/gitlab-org/container-registry/commit/2aad72e4995557eb1a0f5ad6a09232f39b4d1701))
+* fix potential resource leak by ensuring the response body is closed in HTTPReadSeeker ([d476f92](https://gitlab.com/gitlab-org/container-registry/commit/d476f927b1e7ea4660bbe1a72dd0de59a63a52ae))
+* honour aws part size limit when re-uploading objects in aws s3_v2 driver ([5ea107d](https://gitlab.com/gitlab-org/container-registry/commit/5ea107d5fe1dfb0e3c14244da01f36d8b17c89d6))
+* improve storage driver logging, redirect driver logs to the main logger ([5efa19d](https://gitlab.com/gitlab-org/container-registry/commit/5efa19d0b5f0765f0e217216db20f621063b6d9b))
+* new installations via omnibus lock the file system ([d02e775](https://gitlab.com/gitlab-org/container-registry/commit/d02e775088d5cada1477294050de86a2e93e2c22))
+* prevent panics due to nil pointer dereference in s3 v2 ([68f6712](https://gitlab.com/gitlab-org/container-registry/commit/68f671259ebc0d7eeb58e48284fa21691fdec033))
+* proper error handling in s3_v2 Delete() call ([2812633](https://gitlab.com/gitlab-org/container-registry/commit/281263330926d15bf390658adf71715d82c684a2))
+* set proper boundary when re-uploading parts ([7c22aa1](https://gitlab.com/gitlab-org/container-registry/commit/7c22aa195b395c536d5d1fd3ff384b0446c9ef79))
+* stop report to sentry on redis ctx deadline in checkOngoingRename ([6d472a5](https://gitlab.com/gitlab-org/container-registry/commit/6d472a563f7c73f474c77083a338bc842da23230))
+* take manifest subject ID references into account during online GC ([b0355e7](https://gitlab.com/gitlab-org/container-registry/commit/b0355e7aa2886da165eb2d808d3346001c6bb9af))
+* use the right context for goroutine cancelation ([b2e6be2](https://gitlab.com/gitlab-org/container-registry/commit/b2e6be29a1ac9f304756059d35baa1b6dd1ba82a))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update dependency danger-review to v2.1.0 ([8c1a69a](https://gitlab.com/gitlab-org/container-registry/commit/8c1a69a0a554e314a9e1649a8ddce07f0a99cfe3))
+* **deps:** update module cloud.google.com/go/storage to v1.51.0 ([9caabc9](https://gitlab.com/gitlab-org/container-registry/commit/9caabc935d0f537b890eb93aa9770fb9bcbbf4f1))
+* **deps:** update module cloud.google.com/go/storage to v1.51.0, adjust code to make CI pass ([6ea9bb5](https://gitlab.com/gitlab-org/container-registry/commit/6ea9bb51b57654e4c729f009769284fa254d04aa))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.79.1 ([376c6e0](https://gitlab.com/gitlab-org/container-registry/commit/376c6e07ad894ccba45a50f943e37ea2f35f4b24))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.79.2 ([6153705](https://gitlab.com/gitlab-org/container-registry/commit/615370524ddfbfe76f0230dadd4bd04ff6bebae6))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.17.1 ([02e2e54](https://gitlab.com/gitlab-org/container-registry/commit/02e2e5464a87d3630d6a4b800f087745e5ccf90b))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.18.0 ([1891708](https://gitlab.com/gitlab-org/container-registry/commit/18917087e3b7ce0246c0f532ca6d214faf63dcd6))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azidentity to v1.9.0 ([e7e3c7e](https://gitlab.com/gitlab-org/container-registry/commit/e7e3c7e6621e7af5f213f83c93f7f5989647fffb))
+* **deps:** update module github.com/getsentry/sentry-go to v0.32.0 ([41dba64](https://gitlab.com/gitlab-org/container-registry/commit/41dba64804f425ee7c1a304574310fa099c843d8))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.7.4 ([535eedf](https://gitlab.com/gitlab-org/container-registry/commit/535eedfafa7ebf98dc397a6da474eda3975c0a96))
+* **deps:** update module github.com/prometheus/client_golang to v1.22.0 ([87f4cb4](https://gitlab.com/gitlab-org/container-registry/commit/87f4cb46e3d24938ccef0ae40bb5e88f74f4b944))
+* **deps:** update module github.com/spf13/viper to v1.20.1 ([46e48b0](https://gitlab.com/gitlab-org/container-registry/commit/46e48b05070161556308b20c2969cf13c3f6e638))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.126.0 ([60dcd75](https://gitlab.com/gitlab-org/container-registry/commit/60dcd7537a39fc786e86e10ad710875a4ff6dcb8))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.127.0 ([211c92a](https://gitlab.com/gitlab-org/container-registry/commit/211c92a7aec4812239e1821b78c15c1b60f1dfdc))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.23.2 ([7853ab6](https://gitlab.com/gitlab-org/container-registry/commit/7853ab6041c393a1eaa941b773498e51824f61e8))
+* **deps:** update module go.uber.org/mock to v0.5.1 ([e0a9cbc](https://gitlab.com/gitlab-org/container-registry/commit/e0a9cbc334dbee6d58684d1fd41e20447fa3fa03))
+* **deps:** update module golang.org/x/crypto to v0.37.0 ([e6dbcd4](https://gitlab.com/gitlab-org/container-registry/commit/e6dbcd42b3b20c961579710bcd9a867577f92465))
+* **deps:** update module golang.org/x/net to v0.38.0 ([21ab302](https://gitlab.com/gitlab-org/container-registry/commit/21ab3027efbf2b2f01cd5f6adcbd6c5d58b06014))
+* **deps:** update module golang.org/x/net to v0.39.0 ([ed38664](https://gitlab.com/gitlab-org/container-registry/commit/ed386640a4264dd8b09dd1a6e4f1030e4eddf901))
+* **deps:** update module golang.org/x/oauth2 to v0.29.0 ([84dbf5d](https://gitlab.com/gitlab-org/container-registry/commit/84dbf5d00b025bf3b0482877c13a21a3c8d52eb5))
+* **deps:** update module google.golang.org/api to v0.228.0 ([7e6433d](https://gitlab.com/gitlab-org/container-registry/commit/7e6433d8dad494e8e76421499caf5aa3febc8e4b))
+* **deps:** update module google.golang.org/api to v0.229.0 ([e40ae14](https://gitlab.com/gitlab-org/container-registry/commit/e40ae144a10a3a0412d01d296194b89de9bc9622))
+
 ## [4.19.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.18.0-gitlab...v4.19.0-gitlab) (2025-03-24)
 
 
