@@ -4,6 +4,7 @@ package datastore_test
 
 import (
 	"cmp"
+	"database/sql"
 	"fmt"
 	"slices"
 	"testing"
@@ -466,6 +467,42 @@ func TestManifestStore_FindAll(t *testing.T) {
 			},
 			CreatedAt: testutil.ParseTimestamp(t, "2020-03-02 17:50:26.461745", local),
 		},
+		{
+			ID:            28,
+			NamespaceID:   2,
+			RepositoryID:  7,
+			TotalSize:     2156279,
+			SchemaVersion: 2,
+			MediaType:     "application/vnd.docker.container.image.v1+json",
+			Digest:        "sha256:a4152039667a085816221cc897c35a7954ce2f597afc8b1e63741c99b21f8aa6",
+			Payload:       models.Payload(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"sha256:af47096251092caf59498806ab8d58e8173ecf5a182f024ce9d635b5b4a55d66","size":372},"layers":[{"mediaType":"application/vnd.oci.image.layer.v1.tar+gzip","digest":"sha256:9c0abc9c5bd3a7854141800ba1f4a227baa88b11b49d8207eadc483c3f2496de","size":2155907}]}`),
+			Configuration: &models.Configuration{
+				MediaType: "application/vnd.docker.container.image.v1+json",
+				Digest:    "sha256:af47096251092caf59498806ab8d58e8173ecf5a182f024ce9d635b5b4a55d66",
+				Payload:   models.Payload(`{"config":{"Cmd":["sh"]},"created":"2024-09-26T21:31:42Z","history":[{"created":"2024-09-26T21:31:42Z","created_by":"BusyBox 1.37.0 (glibc), Debian 12"}],"rootfs":{"type":"layers","diff_ids":["sha256:59654b79daad74c77dc2e28502ca577ba8ce73276720002234a23fc60ee92692"]},"architecture":"amd64","os":"linux"}`),
+			},
+			CreatedAt: testutil.ParseTimestamp(t, "2025-02-14 09:52:35.336075", local),
+		},
+		{
+			ID:           29,
+			NamespaceID:  2,
+			RepositoryID: 7,
+			TotalSize:    613,
+			SubjectID: sql.NullInt64{
+				Int64: 28,
+				Valid: true,
+			},
+			SchemaVersion: 2,
+			MediaType:     "application/vnd.docker.container.image.v1+json",
+			Digest:        "sha256:f429d41b05a1a9d1a883d2dccc4705de8e504ffd14009af25b06755e31667c52",
+			Payload:       models.Payload(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.dev.cosign.artifact.sig.v1+json","size":354,"digest":"sha256:eb110b254f038cd0d464b20de5070099a6f675b9d8eb7e5035d929540a041ab1"},"layers":[{"mediaType":"application/vnd.dev.cosign.simplesigning.v1+json","size":259,"digest":"sha256:5ebf9ebafcaed068c33e5bb6fcdf92a5154d56f952def7942dbce815f45e4276","annotations":{"dev.cosignproject.cosign/signature":"MEYCIQDuuTIsh4+eytL/0afXyD4MwTk/OdFrxAGwowmUxgK1WwIhAIWEj/gDIJo94VF1LeIxw3iKYvdDnfVxSQhK9EZZFvnp","dev.sigstore.cosign/bundle":"{\"SignedEntryTimestamp\":\"MEUCIEs5Jluu7QCuGs5U1qegZboE2iL5t6fkTidNZQgts0FIAiEAkOp3BUPhlA9UVzDHxaJtij72yDXpRId6cSuguzMTwVc=\",\"Payload\":{\"body\":\"eyJhcGlWZXJzaW9uIjoiMC4wLjEiLCJraW5kIjoiaGFzaGVkcmVrb3JkIiwic3BlYyI6eyJkYXRhIjp7Imhhc2giOnsiYWxnb3JpdGhtIjoic2hhMjU2IiwidmFsdWUiOiI1ZWJmOWViYWZjYWVkMDY4YzMzZTViYjZmY2RmOTJhNTE1NGQ1NmY5NTJkZWY3OTQyZGJjZTgxNWY0NWU0Mjc2In19LCJzaWduYXR1cmUiOnsiY29udGVudCI6Ik1FWUNJUUR1dVRJc2g0K2V5dEwvMGFmWHlENE13VGsvT2RGcnhBR3dvd21VeGdLMVd3SWhBSVdFai9nRElKbzk0VkYxTGVJeHczaUtZdmREbmZWeFNRaEs5RVpaRnZucCIsInB1YmxpY0tleSI6eyJjb250ZW50IjoiTFMwdExTMUNSVWRKVGlCUVZVSk1TVU1nUzBWWkxTMHRMUzBLVFVacmQwVjNXVWhMYjFwSmVtb3dRMEZSV1VsTGIxcEplbW93UkVGUlkwUlJaMEZGZUN0ckszcGpka1pDTW1kUlMxRXZSalJrSzBwbk4xbGlOMWhvTXdwUFNDdGhRMnRQZFVKNlpXRnNkR05ZVGpOdlZWbE9ZV0pZV25WUGRYQkViVk5wUjJGRVJsaHBaU3RMUWk5WGJqQldjVWh5TWxsV1MxTm5QVDBLTFMwdExTMUZUa1FnVUZWQ1RFbERJRXRGV1MwdExTMHRDZz09In19fX0=\",\"integratedTime\":1679430723,\"logIndex\":15981808,\"logID\":\"c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d\"}}"}}],"subject":{"mediaType":"application/vnd.oci.image.manifest.v1+json","size":405,"digest":"sha256:92f46deb02eaf0c8c24cc22e9c54711fe7b09678abcb82949befc55a1a3bbe1f"}}`),
+			Configuration: &models.Configuration{
+				MediaType: "application/vnd.docker.container.image.v1+json",
+				Digest:    "sha256:eb110b254f038cd0d464b20de5070099a6f675b9d8eb7e5035d929540a041ab1",
+				Payload:   models.Payload(`{"config":{"Cmd":["sh"]},"created":"2024-09-26T21:31:42Z","history":[{"created":"2024-09-26T21:31:42Z","created_by":"BusyBox 1.37.0 (glibc), Debian 12"}],"rootfs":{"type":"layers","diff_ids":["sha256:59654b79daad74c77dc2e28502ca577ba8ce73276720002234a23fc60ee92692"]},"architecture":"amd64","os":"linux"}`),
+			},
+			CreatedAt: testutil.ParseTimestamp(t, "2025-02-14 09:52:36.336075", local),
+		},
 	}
 	require.Equal(t, expected, mm)
 }
@@ -488,7 +525,7 @@ func TestManifestStore_Count(t *testing.T) {
 	require.NoError(t, err)
 
 	// see testdata/fixtures/manifests.sql
-	require.Equal(t, 27, count)
+	require.Equal(t, 29, count)
 }
 
 func TestManifestStore_Layers(t *testing.T) {

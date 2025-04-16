@@ -114,11 +114,25 @@ func TestGCConfigLinkStore_FindAll(t *testing.T) {
 			Digest:       "sha256:3ded4e17612c66f216041fe6f15002d9406543192095d689f14e8063b1a503df",
 		},
 		{
+			ID:           13,
+			NamespaceID:  2,
+			RepositoryID: 7,
+			ManifestID:   29,
+			Digest:       "sha256:eb110b254f038cd0d464b20de5070099a6f675b9d8eb7e5035d929540a041ab1",
+		},
+		{
 			ID:           3,
 			NamespaceID:  1,
 			RepositoryID: 4,
 			ManifestID:   3,
 			Digest:       "sha256:33f3ef3322b28ecfc368872e621ab715a04865471c47ca7426f3e93846157780",
+		},
+		{
+			ID:           12,
+			NamespaceID:  2,
+			RepositoryID: 7,
+			ManifestID:   28,
+			Digest:       "sha256:af47096251092caf59498806ab8d58e8173ecf5a182f024ce9d635b5b4a55d66",
 		},
 	}
 
@@ -142,5 +156,5 @@ func TestGcConfigLinkStore_Count(t *testing.T) {
 	require.NoError(t, err)
 
 	// see testdata/fixtures/gc_blobs_configurations.sql
-	require.Equal(t, 11, count)
+	require.Equal(t, 13, count)
 }

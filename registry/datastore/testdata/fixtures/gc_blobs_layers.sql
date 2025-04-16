@@ -22,4 +22,6 @@ VALUES (1, 1, 3, 1, decode('01c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c4727
        (21, 3, 10, 21, decode('018cb22990f6b627016f2f2000d2f29da7c2bc87b80d21efb4f89ed148e00df6ee', 'hex')),
        (22, 3, 10, 22, decode('01ad4309f23d757351fba1698406f09c79667ecde8863dba39407cb915ebbe549d', 'hex')),
        (23, 3, 10, 23, decode('010159a862a1d3a25886b9f029af200f15a27bd0a5552b5861f34b1cb02cc14fb2', 'hex')),
-       (24, 3, 10, 24, decode('01cdb2596a54a1c291f041b1c824e87f4c6ed282a69b42f18c60dc801818e8a144', 'hex'));
+       (24, 3, 10, 24, decode('01cdb2596a54a1c291f041b1c824e87f4c6ed282a69b42f18c60dc801818e8a144', 'hex')),
+       (25, 2, 7, 35, decode('019c0abc9c5bd3a7854141800ba1f4a227baa88b11b49d8207eadc483c3f2496de', 'hex')),
+       (26, 2, 7, 36, decode('015ebf9ebafcaed068c33e5bb6fcdf92a5154d56f952def7942dbce815f45e4276', 'hex'));

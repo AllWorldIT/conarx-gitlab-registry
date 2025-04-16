@@ -116,6 +116,13 @@ BEGIN
             DO UPDATE SET
                 review_after = gc_review_after ('manifest_delete'), event = 'manifest_delete';
     END IF;
+    IF OLD.subject_id IS NOT NULL THEN
+        INSERT INTO gc_manifest_review_queue (top_level_namespace_id, repository_id, manifest_id, review_after, event)
+            VALUES (OLD.top_level_namespace_id, OLD.repository_id, OLD.subject_id, gc_review_after ('manifest_delete'), 'manifest_delete')
+        ON CONFLICT (top_level_namespace_id, repository_id, manifest_id)
+            DO UPDATE SET
+                review_after = gc_review_after ('manifest_delete'), event = 'manifest_delete';
+    END IF;
     RETURN NULL;
 END;
 $$;

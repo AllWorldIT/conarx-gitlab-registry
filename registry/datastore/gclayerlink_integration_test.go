@@ -49,6 +49,13 @@ func TestGCLayerLinkStore_FindAll(t *testing.T) {
 			Digest:       "sha256:476a8fceb48f8f8db4dbad6c79d1087fb456950f31143a93577507f11cce789f",
 		},
 		{
+			ID:           35,
+			NamespaceID:  2,
+			RepositoryID: 7,
+			LayerID:      35,
+			Digest:       "sha256:9c0abc9c5bd3a7854141800ba1f4a227baa88b11b49d8207eadc483c3f2496de",
+		},
+		{
 			ID:           1,
 			NamespaceID:  1,
 			RepositoryID: 3,
@@ -103,6 +110,13 @@ func TestGCLayerLinkStore_FindAll(t *testing.T) {
 			RepositoryID: 13,
 			LayerID:      30,
 			Digest:       "sha256:52f7f1bb6469c3c075e08bf1d2f15ce51c9db79ee715d6649ce9b0d67c84b5ef",
+		},
+		{
+			ID:           36,
+			NamespaceID:  2,
+			RepositoryID: 7,
+			LayerID:      36,
+			Digest:       "sha256:5ebf9ebafcaed068c33e5bb6fcdf92a5154d56f952def7942dbce815f45e4276",
 		},
 		{
 			ID:           15,
@@ -280,5 +294,5 @@ func TestGcLayerLinkStore_Count(t *testing.T) {
 	require.NoError(t, err)
 
 	// see testdata/fixtures/gc_blobs_layers.sql
-	require.Equal(t, 34, count)
+	require.Equal(t, 36, count)
 }

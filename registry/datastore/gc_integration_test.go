@@ -3,6 +3,7 @@
 package datastore_test
 
 import (
+	"database/sql"
 	"io"
 	"math/rand/v2"
 	"strconv"
@@ -396,10 +397,15 @@ func TestGC_TrackDeletedManifests(t *testing.T) {
 	err = rs.LinkBlob(suite.ctx, r, b.Digest)
 	require.NoError(t, err)
 
-	// create manifest
+	// create first manifest
 	ms := datastore.NewManifestStore(suite.db)
 	m := randomManifest(t, r, b)
 	err = ms.Create(suite.ctx, m)
+	require.NoError(t, err)
+	// create another manifest referencing the former as subject
+	m2 := randomManifest(t, r, b)
+	m2.SubjectID = sql.NullInt64{Valid: true, Int64: m.ID}
+	err = ms.Create(suite.ctx, m2)
 	require.NoError(t, err)
 
 	// confirm that the review queue remains empty
@@ -410,7 +416,7 @@ func TestGC_TrackDeletedManifests(t *testing.T) {
 
 	// delete manifest
 	deletedAt := time.Now()
-	ok, err := rs.DeleteManifest(suite.ctx, r, m.Digest)
+	ok, err := rs.DeleteManifest(suite.ctx, r, m2.Digest)
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -424,6 +430,20 @@ func TestGC_TrackDeletedManifests(t *testing.T) {
 	require.Equal(t, b.Digest, tt[0].Digest)
 	require.Equal(t, "manifest_delete", tt[0].Event)
 	assertGCReviewDelayInMinMaxRange(t, tt[0].ReviewAfter, deletedAt)
+	// ignore the few milliseconds between deleting the manifest and queueing a task in response to it
+	require.Less(t, tt[0].CreatedAt, deletedAt.Add(200*time.Millisecond))
+
+	// Additionally, check that a corresponding task was created for the referenced subject manifest too
+	mts := datastore.NewGCManifestTaskStore(suite.db)
+	mt, err := mts.FindAll(suite.ctx)
+	require.NoError(t, err)
+	require.Len(t, tt, 1)
+	require.Equal(t, m.NamespaceID, mt[0].NamespaceID)
+	require.Equal(t, m.RepositoryID, mt[0].RepositoryID)
+	require.Equal(t, m.ID, mt[0].ManifestID)
+	require.Equal(t, 0, mt[0].ReviewCount)
+	require.Equal(t, "manifest_delete", mt[0].Event)
+	assertGCReviewDelayInMinMaxRange(t, mt[0].ReviewAfter, deletedAt)
 	// ignore the few milliseconds between deleting the manifest and queueing a task in response to it
 	require.Less(t, tt[0].CreatedAt, deletedAt.Add(200*time.Millisecond))
 }

@@ -281,7 +281,16 @@ func (s *gcManifestTaskStore) IsDangling(ctx context.Context, m *models.GCManife
 				 WHERE
 					 top_level_namespace_id = $1
 					 AND repository_id = $2
-					 AND child_id = $3)`
+					 AND child_id = $3
+				UNION ALL
+				SELECT
+					1
+				FROM
+					manifests
+				WHERE
+					top_level_namespace_id = $1
+					AND repository_id = $2
+					AND subject_id = $3)`
 
 	var referenced bool
 	if err := s.db.QueryRowContext(ctx, q, m.NamespaceID, m.RepositoryID, m.ManifestID).Scan(&referenced); err != nil {
