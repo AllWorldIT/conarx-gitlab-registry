@@ -229,6 +229,8 @@ Only a few of the operations exposed by the container registry API perform a dis
 
 When deleting a manifest in a repository, the configuration (if any) and layer blobs referenced by the manifest **may** become eligible for deletion. The layer and configuration blobs referenced by the target manifest should be pushed to the GC blob review queue to prevent dangling blobs.
 
+Additionally, for manifests with `subject` references, the referenced manifest should also be pushed to the GC manifest review queue, as the manifest being deleted may be the last reference preventing the referenced manifest from becoming dangling.
+
 This can be accomplished with a trigger for deletes on `manifests` and `layers`:
 
 ```sql
@@ -242,6 +244,13 @@ BEGIN
         ON CONFLICT (digest)
             DO UPDATE SET
                 review_after = gc_review_after('manifest_delete'), event = 'manifest_delete';
+    END IF;
+    IF OLD.subject_id IS NOT NULL THEN
+        INSERT INTO gc_manifest_review_queue (top_level_namespace_id, repository_id, manifest_id, review_after, event)
+        VALUES (OLD.top_level_namespace_id, OLD.repository_id, OLD.subject_id, gc_review_after ('manifest_delete'), 'manifest_delete')
+        ON CONFLICT (top_level_namespace_id, repository_id, manifest_id)
+            DO UPDATE SET
+                          review_after = gc_review_after ('manifest_delete'), event = 'manifest_delete';
     END IF;
     RETURN NULL;
 END;

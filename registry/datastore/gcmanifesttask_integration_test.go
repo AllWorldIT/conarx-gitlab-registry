@@ -620,3 +620,24 @@ func TestGcManifestTaskStore_IsDangling_No_TaggedAndReferencedByList(t *testing.
 	require.NoError(t, err)
 	require.False(t, yn)
 }
+
+func TestGcManifestTaskStore_IsDangling_No_SubjectReferenced(t *testing.T) {
+	reloadGCManifestTaskFixtures(t)
+
+	tx, err := suite.db.BeginTx(suite.ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	// See testdata/fixtures/manifests.sql
+	// Manifest 29 has subject_id set to 28, so manifest 28 is not dangling despite having no tags or index references
+	mt := &models.GCManifestTask{
+		NamespaceID:  2,
+		RepositoryID: 7,
+		ManifestID:   28,
+	}
+
+	s := datastore.NewGCManifestTaskStore(tx)
+	yn, err := s.IsDangling(suite.ctx, mt)
+	require.NoError(t, err)
+	require.False(t, yn)
+}
