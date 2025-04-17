@@ -1719,6 +1719,7 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, appContext *C
 			return fmt.Errorf("forbidden: no repository name")
 		}
 		accessRecords = appendCatalogAccessRecord(accessRecords, r)
+		accessRecords = appendStatisticsAccessRecord(accessRecords, r)
 	}
 
 	ctx, err := app.accessController.Authorized(appContext.Context, accessRecords...)
@@ -1933,6 +1934,24 @@ func appendRepositoryNamespaceAccessRecords(accessRecords []auth.Access, r *http
 	}
 
 	return accessRecords, nil, nil
+}
+
+// appendStatisticsAccessRecord adds the access records for the statistics endpoint.
+func appendStatisticsAccessRecord(accessRecords []auth.Access, r *http.Request) []auth.Access {
+	route := mux.CurrentRoute(r)
+	routeName := route.GetName()
+
+	if routeName != v1.Statistics.Name {
+		return accessRecords
+	}
+
+	accessRecords = append(accessRecords,
+		auth.Access{
+			Resource: auth.Resource{Type: "registry", Name: "statistics"},
+			Action:   "*",
+		})
+
+	return accessRecords
 }
 
 // applyRegistryMiddleware wraps a registry instance with the configured middlewares

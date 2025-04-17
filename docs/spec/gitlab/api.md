@@ -58,7 +58,7 @@ GET /gitlab/v1/
 #### Example
 
 ```shell
-curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/
+curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/"
 ```
 
 ### Response
@@ -699,10 +699,17 @@ Obtain usage statistics and build details about a registry instance.
 ### Request
 
 ```shell
-GET /gitlab/v1/statistics/
+curl --header "Authorization: Bearer <token>" "https://registry.gitlab.com/gitlab/v1/statistics/"
 ```
 
 ### Response
+
+#### Header
+
+ Status Code        | Reason                                                                                                                                                                                                                                                     |
+--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+ `200 OK`           | Request successful. The response body includes the requested statistics.                                                                                                                                                                                   |
+ `401 Unauthorized` | The client should take action based on the contents of the `WWW-Authenticate` header and try the endpoint again. Statistics may contain sensitive information, admin permissions will be required to authenticate, similar to the `v2/_catalog/` endpoint. |
 
 #### Body
 

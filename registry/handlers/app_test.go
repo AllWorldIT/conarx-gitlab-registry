@@ -327,6 +327,34 @@ func TestGitlabAPI_GetRepositoryDetails_SelfWithDescendantsAccessRecords(t *test
 	require.Equal(t, expectedAuthHeader, resp.Header.Get("WWW-Authenticate"))
 }
 
+// TestGitlabAPI_GetStatistics_AuthRequired ensures that only users with admin permissions,
+// denoted by the `*` action, can access the `GET /gitlab/v1/statistics/` endpoint.
+func TestGitlabAPI_GetStatistics_AuthRequired(t *testing.T) {
+	ctx := dtestutil.NewContextWithLogger(t)
+	config := testConfig()
+
+	app, err := NewApp(ctx, config)
+	require.NoError(t, err)
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	builder, err := urls.NewBuilderFromString(server.URL, false)
+	require.NoError(t, err)
+
+	u, err := builder.BuildGitlabV1StatisticsURL()
+	require.NoError(t, err)
+
+	resp, err := http.Get(u)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+	expectedAuthHeader := `Bearer realm="realm-test",service="service-test",scope="registry:statistics:*"`
+	assert.Equal(t, expectedAuthHeader, resp.Header.Get("WWW-Authenticate"))
+}
+
 func Test_updateOnlineGCSettings_SkipIfDatabaseDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	dbMock := dmocks.NewMockHandler(ctrl)
