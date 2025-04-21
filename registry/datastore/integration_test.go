@@ -12,6 +12,8 @@ import (
 
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
+	"github.com/docker/distribution/registry/datastore/migrations/postmigrations"
+	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/datastore/testutil"
 )
 
@@ -37,9 +39,12 @@ func (s *testSuite) setup() error {
 		return err
 	}
 
-	m := migrations.NewMigrator(db)
-	if _, err := m.Up(); err != nil {
-		return err
+	var m []migrations.PureMigrator
+	m = append(m, premigrations.NewMigrator(db), postmigrations.NewMigrator(db))
+	for _, mig := range m {
+		if _, err := mig.Up(); err != nil {
+			return err
+		}
 	}
 	basePath, err := os.Getwd()
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/registry/datastore/migrations"
+	_ "github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	migrate "github.com/rubenv/sql-migrate"
 )
 
@@ -33,8 +34,7 @@ var (
 				`DELETE FROM batched_background_migrations WHERE "name" = 'enforcedBBM'`,
 			},
 		},
-		PostDeployment: true,
-		RequiredBBMs:   []string{"unenforcedBBM"},
+		RequiredBBMs: []string{"unenforcedBBM"},
 	}
 
 	// Unenforced running background migration
@@ -49,13 +49,12 @@ var (
 				`DELETE FROM batched_background_migrations WHERE "name" = 'unenforcedBBM'`,
 			},
 		},
-		PostDeployment: true,
 	}
 )
 
 // allWithBBMSchema returns all migrations including the BBM schema migrations
 func allWithBBMSchema() []*migrations.Migration {
-	stdMigrator := migrations.NewMigrator(nil)
+	stdMigrator := migrations.NewMigrator(nil, migrations.Source(migrations.AllPreMigrations()))
 	var allWithBBMSchema []*migrations.Migration
 	for _, v := range bbmBaseSchemaMigrationIDs {
 		if mig := stdMigrator.FindMigrationByID(v); mig != nil {

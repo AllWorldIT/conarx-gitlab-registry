@@ -16,6 +16,7 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	mock "github.com/docker/distribution/registry/datastore/migrations/mocks"
+	_ "github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/stretchr/testify/require"
@@ -47,7 +48,7 @@ var (
 // init loads (from the standard migrator) all necessary schema migrations
 // that are required for creating background migrations tables.
 func init() {
-	stdMigrator := migrations.NewMigrator(nil)
+	stdMigrator := migrations.NewMigrator(nil, migrations.Source(migrations.AllPreMigrations()))
 
 	// temporary slice to collect Down migrations
 	var downMigrations []string

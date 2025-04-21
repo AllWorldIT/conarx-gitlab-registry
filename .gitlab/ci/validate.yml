@@ -67,7 +67,7 @@ commitlint:
 codelint:multiarch:
   variables:
     GOLANGCI_VERSION: '1.64.6'
-    BUILDTAGS: "integration,handlers_test,api_gitlab_test,include_gcs,online_gc_test,api_conformance_test,toxiproxy"
+    BUILDTAGS: "integration,handlers_test,api_gitlab_test,cli_test,include_gcs,online_gc_test,api_conformance_test,toxiproxy"
     GOOS: linux
   parallel:
     matrix:

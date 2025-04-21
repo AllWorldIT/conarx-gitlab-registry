@@ -39,16 +39,18 @@ fi
 cat << _EOF_ > "$FILE_PATH"
 package migrations
 
-import migrate "github.com/rubenv/sql-migrate"
+import (
+	"github.com/docker/distribution/registry/datastore/migrations"
+	migrate "github.com/rubenv/sql-migrate"
+)
 
 func init() {
-	m := &Migration{
+	m := &migrations.Migration{
 		Migration: &migrate.Migration{
 			Id:   "$ID",
 			Up:   []string{},
 			Down: []string{},
 		},
-		PostDeployment: false,
 	}
 
 	allMigrations = append(allMigrations, m)

@@ -18,6 +18,8 @@ import (
 	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
+	"github.com/docker/distribution/registry/datastore/migrations/postmigrations"
+	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
@@ -42,17 +44,19 @@ func init() {
 
 	MigrateCmd.AddCommand(MigrateVersionCmd)
 	MigrateStatusCmd.Flags().BoolVarP(&upToDateCheck, "up-to-date", "u", false, "check if all known migrations are applied")
-	MigrateStatusCmd.Flags().BoolVarP(&skipPostDeployment, "skip-post-deployment", "s", false, "ignore post deployment migrations")
+	MigrateStatusCmd.Flags().BoolVarP(&SkipPostDeployment, "skip-post-deployment", "s", false, "ignore post deployment migrations")
 	MigrateStatusCmd.PreRunE = setBoolFlagWithEnv("SKIP_POST_DEPLOYMENT_MIGRATIONS", "skip-post-deployment")
 	MigrateCmd.AddCommand(MigrateStatusCmd)
 	MigrateUpCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do not commit changes to the database")
-	MigrateUpCmd.Flags().VarP(nullableInt{&maxNumMigrations}, "limit", "n", "limit the number of migrations (all by default)")
-	MigrateUpCmd.Flags().BoolVarP(&skipPostDeployment, "skip-post-deployment", "s", false, "do not apply post deployment migrations")
+	MigrateUpCmd.Flags().VarP(nullableInt{&MaxNumPreMigrations}, "limit", "n", "limit the number of migrations (all by default)")
+	MigrateUpCmd.Flags().VarP(nullableInt{&MaxNumPostMigrations}, "post-deploy-limit", "p", "limit the number of post-deploy migrations (all by default)")
+	MigrateUpCmd.Flags().BoolVarP(&SkipPostDeployment, "skip-post-deployment", "s", false, "do not apply post deployment migrations")
 	MigrateUpCmd.PreRunE = setBoolFlagWithEnv("SKIP_POST_DEPLOYMENT_MIGRATIONS", "skip-post-deployment")
 	MigrateCmd.AddCommand(MigrateUpCmd)
-	MigrateDownCmd.Flags().BoolVarP(&force, "force", "f", false, "no confirmation message")
+	MigrateDownCmd.Flags().BoolVarP(&Force, "force", "f", false, "no confirmation message")
 	MigrateDownCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "do not commit changes to the database")
-	MigrateDownCmd.Flags().VarP(nullableInt{&maxNumMigrations}, "limit", "n", "limit the number of migrations (all by default)")
+	MigrateDownCmd.Flags().VarP(nullableInt{&MaxNumPreMigrations}, "limit", "n", "limit the number of migrations (all by default)")
+	MigrateDownCmd.Flags().VarP(nullableInt{&MaxNumPostMigrations}, "post-deploy-limit", "p", "limit the number of post-deploy migrations (all by default)")
 	MigrateCmd.AddCommand(MigrateDownCmd)
 	DBCmd.AddCommand(MigrateCmd)
 
@@ -85,28 +89,26 @@ func init() {
 
 // Command flag vars
 var (
-	debugAddr          string
-	dryRun             bool
-	force              bool
-	maxNumMigrations   *int
-	removeUntagged     bool
-	showVersion        bool
-	skipPostDeployment bool
-	upToDateCheck      bool
-	preImport          bool
-	rowCount           bool
-	importCommonBlobs  bool
-	importAllRepos     bool
-	tagConcurrency     *int
-	logToSTDOUT        bool
-	dynamicMediaTypes  bool
-	maxBBMJobRetry     *int
+	debugAddr            string
+	dryRun               bool
+	Force                bool
+	MaxNumPreMigrations  *int
+	MaxNumPostMigrations *int
+	removeUntagged       bool
+	showVersion          bool
+	SkipPostDeployment   bool
+	upToDateCheck        bool
+	preImport            bool
+	rowCount             bool
+	importCommonBlobs    bool
+	importAllRepos       bool
+	tagConcurrency       *int
+	logToSTDOUT          bool
+	dynamicMediaTypes    bool
+	maxBBMJobRetry       *int
 )
 
-var (
-	parallelwalkKey       = "parallelwalk"
-	errPendingPDMigration = errors.New("pending post-deployment migrations must be run to unblock other available migrations")
-)
+var parallelwalkKey = "parallelwalk"
 
 // nullableInt implements spf13/pflag#Value as a custom nullable integer to capture spf13/cobra command flags.
 // https://pkg.go.dev/github.com/spf13/pflag?tab=doc#Value
@@ -268,11 +270,19 @@ var MigrateUpCmd = &cobra.Command{
 			return fmt.Errorf("configuration error: %w", err)
 		}
 
-		if maxNumMigrations == nil {
+		// Handle cases where no migration limits are set.
+		var skipNonRequredPreDeployment, skipNonRequredPostDeployment bool
+		switch {
+		case MaxNumPostMigrations == nil && MaxNumPreMigrations == nil:
 			var all int
-			maxNumMigrations = &all
-		} else if *maxNumMigrations < 1 {
-			return errors.New("limit must be greater than or equal to 1")
+			MaxNumPostMigrations = &all
+			MaxNumPreMigrations = &all
+		case MaxNumPostMigrations == nil && MaxNumPreMigrations != nil:
+			skipNonRequredPostDeployment = true
+		case MaxNumPreMigrations == nil && MaxNumPostMigrations != nil:
+			skipNonRequredPreDeployment = true
+		case *MaxNumPreMigrations < 1 || *MaxNumPostMigrations < 1:
+			return errors.New("both pre and post migration limits must be greater than or equal to 1")
 		}
 
 		db, err := migrationDBFromConfig(config)
@@ -280,47 +290,75 @@ var MigrateUpCmd = &cobra.Command{
 			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
-		opts := make([]migrations.MigratorOption, 0)
-		if skipPostDeployment {
-			opts = append(opts, migrations.SkipPostDeployment())
+		// Initialize the list of migrators based on the migration settings.
+		var m []migrations.PureMigrator
+		if SkipPostDeployment && !skipNonRequredPreDeployment {
+			m = append(m, premigrations.NewMigrator(db, premigrations.SkipPostDeployment()))
 		}
-		m := migrations.NewMigrator(db, opts...)
 
-		var havePendingPostDeploy bool
-		if skipPostDeployment {
-			canSkip, acceptableMigrationLimit, err := m.CanSkipPostDeploy(*maxNumMigrations)
-			if !canSkip {
-				fmt.Printf("WARNING: %v\n", err)
-				if acceptableMigrationLimit == -1 { // -1 means there is no safe non-post deployment to run
-					return errPendingPDMigration
-				}
-				*maxNumMigrations = acceptableMigrationLimit
-				fmt.Printf("Will only apply the first %d migration(s)\n", acceptableMigrationLimit)
-				havePendingPostDeploy = true
+		// Add pre-deployment or post-deployment migrators as needed.
+		if !SkipPostDeployment {
+			// if only one type of limit is specified only do the migration pertaining to the specified limit parameter (and any enforced migrations)
+			if skipNonRequredPreDeployment {
+				m = append(m, postmigrations.NewMigrator(db))
+			} else if skipNonRequredPostDeployment {
+				m = append(m, premigrations.NewMigrator(db))
+			} else {
+				m = append(m, premigrations.NewMigrator(db), postmigrations.NewMigrator(db))
 			}
 		}
 
-		plan, err := m.UpNPlan(*maxNumMigrations)
-		if err != nil {
-			return fmt.Errorf("failed to prepare Up plan: %w", err)
-		}
+		// Track applied migration counts and execution time.
+		var (
+			totalPostDeployApllied, totalPreDeployApllied, totalBBMApllied int
+			totalMigrationTime                                             time.Duration
+		)
+		for _, mig := range m {
+			// Determine the max number of migrations to apply based on type.
+			var maxNumMigrations int
+			if mig.Name() == postmigrations.PostDeployTypeName {
+				maxNumMigrations = *MaxNumPostMigrations
+			} else {
+				maxNumMigrations = *MaxNumPreMigrations
+			}
 
-		if len(plan) > 0 {
-			_, _ = fmt.Println("The following migrations will be applied:")
-			_, _ = fmt.Println(strings.Join(plan, "\n"))
+			// Generate a plan for migrations to be applied.
+			// Note: Currently, the plan does not reveal dependent migrations (e.g., post-deployment or background migrations).
+			// It only shows direct migrations of the selected type. Adding dependency visibility is complex and currently not implemented.
+			plan, err := mig.UpNPlan(maxNumMigrations)
+			if err != nil {
+				return fmt.Errorf("failed to prepare Up plan: %w", err)
+			}
+
+			if len(plan) > 0 {
+				fmt.Printf("%s:\n%s\n", mig.Name(), strings.Join(plan, "\n"))
+			}
+
+			if !dryRun {
+				start := time.Now()
+				mr, err := mig.UpN(maxNumMigrations)
+				if err != nil {
+					return fmt.Errorf("failed to run database migrations: %w", err)
+				}
+
+				totalMigrationTime += time.Since(start)
+
+				// Track the number of applied migrations based on type.
+				if mig.Name() == postmigrations.PostDeployTypeName {
+					totalPostDeployApllied += mr.AppliedCount
+					totalPreDeployApllied += mr.AppliedDependencyCount
+				} else {
+					totalPostDeployApllied += mr.AppliedDependencyCount
+					totalPreDeployApllied += mr.AppliedCount
+				}
+				totalBBMApllied += mr.AppliedBBMCount
+			}
 		}
 
 		if !dryRun {
-			start := time.Now()
-			mr, err := m.UpN(*maxNumMigrations)
-			if err != nil {
-				return fmt.Errorf("failed to run database migrations: %w", err)
-			}
-			fmt.Printf("OK: applied %d migrations and %d background migrations in %.3fs\n", mr.AppliedCount, mr.AppliedBBMCount, time.Since(start).Seconds())
-			if havePendingPostDeploy {
-				return errPendingPDMigration
-			}
+			fmt.Printf("OK: applied %d pre-deployment migration(s), %d post-deployment migration(s) and %d background migration(s) in %.3fs\n", totalPreDeployApllied, totalPostDeployApllied, totalBBMApllied, totalMigrationTime.Seconds())
 		}
+
 		return nil
 	},
 }
@@ -335,11 +373,19 @@ var MigrateDownCmd = &cobra.Command{
 			return fmt.Errorf("configuration error: %w", err)
 		}
 
-		if maxNumMigrations == nil {
+		// Handle cases where no migration limits are set.
+		var skipNonRequredPreDeployment, skipNonRequredPostDeployment bool
+		switch {
+		case MaxNumPostMigrations == nil && MaxNumPreMigrations == nil:
 			var all int
-			maxNumMigrations = &all
-		} else if *maxNumMigrations < 1 {
-			return errors.New("limit must be greater than or equal to 1")
+			MaxNumPostMigrations = &all
+			MaxNumPreMigrations = &all
+		case MaxNumPostMigrations == nil && MaxNumPreMigrations != nil:
+			skipNonRequredPostDeployment = true
+		case MaxNumPreMigrations == nil && MaxNumPostMigrations != nil:
+			skipNonRequredPreDeployment = true
+		case *MaxNumPreMigrations < 1 || *MaxNumPostMigrations < 1:
+			return errors.New("both pre and post migration limits must be greater than or equal to 1")
 		}
 
 		db, err := migrationDBFromConfig(config)
@@ -347,35 +393,65 @@ var MigrateDownCmd = &cobra.Command{
 			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
-		m := migrations.NewMigrator(db)
-		plan, err := m.DownNPlan(*maxNumMigrations)
-		if err != nil {
-			return fmt.Errorf("failed to prepare Down plan: %w", err)
+		// Initialize the list of migrators based on the migration settings.
+		var m []migrations.PureMigrator
+
+		if SkipPostDeployment && !skipNonRequredPreDeployment {
+			m = append(m, premigrations.NewMigrator(db, premigrations.SkipPostDeployment()))
 		}
 
-		if len(plan) > 0 {
-			_, _ = fmt.Println(strings.Join(plan, "\n"))
+		// Add pre-deployment or post-deployment migrators as needed.
+		if !SkipPostDeployment {
+			if skipNonRequredPreDeployment {
+				m = append(m, postmigrations.NewMigrator(db))
+			} else if skipNonRequredPostDeployment {
+				m = append(m, premigrations.NewMigrator(db))
+			} else {
+				m = append(m, postmigrations.NewMigrator(db), premigrations.NewMigrator(db))
+			}
 		}
 
-		if !dryRun && len(plan) > 0 {
-			if !force {
-				var response string
-				_, _ = fmt.Print("Preparing to apply the above down migrations. Are you sure? [y/N] ")
-				_, err := fmt.Scanln(&response)
-				if err != nil && errors.Is(err, io.EOF) {
-					return fmt.Errorf("failed to scan user input: %w", err)
-				}
-				if !regexp.MustCompile(`(?i)^y(es)?$`).MatchString(response) {
-					return nil
-				}
+		// Determine the max number of migrations to remove based on type.
+		for _, mig := range m {
+			var maxNumMigrations int
+			if mig.Name() == postmigrations.PostDeployTypeName {
+				maxNumMigrations = *MaxNumPostMigrations
+			} else {
+				maxNumMigrations = *MaxNumPreMigrations
 			}
 
-			start := time.Now()
-			n, err := m.DownN(*maxNumMigrations)
+			// Generate a plan for migrations to be removed.
+			// Note: Currently, the plan does not reveal dependent migrations (e.g., post-deployment or background migrations).
+			// It only shows direct migrations of the selected type. Adding dependency visibility is complex and currently not implemented.
+			plan, err := mig.DownNPlan(maxNumMigrations)
 			if err != nil {
-				return fmt.Errorf("failed to run database migrations: %w", err)
+				return fmt.Errorf("failed to prepare Down plan: %w", err)
 			}
-			fmt.Printf("OK: applied %d migrations in %.3fs\n", n, time.Since(start).Seconds())
+
+			if len(plan) > 0 {
+				fmt.Printf("%s:\n%s\n", mig.Name(), strings.Join(plan, "\n"))
+			}
+
+			if !dryRun && len(plan) > 0 {
+				if !Force {
+					var response string
+					_, _ = fmt.Print("Preparing to apply the above down migrations. Are you sure? [y/N] ")
+					_, err := fmt.Scanln(&response)
+					if err != nil && errors.Is(err, io.EOF) {
+						return fmt.Errorf("failed to scan user input: %w", err)
+					}
+					if !regexp.MustCompile(`(?i)^y(es)?$`).MatchString(response) {
+						return nil
+					}
+				}
+
+				start := time.Now()
+				n, err := mig.DownN(maxNumMigrations)
+				if err != nil {
+					return fmt.Errorf("failed to run database migrations: %w", err)
+				}
+				fmt.Printf("OK: applied %d %s migration(s) in %.3fs\n", n, mig.Name(), time.Since(start).Seconds())
+			}
 		}
 		return nil
 	},
@@ -396,17 +472,25 @@ var MigrateVersionCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
-
-		m := migrations.NewMigrator(db)
-		v, err := m.Version()
-		if err != nil {
-			return fmt.Errorf("failed to detect database version: %w", err)
-		}
-		if v == "" {
-			v = "Unknown"
+		var m []migrations.PureMigrator
+		if SkipPostDeployment {
+			m = append(m, premigrations.NewMigrator(db))
 		}
 
-		fmt.Printf("%s\n", v)
+		if !SkipPostDeployment {
+			m = append(m, premigrations.NewMigrator(db), postmigrations.NewMigrator(db))
+		}
+		for _, mig := range m {
+			v, err := mig.Version()
+			if err != nil {
+				return fmt.Errorf("failed to detect database version: %w", err)
+			}
+			if v == "" {
+				v = "Unknown"
+			}
+
+			fmt.Printf("%s:%s\n", mig.Name(), v)
+		}
 		return nil
 	},
 }
@@ -427,62 +511,64 @@ var MigrateStatusCmd = &cobra.Command{
 			return fmt.Errorf("failed to construct database connection: %w", err)
 		}
 
-		m := migrations.NewMigrator(db)
-		statuses, err := m.Status()
-		if err != nil {
-			return fmt.Errorf("failed to detect database status: %w", err)
+		var m []migrations.PureMigrator
+		if SkipPostDeployment {
+			m = append(m, premigrations.NewMigrator(db))
 		}
 
-		if upToDateCheck {
-			upToDate := true
-			for _, s := range statuses {
-				if s.AppliedAt == nil {
-					if !s.PostDeployment || !skipPostDeployment {
-						upToDate = false
-						break
+		if !SkipPostDeployment {
+			m = append(m, premigrations.NewMigrator(db), postmigrations.NewMigrator(db))
+		}
+		for _, mig := range m {
+			statuses, err := mig.Status()
+			if err != nil {
+				return fmt.Errorf("failed to detect database status: %w", err)
+			}
+
+			if upToDateCheck {
+				upToDate := true
+				for _, s := range statuses {
+					if s.AppliedAt == nil {
+						if !SkipPostDeployment {
+							upToDate = false
+							break
+						}
 					}
 				}
+				_, err = fmt.Println(upToDate)
+				if err != nil {
+					return fmt.Errorf("printing line: %w", err)
+				}
+				return nil
 			}
-			_, err = fmt.Println(upToDate)
-			if err != nil {
-				return fmt.Errorf("printing line: %w", err)
+
+			table := tablewriter.NewWriter(os.Stdout)
+			table.SetHeader([]string{"Migration", "Applied"})
+			table.SetColWidth(80)
+
+			// Display table rows sorted by migration ID
+			var ids []string
+			for id := range statuses {
+				ids = append(ids, id)
 			}
-			return nil
+			sort.Strings(ids)
+
+			for _, id := range ids {
+				name := id
+				if statuses[id].Unknown {
+					name += " (unknown)"
+				}
+
+				var appliedAt string
+				if statuses[id].AppliedAt != nil {
+					appliedAt = statuses[id].AppliedAt.String()
+				}
+
+				table.Append([]string{name, appliedAt})
+			}
+			_, _ = fmt.Println(mig.Name())
+			table.Render()
 		}
-
-		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Migration", "Applied"})
-		table.SetColWidth(80)
-
-		// Display table rows sorted by migration ID
-		var ids []string
-		for id := range statuses {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-
-		for _, id := range ids {
-			if statuses[id].PostDeployment && skipPostDeployment {
-				continue
-			}
-			name := id
-			if statuses[id].Unknown {
-				name += " (unknown)"
-			}
-
-			if statuses[id].PostDeployment {
-				name += " (post deployment)"
-			}
-
-			var appliedAt string
-			if statuses[id].AppliedAt != nil {
-				appliedAt = statuses[id].AppliedAt.String()
-			}
-
-			table.Append([]string{name, appliedAt})
-		}
-
-		table.Render()
 		return nil
 	},
 }

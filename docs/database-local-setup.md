@@ -140,7 +140,7 @@ You should see all the migrations being applied. Something like this should be e
 ```shell
 ...
 20221222120826_post_add_layers_simplified_usage_index_batch_6
-OK: applied 127 migrations in 4.501s
+OK: applied 127 pre-deployment migration(s), 0 post-deployment migration(s) and O background migration(s) in 4.501s
 ```
 
 1. Verify the migrations have been applied to the correct database and that the tables are empty.
