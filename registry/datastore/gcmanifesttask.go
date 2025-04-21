@@ -55,7 +55,7 @@ func scanFullGCManifestTasks(rows *sql.Rows) ([]*models.GCManifestTask, error) {
 	return rr, nil
 }
 
-func scanFullGCManifestTask(row *sql.Row) (*models.GCManifestTask, error) {
+func scanFullGCManifestTask(row *Row) (*models.GCManifestTask, error) {
 	r := new(models.GCManifestTask)
 
 	if err := row.Scan(&r.NamespaceID, &r.RepositoryID, &r.ManifestID, &r.ReviewAfter, &r.ReviewCount, &r.CreatedAt, &r.Event); err != nil {

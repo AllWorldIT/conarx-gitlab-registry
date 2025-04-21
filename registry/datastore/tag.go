@@ -42,7 +42,7 @@ func NewTagStore(db Queryer) TagStore {
 	return &tagStore{db: db}
 }
 
-func scanFullTag(row *sql.Row) (*models.Tag, error) {
+func scanFullTag(row *Row) (*models.Tag, error) {
 	t := new(models.Tag)
 
 	if err := row.Scan(&t.ID, &t.NamespaceID, &t.Name, &t.RepositoryID, &t.ManifestID, &t.CreatedAt, &t.UpdatedAt); err != nil {

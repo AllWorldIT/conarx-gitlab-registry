@@ -66,7 +66,7 @@ const (
 // Queryer is the common interface to execute queries on a database.
 type Queryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	QueryRowContext(ctx context.Context, query string, args ...any) *Row
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
@@ -101,7 +101,7 @@ type DB struct {
 func (db *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Transactor, error) {
 	tx, err := db.DB.BeginTx(ctx, opts)
 
-	return &Tx{tx}, err
+	return &Tx{tx, db, db.errorProcessor}, err
 }
 
 // Begin wraps sql.Tx from the inner sql.DB within a datastore.Tx.
@@ -135,17 +135,73 @@ func (db *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.R
 	return res, err
 }
 
-// QueryRowContext wraps the underlying QueryRowContext.
-func (db *DB) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+// Row is a wrapper around sql.Row that allows us to intercept errors during the rows' Scan.
+type Row struct {
+	*sql.Row
+	db             *DB
+	errorProcessor QueryErrorProcessor
+	query          string
+	ctx            context.Context
+}
+
+// QueryRowContext wraps the underlying QueryRowContext with our custom Row.
+func (db *DB) QueryRowContext(ctx context.Context, query string, args ...any) *Row {
 	row := db.DB.QueryRowContext(ctx, query, args...)
-	// TODO: We can't check for errors here because QueryRowContext doesn't return an error. The error will be returned
-	//   when Scan is called on the row. We'll need to handle this differently.
-	return row
+	return &Row{
+		Row:            row,
+		db:             db,
+		errorProcessor: db.errorProcessor,
+		query:          query,
+		ctx:            ctx,
+	}
+}
+
+// Scan implements the sql.Row.Scan method and processes errors.
+func (r *Row) Scan(dest ...any) error {
+	err := r.Row.Scan(dest...)
+
+	if err != nil && r.errorProcessor != nil {
+		r.errorProcessor.ProcessQueryError(r.ctx, r.db, r.query, err)
+	}
+
+	return err
 }
 
 // Tx implements Transactor.
 type Tx struct {
 	*sql.Tx
+	db             *DB
+	errorProcessor QueryErrorProcessor
+}
+
+// QueryContext wraps the underlying QueryContext.
+func (tx *Tx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	rows, err := tx.Tx.QueryContext(ctx, query, args...)
+	if err != nil && tx.errorProcessor != nil {
+		tx.errorProcessor.ProcessQueryError(ctx, tx.db, query, err)
+	}
+	return rows, err
+}
+
+// QueryRowContext wraps the underlying Tx.QueryRowContext with our custom Row.
+func (tx *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *Row {
+	row := tx.Tx.QueryRowContext(ctx, query, args...)
+	return &Row{
+		Row:            row,
+		db:             tx.db,
+		errorProcessor: tx.errorProcessor,
+		query:          query,
+		ctx:            ctx,
+	}
+}
+
+// ExecContext wraps the underlying ExecContext.
+func (tx *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	res, err := tx.Tx.ExecContext(ctx, query, args...)
+	if err != nil && tx.errorProcessor != nil {
+		tx.errorProcessor.ProcessQueryError(ctx, tx.db, query, err)
+	}
+	return res, err
 }
 
 // DSN represents the Data Source Name parameters for a DB connection.

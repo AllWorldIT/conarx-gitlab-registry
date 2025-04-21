@@ -4,7 +4,6 @@ package migrations
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -65,7 +64,7 @@ func (s *DepMigratorImp) StatusCache() map[string]*MigrationStatus {
 }
 
 type MigratorImpl struct {
-	db         *sql.DB
+	db         *datastore.DB
 	migrations []*Migration
 	bbmWorker  *bbm.SyncWorker
 	ms         migrate.MigrationSet
@@ -91,15 +90,11 @@ type PureMigrator interface {
 // NOTE(prozlach): we can not use interface here because in some cases the code
 // is accessing private fields of the package/object. This would need a deeper
 // cleanup to make the API clean.
-func NewMigrator(dsdb *datastore.DB, opts ...MigratorOption) *MigratorImpl {
-	var db *sql.DB
-	if dsdb != nil {
-		db = dsdb.DB
-	}
+func NewMigrator(db *datastore.DB, opts ...MigratorOption) *MigratorImpl {
 	m := &MigratorImpl{
 		db:         db,
 		migrations: allMigrations,
-		bbmWorker:  bbm.NewSyncWorker(dsdb),
+		bbmWorker:  bbm.NewSyncWorker(db),
 	}
 
 	for _, o := range opts {
@@ -156,7 +151,7 @@ func (m *MigratorImpl) Reconfigure(f MigratorOption) {
 
 // Version returns the current applied migration version (if any).
 func (m *MigratorImpl) Version() (string, error) {
-	records, err := m.ms.GetMigrationRecords(m.db, dialect)
+	records, err := m.ms.GetMigrationRecords(m.db.DB, dialect)
 	if err != nil {
 		return "", err
 	}
@@ -186,7 +181,7 @@ func (m *MigratorImpl) migrate(direction migrate.MigrationDirection, limit int) 
 		return 0, err
 	}
 
-	return m.ms.ExecMax(m.db, dialect, src, direction, limit)
+	return m.ms.ExecMax(m.db.DB, dialect, src, direction, limit)
 }
 
 // Up applies all pending up migrations. Returns the number of applied migrations and background migrations.
@@ -232,7 +227,7 @@ type MigrationStatus struct {
 
 // Status returns the status of all migrations, indexed by migration ID.
 func (m *MigratorImpl) Status() (map[string]*MigrationStatus, error) {
-	applied, err := m.ms.GetMigrationRecords(m.db, dialect)
+	applied, err := m.ms.GetMigrationRecords(m.db.DB, dialect)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +254,7 @@ func (m *MigratorImpl) Status() (map[string]*MigrationStatus, error) {
 
 // HasPending determines whether all known migrations are applied or not.
 func (m *MigratorImpl) HasPending() (bool, error) {
-	records, err := m.ms.GetMigrationRecords(m.db, dialect)
+	records, err := m.ms.GetMigrationRecords(m.db.DB, dialect)
 	if err != nil {
 		return false, err
 	}
@@ -284,7 +279,7 @@ func (m *MigratorImpl) plan(direction migrate.MigrationDirection, limit int) ([]
 		return nil, err
 	}
 
-	planned, _, err := m.ms.PlanMigration(m.db, dialect, src, direction, limit)
+	planned, _, err := m.ms.PlanMigration(m.db.DB, dialect, src, direction, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +361,7 @@ func (m *MigratorImpl) migrateUpWithCheck(maximum int, extraCheck ...MigrationDe
 	}
 
 	// Fetch the migration records that have already been applied
-	migrationRecords, err := m.ms.GetMigrationRecords(m.db, dialect)
+	migrationRecords, err := m.ms.GetMigrationRecords(m.db.DB, dialect)
 	if err != nil {
 		return mr, fmt.Errorf("retrieving migration records: %w", err)
 	}
@@ -470,7 +465,7 @@ func (*MigratorImpl) ensureBBMsComplete(ctx context.Context, bbmStore datastore.
 // ApplyMigration applies all migration in the 'Up' direction up to `migration`.
 func (m *MigratorImpl) ApplyMigration(src *migrate.MemoryMigrationSource, migration *migrate.Migration) (int, error) {
 	// Execute the migration and move the database schema "Up"
-	n, err := m.ms.ExecVersion(m.db, dialect, src, migrate.Up, migration.VersionInt())
+	n, err := m.ms.ExecVersion(m.db.DB, dialect, src, migrate.Up, migration.VersionInt())
 	if err != nil {
 		return 0, fmt.Errorf("applying migration %s: %w", migration.Id, err)
 	}

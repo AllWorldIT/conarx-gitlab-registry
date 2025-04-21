@@ -50,7 +50,7 @@ func NewManifestStore(db Queryer) ManifestStore {
 	return &manifestStore{db: db}
 }
 
-func scanFullManifest(row *sql.Row) (*models.Manifest, error) {
+func scanFullManifest(row *Row) (*models.Manifest, error) {
 	var dgst Digest
 	var cfgDigest, cfgMediaType sql.NullString
 	var cfgPayload *models.Payload

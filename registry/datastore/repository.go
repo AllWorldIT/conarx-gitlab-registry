@@ -558,7 +558,7 @@ func (c *centralRepositoryCache) GetLSN(ctx context.Context, r *models.Repositor
 	return lsn, nil
 }
 
-func scanFullRepository(row *sql.Row) (*models.Repository, error) {
+func scanFullRepository(row *Row) (*models.Repository, error) {
 	r := new(models.Repository)
 
 	if err := row.Scan(&r.ID, &r.NamespaceID, &r.Name, &r.Path, &r.ParentID, &r.CreatedAt, &r.UpdatedAt, &r.LastPublishedAt); err != nil {
