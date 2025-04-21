@@ -679,15 +679,41 @@ func TestIsInRecovery(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestDB_QueryWrappers(t *testing.T) {
-	// Create mock database and error processor that will be shared
+func TestDB_QueryContext(t *testing.T) {
+	// Create mock database
 	mockDB, sqlMock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer mockDB.Close()
 
 	ctx := context.Background()
 
-	t.Run("QueryContext", func(t *testing.T) {
+	t.Run("successful query", func(t *testing.T) {
+		// Create a DB with the mock processor
+		mockProcessor := &MockQueryErrorProcessor{}
+		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
+
+		// Set up query expectation with success
+		query := "SELECT 1"
+		rows := sqlmock.NewRows([]string{"id"}).AddRow(1)
+		sqlMock.ExpectQuery(query).WillReturnRows(rows)
+
+		// Execute query
+		result, err := db.QueryContext(ctx, query)
+		require.NoError(t, err)
+		defer result.Close()
+
+		// Verify result
+		require.True(t, result.Next())
+		var val int
+		require.NoError(t, result.Scan(&val))
+		require.Equal(t, 1, val)
+
+		// Verify processor was not called
+		require.Equal(t, 0, mockProcessor.callCount)
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+
+	t.Run("query with error", func(t *testing.T) {
 		// Create a DB with the mock processor
 		mockProcessor := &MockQueryErrorProcessor{}
 		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
@@ -712,7 +738,70 @@ func TestDB_QueryWrappers(t *testing.T) {
 		require.NoError(t, sqlMock.ExpectationsWereMet())
 	})
 
-	t.Run("ExecContext", func(t *testing.T) {
+	t.Run("transaction", func(t *testing.T) {
+		// Create a DB and mock processor
+		mockProcessor := &MockQueryErrorProcessor{}
+		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
+
+		// Set up transaction
+		sqlMock.ExpectBegin()
+		tx, err := db.Begin()
+		require.NoError(t, err)
+
+		// Set up query expectation with error
+		query := "SELECT 1"
+		expectedError := errors.New("transaction query error")
+		sqlMock.ExpectQuery(query).WillReturnError(expectedError)
+
+		// Execute query through transaction
+		_, err = tx.QueryContext(ctx, query)
+
+		// Verify error is returned
+		require.Error(t, err)
+		require.Equal(t, expectedError, err)
+
+		// Verify processor was called with correct arguments
+		require.Equal(t, 1, mockProcessor.callCount)
+		require.Equal(t, db, mockProcessor.lastDB)
+		require.Equal(t, query, mockProcessor.lastQuery)
+		require.Equal(t, expectedError, mockProcessor.lastError)
+
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+}
+
+func TestDB_ExecContext(t *testing.T) {
+	// Create mock database
+	mockDB, sqlMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	ctx := context.Background()
+
+	t.Run("successful exec", func(t *testing.T) {
+		// Create a DB with the mock processor
+		mockProcessor := &MockQueryErrorProcessor{}
+		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
+
+		// Set up exec expectation with success
+		query := "UPDATE repositories SET name = 'test'"
+		sqlMock.ExpectExec(query).WillReturnResult(sqlmock.NewResult(1, 1))
+
+		// Execute exec
+		result, err := db.ExecContext(ctx, query)
+		require.NoError(t, err)
+
+		// Verify result
+		rowsAffected, err := result.RowsAffected()
+		require.NoError(t, err)
+		require.Equal(t, int64(1), rowsAffected)
+
+		// Verify processor was not called
+		require.Equal(t, 0, mockProcessor.callCount)
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+
+	t.Run("exec with error", func(t *testing.T) {
 		// Create a DB with the mock processor
 		mockProcessor := &MockQueryErrorProcessor{}
 		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
@@ -720,7 +809,6 @@ func TestDB_QueryWrappers(t *testing.T) {
 		// Set up exec expectation with error
 		query := "UPDATE repositories SET name = 'test'"
 		expectedError := errors.New("connection failure")
-
 		sqlMock.ExpectExec(query).WillReturnError(expectedError)
 
 		// Execute exec
@@ -735,6 +823,126 @@ func TestDB_QueryWrappers(t *testing.T) {
 		require.Equal(t, db, mockProcessor.lastDB)
 		require.Equal(t, query, mockProcessor.lastQuery)
 		require.Equal(t, expectedError, mockProcessor.lastError)
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+
+	t.Run("transaction", func(t *testing.T) {
+		// Create a DB and mock processor
+		mockProcessor := &MockQueryErrorProcessor{}
+		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
+
+		// Set up transaction
+		sqlMock.ExpectBegin()
+		tx, err := db.Begin()
+		require.NoError(t, err)
+
+		// Set up exec expectation with error
+		query := "UPDATE repositories SET name = 'test'"
+		expectedError := errors.New("transaction exec error")
+		sqlMock.ExpectExec(query).WillReturnError(expectedError)
+
+		// Execute exec through transaction
+		_, err = tx.ExecContext(ctx, query)
+
+		// Verify error is returned
+		require.Error(t, err)
+		require.Equal(t, expectedError, err)
+
+		// Verify processor was called with correct arguments
+		require.Equal(t, 1, mockProcessor.callCount)
+		require.Equal(t, db, mockProcessor.lastDB)
+		require.Equal(t, query, mockProcessor.lastQuery)
+		require.Equal(t, expectedError, mockProcessor.lastError)
+
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+}
+
+func TestDB_QueryRowContext(t *testing.T) {
+	// Create mock database
+	mockDB, sqlMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	ctx := context.Background()
+
+	t.Run("successful query", func(t *testing.T) {
+		// Create a DB with the mock processor
+		mockProcessor := &MockQueryErrorProcessor{}
+		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
+
+		// Set up query expectation with successful result
+		query := "SELECT 1"
+		sqlMock.ExpectQuery(query).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+		// Execute query
+		var id int
+		err := db.QueryRowContext(ctx, query).Scan(&id)
+
+		// Verify no error is returned
+		require.NoError(t, err)
+		require.Equal(t, 1, id)
+
+		// Verify processor was not called
+		require.Equal(t, 0, mockProcessor.callCount)
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+
+	t.Run("query with error", func(t *testing.T) {
+		// Create a DB with the mock processor
+		mockProcessor := &MockQueryErrorProcessor{}
+		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
+
+		// Set up query expectation with error result
+		query := "SELECT 1"
+		expectedError := errors.New("no rows in result set")
+		sqlMock.ExpectQuery(query).WillReturnError(expectedError)
+
+		// Execute query
+		var id int
+		err := db.QueryRowContext(ctx, query).Scan(&id)
+
+		// Verify error is returned
+		require.Error(t, err)
+		require.Equal(t, expectedError, err)
+
+		// Verify processor was called with correct arguments
+		require.Equal(t, 1, mockProcessor.callCount)
+		require.Equal(t, db, mockProcessor.lastDB)
+		require.Equal(t, query, mockProcessor.lastQuery)
+		require.Equal(t, expectedError, mockProcessor.lastError)
+		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+
+	t.Run("transaction", func(t *testing.T) {
+		// Create a DB and start a transaction
+		mockProcessor := &MockQueryErrorProcessor{}
+		db := &DB{DB: mockDB, errorProcessor: mockProcessor}
+
+		// Mock transaction
+		sqlMock.ExpectBegin()
+		tx, err := db.Begin()
+		require.NoError(t, err)
+
+		// Set up query expectation with error
+		query := "SELECT 1"
+		expectedError := errors.New("transaction error")
+		sqlMock.ExpectQuery(query).WillReturnError(expectedError)
+
+		// Execute query through transaction
+		var id int
+		err = tx.QueryRowContext(ctx, query).Scan(&id)
+
+		// Verify error is returned
+		require.Error(t, err)
+		require.Equal(t, expectedError, err)
+
+		// Verify processor was called with correct arguments
+		require.Equal(t, 1, mockProcessor.callCount)
+		require.Equal(t, db, mockProcessor.lastDB)
+		require.Equal(t, query, mockProcessor.lastQuery)
+		require.Equal(t, expectedError, mockProcessor.lastError)
+
 		require.NoError(t, sqlMock.ExpectationsWereMet())
 	})
 }

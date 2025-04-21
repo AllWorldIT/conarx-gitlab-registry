@@ -59,7 +59,7 @@ func scanFullGCBlobTasks(rows *sql.Rows) ([]*models.GCBlobTask, error) {
 	return rr, nil
 }
 
-func scanFullGCBlobTask(row *sql.Row) (*models.GCBlobTask, error) {
+func scanFullGCBlobTask(row *Row) (*models.GCBlobTask, error) {
 	b := new(models.GCBlobTask)
 	var dgst Digest
 

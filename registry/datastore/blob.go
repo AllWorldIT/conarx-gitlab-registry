@@ -43,7 +43,7 @@ func NewBlobStore(db Queryer) BlobStore {
 	return &blobStore{db: db}
 }
 
-func scanFullBlob(row *sql.Row) (*models.Blob, error) {
+func scanFullBlob(row *Row) (*models.Blob, error) {
 	var dgst Digest
 	b := new(models.Blob)
 

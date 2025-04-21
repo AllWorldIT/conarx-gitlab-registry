@@ -646,7 +646,7 @@ func (bms *backgroundMigrationStore) ValidateMigrationTableAndColumn(ctx context
 	return err
 }
 
-func scanBackgroundMigrationJob(row *sql.Row) (*models.BackgroundMigrationJob, error) {
+func scanBackgroundMigrationJob(row *Row) (*models.BackgroundMigrationJob, error) {
 	j := new(models.BackgroundMigrationJob)
 	if err := row.Scan(&j.ID, &j.BBMID, &j.StartID, &j.EndID, &j.Status, &j.Attempts, &j.ErrorCode); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -657,7 +657,7 @@ func scanBackgroundMigrationJob(row *sql.Row) (*models.BackgroundMigrationJob, e
 	return j, nil
 }
 
-func scanBackgroundMigration(row *sql.Row) (*models.BackgroundMigration, error) {
+func scanBackgroundMigration(row *Row) (*models.BackgroundMigration, error) {
 	bm := new(models.BackgroundMigration)
 	if err := row.Scan(&bm.ID, &bm.Name, &bm.StartID, &bm.EndID, &bm.BatchSize, &bm.Status, &bm.JobName, &bm.TargetTable, &bm.TargetColumn, &bm.ErrorCode); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {

@@ -37,7 +37,7 @@ func NewNamespaceStore(db Queryer) NamespaceStore {
 	return &namespaceStore{db: db}
 }
 
-func scanFullNamespace(row *sql.Row) (*models.Namespace, error) {
+func scanFullNamespace(row *Row) (*models.Namespace, error) {
 	n := new(models.Namespace)
 
 	if err := row.Scan(&n.ID, &n.Name, &n.CreatedAt, &n.UpdatedAt); err != nil {
