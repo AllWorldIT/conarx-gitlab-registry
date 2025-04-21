@@ -371,27 +371,36 @@ func TestDBLoadBalancer_ThrottledResolveReplicas(t *testing.T) {
 
 	// Create a load balancer with a custom interval for testing
 	lb := &DBLoadBalancer{
-		primary:                    &DB{DB: primaryDB, DSN: &DSN{Host: "primary"}},
-		resolver:                   stubResolver,
-		minResolveReplicasInterval: 50 * time.Millisecond,
-		livenessProber:             NewLivenessProber(),
+		primary:  &DB{DB: primaryDB, DSN: &DSN{Host: "primary", Port: 5432}},
+		resolver: stubResolver,
+		throttledPoolResolver: NewThrottledPoolResolver(
+			WithMinInterval(50*time.Millisecond),
+			WithResolveFunction(func(ctx context.Context) error {
+				_, err := stubResolver.LookupSRV(ctx)
+				return err
+			})),
 	}
 
 	ctx := context.Background()
+	pgErr := &pgconn.PgError{Code: pgerrcode.ConnectionFailure}
 
 	// First call should succeed
-	lb.throttledResolveReplicas(ctx)
+	lb.ProcessQueryError(ctx, lb.Primary(), "SELECT 1", pgErr)
+	// Wait for the asynchronous operation to complete (should be "instantaneous" and stable as we're using a dummy mock)
+	time.Sleep(20 * time.Millisecond)
 	require.Equal(t, 1, resolverCallCount)
 
 	// Second immediate call should be throttled
-	lb.throttledResolveReplicas(ctx)
-	require.Equal(t, 1, resolverCallCount) // Still 1, throttled
+	lb.ProcessQueryError(ctx, lb.Primary(), "SELECT 1", pgErr)
+	time.Sleep(20 * time.Millisecond)
+	require.Equal(t, 1, resolverCallCount)
 
 	// Wait for throttle interval to expire
 	time.Sleep(60 * time.Millisecond)
 
 	// Now should succeed again
-	lb.throttledResolveReplicas(ctx)
+	lb.ProcessQueryError(ctx, lb.Primary(), "SELECT 1", pgErr)
+	time.Sleep(20 * time.Millisecond)
 	require.Equal(t, 2, resolverCallCount)
 }
 
@@ -449,32 +458,6 @@ func TestDBLoadBalancer_IsConnectivityError(t *testing.T) {
 			require.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-func TestDBLoadBalancer_CanResolveReplicas(t *testing.T) {
-	lb := &DBLoadBalancer{
-		minResolveReplicasInterval: 50 * time.Millisecond,
-	}
-
-	// First call, should be allowed
-	allowed := lb.canResolveReplicas()
-	require.True(t, allowed)
-
-	// The call marked operation as in-progress, complete it to simulate finished operation
-	lb.completeReplicaResolution()
-
-	// Second call too soon, should be throttled
-	allowed = lb.canResolveReplicas()
-	require.False(t, allowed)
-
-	// After waiting, next resolution should be allowed
-	time.Sleep(60 * time.Millisecond)
-	allowed = lb.canResolveReplicas()
-	require.True(t, allowed)
-
-	// While in progress, additional resolutions should be rejected
-	allowed = lb.canResolveReplicas()
-	require.False(t, allowed)
 }
 
 func TestNewLivenessProber(t *testing.T) {
@@ -753,6 +736,153 @@ func TestDB_QueryWrappers(t *testing.T) {
 		require.Equal(t, query, mockProcessor.lastQuery)
 		require.Equal(t, expectedError, mockProcessor.lastError)
 		require.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+}
+
+func TestThrottledPoolResolver(t *testing.T) {
+	t.Run("default options", func(t *testing.T) {
+		r := NewThrottledPoolResolver()
+		require.NotNil(t, r)
+		require.Equal(t, minResolveReplicasInterval, r.minInterval)
+		require.Nil(t, r.resolveFn)
+	})
+
+	t.Run("custom options", func(t *testing.T) {
+		var resolveCalled bool
+		r := NewThrottledPoolResolver(
+			WithMinInterval(123*time.Millisecond),
+			WithResolveFunction(func(_ context.Context) error {
+				resolveCalled = true
+				return nil
+			}),
+		)
+
+		require.NotNil(t, r)
+		require.Equal(t, 123*time.Millisecond, r.minInterval)
+		require.NotNil(t, r.resolveFn)
+
+		// Test resolve function
+		err := r.resolveFn(context.Background())
+		require.NoError(t, err)
+		require.True(t, resolveCalled)
+	})
+}
+
+func TestThrottledPoolResolver_BeginComplete(t *testing.T) {
+	r := NewThrottledPoolResolver(
+		WithMinInterval(50 * time.Millisecond),
+	)
+
+	// First call should be allowed
+	require.True(t, r.Begin(), "First resolution should be allowed")
+
+	// Verify inProgress is set
+	require.True(t, r.inProgress, "inProgress should be true after Begin")
+	require.Zero(t, r.lastComplete, "lastComplete should be zero time initially")
+
+	// Second immediate call should be throttled due to inProgress
+	require.False(t, r.Begin(), "Second call should be throttled while in progress")
+
+	// Complete the resolution
+	r.Complete()
+
+	// Verify lastComplete is updated and inProgress is cleared
+	require.False(t, r.inProgress, "inProgress should be false after Complete")
+	require.NotZero(t, r.lastComplete, "lastComplete should be updated")
+
+	// Immediate third call should be throttled due to timing
+	require.False(t, r.Begin(), "Call should be throttled immediately after completion")
+
+	// After waiting, next call should be allowed
+	time.Sleep(60 * time.Millisecond)
+	require.True(t, r.Begin(), "Call should be allowed after interval")
+}
+
+func TestThrottledPoolResolver_Resolve(t *testing.T) {
+	t.Run("successful", func(t *testing.T) {
+		var resolveCalled bool
+		r := NewThrottledPoolResolver(
+			WithMinInterval(50*time.Millisecond),
+			WithResolveFunction(func(_ context.Context) error {
+				resolveCalled = true
+				return nil
+			}),
+		)
+
+		// First resolution should succeed
+		result := r.Resolve(context.Background())
+		require.True(t, result, "Resolve should return true when resolution was performed")
+		require.True(t, resolveCalled, "Resolve function should have been called")
+
+		// Reset for next test
+		resolveCalled = false
+
+		// Immediate second resolution should be throttled
+		result = r.Resolve(context.Background())
+		require.False(t, result, "Immediate second resolution should be throttled")
+		require.False(t, resolveCalled, "Resolve function should not have been called")
+
+		// After waiting, third resolution should succeed
+		resolveCalled = false
+		time.Sleep(60 * time.Millisecond)
+
+		result = r.Resolve(context.Background())
+		require.True(t, result, "Resolution after waiting should succeed")
+		require.True(t, resolveCalled, "Resolve function should have been called")
+	})
+
+	t.Run("error", func(t *testing.T) {
+		expectedErr := errors.New("resolution error")
+		r := NewThrottledPoolResolver(
+			WithResolveFunction(func(_ context.Context) error {
+				return expectedErr
+			}),
+		)
+
+		// Resolution should proceed but return the error
+		result := r.Resolve(context.Background())
+		require.True(t, result, "Resolve should return true even when resolution function returns an error")
+
+		// Verify inProgress was cleared despite the error
+		require.False(t, r.inProgress, "inProgress should be cleared after error")
+		require.NotEqual(t, time.Time{}, r.lastComplete, "lastComplete should be updated after error")
+	})
+
+	t.Run("concurrent", func(t *testing.T) {
+		// Create a resolver with a resolve function that blocks
+		resolveStarted := make(chan struct{})
+		resolveFinished := make(chan struct{})
+		resolveCount := 0
+
+		r := NewThrottledPoolResolver(
+			WithResolveFunction(func(_ context.Context) error {
+				resolveCount++
+				resolveStarted <- struct{}{}
+				<-resolveFinished // Block until test signals completion
+				return nil
+			}),
+		)
+
+		// Start a goroutine that will attempt to resolve
+		go func() {
+			r.Resolve(context.Background())
+		}()
+
+		// Wait for resolution to start
+		<-resolveStarted
+
+		// Try another resolution while first one is in progress
+		result := r.Resolve(context.Background())
+		require.False(t, result, "Concurrent resolution should be throttled")
+
+		// Allow first resolution to complete
+		resolveFinished <- struct{}{}
+
+		// Give time for goroutine to complete
+		time.Sleep(10 * time.Millisecond)
+
+		// Verify only one resolution occurred
+		require.Equal(t, 1, resolveCount, "Only one resolution should have occurred")
 	})
 }
 

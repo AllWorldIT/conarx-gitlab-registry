@@ -471,11 +471,8 @@ type DBLoadBalancer struct {
 	// For controlling replicas liveness probing
 	livenessProber *LivenessProber
 
-	// For controlling replicas resolution concurrency
-	resolveReplicasMu          sync.Mutex
-	resolveReplicasInProgress  bool
-	resolveReplicasLastTime    time.Time
-	minResolveReplicasInterval time.Duration // Minimum time between resolve replicas calls
+	// For controlling concurrent replicas pool resolution
+	throttledPoolResolver *ThrottledPoolResolver
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
@@ -745,51 +742,93 @@ func (p *LivenessProber) Probe(ctx context.Context, db *DB) {
 	}
 }
 
-// canResolveReplicas checks if a full replicas resolution operation is currently allowed. It returns false if another
-// resolution is already in progress or if one was completed too recently (within minResolveReplicasInterval). If the
-// resolution is allowed, it marks the operation as in progress and returns true.
-func (lb *DBLoadBalancer) canResolveReplicas() bool {
-	lb.resolveReplicasMu.Lock()
-	defer lb.resolveReplicasMu.Unlock()
+// ThrottledPoolResolver manages resolution of database replicas with throttling to prevent excessive operations.
+type ThrottledPoolResolver struct {
+	sync.Mutex
+	inProgress   bool
+	lastComplete time.Time
+	minInterval  time.Duration
+	resolveFn    func(context.Context) error
+}
 
-	if lb.resolveReplicasInProgress || (time.Since(lb.resolveReplicasLastTime) < lb.minResolveReplicasInterval) {
+// ThrottledPoolResolverOption configures a ThrottledPoolResolver.
+type ThrottledPoolResolverOption func(*ThrottledPoolResolver)
+
+// WithMinInterval sets the minimum interval between replica resolutions.
+func WithMinInterval(interval time.Duration) ThrottledPoolResolverOption {
+	return func(r *ThrottledPoolResolver) {
+		r.minInterval = interval
+	}
+}
+
+// WithResolveFunction sets the function that performs the actual resolution.
+func WithResolveFunction(fn func(context.Context) error) ThrottledPoolResolverOption {
+	return func(r *ThrottledPoolResolver) {
+		r.resolveFn = fn
+	}
+}
+
+// NewThrottledPoolResolver creates a new ThrottledPoolResolver with the given options.
+func NewThrottledPoolResolver(opts ...ThrottledPoolResolverOption) *ThrottledPoolResolver {
+	resolver := &ThrottledPoolResolver{
+		minInterval: minResolveReplicasInterval,
+	}
+
+	for _, opt := range opts {
+		opt(resolver)
+	}
+
+	return resolver
+}
+
+// Begin checks if a replica pool resolution operation is currently allowed. It returns false if another resolution is
+// already in progress or if one was completed too recently (within minInterval). If resolution is allowed, it marks
+// the operation as in progress and returns true.
+func (r *ThrottledPoolResolver) Begin() bool {
+	r.Lock()
+	defer r.Unlock()
+
+	if r.inProgress || (time.Since(r.lastComplete) < r.minInterval) {
 		return false
 	}
-	lb.resolveReplicasInProgress = true
+
+	r.inProgress = true
 	return true
 }
 
-// completeReplicaResolution marks a replicas resolution operation as complete and updates the timestamp of the last
-// completed to enforce the minimum interval between repetitions.
-func (lb *DBLoadBalancer) completeReplicaResolution() {
-	lb.resolveReplicasMu.Lock()
-	defer lb.resolveReplicasMu.Unlock()
+// Complete marks a replicas resolution operation as complete and updates the timestamp of the last completed operation
+// to enforce the minimum interval between operations.
+func (r *ThrottledPoolResolver) Complete() {
+	r.Lock()
+	defer r.Unlock()
 
-	lb.resolveReplicasInProgress = false
-	lb.resolveReplicasLastTime = time.Now()
+	r.inProgress = false
+	r.lastComplete = time.Now()
 }
 
-// throttledResolveReplicas performs replicas resolution with rate limiting to prevent concurrent operations or
-// excessive frequency.
-func (lb *DBLoadBalancer) throttledResolveReplicas(ctx context.Context) {
-	l := lb.logger(ctx)
+// Resolve triggers a resolution of the replica pool if allowed by throttling constraints.
+// It returns true if the resolution was performed, false if it was skipped due to throttling.
+func (r *ThrottledPoolResolver) Resolve(ctx context.Context) bool {
+	l := log.GetLogger(log.WithContext(ctx))
 
 	// Check if another resolution is already in progress or happened too recently
-	if !lb.canResolveReplicas() {
-		l.Info("skipping replica resolution, already in progress or too recent")
-		return
+	if !r.Begin() {
+		l.Info("skipping replica pool resolution, already in progress or too recent")
+		return false
 	}
 
 	// When we're done, mark the operation as complete
-	defer lb.completeReplicaResolution()
+	defer r.Complete()
 
 	// Perform the resolution
 	l.Info("resolving replicas")
-	if err := lb.ResolveReplicas(ctx); err != nil {
+	if err := r.resolveFn(ctx); err != nil {
 		l.WithError(err).Error("failed to resolve replicas")
 	} else {
 		l.Info("successfully resolved replicas")
 	}
+
+	return true
 }
 
 // isConnectivityError determines if the given error is related to database connectivity issues. It checks for specific
@@ -837,7 +876,7 @@ func (lb *DBLoadBalancer) ProcessQueryError(ctx context.Context, db *DB, query s
 		case HostTypePrimary:
 			// If the primary connection fails (a failover event is possible), proactively refresh all replicas
 			l.Warn("primary database connection error during query execution; initiating replica resolution")
-			go lb.throttledResolveReplicas(context.WithoutCancel(ctx)) // detach from outer context to avoid external cancellation
+			go lb.throttledPoolResolver.Resolve(context.WithoutCancel(ctx)) // detach from outer context to avoid external cancellation
 		case HostTypeReplica:
 			// For a replica, run a liveness probe and retire it if necessary
 			l.Warn("replica database connection error during query execution; initiating liveness probe")
@@ -1004,7 +1043,7 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 		case <-t.C:
 			l.WithFields(log.Fields{"interval_ms": lb.replicaCheckInterval.Milliseconds()}).
 				Info("scheduled refresh of replicas list")
-			lb.throttledResolveReplicas(ctx)
+			lb.throttledPoolResolver.Resolve(ctx)
 		}
 	}
 }
@@ -1042,22 +1081,27 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 	config := applyOptions(opts)
 
 	lb := &DBLoadBalancer{
-		active:                     config.loadBalancing.active,
-		primaryDSN:                 primaryDSN,
-		connector:                  config.loadBalancing.connector,
-		resolver:                   config.loadBalancing.resolver,
-		fixedHosts:                 config.loadBalancing.hosts,
-		replicaOpenOpts:            opts,
-		replicaCheckInterval:       config.loadBalancing.replicaCheckInterval,
-		lsnCache:                   config.loadBalancing.lsnStore,
-		metricsEnabled:             config.metricsEnabled,
-		promRegisterer:             config.promRegisterer,
-		replicaPromCollectors:      make(map[string]prometheus.Collector),
-		minResolveReplicasInterval: minResolveReplicasInterval,
+		active:                config.loadBalancing.active,
+		primaryDSN:            primaryDSN,
+		connector:             config.loadBalancing.connector,
+		resolver:              config.loadBalancing.resolver,
+		fixedHosts:            config.loadBalancing.hosts,
+		replicaOpenOpts:       opts,
+		replicaCheckInterval:  config.loadBalancing.replicaCheckInterval,
+		lsnCache:              config.loadBalancing.lsnStore,
+		metricsEnabled:        config.metricsEnabled,
+		promRegisterer:        config.promRegisterer,
+		replicaPromCollectors: make(map[string]prometheus.Collector),
 	}
 
 	// Initialize the replicas liveness prober with a callback to retire unhealthy hosts
 	lb.livenessProber = NewLivenessProber(WithUnhealthyCallback(lb.removeReplica))
+
+	// Initialize the throttled replica pool resolver
+	lb.throttledPoolResolver = NewThrottledPoolResolver(
+		WithMinInterval(minResolveReplicasInterval),
+		WithResolveFunction(lb.ResolveReplicas),
+	)
 
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
 	if err != nil {
