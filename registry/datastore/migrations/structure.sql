@@ -5676,6 +5676,11 @@ ALTER TABLE public.media_types
         NO MAXVALUE
         CACHE 1);
 
+CREATE TABLE public.post_deploy_schema_migrations (
+    id text NOT NULL,
+    applied_at timestamp with time zone
+);
+
 CREATE TABLE public.repositories (
     id bigint NOT NULL,
     top_level_namespace_id bigint NOT NULL,
@@ -10616,6 +10621,9 @@ ALTER TABLE ONLY public.repositories
 
 ALTER TABLE ONLY public.top_level_namespaces
     ADD CONSTRAINT pk_top_level_namespaces PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.post_deploy_schema_migrations
+    ADD CONSTRAINT post_deploy_schema_migrations_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (id);

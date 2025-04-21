@@ -40,6 +40,8 @@ import (
 	"github.com/docker/distribution/registry/auth/token"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
+	"github.com/docker/distribution/registry/datastore/migrations/postmigrations"
+	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	datastoretestutil "github.com/docker/distribution/registry/datastore/testutil"
 	registryhandlers "github.com/docker/distribution/registry/handlers"
 	iredis "github.com/docker/distribution/registry/internal/redis"
@@ -417,9 +419,13 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := migrations.NewMigrator(db.Primary())
-		if _, err = m.Up(); err != nil {
-			t.Fatal(err)
+
+		var m []migrations.PureMigrator
+		m = append(m, premigrations.NewMigrator(db.Primary()), postmigrations.NewMigrator(db.Primary()))
+		for _, mig := range m {
+			if _, err = mig.Up(); err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		// online GC workers are noisy and not required for the API test, so we disable them globally here

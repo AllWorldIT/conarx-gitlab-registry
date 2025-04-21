@@ -29,7 +29,7 @@ func TestMigrator_Version(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 	_, err = m.Up()
 	require.NoError(t, err)
 
@@ -47,7 +47,7 @@ func TestMigrator_Version_NoMigrations(t *testing.T) {
 	defer cleanupDB(t, db)
 
 	// Create migrator with an empty migration source.
-	m := migrations.NewMigrator(db, migrations.Source(make([]*migrations.Migration, 0)))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(make([]*migrations.Migration, 0)))
 
 	v, err := m.Version()
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestMigrator_LatestVersion(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 
 	v, err := m.LatestVersion()
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestMigrator_LatestVersion_NoMigrations(t *testing.T) {
 	defer cleanupDB(t, db)
 
 	// Create migrator with an empty migration source.
-	m := migrations.NewMigrator(db, migrations.Source(make([]*migrations.Migration, 0)))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(make([]*migrations.Migration, 0)))
 	v, err := m.LatestVersion()
 	require.NoError(t, err)
 	require.Empty(t, v)
@@ -83,7 +83,7 @@ func TestMigrator_Up(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 
 	all := testmigrations.All()
 
@@ -99,85 +99,12 @@ func TestMigrator_Up(t *testing.T) {
 	require.Equal(t, v, currentVersion)
 }
 
-func TestMigrator_Up_ApplyPostDeploymentMigrations(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
-
-	migs := testmigrations.NonPostDeployment()
-
-	mr, err := m.Up()
-	require.NoError(t, err)
-	require.Equal(t, len(migs), mr.AppliedCount)
-
-	initialCurrentVersion, err := m.Version()
-	require.NoError(t, err)
-
-	initialLatestVersion, err := m.LatestVersion()
-	require.NoError(t, err)
-	require.Equal(t, initialLatestVersion, initialCurrentVersion)
-
-	// Run post deployment migrations after fully applying all others.
-	m = migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-	)
-
-	all := testmigrations.All()
-
-	mr, err = m.Up()
-	require.NoError(t, err)
-	require.Equal(t, len(all)-len(migs), mr.AppliedCount)
-
-	currentVersion, err := m.Version()
-	require.NoError(t, err)
-
-	latestVersion, err := m.LatestVersion()
-	require.NoError(t, err)
-	require.Equal(t, latestVersion, currentVersion)
-
-	require.NotEqual(t, initialLatestVersion, latestVersion)
-	require.NotEqual(t, initialCurrentVersion, currentVersion)
-}
-
-func TestMigrator_Up_SkipPostDeployment(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
-
-	migs := testmigrations.NonPostDeployment()
-	n := len(migs)
-
-	mr, err := m.Up()
-	require.NoError(t, err)
-	require.Equal(t, n, mr.AppliedCount)
-
-	currentVersion, err := m.Version()
-	require.NoError(t, err)
-
-	v, err := m.LatestVersion()
-	require.NoError(t, err)
-	require.Equal(t, v, currentVersion)
-}
-
 func TestMigrator_UpN(t *testing.T) {
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 
 	// apply all except the last two
 	all := testmigrations.All()
@@ -211,55 +138,12 @@ func TestMigrator_UpN(t *testing.T) {
 	require.Equal(t, v, v2)
 }
 
-func TestMigrator_UpN_SkipPostDeployment(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
-
-	// apply all non postdeployment migrations except the last two
-	migs := testmigrations.NonPostDeployment()
-	n := len(migs) - 1 - 2
-	nth := migs[n-1]
-
-	mr, err := m.UpN(n)
-	require.NoError(t, err)
-	require.Equal(t, n, mr.AppliedCount)
-
-	v, err := m.Version()
-	require.NoError(t, err)
-	require.Equal(t, nth.Id, v)
-
-	// resume and apply the remaining
-	mr, err = m.UpN(0)
-	require.NoError(t, err)
-	require.Equal(t, len(migs)-n, mr.AppliedCount)
-
-	v, err = m.Version()
-	require.NoError(t, err)
-	require.Equal(t, migs[len(migs)-1].Id, v)
-
-	// make sure it's idempotent
-	mr, err = m.UpN(100)
-	require.NoError(t, err)
-	require.Zero(t, mr.AppliedCount)
-
-	v2, err := m.Version()
-	require.NoError(t, err)
-	require.Equal(t, v, v2)
-}
-
 func TestMigrator_UpNPlan(t *testing.T) {
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 
 	all := testmigrations.All()
 
@@ -292,106 +176,16 @@ func TestMigrator_UpNPlan(t *testing.T) {
 	require.Equal(t, allExceptFirstTwoPlan, plan)
 }
 
-func TestMigrator_UpNPlan_SkipPostDeployment(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
-
-	migs := testmigrations.NonPostDeployment()
-
-	var allPlan []string
-	for _, migration := range migs {
-		allPlan = append(allPlan, migration.Id)
-	}
-
-	// plan all except the last two
-	n := len(allPlan) - 1 - 2
-	allExceptLastTwoPlan := allPlan[:n]
-
-	plan, err := m.UpNPlan(n)
-	require.NoError(t, err)
-	require.Equal(t, allExceptLastTwoPlan, plan)
-
-	// apply two migrations and re-plan all (the first two shouldn't be part of the plan anymore)
-	_, err = m.UpN(2)
-	require.NoError(t, err)
-
-	plan, err = m.UpNPlan(0)
-	require.NoError(t, err)
-
-	allExceptFirstTwoPlan := allPlan[2:]
-	require.Equal(t, allExceptFirstTwoPlan, plan)
-
-	// make sure it's idempotent
-	plan, err = m.UpNPlan(100)
-	require.NoError(t, err)
-	require.Equal(t, allExceptFirstTwoPlan, plan)
-}
-
 func TestMigrator_Down(t *testing.T) {
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 	_, err = m.Up()
 	require.NoError(t, err)
 
 	all := testmigrations.All()
-
-	count, err := m.Down()
-	require.NoError(t, err)
-	require.Equal(t, len(all), count)
-
-	currentVersion, err := m.Version()
-	require.NoError(t, err)
-	require.Empty(t, currentVersion)
-}
-
-func TestMigrator_Down_SkipPostDeployment(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
-	_, err = m.Up()
-	require.NoError(t, err)
-
-	migs := testmigrations.NonPostDeployment()
-
-	count, err := m.Down()
-	require.NoError(t, err)
-	require.Equal(t, len(migs), count)
-
-	currentVersion, err := m.Version()
-	require.NoError(t, err)
-	require.Empty(t, currentVersion)
-}
-
-func TestMigrator_Down_SkipPostDeployment_ExistingPostDeployments(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
-	_, err = m.Up()
-	require.NoError(t, err)
-
-	all := testmigrations.All()
-
-	// Configure migrator to skip postdeployment migrations, down migrations
-	// should ignore this and operate on all applied migrations.
-	m.Reconfigure(migrations.SkipPostDeployment())
 
 	count, err := m.Down()
 	require.NoError(t, err)
@@ -407,7 +201,7 @@ func TestMigrator_DownN(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 	_, err = m.Up()
 	require.NoError(t, err)
 
@@ -443,57 +237,12 @@ func TestMigrator_DownN(t *testing.T) {
 	require.Empty(t, v)
 }
 
-func TestMigrator_DownN_SkipPostDeployment(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
-	_, err = m.Up()
-	require.NoError(t, err)
-
-	// rollback all except the first two
-	migs := testmigrations.NonPostDeployment()
-	n := len(migs) - 2
-	second := migs[1]
-
-	count, err := m.DownN(n)
-	require.NoError(t, err)
-	require.Equal(t, n, count)
-
-	v, err := m.Version()
-	require.NoError(t, err)
-	require.Equal(t, second.Id, v)
-
-	// resume and rollback the remaining two
-	count, err = m.DownN(0)
-	require.NoError(t, err)
-	require.Equal(t, 2, count)
-
-	v, err = m.Version()
-	require.NoError(t, err)
-	require.Empty(t, v)
-
-	// make sure it's idempotent
-	count, err = m.DownN(100)
-	require.NoError(t, err)
-	require.Zero(t, count)
-
-	v, err = m.Version()
-	require.NoError(t, err)
-	require.Empty(t, v)
-}
-
 func TestMigrator_DownNPlan(t *testing.T) {
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 	_, err = m.Up()
 	require.NoError(t, err)
 
@@ -530,58 +279,12 @@ func TestMigrator_DownNPlan(t *testing.T) {
 	require.Equal(t, allExceptFirstTwoPlan, plan)
 }
 
-func TestMigrator_DownNPlan_SkipPostDeploymnet(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
-	_, err = m.Up()
-	require.NoError(t, err)
-
-	migs := testmigrations.NonPostDeployment()
-
-	var migsPlan []string
-
-	for _, migration := range migs {
-		migsPlan = append(migsPlan, migration.Id)
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(migsPlan))) // down migrations are applied in reverse order
-
-	// plan all except the last two
-	n := len(migsPlan) - 1 - 2
-	allExceptLastTwoPlan := migsPlan[:n]
-
-	plan, err := m.DownNPlan(n)
-	require.NoError(t, err)
-	require.Equal(t, allExceptLastTwoPlan, plan)
-
-	// apply two migrations and re-plan all (the first two shouldn't be part of the plan anymore)
-	_, err = m.DownN(2)
-	require.NoError(t, err)
-
-	plan, err = m.DownNPlan(0)
-	require.NoError(t, err)
-
-	allExceptFirstTwoPlan := migsPlan[2:]
-	require.Equal(t, allExceptFirstTwoPlan, plan)
-
-	// make sure it's idempotent
-	plan, err = m.DownNPlan(100)
-	require.NoError(t, err)
-	require.Equal(t, allExceptFirstTwoPlan, plan)
-}
-
 func TestMigrator_Status_Empty(t *testing.T) {
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 
 	all := testmigrations.All()
 
@@ -609,7 +312,7 @@ func TestMigrator_Status_Full(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 	_, err = m.Up()
 	require.NoError(t, err)
 
@@ -634,40 +337,12 @@ func TestMigrator_Status_Full(t *testing.T) {
 	}
 }
 
-func TestMigrator_Status_PostDeployment(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
-	_, err = m.Up()
-	require.NoError(t, err)
-
-	all := testmigrations.All()
-
-	statuses, err := m.Status()
-	require.NoError(t, err)
-	require.Len(t, statuses, len(all))
-
-	// See migrations/testdata/fixtures/
-	postDeploymentID := "20201027124302_create_post_migration_test_two_table"
-	standardID := "20200319131542_create_manifests_test_table"
-
-	postDeploymentStatus := statuses[postDeploymentID]
-	require.NotNil(t, postDeploymentStatus)
-	require.True(t, postDeploymentStatus.PostDeployment)
-
-	standardStatus := statuses[standardID]
-	require.NotNil(t, standardStatus)
-	require.False(t, standardStatus.PostDeployment)
-}
-
 func TestMigrator_Status_Unknown(t *testing.T) {
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 	_, err = m.Up()
 	require.NoError(t, err)
 
@@ -695,25 +370,7 @@ func TestMigrator_HasPending_No(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
-	_, err = m.Up()
-	require.NoError(t, err)
-
-	pending, err := m.HasPending()
-	require.NoError(t, err)
-	require.False(t, pending)
-}
-
-func TestMigrator_HasPending_No_SkipPostDeployment(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 	_, err = m.Up()
 	require.NoError(t, err)
 
@@ -727,32 +384,12 @@ func TestMigrator_HasPending_Yes(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB(t, db)
 
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
 	_, err = m.Up()
 	require.NoError(t, err)
 
 	_, err = m.DownN(1)
 	require.NoError(t, err)
-
-	pending, err := m.HasPending()
-	require.NoError(t, err)
-	require.True(t, pending)
-}
-
-func TestMigrator_HasPending_Yes_PendingPostDeployment(t *testing.T) {
-	db, err := testutil.NewDBFromEnv()
-	require.NoError(t, err)
-	defer cleanupDB(t, db)
-
-	m := migrations.NewMigrator(
-		db,
-		migrations.Source(testmigrations.All()),
-		migrations.SkipPostDeployment(),
-	)
-	_, err = m.Up()
-	require.NoError(t, err)
-
-	m = migrations.NewMigrator(db, migrations.Source(testmigrations.All()))
 
 	pending, err := m.HasPending()
 	require.NoError(t, err)
@@ -791,7 +428,7 @@ func TestMigrator_Up_WithEnforcedBBM(t *testing.T) {
 	defer cleanupDB(t, db, withCleanupBBM(t))
 
 	// Create a new migrator instance with enforced batched background migrations
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.AllWithEnforcedBBMMigrations()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.AllWithEnforcedBBMMigrations()))
 	all := testmigrations.AllWithEnforcedBBMMigrations()
 
 	// Apply the first 5 migrations to simulate a non-fresh registry install
@@ -832,6 +469,7 @@ func TestMigrator_Up_NewInstall_WithEnforcedBBM(t *testing.T) {
 
 	// Create a new migrator with enforced BBM migrations and a custom BBM worker
 	m := migrations.NewMigrator(db,
+		migrations.WithTable(migrationTableName),
 		migrations.Source(
 			testmigrations.AllWithEnforcedBBMMigrations(),
 		),
@@ -879,7 +517,7 @@ func TestMigrator_Up_WithUnEnforcedBBM(t *testing.T) {
 	defer cleanupDB(t, db, withCleanupBBM(t))
 
 	// Create a new migrator with unenforced BBM migrations
-	m := migrations.NewMigrator(db, migrations.Source(testmigrations.AllWithUnEnforcedBBMMigrations()))
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.AllWithUnEnforcedBBMMigrations()))
 
 	all := testmigrations.AllWithUnEnforcedBBMMigrations()
 

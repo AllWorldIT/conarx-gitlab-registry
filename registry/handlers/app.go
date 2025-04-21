@@ -41,7 +41,7 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
-	"github.com/docker/distribution/registry/datastore/migrations"
+	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/gc"
 	"github.com/docker/distribution/registry/gc/worker"
@@ -489,7 +489,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		// Skip postdeployment migrations to prevent pending post deployment
 		// migrations from preventing the registry from starting.
-		m := migrations.NewMigrator(db.Primary(), migrations.SkipPostDeployment())
+		m := premigrations.NewMigrator(db.Primary(), premigrations.SkipPostDeployment())
 		pending, err := m.HasPending()
 		if err != nil {
 			return nil, fmt.Errorf("failed to check database migrations status: %w", err)

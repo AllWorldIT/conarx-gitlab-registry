@@ -11,6 +11,8 @@ import (
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
+	"github.com/docker/distribution/registry/datastore/migrations/postmigrations"
+	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/datastore/mocks"
 	"github.com/docker/distribution/registry/datastore/models"
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
@@ -57,9 +59,12 @@ func initDatabase(t *testing.T, env *env) {
 
 	env.db = db
 
-	m := migrations.NewMigrator(db)
-	_, err = m.Up()
-	require.NoError(t, err)
+	var m []migrations.PureMigrator
+	m = append(m, premigrations.NewMigrator(db), postmigrations.NewMigrator(db))
+	for _, mig := range m {
+		_, err = mig.Up()
+		require.NoError(t, err)
+	}
 }
 
 func newEnv(t *testing.T) *env {

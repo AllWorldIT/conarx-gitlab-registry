@@ -107,6 +107,60 @@ complete when applied to a production database (e.g. when creating indexes or va
 [`20221129145757_post_add_layers_simplified_usage_index_batch_2`](https://gitlab.com/gitlab-org/container-registry/blob/85d0fe473c2fc167cc3ca0c1c08752a0498a839c/registry/datastore/migrations/20221129145757_post_add_layers_simplified_usage_index_batch_2.go)
 for an example.
 
+### Schema Migration Process
+
+The migration system establishes a clear distinction between migrations that must run before the registry starts (i.e. pre-deploy) and those that may run after (i.e. post-deploy). All existing schema migrations are explicitly assigned to either of these categories based on the limitations of the migration (e.g. how long it takes to execute). This classification enables better management and versioning of different types of database changes.
+
+#### Execution Order
+
+The migration command enforces a strict execution order: all pre-deployment migrations run first, followed by all post-deployment migrations. The system supports a dependency graph between the different types of migrations. 
+
+A pre-deployment migration can declare dependencies on specific post-deployment migrations, allowing for complex migration scenarios. For example, a pre-deployment migration that creates a new column may need to ensure that a post-deployment migration has already created the table it depends on. When such dependencies exist, the system will ensure that when running the `migrate up` command, the required post-deployment migrations for any pre-deployment migrations that have not yet been executed are executed before continuing to execute the following pre-deployment migrations. 
+
+In the case where post-deployment migrations are skipped (e.g. using the `--skip-post-deployment` flag) and there are unsatisfied post-deployment dependencies for the pre-deployment migrations that have not yet been executed, the system will block execution and notify the user of unsatisfied dependencies. In this case, the user will need to run the `migrate up` command again without the `--skip-post-deployment` flag.
+
+It is worth noting that due to the enforced execution order (i.e. pre-deploy before post-deploy), a post-deployment migration cannot technically require a pre-deployment migration that hasn't been executed yet. In the case where a pre-deployment migration has dependencies on post-deployment migrations, the system ensures that the necessary post-deployment migrations are executed first to resolve the dependency. Once all pre-deployment migrations are completed, only then will the remaining post-deployment migrations execute. This guarantees that all the required changes from pre-deployment migrations are in place before any post-deployment migrations are applied.
+
+```mermaid
+graph TD
+  Y[Begin Post-deployment Migration] --> |1st migration skipped because applied| B[Post-deployment Migration 1]
+  K[Migrate Up] --> Z
+  Z[Begin Pre-deployment Migration] --> A[Pre-deployment Migration 1]
+  A -->|Execute| B
+  B --> A
+  A --> C[Pre-deployment Migration 2]
+  C --> E[Pre-deployment Migration 3]
+  E --> G[End of Pre-deployment Migrations]
+  G --> Y[Begin of Post-deployment Migrations]
+  B --> |Execute| D[Post-deployment Migration]
+  D --> |Execute| F[Post-deployment Migration 3]
+  F --> H[End of Post-deployment Migrations]
+  H --> I[End]
+  style A fill:#f9f,stroke:#333,stroke-width:4px
+  style B fill:#bbf,stroke:#333,stroke-width:4px
+  style C fill:#f9f,stroke:#333,stroke-width:4px
+  style D fill:#bbf,stroke:#333,stroke-width:4px
+  style E fill:#f9f,stroke:#333,stroke-width:4px
+  style F fill:#bbf,stroke:#333,stroke-width:4px
+  style G fill:#f9f,stroke:#333,stroke-width:4px
+  style H fill:#f9f,stroke:#333,stroke-width:4px
+
+```
+
+In the above example Pre-deployment Migration 1 depends on Post-deployment Migration 1 hence it is executed in the pre-deploy run as opposed to the posy-deploy run.
+
+#### Commands
+
+The migration system supports several key operations:
+
+1. **Up Migrations**: Applies pending migrations in the correct order, respecting dependencies between pre-deployment and post-deployment migrations.
+
+1. **Down Migrations**: Reverts migrations in the reverse order of application - first removing post-deployment migrations, then pre-deployment migrations.
+
+1. **Status**: Displays two separate status tables showing which migrations of each type have been applied.
+
+1. **Version**: Shows the most recent migration version for both pre-deployment and post-deployment migrations, allowing for quick verification of the database state.
+
 ## Development
 
 ### Create Database
@@ -132,7 +186,11 @@ make db-new-migration [name]
 
 A new migration file, named `[timestamp]_[name].go`, will be created under
 `migrations/`. Migration files are prefixed with the timestamp of the current
-system date formatted as `%Y%m%d%H%M%S`.
+system date formatted as `%Y%m%d%H%M%S`. 
+
+Depending on whether the migration is required for pre-deployment or post-deployment,
+move the newly created migration file into the corresponding
+`predeployment/` or `postdeployment/` subdirectory within `migrations/`.
 
 Make sure to use a descriptive name for the migration, preferably denoting the
 `action` and the object `name` and `type`. For example, to create a table `x`,
@@ -140,10 +198,15 @@ use `create_x_table`. To drop a column `a` from table `x`, use `drop_x_a_column`
 The name can only contain alphanumeric and underscore characters.
 
 New migrations are created based on a template, so we just need to fill in the
-list of `Up` and `Down` SQL statements, and if desired, flag the migration as a
-post deployment migrations by changing the boolean value of `PostDeployment` to
-`true`. All `Up` and `Down` statements are executed within a transaction by
-default.
+list of `Up` and `Down` SQL statements.
+
+If applicable, specify migration dependencies by adding the reference ID of the required
+migration to either:
+
+- `RequiredPreDeploy`: for post-deploy migrations that rely on existing pre-deploy migrations.
+- `RequiredPostDeploy`: for pre-deploy migrations that depend on existing post-deploy migrations.
+
+All `Up` and `Down` statements are executed within a transaction.
 
 #### Example
 
@@ -235,7 +298,8 @@ Usage:
 Flags:
   -d, --dry-run     do not commit changes to the database
   -h, --help        help for up
-  -n, --limit int   limit the number of migrations (all by default)
+  -n, --limit int   limit the number of pre-migrations (all by default)
+  -p, --post-deploy-limit int   limit the number of post-migrations (all by default)
   -s, --skip-post-deployment   do not apply post deployment migrations
 ```
 
@@ -254,10 +318,20 @@ migrations are applied.
 
 #### Example
 
+Apply 1 pre-deployment migration:
+
 ```plaintext
 $ registry database migrate up -n 1 config.yml
 20200713143615_create_users_table
-OK: applied 1 migrations in 0.412s
+OK: applied 1 pre-deployment migration(s), 0 post-deployment migration(s) and 0 background migration(s)
+```
+
+Apply 1 post-deployment migration:
+
+```plaintext
+$ registry database migrate up -p 1 config.yml
+20200713143615_create_users_table
+OK: applied 0 pre-deployment migration(s), 1 post-deployment migration(s) and 0 background migration(s)
 ```
 
 ### Apply Down Migrations
@@ -289,6 +363,7 @@ flag can be used to bypass the confirmation message.
 
 ```plaintext
 $ registry database migrate down config.yml
+pre-deployment:
 20200713143615_create_users_table
 20200527132906_create_repository_blobs_table
 20200408193126_create_repository_manifest_lists_table
@@ -302,7 +377,12 @@ $ registry database migrate down config.yml
 20200319130108_create_manifests_table
 20200319122755_create_repositories_table
 Preparing to apply down migrations. Are you sure? [y/N] y
-OK: applied 12 migrations in 121.334s
+OK: applied 12 pre-deployment migration(s) in 121.334s
+
+post-deployment:
+20220319122755_create_index_on_manifest_table
+Preparing to apply down migrations. Are you sure? [y/N] y
+OK: applied 1 post-deployment migration(s) in 0.077s
 ```
 
 ### Status

@@ -14,8 +14,10 @@
     REGISTRY_DATABASE_HOST: db
     REGISTRY_OLD_IMAGE: registry.gitlab.com/gitlab-org/build/cng/gitlab-container-registry:${REGISTRY_SELF_MANAGED_RELEASE_VERSION}
 
+# migrate:init-db-with-last-release is a job that runs the cli migrate command to initialize the database with the last GitLab released registry version.
+# It is a prerequisite for the other jobs that test the migration from the last GitLab released registry version to the current development version.
 #TODO: This job is convoluted because of the nature of dind. Consider building the older registry from source https://gitlab.com/gitlab-org/container-registry/-/issues/1520.
-migrate_old_registry:
+migrate:init-db-with-last-release:
   extends: .base_migration_config
   image: docker:27.2.0
   stage: migrate
@@ -63,16 +65,20 @@ migrate_old_registry:
       - db_dump.sql
     expire_in: 1 hour
 
-migrate_new_registry:
+
+.base_migrate_config-from-last-release-version-to-current:
   extends: .base_migration_config
-  needs: [ "migrate_old_registry"]
+  variables:
+    SKIP_POST_DEPLOYMENT: "true"
+    DUMP_FILE: "db_dump_new_skip_post_deploy.sql"
+  needs: [ "migrate:init-db-with-last-release"]
   image: golang:$GO_VERSION
   stage: migrate
   services:
       - name: postgres:${PG_CURR_VERSION}-alpine
         alias: "db"
   dependencies:
-    - migrate_old_registry  # Ensure the artifact from this job is available
+    - migrate:init-db-with-last-release  # Ensure the artifact from this job is available
   script:
     # Install psql client tools
     - apt-get update && apt-get install -y lsb-release
@@ -84,34 +90,78 @@ migrate_new_registry:
     - PGPASSWORD=$POSTGRES_PASSWORD psql -h ${REGISTRY_DATABASE_HOST} -U $POSTGRES_USER -d $POSTGRES_DB -f db_dump.sql  # Load the dump file into PostgreSQL
     - make bin/registry
     - echo "Running new registry migration..."
-    - ./bin/registry database migrate up --skip-post-deployment config/database-filesystem.yml
+    - MIGRATION_CMD="./bin/registry database migrate up"
+    - if [ "$SKIP_POST_DEPLOYMENT" = "true" ]; then
+        MIGRATION_CMD="$MIGRATION_CMD --skip-post-deployment";
+      fi
+    - MIGRATION_CMD="$MIGRATION_CMD config/database-filesystem.yml"
+    - echo "Executing $MIGRATION_CMD"
+    - eval $MIGRATION_CMD
     - echo "Dumping the database after migration..."
-    - PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h db -U $POSTGRES_USER -d $POSTGRES_DB  > db_dump_new.sql
-    
+    - PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h db -U $POSTGRES_USER -d $POSTGRES_DB  > $DUMP_FILE
   artifacts:
     paths:
-      - db_dump_new.sql  # Save the new dump file
+      - db_dump_new_skip_post_deploy.sql  # Save the new dump file
+    expire_in: 1 hour
+
+# migrate:from-last-release-version-to-current:skip-post-deploy is a job that runs the cli migrate command to migrate the database from the last GitLab released registry version (`REGISTRY_SELF_MANAGED_RELEASE_VERSION`) to the current development version.
+# when post-deployments are skipped.
+migrate:from-last-release-version-to-current:skip-post-deploy:
+  extends: .base_migrate_config-from-last-release-version-to-current
+
+# migrate:from-last-release-version-to-current is a job that runs the cli migrate command to migrate the database from the last GitLab released registry version (`REGISTRY_SELF_MANAGED_RELEASE_VERSION`) to the current development version.
+# when post-deployments are not skipped.
+migrate:from-last-release-version-to-current:
+  extends: .base_migrate_config-from-last-release-version-to-current
+  variables:
+    SKIP_POST_DEPLOYMENT: "false"
+    DUMP_FILE: "db_dump_new.sql"
+  artifacts:
+    paths:
+      - db_dump_new.sql
     expire_in: 1 hour
 
 # This job is purely informational and is used to provide users with an overview of the changes introduced between the current development registry version 
-# and the `REGISTRY_SELF_MANAGED_RELEASE_VERSION`, from the database's perspective.
-compare_dumps:
-  needs: [ "migrate_old_registry", "migrate_new_registry"]
+# (when post-deployments are skipped) and the `REGISTRY_SELF_MANAGED_RELEASE_VERSION`, from the database's perspective.
+.base_compare_dumps_config:
+  needs: [ "migrate:init-db-with-last-release", "migrate:from-last-release-version-to-current:skip-post-deploy"]
+  variables:
+    DIFF_FILE: "db_diff_output_skip_post_deploy.txt"
+    DUMP_FILE: "db_dump_new_skip_post_deploy.sql"
   image: alpine:latest
   stage: migrate
   dependencies:
-    - migrate_old_registry
-    - migrate_new_registry
+    - migrate:init-db-with-last-release
+    - migrate:from-last-release-version-to-current:skip-post-deploy
   script:
     - apk add --no-cache colordiff
     - echo "Comparing old and new database dumps..."
-    - colordiff --fakeexitcode db_dump.sql db_dump_new.sql > db_diff_output.txt
-    - if [ -s db_diff_output.txt ]; then
+    - colordiff --fakeexitcode db_dump.sql $DUMP_FILE > $DIFF_FILE
+    - if [ -s $DIFF_FILE ]; then
         echo "Differences found in the database dumps:";
-        cat db_diff_output.txt;
+        cat $DIFF_FILE;
       else
         echo "No differences found in the database dumps.";
       fi
+  artifacts:
+    paths:
+      - db_diff_output_skip_post_deploy.txt
+    expire_in: 1 hour
+
+# compare_dumps:skip-post-deploy is a job that compares the database dumps between the current development registry version (when post-deployments are skipped) and the `REGISTRY_SELF_MANAGED_RELEASE_VERSION`.
+compare_dumps:skip-post-deploy:
+  extends: .base_compare_dumps_config
+
+# compare_dumps is a job that compares the database dumps between the current development registry version and the `REGISTRY_SELF_MANAGED_RELEASE_VERSION`.
+compare_dumps:
+  extends: .base_compare_dumps_config
+  variables:
+    DIFF_FILE: "db_diff_output.txt"
+    DUMP_FILE: "db_dump_new.sql"
+  needs: [ "migrate:init-db-with-last-release", "migrate:from-last-release-version-to-current"]
+  dependencies:
+    - migrate:init-db-with-last-release
+    - migrate:from-last-release-version-to-current
   artifacts:
     paths:
       - db_diff_output.txt

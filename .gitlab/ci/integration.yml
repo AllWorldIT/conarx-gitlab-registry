@@ -478,3 +478,19 @@ redis:rate:
     - name: redis:alpine
       alias: "redis"
   script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
+
+# cli:schema-migration-dependency is an integration test suite that verifies the dependency resolver for post/pre-deployment schema migrations.
+cli:schema-migration-dependency:
+  extends:
+    - .go-test
+  tags:
+    - gitlab-org-docker
+  services:
+    - name: docker:27.2.0-dind
+      alias: docker
+  stage: integration
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    TAGS: 'integration,cli_test'
+    PACKAGE: 'github.com/docker/distribution/registry'
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=$TAGS
