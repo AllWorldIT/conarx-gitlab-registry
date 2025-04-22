@@ -95,6 +95,10 @@ s3:aws:
       # Regular combinations
       - GO_VERSION: [ "1.23", "1.24" ]
         S3_DRIVER_VERSION: [ "s3", "s3_v2" ]
+        S3_AUTH_MODE: ["key_auth"]
+      - GO_VERSION: [ "1.23", "1.24" ]
+        S3_DRIVER_VERSION: [ "s3_v2" ]
+        S3_AUTH_MODE: ["instance_auth"]
   rules:
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
       when: on_success
@@ -106,6 +110,20 @@ s3:aws:
     # managed credentials set up for the bucket that CI variables point to.
     # Other variants run here as well in order to save $$ on bandwith costs.
     - s3-managed_identity_auth
+  script:
+    # NOTE(prozlach): In case when we test managed credentials variant, we need
+    # to make sure that AWS SDK will not try to auth with creds from
+    # environment and instead tries to obtain managed credentials from the VM
+    # itself.
+    - |
+      if [[ "$S3_AUTH_MODE" == "instance_auth" ]]; then
+        echo "Unsetting key credentials"
+        unset AWS_ACCESS_KEY
+        unset AWS_SECRET_KEY
+        unset AWS_ACCESS_KEY_ID
+        unset AWS_SECRET_ACCESS_KEY
+      fi
+      $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
 
 gcs:
   <<: *storage-driver-test
@@ -179,10 +197,11 @@ azure:
   script:
     # NOTE(prozlach): In case when we test managed credentials variant, we need
     # to make sure that Azure SDK will not try to auth with creds from
-    # environment and instead tries to obtain managed
-    # credentials from the VM itself.
+    # environment and instead tries to obtain managed credentials from the VM
+    # itself.
     - |
       if [[ "$AZURE_CREDENTIALS_TYPE" == "default_credentials" ]]; then
+        echo "Unsetting key credentials"
         unset AZURE_ACCOUNT_KEY
         unset AZURE_TENANT_ID
         unset AZURE_CLIENT_ID

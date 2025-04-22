@@ -112,8 +112,8 @@ func fetchEnvVarsConfiguration() {
 	}
 
 	vars := []envConfig{
-		{common.EnvAccessKey, &accessKey, true},
-		{common.EnvSecretKey, &secretKey, true},
+		{common.EnvAccessKey, &accessKey, false},
+		{common.EnvSecretKey, &secretKey, false},
 		{common.EnvSessionToken, &sessionToken, false},
 
 		{common.EnvBucket, &bucket, true},
