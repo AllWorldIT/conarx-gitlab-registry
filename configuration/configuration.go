@@ -190,6 +190,8 @@ type Configuration struct {
 	} `yaml:"policy,omitempty"`
 
 	GC GC `yaml:"gc,omitempty"`
+
+	RateLimiter RateLimiter `yaml:"rate_limiter,omitempty"`
 }
 
 // TLS specifies the settings for the http server to listen with a TLS configuration.
@@ -1034,6 +1036,43 @@ type Middleware struct {
 	Options Parameters `yaml:"options"`
 }
 
+// RateLimiter represents the top-level rate limiter configuration
+type RateLimiter struct {
+	Enabled  bool      `yaml:"enabled"`
+	Limiters []Limiter `yaml:"limiters,omitempty"`
+}
+
+// Limiter represents an individual rate limit configuration
+type Limiter struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	LogOnly     bool   `yaml:"log_only,omitempty"`
+	Match       Match  `yaml:"match"`
+	Precedence  int64  `yaml:"precedence"`
+	Limit       Limit  `yaml:"limit"`
+	Action      Action `yaml:"action"`
+}
+
+// Match defines how requests are matched for rate limiting
+type Match struct {
+	Type string `yaml:"type"`
+}
+
+// Limit defines the rate limiting parameters
+type Limit struct {
+	Rate           int64         `yaml:"rate"`
+	Period         string        `yaml:"period"`
+	PeriodDuration time.Duration `yaml:"-"`
+	Burst          int64         `yaml:"burst"`
+}
+
+// Action defines actions to take when limits are approached or exceeded
+type Action struct {
+	WarnThreshold float64 `yaml:"warn_threshold,omitempty"`
+	WarnAction    string  `yaml:"warn_action,omitempty"`
+	HardAction    string  `yaml:"hard_action"`
+}
+
 type parseOpts struct {
 	noStorageRequired bool
 }
@@ -1111,6 +1150,7 @@ const (
 	defaultDLBMaxReplicaLagBytes           = 8 * 1024 * 1024
 	defaultDLBMaxReplicaLagTime            = 1 * time.Minute
 	defaultDLBReplicaCheckInterval         = 1 * time.Minute
+	defaultRateLimiterPeriodDuration       = time.Second
 )
 
 // defaultCipherSuites is here just to make slice "a constant"
@@ -1182,6 +1222,16 @@ func ApplyDefaults(config *Configuration) {
 		}
 		if config.Database.LoadBalancing.ReplicaCheckInterval == 0 {
 			config.Database.LoadBalancing.ReplicaCheckInterval = defaultDLBReplicaCheckInterval
+		}
+	}
+
+	// Rate limiter
+	if config.RateLimiter.Enabled {
+		for _, limiter := range config.RateLimiter.Limiters {
+			if limiter.Limit.Period == "" {
+				limiter.Limit.Period = "second"
+				limiter.Limit.PeriodDuration = defaultRateLimiterPeriodDuration
+			}
 		}
 	}
 }

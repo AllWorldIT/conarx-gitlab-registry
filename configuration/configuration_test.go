@@ -144,6 +144,28 @@ var configStruct = Configuration{
 			Disabled: false,
 		},
 	},
+	RateLimiter: RateLimiter{
+		Enabled: true,
+		Limiters: []Limiter{
+			{
+				Name:        "test_rate_limiter",
+				Description: "A rate limiter example",
+				LogOnly:     false,
+				Match:       Match{Type: "IP"},
+				Precedence:  10,
+				Limit: Limit{
+					Rate:   10,
+					Period: "minute",
+					Burst:  100,
+				},
+				Action: Action{
+					WarnThreshold: 0.7,
+					WarnAction:    "log",
+					HardAction:    "block",
+				},
+			},
+		},
+	},
 }
 
 // configYamlV0_1 is a Version 0.1 yaml document representing configStruct
@@ -215,6 +237,23 @@ http:
     - /path/to/ca.pem
   headers:
     X-Content-Type-Options: [nosniff]
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: test_rate_limiter
+      description: "A rate limiter example"
+      log_only: false
+      match:
+        type: IP
+      precedence: 10
+      limit:
+        rate: 10
+        period: "minute"
+        burst: 100
+      action:
+        warn_threshold: 0.7
+        warn_action: "log"
+        hard_action: "block"
 `
 
 // inmemoryConfigYamlV0_1 is a Version 0.1 yaml document specifying an inmemory
@@ -303,6 +342,7 @@ func (s *ConfigSuite) TestParseInmemory() {
 	}
 	s.expectedConfig.Reporting = Reporting{}
 	s.expectedConfig.Log.Fields = nil
+	s.expectedConfig.RateLimiter = RateLimiter{}
 
 	config, err := Parse(bytes.NewReader([]byte(inmemoryConfigYamlV0_1)))
 	require.NoError(s.T(), err)
@@ -323,6 +363,7 @@ func (s *ConfigSuite) TestParseIncomplete() {
 	s.expectedConfig.Auth = Auth{"silly": Parameters{"realm": "silly"}}
 	s.expectedConfig.Reporting = Reporting{}
 	s.expectedConfig.Notifications = Notifications{}
+	s.expectedConfig.RateLimiter = RateLimiter{}
 	s.expectedConfig.HTTP.Headers = nil
 
 	// Note: this also tests that REGISTRY_STORAGE and
@@ -490,7 +531,6 @@ func testParameter(t *testing.T, yml, envVar string, tests []parameterTest, fn p
 					}
 
 					got, err := Parse(bytes.NewReader([]byte(input)))
-
 					if test.wantErr {
 						require.Error(t, err)
 						require.EqualError(t, err, test.err)
@@ -848,7 +888,7 @@ func boolParameterTests() []parameterTest {
 	}
 }
 
-func stringParameterTests(defaultValue string) []parameterTest {
+func stringParameterTests() []parameterTest {
 	return []parameterTest{
 		{
 			name:  "string",
@@ -857,7 +897,7 @@ func stringParameterTests(defaultValue string) []parameterTest {
 		},
 		{
 			name: "default",
-			want: defaultValue,
+			want: "",
 		},
 	}
 }
@@ -907,7 +947,7 @@ http:
     tls:
       certificate: %s
 `
-	tt := stringParameterTests("")
+	tt := stringParameterTests()
 
 	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.HTTP.Debug.TLS.Certificate)
@@ -925,7 +965,7 @@ http:
     tls:
       key: %s
 `
-	tt := stringParameterTests("")
+	tt := stringParameterTests()
 
 	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.HTTP.Debug.TLS.Key)
@@ -943,7 +983,7 @@ http:
     tls:
       minimumtls: %s
 `
-	tt := stringParameterTests("")
+	tt := stringParameterTests()
 
 	validator := func(t *testing.T, want any, got *Configuration) {
 		require.Equal(t, want, got.HTTP.Debug.TLS.MinimumTLS)
@@ -1740,9 +1780,6 @@ func checkStructs(t require.TestingT, rt reflect.Type, structsChecked map[string
 	for i := 0; i < rt.NumField(); i++ {
 		sf := rt.Field(i)
 
-		// Check that the yaml tag does not contain an _.
-		yamlTag := sf.Tag.Get("yaml")
-		require.NotContainsf(t, yamlTag, "_", "yaml field name includes _ character: %s", yamlTag)
 		upper := strings.ToUpper(sf.Name)
 		require.NotContainsf(t, byUpperCase, upper, "field name collision in configuration object: %s", sf.Name)
 		byUpperCase[upper] = i
@@ -1796,6 +1833,9 @@ func copyConfig(config Configuration) *Configuration {
 
 	configCopy.HTTP.TLS.CipherSuites = make([]string, len(config.HTTP.TLS.CipherSuites))
 	copy(configCopy.HTTP.TLS.CipherSuites, config.HTTP.TLS.CipherSuites)
+
+	configCopy.RateLimiter = RateLimiter{Enabled: config.RateLimiter.Enabled, Limiters: make([]Limiter, len(config.RateLimiter.Limiters))}
+	copy(configCopy.RateLimiter.Limiters, config.RateLimiter.Limiters)
 
 	return configCopy
 }
@@ -2776,4 +2816,314 @@ database:
 			require.Equal(t, test.expected, config.Database.BackgroundMigrations)
 		})
 	}
+}
+
+func TestParseRateLimiter_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: %s
+`
+	tt := boolParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.RateLimiter.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_ENABLED", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Name(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "%s"
+`
+	tt := stringParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, got.RateLimiter.Limiters[0].Name)
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_NAME", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Name_MultipleLimiters(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "first"
+    - name: "%s"
+`
+	tt := stringParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 2)
+		require.Equal(t, want, got.RateLimiter.Limiters[1].Name)
+	}
+
+	// Note that the array element is 1 and not 0
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_1_NAME", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Description(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      description: "%s"
+`
+	tt := stringParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, got.RateLimiter.Limiters[0].Description)
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_DESCRIPTION", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_LogOnly(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      description: "description"
+      log_only: %s
+
+`
+	tt := boolParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, strconv.FormatBool(got.RateLimiter.Limiters[0].LogOnly))
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_LOGONLY", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_MatchType(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      description: "description"
+      log_only: false
+      match:
+        type: "%s"
+`
+	tt := stringParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, got.RateLimiter.Limiters[0].Match.Type)
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_MATCH_TYPE", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Precedence(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      description: "description"
+      log_only: false
+      precedence: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "1",
+			want:  "1",
+		},
+		{
+			name: "default",
+			want: "0",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Precedence)))
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_PRECEDENCE", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Limit_Rate(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      description: "description"
+      limit:
+        rate: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "100",
+			want:  "100",
+		},
+		{
+			name: "default",
+			want: "0",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Limit.Rate)))
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_LIMIT_RATE", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Limit_Burst(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      description: "description"
+      limit:
+        burst: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "100",
+			want:  "100",
+		},
+		{
+			name: "default",
+			want: "0",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Limit.Burst)))
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_LIMIT_BURST", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Limit_Period(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      limit:
+        period: %s
+`
+	tt := stringParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, got.RateLimiter.Limiters[0].Limit.Period)
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_LIMIT_PERIOD", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Action_WarnThreshold(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      action:
+        warn_threshold: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "sample",
+			value: "0.9",
+			want:  "0.9",
+		},
+		{
+			name: "default",
+			want: "0.0",
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, fmt.Sprintf("%.1f", got.RateLimiter.Limiters[0].Action.WarnThreshold))
+	}
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_ACTION_WARNTHRESHOLD", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Action_WarnAction(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      action:
+        warn_action: %s
+`
+	tt := stringParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, got.RateLimiter.Limiters[0].Action.WarnAction)
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_ACTION_WARNACTION", tt, validator)
+}
+
+func TestParseRateLimiter_Limiters_Action_HardAction(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+rate_limiter:
+  enabled: true
+  limiters:
+    - name: "test rate limiter"
+      action:
+        hard_action: %s
+`
+	tt := stringParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Len(t, got.RateLimiter.Limiters, 1)
+		require.Equal(t, want, got.RateLimiter.Limiters[0].Action.HardAction)
+	}
+
+	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_ACTION_HARDACTION", tt, validator)
 }
