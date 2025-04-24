@@ -1758,3 +1758,55 @@ information about configuration options.
 > **Note**: Cloudfront keys exist separately from other AWS keys. See
 > [the documentation on AWS credentials](http://docs.aws.amazon.com/general/latest/gr/aws-security-credentials.html)
 > for more information.
+
+## Rate limiter
+
+The Registry can be configured to use application-side rate limiters.
+It uses [Redis](#ratelimiter) in the backend to keep track of requests, and can be
+used to log only or log and enforce the configured limits.
+
+```yaml
+rate_limiter:
+  enabled: true
+  # Limiters is a list of rate limits which may be defined in any order, although they are applied to requests in precedence order (lowest values first)  
+  limiters:
+    # Instance-wide global limits
+    - name: global_rate_limit
+      description: "Global IP rate limit"  # Maybe useful for visibility
+      log_only: false     # When true, only logs violations without enforcement
+      match:
+        type: IP          # No value applies to all requests from a specific IP
+      precedence: 10      # Low precedence, evaluated first
+      limit:
+        rate: 5000
+        period: "minute"
+        burst: 8000
+      action:
+        warn_threshold: 0.7
+        warn_action: "log"
+        hard_action: "block"
+```
+
+| Parameter  | Required | Description                                                                         |
+|------------|----------|-------------------------------------------------------------------------------------|
+| `enabled`  | no       | When set to `true`, the rate limiter functionality is enabled. Defaults to `false`. |
+| `limiters` | no       | List of [`limiters`](#limiters) to be configured.                                   |
+
+### Limiters
+
+The `limiters` section defines the fine-grained configuration of the rate-limiting capability.
+See the [rate-limiting](./spec/gitlab/rate-limiting.md) documentation for examples.
+
+| Parameter               | Required | Description                                                                                                         |
+|-------------------------|----------|---------------------------------------------------------------------------------------------------------------------|
+| `name`                  | yes      | The name of the rate limiter.                                                                                       |
+| `description`           | no       | A description for this limiter.                                                                                     |
+| `log_only`              | no       | When set to `true`, the rate limiter will be enabled but not enforced. Defaults to `false`.                         |
+| `match.type`            | yes      | One of [`IP`] (only IP is available right now).                                                                     |
+| `precedence`            | yes      | A positive integer. The lower the value the higher precedence it will have against other limiters.                  |
+| `limit.rate`            | yes      | The rate at which the limiter's capability is refilled at a given `limiter.period`.                                 |
+| `limit.period`          | yes      | The period at which `limiter.rate` refills the limiter's capability. One of [`second`, `minute`, `hour`].           |
+| `limit.burst`           | yes      | The maximum number of requests that the limiter allows at a given time.                                             |
+| `action.warn_threshold` | no       | A percentage [0.0, 1.0] of the limiter's capacity that triggers a warning action. 0 means no action. Defaults to 0. |
+| `action.warn_action`    | no       | One of [`none`, `log`]. Defaults to `none`.                                                                         |
+| `action.hard_action`    | yes      | One of [`none`, `log`, `block`].                                                                                    |

@@ -169,6 +169,9 @@ func (p *Parser) overwriteFields(v reflect.Value, fullpath string, path []string
 		return p.overwriteStruct(v, fullpath, path, payload)
 	case reflect.Map:
 		return p.overwriteMap(v, fullpath, path, payload)
+	case reflect.Slice, reflect.Array:
+		// Handle arrays/slices
+		return p.overwriteArray(v, fullpath, path, payload)
 	case reflect.Interface:
 		if v.NumMethod() == 0 {
 			if !v.IsNil() {
@@ -182,6 +185,52 @@ func (p *Parser) overwriteFields(v reflect.Value, fullpath string, path []string
 		}
 	}
 	return nil
+}
+
+func (p *Parser) overwriteArray(v reflect.Value, fullpath string, path []string, payload string) error {
+	if len(path) == 0 {
+		// Trying to set the entire array
+		newArray := reflect.New(v.Type())
+		err := yaml.Unmarshal([]byte(payload), newArray.Interface())
+		if err != nil {
+			return err
+		}
+		v.Set(reflect.Indirect(newArray))
+		return nil
+	}
+
+	// Try to parse the first path component as an index
+	index, err := strconv.Atoi(path[0])
+	if err != nil {
+		log.GetLogger().WithFields(log.Fields{"name": fullpath}).Warn("ignoring environment variable with non-numeric array index")
+		return nil
+	}
+
+	// Ensure the array is large enough
+	if index >= v.Len() {
+		// Create a new array with the right size
+		newArray := reflect.MakeSlice(v.Type(), index+1, index+1)
+		// Copy existing elements
+		reflect.Copy(newArray, v)
+		v.Set(newArray)
+	}
+
+	// Get the element at the index
+	elem := v.Index(index)
+
+	if len(path) == 1 {
+		// Set the element directly
+		newElem := reflect.New(elem.Type())
+		err := yaml.Unmarshal([]byte(payload), newElem.Interface())
+		if err != nil {
+			return err
+		}
+		elem.Set(reflect.Indirect(newElem))
+		return nil
+	}
+
+	// Handle nested path
+	return p.overwriteFields(elem, fullpath, path[1:], payload)
 }
 
 // Ensures special `inline` flag is matched correctly, regardless of its position.
