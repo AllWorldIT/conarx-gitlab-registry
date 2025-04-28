@@ -36,7 +36,7 @@ var (
 
 const maxConcurrency = 10
 
-func gcsDriverConstructor(rootDirectory string) (storagedriver.StorageDriver, error) {
+func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.StorageDriver, error) {
 	ctx := context.Background()
 	creds, err := google.FindDefaultCredentials(ctx, storage.ScopeFullControl)
 	if err != nil {
@@ -83,7 +83,13 @@ func gcsDriverConstructor(rootDirectory string) (storagedriver.StorageDriver, er
 		parallelWalk:   parallelWalkBool,
 	}
 
-	return New(parameters)
+	switch os.Getenv(registryGCSDriverEnv) {
+	case "next":
+		tb.Log("Using next-gen GCS driver")
+		return NewNext(parameters)
+	default:
+		return New(parameters)
+	}
 }
 
 func skipGCS() string {
@@ -103,10 +109,10 @@ func TestGCSDriverSuite(t *testing.T) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return gcsDriverConstructor(root)
+			return gcsDriverConstructor(t, root)
 		},
 		func() (storagedriver.StorageDriver, error) {
-			return gcsDriverConstructor("")
+			return gcsDriverConstructor(t, "")
 		},
 		nil,
 	)
@@ -123,10 +129,10 @@ func BenchmarkGCSDriverSuite(b *testing.B) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return gcsDriverConstructor(root)
+			return gcsDriverConstructor(b, root)
 		},
 		func() (storagedriver.StorageDriver, error) {
-			return gcsDriverConstructor("")
+			return gcsDriverConstructor(b, "")
 		},
 		nil,
 	)
@@ -250,10 +256,10 @@ func TestGCSDriverEmptyRootList(t *testing.T) {
 
 	rootedDriver := newTempDirDriver(t)
 
-	emptyRootDriver, err := gcsDriverConstructor("")
+	emptyRootDriver, err := gcsDriverConstructor(t, "")
 	require.NoError(t, err, "unexpected error creating empty root driver")
 
-	slashRootDriver, err := gcsDriverConstructor("/")
+	slashRootDriver, err := gcsDriverConstructor(t, "/")
 	require.NoError(t, err, "unexpected error creating slash root driver")
 
 	filename := "/test"
@@ -367,7 +373,7 @@ func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 func newTempDirDriver(tb testing.TB) storagedriver.StorageDriver {
 	root := tb.TempDir()
 
-	d, err := gcsDriverConstructor(root)
+	d, err := gcsDriverConstructor(tb, root)
 	require.NoError(tb, err)
 
 	return d
@@ -380,7 +386,7 @@ func TestGCSDriverURLFor_Expiry(t *testing.T) {
 
 	ctx := context.Background()
 	validRoot := t.TempDir()
-	d, err := gcsDriverConstructor(validRoot)
+	d, err := gcsDriverConstructor(t, validRoot)
 	require.NoError(t, err)
 
 	fp := "/foo"
@@ -429,7 +435,7 @@ func TestGCSDriverURLFor_AdditionalQueryParams(t *testing.T) {
 
 	ctx := context.Background()
 	validRoot := t.TempDir()
-	d, err := gcsDriverConstructor(validRoot)
+	d, err := gcsDriverConstructor(t, validRoot)
 	require.NoError(t, err)
 
 	fp := "/foo"

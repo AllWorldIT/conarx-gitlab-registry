@@ -127,6 +127,10 @@ s3:aws:
 
 gcs:
   <<: *storage-driver-test
+  parallel:
+    matrix:
+      - GO_VERSION: [ "1.23", "1.24" ]
+        REGISTRY_GCS_DRIVER: [ "current", "next" ]
   variables:
     <<: *storage-driver-variables
     REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
