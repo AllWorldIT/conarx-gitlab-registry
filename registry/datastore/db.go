@@ -61,6 +61,11 @@ const (
 	minResolveReplicasInterval = 10 * time.Second
 	// livenessProbeTimeout is the maximum time for a replica liveness probe to run.
 	livenessProbeTimeout = 100 * time.Millisecond
+
+	// replicaLagCheckTimeout is the default timeout for checking replica lag.
+	replicaLagCheckTimeout = 100 * time.Millisecond
+	// MaxReplicaLagTime is the default maximum replication lag time
+	MaxReplicaLagTime = 30 * time.Second
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -529,6 +534,9 @@ type DBLoadBalancer struct {
 
 	// For controlling concurrent replicas pool resolution
 	throttledPoolResolver *ThrottledPoolResolver
+
+	// For tracking replication lag
+	lagTracker *ReplicaLagTracker
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
@@ -1159,6 +1167,11 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 		WithResolveFunction(lb.ResolveReplicas),
 	)
 
+	// Initialize the replica lag tracker using the same interval as replica checking
+	lb.lagTracker = NewReplicaLagTracker(
+		WithLagCheckInterval(config.loadBalancing.replicaCheckInterval),
+	)
+
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open primary database connection: %w", err)
@@ -1441,4 +1454,123 @@ func IsInRecovery(ctx context.Context, db *DB) (bool, error) {
 	err := db.QueryRowContext(ctx, query).Scan(&inRecovery)
 
 	return inRecovery, err
+}
+
+// ReplicaLagInfo stores lag information for a replica
+type ReplicaLagInfo struct {
+	Address     string
+	TimeLag     time.Duration
+	LastChecked time.Time
+}
+
+// ReplicaLagTracker manages replication lag tracking
+type ReplicaLagTracker struct {
+	sync.Mutex
+	lagInfo       map[string]*ReplicaLagInfo
+	checkInterval time.Duration
+}
+
+// ReplicaLagTrackerOption configures a ReplicaLagTracker.
+type ReplicaLagTrackerOption func(*ReplicaLagTracker)
+
+// WithLagCheckInterval sets the interval for checking replication lag.
+func WithLagCheckInterval(interval time.Duration) ReplicaLagTrackerOption {
+	return func(t *ReplicaLagTracker) {
+		if interval > 0 {
+			t.checkInterval = interval
+		}
+	}
+}
+
+// NewReplicaLagTracker creates a new ReplicaLagTracker with the given options.
+func NewReplicaLagTracker(opts ...ReplicaLagTrackerOption) *ReplicaLagTracker {
+	tracker := &ReplicaLagTracker{
+		lagInfo:       make(map[string]*ReplicaLagInfo),
+		checkInterval: defaultReplicaCheckInterval,
+	}
+
+	for _, opt := range opts {
+		opt(tracker)
+	}
+
+	return tracker
+}
+
+// Get returns the replication lag info for a replica
+func (t *ReplicaLagTracker) Get(replicaAddr string) *ReplicaLagInfo {
+	t.Lock()
+	defer t.Unlock()
+
+	info, exists := t.lagInfo[replicaAddr]
+	if !exists {
+		return nil
+	}
+
+	// Return a copy to avoid race conditions
+	lagInfo := *info
+	return &lagInfo
+}
+
+// set updates the replication lag information for a replica
+func (t *ReplicaLagTracker) set(_ context.Context, db *DB, timeLag time.Duration) {
+	t.Lock()
+	defer t.Unlock()
+
+	addr := db.Address()
+	now := time.Now()
+
+	info, exists := t.lagInfo[addr]
+	if !exists {
+		info = &ReplicaLagInfo{
+			Address: addr,
+		}
+		t.lagInfo[addr] = info
+	}
+
+	info.TimeLag = timeLag
+	info.LastChecked = now
+
+	// TODO: collect metrics
+}
+
+// CheckTimeLag retrieves the time-based replication lag for a replica and stores it
+func (t *ReplicaLagTracker) CheckTimeLag(ctx context.Context, replica *DB) (time.Duration, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, replicaLagCheckTimeout)
+	defer cancel()
+
+	query := `SELECT EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp()))::float AS lag`
+
+	var timeLagSeconds float64
+	err := replica.QueryRowContext(queryCtx, query).Scan(&timeLagSeconds)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check replica time lag: %w", err)
+	}
+
+	timeLag := time.Duration(timeLagSeconds * float64(time.Second))
+	t.set(ctx, replica, timeLag)
+
+	return timeLag, nil
+}
+
+// Check checks replication lag for a specific replica
+func (t *ReplicaLagTracker) Check(ctx context.Context, replica *DB) error {
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"db_replica_addr": replica.Address(),
+	})
+
+	timeLag, err := t.CheckTimeLag(ctx, replica)
+	if err != nil {
+		l.WithError(err).Warn("failed to check time-based replication lag")
+		return err
+	}
+
+	// Log at appropriate level based on max threshold constants
+	l = l.WithFields(log.Fields{"lag_time_s": timeLag.Seconds()})
+	if timeLag > MaxReplicaLagTime {
+		l.Warn("replica time-based replication lag above max threshold")
+	} else {
+		l.Info("replica time-based replication lag below max threshold")
+	}
+
+	return nil
 }
