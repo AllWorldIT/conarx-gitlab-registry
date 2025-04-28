@@ -1,3 +1,21 @@
+## [4.21.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.20.0-gitlab...v4.21.0-gitlab) (2025-04-28)
+
+
+### ✨ Features ✨
+
+* **datastore:** add index on manifests id field ([60371d6](https://gitlab.com/gitlab-org/container-registry/commit/60371d6894bcc068c27413ffd972607ba89b62ee))
+* decouple npdm from pdm migrations ([8e28d8f](https://gitlab.com/gitlab-org/container-registry/commit/8e28d8f9bb9a3ee52e2a777be3d2c22d97853595))
+* **registry:** require auth for v1 statistics API endpoint ([5b4f3f9](https://gitlab.com/gitlab-org/container-registry/commit/5b4f3f95dacbe94ba7cfd9eb395438d454063f52))
+* wrap query row context calls during DLB ([719f05f](https://gitlab.com/gitlab-org/container-registry/commit/719f05f8d6ca219b1bc9c72a0142924ba906573b))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.29.14 ([8d2c201](https://gitlab.com/gitlab-org/container-registry/commit/8d2c201bef4dc5b16511f692ca2789499425682c))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/storage/azblob to v1.6.1 ([da51247](https://gitlab.com/gitlab-org/container-registry/commit/da51247cc2ac818ae91f1b87c5b8c570714cc465))
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.36.0 ([8d49261](https://gitlab.com/gitlab-org/container-registry/commit/8d492616ee8f69d32346d1252a5a037b855f5303))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.128.0 ([cba984d](https://gitlab.com/gitlab-org/container-registry/commit/cba984d9602625299e415b14bb7be135c7af6044))
+
 ## [4.20.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.19.0-gitlab...v4.20.0-gitlab) (2025-04-16)
 
 ### ✨ Features ✨
