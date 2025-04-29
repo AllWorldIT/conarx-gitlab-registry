@@ -101,13 +101,13 @@ func (d *driverNext) GetContent(ctx context.Context, path string) ([]byte, error
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating new reader: %w", err)
 	}
 	defer rc.Close()
 
 	p, err := io.ReadAll(rc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading data: %w", err)
 	}
 	return p, nil
 }
@@ -146,7 +146,7 @@ func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.
 	if err != nil {
 		var gcsErr *googleapi.Error
 		if !errors.As(err, &gcsErr) {
-			return nil, err
+			return nil, fmt.Errorf("fetching object: %w", err)
 		}
 
 		if gcsErr.Code == http.StatusNotFound {
@@ -156,7 +156,7 @@ func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.
 		if gcsErr.Code == http.StatusRequestedRangeNotSatisfiable {
 			obj, err := storageStatObjectNext(ctx, d.storageClient, d.bucket, d.pathToKey(path))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("fetching meta information about the object: %w", err)
 			}
 			if offset == obj.Size {
 				return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
@@ -214,8 +214,9 @@ func getObjectNext(client *http.Client, bucket, name string, offset int64) (*htt
 	// to set the additional "Range" header
 	u := &url.URL{
 		Scheme: "https",
-		Host:   "storage.googleapis.com",
-		Path:   fmt.Sprintf("/%s/%s", bucket, name),
+		// https://cloud.google.com/storage/docs/request-endpoints#typical
+		Host: "storage.googleapis.com",
+		Path: fmt.Sprintf("/%s/%s", bucket, name),
 	}
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -260,20 +261,58 @@ func putContentsCloseNext(wc *storage.Writer, contents []byte) error {
 	return wc.Close()
 }
 
+// putChunkNext either completes upload or submits another chunk.
 func putChunkNext(client *http.Client, sessionURI string, chunk []byte, from, totalSize int64) (int64, error) {
+	// Documentation: https://cloud.google.com/storage/docs/performing-resumable-uploads#chunked-upload
 	bytesPut := int64(0)
 	err := retry(func() error {
 		req, err := http.NewRequest(http.MethodPut, sessionURI, bytes.NewReader(chunk))
 		if err != nil {
-			return err
+			return fmt.Errorf("creating new http request: %w", err)
 		}
 		length := int64(len(chunk))
 		to := from + length - 1
+		req.Header.Set("Content-Type", "application/octet-stream")
+		// NOTE(prozlach) fake-gcs-server documents this behavior well:
+		// https://github.com/fsouza/fake-gcs-server/blob/1e954726309326217b4c533bb9646e30f683fa66/fakestorage/upload.go#L467-L501
+		//
+		// A resumable upload is sent in one or more chunks. The request's
+		// "Content-Range" header is used to determine if more data is expected.
+		//
+		// When sending streaming content, the total size is unknown until the stream
+		// is exhausted. The Go client always sends streaming content. The sequence of
+		// "Content-Range" headers for 2600-byte content sent in 1000-byte chunks are:
+		//
+		//	Content-Range: bytes 0-999/*
+		//	Content-Range: bytes 1000-1999/*
+		//	Content-Range: bytes 2000-2599/*
+		//	Content-Range: bytes */2600
+		//
+		// When sending chunked content of a known size, the total size is sent as
+		// well. The Python client uses this method to upload files and in-memory
+		// content. The sequence of "Content-Range" headers for the 2600-byte content
+		// sent in 1000-byte chunks are:
+		//
+		//	Content-Range: bytes 0-999/2600
+		//	Content-Range: bytes 1000-1999/2600
+		//	Content-Range: bytes 2000-2599/2600
+		//
+		// The server collects the content, analyzes the "Content-Range", and returns a
+		// "308 Permanent Redirect" response if more chunks are expected, and a
+		// "200 OK" response if the upload is complete (the Go client also accepts a
+		// "201 Created" response). The "Range" header in the response should be set to
+		// the size of the content received so far, such as:
+		//
+		//	Range: bytes 0-2000
+		//
+		// The client (such as the Go client) can send a header "X-Guploader-No-308" if
+		// it can't process a native "308 Permanent Redirect". The in-process response
+		// then has a status of "200 OK", with a header "X-Http-Status-Code-Override"
+		// set to "308".
 		size := "*"
 		if totalSize >= 0 {
 			size = strconv.FormatInt(totalSize, 10)
 		}
-		req.Header.Set("Content-Type", "application/octet-stream")
 		if from == to+1 {
 			req.Header.Set("Content-Range", fmt.Sprintf("bytes */%v", size))
 		} else {
@@ -283,21 +322,33 @@ func putChunkNext(client *http.Client, sessionURI string, chunk []byte, from, to
 
 		resp, err := client.Do(req)
 		if err != nil {
-			return err
+			return fmt.Errorf("executing http request: %w", err)
 		}
 		defer resp.Body.Close()
 		if totalSize < 0 && resp.StatusCode == 308 {
+			// NOTE(prozlach): Quoting google docs:
+			// https://cloud.google.com/storage/docs/performing-resumable-uploads#chunked-upload
+			//
+			// A 200 OK or 201 Created response indicates that the upload was
+			// completed, and no further action is necessary
+			//
+			// A 308 Resume Incomplete response indicates resumable upload is
+			// in progress. If Cloud Storage has not yet persisted any bytes,
+			// the 308 response does not have a Range header. In this case, we
+			// should start upload from the beginning. Otherwise, the 308
+			// response has a Range header, which specifies which bytes Cloud
+			// Storage has persisted so far.
 			groups := rangeHeader.FindStringSubmatch(resp.Header.Get("Range"))
 			end, err := strconv.ParseInt(groups[2], 10, 64)
 			if err != nil {
-				return err
+				return fmt.Errorf("parsing Range header: %w", err)
 			}
 			bytesPut = end - from + 1
 			return nil
 		}
 		err = googleapi.CheckMediaResponse(resp)
 		if err != nil {
-			return err
+			return fmt.Errorf("committing resumable upload: %w", err)
 		}
 		bytesPut = to - from + 1
 		return nil
@@ -351,7 +402,7 @@ func (d *driverNext) Stat(ctx context.Context, path string) (storagedriver.FileI
 
 	it, err := storageListObjectsNext(ctx, d.storageClient, d.bucket, query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing objects: %w", err)
 	}
 
 	attrs, err := it.Next()
@@ -359,7 +410,7 @@ func (d *driverNext) Stat(ctx context.Context, path string) (storagedriver.FileI
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetching next page from iterator: %w", err)
 	}
 
 	fi = storagedriver.FileInfoFields{
@@ -386,7 +437,7 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 
 	it, err := storageListObjectsNext(ctx, d.storageClient, d.bucket, query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing objects: %w", err)
 	}
 
 	for {
@@ -395,7 +446,7 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fetching next page from iterator: %w", err)
 		}
 
 		// GCS does not guarantee strong consistency between
@@ -451,7 +502,7 @@ func (d *driverNext) listAll(ctx context.Context, prefix string) ([]string, erro
 	query.Versions = false
 	it, err := storageListObjectsNext(ctx, d.storageClient, d.bucket, query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing objects: %w", err)
 	}
 
 	for {
@@ -460,7 +511,7 @@ func (d *driverNext) listAll(ctx context.Context, prefix string) ([]string, erro
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fetching next page from iterator: %w", err)
 		}
 		// GCS does not guarantee strong consistency between
 		// DELETE and LIST operations. Check that the object is not deleted,
@@ -490,7 +541,7 @@ func (d *driverNext) Delete(ctx context.Context, path string) error {
 				err = nil
 			}
 			if err != nil {
-				return err
+				return fmt.Errorf("deleting object: %w", err)
 			}
 		}
 		return nil
@@ -622,10 +673,13 @@ func (d *driverNext) WalkParallel(ctx context.Context, path string, f storagedri
 	return storagedriver.WalkFallbackParallel(ctx, d, maxWalkConcurrency, path, f)
 }
 
+// startSessionNext starts a new resumable upload session. Documentation can be
+// found here: https://cloud.google.com/storage/docs/performing-resumable-uploads#initiate-session
 func startSessionNext(client *http.Client, bucket, name string) (uri string, err error) {
 	u := &url.URL{
-		Scheme:   "https",
-		Host:     "www.googleapis.com",
+		Scheme: "https",
+		// https://cloud.google.com/storage/docs/request-endpoints#typical
+		Host:     "storage.googleapis.com",
 		Path:     fmt.Sprintf("/upload/storage/v1/b/%v/o", bucket),
 		RawQuery: fmt.Sprintf("uploadType=resumable&name=%v", name),
 	}
@@ -638,12 +692,12 @@ func startSessionNext(client *http.Client, bucket, name string) (uri string, err
 		req.Header.Set("Content-Length", "0")
 		resp, err := client.Do(req)
 		if err != nil {
-			return err
+			return fmt.Errorf("executing http request: %w", err)
 		}
 		defer resp.Body.Close()
 		err = googleapi.CheckMediaResponse(resp)
 		if err != nil {
-			return err
+			return fmt.Errorf("starting new resumable upload session: %w", err)
 		}
 		uri = resp.Header.Get("Location")
 		return nil
@@ -703,6 +757,8 @@ func (w *writerNext) Cancel() error {
 	return nil
 }
 
+// Close stores the current resumable upload session in a temporary object
+// provided that the session has not been committed nor canceled yet.
 func (w *writerNext) Close() error {
 	if w.closed {
 		return storagedriver.ErrAlreadyClosed
@@ -725,10 +781,11 @@ func (w *writerNext) Close() error {
 		return fmt.Errorf("writing chunk: %w", err)
 	}
 
-	// Copy the remaining bytes from the buffer to the upload session
-	// Normally buffSize will be smaller than minChunkSize. However, in the
-	// unlikely event that the upload session failed to start, this number could be higher.
-	// In this case we can safely clip the remaining bytes to the minChunkSize
+	// Copy the remaining bytes from the buffer to the upload session Normally
+	// buffSize will be smaller than minChunkSize. However, in the unlikely
+	// event that the upload session failed to start, this number could be
+	// higher. In this case we can safely clip the remaining bytes to the
+	// minChunkSize
 	if w.buffSize > minChunkSize {
 		w.buffSize = minChunkSize
 	}
@@ -783,8 +840,9 @@ func (w *writerNext) Commit() error {
 	}
 	size := w.offset + w.buffSize
 	var nn int64
-	// loop must be performed at least once to ensure the file is committed even when
-	// the buffer is empty
+	// NOTE(prozlach): loop must be performed at least once to ensure the file
+	// is committed even when the buffer is empty. The empty/first loop with
+	// zero-length will actually commit the file.
 	for {
 		n, err := putChunkNext(w.client, w.sessionURI, w.buffer[nn:w.buffSize], w.offset, size)
 		nn += n
@@ -860,6 +918,18 @@ func (w *writerNext) Size() int64 {
 	return w.size
 }
 
+// init restores resumable upload basing on the Offset and Session-URL metadata
+// and the `tail` of the data that are stored in the temporary object.
+// Due to miminum chunk size limitation for GCS, we can't upload all the bytes
+// remaining in the buffer if there are fewer than minChunkSize, so they are
+// stored in the temporary object created during Close() call, and then read
+// back into the buffer here. The temporary object and the resumable upload coexist
+// until the resumable upload is committed. The Commit operation overrides the
+// temporary object.
+// The buffer size is never smaller than minChunkSize and the amount if tail
+// data is never higher than minChunkSize, hence there is never going to be an
+// overflow/there will always be enough place in the buffer to read back the
+// temporary data in this call.
 func (w *writerNext) init(path string) error {
 	res, err := getObjectNext(w.client, w.bucket, w.name, 0)
 	if err != nil {
@@ -868,7 +938,7 @@ func (w *writerNext) init(path string) error {
 			return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 
-		return err
+		return fmt.Errorf("fetching object: %w", err)
 	}
 	defer res.Body.Close()
 	if res.Header.Get("Content-Type") != uploadSessionContentType {
@@ -876,11 +946,11 @@ func (w *writerNext) init(path string) error {
 	}
 	offset, err := strconv.ParseInt(res.Header.Get("X-Goog-Meta-Offset"), 10, 64)
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing `X-Goog-Meta-Offset` HTTP header: %w", err)
 	}
 	buffer, err := io.ReadAll(res.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("reading `tail` data during writer resume: %w", err)
 	}
 	w.sessionURI = res.Header.Get("X-Goog-Meta-Session-URI")
 	w.buffSize = int64(copy(w.buffer, buffer)) // nolint: gosec // copy() is always going to be non-negative
