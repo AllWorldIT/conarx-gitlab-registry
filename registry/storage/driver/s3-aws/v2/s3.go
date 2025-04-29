@@ -470,7 +470,7 @@ func (d *driver) List(ctx context.Context, opath string) ([]string, error) {
 
 		for _, commonPrefix := range resp.CommonPrefixes {
 			commonPrefix := *commonPrefix.Prefix
-			directories = append(directories, strings.Replace(commonPrefix[0:len(commonPrefix)-1], d.s3Path(""), prefix, 1))
+			//directories = append(directories, strings.Replace(commonPrefix[0:len(commonPrefix)-1], d.s3Path(""), prefix, 1))
 
 			directory := strings.Replace(commonPrefix[0:len(commonPrefix)-1], d.s3Path(""), prefix, 1)
 			// NK: Minio - Walk the directory to see if we have files, if we don't we exclude the directory below
