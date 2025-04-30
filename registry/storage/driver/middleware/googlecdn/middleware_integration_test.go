@@ -1,4 +1,4 @@
-//go:build include_gcs && integration
+//go:build integration
 
 /*
 These tests require a GCS bucket and a functional Cloud CDN endpoint.
@@ -11,7 +11,7 @@ The following environment variables must be set:
    	- REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_KEYNAME
 
 Run the following command to execute these tests:
-	$ go test -v -tags=include_gcs,integration github.com/docker/distribution/registry/storage/driver/middleware/googlecdn
+	$ go test -v -tags=integration github.com/docker/distribution/registry/storage/driver/middleware/googlecdn
 */
 
 package googlecdn

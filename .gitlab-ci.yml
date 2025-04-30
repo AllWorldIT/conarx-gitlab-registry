@@ -28,7 +28,7 @@ variables:
   FF_TIMESTAMPS: 1
   # default Go version
   GO_VERSION: "1.23"
-  BUILDTAGS: "include_gcs,continuous_profiler_stackdriver"
+  BUILDTAGS: "continuous_profiler_stackdriver"
   CGO_ENABLED: "1"
   GOPATH: $CI_PROJECT_DIR/.GOPATH
   GOTESTSUM_VERSION: v1.12.0

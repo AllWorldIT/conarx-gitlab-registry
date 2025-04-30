@@ -2,7 +2,6 @@ ARG GOLANG_VERSION=1.23
 FROM golang:${GOLANG_VERSION}-alpine AS build
 
 ENV DISTRIBUTION_DIR /go/src/github.com/docker/distribution
-ENV BUILDTAGS include_gcs
 
 ARG GOOS=linux
 ARG GOARCH=amd64
