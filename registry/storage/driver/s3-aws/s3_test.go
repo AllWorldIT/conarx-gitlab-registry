@@ -457,133 +457,143 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 	}
 }
 
-func TestS3DriverStorageClassStandard(t *testing.T) {
+func TestS3DriverStorageClass(t *testing.T) {
 	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
-	rootDir := t.TempDir()
-
-	standardDriver := s3DriverConstructorT(t, rootDir, s3.StorageClassStandard)
-	standardDriverKeyer := standardDriver.(common.S3BucketKeyer)
-
-	standardFilename := "/test-standard"
-	contents := []byte("contents")
-	ctx := dcontext.Background()
-
-	err := standardDriver.PutContent(ctx, standardFilename, contents)
-	require.NoError(t, err)
-	defer standardDriver.Delete(ctx, standardFilename)
-
-	// NOTE(prozlach): Our storage driver does not expose API method that
-	// allows fetching the storage class of the object, we need to create a
-	// native S3 client to do that.
-	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
-	require.NoError(t, err)
-	var storageClass string
-	switch driverVersion {
-	case common.V2DriverName:
-		s3API, err := v2.NewS3API(parsedParams)
-		require.NoError(t, err)
-
-		resp, err := s3API.GetObject(
-			ctx,
-			&v2_s3.GetObjectInput{
-				Bucket: ptr.String(parsedParams.Bucket),
-				Key:    ptr.String(standardDriverKeyer.S3BucketKey(standardFilename)),
-			})
-		defer resp.Body.Close()
-		require.NoError(t, err, "unexpected error retrieving standard storage file")
-		storageClass = string(resp.StorageClass)
-	default:
-		s3API, err := v1.NewS3API(parsedParams)
-		require.NoError(t, err)
-
-		resp, err := s3API.GetObjectWithContext(
-			ctx,
-			&s3.GetObjectInput{
-				Bucket: ptr.String(parsedParams.Bucket),
-				Key:    ptr.String(standardDriverKeyer.S3BucketKey(standardFilename)),
-			})
-		defer resp.Body.Close()
-		require.NoError(t, err, "unexpected error retrieving standard storage file")
-		storageClass = ptr.ToString(resp.StorageClass)
+	testCases := []struct {
+		name         string
+		storageClass string
+		// expectedStorageClass is the expected value returned by S3 API
+		// Amazon only populates this header for non-standard storage classes
+		expectedStorageClass string
+	}{
+		{
+			name:                 "Standard",
+			storageClass:         "STANDARD",
+			expectedStorageClass: "", // Amazon doesn't return a value for standard class
+		},
+		{
+			name:                 "ReducedRedundancy",
+			storageClass:         "REDUCED_REDUNDANCY",
+			expectedStorageClass: "REDUCED_REDUNDANCY",
+		},
+		{
+			name:                 "StandardIA",
+			storageClass:         "STANDARD_IA",
+			expectedStorageClass: "STANDARD_IA",
+		},
+		{
+			name:                 "OnezoneIA",
+			storageClass:         "ONEZONE_IA",
+			expectedStorageClass: "ONEZONE_IA",
+		},
+		{
+			name:                 "IntelligentTiering",
+			storageClass:         "INTELLIGENT_TIERING",
+			expectedStorageClass: "INTELLIGENT_TIERING",
+		},
+		{
+			name:                 "Outposts",
+			storageClass:         "OUTPOSTS",
+			expectedStorageClass: "OUTPOSTS",
+		},
+		{
+			name:                 "GlacierIR",
+			storageClass:         "GLACIER_IR",
+			expectedStorageClass: "GLACIER_IR",
+		},
+		{
+			name:                 "ExpressOnezone",
+			storageClass:         "EXPRESS_ONEZONE",
+			expectedStorageClass: "EXPRESS_ONEZONE",
+		},
+		{
+			name:                 "None",
+			storageClass:         common.StorageClassNone,
+			expectedStorageClass: "", // Same behavior as standard, no explicit value returned
+		},
 	}
 
-	// Amazon only populates this header value for non-standard storage classes
-	require.Empty(
-		t, storageClass,
-		"unexpected storage class for standard file: %v", storageClass,
-	)
-}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rootDir := t.TempDir()
 
-func TestS3DriverStorageClassReducedRedundancy(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
-		t.Skip(skipMsg)
+			driver := s3DriverConstructorT(t, rootDir, tc.storageClass)
+
+			// Skip storage class verification for StorageClassNone as it's just a config check
+			if tc.storageClass == common.StorageClassNone {
+				return
+			}
+
+			driverKeyer, ok := driver.(common.S3BucketKeyer)
+			require.True(t, ok, "driver should implement S3BucketKeyer interface")
+
+			filename := "/test-" + strings.ToLower(tc.name)
+			contents := []byte("contents")
+			ctx := dcontext.Background()
+
+			err := driver.PutContent(ctx, filename, contents)
+			if err != nil {
+				// Skip test if the storage class is not supported by the S3 service
+				if strings.Contains(err.Error(), "InvalidStorageClass") {
+					t.Skipf("Storage class %q not supported by this S3 service", tc.storageClass)
+					return
+				}
+				require.NoError(t, err, "unexpected error creating content")
+			}
+			defer driver.Delete(ctx, filename)
+
+			// NOTE(prozlach): Our storage driver does not expose API method that
+			// allows fetching the storage class of the object, we need to create a
+			// native S3 client to do that.
+			parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+			require.NoError(t, err)
+
+			var storageClass string
+			switch driverVersion {
+			case common.V2DriverName:
+				s3API, err := v2.NewS3API(parsedParams)
+				require.NoError(t, err)
+
+				resp, err := s3API.GetObject(
+					ctx,
+					&v2_s3.GetObjectInput{
+						Bucket: ptr.String(parsedParams.Bucket),
+						Key:    ptr.String(driverKeyer.S3BucketKey(filename)),
+					})
+				require.NoError(t, err, "unexpected error retrieving object")
+				defer resp.Body.Close()
+				storageClass = string(resp.StorageClass)
+			default:
+				s3API, err := v1.NewS3API(parsedParams)
+				require.NoError(t, err)
+
+				resp, err := s3API.GetObjectWithContext(
+					ctx,
+					&s3.GetObjectInput{
+						Bucket: ptr.String(parsedParams.Bucket),
+						Key:    ptr.String(driverKeyer.S3BucketKey(filename)),
+					})
+				require.NoError(t, err, "unexpected error retrieving object")
+				defer resp.Body.Close()
+				storageClass = ptr.ToString(resp.StorageClass)
+			}
+
+			if tc.expectedStorageClass == "" {
+				require.Empty(
+					t, storageClass,
+					"unexpected storage class for %s file: %v", tc.name, storageClass,
+				)
+			} else {
+				require.Equalf(
+					t, tc.expectedStorageClass, storageClass,
+					"unexpected storage class for %s file: %v", tc.name, storageClass,
+				)
+			}
+		})
 	}
-
-	rootDir := t.TempDir()
-
-	rrDriver := s3DriverConstructorT(t, rootDir, s3.StorageClassReducedRedundancy)
-	rrDriverKeyer := rrDriver.(common.S3BucketKeyer)
-
-	rrFilename := "/test-rr"
-	contents := []byte("contents")
-	ctx := dcontext.Background()
-
-	err := rrDriver.PutContent(ctx, rrFilename, contents)
-	require.NoError(t, err, "unexpected error creating content")
-	defer rrDriver.Delete(ctx, rrFilename)
-
-	// NOTE(prozlach): Our storage driver does not expose API method that
-	// allows fetching the storage class of the object, we need to create a
-	// native S3 client to do that.
-	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
-	require.NoError(t, err)
-	var storageClass string
-	switch driverVersion {
-	case common.V2DriverName:
-		s3API, err := v2.NewS3API(parsedParams)
-		require.NoError(t, err)
-
-		resp, err := s3API.GetObject(
-			ctx,
-			&v2_s3.GetObjectInput{
-				Bucket: ptr.String(parsedParams.Bucket),
-				Key:    ptr.String(rrDriverKeyer.S3BucketKey(rrFilename)),
-			})
-		defer resp.Body.Close()
-		require.NoError(t, err, "unexpected error retrieving standard storage file")
-		storageClass = string(resp.StorageClass)
-	default:
-		s3API, err := v1.NewS3API(parsedParams)
-		require.NoError(t, err)
-
-		resp, err := s3API.GetObjectWithContext(
-			ctx,
-			&s3.GetObjectInput{
-				Bucket: ptr.String(parsedParams.Bucket),
-				Key:    ptr.String(rrDriverKeyer.S3BucketKey(rrFilename)),
-			})
-		defer resp.Body.Close()
-		require.NoError(t, err, "unexpected error retrieving standard storage file")
-		storageClass = ptr.ToString(resp.StorageClass)
-	}
-
-	require.Equalf(
-		t, s3.StorageClassReducedRedundancy, storageClass,
-		"unexpected storage class for reduced-redundancy file: %v", storageClass,
-	)
-}
-
-func TestS3DriverStorageClassNone(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
-		t.Skip(skipMsg)
-	}
-
-	rootDir := t.TempDir()
-
-	_ = s3DriverConstructorT(t, rootDir, common.StorageClassNone)
 }
 
 func TestS3DriverOverThousandBlobs(t *testing.T) {
