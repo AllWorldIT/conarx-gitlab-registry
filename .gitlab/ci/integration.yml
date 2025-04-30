@@ -13,7 +13,7 @@ middleware:storage-googlecdn:
     - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
     - export REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_PRIVATEKEY="$CDN_PRIVATEKEY"
   script:
-    - $GO_TEST -v -coverprofile=coverage.out -tags=include_gcs,integration
+    - $GO_TEST -v -coverprofile=coverage.out -tags=integration
 
 .storage-driver-test: &storage-driver-test
   extends: .go-version-matrix

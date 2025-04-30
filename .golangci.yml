@@ -16,7 +16,6 @@ run:
    - api_conformance_test
    - api_gitlab_test
    - handlers_test
-   - include_gcs
    - integration
    - online_gc_test
    - toxiproxy
