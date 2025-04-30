@@ -184,6 +184,7 @@ func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, err
 		logrus.Warn("Using next-gen GCS driver")
 		return NewNext(params)
 	default:
+		logrus.Warn("Using legacy GCS driver")
 		return New(params)
 	}
 }

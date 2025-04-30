@@ -88,6 +88,7 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		tb.Log("Using next-gen GCS driver")
 		return NewNext(parameters)
 	default:
+		tb.Log("Using legacy GCS driver")
 		return New(parameters)
 	}
 }

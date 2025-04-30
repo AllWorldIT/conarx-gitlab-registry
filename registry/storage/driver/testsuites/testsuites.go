@@ -667,7 +667,9 @@ func (s *DriverSuite) TestContinueStreamAppendLarge() {
 	require.Greater(s.T(), streamSize, azure_v2.MaxChunkSize*3*2)
 	// gcs needs to be refactored, we can't import the constant directly yet as
 	// there are going to be import loops
-	require.Greater(s.T(), streamSize, int64(256*1024*3))
+	// minChunkSize * 20 == defaultChunkSizea, 3KiB is meant to test saving
+	// state session when chunk size is not even.
+	require.Greater(s.T(), streamSize, int64(20*256*1024+3*2<<10))
 	s.testContinueStreamAppend(s.T(), streamSize)
 }
 
@@ -686,8 +688,8 @@ func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
 	contentsChunk123 := blobber.GetAllBytes()
 	// Use uneven sizes to trigger more code paths
 	contentsChunk1 := contentsChunk123[0:chunkSize]
-	contentsChunk2 := contentsChunk123[chunkSize : chunkSize+128]
-	contentsChunk3 := contentsChunk123[chunkSize+128 : 3*chunkSize]
+	contentsChunk2 := contentsChunk123[chunkSize : chunkSize+101] // intentionally a prime
+	contentsChunk3 := contentsChunk123[chunkSize+101 : 3*chunkSize]
 
 	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
 	require.NoError(t, err)
