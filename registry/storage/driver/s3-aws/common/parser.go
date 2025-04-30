@@ -151,6 +151,30 @@ const (
 // validRegions maps known s3 region identifiers to region descriptors
 var validRegions = make(map[string]struct{})
 
+var validStorageClassesV1 = []string{
+	StorageClassNone,
+	s3.StorageClassStandard,
+	s3.StorageClassReducedRedundancy,
+	s3.StorageClassStandardIa,
+	s3.StorageClassOnezoneIa,
+	s3.StorageClassIntelligentTiering,
+	s3.StorageClassOutposts,
+	s3.StorageClassGlacierIr,
+	s3.StorageClassExpressOnezone,
+}
+
+var validStorageClassesV2 = []string{
+	StorageClassNone,
+	string(types.StorageClassStandard),
+	string(types.StorageClassReducedRedundancy),
+	string(types.StorageClassStandardIa),
+	string(types.StorageClassOnezoneIa),
+	string(types.StorageClassIntelligentTiering),
+	string(types.StorageClassOutposts),
+	string(types.StorageClassGlacierIr),
+	string(types.StorageClassExpressOnezone),
+}
+
 func init() {
 	partitions := endpoints.DefaultPartitions()
 	for _, p := range partitions {
@@ -472,15 +496,10 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 		case (driverVersion == V1DriverName || driverVersion == V1DriverNameAlt):
 			// All valid storage class parameters are UPPERCASE, so be a bit more flexible here
 			storageClassString = strings.ToUpper(storageClassString)
-			validStorageClasses := []string{
-				StorageClassNone,
-				s3.StorageClassStandard,
-				s3.StorageClassReducedRedundancy,
-			}
-			if !slices.Contains(validStorageClasses, storageClassString) {
+			if !slices.Contains(validStorageClassesV1, storageClassString) {
 				err := fmt.Errorf(
 					"the storageclass parameter must be one of %v, %v is invalid",
-					strings.Join(validStorageClasses, ","), storageClassParam,
+					strings.Join(validStorageClassesV1, ","), storageClassParam,
 				)
 				mErr = multierror.Append(mErr, err)
 			} else {
@@ -488,15 +507,10 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 			}
 		case driverVersion == V2DriverName:
 			storageClassString = strings.ToUpper(storageClassString)
-			validStorageClasses := []string{
-				StorageClassNone,
-				string(types.StorageClassStandard),
-				string(types.StorageClassReducedRedundancy),
-			}
-			if !slices.Contains(validStorageClasses, storageClassString) {
+			if !slices.Contains(validStorageClassesV2, storageClassString) {
 				err := fmt.Errorf(
 					"the storageclass parameter must be one of %v, %v is invalid",
-					strings.Join(validStorageClasses, ","), storageClassParam,
+					strings.Join(validStorageClassesV2, ","), storageClassParam,
 				)
 				mErr = multierror.Append(mErr, err)
 			} else {
