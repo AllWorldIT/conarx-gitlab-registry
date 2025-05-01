@@ -727,6 +727,40 @@ func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
 	require.Equal(t, blobber.GetAllBytes(), received)
 }
 
+func (s *DriverSuite) TestContinueAppendZeroSizeBlob() {
+	filename := dtestutil.RandomPath(1, 32)
+	defer s.deletePath(s.StorageDriver, firstPart(filename))
+	s.T().Logf("blob path used for testing: %s", filename)
+
+	// Chosen arbitrary
+	var fileSize int64 = 2 * 1 << 20
+	blobber := s.blobberFactory.GetBlobber(fileSize)
+	contentsChunk := blobber.GetAllBytes()
+
+	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
+	require.NoError(s.T(), err)
+	nn, err := writer.Write(make([]byte, 0))
+	require.NoError(s.T(), err)
+	require.Zero(s.T(), nn)
+	require.NoError(s.T(), writer.Close())
+	require.Zero(s.T(), writer.Size())
+
+	writer, err = s.StorageDriver.Writer(s.ctx, filename, true)
+	require.NoError(s.T(), err)
+	require.Zero(s.T(), writer.Size())
+
+	nnn, err := io.Copy(writer, bytes.NewReader(contentsChunk))
+	require.NoError(s.T(), err)
+	require.EqualValues(s.T(), fileSize, nnn)
+	require.NoError(s.T(), writer.Commit())
+	require.NoError(s.T(), writer.Close())
+	require.EqualValues(s.T(), fileSize, writer.Size())
+
+	received, err := s.StorageDriver.GetContent(s.ctx, filename)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), blobber.GetAllBytes(), received)
+}
+
 func (s *DriverSuite) TestMaxUploadSize() {
 	if s.StorageDriver.Name() == "inmemory" {
 		s.T().Skip("In-memory driver is known to have OOM issues with large uploads.")
