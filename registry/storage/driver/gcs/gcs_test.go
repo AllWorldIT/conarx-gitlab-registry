@@ -356,7 +356,7 @@ func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 	}
 
 	testFn := func(params map[string]any) (any, error) {
-		return parseParameters(params)
+		return parseParameters(params, os.Getenv(registryGCSDriverEnv) == "next")
 	}
 
 	opts := dtestutil.Opts{

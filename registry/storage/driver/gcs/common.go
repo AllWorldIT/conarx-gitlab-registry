@@ -123,8 +123,8 @@ func (d *Wrapper) GCSBucketKey(path string) string {
 	case *driver:
 		return typedDriver.pathToKey(path)
 	default:
-		// Handle unexpected driver type or fail gracefully
-		// Depending on requirements, you might want to log this or handle differently
+		// Handle unexpected driver type or fail gracefully. Depending on
+		// requirements, we might want to log this or handle differently
 		return path
 	}
 }
@@ -172,22 +172,22 @@ func retry(req request) error {
 // Required parameters:
 // - bucket
 func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, error) {
-	params, err := parseParameters(parameters)
+	useNext := os.Getenv(registryGCSDriverEnv) == "next"
+
+	params, err := parseParameters(parameters, useNext)
 	if err != nil {
 		return nil, err
 	}
 
-	switch os.Getenv(registryGCSDriverEnv) {
-	case "next":
+	if useNext {
 		logrus.Warn("Using next-gen GCS driver")
 		return NewNext(params)
-	default:
-		logrus.Warn("Using legacy GCS driver")
-		return New(params)
 	}
+	logrus.Warn("Using legacy GCS driver")
+	return New(params)
 }
 
-func parseParameters(parameters map[string]any) (*driverParameters, error) {
+func parseParameters(parameters map[string]any, useNext bool) (*driverParameters, error) {
 	bucket, ok := parameters["bucket"]
 	if !ok || fmt.Sprint(bucket) == "" {
 		return nil, fmt.Errorf("no bucket parameter provided")
@@ -273,7 +273,17 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		return nil, fmt.Errorf("maxconcurrency config error: %s", err)
 	}
 
-	storageClient, err := storage.NewClient(context.Background(), option.WithTokenSource(ts))
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if useNext {
+		// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
+		// API. GCS SDK recommends using the JSON API instead, which is done
+		// here by setting WithJSONReads. This ensures consistency with other
+		// client operations, which all use JSON. JSON will become the default
+		// in a future release of GCS SDK. We only enable it for GCS next.
+		// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
+		opts = append(opts, storage.WithJSONReads())
+	}
+	storageClient, err := storage.NewClient(context.Background(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("storage client error: %s", err)
 	}
