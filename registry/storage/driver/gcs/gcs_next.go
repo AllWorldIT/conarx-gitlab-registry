@@ -49,12 +49,11 @@ func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
 		return nil, fmt.Errorf("invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
 	}
 	d := &driverNext{
-		bucket:        params.bucket,
+		bucket:        params.storageClient.Bucket(params.bucket),
 		rootDirectory: rootDirectory,
 		email:         params.email,
 		privateKey:    params.privateKey,
 		client:        params.client,
-		storageClient: params.storageClient,
 		chunkSize:     params.chunkSize,
 		parallelWalk:  params.parallelWalk,
 	}
@@ -72,8 +71,7 @@ func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
 // Objects are stored at absolute keys in the provided bucket.
 type driverNext struct {
 	client        *http.Client
-	storageClient *storage.Client
-	bucket        string
+	bucket        *storage.BucketHandle
 	email         string
 	privateKey    []byte
 	rootDirectory string
@@ -92,7 +90,7 @@ func (d *driverNext) GetContent(ctx context.Context, path string) ([]byte, error
 	var rc io.ReadCloser
 	err := retry(func() error {
 		var err error
-		rc, err = d.storageClient.Bucket(d.bucket).Object(name).NewReader(ctx)
+		rc, err = d.bucket.Object(name).NewReader(ctx)
 		return err
 	})
 	if errors.Is(err, storage.ErrObjectNotExist) {
@@ -114,7 +112,7 @@ func (d *driverNext) GetContent(ctx context.Context, path string) ([]byte, error
 // This should primarily be used for small objects.
 func (d *driverNext) PutContent(ctx context.Context, path string, contents []byte) error {
 	return retry(func() error {
-		wc := d.storageClient.Bucket(d.bucket).Object(d.pathToKey(path)).NewWriter(ctx)
+		wc := d.bucket.Object(d.pathToKey(path)).NewWriter(ctx)
 		wc.ContentType = "application/octet-stream"
 		// nolint: gosec
 		h := md5.New()
@@ -136,108 +134,84 @@ func (d *driverNext) PutContent(ctx context.Context, path string, contents []byt
 	})
 }
 
-// Reader retrieves an io.ReadCloser for the content stored at "path"
-// with a given byte offset.
-// May be used to resume reading a stream by providing a nonzero offset.
+// Reader retrieves an io.ReadCloser for the content stored at "path" with a
+// given byte offset. May be used to resume reading a stream by providing a
+// nonzero offset.
 func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
-	res, err := getObjectNext(d.client, d.bucket, d.pathToKey(path), offset)
+	obj := d.bucket.Object(d.pathToKey(path))
+	// NOTE(milosgajdos/prozlach): If length is negative, the object is read
+	// until the end. The request is retried until the context is canceled as
+	// the operation is indepotent. See links below for more info:
+	// https://pkg.go.dev/cloud.google.com/go/storage#ObjectHandle.NewRangeReader
+	// https://cloud.google.com/storage/docs/retry-strategy
+	r, err := obj.NewRangeReader(ctx, offset, -1)
 	if err != nil {
-		var gcsErr *googleapi.Error
-		if !errors.As(err, &gcsErr) {
-			return nil, fmt.Errorf("fetching object: %w", err)
-		}
-
-		if gcsErr.Code == http.StatusNotFound {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 
-		if gcsErr.Code == http.StatusRequestedRangeNotSatisfiable {
-			obj, err := storageStatObjectNext(ctx, d.storageClient, d.bucket, d.pathToKey(path))
-			if err != nil {
-				return nil, fmt.Errorf("fetching meta information about the object: %w", err)
+		var status *googleapi.Error
+		if errors.As(err, &status) {
+			// nolint: revive // max-control-nesting
+			switch status.Code {
+			case http.StatusNotFound:
+				return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+			case http.StatusRequestedRangeNotSatisfiable:
+				attrs, err := obj.Attrs(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("fetching object attributes: %w", err)
+				}
+				if offset == attrs.Size {
+					return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
+				}
+				return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
 			}
-			if offset == obj.Size {
-				return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
-			}
-			return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
 		}
+		return nil, err
 	}
-	if res.Header.Get("Content-Type") == uploadSessionContentType {
-		defer res.Body.Close()
+	if r.Attrs.ContentType == uploadSessionContentType {
+		_ = r.Close()
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
-	return res.Body, nil
+	return r, nil
 }
 
-func storageDeleteObjectNext(ctx context.Context, client *storage.Client, bucket, name string) error {
+func storageDeleteObjectNext(ctx context.Context, bucket *storage.BucketHandle, name string) error {
 	return retry(func() error {
-		return client.Bucket(bucket).Object(name).Delete(ctx)
+		return bucket.Object(name).Delete(ctx)
 	})
 }
 
-func storageStatObjectNext(ctx context.Context, client *storage.Client, bucket, name string) (*storage.ObjectAttrs, error) {
+func storageStatObjectNext(ctx context.Context, bucket *storage.BucketHandle, name string) (*storage.ObjectAttrs, error) {
 	var obj *storage.ObjectAttrs
 	err := retry(func() error {
 		var err error
-		obj, err = client.Bucket(bucket).Object(name).Attrs(ctx)
+		obj, err = bucket.Object(name).Attrs(ctx)
 		return err
 	})
 	return obj, err
 }
 
-func storageListObjectsNext(ctx context.Context, client *storage.Client, bucket string, q *storage.Query) (*storage.ObjectIterator, error) {
+func storageListObjectsNext(ctx context.Context, bucket *storage.BucketHandle, q *storage.Query) (*storage.ObjectIterator, error) {
 	var objs *storage.ObjectIterator
 	err := retry(func() error {
 		var err error
-		objs = client.Bucket(bucket).Objects(ctx, q)
+		objs = bucket.Objects(ctx, q)
 		return err
 	})
 	return objs, err
 }
 
-func storageCopyObjectNext(ctx context.Context, client *storage.Client, srcBucket, srcName, destBucket, destName string) (*storage.ObjectAttrs, error) {
+func storageCopyObjectNext(ctx context.Context, bucket *storage.BucketHandle, srcName, destName string) (*storage.ObjectAttrs, error) {
 	var obj *storage.ObjectAttrs
 	err := retry(func() error {
 		var err error
-		src := client.Bucket(srcBucket).Object(srcName)
-		dst := client.Bucket(destBucket).Object(destName)
+		src := bucket.Object(srcName)
+		dst := bucket.Object(destName)
 		obj, err = dst.CopierFrom(src).Run(ctx)
 		return err
 	})
 	return obj, err
-}
-
-func getObjectNext(client *http.Client, bucket, name string, offset int64) (*http.Response, error) {
-	// copied from google.golang.org/cloud/storage#NewReader :
-	// to set the additional "Range" header
-	u := &url.URL{
-		Scheme: "https",
-		// https://cloud.google.com/storage/docs/request-endpoints#typical
-		Host: "storage.googleapis.com",
-		Path: fmt.Sprintf("/%s/%s", bucket, name),
-	}
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating new http request: %w", err)
-	}
-	if offset > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
-	}
-	var res *http.Response
-	err = retry(func() error {
-		var err error
-		// nolint: bodyclose // body is closed bit later in the code
-		res, err = client.Do(req)
-		return err
-	})
-	if err != nil {
-		return nil, fmt.Errorf("executing http request: %w", err)
-	}
-	if err := googleapi.CheckMediaResponse(res); err != nil {
-		_ = res.Body.Close()
-		return nil, fmt.Errorf("checking media response: %w", err)
-	}
-	return res, nil
 }
 
 func putContentsCloseNext(wc *storage.Writer, contents []byte) error {
@@ -356,22 +330,20 @@ func putChunkNext(client *http.Client, sessionURI string, chunk []byte, from, to
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (d *driverNext) Writer(_ context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
-	writer := &writerNext{
-		client:        d.client,
-		storageClient: d.storageClient,
-		bucket:        d.bucket,
-		name:          d.pathToKey(path),
-		buffer:        make([]byte, d.chunkSize),
+func (d *driverNext) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
+	w := &writerNext{
+		client: d.client,
+		object: d.bucket.Object(d.pathToKey(path)),
+		buffer: make([]byte, d.chunkSize),
 	}
 
 	if doAppend {
-		err := writer.init(path)
+		err := w.init(ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return writer, nil
+	return w, nil
 }
 
 // Stat retrieves the FileInfo for the given path, including the current
@@ -379,7 +351,7 @@ func (d *driverNext) Writer(_ context.Context, path string, doAppend bool) (stor
 func (d *driverNext) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
 	var fi storagedriver.FileInfoFields
 	// try to get as file
-	obj, err := storageStatObjectNext(ctx, d.storageClient, d.bucket, d.pathToKey(path))
+	obj, err := storageStatObjectNext(ctx, d.bucket, d.pathToKey(path))
 	if err == nil {
 		if obj.ContentType == uploadSessionContentType {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
@@ -398,7 +370,7 @@ func (d *driverNext) Stat(ctx context.Context, path string) (storagedriver.FileI
 	query := &storage.Query{}
 	query.Prefix = dirpath
 
-	it, err := storageListObjectsNext(ctx, d.storageClient, d.bucket, query)
+	it, err := storageListObjectsNext(ctx, d.bucket, query)
 	if err != nil {
 		return nil, fmt.Errorf("listing objects: %w", err)
 	}
@@ -433,7 +405,7 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 	}
 	list := make([]string, 0, 64)
 
-	it, err := storageListObjectsNext(ctx, d.storageClient, d.bucket, query)
+	it, err := storageListObjectsNext(ctx, d.bucket, query)
 	if err != nil {
 		return nil, fmt.Errorf("listing objects: %w", err)
 	}
@@ -473,7 +445,7 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 // Move moves an object stored at sourcePath to destPath, removing the
 // original object.
 func (d *driverNext) Move(ctx context.Context, sourcePath, destPath string) error {
-	_, err := storageCopyObjectNext(ctx, d.storageClient, d.bucket, d.pathToKey(sourcePath), d.bucket, d.pathToKey(destPath))
+	_, err := storageCopyObjectNext(ctx, d.bucket, d.pathToKey(sourcePath), d.pathToKey(destPath))
 	if err != nil {
 		var gerr *googleapi.Error
 		if errors.As(err, &gerr) {
@@ -483,7 +455,7 @@ func (d *driverNext) Move(ctx context.Context, sourcePath, destPath string) erro
 		}
 		return err
 	}
-	err = storageDeleteObjectNext(ctx, d.storageClient, d.bucket, d.pathToKey(sourcePath))
+	err = storageDeleteObjectNext(ctx, d.bucket, d.pathToKey(sourcePath))
 	// if deleting the file fails, log the error, but do not fail; the file was successfully copied,
 	// and the original should eventually be cleaned when purging the uploads folder.
 	if err != nil {
@@ -498,7 +470,7 @@ func (d *driverNext) listAll(ctx context.Context, prefix string) ([]string, erro
 	query := &storage.Query{}
 	query.Prefix = prefix
 	query.Versions = false
-	it, err := storageListObjectsNext(ctx, d.storageClient, d.bucket, query)
+	it, err := storageListObjectsNext(ctx, d.bucket, query)
 	if err != nil {
 		return nil, fmt.Errorf("listing objects: %w", err)
 	}
@@ -531,7 +503,7 @@ func (d *driverNext) Delete(ctx context.Context, path string) error {
 	if len(keys) > 0 {
 		sort.Sort(sort.Reverse(sort.StringSlice(keys)))
 		for _, key := range keys {
-			err := storageDeleteObjectNext(ctx, d.storageClient, d.bucket, key)
+			err := storageDeleteObjectNext(ctx, d.bucket, key)
 			// GCS only guarantees eventual consistency, so listAll might return
 			// paths that no longer exist. If this happens, just ignore any not
 			// found error
@@ -544,7 +516,7 @@ func (d *driverNext) Delete(ctx context.Context, path string) error {
 		}
 		return nil
 	}
-	err = storageDeleteObjectNext(ctx, d.storageClient, d.bucket, d.pathToKey(path))
+	err = storageDeleteObjectNext(ctx, d.bucket, d.pathToKey(path))
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
@@ -595,7 +567,7 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 				<-semaphore
 			}()
 
-			if err := storageDeleteObjectNext(ctx, d.storageClient, d.bucket, d.pathToKey(p)); err != nil {
+			if err := storageDeleteObjectNext(ctx, d.bucket, d.pathToKey(p)); err != nil {
 				if !errors.Is(err, storage.ErrObjectNotExist) {
 					errCh <- err
 					return
@@ -651,7 +623,7 @@ func (d *driverNext) URLFor(_ context.Context, path string, options map[string]a
 		QueryParameters: storagedriver.CustomParams(options, customParamKeys),
 		Scheme:          storage.SigningSchemeV4,
 	}
-	return storage.SignedURL(d.bucket, name, opts)
+	return storage.SignedURL(d.bucket.BucketName(), name, opts)
 }
 
 // Walk traverses a filesystem defined within driver, starting
@@ -716,18 +688,16 @@ func (d *driverNext) keyToPath(key string) string {
 }
 
 type writerNext struct {
-	client        *http.Client
-	storageClient *storage.Client
-	bucket        string
-	name          string
-	size          int64
-	offset        int64
-	closed        bool
-	committed     bool
-	canceled      bool
-	sessionURI    string
-	buffer        []byte
-	buffSize      int64
+	client     *http.Client
+	object     *storage.ObjectHandle
+	size       int64
+	offset     int64
+	closed     bool
+	committed  bool
+	canceled   bool
+	sessionURI string
+	buffer     []byte
+	buffSize   int64
 }
 
 // Cancel removes any written content from this FileWriter.
@@ -739,7 +709,7 @@ func (w *writerNext) Cancel() error {
 	}
 	w.canceled = true
 
-	err := storageDeleteObjectNext(context.Background(), w.storageClient, w.bucket, w.name)
+	err := retry(func() error { return w.object.Delete(context.Background()) })
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil
@@ -790,8 +760,8 @@ func (w *writerNext) Close() error {
 
 	// commit the writes by updating the upload session
 	err = retry(func() error {
-		context := context.Background()
-		wc := w.storageClient.Bucket(w.bucket).Object(w.name).NewWriter(context)
+		ctx := context.Background()
+		wc := w.object.NewWriter(ctx)
 		wc.ContentType = uploadSessionContentType
 		wc.Metadata = map[string]string{
 			"Session-URI": w.sessionURI,
@@ -824,8 +794,8 @@ func (w *writerNext) Commit() error {
 	// no session started yet just perform a simple upload
 	if w.sessionURI == "" {
 		err := retry(func() error {
-			context := context.Background()
-			wc := w.storageClient.Bucket(w.bucket).Object(w.name).NewWriter(context)
+			ctx := context.Background()
+			wc := w.object.NewWriter(ctx)
 			wc.ContentType = "application/octet-stream"
 			return putContentsCloseNext(wc, w.buffer[0:w.buffSize])
 		})
@@ -868,7 +838,7 @@ func (w *writerNext) writeChunk() error {
 	}
 	// if their is no sessionURI yet, obtain one by starting the session
 	if w.sessionURI == "" {
-		w.sessionURI, err = startSessionNext(w.client, w.bucket, w.name)
+		w.sessionURI, err = startSessionNext(w.client, w.object.BucketName(), w.object.ObjectName())
 	}
 	if err != nil {
 		return err
@@ -928,30 +898,44 @@ func (w *writerNext) Size() int64 {
 // data is never higher than minChunkSize, hence there is never going to be an
 // overflow/there will always be enough place in the buffer to read back the
 // temporary data in this call.
-func (w *writerNext) init(path string) error {
-	res, err := getObjectNext(w.client, w.bucket, w.name, 0)
+func (w *writerNext) init(ctx context.Context) error {
+	attrs, err := w.object.Attrs(ctx)
 	if err != nil {
 		var gcsErr *googleapi.Error
 		if errors.As(err, &gcsErr) && gcsErr.Code == http.StatusNotFound {
-			return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+			return storagedriver.PathNotFoundError{Path: w.object.ObjectName(), DriverName: driverName}
 		}
 
 		return fmt.Errorf("fetching object: %w", err)
 	}
-	defer res.Body.Close()
-	if res.Header.Get("Content-Type") != uploadSessionContentType {
-		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+	if attrs.ContentType != uploadSessionContentType {
+		return storagedriver.PathNotFoundError{Path: w.object.ObjectName(), DriverName: driverName}
 	}
-	offset, err := strconv.ParseInt(res.Header.Get("X-Goog-Meta-Offset"), 10, 64)
+
+	if attrs.Metadata["Offset"] == "" {
+		return fmt.Errorf("`X-Goog-Meta-Offset` HTTP header has not been set for path %s", w.object.ObjectName())
+	}
+	offset, err := strconv.ParseInt(attrs.Metadata["Offset"], 10, 64)
 	if err != nil {
 		return fmt.Errorf("parsing `X-Goog-Meta-Offset` HTTP header: %w", err)
 	}
-	buffer, err := io.ReadAll(res.Body)
+
+	r, err := w.object.NewReader(ctx)
 	if err != nil {
+		return fmt.Errorf("parsing `X-Goog-Meta-Offset` HTTP header: %w", err)
+	}
+	defer r.Close()
+
+	for err == nil && w.buffSize < int64(len(w.buffer)) {
+		var n int
+		n, err = r.Read(w.buffer[w.buffSize:])
+		w.buffSize += int64(n)
+	}
+	if err != nil && err != io.EOF {
 		return fmt.Errorf("reading `tail` data during writer resume: %w", err)
 	}
-	w.sessionURI = res.Header.Get("X-Goog-Meta-Session-URI")
-	w.buffSize = int64(copy(w.buffer, buffer)) // nolint: gosec // copy() is always going to be non-negative
+
+	w.sessionURI = attrs.Metadata["Session-URI"]
 	w.offset = offset
 	w.size = offset + w.buffSize
 	return nil
