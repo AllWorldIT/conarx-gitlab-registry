@@ -93,7 +93,7 @@ func makeTrustedKeyMap(rootKeys []libtrust.PrivateKey) map[string]libtrust.Publi
 	return trustedKeys
 }
 
-func makeTestToken(tb testing.TB, issuer, audience string, access []*ResourceActions, rootKey libtrust.PrivateKey, depth int, now, exp time.Time) (*Token, error) {
+func makeTestToken(tb testing.TB, issuer string, audience AudienceList, access []*ResourceActions, rootKey libtrust.PrivateKey, depth int, now, exp time.Time) (*Token, error) {
 	tb.Helper()
 
 	signingKey, err := makeSigningKeyWithChain(rootKey, depth)
@@ -158,7 +158,7 @@ func TestTokenVerify(t *testing.T) {
 	var (
 		numTokens = 4
 		issuer    = "test-issuer"
-		audience  = "test-audience"
+		audience  = AudienceList{"test-audience"}
 		access    = []*ResourceActions{
 			{
 				Type:    "repository",
@@ -191,7 +191,7 @@ func TestTokenVerify(t *testing.T) {
 
 	verifyOps := VerifyOptions{
 		TrustedIssuers:    []string{issuer},
-		AcceptedAudiences: []string{audience},
+		AcceptedAudiences: audience,
 		Roots:             rootPool,
 		TrustedKeys:       trustedKeys,
 	}
@@ -206,7 +206,7 @@ func TestTokenVerify(t *testing.T) {
 func TestLeeway(t *testing.T) {
 	var (
 		issuer   = "test-issuer"
-		audience = "test-audience"
+		audience = AudienceList{"test-audience"}
 		access   = []*ResourceActions{
 			{
 				Type:    "repository",
@@ -223,7 +223,7 @@ func TestLeeway(t *testing.T) {
 
 	verifyOps := VerifyOptions{
 		TrustedIssuers:    []string{issuer},
-		AcceptedAudiences: []string{audience},
+		AcceptedAudiences: audience,
 		Roots:             nil,
 		TrustedKeys:       trustedKeys,
 	}
@@ -338,7 +338,7 @@ func TestAccessController(t *testing.T) {
 
 	// 2. Supply an invalid token.
 	token, err := makeTestToken(t,
-		issuer, service,
+		issuer, []string{service},
 		[]*ResourceActions{{
 			Type:    testAccess.Type,
 			Name:    testAccess.Name,
@@ -360,7 +360,7 @@ func TestAccessController(t *testing.T) {
 
 	// 3. Supply a token with insufficient access.
 	token, err = makeTestToken(t,
-		issuer, service,
+		issuer, AudienceList{service},
 		make([]*ResourceActions, 0), // No access specified.
 		rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
 	)
@@ -378,7 +378,7 @@ func TestAccessController(t *testing.T) {
 
 	// 4. Supply the token we need, or deserve, or whatever.
 	token, err = makeTestToken(t,
-		issuer, service,
+		issuer, AudienceList{service},
 		[]*ResourceActions{{
 			Type:    testAccess.Type,
 			Name:    testAccess.Name,
@@ -402,7 +402,7 @@ func TestAccessController(t *testing.T) {
 
 	// 5. Supply a token with full admin rights, which is represented as "*".
 	token, err = makeTestToken(t,
-		issuer, service,
+		issuer, AudienceList{service},
 		[]*ResourceActions{{
 			Type:    testAccess.Type,
 			Name:    testAccess.Name,
@@ -529,7 +529,7 @@ func newTestAuthContext(t *testing.T, ctx context.Context, req *http.Request, ac
 	require.NoError(t, err)
 
 	token, err := makeTestToken(t,
-		testIssuer, testService, actions, rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
+		testIssuer, AudienceList{testService}, actions, rootKeys[0], 1, time.Now(), time.Now().Add(5*time.Minute),
 	)
 	require.NoError(t, err)
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.compactRaw()))
