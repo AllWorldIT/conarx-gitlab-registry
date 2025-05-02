@@ -337,6 +337,26 @@ func (d *driverNext) Writer(ctx context.Context, path string, doAppend bool) (st
 		buffer: make([]byte, d.chunkSize),
 	}
 
+	// NOTE(prozlach): Dear future maintainer of this code, the concurency
+	// model that GCS has has some severe limitations.
+	//
+	// In case when we create a new Writer, a new session URL is obtained,
+	// which in turn creates new resumable upload. GCS has last-write-wins
+	// semantic, so in case when multiple Writers are targeting the same path,
+	// the last write commit silently wins. Not ideal, but at least there will
+	// not be data corruption.
+	// The problem starts when there is more than one writer resuming the same
+	// upload - they will read back the same session URL from the temporary
+	// object, and hence try to append to the same in-progress file upload. GCS
+	// ignores data for the offsets that it already committed, so the outcomes
+	// aren't predicable and there is going to be data corruption.
+	// Fortunately there is no need to fix this ATM, as the way that
+	// container-registry creates paths makes collisions impossible(?),
+	// and the filesystem driver is not that consistent too. Only Azure v2
+	// and S3 v2 are ATM.
+	// Fixing it would require some non-trivial refactoring, let's wait until
+	// we have a use-case which would justify it.
+
 	if doAppend {
 		err := w.init(ctx)
 		if err != nil {
