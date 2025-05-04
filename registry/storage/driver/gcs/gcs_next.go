@@ -234,11 +234,11 @@ func putContentsCloseNext(wc *storage.Writer, contents []byte) error {
 }
 
 // putChunkNext either completes upload or submits another chunk.
-func putChunkNext(client *http.Client, sessionURI string, chunk []byte, from, totalSize int64) (int64, error) {
+func putChunkNext(ctx context.Context, client *http.Client, sessionURI string, chunk []byte, from, totalSize int64) (int64, error) {
 	// Documentation: https://cloud.google.com/storage/docs/performing-resumable-uploads#chunked-upload
 	bytesPut := int64(0)
 	err := retry(func() error {
-		req, err := http.NewRequest(http.MethodPut, sessionURI, bytes.NewReader(chunk))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, sessionURI, bytes.NewReader(chunk))
 		if err != nil {
 			return fmt.Errorf("creating new http request: %w", err)
 		}
@@ -332,13 +332,14 @@ func putChunkNext(client *http.Client, sessionURI string, chunk []byte, from, to
 // at the location designated by "path" after the call to Commit.
 func (d *driverNext) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	w := &writerNext{
+		ctx:    ctx,
 		client: d.client,
 		object: d.bucket.Object(d.pathToKey(path)),
 		buffer: make([]byte, d.chunkSize),
 	}
 
 	if doAppend {
-		err := w.init(ctx)
+		err := w.init()
 		if err != nil {
 			return nil, err
 		}
@@ -645,7 +646,7 @@ func (d *driverNext) WalkParallel(ctx context.Context, path string, f storagedri
 
 // startSessionNext starts a new resumable upload session. Documentation can be
 // found here: https://cloud.google.com/storage/docs/performing-resumable-uploads#initiate-session
-func startSessionNext(client *http.Client, bucket, name string) (uri string, err error) {
+func startSessionNext(ctx context.Context, client *http.Client, bucket, name string) (uri string, err error) {
 	u := &url.URL{
 		Scheme: "https",
 		// https://cloud.google.com/storage/docs/request-endpoints#typical
@@ -654,7 +655,7 @@ func startSessionNext(client *http.Client, bucket, name string) (uri string, err
 		RawQuery: fmt.Sprintf("uploadType=resumable&name=%v", name),
 	}
 	err = retry(func() error {
-		req, err := http.NewRequest(http.MethodPost, u.String(), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
 		if err != nil {
 			return err
 		}
@@ -688,6 +689,7 @@ func (d *driverNext) keyToPath(key string) string {
 }
 
 type writerNext struct {
+	ctx        context.Context
 	client     *http.Client
 	object     *storage.ObjectHandle
 	size       int64
@@ -709,7 +711,7 @@ func (w *writerNext) Cancel() error {
 	}
 	w.canceled = true
 
-	err := retry(func() error { return w.object.Delete(context.Background()) })
+	err := retry(func() error { return w.object.Delete(w.ctx) })
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil
@@ -760,8 +762,7 @@ func (w *writerNext) Close() error {
 
 	// commit the writes by updating the upload session
 	err = retry(func() error {
-		ctx := context.Background()
-		wc := w.object.NewWriter(ctx)
+		wc := w.object.NewWriter(w.ctx)
 		wc.ContentType = uploadSessionContentType
 		wc.Metadata = map[string]string{
 			"Session-URI": w.sessionURI,
@@ -794,8 +795,7 @@ func (w *writerNext) Commit() error {
 	// no session started yet just perform a simple upload
 	if w.sessionURI == "" {
 		err := retry(func() error {
-			ctx := context.Background()
-			wc := w.object.NewWriter(ctx)
+			wc := w.object.NewWriter(w.ctx)
 			wc.ContentType = "application/octet-stream"
 			return putContentsCloseNext(wc, w.buffer[0:w.buffSize])
 		})
@@ -812,7 +812,7 @@ func (w *writerNext) Commit() error {
 	// is committed even when the buffer is empty. The empty/first loop with
 	// zero-length will actually commit the file.
 	for {
-		n, err := putChunkNext(w.client, w.sessionURI, w.buffer[nn:w.buffSize], w.offset, size)
+		n, err := putChunkNext(w.ctx, w.client, w.sessionURI, w.buffer[nn:w.buffSize], w.offset, size)
 		nn += n
 		w.offset += n
 		w.size = w.offset
@@ -838,12 +838,12 @@ func (w *writerNext) writeChunk() error {
 	}
 	// if their is no sessionURI yet, obtain one by starting the session
 	if w.sessionURI == "" {
-		w.sessionURI, err = startSessionNext(w.client, w.object.BucketName(), w.object.ObjectName())
+		w.sessionURI, err = startSessionNext(w.ctx, w.client, w.object.BucketName(), w.object.ObjectName())
 	}
 	if err != nil {
 		return err
 	}
-	nn, err := putChunkNext(w.client, w.sessionURI, w.buffer[0:chunkSize], w.offset, -1)
+	nn, err := putChunkNext(w.ctx, w.client, w.sessionURI, w.buffer[0:chunkSize], w.offset, -1)
 	w.offset += nn
 	if w.offset > w.size {
 		w.size = w.offset
@@ -898,8 +898,8 @@ func (w *writerNext) Size() int64 {
 // data is never higher than minChunkSize, hence there is never going to be an
 // overflow/there will always be enough place in the buffer to read back the
 // temporary data in this call.
-func (w *writerNext) init(ctx context.Context) error {
-	attrs, err := w.object.Attrs(ctx)
+func (w *writerNext) init() error {
+	attrs, err := w.object.Attrs(w.ctx)
 	if err != nil {
 		var gcsErr *googleapi.Error
 		if errors.As(err, &gcsErr) && gcsErr.Code == http.StatusNotFound {
@@ -920,7 +920,7 @@ func (w *writerNext) init(ctx context.Context) error {
 		return fmt.Errorf("parsing `X-Goog-Meta-Offset` HTTP header: %w", err)
 	}
 
-	r, err := w.object.NewReader(ctx)
+	r, err := w.object.NewReader(w.ctx)
 	if err != nil {
 		return fmt.Errorf("parsing `X-Goog-Meta-Offset` HTTP header: %w", err)
 	}
