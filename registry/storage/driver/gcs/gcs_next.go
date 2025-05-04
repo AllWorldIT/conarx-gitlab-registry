@@ -15,6 +15,8 @@ package gcs
 import (
 	"bytes"
 	"context"
+	"sync"
+	"sync/atomic"
 
 	// nolint: revive,gosec // imports-blocklist
 	"crypto/md5"
@@ -27,7 +29,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -35,6 +36,7 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 )
@@ -523,69 +525,59 @@ func (d *driverNext) Delete(ctx context.Context, path string) error {
 	return err
 }
 
-// DeleteFiles deletes a set of files concurrently, using a separate goroutine for each, up to a maximum of
-// maxDeleteConcurrency. Returns the number of successfully deleted files and any errors. This method is idempotent, no
+// DeleteFiles deletes a set of files concurrently, using a separate goroutine
+// for each, up to a maximum of maxDeleteConcurrency. Returns the number of
+// successfully deleted files and any errors. This method is idempotent, no
 // error is returned if a file does not exist.
 func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, error) {
-	// collect errors from concurrent requests
-	var errs error
-	errCh := make(chan error)
-	errDone := make(chan struct{})
-	go func() {
-		for err := range errCh {
-			if err != nil {
-				errs = multierror.Append(errs, err)
-			}
-		}
-		errDone <- struct{}{}
-	}()
+	errs := new(multierror.Error)
+	errsMutex := new(sync.Mutex)
 
-	// count the number of successfully deleted files across concurrent requests
-	count := 0
-	countCh := make(chan struct{})
-	countDone := make(chan struct{})
-	go func() {
-		for range countCh {
-			count++
-		}
-		countDone <- struct{}{}
-	}()
+	// Count the number of successfully deleted files across concurrent requests
+	// NOTE(prozlach): Using int32, this gives us up to 2 147 483 648 files
+	// that can be deleted, so it should suffice. By using int64 we would get
+	// linter warnings, esp. on 32bit platforms.
+	count := new(atomic.Int32)
 
-	var wg sync.WaitGroup
-	// limit the number of active goroutines to maxDeleteConcurrency
-	semaphore := make(chan struct{}, maxDeleteConcurrency)
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxDeleteConcurrency)
 
 	for _, path := range paths {
-		// block if there are maxDeleteConcurrency goroutines
-		semaphore <- struct{}{}
-		wg.Add(1)
+		g.Go(func() error {
+			// Check if any context was canceled, if so - skip calling Delete
+			// as it will fail anyway.
+			select {
+			case <-gctx.Done():
+				errsMutex.Lock()
+				defer errsMutex.Unlock()
 
-		go func(p string) {
-			defer func() {
-				wg.Done()
-				// signal free spot for another goroutine
-				<-semaphore
-			}()
-
-			if err := storageDeleteObjectNext(ctx, d.bucket, d.pathToKey(p)); err != nil {
-				if !errors.Is(err, storage.ErrObjectNotExist) {
-					errCh <- err
-					return
-				}
+				errs = multierror.Append(errs, gctx.Err())
+				return nil
+			default:
 			}
-			// count successfully deleted files
-			countCh <- struct{}{}
-		}(path)
+
+			err := storageDeleteObjectNext(gctx, d.bucket, d.pathToKey(path))
+			if err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
+				errsMutex.Lock()
+				defer errsMutex.Unlock()
+
+				errs = multierror.Append(errs, err)
+			} else {
+				// count successfully deleted files
+				count.Add(1)
+			}
+
+			return nil
+		})
 	}
 
-	wg.Wait()
-	close(semaphore)
-	close(errCh)
-	<-errDone
-	close(countCh)
-	<-countDone
+	// Wait for all goroutines. g.Wait() will return the first error returned
+	// by any g.Go func, or nil if all returned nil. Since we always return nil
+	// from g.Go in this example, we rely solely on the errors collected
+	// multierror var
+	_ = g.Wait()
 
-	return count, errs
+	return int(count.Load()), errs.ErrorOrNil()
 }
 
 // URLFor returns a URL which may be used to retrieve the content stored at
