@@ -58,14 +58,14 @@ require (
 	golang.org/x/oauth2 v0.29.0
 	golang.org/x/sync v0.13.0
 	golang.org/x/time v0.11.0
-	google.golang.org/api v0.230.0
+	google.golang.org/api v0.231.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
 	cel.dev/expr v0.20.0 // indirect
 	cloud.google.com/go v0.120.1 // indirect
-	cloud.google.com/go/auth v0.16.0 // indirect
+	cloud.google.com/go/auth v0.16.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.5.2 // indirect
