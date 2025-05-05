@@ -50,6 +50,13 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
 	if os.Getenv(registryGCSDriverEnv) == "next" {
 		opts = append(opts, option.WithUserAgent(userAgent))
+		// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
+		// API. GCS SDK recommends using the JSON API instead, which is done
+		// here by setting WithJSONReads. This ensures consistency with other
+		// client operations, which all use JSON. JSON will become the default
+		// in a future release of GCS SDK. We only enable it for GCS next.
+		// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
+		opts = append(opts, storage.WithJSONReads())
 	}
 	storageClient, err := storage.NewClient(dcontext.Background(), opts...)
 	if err != nil {
