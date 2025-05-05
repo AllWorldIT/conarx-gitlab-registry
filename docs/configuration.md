@@ -107,6 +107,7 @@ storage:
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
+    useragent: container-registry
     credentials:
       type: service_account
       project_id: project_id_string
@@ -502,6 +503,7 @@ storage:
   gcs:
     bucket: bucketname
     keyfile: /path/to/keyfile
+    useragent: container-registry
     credentials:
       type: service_account
       project_id: project_id_string

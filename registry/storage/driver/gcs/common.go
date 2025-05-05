@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
 	"github.com/docker/distribution/registry/storage/internal/metrics"
+	"github.com/docker/distribution/version"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -282,6 +284,15 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 		// in a future release of GCS SDK. We only enable it for GCS next.
 		// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
 		opts = append(opts, storage.WithJSONReads())
+
+		if userAgent, ok := parameters["useragent"]; ok {
+			if ua, ok := userAgent.(string); ok && ua != "" {
+				opts = append(opts, option.WithUserAgent(ua))
+			} else {
+				userAgent := fmt.Sprintf("container-registry %s (%s)", version.Version, runtime.Version())
+				opts = append(opts, option.WithUserAgent(userAgent))
+			}
+		}
 	}
 	storageClient, err := storage.NewClient(context.Background(), opts...)
 	if err != nil {
