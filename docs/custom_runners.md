@@ -1,13 +1,16 @@
 # Custom GitLab Runner Configuration
 
-This document describes how to set up and configure custom GitLab runners for our CI/CD pipelines that interact with Azure and AWS S3 storage.
+This document describes how to set up and configure custom GitLab runners for our CI/CD pipelines that interact with Azure, GCS and AWS S3 storage.
 
 ## Overview
 
 Our CI/CD pipelines use custom GitLab runners located in regions close to the storage buckets:
 
-- **Azure**: Located in `useast` region
-- **AWS S3**: Located in `us-east-1` region
+- **Azure**: Located in `useast` region (Virginia)
+- **AWS S3**: Located in `us-east-1` region (Northern Virginia)
+- **GCS**: Located in `us-east-4` region (Northern Virginia)
+
+The reason for using custom CI runners is to speed the tests up (i.e. VMs are close the test buckets/in the same zone), and reduce costs (intra-zone traffic is for free).
 
 ## Access Credentials
 
@@ -15,6 +18,33 @@ Access credentials for the runner VMs are stored in 1Password:
 
 - AWS VM: Entry `container-registry-cirunner-aws`
 - Azure VM: Entry `container-registry-cirunner-azure`
+- Google Cloud VM: Entry `container-registry-cirunner-gcs`
+
+## Preventing automatic power-down
+
+As per the [cloud sandbox documentation](https://gitlab.com/gitlab-com/gl-security/product-security/vulnerability-management/vulnerability-management-internal/instance-ttl-automation#exclusion-label), in order to prevent the GCS machine from powering down, one should apply `instance-ttl-bot-ignore` label with a descrition:
+
+```plaintext
+This is a CI runner that we use to test instance credentials access to GCS bucket. Do not delete.
+```
+
+## Logging into VM
+
+### For GCS
+
+```shell
+gcloud config set project <package-container gcs project>
+gcloud auth login
+gcloud compute ssh container-registry-cirunner-gcs      
+```
+
+### For AWS
+
+SSH key is in 1Password (entry `container-registry-cirunner-aws`), and the IP address of the machine can be found in the AWS console of our team's sandbox acocunt.
+
+### For Azure
+
+SSH key is in 1Password (entry `container-registry-cirunner-azure`), and the IP address of the machine can be found in the Azure controll panel.
 
 ## Runner Setup Instructions
 
@@ -34,6 +64,7 @@ Setting up a custom runner follows the standard GitLab Runner installation proce
 - Apply the appropriate tag:
   - For AWS S3: `s3-managed_identity_auth`
   - For Azure: `azure-managed_identity_auth`
+  - For GCS: `gcs-managed_identity_auth`
 - For Azure VM only: Assign managed identity access with "Data Contributor" level to the blob storage account used for testing
 
 ## Sample Configuration

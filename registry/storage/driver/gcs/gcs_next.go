@@ -141,7 +141,7 @@ func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.
 	obj := d.bucket.Object(d.pathToKey(path))
 	// NOTE(milosgajdos/prozlach): If length is negative, the object is read
 	// until the end. The request is retried until the context is canceled as
-	// the operation is indepotent. See links below for more info:
+	// the operation is idempotent. See links below for more info:
 	// https://pkg.go.dev/cloud.google.com/go/storage#ObjectHandle.NewRangeReader
 	// https://cloud.google.com/storage/docs/retry-strategy
 	r, err := obj.NewRangeReader(ctx, offset, -1)
@@ -592,10 +592,6 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 // the given path, possibly using the given options.
 // Returns ErrUnsupportedMethod if this driver has no privateKey
 func (d *driverNext) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
-	if d.privateKey == nil {
-		return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
-	}
-
 	name := d.pathToKey(path)
 	methodString := http.MethodGet
 	method, ok := options["method"]
@@ -616,14 +612,29 @@ func (d *driverNext) URLFor(_ context.Context, path string, options map[string]a
 	}
 
 	opts := &storage.SignedURLOptions{
-		GoogleAccessID:  d.email,
-		PrivateKey:      d.privateKey,
 		Method:          methodString,
 		Expires:         expiresTime,
 		QueryParameters: storagedriver.CustomParams(options, customParamKeys),
 		Scheme:          storage.SigningSchemeV4,
 	}
-	return storage.SignedURL(d.bucket.BucketName(), name, opts)
+
+	if d.privateKey != nil && d.email != "" {
+		// If we have a private key and email from service account JSON, use them directly
+		opts.GoogleAccessID = d.email
+		opts.PrivateKey = d.privateKey
+	}
+
+	// Signing a URL requires credentials authorized to sign a URL. They can be
+	// passed through SignedURLOptions with one of the following options:
+	//    a. a Google service account private key, obtainable from the Google Developers Console
+	//    b. a Google Access ID with iam.serviceAccounts.signBlob permissions
+	//    c. a SignBytes function implementing custom signing.
+	// In this case none of these options are used, which means the SignedURL
+	// function attempts to use the same authentication that was used to
+	// instantiate the Storage client and in our case this is instance profile
+	// credentials.
+	// Doc: https://cloud.google.com/storage/docs/access-control/signing-urls-with-helpers#download-object
+	return d.bucket.SignedURL(name, opts)
 }
 
 // Walk traverses a filesystem defined within driver, starting
