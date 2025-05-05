@@ -12,6 +12,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/registry/internal/testutil"
 
+	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -28,7 +29,6 @@ import (
 
 var (
 	bucket       = os.Getenv("REGISTRY_STORAGE_GCS_BUCKET")
-	credentials  = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	parallelWalk = os.Getenv("GCS_PARALLEL_WALK")
 )
 
@@ -42,22 +42,31 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 	}
 
 	ts := creds.TokenSource
-	jwtConfig, err := google.JWTConfigFromJSON(creds.JSON)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading JWT config: %w", err)
-	}
-	email := jwtConfig.Email
-	if email == "" {
-		return nil, fmt.Errorf("Error reading JWT config : missing client_email property")
-	}
-	privateKey := jwtConfig.PrivateKey
-	if len(privateKey) == 0 {
-		return nil, fmt.Errorf("Error reading JWT config : missing private_key property")
-	}
 
 	storageClient, err := storage.NewClient(dcontext.Background(), option.WithTokenSource(ts))
 	if err != nil {
 		return nil, fmt.Errorf("Error creating storage client: %w", err)
+	}
+
+	// Variables to store email and privateKey
+	var email string
+	var privateKey []byte
+
+	// Only try to extract JWT config if we have JSON credentials
+	if len(creds.JSON) > 0 {
+		jwtConfig, err := google.JWTConfigFromJSON(creds.JSON)
+		if err != nil {
+			return nil, fmt.Errorf("Error reading JWT config: %w", err)
+		}
+		email = jwtConfig.Email
+		privateKey = jwtConfig.PrivateKey
+	} else {
+		// For compute engine default credentials, attempt to get service
+		// account email. This is optional.
+		serviceInfo, err := metadata.GetWithContext(context.Background(), "instance/service-accounts/default/email")
+		if err == nil {
+			email = serviceInfo
+		}
 	}
 
 	var parallelWalkBool bool
@@ -92,8 +101,8 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 }
 
 func skipGCS() string {
-	if bucket == "" || credentials == "" {
-		return "The following environment variables must be set to enable these tests: REGISTRY_STORAGE_GCS_BUCKET, GOOGLE_APPLICATION_CREDENTIALS"
+	if bucket == "" {
+		return "The following environment variables must be set to enable these tests: REGISTRY_STORAGE_GCS_BUCKET. Set GOOGLE_APPLICATION_CREDENTIALS as well if not using instance profiles."
 	}
 	return ""
 }

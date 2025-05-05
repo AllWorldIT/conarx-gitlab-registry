@@ -125,12 +125,23 @@ s3:aws:
       fi
       $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
 
-gcs:
+.if-fork-merge-request: &if-fork-merge-request
+  if: '($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE != "merge_train") && $CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
+
+gcs:key_creds:
   <<: *storage-driver-test
   parallel:
     matrix:
       - GO_VERSION: [ "1.23", "1.24" ]
         REGISTRY_GCS_DRIVER: [ "current", "next" ]
+  rules:
+    - <<: *if-fork-merge-request
+      when: never
+    - changes:
+        - registry/storage/driver/gcs/*
+        - registry/storage/driver/gcs/testdata/*
+        - registry/storage/driver/testsuites/*
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
   variables:
     <<: *storage-driver-variables
     REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
@@ -139,8 +150,34 @@ gcs:
   before_script:
     - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
 
-.if-fork-merge-request: &if-fork-merge-request
-  if: '($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE != "merge_train") && $CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
+gcs:instance_creds:
+  <<: *storage-driver-test
+  parallel:
+    matrix:
+      - GO_VERSION: [ "1.23", "1.24" ]
+        # Only supported on `next` driver:
+        REGISTRY_GCS_DRIVER: [ "next" ]
+ # Do not run in forked projects, as we are running on custom runner with
+ # instance-level credentials
+  rules:
+    - <<: *if-fork-merge-request
+      when: never
+    - changes:
+        - registry/storage/driver/gcs/*
+        - registry/storage/driver/gcs/testdata/*
+        - registry/storage/driver/testsuites/*
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+  tags:
+    # NOTE(prozlach): run on a custom runner, that runs on an GCS VM which has
+    # managed credentials set up for the bucket that CI variables point to.
+    # Other variants do not need to run here as our default runners run in
+    # Google Cloud anyway.
+    - gcs-managed_identity_auth
+  variables:
+    <<: *storage-driver-variables
+    REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
+    PACKAGE: "github.com/docker/distribution/registry/storage/driver/gcs"
+    TEST_TIMEOUT: "35m"
 
 # NOTE(prozlach): Azure storage container used in tests has an auto-cleanup policy set
 # - all blobs older than 24h will be deleted, so even if CI task fails, there
@@ -158,7 +195,7 @@ azure:
       - GO_VERSION: [ "1.23", "1.24" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "client_secret", "default_credentials" ]
-  # Do not run in forked projects, as we are running on custom runner with
+ # Do not run in forked projects, as we are running on custom runner with
  # instance-level credentials
   rules:
     - <<: *if-fork-merge-request
