@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/registry/internal/testutil"
+	"github.com/docker/distribution/version"
 
 	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/require"
@@ -30,6 +32,8 @@ var (
 	bucket       = os.Getenv("REGISTRY_STORAGE_GCS_BUCKET")
 	credentials  = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	parallelWalk = os.Getenv("GCS_PARALLEL_WALK")
+
+	userAgent = fmt.Sprintf("container-registry-tests/%s %s", version.Version, runtime.Version())
 )
 
 const maxConcurrency = 10
@@ -55,7 +59,11 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		return nil, fmt.Errorf("Error reading JWT config : missing private_key property")
 	}
 
-	storageClient, err := storage.NewClient(dcontext.Background(), option.WithTokenSource(ts))
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if os.Getenv(registryGCSDriverEnv) == "next" {
+		opts = append(opts, option.WithUserAgent(userAgent))
+	}
+	storageClient, err := storage.NewClient(dcontext.Background(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating storage client: %w", err)
 	}
@@ -350,9 +358,9 @@ func TestGCSDriverMoveDirectory(t *testing.T) {
 
 func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 	p := map[string]any{
-		"bucket":  "bucket",
-		"keyfile": "testdata/key.json",
-		// TODO: add string test cases, if needed?
+		"bucket":    "bucket",
+		"keyfile":   "testdata/key.json",
+		"useragent": userAgent,
 	}
 
 	testFn := func(params map[string]any) (any, error) {
