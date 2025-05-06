@@ -46,7 +46,7 @@ func (*mockDeleteObjectsError) DeleteObjectsWithContext(_ aws.Context, _ *s3.Del
 }
 
 func testDeleteFilesError(t *testing.T, mock s3iface.S3API, numFiles int) (int, error) {
-	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
+	if skipMsg := skipCheck(false, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -159,7 +159,7 @@ func (*mockPutObjectWithContextRetryableError) ListObjectsV2PagesWithContext(_ a
 }
 
 func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
-	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
+	if skipMsg := skipCheck(false, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -184,7 +184,7 @@ func TestS3DriverBackoffDisabledByDefault(t *testing.T) {
 }
 
 func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
-	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
+	if skipMsg := skipCheck(false, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -210,7 +210,7 @@ func TestS3DriverBackoffDisabledBySettingZeroRetries(t *testing.T) {
 }
 
 func TestS3DriverBackoffRetriesRetryableErrors(t *testing.T) {
-	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
+	if skipMsg := skipCheck(false, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -256,7 +256,7 @@ func (*mockPutObjectWithContextPermanentError) ListObjectsV2WithContext(_ aws.Co
 }
 
 func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
-	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
+	if skipMsg := skipCheck(false, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -285,7 +285,7 @@ func TestS3DriverBackoffDoesNotRetryPermanentErrors(t *testing.T) {
 }
 
 func TestS3DriverBackoffDoesNotRetryNonRequestErrors(t *testing.T) {
-	if skipMsg := skipCheck(false, driverVersion, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
+	if skipMsg := skipCheck(false, common.V1DriverName, common.V1DriverNameAlt); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
