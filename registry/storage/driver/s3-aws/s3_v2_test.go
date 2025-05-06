@@ -150,6 +150,18 @@ func TestS3DriverRetriesAndErrorHandling(t *testing.T) {
 		}
 	}
 
+	matchAlways := func(*testing.T) dtestutil.RequestMatcher {
+		return func(*http.Request) bool { return true }
+	}
+
+	matchUserAgent := func(tt *testing.T) dtestutil.RequestModifier {
+		return func(req *http.Request) (*http.Request, bool) {
+			ua := req.Header.Get("User-Agent")
+			assert.Contains(tt, ua, "docker-distribution/")
+			return req, true
+		}
+	}
+
 	makeResponseOperationTimeout := func(tt *testing.T) dtestutil.ResponseModifier {
 		return func(resp *http.Response) (*http.Response, bool) {
 			if resp.StatusCode != http.StatusOK {
@@ -201,10 +213,18 @@ func TestS3DriverRetriesAndErrorHandling(t *testing.T) {
 		maxRetries         int64
 	}{
 		{
-			name:               "writer happy path - no injected failure",
-			interceptorConfigs: make([]dtestutil.InterceptorConfig, 0),
-			testFunc:           testFuncWriterAllOK,
-			maxRetries:         3,
+			name: "writer happy path - no injected failure",
+			interceptorConfigs: []dtestutil.InterceptorConfig{
+				{
+					Matcher:                            matchAlways,
+					RequestModifier:                    matchUserAgent,
+					ResponseModifier:                   nil,
+					ExpectedRequestModificationsCount:  2,
+					ExpectedResponseModificationsCount: 0,
+				},
+			},
+			testFunc:   testFuncWriterAllOK,
+			maxRetries: 3,
 		},
 		{
 			name: "unrecoverable error from server",
