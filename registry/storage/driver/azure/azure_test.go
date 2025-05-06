@@ -941,6 +941,14 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 		}
 	}
 
+	matchUserAgent := func(tt *testing.T) dtestutil.RequestModifier {
+		return func(req *http.Request) (*http.Request, bool) {
+			ua := req.Header.Get("User-Agent")
+			assert.Contains(tt, ua, "cr/")
+			return req, true
+		}
+	}
+
 	makeAppenBlockRequestInvalid := func(tt *testing.T) dtestutil.RequestModifier {
 		return func(req *http.Request) (*http.Request, bool) {
 			q := req.URL.Query()
@@ -980,9 +988,17 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 		testFunc           func(*testing.T, storagedriver.StorageDriver, string, func() bool) bool
 	}{
 		{
-			name:               "writer happy path - no injected failure",
-			interceptorConfigs: make([]dtestutil.InterceptorConfig, 0),
-			testFunc:           testFuncWriterAllOK,
+			name: "writer happy path - no injected failure",
+			interceptorConfigs: []dtestutil.InterceptorConfig{
+				{
+					Matcher:                            matchAlways,
+					RequestModifier:                    matchUserAgent,
+					ResponseModifier:                   nil,
+					ExpectedRequestModificationsCount:  5,
+					ExpectedResponseModificationsCount: 0,
+				},
+			},
+			testFunc: testFuncWriterAllOK,
 		},
 		{
 			name: "unrecoverable error from server",
