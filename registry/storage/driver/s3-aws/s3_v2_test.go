@@ -21,7 +21,7 @@ import (
 )
 
 func TestS3DriverRetriesAndErrorHandling(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion, common.V2DriverName); skipMsg != "" {
+	if skipMsg := skipCheck(true, common.V2DriverName); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 

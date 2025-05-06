@@ -259,21 +259,22 @@ func prefixedS3DriverConstructorT(t *testing.T) storagedriver.StorageDriver {
 	return d
 }
 
-func skipCheck(envVarsRequired bool, runningDriverVersion string, supportedDriverVersions ...string) string {
+func skipCheck(envVarsRequired bool, supportedDriverVersions ...string) string {
 	if envVarsRequired && len(missing) > 0 {
 		return fmt.Sprintf(
 			"Invalid value or missing environment values required to run S3 tests: %s",
 			strings.Join(missing, ", "),
 		)
 	}
-	if len(supportedDriverVersions) > 0 && !slices.Contains(supportedDriverVersions, runningDriverVersion) {
-		return fmt.Sprintf("Test is not supported for driver %s", runningDriverVersion)
+	driverVersion = os.Getenv(common.EnvDriverVersion)
+	if len(supportedDriverVersions) > 0 && !slices.Contains(supportedDriverVersions, driverVersion) {
+		return fmt.Sprintf("Test is not supported for driver %q, supported versions: %v", driverVersion, supportedDriverVersions)
 	}
 	return ""
 }
 
 func TestS3DriverSuite(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -293,7 +294,7 @@ func TestS3DriverSuite(t *testing.T) {
 }
 
 func BenchmarkS3DriverSuite(b *testing.B) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		b.Skip(skipMsg)
 	}
 
@@ -429,7 +430,7 @@ func TestS3DriverPathStyle(t *testing.T) {
 }
 
 func TestS3DriverEmptyRootList(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -458,7 +459,7 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 }
 
 func TestS3DriverStorageClass(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -597,7 +598,7 @@ func TestS3DriverStorageClass(t *testing.T) {
 }
 
 func TestS3DriverOverThousandBlobs(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -617,7 +618,7 @@ func TestS3DriverOverThousandBlobs(t *testing.T) {
 }
 
 func TestS3DriverURLFor(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -722,7 +723,7 @@ func TestS3DriverURLFor(t *testing.T) {
 }
 
 func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -760,7 +761,7 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 // meant as a preventive measure, just in case we change the code later one and
 // get the inequalities wrong.
 func TestFlushObjectTwiceChunkSize(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -798,7 +799,7 @@ func TestFlushObjectTwiceChunkSize(t *testing.T) {
 }
 
 func TestS3DriverClientTransport(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion); skipMsg != "" {
+	if skipMsg := skipCheck(true); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
@@ -963,7 +964,7 @@ func generateSelfSignedCert(addresses []string) (tls.Certificate, error) {
 // properly handle the "empty" directories - i.e. objects with zero size that
 // are meant as placeholders.
 func TestWalkEmptyDir(t *testing.T) {
-	if skipMsg := skipCheck(true, driverVersion, common.V2DriverName); skipMsg != "" {
+	if skipMsg := skipCheck(true, common.V2DriverName); skipMsg != "" {
 		t.Skip(skipMsg)
 	}
 
