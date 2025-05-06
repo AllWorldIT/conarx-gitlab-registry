@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -503,16 +502,18 @@ func (d *driverNext) Delete(ctx context.Context, path string) error {
 		return err
 	}
 	if len(keys) > 0 {
-		sort.Sort(sort.Reverse(sort.StringSlice(keys)))
-		for _, key := range keys {
-			err := storageDeleteObjectNext(ctx, d.bucket, key)
+		// NOTE(milosgajdos/prozlach): d.listAll calls (BucketHandle).Objects
+		// Objects will be iterated over lexicographically by name. This means
+		// we don't have to reverse order the slice; we can range over the keys
+		// slice in reverse order
+		// docs:
+		// https://pkg.go.dev/cloud.google.com/go/storage#BucketHandle.Objects
+		for i := len(keys) - 1; i >= 0; i-- {
+			err := storageDeleteObjectNext(ctx, d.bucket, keys[i])
 			// GCS only guarantees eventual consistency, so listAll might return
 			// paths that no longer exist. If this happens, just ignore any not
 			// found error
-			if errors.Is(err, storage.ErrObjectNotExist) {
-				err = nil
-			}
-			if err != nil {
+			if err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
 				return fmt.Errorf("deleting object: %w", err)
 			}
 		}
