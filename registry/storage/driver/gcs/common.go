@@ -146,6 +146,11 @@ func retry(req request) error {
 			return nil
 		}
 
+		// Context cancelation/expiry is fatal, do not try to retry:
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+
 		gErr := new(googleapi.Error)
 		if !errors.As(err, &gErr) || (gErr.Code != http.StatusTooManyRequests && gErr.Code < http.StatusInternalServerError) {
 			return err
