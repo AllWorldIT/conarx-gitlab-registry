@@ -3100,6 +3100,10 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 	env := newTestEnv(t)
 	t.Cleanup(env.Shutdown)
 
+	if !env.config.Database.Enabled {
+		t.Skip("skipping test because the metadata database is not enabled")
+	}
+
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
 
@@ -3120,8 +3124,7 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 			name:              "immutable tag creation",
 			tag:               "latest",
 			immutablePatterns: []string{`^v[0-9]+\.[0-9]+\.[0-9]+$`, "^latest$"},
-			expectedStatus:    http.StatusUnauthorized,
-			expectedError:     &v2.ErrorCodeImmutableTag,
+			expectedStatus:    http.StatusCreated,
 		},
 		{
 			name:              "mutable tag creation",
@@ -3149,6 +3152,7 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 		{
 			name:              "pattern count exceeded",
 			tag:               "latest",
+			existingTag:       true,
 			immutablePatterns: []string{"a", "b", "c", "d", "e", "f"},
 			expectedStatus:    http.StatusBadRequest,
 			expectedError:     &v2.ErrorCodeTagPatternCount,
@@ -3156,6 +3160,7 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 		{
 			name:              "pattern length exceeded",
 			tag:               "latest",
+			existingTag:       true,
 			immutablePatterns: []string{"^iFl12h7joyT83me9Pbfp5GaoO0ihjEs3QFRoKjODsNw7IYMxD8ePi3zLfj20QjfZHtL7RKi9Ew9v2MBhI3YhQFg4LjmNpXYZa2c$"}, // 101 characters
 			expectedStatus:    http.StatusBadRequest,
 			expectedError:     &v2.ErrorCodeInvalidTagImmutabilityPattern,
@@ -3163,6 +3168,7 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 		{
 			name:              "invalid pattern",
 			tag:               "latest",
+			existingTag:       true,
 			immutablePatterns: []string{"^[a-z"},
 			expectedStatus:    http.StatusBadRequest,
 			expectedError:     &v2.ErrorCodeInvalidTagImmutabilityPattern,
