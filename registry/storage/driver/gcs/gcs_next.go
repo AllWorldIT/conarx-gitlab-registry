@@ -115,6 +115,12 @@ func (d *driverNext) PutContent(ctx context.Context, path string, contents []byt
 	return retry(func() error {
 		wc := d.bucket.Object(d.pathToKey(path)).NewWriter(ctx)
 		wc.ContentType = "application/octet-stream"
+
+		// NOTE(milosgajdos/prozlach): Apparently it's posisble to to upload
+		// 0-byte content to GCS. Setting MD5 on the Writer helps to prevent
+		// presisting that data. If set, the uploaded data is rejected if its
+		// MD5 hash does not match this field. See:
+		// https://pkg.go.dev/cloud.google.com/go/storage#ObjectAttrs
 		// nolint: gosec
 		h := md5.New()
 		_, err := h.Write(contents)
@@ -693,10 +699,19 @@ func (d *driverNext) keyToPath(key string) string {
 }
 
 type writerNext struct {
-	ctx        context.Context
-	client     *http.Client
-	object     *storage.ObjectHandle
-	size       int64
+	ctx    context.Context
+	client *http.Client
+	object *storage.ObjectHandle
+	// size is the amount of data written to this writter using Write(), but
+	// not necessarily committed yet (i.e. offset + buffSize). If Writer was
+	// resumed, then it includes the offset of the data already persisted in
+	// the previous session.
+	size int64
+	// offset is the amount of data persisted in the backend, be it as
+	// resumable upload yet to be committed or data written in
+	// putContentsCloseNext. It does not mean that this data is visible in the
+	// bucket, as resumable uploads require finall call to Commit() to finish
+	// the upload and make the data accessible.
 	offset     int64
 	closed     bool
 	committed  bool
@@ -777,7 +792,6 @@ func (w *writerNext) Close() error {
 	if err != nil {
 		return fmt.Errorf("writing contents while closing writer: %w", err)
 	}
-	w.size = w.offset + w.buffSize
 	w.buffSize = 0
 	return nil
 }
@@ -806,20 +820,20 @@ func (w *writerNext) Commit() error {
 		if err != nil {
 			return err
 		}
-		w.size = w.offset + w.buffSize
+		// putContentsCloseNext overwrites the object if it was already
+		// present, so offset is going to be equal to w.size.
+		w.offset = w.size
 		w.buffSize = 0
 		return nil
 	}
-	size := w.offset + w.buffSize
 	var nn int64
 	// NOTE(prozlach): loop must be performed at least once to ensure the file
 	// is committed even when the buffer is empty. The empty/first loop with
 	// zero-length will actually commit the file.
 	for {
-		n, err := putChunkNext(w.ctx, w.client, w.sessionURI, w.buffer[nn:w.buffSize], w.offset, size)
+		n, err := putChunkNext(w.ctx, w.client, w.sessionURI, w.buffer[nn:w.buffSize], w.offset, w.size)
 		nn += n
 		w.offset += n
-		w.size = w.offset
 		if err != nil {
 			w.buffSize = int64(copy(w.buffer, w.buffer[nn:w.buffSize])) // nolint: gosec // copy() is always going to be non-negative
 			return err
@@ -849,9 +863,6 @@ func (w *writerNext) writeChunk() error {
 	}
 	nn, err := putChunkNext(w.ctx, w.client, w.sessionURI, w.buffer[0:chunkSize], w.offset, -1)
 	w.offset += nn
-	if w.offset > w.size {
-		w.size = w.offset
-	}
 	// shift the remaining bytes to the start of the buffer
 	w.buffSize = int64(copy(w.buffer, w.buffer[nn:w.buffSize])) // nolint: gosec // copy() is always going to be non-negative
 
@@ -874,6 +885,14 @@ func (w *writerNext) Write(p []byte) (int, error) {
 	for nn < len(p) {
 		n := copy(w.buffer[w.buffSize:], p[nn:])
 		w.buffSize += int64(n) // nolint: gosec // copy() is always going to be non-negative
+		// NOTE(prozlach): It should be safe to bump the size of the writer
+		// before the data is actually committed to the backend for two reasons:
+		// * data is loaded into buffer, even if this attempt to upload data
+		// fails, the caller may retry and the data may get uploaded.
+		// * the writeChunk->putChunkNext methods prune the buffer only when
+		// the data was successfully uploaded.
+		// * this follows the semantics of Azure and S3 drivers
+		w.size += int64(n)
 		if w.buffSize == int64(cap(w.buffer)) {
 			err = w.writeChunk()
 			if err != nil {
