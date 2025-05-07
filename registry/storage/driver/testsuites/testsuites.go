@@ -463,11 +463,7 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 	written, err := io.CopyBuffer(writer, blobber.GetReader(), make([]byte, 256*1<<20))
 	require.NoError(s.T(), err)
 	require.EqualValues(s.T(), fileSize, written)
-	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
-	// This is just a workaround for now to enforce correct behavior on other
-	// drivers. The TLDR is that gcs Writer object does not report correct size
-	// until the Commit() is called. This is not the case for other drivers.
-	if s.StorageDriver.Name() != "gcs" {
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
 		require.EqualValues(s.T(), fileSize, writer.Size())
 	}
 
@@ -499,11 +495,7 @@ func (s *DriverSuite) TestWriteReadSmallStream() {
 	written, err := io.CopyBuffer(writer, blobber.GetReader(), make([]byte, 2*1<<20))
 	require.NoError(s.T(), err)
 	require.EqualValues(s.T(), fileSize, written)
-	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
-	// This is just a workaround for now to enforce correct behavior on other
-	// drivers. The TLDR is that gcs Writer object does not report correct size
-	// until the Commit() is called. This is not the case for other drivers.
-	if s.StorageDriver.Name() != "gcs" {
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
 		require.EqualValues(s.T(), fileSize, writer.Size())
 	}
 
@@ -544,11 +536,7 @@ func (s *DriverSuite) TestConcurentWriteCausesError() {
 	written, err := io.Copy(writerA, blobberA1.GetReader())
 	require.NoError(s.T(), err)
 	require.EqualValues(s.T(), blobberA1.Size(), written)
-	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
-	// This is just a workaround for now to enforce correct behavior on other
-	// drivers. The TLDR is that gcs Writer object does not report correct size
-	// until the Commit() is called. This is not the case for other drivers.
-	if s.StorageDriver.Name() != "gcs" {
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
 		require.EqualValues(s.T(), blobberA1.Size(), writerA.Size())
 	}
 
@@ -558,8 +546,7 @@ func (s *DriverSuite) TestConcurentWriteCausesError() {
 	written, err = io.Copy(writerB, blobberB.GetReader())
 	require.NoError(s.T(), err)
 	require.EqualValues(s.T(), blobberB.Size(), written)
-	// See the comment above
-	if s.StorageDriver.Name() != "gcs" {
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
 		require.EqualValues(s.T(), blobberB.Size(), writerB.Size())
 	}
 
@@ -3236,11 +3223,7 @@ func (s *DriverSuite) testFileStreams(t *testing.T, size int64) {
 		return
 	}
 
-	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
-	// This is just a workaround for now to enforce correct behavior on other
-	// drivers. The TLDR is that gcs Writer object does not report correct size
-	// until the Commit() is called. This is not the case for other drivers.
-	if s.StorageDriver.Name() != "gcs" {
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
 		if !assert.EqualValues(t, size, writer.Size()) {
 			return
 		}
