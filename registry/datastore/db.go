@@ -66,6 +66,8 @@ const (
 	replicaLagCheckTimeout = 100 * time.Millisecond
 	// MaxReplicaLagTime is the default maximum replication lag time
 	MaxReplicaLagTime = 30 * time.Second
+	// MaxReplicaLagBytes is the default maximum replication lag in bytes
+	MaxReplicaLagBytes = 8 * 1024 * 1024
 )
 
 // Queryer is the common interface to execute queries on a database.
@@ -1249,8 +1251,8 @@ func (lb *DBLoadBalancer) RecordLSN(ctx context.Context, r *models.Repository) e
 		return fmt.Errorf("LSN cache is not configured")
 	}
 
-	var lsn string
-	if err := lb.Primary().QueryRowContext(ctx, "SELECT pg_current_wal_insert_lsn()").Scan(&lsn); err != nil {
+	lsn, err := lb.primaryLSN(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to query current WAL insert LSN: %w", err)
 	}
 
@@ -1364,6 +1366,17 @@ func (lb *DBLoadBalancer) TypeOf(db *DB) string {
 	return HostTypeUnknown
 }
 
+// primaryLSN returns the primary database's current write location
+func (lb *DBLoadBalancer) primaryLSN(ctx context.Context) (string, error) {
+	var lsn string
+	query := "SELECT pg_current_wal_insert_lsn()::text AS location"
+	if err := lb.primary.QueryRowContext(ctx, query).Scan(&lsn); err != nil {
+		return "", err
+	}
+
+	return lsn, nil
+}
+
 // QueryBuilder helps in building SQL queries with parameters.
 type QueryBuilder struct {
 	sql     strings.Builder
@@ -1460,6 +1473,7 @@ func IsInRecovery(ctx context.Context, db *DB) (bool, error) {
 type ReplicaLagInfo struct {
 	Address     string
 	TimeLag     time.Duration
+	BytesLag    int64
 	LastChecked time.Time
 }
 
@@ -1512,7 +1526,7 @@ func (t *ReplicaLagTracker) Get(replicaAddr string) *ReplicaLagInfo {
 }
 
 // set updates the replication lag information for a replica
-func (t *ReplicaLagTracker) set(_ context.Context, db *DB, timeLag time.Duration) {
+func (t *ReplicaLagTracker) set(_ context.Context, db *DB, timeLag time.Duration, bytesLag int64) {
 	t.Lock()
 	defer t.Unlock()
 
@@ -1528,13 +1542,30 @@ func (t *ReplicaLagTracker) set(_ context.Context, db *DB, timeLag time.Duration
 	}
 
 	info.TimeLag = timeLag
+	info.BytesLag = bytesLag
 	info.LastChecked = now
 
 	// TODO: collect metrics
 }
 
-// CheckTimeLag retrieves the time-based replication lag for a replica and stores it
-func (t *ReplicaLagTracker) CheckTimeLag(ctx context.Context, replica *DB) (time.Duration, error) {
+// CheckBytesLag retrieves the data-based replication lag for a replica
+func (*ReplicaLagTracker) CheckBytesLag(ctx context.Context, primaryLSN string, replica *DB) (int64, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, replicaLagCheckTimeout)
+	defer cancel()
+
+	// Calculate bytes lag on the replica using the provided primary LSN
+	var bytesLag int64
+	query := `SELECT pg_wal_lsn_diff($1, pg_last_wal_replay_lsn())::bigint AS diff`
+	err := replica.QueryRowContext(queryCtx, query, primaryLSN).Scan(&bytesLag)
+	if err != nil {
+		return 0, fmt.Errorf("failed to calculate replica bytes lag: %w", err)
+	}
+
+	return bytesLag, nil
+}
+
+// CheckTimeLag retrieves the time-based replication lag for a replica
+func (*ReplicaLagTracker) CheckTimeLag(ctx context.Context, replica *DB) (time.Duration, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, replicaLagCheckTimeout)
 	defer cancel()
 
@@ -1546,31 +1577,41 @@ func (t *ReplicaLagTracker) CheckTimeLag(ctx context.Context, replica *DB) (time
 		return 0, fmt.Errorf("failed to check replica time lag: %w", err)
 	}
 
-	timeLag := time.Duration(timeLagSeconds * float64(time.Second))
-	t.set(ctx, replica, timeLag)
-
-	return timeLag, nil
+	return time.Duration(timeLagSeconds * float64(time.Second)), nil
 }
 
-// Check checks replication lag for a specific replica
-func (t *ReplicaLagTracker) Check(ctx context.Context, replica *DB) error {
+// Check checks replication lag for a specific replica and stores it.
+func (t *ReplicaLagTracker) Check(ctx context.Context, primaryLSN string, replica *DB) error {
 	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
 		"db_replica_addr": replica.Address(),
 	})
 
 	timeLag, err := t.CheckTimeLag(ctx, replica)
 	if err != nil {
-		l.WithError(err).Warn("failed to check time-based replication lag")
+		l.WithError(err).Error("failed to check time-based replication lag")
 		return err
 	}
 
-	// Log at appropriate level based on max threshold constants
-	l = l.WithFields(log.Fields{"lag_time_s": timeLag.Seconds()})
+	bytesLag, err := t.CheckBytesLag(ctx, primaryLSN, replica)
+	if err != nil {
+		l.WithError(err).Error("failed to check data-based replication lag")
+		return err
+	}
+
+	// Log at appropriate level based on max thresholds
+	l = l.WithFields(log.Fields{"lag_time_s": timeLag.Seconds(), "lag_bytes": bytesLag})
+
 	if timeLag > MaxReplicaLagTime {
 		l.Warn("replica time-based replication lag above max threshold")
-	} else {
-		l.Info("replica time-based replication lag below max threshold")
 	}
+	if bytesLag > MaxReplicaLagBytes {
+		l.Warn("replica data-based replication lag above max threshold")
+	}
+	if timeLag <= MaxReplicaLagTime && bytesLag <= MaxReplicaLagBytes {
+		l.Info("replica replication lag below max thresholds")
+	}
+
+	t.set(ctx, replica, timeLag, bytesLag)
 
 	return nil
 }

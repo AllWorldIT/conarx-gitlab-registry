@@ -1167,7 +1167,7 @@ func TestReplicaLagTracker_Get(t *testing.T) {
 
 	// Add lag info for the replica
 	lagTime := 5 * time.Second
-	tracker.set(ctx, db, lagTime)
+	tracker.set(ctx, db, lagTime, 0)
 
 	// Verify internal state - lagInfo map should have one entry
 	require.Len(t, tracker.lagInfo, 1, "lagInfo map should have one entry")
@@ -1204,7 +1204,7 @@ func TestReplicaLagTracker_Set(t *testing.T) {
 
 	// Set initial lag info
 	initialLag := 3 * time.Second
-	tracker.set(ctx, db, initialLag)
+	tracker.set(ctx, db, initialLag, 0)
 
 	// Verify internal state after first Set
 	require.Len(t, tracker.lagInfo, 1, "lagInfo map should have one entry")
@@ -1221,7 +1221,7 @@ func TestReplicaLagTracker_Set(t *testing.T) {
 	// Update lag info
 	updatedLag := 5 * time.Second
 	time.Sleep(10 * time.Millisecond) // Ensure LastChecked time changes
-	tracker.set(ctx, db, updatedLag)
+	tracker.set(ctx, db, updatedLag, 0)
 
 	// Verify internal state after update
 	require.Len(t, tracker.lagInfo, 1, "lagInfo map should still have one entry")
@@ -1255,26 +1255,17 @@ func TestReplicaLagTracker_CheckTimeLag(t *testing.T) {
 		tracker := NewReplicaLagTracker()
 
 		// Mock the lag query
-		expectedLag := 2.5 // seconds
+		expectedLag := 3.5 // seconds
 		mock.ExpectQuery("SELECT EXTRACT\\(EPOCH FROM").
 			WillReturnRows(sqlmock.NewRows([]string{"lag"}).AddRow(expectedLag))
 
 		// Check lag
-		beforeCheck := time.Now()
 		lag, err := tracker.CheckTimeLag(ctx, db)
 
 		// Verify no error and lag is correct
 		require.NoError(t, err, "CheckTimeLag should not return error on successful query")
 		require.Equal(t, time.Duration(expectedLag*float64(time.Second)), lag, "Should return the correct lag duration")
-
-		// Verify lag info was saved in internal state
-		require.Len(t, tracker.lagInfo, 1, "lagInfo map should have one entry after successful check")
-		require.Contains(t, tracker.lagInfo, db.Address(), "lagInfo map should contain the DB address")
-		require.Equal(t, lag, tracker.lagInfo[db.Address()].TimeLag, "Internal TimeLag should match returned lag")
-		require.GreaterOrEqual(t, tracker.lagInfo[db.Address()].LastChecked, beforeCheck,
-			"LastChecked should be at or after the captured start time")
-
-		require.NoError(t, mock.ExpectationsWereMet())
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
 	})
 
 	t.Run("query error", func(t *testing.T) {
@@ -1290,21 +1281,18 @@ func TestReplicaLagTracker_CheckTimeLag(t *testing.T) {
 
 		// Verify error is returned and zero lag
 		require.Error(t, err, "CheckTimeLag should return error on query failure")
-		require.ErrorContains(t, err, "query failed", "Error should contain the original error message")
+		require.ErrorContains(t, err, expectedErr.Error(), "Error should contain the original error message")
 		require.Zero(t, lag, "Should return zero lag on query error")
 
-		// Verify no lag info was saved on error
-		require.Empty(t, tracker.lagInfo, "lagInfo map should remain empty on error")
-
-		require.NoError(t, mock.ExpectationsWereMet())
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
 	})
 
 	t.Run("query timeout", func(t *testing.T) {
 		tracker := NewReplicaLagTracker()
 
-		// Mock a query that takes too long (exceeds the 100ms timeout)
+		// Mock a query that takes too long (exceeds the replicaLagCheckTimeout timeout)
 		mock.ExpectQuery("SELECT EXTRACT\\(EPOCH FROM").
-			WillDelayFor(150 * time.Millisecond).
+			WillDelayFor(replicaLagCheckTimeout + 50*time.Millisecond).
 			WillReturnRows(sqlmock.NewRows([]string{"lag"}).AddRow(1.5))
 
 		// Check lag
@@ -1312,15 +1300,10 @@ func TestReplicaLagTracker_CheckTimeLag(t *testing.T) {
 
 		// Verify error is returned and zero lag on timeout
 		require.Error(t, err, "CheckTimeLag should return error on timeout")
-		// The error message could be either "context deadline exceeded" or "canceling query due to user request"
-		// depending on how the database driver implements context cancellation
-		require.Contains(t, err.Error(), "cancel", "Error should indicate cancellation or timeout")
+		require.ErrorContains(t, err, "canceling query due to user request", "Error should indicate timeout")
 		require.Zero(t, lag, "Should return zero lag on query timeout")
 
-		// Verify no lag info was saved on timeout
-		require.Empty(t, tracker.lagInfo, "lagInfo map should remain empty on timeout")
-
-		require.NoError(t, mock.ExpectationsWereMet())
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
 	})
 }
 
@@ -1338,46 +1321,222 @@ func TestReplicaLagTracker_Check(t *testing.T) {
 		},
 	}
 	ctx := context.Background()
+	primaryLSN := "0/1234567"
 
 	t.Run("successful check", func(t *testing.T) {
 		tracker := NewReplicaLagTracker()
 
-		// Mock the lag query
-		expectedLag := 3.5 // seconds
+		// Mock time lag query
+		expectedTimeLag := 2.5 // seconds
 		mock.ExpectQuery("SELECT EXTRACT\\(EPOCH FROM").
-			WillReturnRows(sqlmock.NewRows([]string{"lag"}).AddRow(expectedLag))
+			WillReturnRows(sqlmock.NewRows([]string{"lag"}).AddRow(expectedTimeLag))
+
+		// Mock bytes lag query
+		expectedBytesLag := int64(1048576)
+		mock.ExpectQuery("SELECT pg_wal_lsn_diff").
+			WithArgs(primaryLSN).
+			WillReturnRows(sqlmock.NewRows([]string{"diff"}).AddRow(expectedBytesLag))
 
 		// Call Check
 		beforeCheck := time.Now()
-		err := tracker.Check(ctx, db)
+		err := tracker.Check(ctx, primaryLSN, db)
 		require.NoError(t, err, "Check should not return error on successful query")
 
 		// Verify internal state changed
 		require.Len(t, tracker.lagInfo, 1, "lagInfo map should have one entry after Check")
 		require.Contains(t, tracker.lagInfo, db.Address(), "lagInfo map should contain the DB address")
-		require.Equal(t, time.Duration(expectedLag*float64(time.Second)), tracker.lagInfo[db.Address()].TimeLag,
-			"Internal TimeLag should match query result")
+		require.Equal(t, time.Duration(expectedTimeLag*float64(time.Second)),
+			tracker.lagInfo[db.Address()].TimeLag,
+			"TimeLag should match query result")
+		require.Equal(t, expectedBytesLag,
+			tracker.lagInfo[db.Address()].BytesLag,
+			"BytesLag should match query result")
 		require.GreaterOrEqual(t, tracker.lagInfo[db.Address()].LastChecked, beforeCheck,
 			"LastChecked should be at or after the captured start time")
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("query error", func(t *testing.T) {
+	t.Run("time lag error", func(t *testing.T) {
 		tracker := NewReplicaLagTracker()
 
-		// Mock a query error
-		expectedErr := errors.New("query failed")
+		// Mock time lag query error
+		timeLagErr := errors.New("time lag query failed")
 		mock.ExpectQuery("SELECT EXTRACT\\(EPOCH FROM").
-			WillReturnError(expectedErr)
+			WillReturnError(timeLagErr)
 
-		// Call Check
-		err := tracker.Check(ctx, db)
-		require.Error(t, err, "Check should return error on query failure")
-		require.ErrorContains(t, err, "query failed", "Error should contain the original error message")
+		// Check lag
+		err := tracker.Check(ctx, primaryLSN, db)
 
-		// Verify that lag info was not set on error
+		// Verify error is returned
+		require.Error(t, err, "Check should return error when time lag query fails")
+		require.ErrorContains(t, err, timeLagErr.Error(), "Original error should be included")
+
+		// Verify no lag info was stored
 		require.Empty(t, tracker.lagInfo, "lagInfo map should remain empty on error")
 
-		require.NoError(t, mock.ExpectationsWereMet())
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
+	})
+
+	t.Run("bytes lag error", func(t *testing.T) {
+		tracker := NewReplicaLagTracker()
+
+		// Mock successful time lag query
+		expectedTimeLag := 1.5
+		mock.ExpectQuery("SELECT EXTRACT\\(EPOCH FROM").
+			WillReturnRows(sqlmock.NewRows([]string{"lag"}).AddRow(expectedTimeLag))
+
+		// Mock bytes lag query error
+		bytesLagErr := errors.New("bytes lag query failed")
+		mock.ExpectQuery("SELECT pg_wal_lsn_diff").
+			WithArgs(primaryLSN).
+			WillReturnError(bytesLagErr)
+
+		// Check lag
+		err := tracker.Check(ctx, primaryLSN, db)
+
+		// Verify error is returned
+		require.Error(t, err, "Check should return error when bytes lag query fails")
+		require.ErrorContains(t, err, bytesLagErr.Error(), "Original error should be included")
+
+		// Verify no lag info was stored
+		require.Empty(t, tracker.lagInfo, "lagInfo map should remain empty on error")
+
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
+	})
+}
+
+func TestDBLoadBalancer_primaryLSN(t *testing.T) {
+	// Create a mock database
+	mockDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	// Create a load balancer with the mock database as primary
+	lb := &DBLoadBalancer{
+		primary: &DB{
+			DB: mockDB,
+		},
+	}
+
+	ctx := context.Background()
+	expectedQueryPattern := `SELECT pg_current_wal_insert_lsn()`
+	expectedLSN := "0/1234567"
+
+	t.Run("success", func(t *testing.T) {
+		// Set up mock expectation for the LSN query
+		mock.ExpectQuery(expectedQueryPattern).
+			WillReturnRows(sqlmock.NewRows([]string{"location"}).AddRow(expectedLSN))
+
+		// Call the method
+		lsn, err := lb.primaryLSN(ctx)
+
+		// Verify result
+		require.NoError(t, err, "primaryLSN should not return an error")
+		require.Equal(t, expectedLSN, lsn, "LSN should match expected value")
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
+	})
+
+	t.Run("error", func(t *testing.T) {
+		// Set up mock expectation for a failed LSN query
+		expectedErr := errors.New("database error")
+		mock.ExpectQuery(expectedQueryPattern).
+			WillReturnError(expectedErr)
+
+		// Call the method
+		lsn, err := lb.primaryLSN(ctx)
+
+		// Verify error is returned
+		require.Error(t, err, "primaryLSN should return an error")
+		require.ErrorContains(t, err, expectedErr.Error(), "Error message should be descriptive")
+		require.ErrorContains(t, err, "database error", "Original error should be included")
+		require.Empty(t, lsn, "LSN should be empty on error")
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		// Set up mock expectation with delay exceeding timeout
+		mock.ExpectQuery(expectedQueryPattern).
+			WillDelayFor(50 * time.Millisecond).
+			WillReturnRows(sqlmock.NewRows([]string{"location"}).AddRow(expectedLSN))
+
+		// Call the method
+		ctx, cancel := context.WithTimeout(ctx, 25*time.Millisecond)
+		defer cancel()
+		lsn, err := lb.primaryLSN(ctx)
+
+		// Verify timeout error is handled
+		require.Error(t, err, "primaryLSN should return an error on timeout")
+		require.ErrorContains(t, err, "canceling query due to user request", "Error message should be descriptive")
+		require.Empty(t, lsn, "LSN should be empty on error")
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
+	})
+}
+
+func TestReplicaLagTracker_CheckBytesLag(t *testing.T) {
+	tracker := NewReplicaLagTracker()
+	ctx := context.Background()
+
+	// Create a mock DB with an address
+	mockDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	db := &DB{DB: mockDB}
+
+	// Primary LSN to use for testing
+	primaryLSN := "0/1234567"
+	expectedQueryPattern := "SELECT pg_wal_lsn_diff"
+
+	t.Run("successful query", func(t *testing.T) {
+		expectedLag := int64(1048576)
+
+		// Mock the bytes lag query
+		mock.ExpectQuery(expectedQueryPattern).
+			WithArgs(primaryLSN).
+			WillReturnRows(sqlmock.NewRows([]string{"diff"}).AddRow(expectedLag))
+
+		// Check lag
+		bytesLag, err := tracker.CheckBytesLag(ctx, primaryLSN, db)
+
+		// Verify no error and lag is correct
+		require.NoError(t, err, "CheckBytesLag should not return error on successful query")
+		require.Equal(t, expectedLag, bytesLag, "Should return the correct bytes lag")
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		// Mock a query error
+		expectedErr := errors.New("query failed")
+		mock.ExpectQuery(expectedQueryPattern).
+			WithArgs(primaryLSN).
+			WillReturnError(expectedErr)
+
+		// Check lag
+		bytesLag, err := tracker.CheckBytesLag(ctx, primaryLSN, db)
+
+		// Verify error is returned and zero lag
+		require.Error(t, err, "CheckBytesLag should return error on query failure")
+		require.ErrorContains(t, err, "failed to calculate replica bytes lag", "Error should be descriptive")
+		require.ErrorContains(t, err, "query failed", "Original error should be included")
+		require.Zero(t, bytesLag, "Should return zero lag on query error")
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
+	})
+
+	t.Run("query timeout", func(t *testing.T) {
+		// Mock a query that takes too long (exceeds the replicaLagCheckTimeout timeout)
+		mock.ExpectQuery(expectedQueryPattern).
+			WithArgs(primaryLSN).
+			WillDelayFor(replicaLagCheckTimeout + 50*time.Millisecond).
+			WillReturnRows(sqlmock.NewRows([]string{"diff"}).AddRow(1024))
+
+		// Check lag
+		bytesLag, err := tracker.CheckBytesLag(ctx, primaryLSN, db)
+
+		// Verify error is returned and zero lag on timeout
+		require.Error(t, err, "CheckBytesLag should return error on timeout")
+		require.ErrorContains(t, err, "failed to calculate replica bytes lag", "Error should be descriptive")
+		require.Contains(t, err.Error(), "cancel", "Error should indicate cancellation")
+		require.Zero(t, bytesLag, "Should return zero lag on query timeout")
+		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
 	})
 }
