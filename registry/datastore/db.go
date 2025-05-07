@@ -66,7 +66,8 @@ const (
 	replicaLagCheckTimeout = 100 * time.Millisecond
 	// MaxReplicaLagTime is the default maximum replication lag time
 	MaxReplicaLagTime = 30 * time.Second
-	// MaxReplicaLagBytes is the default maximum replication lag in bytes
+	// MaxReplicaLagBytes is the default maximum replication lag in bytes. This matches the Rails default, see
+	// https://gitlab.com/gitlab-org/gitlab/blob/5c68653ce8e982e255277551becb3270a92f5e9e/lib/gitlab/database/load_balancing/configuration.rb#L48-48
 	MaxReplicaLagBytes = 8 * 1024 * 1024
 )
 
