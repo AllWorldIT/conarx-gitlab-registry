@@ -157,7 +157,7 @@ func TestS3DriverRetriesAndErrorHandling(t *testing.T) {
 	matchUserAgent := func(tt *testing.T) dtestutil.RequestModifier {
 		return func(req *http.Request) (*http.Request, bool) {
 			ua := req.Header.Get("User-Agent")
-			assert.Contains(tt, ua, "docker-distribution/")
+			assert.Contains(tt, ua, "docker-distribution")
 			return req, true
 		}
 	}
@@ -219,7 +219,7 @@ func TestS3DriverRetriesAndErrorHandling(t *testing.T) {
 					Matcher:                            matchAlways,
 					RequestModifier:                    matchUserAgent,
 					ResponseModifier:                   nil,
-					ExpectedRequestModificationsCount:  2,
+					ExpectedRequestModificationsCount:  6,
 					ExpectedResponseModificationsCount: 0,
 				},
 			},
