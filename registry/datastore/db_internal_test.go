@@ -1083,7 +1083,7 @@ func TestThrottledPoolResolver_Resolve(t *testing.T) {
 		result := r.Resolve(context.Background())
 		require.False(t, result, "Concurrent resolution should be throttled")
 
-		// Allow first resolution to complete
+		// Allowed first resolution to complete
 		resolveFinished <- struct{}{}
 
 		// Give time for goroutine to complete

@@ -439,7 +439,7 @@ database:api-load-balancing-discovery-cache-fallback:
   services:
     - name: redis:alpine
       alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
 
 cache:redis:
   extends: .cache:redis
@@ -537,7 +537,18 @@ redis:rate:
   services:
     - name: redis:alpine
       alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
+
+redis:rate-limiter:handlers:
+  extends: .go-version-matrix
+  stage: integration
+  variables:
+    REDIS_ADDR: "redis:6379"
+    PACKAGE: "github.com/docker/distribution/registry/handlers"
+  services:
+    - name: redis:alpine
+      alias: "redis"
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
 
 # cli:schema-migration-dependency is an integration test suite that verifies the dependency resolver for post/pre-deployment schema migrations.
 cli:schema-migration-dependency:

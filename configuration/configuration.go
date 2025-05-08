@@ -1228,9 +1228,16 @@ func ApplyDefaults(config *Configuration) {
 	// Rate limiter
 	if config.RateLimiter.Enabled {
 		for _, limiter := range config.RateLimiter.Limiters {
+			limiter.Match.Type = strings.ToLower(limiter.Match.Type)
 			if limiter.Limit.Period == "" {
 				limiter.Limit.Period = "second"
 				limiter.Limit.PeriodDuration = defaultRateLimiterPeriodDuration
+			}
+			if limiter.Action.WarnAction == "" {
+				limiter.Action.WarnAction = "none"
+			}
+			if limiter.Action.HardAction == "" {
+				limiter.Action.HardAction = "none"
 			}
 		}
 	}
