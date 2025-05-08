@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration && redis_test
 
 package redis_test
 
@@ -15,14 +15,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
-
-func isEligible(t *testing.T) {
-	t.Helper()
-
-	if os.Getenv("REDIS_ADDR") == "" {
-		t.Skip("the 'REDIS_ADDR' environment variable must be set to enable these tests")
-	}
-}
 
 func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
 	var db int
@@ -53,8 +45,6 @@ func flushDB(t *testing.T, client redis.UniversalClient) {
 // TestRedisLayerInfoCache exercises a live redis instance using the cache
 // implementation.
 func TestRedisBlobDescriptorCacheProvider(t *testing.T) {
-	isEligible(t)
-
 	client := redis.NewUniversalClient(poolOptsFromEnv(t))
 	flushDB(t, client)
 
