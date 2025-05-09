@@ -18,12 +18,15 @@ var (
 	lbDNSLookupDurationHist *prometheus.HistogramVec
 	lbPoolEvents            *prometheus.CounterVec
 	lbTargets               *prometheus.CounterVec
+	lbLagBytes              *prometheus.GaugeVec
+	lbLagSeconds            *prometheus.HistogramVec
 )
 
 const (
 	subsystem      = "database"
 	queryNameLabel = "name"
 	errorLabel     = "error"
+	replicaLabel   = "replica"
 
 	queryDurationName = "query_duration_seconds"
 	queryDurationDesc = "A histogram of latencies for database queries."
@@ -70,6 +73,11 @@ const (
 	lbFallbackError       = "error"
 	lbFallbackNotUpToDate = "not_up_to_date"
 	lbReasonSelected      = "selected"
+
+	lbLagBytesName   = "lb_lag_bytes"
+	lbLagBytesDesc   = "A gauge for the replication lag in bytes for each replica."
+	lbLagSecondsName = "lb_lag_seconds"
+	lbLagSecondsDesc = "A histogram of replication lag in seconds for each replica."
 )
 
 func init() {
@@ -154,6 +162,27 @@ func init() {
 		[]string{lbTargetTypeLabel, lbFallbackLabel, lbReasonLabel},
 	)
 
+	lbLagBytes = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbLagBytesName,
+			Help:      lbLagBytesDesc,
+		},
+		[]string{replicaLabel},
+	)
+
+	lbLagSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbLagSecondsName,
+			Help:      lbLagSecondsDesc,
+			Buckets:   []float64{0.001, 0.01, 0.1, 0.5, 1, 5, 10, 20, 30, 60}, // 1ms to 60s
+		},
+		[]string{replicaLabel},
+	)
+
 	prometheus.MustRegister(queryDurationHist)
 	prometheus.MustRegister(queryTotal)
 	prometheus.MustRegister(lbPoolSize)
@@ -162,6 +191,8 @@ func init() {
 	prometheus.MustRegister(lbDNSLookupDurationHist)
 	prometheus.MustRegister(lbPoolEvents)
 	prometheus.MustRegister(lbTargets)
+	prometheus.MustRegister(lbLagBytes)
+	prometheus.MustRegister(lbLagSeconds)
 }
 
 func InstrumentQuery(name string) func() {
@@ -268,4 +299,14 @@ func PrimaryFallbackNotUpToDate() {
 // ReplicaTarget increments the counter for replica targets successfully selected during load balancing.
 func ReplicaTarget() {
 	lbTargets.WithLabelValues(lbReplicaType, "false", lbReasonSelected).Inc()
+}
+
+// ReplicaLagBytes records the byte lag for a replica.
+func ReplicaLagBytes(replicaAddr string, bytes float64) {
+	lbLagBytes.WithLabelValues(replicaAddr).Set(bytes)
+}
+
+// ReplicaLagSeconds records the time lag for a replica in seconds.
+func ReplicaLagSeconds(replicaAddr string, seconds float64) {
+	lbLagSeconds.WithLabelValues(replicaAddr).Observe(seconds)
 }
