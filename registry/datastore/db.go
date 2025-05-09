@@ -1324,6 +1324,8 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	l = l.WithFields(log.Fields{"primary_lsn": primaryLSN})
 
 	// Query to check if the candidate replica is up-to-date with the primary LSN
+	defer metrics.InstrumentQuery("lb_replica_up_to_date")()
+
 	query := `
         WITH replica_lsn AS (
 			SELECT pg_last_wal_replay_lsn () AS lsn
@@ -1369,6 +1371,8 @@ func (lb *DBLoadBalancer) TypeOf(db *DB) string {
 
 // primaryLSN returns the primary database's current write location
 func (lb *DBLoadBalancer) primaryLSN(ctx context.Context) (string, error) {
+	defer metrics.InstrumentQuery("lb_primary_lsn")()
+
 	var lsn string
 	query := "SELECT pg_current_wal_insert_lsn()::text AS location"
 	if err := lb.primary.QueryRowContext(ctx, query).Scan(&lsn); err != nil {
@@ -1546,11 +1550,14 @@ func (t *ReplicaLagTracker) set(_ context.Context, db *DB, timeLag time.Duration
 	info.BytesLag = bytesLag
 	info.LastChecked = now
 
-	// TODO: collect metrics
+	metrics.ReplicaLagBytes(addr, float64(bytesLag))
+	metrics.ReplicaLagSeconds(addr, timeLag.Seconds())
 }
 
 // CheckBytesLag retrieves the data-based replication lag for a replica
 func (*ReplicaLagTracker) CheckBytesLag(ctx context.Context, primaryLSN string, replica *DB) (int64, error) {
+	defer metrics.InstrumentQuery("lb_check_bytes_lag")()
+
 	queryCtx, cancel := context.WithTimeout(ctx, replicaLagCheckTimeout)
 	defer cancel()
 
@@ -1567,6 +1574,8 @@ func (*ReplicaLagTracker) CheckBytesLag(ctx context.Context, primaryLSN string, 
 
 // CheckTimeLag retrieves the time-based replication lag for a replica
 func (*ReplicaLagTracker) CheckTimeLag(ctx context.Context, replica *DB) (time.Duration, error) {
+	defer metrics.InstrumentQuery("lb_check_time_lag")()
+
 	queryCtx, cancel := context.WithTimeout(ctx, replicaLagCheckTimeout)
 	defer cancel()
 

@@ -343,3 +343,110 @@ func TestPrimaryFallbackNotUpToDate(t *testing.T) {
 func TestReplicaTarget(t *testing.T) {
 	testTarget(t, lbReplicaType, false, lbReasonSelected, ReplicaTarget)
 }
+
+func TestReplicaLagBytes(t *testing.T) {
+	// Create test registry to avoid conflicts with other tests
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbLagBytes)
+	defer func() { lbLagBytes.Reset() }()
+
+	// Set values for two different replicas
+	replicaAddr1 := "replica1:5432"
+	replicaAddr2 := "replica2:5432"
+
+	ReplicaLagBytes(replicaAddr1, 1048576)
+	ReplicaLagBytes(replicaAddr2, 2097152)
+	ReplicaLagBytes(replicaAddr1, 524288)
+
+	// Expected metrics output
+	tmplFormat := `
+# HELP registry_database_lb_lag_bytes A gauge for the replication lag in bytes for each replica.
+# TYPE registry_database_lb_lag_bytes gauge
+registry_database_lb_lag_bytes{replica="{{.Replica1}}"} 524288
+registry_database_lb_lag_bytes{replica="{{.Replica2}}"} 2097152
+`
+	tmplData := struct {
+		Replica1 string
+		Replica2 string
+	}{
+		Replica1: replicaAddr1,
+		Replica2: replicaAddr2,
+	}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	// Verify metrics
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbLagBytesName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestReplicaLagSeconds(t *testing.T) {
+	// Create test registry to avoid conflicts with other tests
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbLagSeconds)
+	defer func() { lbLagSeconds.Reset() }()
+
+	// Set values for two different replicas
+	replicaAddr1 := "replica1:5432"
+	replicaAddr2 := "replica2:5432"
+
+	// Add observations
+	ReplicaLagSeconds(replicaAddr1, 0.5)
+	ReplicaLagSeconds(replicaAddr1, 1.5)
+	ReplicaLagSeconds(replicaAddr1, 2.0)
+	ReplicaLagSeconds(replicaAddr2, 25.0)
+	ReplicaLagSeconds(replicaAddr2, 0.1)
+
+	// Expected metrics output
+	tmplFormat := `
+# HELP registry_database_lb_lag_seconds A histogram of replication lag in seconds for each replica.
+# TYPE registry_database_lb_lag_seconds histogram
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="0.001"} 0
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="0.01"} 0
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="0.1"} 0
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="0.5"} 1
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="1"} 1
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="5"} 3
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="10"} 3
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="20"} 3
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="30"} 3
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="60"} 3
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica1}}",le="+Inf"} 3
+registry_database_lb_lag_seconds_sum{replica="{{.Replica1}}"} 4
+registry_database_lb_lag_seconds_count{replica="{{.Replica1}}"} 3
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="0.001"} 0
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="0.01"} 0
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="0.1"} 1
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="0.5"} 1
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="1"} 1
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="5"} 1
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="10"} 1
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="20"} 1
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="30"} 2
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="60"} 2
+registry_database_lb_lag_seconds_bucket{replica="{{.Replica2}}",le="+Inf"} 2
+registry_database_lb_lag_seconds_sum{replica="{{.Replica2}}"} 25.1
+registry_database_lb_lag_seconds_count{replica="{{.Replica2}}"} 2
+`
+	tmplData := struct {
+		Replica1 string
+		Replica2 string
+	}{
+		Replica1: replicaAddr1,
+		Replica2: replicaAddr2,
+	}
+
+	var expected bytes.Buffer
+	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
+	require.NoError(t, err)
+	require.NoError(t, tmpl.Execute(&expected, tmplData))
+
+	// Verify metrics
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbLagSecondsName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
