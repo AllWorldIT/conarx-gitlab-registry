@@ -426,17 +426,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			if err := app.configureRedisLoadBalancingCache(ctx, config); err != nil {
 				return nil, err
 			}
-			// TODO: remove fallback to `redis.cache` once we're making use of `redis.loadbalancing` in production:
-			// https://gitlab.com/gitlab-org/container-registry/-/issues/1535
-			cache := app.redisLBCache
-			if cache == nil {
-				if app.redisCache == nil {
-					return nil, errors.New("`redis.loadbalancing` required for enabling database load balancing")
-				}
-				log.Warn("redis.loadbalancing configuration is not set, using redis.cache configuration")
-				cache = app.redisCache
-			}
-			dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(cache)))
+			dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisLBCache)))
 
 			// service discovery takes precedence over fixed hosts
 			if config.Database.LoadBalancing.Record != "" {

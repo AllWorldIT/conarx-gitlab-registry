@@ -415,21 +415,6 @@ database:api-load-balancing-discovery:
     REGISTRY_DATABASE_LOADBALANCING_NAMESERVER: "test-dns-server"
     REGISTRY_DATABASE_LOADBALANCING_PORT: "8600"
 
-# TODO: remove fallback to `redis.cache` once we're making use of `redis.loadbalancing` in production:
-# https://gitlab.com/gitlab-org/container-registry/-/issues/1535
-database:api-load-balancing-discovery-cache-fallback:
-  <<: *database-load-balancing
-  variables:
-    <<: *database-load-balancing-variables
-    REGISTRY_REDIS_CACHE_ENABLED: "true"
-    REGISTRY_REDIS_CACHE_ADDR: "redis:6379"
-    REGISTRY_DATABASE_LOADBALANCING_RECORD: "replica.registry-db.service.consul"
-    REGISTRY_DATABASE_LOADBALANCING_NAMESERVER: "test-dns-server"
-    REGISTRY_DATABASE_LOADBALANCING_PORT: "8600"
-  before_script:
-    - unset REGISTRY_REDIS_LOADBALANCING_ENABLED
-    - unset REGISTRY_REDIS_LOADBALANCING_ADDR
-
 .cache:redis: &cache-redis
   extends: .go-version-matrix
   stage: integration
