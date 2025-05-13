@@ -739,7 +739,7 @@ func bufferStreamLogger(buf *bytes.Buffer) *logrus.Entry {
 	return logger.WithFields(fields)
 }
 
-func Test_startDBReplicaChecking_StartupJitter(t *testing.T) {
+func Test_startDBPoolRefresh_StartupJitter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	clockMock := imocks.NewMockClock(ctrl)
 	testutil.StubClock(t, &systemClock, clockMock)
@@ -747,7 +747,7 @@ func Test_startDBReplicaChecking_StartupJitter(t *testing.T) {
 	// use fixed time for reproducible rand seeds (used to generate jitter durations)
 	now := time.Time{}
 	r := rand.New(rand.NewChaCha8(dtestutil.SeedFromUnixNano(now.UnixNano())))
-	expectedJitter := time.Duration(r.IntN(dlbReplicaCheckJitterMaxSeconds)) * time.Second
+	expectedJitter := time.Duration(r.IntN(dlbPeriodicTaskJitterMaxSeconds)) * time.Second
 
 	// Create the load balancer with the required options
 	lbMock := dmocks.NewMockLoadBalancer(ctrl)
@@ -760,12 +760,12 @@ func Test_startDBReplicaChecking_StartupJitter(t *testing.T) {
 	gomock.InOrder(
 		clockMock.EXPECT().Now().Return(now).Times(1),     // base for jitter
 		clockMock.EXPECT().Sleep(expectedJitter).Times(1), // jitter sleep
-		lbMock.EXPECT().StartReplicaChecking(ctx).Return(nil).Times(1).Do(func(_ context.Context) {
+		lbMock.EXPECT().StartPoolRefresh(ctx).Return(nil).Times(1).Do(func(_ context.Context) {
 			wg.Done() // Mark the goroutine as done
 		}),
 	)
 
-	startDBReplicaChecking(ctx, lbMock)
+	startDBPoolRefresh(ctx, lbMock)
 
 	// Wait for the goroutine to complete before checking expectations
 	wg.Wait()

@@ -502,7 +502,8 @@ type LoadBalancer interface {
 	Replicas() []*DB
 	Close() error
 	RecordLSN(context.Context, *models.Repository) error
-	StartReplicaChecking(context.Context) error
+	StartPoolRefresh(context.Context) error
+	StartLagCheck(context.Context) error
 	TypeOf(*DB) string
 }
 
@@ -539,7 +540,7 @@ type DBLoadBalancer struct {
 	throttledPoolResolver *ThrottledPoolResolver
 
 	// For tracking replication lag
-	lagTracker *ReplicaLagTracker
+	lagTracker LagTracker
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
@@ -1091,8 +1092,8 @@ func dbByAddress(dbs []*DB, addr string) *DB {
 	return nil
 }
 
-// StartReplicaChecking synchronously refreshes the list of replicas in the configured interval.
-func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
+// StartPoolRefresh synchronously refreshes the list of replica servers in the configured interval.
+func (lb *DBLoadBalancer) StartPoolRefresh(ctx context.Context) error {
 	// If the check interval was set to zero (no recurring checks) or the resolver is not set (service discovery
 	// was not enabled), then exit early as there is nothing to do
 	if lb.replicaCheckInterval == 0 || lb.resolver == nil {
@@ -1111,6 +1112,49 @@ func (lb *DBLoadBalancer) StartReplicaChecking(ctx context.Context) error {
 			l.WithFields(log.Fields{"interval_ms": lb.replicaCheckInterval.Milliseconds()}).
 				Info("scheduled refresh of replicas list")
 			lb.throttledPoolResolver.Resolve(ctx)
+		}
+	}
+}
+
+// StartLagCheck runs a background goroutine to check lag for all replicas.
+func (lb *DBLoadBalancer) StartLagCheck(ctx context.Context) error {
+	// If the check interval was set to zero (no recurring checks) or there are no replicas to check,
+	// then exit early as there is nothing to do
+	if lb.replicaCheckInterval == 0 || len(lb.replicas) == 0 {
+		return nil
+	}
+
+	l := lb.logger(ctx)
+	t := time.NewTicker(lb.replicaCheckInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+			l.Info("checking replication lag for all replicas")
+
+			// Get current primary LSN
+			primaryLSN, err := lb.primaryLSN(ctx)
+			if err != nil {
+				l.WithError(err).Error("failed to query primary LSN")
+				continue
+			}
+
+			// Check lag for each replica
+			lb.replicaMutex.Lock()
+			replicas := lb.replicas
+			lb.replicaMutex.Unlock()
+
+			for _, replica := range replicas {
+				replicaAddr := replica.Address()
+				l = l.WithFields(log.Fields{"replica_addr": replicaAddr})
+
+				if err := lb.lagTracker.Check(ctx, primaryLSN, replica); err != nil {
+					l.WithError(err).Error("failed to check database replica lag")
+				}
+			}
 		}
 	}
 }
@@ -1476,6 +1520,11 @@ type ReplicaLagInfo struct {
 	TimeLag     time.Duration
 	BytesLag    int64
 	LastChecked time.Time
+}
+
+// LagTracker represents a component that can track database replication lag.
+type LagTracker interface {
+	Check(ctx context.Context, primaryLSN string, replica *DB) error
 }
 
 // ReplicaLagTracker manages replication lag tracking
