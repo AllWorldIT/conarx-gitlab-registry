@@ -1540,3 +1540,181 @@ func TestReplicaLagTracker_CheckBytesLag(t *testing.T) {
 		require.NoError(t, mock.ExpectationsWereMet(), "All SQL expectations should be met")
 	})
 }
+
+// mockLagTracker is a test implementation of the LagTracker interface
+type mockLagTracker struct {
+	checkCalls      map[string]int
+	checkFn         func(ctx context.Context, primaryLSN string, replica *DB) error
+	inputPrimaryLSN string
+}
+
+func newMockLagTracker() *mockLagTracker {
+	return &mockLagTracker{
+		checkCalls: make(map[string]int),
+		checkFn: func(_ context.Context, _ string, _ *DB) error {
+			return nil
+		},
+	}
+}
+
+func (m *mockLagTracker) Check(ctx context.Context, primaryLSN string, replica *DB) error {
+	m.inputPrimaryLSN = primaryLSN
+	m.checkCalls[replica.DSN.Host]++
+	return m.checkFn(ctx, primaryLSN, replica)
+}
+
+func TestDBLoadBalancer_StartLagCheck(t *testing.T) {
+	// Create test primary DB
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDSN := &DSN{
+		Host:     "primary",
+		Port:     5432,
+		User:     "user",
+		Password: "password",
+		DBName:   "dbname",
+		SSLMode:  "disable",
+	}
+
+	primaryDB := &DB{
+		DB:  primaryMockDB,
+		DSN: primaryDSN,
+	}
+
+	// Create test replicas
+	replica1MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica1MockDB.Close()
+
+	replica2MockDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replica2MockDB.Close()
+
+	replica1 := &DB{
+		DB:  replica1MockDB,
+		DSN: &DSN{Host: "replica1", Port: 5432},
+	}
+
+	replica2 := &DB{
+		DB:  replica2MockDB,
+		DSN: &DSN{Host: "replica2", Port: 5432},
+	}
+
+	// Create our mock lag tracker
+	mockTracker := newMockLagTracker()
+
+	// Configure the primary LSN query
+	primaryLSN := "0/1000000"
+	primaryLSNRows := sqlmock.NewRows([]string{"location"}).AddRow(primaryLSN)
+	primaryMock.ExpectQuery("SELECT pg_current_wal_insert_lsn\\(\\)::text AS location").WillReturnRows(primaryLSNRows)
+
+	// Create the load balancer and populate its fields for testing
+	lb := &DBLoadBalancer{
+		primary:              primaryDB,
+		replicas:             []*DB{replica1, replica2},
+		replicaCheckInterval: 50 * time.Millisecond,
+		lagTracker:           mockTracker,
+	}
+
+	// Start lag checking in a goroutine
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- lb.StartLagCheck(ctx)
+	}()
+
+	// Wait just enough time for the lag checker to run once
+	time.Sleep(60 * time.Millisecond)
+
+	// Cancel the context and make sure it exits properly
+	cancel()
+	require.ErrorIs(t, <-errCh, context.Canceled)
+
+	// Verify our lag tracker was called for each replica
+	require.Equal(t, 1, mockTracker.checkCalls["replica1"])
+	require.Equal(t, 1, mockTracker.checkCalls["replica2"])
+	require.Equal(t, primaryLSN, mockTracker.inputPrimaryLSN)
+
+	// Verify primary mock expectations (LSN query)
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+}
+
+func TestDBLoadBalancer_StartLagCheck_ZeroInterval(t *testing.T) {
+	// Create a load balancer with zero check interval
+	lb := &DBLoadBalancer{
+		replicaCheckInterval: 0,                                   // Zero interval
+		replicas:             []*DB{{DSN: &DSN{Host: "replica"}}}, // Non-empty replicas
+	}
+
+	// StartLagCheck should return immediately
+	err := lb.StartLagCheck(context.Background())
+	require.NoError(t, err)
+}
+
+func TestDBLoadBalancer_StartLagCheck_NoReplicas(t *testing.T) {
+	// Create a load balancer with no replicas
+	lb := &DBLoadBalancer{
+		replicaCheckInterval: 50 * time.Millisecond, // Non-zero interval
+		replicas:             nil,                   // Empty replicas
+	}
+
+	// StartLagCheck should return immediately
+	err := lb.StartLagCheck(context.Background())
+	require.NoError(t, err)
+}
+
+func TestDBLoadBalancer_StartLagCheck_PrimaryLSNError(t *testing.T) {
+	// Create mock primary DB
+	primaryMockDB, primaryMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryMockDB.Close()
+
+	primaryDB := &DB{
+		DB:  primaryMockDB,
+		DSN: &DSN{Host: "primary"},
+	}
+
+	// Create test replicas
+	replica := &DB{
+		DSN: &DSN{Host: "replica1"},
+	}
+
+	// Create mock tracker
+	mockTracker := newMockLagTracker()
+
+	// Configure primaryLSN to return an error
+	primaryMock.ExpectQuery("SELECT pg_current_wal_insert_lsn\\(\\)::text AS location").
+		WillReturnError(errors.New("query failed"))
+
+	// Create the load balancer
+	lb := &DBLoadBalancer{
+		primary:              primaryDB,
+		replicas:             []*DB{replica},
+		replicaCheckInterval: 50 * time.Millisecond,
+		lagTracker:           mockTracker,
+	}
+
+	// Start lag checking in a goroutine
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- lb.StartLagCheck(ctx)
+	}()
+
+	// Wait just enough time for the lag checker to attempt to run once
+	time.Sleep(60 * time.Millisecond)
+
+	// Cancel the context to stop the lag checking
+	cancel()
+	require.ErrorIs(t, <-errCh, context.Canceled)
+
+	// Verify the tracker wasn't called at all since we had a primaryLSN error
+	require.Empty(t, mockTracker.checkCalls, "Lag tracker should not be called when primary LSN query fails")
+
+	// Verify primary mock expectations (LSN query)
+	require.NoError(t, primaryMock.ExpectationsWereMet())
+}

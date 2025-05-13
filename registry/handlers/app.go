@@ -474,7 +474,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		}
 
 		if config.Database.LoadBalancing.Enabled && config.Database.LoadBalancing.ReplicaCheckInterval != 0 {
-			startDBReplicaChecking(ctx, db)
+			startDBPoolRefresh(ctx, db)
+			startDBLagCheck(ctx, db)
 		}
 
 		inRecovery, err := datastore.IsInRecovery(ctx, db.Primary())
@@ -816,46 +817,58 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 	}
 }
 
-const dlbReplicaCheckJitterMaxSeconds = 10
+const dlbPeriodicTaskJitterMaxSeconds = 10
 
-func startDBReplicaChecking(ctx context.Context, lb datastore.LoadBalancer) {
+// startDBLoadBalancerPeriodicTask starts a goroutine to periodically execute a database load balancer task.
+// It handles jittered startup, error recovery, and appropriate logging.
+func startDBLoadBalancerPeriodicTask(ctx context.Context, taskName string, taskFn func(context.Context) error) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
 	// delay startup using a randomized jitter to ease concurrency in clustered environments
 	// nolint: gosec // G404: used only for jitter calculation
 	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(systemClock.Now().UnixNano())))
-	jitter := time.Duration(r.Int64N(dlbReplicaCheckJitterMaxSeconds)) * time.Second
+	jitter := time.Duration(r.Int64N(dlbPeriodicTaskJitterMaxSeconds)) * time.Second
 
 	l.WithFields(dlog.Fields{"jitter_s": jitter.Seconds()}).
-		Info("preparing to start database load balancing replica checking")
+		Info(fmt.Sprintf("preparing to start database load balancing %s", taskName))
 
 	go func() {
 		systemClock.Sleep(jitter)
 
-		// This function can only end in three situations: 1) service discovery is disabled and therefore there is
+		// This function can only end in three situations: 1) the task is disabled and therefore there is
 		// nothing left to do (no error) 2) context cancellation 3) panic. If a panic occurs we should log, report to
 		// Sentry and then re-panic, as the instance would be in an inconsistent/unknown state. In case of context
 		// cancellation, the app is shutting down, so there is nothing to worry about.
 		defer func() {
 			if err := recover(); err != nil {
-				l.WithFields(dlog.Fields{"error": err}).Error("database load balancing replica checking stopped with panic")
+				l.WithFields(dlog.Fields{"error": err}).Error(fmt.Sprintf("database load balancing %s stopped with panic", taskName))
 				sentry.CurrentHub().Recover(err)
 				sentry.Flush(5 * time.Second)
 				panic(err)
 			}
 		}()
-		if err := lb.StartReplicaChecking(ctx); err != nil {
+		if err := taskFn(ctx); err != nil {
 			if errors.Is(err, context.Canceled) {
 				// leaving this here for now for additional confidence and improved observability
-				l.Warn("database load balancing replica checking stopped due to context cancellation")
+				l.Warn(fmt.Sprintf("database load balancing %s stopped due to context cancellation", taskName))
 			} else {
 				// this should never happen, but leaving it here for future proofing against bugs
-				e := fmt.Errorf("database load balancing replica checking stopped with error: %w", err)
+				e := fmt.Errorf("database load balancing %s stopped with error: %w", taskName, err)
 				errortracking.Capture(e, errortracking.WithStackTrace())
-				l.WithError(err).Error("database load balancing replica checking stopped with error")
+				l.WithError(err).Error(fmt.Sprintf("database load balancing %s stopped with error", taskName))
 			}
 		}
 	}()
+}
+
+// startDBPoolRefresh starts a goroutine to periodically refresh the database replica pool.
+func startDBPoolRefresh(ctx context.Context, lb datastore.LoadBalancer) {
+	startDBLoadBalancerPeriodicTask(ctx, "pool refresh", lb.StartPoolRefresh)
+}
+
+// startDBLagCheck starts a goroutine to periodically check and track replication lag for all replicas.
+func startDBLagCheck(ctx context.Context, lb datastore.LoadBalancer) {
+	startDBLoadBalancerPeriodicTask(ctx, "lag check", lb.StartLagCheck)
 }
 
 // RegisterHealthChecks is an awful hack to defer health check registration

@@ -2353,7 +2353,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 	}
 }
 
-func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
+func TestDBLoadBalancer_StartPoolRefresh(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -2466,7 +2466,7 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- lb.StartReplicaChecking(ctx)
+		errCh <- lb.StartPoolRefresh(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -2491,7 +2491,7 @@ func TestDBLoadBalancer_StartReplicaChecking(t *testing.T) {
 	require.NoError(t, replicaMock3.ExpectationsWereMet())
 }
 
-func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
+func TestDBLoadBalancer_StartPoolRefresh_ZeroInterval(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockResolver := mocks.NewMockDNSResolver(ctrl)
@@ -2559,7 +2559,7 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- lb.StartReplicaChecking(ctx)
+		errCh <- lb.StartPoolRefresh(ctx)
 	}()
 
 	// Wait just enough time to confirm that no connections were attempted in the background. We've set expectations
@@ -2575,7 +2575,7 @@ func TestDBLoadBalancer_StartReplicaChecking_ZeroInterval(t *testing.T) {
 	require.NoError(t, replicaMock1.ExpectationsWereMet())
 }
 
-func TestDBLoadBalancer_StartReplicaChecking_NoFixedHostsOrServiceDiscovery(t *testing.T) {
+func TestDBLoadBalancer_StartPoolRefresh_NoFixedHostsOrServiceDiscovery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockConnector := mocks.NewMockConnector(ctrl)
@@ -2611,7 +2611,7 @@ func TestDBLoadBalancer_StartReplicaChecking_NoFixedHostsOrServiceDiscovery(t *t
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- lb.StartReplicaChecking(ctx)
+		errCh <- lb.StartPoolRefresh(ctx)
 	}()
 
 	// Wait just enough time to confirm that no connections were attempted in the background. We've set expectations
@@ -3340,7 +3340,7 @@ func TestNewDBLoadBalancer_ReplicaResolveTimeout_ConnectionOpenTimeout(t *testin
 	require.Empty(t, lb.Replicas())
 }
 
-func TestStartReplicaChecking_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.T) {
+func TestStartPoolRefresh_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -3393,7 +3393,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- lb.StartReplicaChecking(ctx)
+		errCh <- lb.StartPoolRefresh(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3407,7 +3407,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_SRVLookupTimeout(t *testing.
 	require.Empty(t, lb.Replicas())
 }
 
-func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing.T) {
+func TestStartPoolRefresh_ReplicaResolveTimeout_HostLookupTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -3468,7 +3468,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- lb.StartReplicaChecking(ctx)
+		errCh <- lb.StartPoolRefresh(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3482,7 +3482,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_HostLookupTimeout(t *testing
 	require.Empty(t, lb.Replicas())
 }
 
-func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *testing.T) {
+func TestStartPoolRefresh_ReplicaResolveTimeout_OpenConnectionTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -3557,7 +3557,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- lb.StartReplicaChecking(ctx)
+		errCh <- lb.StartPoolRefresh(ctx)
 	}()
 
 	// Wait just enough time for the replicas to be refreshed once
@@ -3571,7 +3571,7 @@ func TestStartReplicaChecking_ReplicaResolveTimeout_OpenConnectionTimeout(t *tes
 	require.Empty(t, lb.Replicas())
 }
 
-func TestDBLoadBalancer_StartReplicaChecking_WithThrottling(t *testing.T) {
+func TestDBLoadBalancer_StartPoolRefresh_WithThrottling(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -3621,7 +3621,7 @@ func TestDBLoadBalancer_StartReplicaChecking_WithThrottling(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- lb.StartReplicaChecking(ctx)
+		errCh <- lb.StartPoolRefresh(ctx)
 	}()
 
 	// Wait for first scheduled check plus a bit more
