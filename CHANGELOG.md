@@ -1,3 +1,47 @@
+## [4.22.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.21.0-gitlab...v4.22.0-gitlab) (2025-05-19)
+
+### ✨ Features ✨
+
+* add custom user agent to azure ([bbcfebf](https://gitlab.com/gitlab-org/container-registry/commit/bbcfebf39bef9691e79aaaa1edb79d838937a11f))
+* add support for setting user-agent for the GCS next storage driver ([fb16a14](https://gitlab.com/gitlab-org/container-registry/commit/fb16a14473b654837e576093924b64e1ab6c64f0))
+* Add support for Workload Identity to GCS storage driver. ([5e5dcb8](https://gitlab.com/gitlab-org/container-registry/commit/5e5dcb862803b725eb241ee974d2f6ed445afa72))
+* **datastore:** add DB load balancing replication lag tracking ([5fee255](https://gitlab.com/gitlab-org/container-registry/commit/5fee2558c044597c8d04542a29320c110c1ba829))
+* **handlers:** add rate-limiter middleware ([d4e92b3](https://gitlab.com/gitlab-org/container-registry/commit/d4e92b367ee10cd7e22453991a3dd791a14c7a35))
+* support more S3 storage classes ([1d17b6a](https://gitlab.com/gitlab-org/container-registry/commit/1d17b6a18ad963f519de77e6002ee87a615a35b4))
+* use JSON API in gcs next driver ([678013d](https://gitlab.com/gitlab-org/container-registry/commit/678013db9585d336b23a43dd48a5c6ace5171e8c))
+
+### 🐛 Bug Fixes 🐛
+
+* **api:** allow new tag to be created even if matching immutable patterns ([b6e7631](https://gitlab.com/gitlab-org/container-registry/commit/b6e7631863a39ee1542b22ff70ae4a688cb04c74))
+* better context handling in DeleteFiles method of gcs_next, refactor the function ([abf5efd](https://gitlab.com/gitlab-org/container-registry/commit/abf5efdd5ba49c4c1047d7dc2f81bf6444fbe50c))
+* bubble up error from failed sub-repository size calculation ([99be331](https://gitlab.com/gitlab-org/container-registry/commit/99be33188320873f512f33d7ce6deb2518b0902f))
+* make Size() method of the gcs_next Writer correctly report size of the data written so far ([923f25f](https://gitlab.com/gitlab-org/container-registry/commit/923f25f194ecbf93bf44983ec6dea30a5bfd890e))
+* proper context cancellation in gcs_next driver ([6078c25](https://gitlab.com/gitlab-org/container-registry/commit/6078c25dfb3aac4ee59bb312f3490cb95b4fe397))
+
+### ⚡️ Performance Improvements ⚡️
+
+* avoid needlesly sorting results in Delete() call for gcs_next ([fc78910](https://gitlab.com/gitlab-org/container-registry/commit/fc78910928449d0772bd586c1f7dea9cff3cb648))
+
+### ⏮️️ Reverts ⏮️️
+
+* remove fallback on redis cache config for dlb ([c765bf4](https://gitlab.com/gitlab-org/container-registry/commit/c765bf44251a3e000578d36a5a53802d6468e961))
+
+### ⚙️ Build ⚙️
+
+* build gcs driver by default ([d977c9a](https://gitlab.com/gitlab-org/container-registry/commit/d977c9ac70496edd1f19205c3d161417c7b92eb5))
+* **deps:** update module cloud.google.com/go/storage to v1.52.0 ([cc493db](https://gitlab.com/gitlab-org/container-registry/commit/cc493dbd12a54f944ba71a5128d38cd441f07587))
+* **deps:** update module cloud.google.com/go/storage to v1.53.0 ([240796e](https://gitlab.com/gitlab-org/container-registry/commit/240796eed6f78138c197c8bf32e5c17feed00672))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.79.3 ([ddded1c](https://gitlab.com/gitlab-org/container-registry/commit/ddded1c1d8617bad686e783fef017094716a9a63))
+* **deps:** update module github.com/rubenv/sql-migrate to v1.8.0 ([d3741b7](https://gitlab.com/gitlab-org/container-registry/commit/d3741b791f6ec0425c4dba027086b4a691fb5d65))
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.37.0 ([339e80d](https://gitlab.com/gitlab-org/container-registry/commit/339e80d3bc5a8f6e1b93af19fc2559ca277a37d6))
+* **deps:** update module github.com/testcontainers/testcontainers-go/modules/postgres to v0.37.0 ([e2a6301](https://gitlab.com/gitlab-org/container-registry/commit/e2a63014cae0d75d5f8b4f8e4297c2bc87a9b9d5))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.24.0 ([978c6ea](https://gitlab.com/gitlab-org/container-registry/commit/978c6ea4ccec1c2da4c9897df5183e4a2e3d955c))
+* **deps:** update module go.uber.org/mock to v0.5.2 ([4021b8b](https://gitlab.com/gitlab-org/container-registry/commit/4021b8bc231992128b8451dd5e40fc4685c1466b))
+* **deps:** update module golang.org/x/crypto to v0.38.0 ([6d9f5a0](https://gitlab.com/gitlab-org/container-registry/commit/6d9f5a06b62c35d63220eaee72cc6aa04b44b31a))
+* **deps:** update module golang.org/x/net to v0.40.0 ([f2c399b](https://gitlab.com/gitlab-org/container-registry/commit/f2c399b027f19fb3c61e7203baada73b6b83dc46))
+* **deps:** update module google.golang.org/api to v0.231.0 ([90fa3f0](https://gitlab.com/gitlab-org/container-registry/commit/90fa3f040af9edc4db03e5b4b9f1e29adb6b81a3))
+* **deps:** update module google.golang.org/api to v0.232.0 ([789d0e1](https://gitlab.com/gitlab-org/container-registry/commit/789d0e1aff52bea2532472faa6f5e6d2839a6574))
+
 ## [4.21.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.20.0-gitlab...v4.21.0-gitlab) (2025-04-28)
 
 
