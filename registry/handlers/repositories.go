@@ -291,8 +291,11 @@ func (h *repositoryHandler) HandleGetRepository(w http.ResponseWriter, r *http.R
 				// if this same query has timed out in the last 24h OR times out now, fallback to estimation
 				// nolint: revive // max-control-nesting
 				if errors.Is(err, datastore.ErrSizeHasTimedOut) || (errors.As(err, &pgErr) && pgErr.Code == pgerrcode.QueryCanceled) {
-					size, err = store.EstimatedSizeWithDescendants(ctx, repo)
-					precision = sizePrecisionUntagged
+					// size estimation is only supported for root repositories
+					if repo.IsTopLevel() {
+						size, err = store.EstimatedSizeWithDescendants(ctx, repo)
+						precision = sizePrecisionUntagged
+					}
 				}
 			}
 		}

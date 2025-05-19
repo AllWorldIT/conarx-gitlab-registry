@@ -2013,17 +2013,11 @@ func (s *repositoryStore) estimateTopLevelSizeWithDescendants(ctx context.Contex
 	return size, nil
 }
 
-var ErrOnlyRootEstimates = errors.New("only the size of root repositories can be estimated")
-
 // EstimatedSizeWithDescendants is an alternative to SizeWithDescendants that relies on a simpler query that does not
 // exclude unreferenced layers. Therefore, the measured size should be considered an estimate. This is a partial
 // mitigation for https://gitlab.com/gitlab-org/container-registry/-/issues/779. For now, only top-level namespaces are
-// supported. ErrOnlyRootEstimates is returned if attempting to estimate the size of a non-root repository.
+// supported. EstimatedSizeWithDescendants should only be called for root repositories.
 func (s *repositoryStore) EstimatedSizeWithDescendants(ctx context.Context, r *models.Repository) (RepositorySize, error) {
-	if !r.IsTopLevel() {
-		return RepositorySize{}, ErrOnlyRootEstimates
-	}
-
 	if found, b := s.cache.GetSizeWithDescendants(ctx, r); found {
 		return RepositorySize{b, true}, nil
 	}
