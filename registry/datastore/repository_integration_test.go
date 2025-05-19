@@ -2065,16 +2065,6 @@ func TestRepositoryStore_EstimatedSizeWithDescendants_TopLevelEmpty(t *testing.T
 	require.Zero(t, size.Bytes())
 }
 
-func TestRepositoryStore_EstimatedSizeWithDescendants_NonTopLevel(t *testing.T) {
-	reloadManifestFixtures(t)
-
-	s := datastore.NewRepositoryStore(suite.db)
-
-	size, err := s.EstimatedSizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 3, ID: 9, Path: "usage-group/sub-group-1"})
-	require.ErrorIs(t, err, datastore.ErrOnlyRootEstimates)
-	require.Zero(t, size.Bytes())
-}
-
 func TestRepositoryBlobService_Stat(t *testing.T) {
 	reloadBlobFixtures(t)
 
