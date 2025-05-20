@@ -172,6 +172,8 @@ func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.
 					return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
 				}
 				return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
+			default:
+				return nil, fmt.Errorf("unexpected Google API error: %w", status)
 			}
 		}
 		return nil, err

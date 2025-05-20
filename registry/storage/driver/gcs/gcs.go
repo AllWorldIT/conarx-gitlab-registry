@@ -147,11 +147,10 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 			return nil, err
 		}
 
-		if gcsErr.Code == http.StatusNotFound {
+		switch gcsErr.Code {
+		case http.StatusNotFound:
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
-		}
-
-		if gcsErr.Code == http.StatusRequestedRangeNotSatisfiable {
+		case http.StatusRequestedRangeNotSatisfiable:
 			obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
 			if err != nil {
 				return nil, err
@@ -160,6 +159,8 @@ func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 				return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
 			}
 			return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
+		default:
+			return nil, fmt.Errorf("unexpected Google API error: %w", gcsErr)
 		}
 	}
 	if res.Header.Get("Content-Type") == uploadSessionContentType {
