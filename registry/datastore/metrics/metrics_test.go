@@ -287,6 +287,14 @@ func TestReplicaRemoved(t *testing.T) {
 	testPoolOperation(t, lbPoolEventsReplicaRemoved, ReplicaRemoved)
 }
 
+func TestReplicaQuarantined(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaQuarantined, ReplicaQuarantined)
+}
+
+func TestReplicaReintegrated(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaReintegrated, ReplicaReintegrated)
+}
+
 func testTarget(t *testing.T, targetType string, fallback bool, reason string, targetFunc func()) {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(lbTargets)
@@ -338,6 +346,10 @@ func TestPrimaryFallbackError(t *testing.T) {
 
 func TestPrimaryFallbackNotUpToDate(t *testing.T) {
 	testTarget(t, lbPrimaryType, true, lbFallbackNotUpToDate, PrimaryFallbackNotUpToDate)
+}
+
+func TestPrimaryFallbackAllQuarantined(t *testing.T) {
+	testTarget(t, lbPrimaryType, true, lbFallbackAllQuarantined, PrimaryFallbackAllQuarantined)
 }
 
 func TestReplicaTarget(t *testing.T) {
@@ -448,5 +460,62 @@ registry_database_lb_lag_seconds_count{replica="{{.Replica2}}"} 2
 	// Verify metrics
 	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbLagSecondsName)
 	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestReplicaStatus(t *testing.T) {
+	// Create test registry to avoid conflicts with other tests
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(lbPoolStatus)
+	defer func() { lbPoolStatus.Reset() }()
+
+	// Test replica address
+	replica := "replica-test:5432"
+
+	// Test the entire lifecycle
+	// 1. Initially online
+	ReplicaStatusOnline(replica)
+
+	// Verify online status
+	var expected1 bytes.Buffer
+	_, err := expected1.WriteString(`
+# HELP registry_database_lb_pool_status A gauge for the current status of each replica in the load balancer pool.
+# TYPE registry_database_lb_pool_status gauge
+registry_database_lb_pool_status{replica="replica-test:5432",status="online"} 1
+registry_database_lb_pool_status{replica="replica-test:5432",status="quarantined"} 0
+`)
+	require.NoError(t, err)
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, lbPoolStatusName)
+	err = testutil.GatherAndCompare(reg, &expected1, fullName)
+	require.NoError(t, err)
+
+	// 2. Quarantine the replica
+	ReplicaStatusQuarantined(replica)
+
+	// Verify quarantined status
+	var expected2 bytes.Buffer
+	_, err = expected2.WriteString(`
+# HELP registry_database_lb_pool_status A gauge for the current status of each replica in the load balancer pool.
+# TYPE registry_database_lb_pool_status gauge
+registry_database_lb_pool_status{replica="replica-test:5432",status="online"} 0
+registry_database_lb_pool_status{replica="replica-test:5432",status="quarantined"} 1
+`)
+	require.NoError(t, err)
+	err = testutil.GatherAndCompare(reg, &expected2, fullName)
+	require.NoError(t, err)
+
+	// 3. Reintegrate the replica
+	ReplicaStatusReintegrated(replica)
+
+	// Verify reintegrated status (should be back to online)
+	var expected3 bytes.Buffer
+	_, err = expected3.WriteString(`
+# HELP registry_database_lb_pool_status A gauge for the current status of each replica in the load balancer pool.
+# TYPE registry_database_lb_pool_status gauge
+registry_database_lb_pool_status{replica="replica-test:5432",status="online"} 1
+registry_database_lb_pool_status{replica="replica-test:5432",status="quarantined"} 0
+`)
+	require.NoError(t, err)
+	err = testutil.GatherAndCompare(reg, &expected3, fullName)
 	require.NoError(t, err)
 }

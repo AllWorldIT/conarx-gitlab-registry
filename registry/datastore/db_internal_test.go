@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -247,37 +248,213 @@ func TestDBLoadBalancer_Primary(t *testing.T) {
 	require.Equal(t, primaryDB, db.DB)
 }
 
-func TestDBLoadBalancer_Replica(t *testing.T) {
-	primaryDB, _, err := sqlmock.New()
+// Helper function to create test DB connections
+func createTestDB(t *testing.T, host string) (*sql.DB, *DB) {
+	mockDB, _, err := sqlmock.New()
 	require.NoError(t, err)
-	defer primaryDB.Close()
+	t.Cleanup(func() { mockDB.Close() })
 
-	replicaDB1, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer replicaDB1.Close()
-
-	replicaDB2, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer replicaDB2.Close()
-
-	lb := &DBLoadBalancer{
-		primary:  &DB{DB: primaryDB},
-		replicas: []*DB{{DB: replicaDB1}, {DB: replicaDB2}},
+	db := &DB{
+		DB: mockDB,
+		DSN: &DSN{
+			Host: host,
+			Port: 5432,
+		},
 	}
+	return mockDB, db
+}
 
-	// Test round-robin selection of replicas
+// TestDBLoadBalancer_Replica tests the replica selection logic of DBLoadBalancer in various scenarios including no
+// replicas, some/all quarantined replicas, and round-robin selection.
+func TestDBLoadBalancer_Replica(t *testing.T) {
 	ctx := context.Background()
-	db1 := lb.Replica(ctx)
-	require.NotNil(t, db1)
-	require.Equal(t, replicaDB1, db1.DB)
 
-	db2 := lb.Replica(ctx)
-	require.NotNil(t, db2)
-	require.Equal(t, replicaDB2, db2.DB)
+	t.Run("no replicas falls back to primary", func(t *testing.T) {
+		// Create primary DB
+		primaryMockDB, primaryDB := createTestDB(t, "primary")
 
-	db3 := lb.Replica(ctx)
-	require.NotNil(t, db3)
-	require.Equal(t, replicaDB1, db3.DB)
+		// Create load balancer with no replicas
+		lb := &DBLoadBalancer{
+			primary:  primaryDB,
+			replicas: make([]*DB, 0),
+		}
+
+		// Should return primary when no replicas available
+		db := lb.Replica(ctx)
+		require.Equal(t, primaryMockDB, db.DB)
+	})
+
+	t.Run("round-robin selection with multiple replicas", func(t *testing.T) {
+		// Create primary and replica DBs
+		_, primaryDB := createTestDB(t, "primary")
+		replica1MockDB, replica1 := createTestDB(t, "replica1")
+		replica2MockDB, replica2 := createTestDB(t, "replica2")
+		replica3MockDB, replica3 := createTestDB(t, "replica3")
+
+		// Create load balancer with multiple replicas
+		lb := &DBLoadBalancer{
+			primary:  primaryDB,
+			replicas: []*DB{replica1, replica2, replica3},
+		}
+
+		// First call should return first replica
+		db1 := lb.Replica(ctx)
+		require.Equal(t, replica1MockDB, db1.DB)
+
+		// Second call should return second replica
+		db2 := lb.Replica(ctx)
+		require.Equal(t, replica2MockDB, db2.DB)
+
+		// Third call should return third replica
+		db3 := lb.Replica(ctx)
+		require.Equal(t, replica3MockDB, db3.DB)
+
+		// Fourth call should wrap around to first replica
+		db4 := lb.Replica(ctx)
+		require.Equal(t, replica1MockDB, db4.DB)
+	})
+
+	t.Run("skips quarantined replicas", func(t *testing.T) {
+		// Create primary and replica DBs
+		_, primaryDB := createTestDB(t, "primary")
+		replica1MockDB, replica1 := createTestDB(t, "replica1")
+		_, replica2 := createTestDB(t, "replica2") // we'll quarantine this one
+		replica3MockDB, replica3 := createTestDB(t, "replica3")
+
+		// Create mock lag tracker
+		tracker := newMockLagTracker()
+		now := time.Now()
+
+		// Quarantine the second replica
+		tracker.lagInfo[replica2.Address()] = &ReplicaLagInfo{
+			Address:       replica2.Address(),
+			LastChecked:   now,
+			TimeLag:       MaxReplicaLagTime * 2,
+			BytesLag:      int64(MaxReplicaLagBytes * 2),
+			Quarantined:   true,
+			QuarantinedAt: now,
+		}
+
+		// Create load balancer with tracker
+		lb := &DBLoadBalancer{
+			primary:    primaryDB,
+			replicas:   []*DB{replica1, replica2, replica3},
+			lagTracker: tracker,
+		}
+
+		// First call should return first replica
+		db1 := lb.Replica(ctx)
+		require.Equal(t, replica1MockDB, db1.DB)
+
+		// Second call should skip quarantined replica2 and return replica3
+		db2 := lb.Replica(ctx)
+		require.Equal(t, replica3MockDB, db2.DB)
+
+		// Third call should wrap around to replica1
+		db3 := lb.Replica(ctx)
+		require.Equal(t, replica1MockDB, db3.DB)
+	})
+
+	t.Run("falls back to primary when all replicas quarantined", func(t *testing.T) {
+		// Create primary and replica DBs
+		primaryMockDB, primaryDB := createTestDB(t, "primary")
+		_, replica1 := createTestDB(t, "replica1")
+		_, replica2 := createTestDB(t, "replica2")
+
+		// Create mock lag tracker and quarantine all replicas
+		tracker := newMockLagTracker()
+		now := time.Now()
+
+		// Quarantine both replicas
+		tracker.lagInfo[replica1.Address()] = &ReplicaLagInfo{
+			Address:       replica1.Address(),
+			LastChecked:   now,
+			TimeLag:       MaxReplicaLagTime * 2,
+			BytesLag:      int64(MaxReplicaLagBytes * 2),
+			Quarantined:   true,
+			QuarantinedAt: now,
+		}
+		tracker.lagInfo[replica2.Address()] = &ReplicaLagInfo{
+			Address:       replica2.Address(),
+			LastChecked:   now,
+			TimeLag:       MaxReplicaLagTime * 2,
+			BytesLag:      int64(MaxReplicaLagBytes * 2),
+			Quarantined:   true,
+			QuarantinedAt: now,
+		}
+
+		// Create load balancer with tracker
+		lb := &DBLoadBalancer{
+			primary:    primaryDB,
+			replicas:   []*DB{replica1, replica2},
+			lagTracker: tracker,
+		}
+
+		// Should fall back to primary when all replicas are quarantined
+		db := lb.Replica(ctx)
+		require.Equal(t, primaryMockDB, db.DB)
+	})
+
+	t.Run("index updates correctly with mixed quarantined replicas", func(t *testing.T) {
+		// Create primary and replica DBs
+		_, primaryDB := createTestDB(t, "primary")
+		replica1MockDB, replica1 := createTestDB(t, "replica1")
+		replica2MockDB, replica2 := createTestDB(t, "replica2") // will be quarantined
+		replica3MockDB, replica3 := createTestDB(t, "replica3")
+
+		// Create mock lag tracker
+		tracker := newMockLagTracker()
+		now := time.Now()
+
+		// Quarantine only the second replica
+		tracker.lagInfo[replica2.Address()] = &ReplicaLagInfo{
+			Address:       replica2.Address(),
+			LastChecked:   now,
+			TimeLag:       MaxReplicaLagTime * 2,
+			BytesLag:      int64(MaxReplicaLagBytes * 2),
+			Quarantined:   true,
+			QuarantinedAt: now,
+		}
+
+		// Create load balancer with tracker
+		lb := &DBLoadBalancer{
+			primary:    primaryDB,
+			replicas:   []*DB{replica1, replica2, replica3},
+			lagTracker: tracker,
+		}
+
+		// First call should return replica1
+		db1 := lb.Replica(ctx)
+		require.Equal(t, replica1MockDB, db1.DB)
+
+		// Second call should skip quarantined replica2 and return replica3
+		db2 := lb.Replica(ctx)
+		require.Equal(t, replica3MockDB, db2.DB)
+
+		// Third call should return replica1 again (round-robin)
+		db3 := lb.Replica(ctx)
+		require.Equal(t, replica1MockDB, db3.DB)
+
+		// The index should update based on total replicas (not just available ones)
+		// Start: index=0, Calls: R1->index=1, R3->index=2, R1->index=0
+		require.Equal(t, 0, lb.replicaIndex, "Index should wrap around to 0")
+
+		// Now reintegrate replica2
+		tracker.lagInfo[replica2.Address()].Quarantined = false
+		tracker.lagInfo[replica2.Address()].QuarantinedAt = time.Time{}
+
+		// Fourth call should return replica1 (index=0)
+		db4 := lb.Replica(ctx)
+		require.Equal(t, replica1MockDB, db4.DB)
+
+		// Fifth call should return replica2 which is now available (index=1)
+		db5 := lb.Replica(ctx)
+		require.Equal(t, replica2MockDB, db5.DB)
+
+		// Sixth call should return replica3 (index=2)
+		db6 := lb.Replica(ctx)
+		require.Equal(t, replica3MockDB, db6.DB)
+	})
 }
 
 func TestDBLoadBalancer_NoReplicas(t *testing.T) {
@@ -1182,6 +1359,159 @@ func TestReplicaLagTracker_Get(t *testing.T) {
 	require.WithinDuration(t, time.Now(), info.LastChecked, 1*time.Second)
 }
 
+// TestReplicaLagTracker_Quarantine tests different lag scenarios to ensure replicas are correctly quarantined and
+// reintegrated based on the quarantine logic.
+func TestReplicaLagTracker_Quarantine(t *testing.T) {
+	ctx := context.Background()
+
+	// Helper function to create a test DB
+	createTestDB := func(t *testing.T, host string) *DB {
+		mockDB, _, err := sqlmock.New()
+		require.NoError(t, err)
+		t.Cleanup(func() { mockDB.Close() })
+
+		return &DB{
+			DB: mockDB,
+			DSN: &DSN{
+				Host: host,
+				Port: 5432,
+			},
+		}
+	}
+
+	t.Run("no quarantine with normal lag values", func(t *testing.T) {
+		tracker := NewReplicaLagTracker()
+		db := createTestDB(t, "replica-normal")
+
+		// Set lag values below both thresholds
+		normalTimeLag := MaxReplicaLagTime / 2
+		normalBytesLag := int64(MaxReplicaLagBytes / 2)
+
+		tracker.set(ctx, db, normalTimeLag, normalBytesLag)
+
+		info := tracker.Get(db.Address())
+		require.NotNil(t, info)
+		require.False(t, info.Quarantined, "Replica shouldn't be quarantined when both lag values are below thresholds")
+		require.Zero(t, info.QuarantinedAt, "QuarantinedAt should be zero")
+	})
+
+	t.Run("no quarantine with only time lag exceeding threshold", func(t *testing.T) {
+		tracker := NewReplicaLagTracker()
+		db := createTestDB(t, "replica-high-time")
+
+		// Set time lag above threshold but bytes lag below
+		highTimeLag := MaxReplicaLagTime * 2
+		normalBytesLag := int64(MaxReplicaLagBytes / 2)
+
+		tracker.set(ctx, db, highTimeLag, normalBytesLag)
+
+		info := tracker.Get(db.Address())
+		require.NotNil(t, info)
+		require.False(t, info.Quarantined, "Replica shouldn't be quarantined when only time lag exceeds threshold")
+		require.Zero(t, info.QuarantinedAt, "QuarantinedAt should be zero")
+	})
+
+	t.Run("no quarantine with only bytes lag exceeding threshold", func(t *testing.T) {
+		tracker := NewReplicaLagTracker()
+		db := createTestDB(t, "replica-high-bytes")
+
+		// Set bytes lag above threshold but time lag below
+		normalTimeLag := MaxReplicaLagTime / 2
+		highBytesLag := int64(MaxReplicaLagBytes * 2)
+
+		tracker.set(ctx, db, normalTimeLag, highBytesLag)
+
+		info := tracker.Get(db.Address())
+		require.NotNil(t, info)
+		require.False(t, info.Quarantined, "Replica shouldn't be quarantined when only bytes lag exceeds threshold")
+		require.Zero(t, info.QuarantinedAt, "QuarantinedAt should be zero")
+	})
+
+	t.Run("quarantine when both lag values exceed thresholds", func(t *testing.T) {
+		tracker := NewReplicaLagTracker()
+		db := createTestDB(t, "replica-high-both")
+
+		// Set both lags above thresholds
+		highTimeLag := MaxReplicaLagTime * 2
+		highBytesLag := int64(MaxReplicaLagBytes * 2)
+
+		tracker.set(ctx, db, highTimeLag, highBytesLag)
+
+		info := tracker.Get(db.Address())
+		require.NotNil(t, info)
+		require.True(t, info.Quarantined, "Replica should be quarantined when both lag values exceed thresholds")
+		require.NotZero(t, info.QuarantinedAt, "QuarantinedAt should be set")
+	})
+
+	t.Run("reintegration when time lag drops below threshold", func(t *testing.T) {
+		tracker := NewReplicaLagTracker()
+		db := createTestDB(t, "replica-reintegrate-time")
+
+		// First quarantine the replica
+		highTimeLag := MaxReplicaLagTime * 2
+		highBytesLag := int64(MaxReplicaLagBytes * 2)
+		tracker.set(ctx, db, highTimeLag, highBytesLag)
+
+		info := tracker.Get(db.Address())
+		require.True(t, info.Quarantined, "Replica should be quarantined initially")
+
+		// Now lower time lag below threshold but keep bytes lag high
+		normalTimeLag := MaxReplicaLagTime / 2
+		tracker.set(ctx, db, normalTimeLag, highBytesLag)
+
+		info = tracker.Get(db.Address())
+		require.NotNil(t, info)
+		require.False(t, info.Quarantined, "Replica should be reintegrated when time lag drops below threshold")
+		require.Zero(t, info.QuarantinedAt, "QuarantinedAt should be reset")
+	})
+
+	t.Run("reintegration when bytes lag drops below threshold", func(t *testing.T) {
+		tracker := NewReplicaLagTracker()
+		db := createTestDB(t, "replica-reintegrate-bytes")
+
+		// First quarantine the replica
+		highTimeLag := MaxReplicaLagTime * 2
+		highBytesLag := int64(MaxReplicaLagBytes * 2)
+		tracker.set(ctx, db, highTimeLag, highBytesLag)
+
+		info := tracker.Get(db.Address())
+		require.True(t, info.Quarantined, "Replica should be quarantined initially")
+
+		// Now lower bytes lag below threshold but keep time lag high
+		normalBytesLag := int64(MaxReplicaLagBytes / 2)
+		tracker.set(ctx, db, highTimeLag, normalBytesLag)
+
+		info = tracker.Get(db.Address())
+		require.NotNil(t, info)
+		require.False(t, info.Quarantined, "Replica should be reintegrated when bytes lag drops below threshold")
+		require.Zero(t, info.QuarantinedAt, "QuarantinedAt should be reset")
+	})
+
+	t.Run("stays quarantined when both lag values remain high", func(t *testing.T) {
+		tracker := NewReplicaLagTracker()
+		db := createTestDB(t, "replica-stay-quarantined")
+
+		// First quarantine the replica
+		highTimeLag := MaxReplicaLagTime * 2
+		highBytesLag := int64(MaxReplicaLagBytes * 2)
+		tracker.set(ctx, db, highTimeLag, highBytesLag)
+
+		info := tracker.Get(db.Address())
+		require.True(t, info.Quarantined, "Replica should be quarantined initially")
+		initialQuarantinedAt := info.QuarantinedAt
+
+		// Update with still high lag values
+		newHighTimeLag := MaxReplicaLagTime * 3 / 2          // 1.5x
+		newHighBytesLag := int64(MaxReplicaLagBytes * 3 / 2) // 1.5x
+		tracker.set(ctx, db, newHighTimeLag, newHighBytesLag)
+
+		info = tracker.Get(db.Address())
+		require.NotNil(t, info)
+		require.True(t, info.Quarantined, "Replica should stay quarantined when both lag values remain high")
+		require.Equal(t, initialQuarantinedAt, info.QuarantinedAt, "QuarantinedAt should not change")
+	})
+}
+
 func TestReplicaLagTracker_Set(t *testing.T) {
 	tracker := NewReplicaLagTracker()
 	ctx := context.Background()
@@ -1546,6 +1876,7 @@ type mockLagTracker struct {
 	checkCalls      map[string]int
 	checkFn         func(ctx context.Context, primaryLSN string, replica *DB) error
 	inputPrimaryLSN string
+	lagInfo         map[string]*ReplicaLagInfo
 }
 
 func newMockLagTracker() *mockLagTracker {
@@ -1554,6 +1885,7 @@ func newMockLagTracker() *mockLagTracker {
 		checkFn: func(_ context.Context, _ string, _ *DB) error {
 			return nil
 		},
+		lagInfo: make(map[string]*ReplicaLagInfo),
 	}
 }
 
@@ -1561,6 +1893,14 @@ func (m *mockLagTracker) Check(ctx context.Context, primaryLSN string, replica *
 	m.inputPrimaryLSN = primaryLSN
 	m.checkCalls[replica.DSN.Host]++
 	return m.checkFn(ctx, primaryLSN, replica)
+}
+
+func (m *mockLagTracker) Get(replicaAddr string) *ReplicaLagInfo {
+	info, exists := m.lagInfo[replicaAddr]
+	if !exists {
+		return nil
+	}
+	return info
 }
 
 func TestDBLoadBalancer_StartLagCheck(t *testing.T) {
