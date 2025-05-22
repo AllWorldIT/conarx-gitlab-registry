@@ -1249,18 +1249,44 @@ func (lb *DBLoadBalancer) Primary() *DB {
 	return lb.primary
 }
 
-// Replica returns a round-robin elected replica database handler. If no replicas are configured, then the primary
-// database handler is returned.
+// Replica returns a round-robin elected replica database handler. If no replicas are configured
+// or all replicas are quarantined, then the primary database handler is returned.
 func (lb *DBLoadBalancer) Replica(ctx context.Context) *DB {
 	lb.replicaMutex.Lock()
 	defer lb.replicaMutex.Unlock()
 
 	if len(lb.replicas) == 0 {
 		lb.logger(ctx).Info("no replicas available, falling back to primary")
+		metrics.PrimaryFallbackNoReplica()
 		return lb.primary
 	}
 
-	replica := lb.replicas[lb.replicaIndex]
+	// Filter out quarantined replicas
+	var availableReplicas []*DB
+	for _, r := range lb.replicas {
+		if lb.lagTracker != nil {
+			info := lb.lagTracker.Get(r.Address())
+			if info != nil && info.Quarantined {
+				continue
+			}
+		}
+		availableReplicas = append(availableReplicas, r)
+	}
+
+	// If all replicas are quarantined, fall back to primary
+	if len(availableReplicas) == 0 {
+		lb.logger(ctx).Info("all replicas are quarantined, falling back to primary")
+		metrics.PrimaryFallbackAllQuarantined()
+		return lb.primary
+	}
+
+	// Select the next available replica using round-robin from the filtered list
+	availableIndex := lb.replicaIndex % len(availableReplicas)
+	replica := availableReplicas[availableIndex]
+
+	// Update the index based on the total number of replicas (not just available ones)
+	// This ensures consistent round-robin behavior even as replicas enter or exit quarantine,
+	// providing a more balanced distribution of load over time
 	lb.replicaIndex = (lb.replicaIndex + 1) % len(lb.replicas)
 
 	return replica
@@ -1344,7 +1370,6 @@ func (lb *DBLoadBalancer) UpToDateReplica(ctx context.Context, r *models.Reposit
 	// the primary database.
 	replica := lb.Replica(ctx)
 	if replica == lb.primary {
-		metrics.PrimaryFallbackNoReplica()
 		return lb.primary
 	}
 	l = l.WithFields(log.Fields{"db_replica_addr": replica.Address()})
@@ -1520,15 +1545,18 @@ func IsInRecovery(ctx context.Context, db *DB) (bool, error) {
 
 // ReplicaLagInfo stores lag information for a replica
 type ReplicaLagInfo struct {
-	Address     string
-	TimeLag     time.Duration
-	BytesLag    int64
-	LastChecked time.Time
+	Address       string
+	TimeLag       time.Duration
+	BytesLag      int64
+	LastChecked   time.Time
+	Quarantined   bool
+	QuarantinedAt time.Time
 }
 
 // LagTracker represents a component that can track database replication lag.
 type LagTracker interface {
 	Check(ctx context.Context, primaryLSN string, replica *DB) error
+	Get(replicaAddr string) *ReplicaLagInfo
 }
 
 // ReplicaLagTracker manages replication lag tracking
@@ -1579,8 +1607,8 @@ func (t *ReplicaLagTracker) Get(replicaAddr string) *ReplicaLagInfo {
 	return &lagInfo
 }
 
-// set updates the replication lag information for a replica
-func (t *ReplicaLagTracker) set(_ context.Context, db *DB, timeLag time.Duration, bytesLag int64) {
+// set updates the replication lag information for a replica and handles quarantine logic
+func (t *ReplicaLagTracker) set(ctx context.Context, db *DB, timeLag time.Duration, bytesLag int64) {
 	t.Lock()
 	defer t.Unlock()
 
@@ -1593,11 +1621,45 @@ func (t *ReplicaLagTracker) set(_ context.Context, db *DB, timeLag time.Duration
 			Address: addr,
 		}
 		t.lagInfo[addr] = info
+
+		// Set initial status for a newly tracked replica as online
+		metrics.ReplicaStatusOnline(addr)
 	}
 
 	info.TimeLag = timeLag
 	info.BytesLag = bytesLag
 	info.LastChecked = now
+
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"db_replica_addr": addr,
+		"lag_time_s":      timeLag.Seconds(),
+		"lag_bytes":       bytesLag,
+	})
+
+	// Check if replica should be quarantined or reintegrated.
+	if timeLag > MaxReplicaLagTime && bytesLag > MaxReplicaLagBytes && !info.Quarantined {
+		// Quarantine when both time and bytes lag exceed their thresholds
+		info.Quarantined = true
+		info.QuarantinedAt = now
+
+		metrics.ReplicaStatusQuarantined(addr)
+		metrics.ReplicaQuarantined()
+
+		// Add threshold values to logs when quarantining
+		l.WithFields(log.Fields{
+			"lag_time_threshold_s": MaxReplicaLagTime.Seconds(),
+			"lag_bytes_threshold":  MaxReplicaLagBytes,
+		}).Warn("replica quarantined due to excessive replication lag")
+	} else if info.Quarantined && (timeLag <= MaxReplicaLagTime || bytesLag <= MaxReplicaLagBytes) {
+		// Reintegrate if either time or bytes lag falls below its threshold
+		info.Quarantined = false
+		info.QuarantinedAt = time.Time{}
+
+		metrics.ReplicaStatusReintegrated(addr)
+		metrics.ReplicaReintegrated()
+
+		l.Info("replica reintegrated after catching up on replication lag")
+	}
 
 	metrics.ReplicaLagBytes(addr, float64(bytesLag))
 	metrics.ReplicaLagSeconds(addr, timeLag.Seconds())
