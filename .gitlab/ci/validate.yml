@@ -66,7 +66,6 @@ commitlint:
 
 codelint:multiarch:
   variables:
-    GOLANGCI_VERSION: '2.1.6'
     BUILDTAGS: "integration,handlers_test,api_gitlab_test,cli_test,online_gc_test,api_conformance_test,toxiproxy"
     GOOS: linux
   parallel:
@@ -77,8 +76,8 @@ codelint:multiarch:
   needs: []
   before_script:
     - apt-get update
-    - wget https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_VERSION}/golangci-lint-${GOLANGCI_VERSION}-linux-amd64.deb
-    - apt-get install -y ./golangci-lint-${GOLANGCI_VERSION}-linux-amd64.deb
+    - wget https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64.deb
+    - apt-get install -y ./golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64.deb
   script:
     - |
       if [ "$GOARCH" = "386" ]; then
@@ -99,8 +98,6 @@ codelint:multiarch:
 
 
 codelint:ui_report:
-  variables:
-    GOLANGCI_LINT_VERSION: 'v2.1.6'
   cache: {}
   image: golangci/golangci-lint:$GOLANGCI_LINT_VERSION
   stage: validate

@@ -35,6 +35,7 @@ variables:
   PG_PREV_VERSION: "15"
   PG_CURR_VERSION: "16"
   PG_NEXT_VERSION: "17"
+  GOLANGCI_LINT_VERSION: "v2.1.6"
 
 stages:
   - validate

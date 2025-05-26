@@ -833,9 +833,9 @@ func (bw *blockWriter) Write(p []byte) (int, error) {
 		// here - i.e. in cases where blob size does not change during the
 		// overwrite by some another process, so these conditions are complete
 		// each other/are orthogonal.
-		appendposFailed := bloberror.HasCode(err, bloberror.AppendPositionConditionNotMet) // nolint:staticcheck
+		appendposFailed := bloberror.HasCode(err, bloberror.AppendPositionConditionNotMet)
 		etagFailed := bloberror.HasCode(err, bloberror.ConditionNotMet)
-		if !(appendposFailed || etagFailed) || !timeoutFromCtx { // nolint: staticcheck
+		if !(appendposFailed || etagFailed) || !timeoutFromCtx {
 			// Error was not caused by an operation timeout, abort!
 			return int(n), fmt.Errorf("appending blob: %w", err) // nolint: gosec // n is always going to be non-negative
 		}
