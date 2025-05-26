@@ -30,6 +30,7 @@ import (
 	"github.com/docker/distribution/version"
 	sloglogrus "github.com/samber/slog-logrus/v2"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/http2"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"
@@ -141,6 +142,21 @@ type baseEmbed struct {
 
 type request func() error
 
+func ShouldRetry(err error) bool {
+	// Context cancelation/expiry is fatal, do not try to retry:
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	// NOTE(prozlach): http2 stream errors are also retryable
+	var streamError http2.StreamError
+	if errors.As(err, &streamError) {
+		return true
+	}
+
+	return storage.ShouldRetry(err)
+}
+
 func retry(req request) error {
 	backoff := time.Second
 	var err error
@@ -150,17 +166,12 @@ func retry(req request) error {
 			return nil
 		}
 
-		// Context cancelation/expiry is fatal, do not try to retry:
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if !ShouldRetry(err) {
 			return err
 		}
 
 		gErr := new(googleapi.Error)
-		if !errors.As(err, &gErr) || (gErr.Code != http.StatusTooManyRequests && gErr.Code < http.StatusInternalServerError) {
-			return err
-		}
-
-		if gErr.Code == http.StatusTooManyRequests {
+		if errors.As(err, &gErr) && gErr.Code == http.StatusTooManyRequests {
 			metrics.StorageRatelimit()
 		}
 
