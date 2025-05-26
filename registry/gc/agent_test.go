@@ -148,7 +148,7 @@ func TestNewAgent(t *testing.T) {
 			require.NoError(t, err)
 			gotLogger, err := log.ToLogrusEntry(got.logger)
 			require.NoError(t, err)
-			require.EqualValues(t, wantLogger.Logger.Level, gotLogger.Logger.Level)
+			require.Equal(t, wantLogger.Logger.Level, gotLogger.Logger.Level)
 			require.Equal(t, wantLogger.Logger.Formatter, gotLogger.Logger.Formatter)
 			require.Equal(t, wantLogger.Logger.Out, gotLogger.Logger.Out)
 		})

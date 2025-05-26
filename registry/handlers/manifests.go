@@ -152,9 +152,10 @@ func (imh *manifestHandler) HandleGetManifest(w http.ResponseWriter, r *http.Req
 		manifestType = ociImageManifestSchema
 	} else if isManifestList {
 		// nolint: revive // max-control-nesting
-		if manifestList.MediaType == manifestlist.MediaTypeManifestList {
+		switch manifestList.MediaType {
+		case manifestlist.MediaTypeManifestList:
 			manifestType = manifestlistSchema
-		} else if manifestList.MediaType == v1.MediaTypeImageIndex || manifestList.MediaType == "" {
+		case v1.MediaTypeImageIndex, "":
 			manifestType = ociImageIndexSchema
 		}
 	}

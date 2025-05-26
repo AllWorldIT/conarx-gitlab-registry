@@ -165,7 +165,7 @@ func TestCatalogEnumerate(t *testing.T) {
 	close(reposChan)
 	<-done
 
-	assert.Equal(t, len(env.expected), len(repos), "expected catalog enumerate doesn't have correct number of values")
+	assert.Len(t, repos, len(env.expected), "expected catalog enumerate doesn't have correct number of values")
 
 	sort.Slice(repos, func(i, j int) bool {
 		return lessPath(repos[i], repos[j])

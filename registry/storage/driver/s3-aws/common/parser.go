@@ -520,10 +520,10 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 			storageClass = storageClassString
 		}
 	} else {
-		switch {
-		case (driverVersion == V1DriverName || driverVersion == V1DriverNameAlt):
+		switch driverVersion {
+		case V1DriverName, V1DriverNameAlt:
 			storageClass = string(s3.StorageClassStandard)
-		case driverVersion == V2DriverName:
+		case V2DriverName:
 			storageClass = string(types.StorageClassStandard)
 		}
 	}
@@ -600,10 +600,10 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 			}
 		}
 	} else {
-		switch {
-		case (driverVersion == V1DriverName || driverVersion == V1DriverNameAlt):
+		switch driverVersion {
+		case V1DriverName, V1DriverNameAlt:
 			objectACL = string(s3.ObjectCannedACLPrivate)
-		case driverVersion == V2DriverName:
+		case V2DriverName:
 			objectACL = string(types.ObjectCannedACLPrivate)
 		}
 	}

@@ -2255,7 +2255,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 			}
 
 			// Ensure there are no extra host type/addr labels beyond the expected ones
-			require.Equal(t, len(tt.expectedLabelAddrTypeMap), len(labelsFound))
+			require.Len(t, labelsFound, len(tt.expectedLabelAddrTypeMap))
 
 			// Cleanup before next test
 			if tt.cleanup != nil {

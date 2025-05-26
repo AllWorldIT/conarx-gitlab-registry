@@ -462,9 +462,9 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 	//
 	written, err := io.CopyBuffer(writer, blobber.GetReader(), make([]byte, 256*1<<20))
 	require.NoError(s.T(), err)
-	require.EqualValues(s.T(), fileSize, written)
+	require.Equal(s.T(), fileSize, written)
 	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
-		require.EqualValues(s.T(), fileSize, writer.Size())
+		require.Equal(s.T(), fileSize, writer.Size())
 	}
 
 	err = writer.Commit()
@@ -494,9 +494,9 @@ func (s *DriverSuite) TestWriteReadSmallStream() {
 
 	written, err := io.CopyBuffer(writer, blobber.GetReader(), make([]byte, 2*1<<20))
 	require.NoError(s.T(), err)
-	require.EqualValues(s.T(), fileSize, written)
+	require.Equal(s.T(), fileSize, written)
 	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
-		require.EqualValues(s.T(), fileSize, writer.Size())
+		require.Equal(s.T(), fileSize, writer.Size())
 	}
 
 	err = writer.Commit()
@@ -738,10 +738,10 @@ func (s *DriverSuite) TestContinueAppendZeroSizeBlob() {
 
 	nnn, err := io.Copy(writer, bytes.NewReader(contentsChunk))
 	require.NoError(s.T(), err)
-	require.EqualValues(s.T(), fileSize, nnn)
+	require.Equal(s.T(), fileSize, nnn)
 	require.NoError(s.T(), writer.Commit())
 	require.NoError(s.T(), writer.Close())
-	require.EqualValues(s.T(), fileSize, writer.Size())
+	require.Equal(s.T(), fileSize, writer.Size())
 
 	received, err := s.StorageDriver.GetContent(s.ctx, filename)
 	require.NoError(s.T(), err)
@@ -792,10 +792,10 @@ func (s *DriverSuite) TestMaxUploadSize() {
 		require.NoError(s.T(), err)
 		nn, err := io.CopyBuffer(writer, bigChunk, buf)
 		require.NoError(s.T(), err)
-		require.EqualValues(s.T(), bigChunkSize, nn)
+		require.Equal(s.T(), bigChunkSize, nn)
 		totalWritten += nn
 		require.NoError(s.T(), writer.Close())
-		require.EqualValues(s.T(), totalWritten, writer.Size())
+		require.Equal(s.T(), totalWritten, writer.Size())
 
 		if !doAppend {
 			doAppend = true
@@ -809,14 +809,14 @@ func (s *DriverSuite) TestMaxUploadSize() {
 		require.NoError(s.T(), err)
 		nn, err = io.Copy(writer, smallChunk)
 		require.NoError(s.T(), err)
-		require.EqualValues(s.T(), smallChunkSize, nn)
+		require.Equal(s.T(), smallChunkSize, nn)
 		totalWritten += nn
 		if totalWritten >= blobSize {
 			// This is the last write, commit the upload:
 			require.NoError(s.T(), writer.Commit())
 		}
 		require.NoError(s.T(), writer.Close())
-		require.EqualValues(s.T(), totalWritten, writer.Size())
+		require.Equal(s.T(), totalWritten, writer.Size())
 
 		if totalWritten >= blobSize {
 			break
@@ -875,7 +875,7 @@ func (s *DriverSuite) TestMaxUploadSize() {
 
 		if err != nil {
 			if err == io.EOF {
-				require.EqualValues(s.T(), currentOffset, totalWritten, "the object stored in the backend is shorter than expected")
+				require.Equal(s.T(), currentOffset, totalWritten, "the object stored in the backend is shorter than expected")
 			} else {
 				require.NoError(s.T(), err, "reading data back failed")
 			}
@@ -2278,11 +2278,8 @@ func (s *DriverSuite) TestWalk() {
 	for i := 0; i < numWantedFiles; i++ {
 		// Gather unique directories from the full path, excluding the root directory.
 		p := path.Dir(wantedFiles[i])
-		for {
-			// Guard against non-terminating loops: path.Dir returns "." if the path is empty.
-			if p == rootDirectory || p == "." {
-				break
-			}
+		// Guard against non-terminating loops: path.Dir returns "." if the path is empty.
+		for p != rootDirectory && p != "." {
 			wantedDirectoriesSet[p] = struct{}{}
 			p = path.Dir(p)
 		}
@@ -3219,12 +3216,12 @@ func (s *DriverSuite) testFileStreams(t *testing.T, size int64) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	if !assert.EqualValues(t, size, nn) {
+	if !assert.Equal(t, size, nn) {
 		return
 	}
 
 	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
-		if !assert.EqualValues(t, size, writer.Size()) {
+		if !assert.Equal(t, size, writer.Size()) {
 			return
 		}
 	}

@@ -230,7 +230,7 @@ func TestGCSDriverCommit(t *testing.T) {
 
 	readContents, err := driver.GetContent(ctx, filename)
 	require.NoError(t, err, "driver.GetContent: unexpected error")
-	require.Equal(t, len(contents), len(readContents), "length mismatch for driver.GetContent(..)")
+	require.Len(t, readContents, len(contents), "length mismatch for driver.GetContent(..)")
 
 	fileInfo, err := driver.Stat(ctx, filename)
 	require.NoError(t, err, "driver.Stat: unexpected error")
@@ -490,7 +490,7 @@ func TestGCSDriverURLFor_AdditionalQueryParams(t *testing.T) {
 	require.Equal(t, fmt.Sprintf("%v", opts["namespace_id"]), u.Query().Get(customGitlabGoogleNamespaceIdParam))
 	require.Equal(t, fmt.Sprintf("%v", opts["project_id"]), u.Query().Get(customGitlabGoogleProjectIdParam))
 	require.Equal(t, opts["auth_type"], u.Query().Get(customGitlabGoogleAuthTypeParam))
-	require.EqualValues(t, fmt.Sprintf("%v", opts["size_bytes"]), u.Query().Get(customGitlabGoogleObjectSizeParam))
+	require.Equal(t, fmt.Sprintf("%v", opts["size_bytes"]), u.Query().Get(customGitlabGoogleObjectSizeParam))
 }
 
 func TestGCSDriverCustomParams(t *testing.T) {
