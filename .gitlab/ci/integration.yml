@@ -68,7 +68,7 @@ s3:minio:
       for i in `env | grep -E 'S3|AWS' | cut -d\= -f1`; do unset $i; done;
       export S3_BUCKET="test-bucket"
 
-      ./mc config host add s3v4 $REGION_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api S3v4
+      ./mc alias set s3v4 $REGION_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api=S3v4
       ./mc mb s3v4/$S3_BUCKET
   script:
     # NOTE(prozlach): Project and group credentials take precedence over job
