@@ -99,7 +99,7 @@ codelint:multiarch:
 
 codelint:ui_report:
   cache: {}
-  image: golangci/golangci-lint:$GOLANGCI_LINT_VERSION
+  image: golangci/golangci-lint:v${GOLANGCI_LINT_VERSION}
   stage: validate
   needs: []
   before_script:
