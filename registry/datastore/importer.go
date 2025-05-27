@@ -1248,7 +1248,7 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 			l.WithError(err).Error("pre importing tagged manifests")
 			// if the storage driver failed to find a repository path (usually due to missing `_manifests/revisions`
 			// or `_manifests/tags` folders) continue to the next one, otherwise stop as the error is unknown.
-			if !(errors.As(err, &driver.PathNotFoundError{}) || errors.As(err, &distribution.ErrRepositoryUnknown{})) {
+			if !errors.As(err, &driver.PathNotFoundError{}) && !errors.As(err, &distribution.ErrRepositoryUnknown{}) {
 				return fmt.Errorf("pre importing tagged manifests: %w", err)
 			}
 			return nil
@@ -1381,7 +1381,7 @@ func (imp *Importer) importAllRepositoriesImpl(ctx context.Context) (err error) 
 			l.WithError(err).Error("error importing repository")
 			// if the storage driver failed to find a repository path (usually due to missing `_manifests/revisions`
 			// or `_manifests/tags` folders) continue to the next one, otherwise stop as the error is unknown.
-			if !(errors.As(err, &driver.PathNotFoundError{}) || errors.As(err, &distribution.ErrRepositoryUnknown{})) {
+			if !errors.As(err, &driver.PathNotFoundError{}) && !errors.As(err, &distribution.ErrRepositoryUnknown{}) {
 				return err
 			}
 			return nil

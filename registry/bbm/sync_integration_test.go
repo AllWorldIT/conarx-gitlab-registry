@@ -518,7 +518,7 @@ func (s *BackgroundMigrationTestSuite) requireBackgroundMigrations(expected map[
 		err := rowBM.Scan(&actualBM.ID, &actualBM.Name, &actualBM.StartID, &actualBM.EndID, &actualBM.BatchSize, &actualBM.Status, &actualBM.JobName, &actualBM.TargetTable, &actualBM.TargetColumn, &actualBM.ErrorCode)
 		s.Require().NoError(err)
 
-		require.EqualValues(s.T(), &expectedBM, actualBM)
+		require.Equal(s.T(), &expectedBM, actualBM)
 
 		// Handle nil map
 		if expectedJobs == nil {
@@ -588,7 +588,7 @@ func (s *BackgroundMigrationTestSuite) requireBBMFinally(bbmName string, expecte
 		s.Require().NoError(err)
 	}
 
-	require.EqualValues(s.T(), expectedBBM, bm)
+	require.Equal(s.T(), expectedBBM, bm)
 }
 
 // generateBBMFixtures creates schema migration records for background migration entries.

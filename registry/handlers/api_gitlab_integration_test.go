@@ -941,7 +941,7 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 			err = dec.Decode(&body)
 			require.NoError(t, err)
 
-			require.Equal(t, len(test.expectedOrderedTags), len(body))
+			require.Len(t, body, len(test.expectedOrderedTags))
 
 			// the updated tags will contain a different digest and setting this up is not practical
 			// we can just test for the names in order and make sure that the published_at date is what

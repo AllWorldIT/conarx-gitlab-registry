@@ -2080,7 +2080,7 @@ func TestRepositoryBlobService_Stat(t *testing.T) {
 
 	desc, err := rbs.Stat(suite.ctx, dgst)
 	require.NoError(t, err)
-	require.EqualValues(t, distribution.Descriptor{Digest: dgst, Size: int64(108), MediaType: "application/vnd.docker.image.rootfs.diff.tar.gzip"}, desc)
+	require.Equal(t, distribution.Descriptor{Digest: dgst, Size: int64(108), MediaType: "application/vnd.docker.image.rootfs.diff.tar.gzip"}, desc)
 }
 
 func TestRepositoryBlobService_Stat_NotFound(t *testing.T) {

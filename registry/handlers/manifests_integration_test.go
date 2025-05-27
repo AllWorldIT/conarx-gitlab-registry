@@ -72,9 +72,9 @@ func TestGetManifest(t *testing.T) {
 	require.NotNil(t, manifestsGetter)
 	manifest, digest, err := manifestsGetter.GetByTag(env.ctx, tagName)
 	require.NoError(t, err)
-	require.EqualValues(t, g_digest.FromString(testutil.SampleManifestJSON), digest)
+	require.Equal(t, g_digest.FromString(testutil.SampleManifestJSON), digest)
 	mediaType, payload, err := manifest.Payload()
 	require.NoError(t, err)
-	require.EqualValues(t, schema2.MediaTypeManifest, mediaType)
+	require.Equal(t, schema2.MediaTypeManifest, mediaType)
 	require.JSONEq(t, testutil.SampleManifestJSON, string(payload))
 }

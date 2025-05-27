@@ -992,7 +992,7 @@ func TestParseLogLevelParam(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
 			resultV1 := ParseLogLevelParamV1(logger, tc.param)
-			assert.EqualValues(tt, tc.expectedV1, resultV1)
+			assert.Equal(tt, tc.expectedV1, resultV1)
 
 			if tc.expectWarningV1 {
 				assert.Contains(tt, logBuffer.String(), "has been passed to S3 driver v1. Ignoring.")
@@ -1000,7 +1000,7 @@ func TestParseLogLevelParam(t *testing.T) {
 			logBuffer.Reset()
 
 			resultV2 := ParseLogLevelParamV2(logger, tc.param)
-			assert.EqualValues(tt, tc.expectedV2, resultV2)
+			assert.Equal(tt, tc.expectedV2, resultV2)
 
 			if tc.expectWarningV2 {
 				assert.Contains(tt, logBuffer.String(), "has been passed to S3 driver v2. Ignoring.")

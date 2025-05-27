@@ -182,7 +182,7 @@ func checkRenamed(t *testing.T, action string, rename Rename, event *Event) {
 	require.Equal(t, event.Request, request)
 	require.Equal(t, event.Actor, actor)
 	require.Equal(t, event.Target.Repository, repo)
-	require.EqualValues(t, event.Target.Rename, &rename)
+	require.Equal(t, event.Target.Rename, &rename)
 }
 
 func checkCommonManifest(t *testing.T, action string, event *Event) {
@@ -195,7 +195,7 @@ func checkCommonManifest(t *testing.T, action string, event *Event) {
 	require.NoError(t, err, "error building expected url")
 	require.Equal(t, event.Target.URL, u, "incorrect url passed")
 
-	require.Equal(t, len(event.Target.References), len(layers), "unexpected number of references")
+	require.Len(t, layers, len(event.Target.References), "unexpected number of references")
 	for i, targetReference := range event.Target.References {
 		require.Equal(t, targetReference.Digest, layers[i].BlobSum, "unexpected reference")
 	}

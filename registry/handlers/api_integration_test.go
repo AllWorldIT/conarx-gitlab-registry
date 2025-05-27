@@ -974,7 +974,7 @@ func TestManifestAPI_BuildkitIndex(t *testing.T) {
 	err = dec.Decode(&respIdx)
 	require.NoError(t, err)
 
-	require.EqualValues(t, didx, respIdx)
+	require.Equal(t, didx, respIdx)
 
 	// Stat each one of its references
 	for _, d := range didx.References() {
@@ -1028,7 +1028,7 @@ func TestManifestAPI_OCIIndexNoMediaType(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&fetchedIndex)
 	require.NoError(t, err)
 
-	require.EqualValues(t, sentIndex, fetchedIndex)
+	require.Equal(t, sentIndex, fetchedIndex)
 	require.Empty(t, fetchedIndex.MediaType)
 }
 
@@ -1081,7 +1081,7 @@ func TestManifestAPI_ManifestListWithLayerReferences(t *testing.T) {
 
 	_, p, counts := checkBodyHasErrorCodes(t, "manifest list with layer blobs", resp, v2.ErrorCodeManifestBlobUnknown)
 	expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestBlobUnknown: 2}
-	require.EqualValuesf(t, expectedCounts, counts, "response body: %s", p)
+	require.Equal(t, expectedCounts, counts, "response body: %s", p)
 }
 
 func TestManifestAPI_Get_Schema1(t *testing.T) {
