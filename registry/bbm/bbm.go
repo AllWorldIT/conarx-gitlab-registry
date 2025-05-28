@@ -76,11 +76,31 @@ func AllWork() []Work {
 	// nolint: revive // enforce-slice-style
 	return []Work{
 		// {Name: "ExampleNameThatMatchesTheJobSignatureNameColumn", Do: ExampleDoFunction}
+		{Name: "copyManifestMediaTypeIDToNewBigIntColumn", Do: copyManifestMediaTypeIDToNewBigIntColumn},
 	}
+}
+
+func copyManifestMediaTypeIDToNewBigIntColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, _ int) error {
+	fmt.Printf(`Copying from column manifests.media_type_id to manifests.media_type_id_convert_to_bigint,  Starting from %s :%d to id:%d`, paginationColumn, paginationAfter, paginationBefore)
+	q := fmt.Sprintf(`UPDATE %s SET media_type_id_convert_to_bigint = media_type_id WHERE %s >= $1 AND %s <= $2`, paginationTable, paginationColumn, paginationColumn)
+	_, err := db.ExecContext(ctx, q, paginationAfter, paginationBefore)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // RegisterWork registers all known work functions to the Background Migration worker.
 func RegisterWork(work []Work, opts ...WorkerOption) (*Worker, error) {
+	workMap, err := makeWorkMap(work)
+	if err != nil {
+		return nil, err
+	}
+	return NewWorker(workMap, opts...), nil
+}
+
+func makeWorkMap(work []Work) (map[string]Work, error) {
+	var err error
 	workMap := make(map[string]Work, 0)
 	for _, val := range work {
 		if _, found := workMap[val.Name]; found {
@@ -88,7 +108,7 @@ func RegisterWork(work []Work, opts ...WorkerOption) (*Worker, error) {
 		}
 		workMap[val.Name] = val
 	}
-	return NewWorker(workMap, opts...), nil
+	return workMap, err
 }
 
 // Worker is the Background Migration agent of execution. It listens for pending Background Migration jobs and tries to execute the corresponding work function.
