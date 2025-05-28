@@ -2,6 +2,8 @@ package bbm
 
 import (
 	"context"
+	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -637,6 +639,10 @@ func TestSyncWorker_Run(t *testing.T) {
 func TestNewSyncWorkerOpts(t *testing.T) {
 	wh := bbm_mocks.NewMockHandler(gomock.NewController(t))
 	wm := map[string]Work{"test": {Name: "test", Do: func(context.Context, datastore.Handler, string, string, int, int, int) error { return nil }}}
+
+	defaultWorkMap, err := makeWorkMap(AllWork())
+	require.NoError(t, err)
+
 	tests := []struct {
 		name           string
 		opts           []SyncWorkerOption
@@ -664,7 +670,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncLogger(log.GetLogger().WithFields(log.Fields{"test": "value"}))},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            make(map[string]Work, 0),
+					work:            defaultWorkMap,
 					logger:          log.GetLogger().WithFields(log.Fields{"test": "value", componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -681,7 +687,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncMaxJobAttempt(5)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            make(map[string]Work, 0),
+					work:            defaultWorkMap,
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   5,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -698,7 +704,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncMaxJobPerBatch(10)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            make(map[string]Work, 0),
+					work:            defaultWorkMap,
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  10,
@@ -715,7 +721,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncMaxBatchTimeout(2 * time.Minute)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            make(map[string]Work, 0),
+					work:            defaultWorkMap,
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -732,7 +738,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithSyncHandler(wh)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            make(map[string]Work, 0),
+					work:            defaultWorkMap,
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -749,7 +755,7 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 			opts: []SyncWorkerOption{WithJobTimeout(2 * time.Minute)},
 			expectedWorker: func() *SyncWorker {
 				w := &SyncWorker{
-					work:            make(map[string]Work, 0),
+					work:            defaultWorkMap,
 					logger:          log.GetLogger().WithFields(log.Fields{componentKey: syncWorkerName}),
 					maxJobAttempt:   defaultMaxJobAttempt,
 					maxJobPerBatch:  defaultMaxJobPerBatch,
@@ -765,8 +771,34 @@ func TestNewSyncWorkerOpts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			worker := NewSyncWorker(nil, tt.opts...)
-			require.Equal(t, tt.expectedWorker, worker)
+			actual := NewSyncWorker(nil, tt.opts...)
+
+			for key, expectedWork := range tt.expectedWorker.work {
+				actualWork, ok := actual.work[key]
+				require.True(t, ok, "actual work does not contain key: %s", key)
+				require.Equal(t, expectedWork.Name, actualWork.Name, "work function names do not match for key: %s", key)
+				requireSameFunction(t, expectedWork.Do, actualWork.Do)
+			}
+			require.Equal(t, tt.expectedWorker.logger, actual.logger)
+			require.Equal(t, tt.expectedWorker.db, actual.db)
+			require.Equal(t, tt.expectedWorker.maxJobAttempt, actual.maxJobAttempt)
+			require.Equal(t, tt.expectedWorker.maxJobPerBatch, actual.maxJobPerBatch)
+			require.Equal(t, tt.expectedWorker.maxBatchTimeout, actual.maxBatchTimeout)
+			require.Equal(t, tt.expectedWorker.lockWaitTimeout, actual.lockWaitTimeout)
+			require.Equal(t, tt.expectedWorker.jobTimeout, actual.jobTimeout)
+			// the best we can do here is compare the type and not the underlying object since the underlying object
+			// of the interface contains function pointers and the pointer values are not comparable with testify alone.
+			require.IsType(t, tt.expectedWorker.wh, actual.wh)
+			require.Equal(t, tt.expectedWorker.lastRunCompletedBBMs, actual.lastRunCompletedBBMs)
 		})
 	}
+}
+
+// requireSameFunction asserts that the two function values point to the same underlying function
+// by comparing their fully qualified runtime names. This does not compare parameter or return types,
+// and will fail for different but structurally identical functions.
+func requireSameFunction(t *testing.T, func1, func2 any) {
+	funcName1 := runtime.FuncForPC(reflect.ValueOf(func1).Pointer()).Name()
+	funcName2 := runtime.FuncForPC(reflect.ValueOf(func2).Pointer()).Name()
+	require.Equal(t, funcName1, funcName2)
 }

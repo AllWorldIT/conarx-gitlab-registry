@@ -202,6 +202,16 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.set_media_type_id_convert_to_bigint ()
+    RETURNS TRIGGER
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.media_type_id_convert_to_bigint := NEW.media_type_id;
+    RETURN NEW;
+END;
+$$;
+
 CREATE TABLE public.blobs (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -3083,7 +3093,8 @@ CREATE TABLE public.manifests (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 )
 PARTITION BY HASH (top_level_namespace_id);
 
@@ -3103,7 +3114,8 @@ CREATE TABLE partitions.manifests_p_0 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_1 (
@@ -3122,7 +3134,8 @@ CREATE TABLE partitions.manifests_p_1 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_10 (
@@ -3141,7 +3154,8 @@ CREATE TABLE partitions.manifests_p_10 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_11 (
@@ -3160,7 +3174,8 @@ CREATE TABLE partitions.manifests_p_11 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_12 (
@@ -3179,7 +3194,8 @@ CREATE TABLE partitions.manifests_p_12 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_13 (
@@ -3198,7 +3214,8 @@ CREATE TABLE partitions.manifests_p_13 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_14 (
@@ -3217,7 +3234,8 @@ CREATE TABLE partitions.manifests_p_14 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_15 (
@@ -3236,7 +3254,8 @@ CREATE TABLE partitions.manifests_p_15 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_16 (
@@ -3255,7 +3274,8 @@ CREATE TABLE partitions.manifests_p_16 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_17 (
@@ -3274,7 +3294,8 @@ CREATE TABLE partitions.manifests_p_17 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_18 (
@@ -3293,7 +3314,8 @@ CREATE TABLE partitions.manifests_p_18 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_19 (
@@ -3312,7 +3334,8 @@ CREATE TABLE partitions.manifests_p_19 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_2 (
@@ -3331,7 +3354,8 @@ CREATE TABLE partitions.manifests_p_2 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_20 (
@@ -3350,7 +3374,8 @@ CREATE TABLE partitions.manifests_p_20 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_21 (
@@ -3369,7 +3394,8 @@ CREATE TABLE partitions.manifests_p_21 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_22 (
@@ -3388,7 +3414,8 @@ CREATE TABLE partitions.manifests_p_22 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_23 (
@@ -3407,7 +3434,8 @@ CREATE TABLE partitions.manifests_p_23 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_24 (
@@ -3426,7 +3454,8 @@ CREATE TABLE partitions.manifests_p_24 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_25 (
@@ -3445,7 +3474,8 @@ CREATE TABLE partitions.manifests_p_25 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_26 (
@@ -3464,7 +3494,8 @@ CREATE TABLE partitions.manifests_p_26 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_27 (
@@ -3483,7 +3514,8 @@ CREATE TABLE partitions.manifests_p_27 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_28 (
@@ -3502,7 +3534,8 @@ CREATE TABLE partitions.manifests_p_28 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_29 (
@@ -3521,7 +3554,8 @@ CREATE TABLE partitions.manifests_p_29 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_3 (
@@ -3540,7 +3574,8 @@ CREATE TABLE partitions.manifests_p_3 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_30 (
@@ -3559,7 +3594,8 @@ CREATE TABLE partitions.manifests_p_30 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_31 (
@@ -3578,7 +3614,8 @@ CREATE TABLE partitions.manifests_p_31 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_32 (
@@ -3597,7 +3634,8 @@ CREATE TABLE partitions.manifests_p_32 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_33 (
@@ -3616,7 +3654,8 @@ CREATE TABLE partitions.manifests_p_33 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_34 (
@@ -3635,7 +3674,8 @@ CREATE TABLE partitions.manifests_p_34 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_35 (
@@ -3654,7 +3694,8 @@ CREATE TABLE partitions.manifests_p_35 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_36 (
@@ -3673,7 +3714,8 @@ CREATE TABLE partitions.manifests_p_36 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_37 (
@@ -3692,7 +3734,8 @@ CREATE TABLE partitions.manifests_p_37 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_38 (
@@ -3711,7 +3754,8 @@ CREATE TABLE partitions.manifests_p_38 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_39 (
@@ -3730,7 +3774,8 @@ CREATE TABLE partitions.manifests_p_39 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_4 (
@@ -3749,7 +3794,8 @@ CREATE TABLE partitions.manifests_p_4 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_40 (
@@ -3768,7 +3814,8 @@ CREATE TABLE partitions.manifests_p_40 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_41 (
@@ -3787,7 +3834,8 @@ CREATE TABLE partitions.manifests_p_41 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_42 (
@@ -3806,7 +3854,8 @@ CREATE TABLE partitions.manifests_p_42 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_43 (
@@ -3825,7 +3874,8 @@ CREATE TABLE partitions.manifests_p_43 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_44 (
@@ -3844,7 +3894,8 @@ CREATE TABLE partitions.manifests_p_44 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_45 (
@@ -3863,7 +3914,8 @@ CREATE TABLE partitions.manifests_p_45 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_46 (
@@ -3882,7 +3934,8 @@ CREATE TABLE partitions.manifests_p_46 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_47 (
@@ -3901,7 +3954,8 @@ CREATE TABLE partitions.manifests_p_47 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_48 (
@@ -3920,7 +3974,8 @@ CREATE TABLE partitions.manifests_p_48 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_49 (
@@ -3939,7 +3994,8 @@ CREATE TABLE partitions.manifests_p_49 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_5 (
@@ -3958,7 +4014,8 @@ CREATE TABLE partitions.manifests_p_5 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_50 (
@@ -3977,7 +4034,8 @@ CREATE TABLE partitions.manifests_p_50 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_51 (
@@ -3996,7 +4054,8 @@ CREATE TABLE partitions.manifests_p_51 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_52 (
@@ -4015,7 +4074,8 @@ CREATE TABLE partitions.manifests_p_52 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_53 (
@@ -4034,7 +4094,8 @@ CREATE TABLE partitions.manifests_p_53 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_54 (
@@ -4053,7 +4114,8 @@ CREATE TABLE partitions.manifests_p_54 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_55 (
@@ -4072,7 +4134,8 @@ CREATE TABLE partitions.manifests_p_55 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_56 (
@@ -4091,7 +4154,8 @@ CREATE TABLE partitions.manifests_p_56 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_57 (
@@ -4110,7 +4174,8 @@ CREATE TABLE partitions.manifests_p_57 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_58 (
@@ -4129,7 +4194,8 @@ CREATE TABLE partitions.manifests_p_58 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_59 (
@@ -4148,7 +4214,8 @@ CREATE TABLE partitions.manifests_p_59 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_6 (
@@ -4167,7 +4234,8 @@ CREATE TABLE partitions.manifests_p_6 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_60 (
@@ -4186,7 +4254,8 @@ CREATE TABLE partitions.manifests_p_60 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_61 (
@@ -4205,7 +4274,8 @@ CREATE TABLE partitions.manifests_p_61 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_62 (
@@ -4224,7 +4294,8 @@ CREATE TABLE partitions.manifests_p_62 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_63 (
@@ -4243,7 +4314,8 @@ CREATE TABLE partitions.manifests_p_63 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_7 (
@@ -4262,7 +4334,8 @@ CREATE TABLE partitions.manifests_p_7 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_8 (
@@ -4281,7 +4354,8 @@ CREATE TABLE partitions.manifests_p_8 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.manifests_p_9 (
@@ -4300,7 +4374,8 @@ CREATE TABLE partitions.manifests_p_9 (
     total_size bigint NOT NULL,
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
-    artifact_media_type_id bigint
+    artifact_media_type_id bigint,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE public.repository_blobs (
@@ -16496,6 +16571,11 @@ CREATE TRIGGER gc_track_tmp_blobs_manifests_trigger
     AFTER INSERT ON public.manifests
     FOR EACH ROW
     EXECUTE FUNCTION public.gc_track_tmp_blobs_manifests ();
+
+CREATE TRIGGER set_media_type_id_convert_to_bigint
+    BEFORE INSERT OR UPDATE ON public.manifests
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_media_type_id_convert_to_bigint ();
 
 ALTER TABLE ONLY public.batched_background_migration_jobs
     ADD CONSTRAINT fk_batched_background_migration_jobs_bbm_id_bbms FOREIGN KEY (batched_background_migration_id) REFERENCES public.batched_background_migrations (id) ON DELETE CASCADE;
