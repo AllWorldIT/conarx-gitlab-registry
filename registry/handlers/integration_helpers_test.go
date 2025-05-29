@@ -1726,7 +1726,7 @@ func generateAuthToken(t *testing.T, user string, access []*token.ResourceAction
 		Issuer:     issuer.Issuer,
 		Subject:    user,
 		AuthType:   authUserType,
-		Audience:   issuer.Service,
+		Audience:   token.AudienceList{issuer.Service},
 		Expiration: issuer.ExpireFunc(),
 		NotBefore:  time.Now().Unix(),
 		IssuedAt:   time.Now().Unix(),
