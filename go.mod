@@ -35,7 +35,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/lib/pq v1.10.9
-	github.com/olekukonko/tablewriter v1.0.6
+	github.com/olekukonko/tablewriter v1.0.7
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/prometheus/client_golang v1.22.0
