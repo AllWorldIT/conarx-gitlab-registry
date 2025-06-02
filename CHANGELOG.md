@@ -1,3 +1,33 @@
+## [4.23.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.22.0-gitlab...v4.23.0-gitlab) (2025-06-02)
+
+
+### ✨ Features ✨
+
+* **auth/token:** support Audience array in JWT ([57bd91c](https://gitlab.com/gitlab-org/container-registry/commit/57bd91c7ea10bd0b694fa60150a753f060d41240))
+* **bbm:** add media_type_id_convert_to_bigint manifest table migration ([ca8b67a](https://gitlab.com/gitlab-org/container-registry/commit/ca8b67abebb45d19999a1ab2d359b12e258e3a64))
+* **datastore:** quarantine replicas exceeding lag thresholds ([e2258cb](https://gitlab.com/gitlab-org/container-registry/commit/e2258cb060ba8dbf58a9f64f96f5009e450a4883))
+
+
+### 🐛 Bug Fixes 🐛
+
+* add graceful handling of backend errors in gcs storage driver Reader() ([be0f90b](https://gitlab.com/gitlab-org/container-registry/commit/be0f90bc2582bf209123f2bbae804c272b4835b2))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/compute/metadata to v0.7.0 ([f14e788](https://gitlab.com/gitlab-org/container-registry/commit/f14e7889b1d19914f795d95c598791f64fa051f8))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.79.4 ([88750b0](https://gitlab.com/gitlab-org/container-registry/commit/88750b0054a18d5925cc20ee503d670cf2282d3d))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.80.0 ([3468fd4](https://gitlab.com/gitlab-org/container-registry/commit/3468fd4663cb040a92f09302887b7489647e4b54))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azidentity to v1.10.0 ([260f9c1](https://gitlab.com/gitlab-org/container-registry/commit/260f9c1bfe25dd9cc70f58273977b4d27091b174))
+* **deps:** update module github.com/getsentry/sentry-go to v0.33.0 ([ea0db39](https://gitlab.com/gitlab-org/container-registry/commit/ea0db39b4d2f3265f503ff97d2ed7541ad7c65a0))
+* **deps:** update module github.com/golang-jwt/jwt/v4 to v4.5.2 ([86875fa](https://gitlab.com/gitlab-org/container-registry/commit/86875fa248bfe18d0e92e250fe021bad0067bd09))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.7.5 ([2ae2821](https://gitlab.com/gitlab-org/container-registry/commit/2ae2821be93fcee5803f9d4eba85b5c215f4520f))
+* **deps:** update module github.com/olekukonko/tablewriter to v1 ([cee9480](https://gitlab.com/gitlab-org/container-registry/commit/cee948058a54441f5dec16a655b00e3f1d3f4f7b))
+* **deps:** update module github.com/olekukonko/tablewriter to v1.0.7 ([dc29bf3](https://gitlab.com/gitlab-org/container-registry/commit/dc29bf3d3cd30e58ece9d7f69529fa22a71b662f))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.9.0 ([4758610](https://gitlab.com/gitlab-org/container-registry/commit/4758610fc5888950ad23f4e5089c62f3b43689f7))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.129.0 ([4e5e3f7](https://gitlab.com/gitlab-org/container-registry/commit/4e5e3f7579cd0d909a14740d8ed02e622103e247))
+* **deps:** update module google.golang.org/api to v0.234.0 ([f48150d](https://gitlab.com/gitlab-org/container-registry/commit/f48150db6314f43e4a7557327d33e9d4c16c20bf))
+
 ## [4.22.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.21.0-gitlab...v4.22.0-gitlab) (2025-05-19)
 
 ### ✨ Features ✨
