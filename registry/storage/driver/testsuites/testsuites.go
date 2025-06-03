@@ -752,6 +752,9 @@ func (s *DriverSuite) TestMaxUploadSize() {
 	if s.StorageDriver.Name() == "inmemory" {
 		s.T().Skip("In-memory driver is known to have OOM issues with large uploads.")
 	}
+	if s.StorageDriver.Name() == "filesystem" {
+		s.T().Skip("filesystem driver tests are running on tmpfs and it does not do chunking so this test would not bring much value")
+	}
 	if slices.Contains([]string{s3_common.V1DriverName, s3_common.V1DriverNameAlt}, s.StorageDriver.Name()) {
 		s.T().Skip("S3 v1 driver has chunk size limitations which aren't planned to be fixed")
 	}
