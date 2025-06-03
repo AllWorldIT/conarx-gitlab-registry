@@ -2,7 +2,7 @@
 # These are the default approvers.  Additional rules will overwrite
 # this rule, not append to it.
 
-/ @gitlab-org/maintainers/container-registry @vespian_gl
+/ @gitlab-org/maintainers/container-registry
 
 # First entry if not a group, is a primary, all subsequent entries are
 # secondaries, as per
