@@ -429,11 +429,18 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 }
 
 func (d *driver) statHead(ctx context.Context, path string) (*storagedriver.FileInfoFields, error) {
+	// NOTE(prozlach): This is to cover for the cases when the rootDirectory of
+	// the driver is either "" or "/".
+	key := d.s3Path(path)
+	if key == "" {
+		key = "/"
+	}
+
 	resp, err := d.S3.HeadObject(
 		ctx,
 		&s3.HeadObjectInput{
 			Bucket: ptr.String(d.Bucket),
-			Key:    ptr.String(d.s3Path(path)),
+			Key:    &key,
 		},
 	)
 	if err != nil {
