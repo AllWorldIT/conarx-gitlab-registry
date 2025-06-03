@@ -27,6 +27,15 @@ filesystem:
   variables:
     <<: *storage-driver-variables
     PACKAGE: 'github.com/docker/distribution/registry/storage/driver/filesystem'
+    TMPDIR: /mnt/tmpfs
+  tags:
+    # NOTE(prozlach): run on gitlab private runners where we can mount tmpfs.
+    - gitlab-org-docker
+  script:
+    - mkdir -p /mnt/tmpfs
+    - mount -t tmpfs -o size=3G tmpfs /mnt/tmpfs
+    - df -h
+    - $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
 
 inmemory:
   <<: *storage-driver-test
