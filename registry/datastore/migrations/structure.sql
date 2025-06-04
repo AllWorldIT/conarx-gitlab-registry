@@ -202,6 +202,16 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.set_media_type_id_convert_to_bigint ()
+    RETURNS TRIGGER
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.media_type_id_convert_to_bigint := NEW.media_type_id;
+    RETURN NEW;
+END;
+$$;
+
 CREATE TABLE public.blobs (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -16819,6 +16829,11 @@ CREATE TRIGGER gc_track_tmp_blobs_manifests_trigger
     AFTER INSERT ON public.manifests
     FOR EACH ROW
     EXECUTE FUNCTION public.gc_track_tmp_blobs_manifests ();
+
+CREATE TRIGGER set_media_type_id_convert_to_bigint
+    BEFORE INSERT OR UPDATE ON public.manifests
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_media_type_id_convert_to_bigint ();
 
 ALTER TABLE ONLY public.batched_background_migration_jobs
     ADD CONSTRAINT fk_batched_background_migration_jobs_bbm_id_bbms FOREIGN KEY (batched_background_migration_id) REFERENCES public.batched_background_migrations (id) ON DELETE CASCADE;
