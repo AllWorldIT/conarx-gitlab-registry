@@ -219,6 +219,22 @@ database:schema-migrations:
     - ./bin/registry database migrate up config.yml
     - ./bin/registry database migrate down --force config.yml
 
+database:schema-migrations:cloudsql:
+  extends: .schema-migrations
+  stage: validate
+  # Overrides `parallel` and `services` from .schema-migrations so that we only test against the CloudSQL Postgres
+  parallel:
+  services:
+  allow_failure: true
+  variables:
+    REGISTRY_DATABASE_HOST: $GDCLOUD_REGISTRY_DATABASE_HOST
+    REGISTRY_DATABASE_USER: $GDCLOUD_REGISTRY_DATABASE_USER
+    REGISTRY_DATABASE_PASSWORD: $GDCLOUD_REGISTRY_DATABASE_PASSWORD
+    REGISTRY_DATABASE_DBNAME: $GCLOUD_REGISTRY_DATABASE_NAME
+  script:
+    - ./bin/registry database migrate up config.yml
+    - ./bin/registry database migrate down --force config.yml
+
 database:schema-migrations:status:
   extends: .schema-migrations
   stage: validate
