@@ -1,3 +1,22 @@
+## [4.23.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.23.0-gitlab...v4.23.1-gitlab) (2025-06-05)
+
+### 🐛 Bug Fixes 🐛
+
+* **api/gitlab/v1:** fix repository cache initialization ([d135234](https://gitlab.com/gitlab-org/container-registry/commit/d1352341cee75fd185f0a67b1f75f2599fc68057))
+* remmove cloudsql incompatible migrations ([ef66c26](https://gitlab.com/gitlab-org/container-registry/commit/ef66c261a2d8e3433a7c0b6be24c90e8b32d1538))
+* Stat call should properly handle unprefixed configurations in s3_v2 storage driver ([4b67a75](https://gitlab.com/gitlab-org/container-registry/commit/4b67a753fd4232d5898fc36abddd15b4d0aa61b4))
+
+### ⏮️️ Reverts ⏮️️
+
+* revert 7fed33f9 ([ede0ad3](https://gitlab.com/gitlab-org/container-registry/commit/ede0ad3ae0642477413b6d99e2e6cce681712e9b))
+* revert ef66c261a2d8e3433a7c0b6be24c90e8b32d1538 ([d00e168](https://gitlab.com/gitlab-org/container-registry/commit/d00e1684606eb3b7c62b42db1e9ffd435c2fb6a6))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/alicebob/miniredis/v2 to v2.35.0 ([f554f29](https://gitlab.com/gitlab-org/container-registry/commit/f554f291f63df19b87fcfe9b88bad0de00ae9721))
+* **deps:** update module google.golang.org/api to v0.235.0 ([5313f8f](https://gitlab.com/gitlab-org/container-registry/commit/5313f8f87d6736a0d12d89a62c3f34afb27c6269))
+* **deps:** update module google.golang.org/api to v0.236.0 ([38034e4](https://gitlab.com/gitlab-org/container-registry/commit/38034e4723d2b4e120584dc4c469a67310763e3b))
+
 ## [4.23.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.22.0-gitlab...v4.23.0-gitlab) (2025-06-02)
 
 
