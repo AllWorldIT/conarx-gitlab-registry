@@ -15,12 +15,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/distribution/internal/feature"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
+	v1 "github.com/docker/distribution/registry/api/gitlab/v1"
 	"github.com/docker/distribution/registry/api/urls"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/auth"
@@ -28,16 +33,13 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	dmocks "github.com/docker/distribution/registry/datastore/mocks"
 	imocks "github.com/docker/distribution/registry/internal/mocks"
+	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/registry/storage"
 	memorycache "github.com/docker/distribution/registry/storage/cache/memory"
 	_ "github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/docker/distribution/registry/storage/driver/testdriver"
 	dtestutil "github.com/docker/distribution/testutil"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 // TestAppDistribtionDispatcher builds an application with a test dispatcher and
@@ -1038,6 +1040,84 @@ func TestNewApp_Locks_NoManifestsInFilesystem(t *testing.T) {
 			require.NoError(t, err)
 
 			require.NoFileExists(t, filepath.Join(tmpDir, "docker/registry/lockfiles/filesystem-in-use"))
+		})
+	}
+}
+
+// TestDispatcherGitlab_RepoCacheInitialization ensures that ctx.repoCache is properly initialized
+// when the database is enabled in the GitLab v1 API dispatcher.
+func TestDispatcherGitlab_RepoCacheInitialization(t *testing.T) {
+	driver := testdriver.New()
+	ctx := dtestutil.NewContextWithLogger(t)
+	registry, err := storage.NewRegistry(ctx, driver)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name         string
+		redisCache   bool
+		expectedType any
+	}{
+		{
+			name:         "with redis cache",
+			redisCache:   true,
+			expectedType: datastore.NewCentralRepositoryCache(&iredis.Cache{}),
+		},
+		{
+			name:         "without redis cache",
+			redisCache:   false,
+			expectedType: datastore.NewSingleRepositoryCache(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := &App{
+				Config: &configuration.Configuration{
+					Database: configuration.Database{
+						Enabled: true,
+					},
+				},
+				Context:  ctx,
+				driver:   driver,
+				registry: registry,
+				// Bypass authorization logic
+				accessController: nil,
+			}
+
+			if tc.redisCache {
+				// Create a mock Redis cache
+				app.redisCache = &iredis.Cache{}
+			}
+
+			// Initialize the app's router to get proper GitLab v1 routes
+			require.NoError(t, app.initMetaRouter())
+
+			// Create a test dispatcher that captures the context
+			var capturedContext *Context
+			testDispatcher := func(ctx *Context, _ *http.Request) http.Handler {
+				capturedContext = ctx
+				return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+			}
+
+			// Register our test dispatcher for the GitLab v1 base route
+			app.registerGitlab(v1.Base, testDispatcher)
+
+			// Create a test request to the GitLab v1 base endpoint
+			req := httptest.NewRequest(http.MethodGet, v1.Base.Path, nil)
+			w := httptest.NewRecorder()
+
+			// Use the app's router to serve the request, which will properly set up route context
+			app.ServeHTTP(w, req)
+
+			// Verify the context was captured
+			require.NotNil(t, capturedContext, "context should be captured")
+
+			// Check repoCache initialization
+			require.NotNil(t, capturedContext.repoCache, "repoCache should not be nil when database is enabled")
+			// Verify the type of cache based on Redis availability
+			require.IsType(t, tc.expectedType, capturedContext.repoCache, "repoCache should be of expected type")
 		})
 	}
 }
