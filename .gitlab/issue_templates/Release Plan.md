@@ -66,23 +66,23 @@ The release documentation can be found [here](https://gitlab.com/gitlab-org/cont
 ### 3. Update
 
 
-1. The version bump for [CNG](https://gitlab.com/gitlab-org/build/CNG) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
+1. [ ] The version bump for [CNG](https://gitlab.com/gitlab-org/build/CNG) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
    1. [ ] Check for the renovate MR [here](https://gitlab.com/gitlab-org/build/CNG/-/merge_requests?scope=all&state=opened&label_name[]=automation%3Abot-authored&search=container-registry). Once the MR is created:
       1. [ ] Mark it as related to this release issue.
       1. [ ] Either request a review from `@gitlab-org/maintainers/container-registry` to speed up the process, or just let the bot pick a Distribution reviewer. If reviewing the MR, make sure:
          - [ ] The MR is targeting the `master` branch.
          - [ ] The MR has a green pipeline on GitLab.com.
-1. The version bump for [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit/-/merge_requests) is automatically done using the internal `release-cli`.
+1. [ ] The version bump for [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit/-/merge_requests) needs to be done manually ([example](https://gitlab.com/gitlab-org/gitlab-development-kit/-/merge_requests/4247)) as the CI job is currently not functioning.
    - [ ] Assign to the reviewer suggested by reviewer roulette
-1. The version bump for [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
+1. [ ] The version bump for [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
     1. [ ] Check for the renovate MR [here](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests?scope=all&state=opened&label_name[]=automation%3Abot-authored&search=container-registry). Once the MR is created:
         1. [ ] Mark it as related to this release issue;
         1. [ ] Let the bot pick a Distribution reviewer.
-1. The version bump for [Charts](https://gitlab.com/gitlab-org/charts/gitlab) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
+1. [ ] The version bump for [Charts](https://gitlab.com/gitlab-org/charts/gitlab) is automatically created by the renovate bot, which is triggered every 15-30 minutes.
     1. [ ] Check for the renovate MR [here](https://gitlab.com/gitlab-org/charts/gitlab/-/merge_requests?scope=all&state=opened&label_name[]=automation%3Abot-authored&search=container-registry). Once the MR is created:
         1. [ ] Mark it as related to this release issue;
         1. [ ] Let the bot pick a Distribution reviewer.
-1. Version bumps in [K8s Workloads](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com) need to be done manually for now as CI is broken. The MR title should be "Bump Container Registry to [version] ([environment(s)])".
+1. [ ] Version bumps in [K8s Workloads](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com) need to be done manually for now as CI is broken. The MR title should be "Bump Container Registry to [version] ([environment(s)])".
    1. [ ] Wait for the CNG version bump to be merged.
    1. [ ] Check MRs included in the release for the labels ~high-risk-change, ~cannot-rollback.
       - [ ] If they exist, add the same label to each deployment stage.
@@ -91,7 +91,7 @@ The release documentation can be found [here](https://gitlab.com/gitlab-org/cont
       1. [ ] Version bump for Pre-Production and Staging.
       1. [ ] Version bump for Production Canary.
       1. [ ] Version bump for Production Main Stage.
-1. If this is the last registry release in the milestone, open an MR to update [`REGISTRY_SELF_MANAGED_RELEASE_VERSION`](https://gitlab.com/gitlab-org/container-registry/-/blob/master/.gitlab/ci/migrate.yml?ref_type=heads#L9) to the new self-managed release version.
+1. [ ] If this is the last registry release in the milestone, open an MR to update [`REGISTRY_SELF_MANAGED_RELEASE_VERSION`](https://gitlab.com/gitlab-org/container-registry/-/blob/master/.gitlab/ci/migrate.yml?ref_type=heads#L9) to the new self-managed release version.
 
 #### Potentially risky deployments
 
