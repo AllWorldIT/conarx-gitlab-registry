@@ -1603,6 +1603,13 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 			ctx.queueBridge = app.queueBridge(ctx, r)
 		}
 
+		// Initialize repository cache
+		if app.redisCache != nil {
+			ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
+		} else {
+			ctx.repoCache = datastore.NewSingleRepositoryCache()
+		}
+
 		dispatch(ctx, r).ServeHTTP(w, r)
 
 		// Automated error response handling here. Handlers may return their
