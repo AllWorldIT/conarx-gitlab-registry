@@ -34,6 +34,7 @@ Related to <!-- add the issue URL here -->
   - [ ] Change does not introduce database changes
   - MR includes DB chagnes
     - **Do not** include code that depends on the schema migrations in the same commit. Split the MR into two or more.
+    - **Do not** include code that depends on [background migrations](../../docs/spec/gitlab/database-background-migrations.md#work-function-not-found-error) in the same release.
     - [ ] Manually run up and down migrations in a [postgres.ai](https://console.postgres.ai/gitlab/joe-instances/68) production database clone and post a screenshot of the result here.
     - [ ] If adding new schema migrations make sure the `REGISTRY_SELF_MANAGED_RELEASE_VERSION` CI variable in [migrate.yml](../ci/migrate.yml) is pointing to the latest GitLab self-managed released registry version. Find the correct registry version [here](https://gitlab.com/gitlab-org/omnibus-gitlab/-/blob/master/config/software/registry.rb?ref_type=heads#L22). Make sure to select the branch of the latest GitLab release.
     - [ ] If adding new queries, extract a query plan from [postgres.ai](https://console.postgres.ai/gitlab/joe-instances/68) and post the link here. If changing existing queries, also extract a query plan for the current version for comparison.
