@@ -395,6 +395,14 @@ When a new migration is introduced that depends on a background migration that h
 
 It's worth noting that fresh registry installations can execute and finalize their background migrations as part of the regular migration process using `migrate up`, avoiding these issues.
 
+### Work Function Not Found Error
+
+During rolling upgrades or version rollbacks, background migration jobs may fail with a `work function not found` error if some pods do not yet have the required function code. These failures will mark the migration as failed, pending manual intervention.
+
+To avoid this we need to ensure the registry version containing the migration work function is deployed before inserting the migration into the database. We can do this by only creating background migration records in the database after the corresponding container registry version (with the migration function) has been released and deployed.
+
+Tracking: [#1606](https://gitlab.com/gitlab-org/container-registry/-/issues/1606), [#1610](https://gitlab.com/gitlab-org/container-registry/-/issues/1610), [#1616](https://gitlab.com/gitlab-org/container-registry/-/issues/1616)
+
 ## Debugging
 
 When a background migration encounters issues or fails, the reason for the failure is typically logged in the registry's log stream. Additional details regarding the failure can also be extracted from the `background_migrations` and/or `background_migration_jobs` tables. These tables provide high-level information about the migration's progress, which can be useful for troubleshooting.
