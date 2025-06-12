@@ -22,6 +22,7 @@ import (
 type MockClock struct {
 	ctrl     *gomock.Controller
 	recorder *MockClockMockRecorder
+	isgomock struct{}
 }
 
 // MockClockMockRecorder is the mock recorder for MockClock.
@@ -42,31 +43,31 @@ func (m *MockClock) EXPECT() *MockClockMockRecorder {
 }
 
 // After mocks base method.
-func (m *MockClock) After(arg0 time.Duration) <-chan time.Time {
+func (m *MockClock) After(d time.Duration) <-chan time.Time {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "After", arg0)
+	ret := m.ctrl.Call(m, "After", d)
 	ret0, _ := ret[0].(<-chan time.Time)
 	return ret0
 }
 
 // After indicates an expected call of After.
-func (mr *MockClockMockRecorder) After(arg0 any) *gomock.Call {
+func (mr *MockClockMockRecorder) After(d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "After", reflect.TypeOf((*MockClock)(nil).After), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "After", reflect.TypeOf((*MockClock)(nil).After), d)
 }
 
 // AfterFunc mocks base method.
-func (m *MockClock) AfterFunc(arg0 time.Duration, arg1 func()) *clock.Timer {
+func (m *MockClock) AfterFunc(d time.Duration, f func()) *clock.Timer {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AfterFunc", arg0, arg1)
+	ret := m.ctrl.Call(m, "AfterFunc", d, f)
 	ret0, _ := ret[0].(*clock.Timer)
 	return ret0
 }
 
 // AfterFunc indicates an expected call of AfterFunc.
-func (mr *MockClockMockRecorder) AfterFunc(arg0, arg1 any) *gomock.Call {
+func (mr *MockClockMockRecorder) AfterFunc(d, f any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterFunc", reflect.TypeOf((*MockClock)(nil).AfterFunc), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterFunc", reflect.TypeOf((*MockClock)(nil).AfterFunc), d, f)
 }
 
 // Now mocks base method.
@@ -84,113 +85,113 @@ func (mr *MockClockMockRecorder) Now() *gomock.Call {
 }
 
 // Since mocks base method.
-func (m *MockClock) Since(arg0 time.Time) time.Duration {
+func (m *MockClock) Since(t time.Time) time.Duration {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Since", arg0)
+	ret := m.ctrl.Call(m, "Since", t)
 	ret0, _ := ret[0].(time.Duration)
 	return ret0
 }
 
 // Since indicates an expected call of Since.
-func (mr *MockClockMockRecorder) Since(arg0 any) *gomock.Call {
+func (mr *MockClockMockRecorder) Since(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Since", reflect.TypeOf((*MockClock)(nil).Since), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Since", reflect.TypeOf((*MockClock)(nil).Since), t)
 }
 
 // Sleep mocks base method.
-func (m *MockClock) Sleep(arg0 time.Duration) {
+func (m *MockClock) Sleep(d time.Duration) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Sleep", arg0)
+	m.ctrl.Call(m, "Sleep", d)
 }
 
 // Sleep indicates an expected call of Sleep.
-func (mr *MockClockMockRecorder) Sleep(arg0 any) *gomock.Call {
+func (mr *MockClockMockRecorder) Sleep(d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sleep", reflect.TypeOf((*MockClock)(nil).Sleep), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sleep", reflect.TypeOf((*MockClock)(nil).Sleep), d)
 }
 
 // Tick mocks base method.
-func (m *MockClock) Tick(arg0 time.Duration) <-chan time.Time {
+func (m *MockClock) Tick(d time.Duration) <-chan time.Time {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Tick", arg0)
+	ret := m.ctrl.Call(m, "Tick", d)
 	ret0, _ := ret[0].(<-chan time.Time)
 	return ret0
 }
 
 // Tick indicates an expected call of Tick.
-func (mr *MockClockMockRecorder) Tick(arg0 any) *gomock.Call {
+func (mr *MockClockMockRecorder) Tick(d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Tick", reflect.TypeOf((*MockClock)(nil).Tick), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Tick", reflect.TypeOf((*MockClock)(nil).Tick), d)
 }
 
 // Ticker mocks base method.
-func (m *MockClock) Ticker(arg0 time.Duration) *clock.Ticker {
+func (m *MockClock) Ticker(d time.Duration) *clock.Ticker {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Ticker", arg0)
+	ret := m.ctrl.Call(m, "Ticker", d)
 	ret0, _ := ret[0].(*clock.Ticker)
 	return ret0
 }
 
 // Ticker indicates an expected call of Ticker.
-func (mr *MockClockMockRecorder) Ticker(arg0 any) *gomock.Call {
+func (mr *MockClockMockRecorder) Ticker(d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ticker", reflect.TypeOf((*MockClock)(nil).Ticker), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ticker", reflect.TypeOf((*MockClock)(nil).Ticker), d)
 }
 
 // Timer mocks base method.
-func (m *MockClock) Timer(arg0 time.Duration) *clock.Timer {
+func (m *MockClock) Timer(d time.Duration) *clock.Timer {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Timer", arg0)
+	ret := m.ctrl.Call(m, "Timer", d)
 	ret0, _ := ret[0].(*clock.Timer)
 	return ret0
 }
 
 // Timer indicates an expected call of Timer.
-func (mr *MockClockMockRecorder) Timer(arg0 any) *gomock.Call {
+func (mr *MockClockMockRecorder) Timer(d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Timer", reflect.TypeOf((*MockClock)(nil).Timer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Timer", reflect.TypeOf((*MockClock)(nil).Timer), d)
 }
 
 // Until mocks base method.
-func (m *MockClock) Until(arg0 time.Time) time.Duration {
+func (m *MockClock) Until(t time.Time) time.Duration {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Until", arg0)
+	ret := m.ctrl.Call(m, "Until", t)
 	ret0, _ := ret[0].(time.Duration)
 	return ret0
 }
 
 // Until indicates an expected call of Until.
-func (mr *MockClockMockRecorder) Until(arg0 any) *gomock.Call {
+func (mr *MockClockMockRecorder) Until(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Until", reflect.TypeOf((*MockClock)(nil).Until), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Until", reflect.TypeOf((*MockClock)(nil).Until), t)
 }
 
 // WithDeadline mocks base method.
-func (m *MockClock) WithDeadline(arg0 context.Context, arg1 time.Time) (context.Context, context.CancelFunc) {
+func (m *MockClock) WithDeadline(parent context.Context, d time.Time) (context.Context, context.CancelFunc) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithDeadline", arg0, arg1)
+	ret := m.ctrl.Call(m, "WithDeadline", parent, d)
 	ret0, _ := ret[0].(context.Context)
 	ret1, _ := ret[1].(context.CancelFunc)
 	return ret0, ret1
 }
 
 // WithDeadline indicates an expected call of WithDeadline.
-func (mr *MockClockMockRecorder) WithDeadline(arg0, arg1 any) *gomock.Call {
+func (mr *MockClockMockRecorder) WithDeadline(parent, d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithDeadline", reflect.TypeOf((*MockClock)(nil).WithDeadline), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithDeadline", reflect.TypeOf((*MockClock)(nil).WithDeadline), parent, d)
 }
 
 // WithTimeout mocks base method.
-func (m *MockClock) WithTimeout(arg0 context.Context, arg1 time.Duration) (context.Context, context.CancelFunc) {
+func (m *MockClock) WithTimeout(parent context.Context, t time.Duration) (context.Context, context.CancelFunc) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithTimeout", arg0, arg1)
+	ret := m.ctrl.Call(m, "WithTimeout", parent, t)
 	ret0, _ := ret[0].(context.Context)
 	ret1, _ := ret[1].(context.CancelFunc)
 	return ret0, ret1
 }
 
 // WithTimeout indicates an expected call of WithTimeout.
-func (mr *MockClockMockRecorder) WithTimeout(arg0, arg1 any) *gomock.Call {
+func (mr *MockClockMockRecorder) WithTimeout(parent, t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTimeout", reflect.TypeOf((*MockClock)(nil).WithTimeout), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTimeout", reflect.TypeOf((*MockClock)(nil).WithTimeout), parent, t)
 }

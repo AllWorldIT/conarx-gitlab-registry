@@ -22,6 +22,7 @@ import (
 type MockGCManifestTaskStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockGCManifestTaskStoreMockRecorder
+	isgomock struct{}
 }
 
 // MockGCManifestTaskStoreMockRecorder is the mock recorder for MockGCManifestTaskStore.
@@ -42,134 +43,134 @@ func (m *MockGCManifestTaskStore) EXPECT() *MockGCManifestTaskStoreMockRecorder 
 }
 
 // Count mocks base method.
-func (m *MockGCManifestTaskStore) Count(arg0 context.Context) (int, error) {
+func (m *MockGCManifestTaskStore) Count(ctx context.Context) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Count", arg0)
+	ret := m.ctrl.Call(m, "Count", ctx)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Count indicates an expected call of Count.
-func (mr *MockGCManifestTaskStoreMockRecorder) Count(arg0 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) Count(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockGCManifestTaskStore)(nil).Count), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockGCManifestTaskStore)(nil).Count), ctx)
 }
 
 // Delete mocks base method.
-func (m *MockGCManifestTaskStore) Delete(arg0 context.Context, arg1 *models.GCManifestTask) error {
+func (m *MockGCManifestTaskStore) Delete(ctx context.Context, b *models.GCManifestTask) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", arg0, arg1)
+	ret := m.ctrl.Call(m, "Delete", ctx, b)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockGCManifestTaskStoreMockRecorder) Delete(arg0, arg1 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) Delete(ctx, b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockGCManifestTaskStore)(nil).Delete), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockGCManifestTaskStore)(nil).Delete), ctx, b)
 }
 
 // FindAll mocks base method.
-func (m *MockGCManifestTaskStore) FindAll(arg0 context.Context) ([]*models.GCManifestTask, error) {
+func (m *MockGCManifestTaskStore) FindAll(ctx context.Context) ([]*models.GCManifestTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAll", arg0)
+	ret := m.ctrl.Call(m, "FindAll", ctx)
 	ret0, _ := ret[0].([]*models.GCManifestTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAll indicates an expected call of FindAll.
-func (mr *MockGCManifestTaskStoreMockRecorder) FindAll(arg0 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) FindAll(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAll), ctx)
 }
 
 // FindAndLock mocks base method.
-func (m *MockGCManifestTaskStore) FindAndLock(arg0 context.Context, arg1, arg2, arg3 int64) (*models.GCManifestTask, error) {
+func (m *MockGCManifestTaskStore) FindAndLock(ctx context.Context, namespaceID, repositoryID, manifestID int64) (*models.GCManifestTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAndLock", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "FindAndLock", ctx, namespaceID, repositoryID, manifestID)
 	ret0, _ := ret[0].(*models.GCManifestTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAndLock indicates an expected call of FindAndLock.
-func (mr *MockGCManifestTaskStoreMockRecorder) FindAndLock(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) FindAndLock(ctx, namespaceID, repositoryID, manifestID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAndLock", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAndLock), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAndLock", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAndLock), ctx, namespaceID, repositoryID, manifestID)
 }
 
 // FindAndLockBefore mocks base method.
-func (m *MockGCManifestTaskStore) FindAndLockBefore(arg0 context.Context, arg1, arg2, arg3 int64, arg4 time.Time) (*models.GCManifestTask, error) {
+func (m *MockGCManifestTaskStore) FindAndLockBefore(ctx context.Context, namespaceID, repositoryID, manifestID int64, date time.Time) (*models.GCManifestTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAndLockBefore", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "FindAndLockBefore", ctx, namespaceID, repositoryID, manifestID, date)
 	ret0, _ := ret[0].(*models.GCManifestTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAndLockBefore indicates an expected call of FindAndLockBefore.
-func (mr *MockGCManifestTaskStoreMockRecorder) FindAndLockBefore(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) FindAndLockBefore(ctx, namespaceID, repositoryID, manifestID, date any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAndLockBefore", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAndLockBefore), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAndLockBefore", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAndLockBefore), ctx, namespaceID, repositoryID, manifestID, date)
 }
 
 // FindAndLockNBefore mocks base method.
-func (m *MockGCManifestTaskStore) FindAndLockNBefore(arg0 context.Context, arg1, arg2 int64, arg3 []int64, arg4 time.Time) ([]*models.GCManifestTask, error) {
+func (m *MockGCManifestTaskStore) FindAndLockNBefore(ctx context.Context, namespaceID, repositoryID int64, manifestIDs []int64, date time.Time) ([]*models.GCManifestTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAndLockNBefore", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "FindAndLockNBefore", ctx, namespaceID, repositoryID, manifestIDs, date)
 	ret0, _ := ret[0].([]*models.GCManifestTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAndLockNBefore indicates an expected call of FindAndLockNBefore.
-func (mr *MockGCManifestTaskStoreMockRecorder) FindAndLockNBefore(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) FindAndLockNBefore(ctx, namespaceID, repositoryID, manifestIDs, date any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAndLockNBefore", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAndLockNBefore), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAndLockNBefore", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAndLockNBefore), ctx, namespaceID, repositoryID, manifestIDs, date)
 }
 
 // IsDangling mocks base method.
-func (m *MockGCManifestTaskStore) IsDangling(arg0 context.Context, arg1 *models.GCManifestTask) (bool, error) {
+func (m *MockGCManifestTaskStore) IsDangling(ctx context.Context, b *models.GCManifestTask) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsDangling", arg0, arg1)
+	ret := m.ctrl.Call(m, "IsDangling", ctx, b)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsDangling indicates an expected call of IsDangling.
-func (mr *MockGCManifestTaskStoreMockRecorder) IsDangling(arg0, arg1 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) IsDangling(ctx, b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDangling", reflect.TypeOf((*MockGCManifestTaskStore)(nil).IsDangling), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDangling", reflect.TypeOf((*MockGCManifestTaskStore)(nil).IsDangling), ctx, b)
 }
 
 // Next mocks base method.
-func (m *MockGCManifestTaskStore) Next(arg0 context.Context) (*models.GCManifestTask, error) {
+func (m *MockGCManifestTaskStore) Next(ctx context.Context) (*models.GCManifestTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Next", arg0)
+	ret := m.ctrl.Call(m, "Next", ctx)
 	ret0, _ := ret[0].(*models.GCManifestTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Next indicates an expected call of Next.
-func (mr *MockGCManifestTaskStoreMockRecorder) Next(arg0 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) Next(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockGCManifestTaskStore)(nil).Next), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockGCManifestTaskStore)(nil).Next), ctx)
 }
 
 // Postpone mocks base method.
-func (m *MockGCManifestTaskStore) Postpone(arg0 context.Context, arg1 *models.GCManifestTask, arg2 time.Duration) error {
+func (m *MockGCManifestTaskStore) Postpone(ctx context.Context, b *models.GCManifestTask, d time.Duration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Postpone", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Postpone", ctx, b, d)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Postpone indicates an expected call of Postpone.
-func (mr *MockGCManifestTaskStoreMockRecorder) Postpone(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) Postpone(ctx, b, d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Postpone", reflect.TypeOf((*MockGCManifestTaskStore)(nil).Postpone), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Postpone", reflect.TypeOf((*MockGCManifestTaskStore)(nil).Postpone), ctx, b, d)
 }

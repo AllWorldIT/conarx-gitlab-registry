@@ -21,6 +21,7 @@ import (
 type MockGCSettingsStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockGCSettingsStoreMockRecorder
+	isgomock struct{}
 }
 
 // MockGCSettingsStoreMockRecorder is the mock recorder for MockGCSettingsStore.
@@ -41,16 +42,16 @@ func (m *MockGCSettingsStore) EXPECT() *MockGCSettingsStoreMockRecorder {
 }
 
 // UpdateAllReviewAfterDefaults mocks base method.
-func (m *MockGCSettingsStore) UpdateAllReviewAfterDefaults(arg0 context.Context, arg1 time.Duration) (bool, error) {
+func (m *MockGCSettingsStore) UpdateAllReviewAfterDefaults(ctx context.Context, d time.Duration) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateAllReviewAfterDefaults", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateAllReviewAfterDefaults", ctx, d)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateAllReviewAfterDefaults indicates an expected call of UpdateAllReviewAfterDefaults.
-func (mr *MockGCSettingsStoreMockRecorder) UpdateAllReviewAfterDefaults(arg0, arg1 any) *gomock.Call {
+func (mr *MockGCSettingsStoreMockRecorder) UpdateAllReviewAfterDefaults(ctx, d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAllReviewAfterDefaults", reflect.TypeOf((*MockGCSettingsStore)(nil).UpdateAllReviewAfterDefaults), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAllReviewAfterDefaults", reflect.TypeOf((*MockGCSettingsStore)(nil).UpdateAllReviewAfterDefaults), ctx, d)
 }
