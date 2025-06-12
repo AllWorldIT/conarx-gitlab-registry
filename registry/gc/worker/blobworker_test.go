@@ -51,7 +51,7 @@ func Test_NewBlobWorker(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 	require.NotNil(t, w.logger)
@@ -65,7 +65,7 @@ func Test_NewBlobWorker_WithLogger(t *testing.T) {
 
 	logger := log.GetLogger(log.WithContext(ctx))
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	w := NewBlobWorker(dbMock, driverMock, WithBlobLogger(logger))
 
 	require.Equal(t, logger.WithFields(log.Fields{componentKey: w.name}), w.logger)
@@ -76,7 +76,7 @@ func Test_NewBlobWorker_WithTxDeadline(t *testing.T) {
 
 	d := 10 * time.Minute
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	w := NewBlobWorker(dbMock, driverMock, WithBlobTxTimeout(d))
 
 	require.Equal(t, d, w.txTimeout)
@@ -87,7 +87,7 @@ func Test_NewBlobWorker_WithStorageDeadline(t *testing.T) {
 
 	d := 1 * time.Minute
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	w := NewBlobWorker(dbMock, driverMock, WithBlobStorageTimeout(d))
 
 	require.Equal(t, d, w.storageTimeout)
@@ -109,7 +109,7 @@ func TestBlobWorker_processTask(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	w := NewBlobWorker(dbMock, driverMock)
 
 	dbCtx := testutil.IsContextWithDeadline{Deadline: clockMock.Now().Add(defaultTxTimeout)}
@@ -140,7 +140,7 @@ func TestBlobWorker_processTask_BeginTxError(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	w := NewBlobWorker(dbMock, driverMock)
 
 	dbCtx := testutil.IsContextWithDeadline{Deadline: clockMock.Now().Add(defaultTxTimeout)}
@@ -159,7 +159,7 @@ func TestBlobWorker_processTask_NextError(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
@@ -184,7 +184,7 @@ func TestBlobWorker_processTask_None(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
@@ -210,7 +210,7 @@ func TestBlobWorker_processTask_None_CommitError(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
@@ -236,7 +236,7 @@ func TestBlobWorker_processTask_IsDanglingError(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
@@ -265,7 +265,7 @@ func TestBlobWorker_processTask_IsDanglingErrorAndPostponeError(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
@@ -299,7 +299,7 @@ func TestBlobWorker_processTask_IsDanglingErrorAndPostponeCommitError(t *testing
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
@@ -334,7 +334,7 @@ func TestBlobWorker_processTask_IsDanglingDeadlineExceededError(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
@@ -361,7 +361,7 @@ func TestBlobWorker_processTask_StoreDeleteNotFoundError(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
@@ -395,7 +395,7 @@ func TestBlobWorker_processTask_StoreDeleteDeadlineExceededError(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -426,7 +426,7 @@ func TestBlobWorker_processTask_StoreDeleteUnknownError(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -460,7 +460,7 @@ func TestBlobWorker_processTask_StoreDeleteUnknownErrorAndPostponeError(t *testi
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -499,7 +499,7 @@ func TestBlobWorker_processTask_VacuumNotFoundError(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -532,7 +532,7 @@ func TestBlobWorker_processTask_VacuumUnknownError(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -564,7 +564,7 @@ func TestBlobWorker_processTask_FindByDigestError(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -603,7 +603,7 @@ func TestBlobWorker_processTask_FindByDigestNotFound(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -636,7 +636,7 @@ func TestBlobWorker_processTask_VacuumUnknownErrorAndPostponeError(t *testing.T)
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -673,7 +673,7 @@ func TestBlobWorker_processTask_IsDanglingNo(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -703,7 +703,7 @@ func TestBlobWorker_processTask_IsDanglingNo_DeleteTaskError(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -731,7 +731,7 @@ func TestBlobWorker_processTask_IsDanglingNo_CommitError(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -761,7 +761,7 @@ func TestBlobWorker_processTask_RollbackOnExitUnknownError(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -787,7 +787,7 @@ func TestBlobWorker_Run(t *testing.T) {
 
 	dbMock := storemock.NewMockHandler(ctrl)
 	txMock := storemock.NewMockTransactor(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
@@ -813,7 +813,7 @@ func TestBlobWorker_Run_Error(t *testing.T) {
 	clockMock := stubClock(t, time.Now())
 
 	dbMock := storemock.NewMockHandler(ctrl)
-	driverMock := drivermock.NewMockStorageDeleter(ctrl)
+	driverMock := drivermock.NewMockStorageDriver(ctrl)
 
 	w := NewBlobWorker(dbMock, driverMock)
 
