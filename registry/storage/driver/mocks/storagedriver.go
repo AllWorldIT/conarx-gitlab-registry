@@ -20,6 +20,7 @@ import (
 type MockStorageDeleter struct {
 	ctrl     *gomock.Controller
 	recorder *MockStorageDeleterMockRecorder
+	isgomock struct{}
 }
 
 // MockStorageDeleterMockRecorder is the mock recorder for MockStorageDeleter.
@@ -40,30 +41,30 @@ func (m *MockStorageDeleter) EXPECT() *MockStorageDeleterMockRecorder {
 }
 
 // Delete mocks base method.
-func (m *MockStorageDeleter) Delete(arg0 context.Context, arg1 string) error {
+func (m *MockStorageDeleter) Delete(ctx context.Context, path string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", arg0, arg1)
+	ret := m.ctrl.Call(m, "Delete", ctx, path)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockStorageDeleterMockRecorder) Delete(arg0, arg1 any) *gomock.Call {
+func (mr *MockStorageDeleterMockRecorder) Delete(ctx, path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockStorageDeleter)(nil).Delete), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockStorageDeleter)(nil).Delete), ctx, path)
 }
 
 // DeleteFiles mocks base method.
-func (m *MockStorageDeleter) DeleteFiles(arg0 context.Context, arg1 []string) (int, error) {
+func (m *MockStorageDeleter) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteFiles", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteFiles", ctx, paths)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteFiles indicates an expected call of DeleteFiles.
-func (mr *MockStorageDeleterMockRecorder) DeleteFiles(arg0, arg1 any) *gomock.Call {
+func (mr *MockStorageDeleterMockRecorder) DeleteFiles(ctx, paths any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFiles", reflect.TypeOf((*MockStorageDeleter)(nil).DeleteFiles), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFiles", reflect.TypeOf((*MockStorageDeleter)(nil).DeleteFiles), ctx, paths)
 }

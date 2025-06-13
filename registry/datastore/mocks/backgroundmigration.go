@@ -21,6 +21,7 @@ import (
 type MockBackgroundMigrationStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockBackgroundMigrationStoreMockRecorder
+	isgomock struct{}
 }
 
 // MockBackgroundMigrationStoreMockRecorder is the mock recorder for MockBackgroundMigrationStore.
@@ -41,322 +42,322 @@ func (m *MockBackgroundMigrationStore) EXPECT() *MockBackgroundMigrationStoreMoc
 }
 
 // AreFinished mocks base method.
-func (m *MockBackgroundMigrationStore) AreFinished(arg0 context.Context, arg1 []string) (bool, error) {
+func (m *MockBackgroundMigrationStore) AreFinished(ctx context.Context, names []string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AreFinished", arg0, arg1)
+	ret := m.ctrl.Call(m, "AreFinished", ctx, names)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AreFinished indicates an expected call of AreFinished.
-func (mr *MockBackgroundMigrationStoreMockRecorder) AreFinished(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) AreFinished(ctx, names any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AreFinished", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).AreFinished), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AreFinished", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).AreFinished), ctx, names)
 }
 
 // CountByStatus mocks base method.
-func (m *MockBackgroundMigrationStore) CountByStatus(arg0 context.Context) (map[models.BackgroundMigrationStatus]int, error) {
+func (m *MockBackgroundMigrationStore) CountByStatus(ctx context.Context) (map[models.BackgroundMigrationStatus]int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CountByStatus", arg0)
+	ret := m.ctrl.Call(m, "CountByStatus", ctx)
 	ret0, _ := ret[0].(map[models.BackgroundMigrationStatus]int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CountByStatus indicates an expected call of CountByStatus.
-func (mr *MockBackgroundMigrationStoreMockRecorder) CountByStatus(arg0 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) CountByStatus(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountByStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).CountByStatus), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountByStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).CountByStatus), ctx)
 }
 
 // CreateNewJob mocks base method.
-func (m *MockBackgroundMigrationStore) CreateNewJob(arg0 context.Context, arg1 *models.BackgroundMigrationJob) error {
+func (m *MockBackgroundMigrationStore) CreateNewJob(ctx context.Context, newJob *models.BackgroundMigrationJob) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateNewJob", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateNewJob", ctx, newJob)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateNewJob indicates an expected call of CreateNewJob.
-func (mr *MockBackgroundMigrationStoreMockRecorder) CreateNewJob(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) CreateNewJob(ctx, newJob any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNewJob", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).CreateNewJob), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNewJob", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).CreateNewJob), ctx, newJob)
 }
 
 // ExistsColumn mocks base method.
-func (m *MockBackgroundMigrationStore) ExistsColumn(arg0 context.Context, arg1, arg2, arg3 string) (bool, error) {
+func (m *MockBackgroundMigrationStore) ExistsColumn(ctx context.Context, schema, table, column string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExistsColumn", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ExistsColumn", ctx, schema, table, column)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ExistsColumn indicates an expected call of ExistsColumn.
-func (mr *MockBackgroundMigrationStoreMockRecorder) ExistsColumn(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) ExistsColumn(ctx, schema, table, column any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExistsColumn", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).ExistsColumn), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExistsColumn", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).ExistsColumn), ctx, schema, table, column)
 }
 
 // ExistsTable mocks base method.
-func (m *MockBackgroundMigrationStore) ExistsTable(arg0 context.Context, arg1, arg2 string) (bool, error) {
+func (m *MockBackgroundMigrationStore) ExistsTable(ctx context.Context, schema, table string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExistsTable", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ExistsTable", ctx, schema, table)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ExistsTable indicates an expected call of ExistsTable.
-func (mr *MockBackgroundMigrationStoreMockRecorder) ExistsTable(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) ExistsTable(ctx, schema, table any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExistsTable", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).ExistsTable), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExistsTable", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).ExistsTable), ctx, schema, table)
 }
 
 // FindAll mocks base method.
-func (m *MockBackgroundMigrationStore) FindAll(arg0 context.Context) (models.BackgroundMigrations, error) {
+func (m *MockBackgroundMigrationStore) FindAll(ctx context.Context) (models.BackgroundMigrations, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAll", arg0)
+	ret := m.ctrl.Call(m, "FindAll", ctx)
 	ret0, _ := ret[0].(models.BackgroundMigrations)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAll indicates an expected call of FindAll.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindAll(arg0 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindAll(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindAll), ctx)
 }
 
 // FindById mocks base method.
-func (m *MockBackgroundMigrationStore) FindById(arg0 context.Context, arg1 int) (*models.BackgroundMigration, error) {
+func (m *MockBackgroundMigrationStore) FindById(ctx context.Context, id int) (*models.BackgroundMigration, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindById", arg0, arg1)
+	ret := m.ctrl.Call(m, "FindById", ctx, id)
 	ret0, _ := ret[0].(*models.BackgroundMigration)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindById indicates an expected call of FindById.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindById(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindById(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindById", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindById), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindById", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindById), ctx, id)
 }
 
 // FindByName mocks base method.
-func (m *MockBackgroundMigrationStore) FindByName(arg0 context.Context, arg1 string) (*models.BackgroundMigration, error) {
+func (m *MockBackgroundMigrationStore) FindByName(ctx context.Context, name string) (*models.BackgroundMigration, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindByName", arg0, arg1)
+	ret := m.ctrl.Call(m, "FindByName", ctx, name)
 	ret0, _ := ret[0].(*models.BackgroundMigration)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindByName indicates an expected call of FindByName.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindByName(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindByName(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByName", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindByName), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByName", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindByName), ctx, name)
 }
 
 // FindJobEndFromJobStart mocks base method.
-func (m *MockBackgroundMigrationStore) FindJobEndFromJobStart(arg0 context.Context, arg1, arg2 string, arg3, arg4, arg5 int) (int, error) {
+func (m *MockBackgroundMigrationStore) FindJobEndFromJobStart(ctx context.Context, table, column string, start, last, batchSize int) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindJobEndFromJobStart", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "FindJobEndFromJobStart", ctx, table, column, start, last, batchSize)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindJobEndFromJobStart indicates an expected call of FindJobEndFromJobStart.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindJobEndFromJobStart(arg0, arg1, arg2, arg3, arg4, arg5 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindJobEndFromJobStart(ctx, table, column, start, last, batchSize any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindJobEndFromJobStart", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindJobEndFromJobStart), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindJobEndFromJobStart", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindJobEndFromJobStart), ctx, table, column, start, last, batchSize)
 }
 
 // FindJobWithEndID mocks base method.
-func (m *MockBackgroundMigrationStore) FindJobWithEndID(arg0 context.Context, arg1, arg2 int) (*models.BackgroundMigrationJob, error) {
+func (m *MockBackgroundMigrationStore) FindJobWithEndID(ctx context.Context, bmID, endID int) (*models.BackgroundMigrationJob, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindJobWithEndID", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "FindJobWithEndID", ctx, bmID, endID)
 	ret0, _ := ret[0].(*models.BackgroundMigrationJob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindJobWithEndID indicates an expected call of FindJobWithEndID.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindJobWithEndID(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindJobWithEndID(ctx, bmID, endID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindJobWithEndID", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindJobWithEndID), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindJobWithEndID", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindJobWithEndID), ctx, bmID, endID)
 }
 
 // FindJobWithStatus mocks base method.
-func (m *MockBackgroundMigrationStore) FindJobWithStatus(arg0 context.Context, arg1 int, arg2 models.BackgroundMigrationStatus) (*models.BackgroundMigrationJob, error) {
+func (m *MockBackgroundMigrationStore) FindJobWithStatus(ctx context.Context, bmID int, status models.BackgroundMigrationStatus) (*models.BackgroundMigrationJob, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindJobWithStatus", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "FindJobWithStatus", ctx, bmID, status)
 	ret0, _ := ret[0].(*models.BackgroundMigrationJob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindJobWithStatus indicates an expected call of FindJobWithStatus.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindJobWithStatus(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindJobWithStatus(ctx, bmID, status any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindJobWithStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindJobWithStatus), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindJobWithStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindJobWithStatus), ctx, bmID, status)
 }
 
 // FindLastJob mocks base method.
-func (m *MockBackgroundMigrationStore) FindLastJob(arg0 context.Context, arg1 *models.BackgroundMigration) (*models.BackgroundMigrationJob, error) {
+func (m *MockBackgroundMigrationStore) FindLastJob(ctx context.Context, backgroundMigration *models.BackgroundMigration) (*models.BackgroundMigrationJob, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindLastJob", arg0, arg1)
+	ret := m.ctrl.Call(m, "FindLastJob", ctx, backgroundMigration)
 	ret0, _ := ret[0].(*models.BackgroundMigrationJob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindLastJob indicates an expected call of FindLastJob.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindLastJob(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindLastJob(ctx, backgroundMigration any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindLastJob", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindLastJob), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindLastJob", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindLastJob), ctx, backgroundMigration)
 }
 
 // FindNext mocks base method.
-func (m *MockBackgroundMigrationStore) FindNext(arg0 context.Context) (*models.BackgroundMigration, error) {
+func (m *MockBackgroundMigrationStore) FindNext(ctx context.Context) (*models.BackgroundMigration, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindNext", arg0)
+	ret := m.ctrl.Call(m, "FindNext", ctx)
 	ret0, _ := ret[0].(*models.BackgroundMigration)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindNext indicates an expected call of FindNext.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindNext(arg0 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindNext(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindNext", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindNext), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindNext", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindNext), ctx)
 }
 
 // FindNextByStatus mocks base method.
-func (m *MockBackgroundMigrationStore) FindNextByStatus(arg0 context.Context, arg1 models.BackgroundMigrationStatus) (*models.BackgroundMigration, error) {
+func (m *MockBackgroundMigrationStore) FindNextByStatus(ctx context.Context, status models.BackgroundMigrationStatus) (*models.BackgroundMigration, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindNextByStatus", arg0, arg1)
+	ret := m.ctrl.Call(m, "FindNextByStatus", ctx, status)
 	ret0, _ := ret[0].(*models.BackgroundMigration)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindNextByStatus indicates an expected call of FindNextByStatus.
-func (mr *MockBackgroundMigrationStoreMockRecorder) FindNextByStatus(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindNextByStatus(ctx, status any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindNextByStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindNextByStatus), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindNextByStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindNextByStatus), ctx, status)
 }
 
 // IncrementJobAttempts mocks base method.
-func (m *MockBackgroundMigrationStore) IncrementJobAttempts(arg0 context.Context, arg1 int) error {
+func (m *MockBackgroundMigrationStore) IncrementJobAttempts(ctx context.Context, jobID int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IncrementJobAttempts", arg0, arg1)
+	ret := m.ctrl.Call(m, "IncrementJobAttempts", ctx, jobID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // IncrementJobAttempts indicates an expected call of IncrementJobAttempts.
-func (mr *MockBackgroundMigrationStoreMockRecorder) IncrementJobAttempts(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) IncrementJobAttempts(ctx, jobID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementJobAttempts", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).IncrementJobAttempts), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementJobAttempts", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).IncrementJobAttempts), ctx, jobID)
 }
 
 // Lock mocks base method.
-func (m *MockBackgroundMigrationStore) Lock(arg0 context.Context) error {
+func (m *MockBackgroundMigrationStore) Lock(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Lock", arg0)
+	ret := m.ctrl.Call(m, "Lock", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Lock indicates an expected call of Lock.
-func (mr *MockBackgroundMigrationStoreMockRecorder) Lock(arg0 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) Lock(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Lock), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Lock), ctx)
 }
 
 // Pause mocks base method.
-func (m *MockBackgroundMigrationStore) Pause(arg0 context.Context) error {
+func (m *MockBackgroundMigrationStore) Pause(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Pause", arg0)
+	ret := m.ctrl.Call(m, "Pause", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Pause indicates an expected call of Pause.
-func (mr *MockBackgroundMigrationStoreMockRecorder) Pause(arg0 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) Pause(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pause", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Pause), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pause", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Pause), ctx)
 }
 
 // Resume mocks base method.
-func (m *MockBackgroundMigrationStore) Resume(arg0 context.Context) error {
+func (m *MockBackgroundMigrationStore) Resume(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Resume", arg0)
+	ret := m.ctrl.Call(m, "Resume", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Resume indicates an expected call of Resume.
-func (mr *MockBackgroundMigrationStoreMockRecorder) Resume(arg0 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) Resume(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resume", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Resume), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resume", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Resume), ctx)
 }
 
 // SyncLock mocks base method.
-func (m *MockBackgroundMigrationStore) SyncLock(arg0 context.Context) error {
+func (m *MockBackgroundMigrationStore) SyncLock(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncLock", arg0)
+	ret := m.ctrl.Call(m, "SyncLock", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SyncLock indicates an expected call of SyncLock.
-func (mr *MockBackgroundMigrationStoreMockRecorder) SyncLock(arg0 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) SyncLock(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncLock", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).SyncLock), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncLock", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).SyncLock), ctx)
 }
 
 // UpdateJobStatus mocks base method.
-func (m *MockBackgroundMigrationStore) UpdateJobStatus(arg0 context.Context, arg1 *models.BackgroundMigrationJob) error {
+func (m *MockBackgroundMigrationStore) UpdateJobStatus(ctx context.Context, job *models.BackgroundMigrationJob) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateJobStatus", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateJobStatus", ctx, job)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateJobStatus indicates an expected call of UpdateJobStatus.
-func (mr *MockBackgroundMigrationStoreMockRecorder) UpdateJobStatus(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) UpdateJobStatus(ctx, job any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateJobStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).UpdateJobStatus), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateJobStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).UpdateJobStatus), ctx, job)
 }
 
 // UpdateStatus mocks base method.
-func (m *MockBackgroundMigrationStore) UpdateStatus(arg0 context.Context, arg1 *models.BackgroundMigration) error {
+func (m *MockBackgroundMigrationStore) UpdateStatus(ctx context.Context, bbm *models.BackgroundMigration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateStatus", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateStatus", ctx, bbm)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateStatus indicates an expected call of UpdateStatus.
-func (mr *MockBackgroundMigrationStoreMockRecorder) UpdateStatus(arg0, arg1 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) UpdateStatus(ctx, bbm any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).UpdateStatus), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).UpdateStatus), ctx, bbm)
 }
 
 // ValidateMigrationTableAndColumn mocks base method.
-func (m *MockBackgroundMigrationStore) ValidateMigrationTableAndColumn(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockBackgroundMigrationStore) ValidateMigrationTableAndColumn(ctx context.Context, tableWithSchema, column string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateMigrationTableAndColumn", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ValidateMigrationTableAndColumn", ctx, tableWithSchema, column)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateMigrationTableAndColumn indicates an expected call of ValidateMigrationTableAndColumn.
-func (mr *MockBackgroundMigrationStoreMockRecorder) ValidateMigrationTableAndColumn(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockBackgroundMigrationStoreMockRecorder) ValidateMigrationTableAndColumn(ctx, tableWithSchema, column any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateMigrationTableAndColumn", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).ValidateMigrationTableAndColumn), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateMigrationTableAndColumn", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).ValidateMigrationTableAndColumn), ctx, tableWithSchema, column)
 }

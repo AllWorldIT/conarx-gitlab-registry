@@ -21,6 +21,7 @@ import (
 type MockRepositoryCache struct {
 	ctrl     *gomock.Controller
 	recorder *MockRepositoryCacheMockRecorder
+	isgomock struct{}
 }
 
 // MockRepositoryCacheMockRecorder is the mock recorder for MockRepositoryCache.
@@ -41,121 +42,121 @@ func (m *MockRepositoryCache) EXPECT() *MockRepositoryCacheMockRecorder {
 }
 
 // Get mocks base method.
-func (m *MockRepositoryCache) Get(arg0 context.Context, arg1 string) *models.Repository {
+func (m *MockRepositoryCache) Get(ctx context.Context, path string) *models.Repository {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0, arg1)
+	ret := m.ctrl.Call(m, "Get", ctx, path)
 	ret0, _ := ret[0].(*models.Repository)
 	return ret0
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockRepositoryCacheMockRecorder) Get(arg0, arg1 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) Get(ctx, path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockRepositoryCache)(nil).Get), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockRepositoryCache)(nil).Get), ctx, path)
 }
 
 // GetLSN mocks base method.
-func (m *MockRepositoryCache) GetLSN(arg0 context.Context, arg1 *models.Repository) (string, error) {
+func (m *MockRepositoryCache) GetLSN(ctx context.Context, r *models.Repository) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLSN", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetLSN", ctx, r)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetLSN indicates an expected call of GetLSN.
-func (mr *MockRepositoryCacheMockRecorder) GetLSN(arg0, arg1 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) GetLSN(ctx, r any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLSN", reflect.TypeOf((*MockRepositoryCache)(nil).GetLSN), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLSN", reflect.TypeOf((*MockRepositoryCache)(nil).GetLSN), ctx, r)
 }
 
 // GetSizeWithDescendants mocks base method.
-func (m *MockRepositoryCache) GetSizeWithDescendants(arg0 context.Context, arg1 *models.Repository) (bool, int64) {
+func (m *MockRepositoryCache) GetSizeWithDescendants(ctx context.Context, r *models.Repository) (bool, int64) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSizeWithDescendants", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetSizeWithDescendants", ctx, r)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(int64)
 	return ret0, ret1
 }
 
 // GetSizeWithDescendants indicates an expected call of GetSizeWithDescendants.
-func (mr *MockRepositoryCacheMockRecorder) GetSizeWithDescendants(arg0, arg1 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) GetSizeWithDescendants(ctx, r any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSizeWithDescendants", reflect.TypeOf((*MockRepositoryCache)(nil).GetSizeWithDescendants), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSizeWithDescendants", reflect.TypeOf((*MockRepositoryCache)(nil).GetSizeWithDescendants), ctx, r)
 }
 
 // HasSizeWithDescendantsTimedOut mocks base method.
-func (m *MockRepositoryCache) HasSizeWithDescendantsTimedOut(arg0 context.Context, arg1 *models.Repository) bool {
+func (m *MockRepositoryCache) HasSizeWithDescendantsTimedOut(ctx context.Context, r *models.Repository) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasSizeWithDescendantsTimedOut", arg0, arg1)
+	ret := m.ctrl.Call(m, "HasSizeWithDescendantsTimedOut", ctx, r)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // HasSizeWithDescendantsTimedOut indicates an expected call of HasSizeWithDescendantsTimedOut.
-func (mr *MockRepositoryCacheMockRecorder) HasSizeWithDescendantsTimedOut(arg0, arg1 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) HasSizeWithDescendantsTimedOut(ctx, r any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasSizeWithDescendantsTimedOut", reflect.TypeOf((*MockRepositoryCache)(nil).HasSizeWithDescendantsTimedOut), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasSizeWithDescendantsTimedOut", reflect.TypeOf((*MockRepositoryCache)(nil).HasSizeWithDescendantsTimedOut), ctx, r)
 }
 
 // InvalidateSize mocks base method.
-func (m *MockRepositoryCache) InvalidateSize(arg0 context.Context, arg1 *models.Repository) {
+func (m *MockRepositoryCache) InvalidateSize(ctx context.Context, repo *models.Repository) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "InvalidateSize", arg0, arg1)
+	m.ctrl.Call(m, "InvalidateSize", ctx, repo)
 }
 
 // InvalidateSize indicates an expected call of InvalidateSize.
-func (mr *MockRepositoryCacheMockRecorder) InvalidateSize(arg0, arg1 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) InvalidateSize(ctx, repo any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateSize", reflect.TypeOf((*MockRepositoryCache)(nil).InvalidateSize), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateSize", reflect.TypeOf((*MockRepositoryCache)(nil).InvalidateSize), ctx, repo)
 }
 
 // Set mocks base method.
-func (m *MockRepositoryCache) Set(arg0 context.Context, arg1 *models.Repository) {
+func (m *MockRepositoryCache) Set(ctx context.Context, repo *models.Repository) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Set", arg0, arg1)
+	m.ctrl.Call(m, "Set", ctx, repo)
 }
 
 // Set indicates an expected call of Set.
-func (mr *MockRepositoryCacheMockRecorder) Set(arg0, arg1 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) Set(ctx, repo any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockRepositoryCache)(nil).Set), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockRepositoryCache)(nil).Set), ctx, repo)
 }
 
 // SetLSN mocks base method.
-func (m *MockRepositoryCache) SetLSN(arg0 context.Context, arg1 *models.Repository, arg2 string) error {
+func (m *MockRepositoryCache) SetLSN(ctx context.Context, r *models.Repository, lsn string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetLSN", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SetLSN", ctx, r, lsn)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetLSN indicates an expected call of SetLSN.
-func (mr *MockRepositoryCacheMockRecorder) SetLSN(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) SetLSN(ctx, r, lsn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLSN", reflect.TypeOf((*MockRepositoryCache)(nil).SetLSN), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLSN", reflect.TypeOf((*MockRepositoryCache)(nil).SetLSN), ctx, r, lsn)
 }
 
 // SetSizeWithDescendants mocks base method.
-func (m *MockRepositoryCache) SetSizeWithDescendants(arg0 context.Context, arg1 *models.Repository, arg2 int64) {
+func (m *MockRepositoryCache) SetSizeWithDescendants(ctx context.Context, r *models.Repository, size int64) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetSizeWithDescendants", arg0, arg1, arg2)
+	m.ctrl.Call(m, "SetSizeWithDescendants", ctx, r, size)
 }
 
 // SetSizeWithDescendants indicates an expected call of SetSizeWithDescendants.
-func (mr *MockRepositoryCacheMockRecorder) SetSizeWithDescendants(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) SetSizeWithDescendants(ctx, r, size any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSizeWithDescendants", reflect.TypeOf((*MockRepositoryCache)(nil).SetSizeWithDescendants), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSizeWithDescendants", reflect.TypeOf((*MockRepositoryCache)(nil).SetSizeWithDescendants), ctx, r, size)
 }
 
 // SizeWithDescendantsTimedOut mocks base method.
-func (m *MockRepositoryCache) SizeWithDescendantsTimedOut(arg0 context.Context, arg1 *models.Repository) {
+func (m *MockRepositoryCache) SizeWithDescendantsTimedOut(ctx context.Context, r *models.Repository) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SizeWithDescendantsTimedOut", arg0, arg1)
+	m.ctrl.Call(m, "SizeWithDescendantsTimedOut", ctx, r)
 }
 
 // SizeWithDescendantsTimedOut indicates an expected call of SizeWithDescendantsTimedOut.
-func (mr *MockRepositoryCacheMockRecorder) SizeWithDescendantsTimedOut(arg0, arg1 any) *gomock.Call {
+func (mr *MockRepositoryCacheMockRecorder) SizeWithDescendantsTimedOut(ctx, r any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SizeWithDescendantsTimedOut", reflect.TypeOf((*MockRepositoryCache)(nil).SizeWithDescendantsTimedOut), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SizeWithDescendantsTimedOut", reflect.TypeOf((*MockRepositoryCache)(nil).SizeWithDescendantsTimedOut), ctx, r)
 }
