@@ -45,6 +45,7 @@ const (
 	GCReviewAfterDefaultsTable   table = "gc_review_after_defaults"
 	BackgroundMigrationTable     table = "batched_background_migrations"
 	BackgroundMigrationJobsTable table = "batched_background_migration_jobs"
+	ImportStatisticsTable        table = "import_statistics"
 )
 
 // AllTables represents all tables in the test database.
