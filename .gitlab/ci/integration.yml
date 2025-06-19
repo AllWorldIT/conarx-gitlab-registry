@@ -305,6 +305,46 @@ api:online-gc:
     PACKAGE: 'github.com/docker/distribution/registry/handlers'
   script: $GO_TEST -v -coverprofile=coverage.out -tags=$TAGS -run=OnlineGC
 
+# NOTE(prozlach): This job verifies that the minimum postresql version that we
+# check for during container-registry startup matches the minimum PostgreSQL
+# version that we test against in the CI
+database:verify-postgresql-min-version:
+  stage: integration
+  needs: []
+  image: alpine:latest
+  script:
+    # Install bash if not available
+    - apk add --no-cache bash
+    
+    # Run the verification script with bash
+    - |
+      #!/bin/bash
+      set -euo pipefail
+      
+      # Extract PG_PREV_VERSION from .gitlab-ci.yml
+      PG_PREV_VERSION=$(grep -E '^\s*PG_PREV_VERSION:' .gitlab-ci.yml | grep -oE '[0-9]+')
+      echo "PG_PREV_VERSION from .gitlab-ci.yml: ${PG_PREV_VERSION}"
+      
+      # Extract MinPostgresqlVersion from datastore.go (assuming minor version is always 0)
+      MIN_PG_VERSION=$(grep -E 'MinPostgresqlVersion.*=' registry/datastore/datastore.go | grep -oE '[0-9]+\.[0-9]+' | cut -d. -f1)
+      echo "MinPostgresqlVersion from datastore.go: ${MIN_PG_VERSION}"
+      
+      # Compare versions
+      if [ "${PG_PREV_VERSION}" != "${MIN_PG_VERSION}" ]; then
+        echo "ERROR: PostgreSQL minimum version mismatch!"
+        echo "PG_PREV_VERSION in .gitlab-ci.yml: ${PG_PREV_VERSION}"
+        echo "MinPostgresqlVersion in datastore.go: ${MIN_PG_VERSION}"
+        echo "These values must match to ensure consistency."
+        exit 1
+      else
+        echo "SUCCESS: PostgreSQL minimum versions match (${PG_PREV_VERSION})"
+      fi
+  rules:
+    # Run on changes to either file
+    - changes:
+        - .gitlab-ci.yml
+        - registry/datastore/datastore.go
+
 database:migrations:
   <<: *database
   variables:

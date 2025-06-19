@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -557,4 +558,41 @@ func IsInRecovery(ctx context.Context, db *DB) (bool, error) {
 	err := db.QueryRowContext(ctx, query).Scan(&inRecovery)
 
 	return inRecovery, err
+}
+
+// versionToServerVersionNum converts a PostgreSQL version string (e.g., "14.5")
+// to the server_version_num format for PostgreSQL 10+
+func versionToServerVersionNum(version string) (int, error) {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("invalid version format: %s", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, fmt.Errorf("invalid major version: %s", parts[0])
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, fmt.Errorf("invalid minor version: %s", parts[1])
+	}
+
+	return major*10000 + minor, nil
+}
+
+// IsDBSupported checks if a provided database has a version that is supported
+func IsDBSupported(ctx context.Context, db *DB) (bool, error) {
+	var inSupported bool
+
+	minVersion, err := versionToServerVersionNum(MinPostgresqlVersion)
+	if err != nil {
+		return false, fmt.Errorf("the minimum PostgreSQL version string %q is invalid: %w", MinPostgresqlVersion, err)
+	}
+
+	defer metrics.InstrumentQuery("server_version_check")()
+	query := fmt.Sprintf("SELECT current_setting('server_version_num')::integer >= %d", minVersion)
+	err = db.QueryRowContext(ctx, query).Scan(&inSupported)
+
+	return inSupported, err
 }
