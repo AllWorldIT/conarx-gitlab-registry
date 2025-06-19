@@ -468,6 +468,18 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			startDBLagCheck(ctx, db)
 		}
 
+		inSupported, err := datastore.IsDBSupported(ctx, db.Primary())
+		if err != nil {
+			log.WithError(err).Error("could not check whether database version is supported")
+			return nil, err
+		}
+
+		if !inSupported {
+			err = fmt.Errorf("the database version is lower than the minimal supported version %s", datastore.MinPostgresqlVersion)
+			log.WithError(err).Errorf("database version is not supported, please upgrade your database to at least %s and try again", datastore.MinPostgresqlVersion)
+			return nil, err
+		}
+
 		inRecovery, err := datastore.IsInRecovery(ctx, db.Primary())
 		if err != nil {
 			log.WithError(err).Error("could not check database recovery status")
