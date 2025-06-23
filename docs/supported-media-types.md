@@ -97,6 +97,7 @@ Media type IDs are currently implmented with `SMALLINT`, while it's unlikely to 
 | `application/vnd.acme.rocket.docs.layer.v1+tar`                           |
 | `application/vnd.acme.rocket.config`                                      |
 | `application/tar+gzip`                                                    |
+| `application/spdx+json`                                                   |
 | `application/sap-cnudie+tar`                                              |
 | `application/octet-stream`                                                |
 | `application/json`                                                        |
