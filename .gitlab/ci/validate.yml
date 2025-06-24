@@ -159,7 +159,6 @@ build_smoketest:
   stage: validate
   variables:
     GOOS: linux
-    BUILDTAGS: "include_oss"
     GOTOOLCHAIN: local
     MAKE: gmake
     CGO_ENABLED: 0
