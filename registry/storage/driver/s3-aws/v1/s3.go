@@ -369,16 +369,18 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 // in bytes and the creation time.
 func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
 	s3Path := d.s3Path(path)
-	resp, err := d.S3.ListObjectsV2WithContext(
-		ctx,
-		&s3.ListObjectsV2Input{
-			Bucket: aws.String(d.Bucket),
-			Prefix: aws.String(s3Path),
-			// NOTE(prozlach): Yes, AWS returns objects in lexicographical
-			// order based on their key names for general purpose buckets.
-			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
-			MaxKeys: aws.Int64(1),
-		})
+	listInput := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(d.Bucket),
+		Prefix:    aws.String(s3Path),
+		Delimiter: aws.String("/"),
+		// NOTE(prozlach): AWS returns objects in lexicographical order
+		// based on their key names for general purpose buckets, but there
+		// is a catch - chars like `.` go before `/` so we need to go
+		// through the list and do exact matching.
+		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+		MaxKeys: aws.Int64(listMax),
+	}
+	resp, err := d.S3.ListObjectsV2WithContext(ctx, listInput)
 	if err != nil {
 		return nil, err
 	}
@@ -387,23 +389,68 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 		Path: path,
 	}
 
-	if len(resp.Contents) == 1 {
-		entry := resp.Contents[0]
-		if *entry.Key != s3Path {
-			if len(*entry.Key) > len(s3Path) && (*entry.Key)[len(s3Path)] != '/' {
-				return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V1DriverName}
+main:
+	for {
+		// Files matching prefix:
+		noMoreFiles := false
+		noMoreDirs := false
+	loop_files:
+		for _, entry := range resp.Contents {
+			switch strings.Compare(*entry.Key, s3Path) {
+			// NOTE(prozlach): The -1 case will never happen here as the List
+			// call only gives us objects matching the prefix, and we can have
+			// only two cases - file matches the prefix exactly (`0` case) or
+			// file is longer (`1` case). Still - putting it here for
+			// completeness.
+			case -1:
+				log.WithFields(log.Fields{
+					"key": *entry.Key,
+				}).Debugln("skipping predecessor entry as it does not match")
+				continue loop_files
+			case 0:
+				fi.IsDir = false
+				fi.Size = *entry.Size
+				fi.ModTime = *entry.LastModified
+				return storagedriver.FileInfoInternal{FileInfoFields: fi}, nil
+			case 1:
+				noMoreFiles = true
+				break loop_files
 			}
-			fi.IsDir = true
-		} else {
-			fi.IsDir = false
-			fi.Size = *entry.Size
-			fi.ModTime = *entry.LastModified
 		}
-	} else {
-		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V1DriverName}
+		if len(resp.Contents) == 0 {
+			noMoreFiles = true
+		}
+
+		// Prefix has subdirectories:
+	loop_dirs:
+		for _, commonPrefix := range resp.CommonPrefixes {
+			switch strings.Compare(*commonPrefix.Prefix, s3Path+"/") {
+			case -1:
+				continue loop_dirs
+			case 0:
+				fi.IsDir = true
+				return storagedriver.FileInfoInternal{FileInfoFields: fi}, nil
+			case 1:
+				noMoreDirs = true
+				break loop_dirs
+			}
+		}
+		if len(resp.CommonPrefixes) == 0 {
+			noMoreDirs = true
+		}
+
+		if resp.IsTruncated == nil || !*resp.IsTruncated || (noMoreFiles && noMoreDirs) {
+			break main
+		}
+
+		listInput.ContinuationToken = resp.NextContinuationToken
+		resp, err = d.S3.ListObjectsV2WithContext(ctx, listInput)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return storagedriver.FileInfoInternal{FileInfoFields: fi}, nil
+	return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V1DriverName}
 }
 
 // List returns a list of the objects that are direct descendants of the given path.
