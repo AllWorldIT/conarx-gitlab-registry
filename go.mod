@@ -27,7 +27,7 @@ require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
 	github.com/eko/gocache/lib/v4 v4.2.0
 	github.com/eko/gocache/store/redis/v4 v4.2.0
-	github.com/getsentry/sentry-go v0.33.0
+	github.com/getsentry/sentry-go v0.34.0
 	github.com/go-redis/redismock/v9 v9.0.3
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
