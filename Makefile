@@ -1,7 +1,7 @@
 # Root directory of the project (absolute path).
 ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-GOLANGCI_VERSION ?= v1.64.6
+GOLANGCI_VERSION ?= v2.1.6
 DOCSLINT_VERSION ?= registry.gitlab.com/gitlab-org/technical-writing/docs-gitlab-com/lint-markdown:alpine-3.21-vale-3.11.2-markdownlint2-0.17.2-lychee-0.18.1
 
 # Used to populate version variable in main package.
@@ -54,7 +54,7 @@ check: lint
 
 lint: ## run golangci-lint, with defaults
 	@echo "$(WHALE) $@"
-	go run github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_VERSION} run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION} run
 
 lint-docs: ## run golangci-lint, with defaults
 	@#There are few issues with installing the tooling natively:

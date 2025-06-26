@@ -13,7 +13,7 @@ middleware:storage-googlecdn:
     - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
     - export REGISTRY_MIDDLEWARE_STORAGE_GOOGLECDN_PRIVATEKEY="$CDN_PRIVATEKEY"
   script:
-    - $GO_TEST -v -coverprofile=coverage.out -tags=include_gcs,integration
+    - $GO_TEST -v -coverprofile=coverage.out -tags=integration
 
 .storage-driver-test: &storage-driver-test
   extends: .go-version-matrix
@@ -27,6 +27,15 @@ filesystem:
   variables:
     <<: *storage-driver-variables
     PACKAGE: 'github.com/docker/distribution/registry/storage/driver/filesystem'
+    TMPDIR: /mnt/tmpfs
+  tags:
+    # NOTE(prozlach): run on gitlab private runners where we can mount tmpfs.
+    - gitlab-org-docker
+  script:
+    - mkdir -p /mnt/tmpfs
+    - mount -t tmpfs -o size=3G tmpfs /mnt/tmpfs
+    - df -h
+    - $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
 
 inmemory:
   <<: *storage-driver-test
@@ -68,7 +77,7 @@ s3:minio:
       for i in `env | grep -E 'S3|AWS' | cut -d\= -f1`; do unset $i; done;
       export S3_BUCKET="test-bucket"
 
-      ./mc config host add s3v4 $REGION_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api S3v4
+      ./mc alias set s3v4 $REGION_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY --api=S3v4
       ./mc mb s3v4/$S3_BUCKET
   script:
     # NOTE(prozlach): Project and group credentials take precedence over job
@@ -125,8 +134,23 @@ s3:aws:
       fi
       $GO_TEST -timeout=$TEST_TIMEOUT -v -coverprofile=coverage.out -tags=$BUILDTAGS $PACKAGE
 
-gcs:
+.if-fork-merge-request: &if-fork-merge-request
+  if: '($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE != "merge_train") && $CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
+
+gcs:key_creds:
   <<: *storage-driver-test
+  parallel:
+    matrix:
+      - GO_VERSION: [ "1.23", "1.24" ]
+        REGISTRY_GCS_DRIVER: [ "current", "next" ]
+  rules:
+    - <<: *if-fork-merge-request
+      when: never
+    - changes:
+        - registry/storage/driver/gcs/*
+        - registry/storage/driver/gcs/testdata/*
+        - registry/storage/driver/testsuites/*
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
   variables:
     <<: *storage-driver-variables
     REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
@@ -135,8 +159,34 @@ gcs:
   before_script:
     - export GOOGLE_APPLICATION_CREDENTIALS="$CDN_CREDENTIALS"
 
-.if-fork-merge-request: &if-fork-merge-request
-  if: '($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE != "merge_train") && $CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
+gcs:instance_creds:
+  <<: *storage-driver-test
+  parallel:
+    matrix:
+      - GO_VERSION: [ "1.23", "1.24" ]
+        # Only supported on `next` driver:
+        REGISTRY_GCS_DRIVER: [ "next" ]
+ # Do not run in forked projects, as we are running on custom runner with
+ # instance-level credentials
+  rules:
+    - <<: *if-fork-merge-request
+      when: never
+    - changes:
+        - registry/storage/driver/gcs/*
+        - registry/storage/driver/gcs/testdata/*
+        - registry/storage/driver/testsuites/*
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+  tags:
+    # NOTE(prozlach): run on a custom runner, that runs on an GCS VM which has
+    # managed credentials set up for the bucket that CI variables point to.
+    # Other variants do not need to run here as our default runners run in
+    # Google Cloud anyway.
+    - gcs-managed_identity_auth
+  variables:
+    <<: *storage-driver-variables
+    REGISTRY_STORAGE_GCS_BUCKET: $GCS_BUCKET
+    PACKAGE: "github.com/docker/distribution/registry/storage/driver/gcs"
+    TEST_TIMEOUT: "35m"
 
 # NOTE(prozlach): Azure storage container used in tests has an auto-cleanup policy set
 # - all blobs older than 24h will be deleted, so even if CI task fails, there
@@ -154,7 +204,7 @@ azure:
       - GO_VERSION: [ "1.23", "1.24" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "client_secret", "default_credentials" ]
-  # Do not run in forked projects, as we are running on custom runner with
+ # Do not run in forked projects, as we are running on custom runner with
  # instance-level credentials
   rules:
     - <<: *if-fork-merge-request
@@ -374,21 +424,6 @@ database:api-load-balancing-discovery:
     REGISTRY_DATABASE_LOADBALANCING_NAMESERVER: "test-dns-server"
     REGISTRY_DATABASE_LOADBALANCING_PORT: "8600"
 
-# TODO: remove fallback to `redis.cache` once we're making use of `redis.loadbalancing` in production:
-# https://gitlab.com/gitlab-org/container-registry/-/issues/1535
-database:api-load-balancing-discovery-cache-fallback:
-  <<: *database-load-balancing
-  variables:
-    <<: *database-load-balancing-variables
-    REGISTRY_REDIS_CACHE_ENABLED: "true"
-    REGISTRY_REDIS_CACHE_ADDR: "redis:6379"
-    REGISTRY_DATABASE_LOADBALANCING_RECORD: "replica.registry-db.service.consul"
-    REGISTRY_DATABASE_LOADBALANCING_NAMESERVER: "test-dns-server"
-    REGISTRY_DATABASE_LOADBALANCING_PORT: "8600"
-  before_script:
-    - unset REGISTRY_REDIS_LOADBALANCING_ENABLED
-    - unset REGISTRY_REDIS_LOADBALANCING_ADDR
-
 .cache:redis: &cache-redis
   extends: .go-version-matrix
   stage: integration
@@ -398,7 +433,7 @@ database:api-load-balancing-discovery-cache-fallback:
   services:
     - name: redis:alpine
       alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
 
 cache:redis:
   extends: .cache:redis
@@ -496,7 +531,18 @@ redis:rate:
   services:
     - name: redis:alpine
       alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
+
+redis:rate-limiter:handlers:
+  extends: .go-version-matrix
+  stage: integration
+  variables:
+    REDIS_ADDR: "redis:6379"
+    PACKAGE: "github.com/docker/distribution/registry/handlers"
+  services:
+    - name: redis:alpine
+      alias: "redis"
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
 
 # cli:schema-migration-dependency is an integration test suite that verifies the dependency resolver for post/pre-deployment schema migrations.
 cli:schema-migration-dependency:

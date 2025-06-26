@@ -507,7 +507,7 @@ func manifestGetSchema2NonMatchingEtag(t *testing.T, opts ...configOpt) {
 			err = dec.Decode(&fetchedManifest)
 			require.NoError(t, err)
 
-			require.EqualValues(t, deserializedManifest, fetchedManifest)
+			require.Equal(t, deserializedManifest, fetchedManifest)
 
 			if env.ns != nil {
 				sizeStr := resp.Header.Get("Content-Length")
@@ -713,7 +713,7 @@ func baseURLPrefix(t *testing.T, opts ...configOpt) {
 		require.Equal(t, "2", resp.Header.Get("Content-Length"))
 	} else {
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
-		require.Equal(t, "", resp.Header.Get("Content-Type"))
+		require.Empty(t, resp.Header.Get("Content-Type"))
 		require.Equal(t, "0", resp.Header.Get("Content-Length"))
 	}
 }
@@ -896,7 +896,7 @@ func manifestPutSchema2MissingConfig(t *testing.T, opts ...configOpt) {
 			_, p, counts := checkBodyHasErrorCodes(t, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestBlobUnknown: 1}
 
-			require.EqualValuesf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
 		})
 	}
 }
@@ -972,7 +972,7 @@ func manifestPutSchema2MissingLayers(t *testing.T, opts ...configOpt) {
 			_, p, counts := checkBodyHasErrorCodes(t, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestBlobUnknown: 2}
 
-			require.EqualValuesf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
 		})
 	}
 }
@@ -1053,7 +1053,7 @@ func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 			_, p, counts := checkBodyHasErrorCodes(t, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestBlobUnknown: 3}
 
-			require.EqualValuesf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
 		})
 	}
 }
@@ -1133,7 +1133,7 @@ func manifestPutSchema2ReferencesExceedLimit(t *testing.T, opts ...configOpt) {
 			_, p, counts := checkBodyHasErrorCodes(t, "manifest put with layers exceeding limit", resp, v2.ErrorCodeManifestReferenceLimit)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestReferenceLimit: 1}
 
-			require.EqualValuesf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
 		})
 	}
 }
@@ -1203,7 +1203,7 @@ func manifestPutSchema2PayloadSizeExceedsLimit(t *testing.T, opts ...configOpt) 
 			errs, p, counts := checkBodyHasErrorCodes(t, "manifest put exceeds payload size limit", resp, v2.ErrorCodeManifestPayloadSizeLimit)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestPayloadSizeLimit: 1}
 
-			require.EqualValuesf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
 
 			require.Len(t, errs, 1, "exactly one error")
 			errc, ok := errs[0].(errcode.Error)
@@ -1545,7 +1545,7 @@ func manifestHeadSchema2(t *testing.T, opts ...configOpt) {
 
 			cl, err := strconv.Atoi(resp.Header.Get("Content-Length"))
 			require.NoError(t, err)
-			require.EqualValues(t, len(payload), cl)
+			require.Equal(t, len(payload), cl)
 
 			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
 
@@ -1661,7 +1661,7 @@ func manifestGetSchema2NoAcceptHeaders(t *testing.T, opts ...configOpt) {
 			err = dec.Decode(&fetchedManifest)
 			require.NoError(t, err)
 
-			require.EqualValues(t, deserializedManifest, fetchedManifest)
+			require.Equal(t, deserializedManifest, fetchedManifest)
 
 			if env.ns != nil {
 				sizeStr := resp.Header.Get("Content-Length")
@@ -2200,7 +2200,7 @@ func manifestPutOCIWithArtifactType(t *testing.T, opts ...configOpt) {
 	err = dec.Decode(&fetchedManifest)
 	require.NoError(t, err)
 
-	require.EqualValues(t, mfst, fetchedManifest)
+	require.Equal(t, mfst, fetchedManifest)
 }
 
 func manifestGetOCINonMatchingEtag(t *testing.T, opts ...configOpt) {
@@ -2281,7 +2281,7 @@ func manifestGetOCINonMatchingEtag(t *testing.T, opts ...configOpt) {
 			err = dec.Decode(&fetchedManifest)
 			require.NoError(t, err)
 
-			require.EqualValues(t, deserializedManifest, fetchedManifest)
+			require.Equal(t, deserializedManifest, fetchedManifest)
 
 			if env.ns != nil {
 				sizeStr := resp.Header.Get("Content-Length")
@@ -2575,7 +2575,7 @@ func manifestGetOCIIndexNonMatchingEtag(t *testing.T, opts ...configOpt) {
 			err = dec.Decode(&fetchedManifest)
 			require.NoError(t, err)
 
-			require.EqualValues(t, deserializedManifest, fetchedManifest)
+			require.Equal(t, deserializedManifest, fetchedManifest)
 
 			if env.ns != nil {
 				sizeStr := resp.Header.Get("Content-Length")
@@ -2733,7 +2733,7 @@ func manifestGetManifestListFallbackToSchema2(t *testing.T, opts ...configOpt) {
 	err = dec.Decode(&fetchedManifest)
 	require.NoError(t, err)
 
-	require.EqualValues(t, deserializedManifest, fetchedManifest)
+	require.Equal(t, deserializedManifest, fetchedManifest)
 
 	if env.ns != nil {
 		// we need to assert that the fetched manifest is the one that was sent in the event

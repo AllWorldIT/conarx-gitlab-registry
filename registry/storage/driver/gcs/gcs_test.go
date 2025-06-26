@@ -1,5 +1,3 @@
-//go:build include_gcs
-
 package gcs
 
 import (
@@ -7,13 +5,16 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/benbjohnson/clock"
 	"github.com/docker/distribution/registry/internal/testutil"
+	"github.com/docker/distribution/version"
 
+	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -30,13 +31,14 @@ import (
 
 var (
 	bucket       = os.Getenv("REGISTRY_STORAGE_GCS_BUCKET")
-	credentials  = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	parallelWalk = os.Getenv("GCS_PARALLEL_WALK")
+
+	userAgent = fmt.Sprintf("container-registry-tests/%s %s", version.Version, runtime.Version())
 )
 
 const maxConcurrency = 10
 
-func gcsDriverConstructor(rootDirectory string) (storagedriver.StorageDriver, error) {
+func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.StorageDriver, error) {
 	ctx := context.Background()
 	creds, err := google.FindDefaultCredentials(ctx, storage.ScopeFullControl)
 	if err != nil {
@@ -44,22 +46,42 @@ func gcsDriverConstructor(rootDirectory string) (storagedriver.StorageDriver, er
 	}
 
 	ts := creds.TokenSource
-	jwtConfig, err := google.JWTConfigFromJSON(creds.JSON)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading JWT config: %w", err)
-	}
-	email := jwtConfig.Email
-	if email == "" {
-		return nil, fmt.Errorf("Error reading JWT config : missing client_email property")
-	}
-	privateKey := jwtConfig.PrivateKey
-	if len(privateKey) == 0 {
-		return nil, fmt.Errorf("Error reading JWT config : missing private_key property")
-	}
 
-	storageClient, err := storage.NewClient(dcontext.Background(), option.WithTokenSource(ts))
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if os.Getenv(registryGCSDriverEnv) == "next" {
+		opts = append(opts, option.WithUserAgent(userAgent))
+		// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
+		// API. GCS SDK recommends using the JSON API instead, which is done
+		// here by setting WithJSONReads. This ensures consistency with other
+		// client operations, which all use JSON. JSON will become the default
+		// in a future release of GCS SDK. We only enable it for GCS next.
+		// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
+		opts = append(opts, storage.WithJSONReads())
+	}
+	storageClient, err := storage.NewClient(dcontext.Background(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating storage client: %w", err)
+	}
+
+	// Variables to store email and privateKey
+	var email string
+	var privateKey []byte
+
+	// Only try to extract JWT config if we have JSON credentials
+	if len(creds.JSON) > 0 {
+		jwtConfig, err := google.JWTConfigFromJSON(creds.JSON)
+		if err != nil {
+			return nil, fmt.Errorf("Error reading JWT config: %w", err)
+		}
+		email = jwtConfig.Email
+		privateKey = jwtConfig.PrivateKey
+	} else {
+		// For compute engine default credentials, attempt to get service
+		// account email. This is optional.
+		serviceInfo, err := metadata.GetWithContext(context.Background(), "instance/service-accounts/default/email")
+		if err == nil {
+			email = serviceInfo
+		}
 	}
 
 	var parallelWalkBool bool
@@ -83,12 +105,19 @@ func gcsDriverConstructor(rootDirectory string) (storagedriver.StorageDriver, er
 		parallelWalk:   parallelWalkBool,
 	}
 
-	return New(parameters)
+	switch os.Getenv(registryGCSDriverEnv) {
+	case "next":
+		tb.Log("Using next-gen GCS driver")
+		return NewNext(parameters)
+	default:
+		tb.Log("Using legacy GCS driver")
+		return New(parameters)
+	}
 }
 
 func skipGCS() string {
-	if bucket == "" || credentials == "" {
-		return "The following environment variables must be set to enable these tests: REGISTRY_STORAGE_GCS_BUCKET, GOOGLE_APPLICATION_CREDENTIALS"
+	if bucket == "" {
+		return "The following environment variables must be set to enable these tests: REGISTRY_STORAGE_GCS_BUCKET. Set GOOGLE_APPLICATION_CREDENTIALS as well if not using instance profiles."
 	}
 	return ""
 }
@@ -103,10 +132,10 @@ func TestGCSDriverSuite(t *testing.T) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return gcsDriverConstructor(root)
+			return gcsDriverConstructor(t, root)
 		},
 		func() (storagedriver.StorageDriver, error) {
-			return gcsDriverConstructor("")
+			return gcsDriverConstructor(t, "")
 		},
 		nil,
 	)
@@ -123,10 +152,10 @@ func BenchmarkGCSDriverSuite(b *testing.B) {
 	ts := testsuites.NewDriverSuite(
 		context.Background(),
 		func() (storagedriver.StorageDriver, error) {
-			return gcsDriverConstructor(root)
+			return gcsDriverConstructor(b, root)
 		},
 		func() (storagedriver.StorageDriver, error) {
-			return gcsDriverConstructor("")
+			return gcsDriverConstructor(b, "")
 		},
 		nil,
 	)
@@ -201,7 +230,7 @@ func TestGCSDriverCommit(t *testing.T) {
 
 	readContents, err := driver.GetContent(ctx, filename)
 	require.NoError(t, err, "driver.GetContent: unexpected error")
-	require.Equal(t, len(contents), len(readContents), "length mismatch for driver.GetContent(..)")
+	require.Len(t, readContents, len(contents), "length mismatch for driver.GetContent(..)")
 
 	fileInfo, err := driver.Stat(ctx, filename)
 	require.NoError(t, err, "driver.Stat: unexpected error")
@@ -250,10 +279,10 @@ func TestGCSDriverEmptyRootList(t *testing.T) {
 
 	rootedDriver := newTempDirDriver(t)
 
-	emptyRootDriver, err := gcsDriverConstructor("")
+	emptyRootDriver, err := gcsDriverConstructor(t, "")
 	require.NoError(t, err, "unexpected error creating empty root driver")
 
-	slashRootDriver, err := gcsDriverConstructor("/")
+	slashRootDriver, err := gcsDriverConstructor(t, "/")
 	require.NoError(t, err, "unexpected error creating slash root driver")
 
 	filename := "/test"
@@ -345,13 +374,13 @@ func TestGCSDriverMoveDirectory(t *testing.T) {
 
 func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 	p := map[string]any{
-		"bucket":  "bucket",
-		"keyfile": "testdata/key.json",
-		// TODO: add string test cases, if needed?
+		"bucket":    "bucket",
+		"keyfile":   "testdata/key.json",
+		"useragent": userAgent,
 	}
 
 	testFn := func(params map[string]any) (any, error) {
-		return parseParameters(params)
+		return parseParameters(params, os.Getenv(registryGCSDriverEnv) == "next")
 	}
 
 	opts := dtestutil.Opts{
@@ -367,7 +396,7 @@ func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 func newTempDirDriver(tb testing.TB) storagedriver.StorageDriver {
 	root := tb.TempDir()
 
-	d, err := gcsDriverConstructor(root)
+	d, err := gcsDriverConstructor(tb, root)
 	require.NoError(tb, err)
 
 	return d
@@ -380,7 +409,7 @@ func TestGCSDriverURLFor_Expiry(t *testing.T) {
 
 	ctx := context.Background()
 	validRoot := t.TempDir()
-	d, err := gcsDriverConstructor(validRoot)
+	d, err := gcsDriverConstructor(t, validRoot)
 	require.NoError(t, err)
 
 	fp := "/foo"
@@ -429,7 +458,7 @@ func TestGCSDriverURLFor_AdditionalQueryParams(t *testing.T) {
 
 	ctx := context.Background()
 	validRoot := t.TempDir()
-	d, err := gcsDriverConstructor(validRoot)
+	d, err := gcsDriverConstructor(t, validRoot)
 	require.NoError(t, err)
 
 	fp := "/foo"
@@ -461,7 +490,7 @@ func TestGCSDriverURLFor_AdditionalQueryParams(t *testing.T) {
 	require.Equal(t, fmt.Sprintf("%v", opts["namespace_id"]), u.Query().Get(customGitlabGoogleNamespaceIdParam))
 	require.Equal(t, fmt.Sprintf("%v", opts["project_id"]), u.Query().Get(customGitlabGoogleProjectIdParam))
 	require.Equal(t, opts["auth_type"], u.Query().Get(customGitlabGoogleAuthTypeParam))
-	require.EqualValues(t, fmt.Sprintf("%v", opts["size_bytes"]), u.Query().Get(customGitlabGoogleObjectSizeParam))
+	require.Equal(t, fmt.Sprintf("%v", opts["size_bytes"]), u.Query().Get(customGitlabGoogleObjectSizeParam))
 }
 
 func TestGCSDriverCustomParams(t *testing.T) {

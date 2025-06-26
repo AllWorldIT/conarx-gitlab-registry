@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration && redis_test
 
 package redis_rate_test
 

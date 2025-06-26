@@ -441,6 +441,12 @@ Before running a background migration on a live production/staging database, itâ
        disabled: true  # Disable garbage collection for this test
    ```
 
+1. The Background Migrations process is still in beta and not enabled by default. To use the feature you must also set the feature flag environment variable `REGISTRY_FF_BBM` to `true` in your development environment before starting the registry: 
+
+   ```shell
+   export REGISTRY_FF_BBM=true
+   ```
+
 1. Apply any necessary schema changes (e.g., new indexes, tables) `./bin/registry database migrate up ./config/filesystem.yml`.
 
 1. Start the registry and confirm that background migration jobs are running `./bin/registry serve ./config/filesystem.yml`. You should be able to see log entries referencing the background migration runs.

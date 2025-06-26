@@ -4,12 +4,15 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -28,6 +31,7 @@ import (
 	v1 "github.com/docker/distribution/registry/api/gitlab/v1"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/auth/token"
+	"github.com/docker/distribution/registry/datastore"
 	dbtestutil "github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/internal/testutil"
@@ -71,6 +75,8 @@ func testGitlabAPIRepositoryGet(t *testing.T, opts ...configOpt) {
 	})
 	require.NoError(t, err)
 
+	waitForReplica(t, env.db)
+
 	resp, err = http.Get(u)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -96,6 +102,8 @@ func testGitlabAPIRepositoryGet(t *testing.T, opts ...configOpt) {
 	for _, d := range dm.Layers() {
 		expectedSize += d.Size
 	}
+
+	waitForReplica(t, env.db)
 
 	resp, err = http.Get(u)
 	require.NoError(t, err)
@@ -127,6 +135,8 @@ func testGitlabAPIRepositoryGet(t *testing.T, opts ...configOpt) {
 		"size": []string{"self_with_descendants"},
 	})
 	require.NoError(t, err)
+
+	waitForReplica(t, env.db)
 
 	resp, err = http.Get(u)
 	require.NoError(t, err)
@@ -189,6 +199,8 @@ func TestGitlabAPI_Repository_Get_SizeWithDescendants_NonExistingBase(t *testing
 		"size": []string{"self_with_descendants"},
 	})
 	require.NoError(t, err)
+
+	waitForReplica(t, env.db)
 
 	resp, err := http.Get(u)
 	require.NoError(t, err)
@@ -271,6 +283,7 @@ func testGitlabAPIRepositoryTagsList(t *testing.T, opts ...configOpt) {
 	// the `digest` and `size` for all returned tag details will be the same and only `name` varies. This allows us to
 	// simplify the test setup and assertions.
 	dgst, cfgDgst, mediaType, size := createRepositoryWithMultipleIdenticalTags(t, env, imageName.Name(), shuffledTags)
+	waitForReplica(t, env.db)
 
 	tt := []struct {
 		name                string
@@ -928,7 +941,7 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 			err = dec.Decode(&body)
 			require.NoError(t, err)
 
-			require.Equal(t, len(test.expectedOrderedTags), len(body))
+			require.Len(t, body, len(test.expectedOrderedTags))
 
 			// the updated tags will contain a different digest and setting this up is not practical
 			// we can just test for the names in order and make sure that the published_at date is what
@@ -2554,4 +2567,53 @@ func assertCommonResponseFields(t *testing.T, r *handlers.RepositoryTagDetailAPI
 	assert.Regexp(t, iso8601MsFormat, r.CreatedAt, "created_at must match ISO format")
 	assert.Empty(t, r.UpdatedAt)
 	assert.Equal(t, r.CreatedAt, r.PublishedAt)
+}
+
+// waitForReplica if load balancing is enabled. It ensures that replicas have caught up.
+// See https://gitlab.com/gitlab-org/container-registry/-/issues/1430#note_2494499316.
+func waitForReplica(t *testing.T, db datastore.LoadBalancer) {
+	t.Helper()
+
+	if os.Getenv("REGISTRY_DATABASE_LOADBALANCING_ENABLED") != "true" {
+		return
+	}
+
+	require.Eventually(
+		t,
+		isReplicaUpToDate(t, db),
+		5*time.Second,
+		500*time.Millisecond,
+		"replica did not sync in time")
+}
+
+func isReplicaUpToDate(t *testing.T, db datastore.LoadBalancer) func() bool {
+	return func() bool {
+		t.Helper()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		for _, replica := range db.Replicas() {
+			var result sql.NullBool
+			row := replica.QueryRowContext(
+				ctx,
+				// We use <= instead of = to check if a replica is caught up because:
+				// 1. Normally, receive_lsn = replay_lsn when a replica is fully caught up
+				// 2. In certain scenarios (failover, recovery, etc.), replay_lsn can advance beyond
+				//    receive_lsn while the replica is still considered "caught up"
+				// The inequality check handles both the normal case and these edge cases correctly.
+				"SELECT pg_last_wal_receive_lsn() <= pg_last_wal_replay_lsn() AS is_caught_up;",
+			)
+
+			err := row.Scan(&result)
+			require.NoError(t, err)
+
+			// replica not in sync yet, return early
+			if !result.Valid || !result.Bool {
+				return false
+			}
+		}
+
+		return true
+	}
 }

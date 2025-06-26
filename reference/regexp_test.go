@@ -26,9 +26,9 @@ func checkRegexp(t *testing.T, r *regexp.Regexp, m regexpMatch) {
 			assert.Equal(t, m.subs[i], matches[i+1], "unexpected submatch %d: %q, expected %q for %q", i+1, matches[i+1], m.subs[i], m.input)
 		}
 	case m.match:
-		assert.Fail(t, "expected match for %q", m.input)
+		assert.Failf(t, "expected match for %q", m.input)
 	case matches != nil:
-		assert.Fail(t, "unexpected match for %q", m.input)
+		assert.Failf(t, "unexpected match for %q", m.input)
 	}
 }
 

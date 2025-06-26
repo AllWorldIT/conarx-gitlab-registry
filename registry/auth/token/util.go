@@ -3,6 +3,7 @@ package token
 import (
 	"encoding/base64"
 	"errors"
+	"slices"
 	"strings"
 )
 
@@ -44,4 +45,15 @@ func newActionSet(actions ...string) actionSet {
 // either "*" or the given action string.
 func (s actionSet) contains(action string) bool {
 	return s.stringSet.contains("*") || s.stringSet.contains(action)
+}
+
+// containsAny returns true if any of q is found in ss.
+func containsAny(ss, q []string) bool {
+	for _, s := range ss {
+		if slices.Contains(q, s) {
+			return true
+		}
+	}
+
+	return false
 }

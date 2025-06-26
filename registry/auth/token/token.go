@@ -44,13 +44,13 @@ type ResourceActions struct {
 // ClaimSet describes the main section of a JSON Web Token.
 type ClaimSet struct {
 	// Public claims
-	Issuer     string `json:"iss"`
-	Subject    string `json:"sub"`
-	Audience   string `json:"aud"`
-	Expiration int64  `json:"exp"`
-	NotBefore  int64  `json:"nbf"`
-	IssuedAt   int64  `json:"iat"`
-	JWTID      string `json:"jti"`
+	Issuer     string       `json:"iss"`
+	Subject    string       `json:"sub"`
+	Audience   AudienceList `json:"aud"`
+	Expiration int64        `json:"exp"`
+	NotBefore  int64        `json:"nbf"`
+	IssuedAt   int64        `json:"iat"`
+	JWTID      string       `json:"jti"`
 
 	// Private claims
 	Access   []*ResourceActions `json:"access"`
@@ -172,7 +172,7 @@ func (t *Token) Verify(verifyOpts VerifyOptions) error {
 	}
 
 	// Verify that the Audience claim is allowed.
-	if !slices.Contains(verifyOpts.AcceptedAudiences, t.Claims.Audience) {
+	if !containsAny(verifyOpts.AcceptedAudiences, t.Claims.Audience) {
 		logger.WithFields(log.Fields{"audience": t.Claims.Audience, "accepted_audiences": verifyOpts.AcceptedAudiences}).
 			Error("token intended for another audience")
 		return ErrInvalidToken

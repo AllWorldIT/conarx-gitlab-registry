@@ -66,8 +66,7 @@ commitlint:
 
 codelint:multiarch:
   variables:
-    GOLANGCI_VERSION: '1.64.6'
-    BUILDTAGS: "integration,handlers_test,api_gitlab_test,cli_test,include_gcs,online_gc_test,api_conformance_test,toxiproxy"
+    BUILDTAGS: "integration,handlers_test,api_gitlab_test,cli_test,online_gc_test,api_conformance_test,toxiproxy"
     GOOS: linux
   parallel:
     matrix:
@@ -77,8 +76,8 @@ codelint:multiarch:
   needs: []
   before_script:
     - apt-get update
-    - wget https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_VERSION}/golangci-lint-${GOLANGCI_VERSION}-linux-amd64.deb
-    - apt-get install -y ./golangci-lint-${GOLANGCI_VERSION}-linux-amd64.deb
+    - wget https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64.deb
+    - apt-get install -y ./golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64.deb
   script:
     - |
       if [ "$GOARCH" = "386" ]; then
@@ -99,10 +98,8 @@ codelint:multiarch:
 
 
 codelint:ui_report:
-  variables:
-    GOLANGCI_LINT_VERSION: 'v1.64.6'
   cache: {}
-  image: golangci/golangci-lint:$GOLANGCI_LINT_VERSION
+  image: golangci/golangci-lint:v${GOLANGCI_LINT_VERSION}
   stage: validate
   needs: []
   before_script:
@@ -111,7 +108,7 @@ codelint:ui_report:
   script:
     # Write the code coverage report to gl-code-quality-report.json
     # and print linting issues to stdout in the format: path/to/file:line description
-    - golangci-lint run --out-format code-climate | tee gl-code-quality-report.json | jq -r '.[] | "\(.location.path):\(.location.lines.begin) \(.description)"'
+    - golangci-lint run --output.code-climate.path=stdout | grep -v "^[0-9]* issues\.$" | tee gl-code-quality-report.json | jq -r '.[] | "\(.location.path):\(.location.lines.begin) \(.description)"'
   artifacts:
     reports:
       codequality: gl-code-quality-report.json
@@ -162,7 +159,7 @@ build_smoketest:
   stage: validate
   variables:
     GOOS: linux
-    BUILDTAGS: "include_gcs,include_oss"
+    BUILDTAGS: "include_oss"
     GOTOOLCHAIN: local
     MAKE: gmake
     CGO_ENABLED: 0

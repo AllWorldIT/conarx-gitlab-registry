@@ -1,3 +1,96 @@
+## [4.23.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.23.0-gitlab...v4.23.1-gitlab) (2025-06-05)
+
+### 🐛 Bug Fixes 🐛
+
+* **api/gitlab/v1:** fix repository cache initialization ([d135234](https://gitlab.com/gitlab-org/container-registry/commit/d1352341cee75fd185f0a67b1f75f2599fc68057))
+* remmove cloudsql incompatible migrations ([ef66c26](https://gitlab.com/gitlab-org/container-registry/commit/ef66c261a2d8e3433a7c0b6be24c90e8b32d1538))
+* Stat call should properly handle unprefixed configurations in s3_v2 storage driver ([4b67a75](https://gitlab.com/gitlab-org/container-registry/commit/4b67a753fd4232d5898fc36abddd15b4d0aa61b4))
+
+### ⏮️️ Reverts ⏮️️
+
+* revert 7fed33f9 ([ede0ad3](https://gitlab.com/gitlab-org/container-registry/commit/ede0ad3ae0642477413b6d99e2e6cce681712e9b))
+* revert ef66c261a2d8e3433a7c0b6be24c90e8b32d1538 ([d00e168](https://gitlab.com/gitlab-org/container-registry/commit/d00e1684606eb3b7c62b42db1e9ffd435c2fb6a6))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/alicebob/miniredis/v2 to v2.35.0 ([f554f29](https://gitlab.com/gitlab-org/container-registry/commit/f554f291f63df19b87fcfe9b88bad0de00ae9721))
+* **deps:** update module google.golang.org/api to v0.235.0 ([5313f8f](https://gitlab.com/gitlab-org/container-registry/commit/5313f8f87d6736a0d12d89a62c3f34afb27c6269))
+* **deps:** update module google.golang.org/api to v0.236.0 ([38034e4](https://gitlab.com/gitlab-org/container-registry/commit/38034e4723d2b4e120584dc4c469a67310763e3b))
+
+## [4.23.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.22.0-gitlab...v4.23.0-gitlab) (2025-06-02)
+
+
+### ✨ Features ✨
+
+* **auth/token:** support Audience array in JWT ([57bd91c](https://gitlab.com/gitlab-org/container-registry/commit/57bd91c7ea10bd0b694fa60150a753f060d41240))
+* **bbm:** add media_type_id_convert_to_bigint manifest table migration ([ca8b67a](https://gitlab.com/gitlab-org/container-registry/commit/ca8b67abebb45d19999a1ab2d359b12e258e3a64))
+* **datastore:** quarantine replicas exceeding lag thresholds ([e2258cb](https://gitlab.com/gitlab-org/container-registry/commit/e2258cb060ba8dbf58a9f64f96f5009e450a4883))
+
+
+### 🐛 Bug Fixes 🐛
+
+* add graceful handling of backend errors in gcs storage driver Reader() ([be0f90b](https://gitlab.com/gitlab-org/container-registry/commit/be0f90bc2582bf209123f2bbae804c272b4835b2))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/compute/metadata to v0.7.0 ([f14e788](https://gitlab.com/gitlab-org/container-registry/commit/f14e7889b1d19914f795d95c598791f64fa051f8))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.79.4 ([88750b0](https://gitlab.com/gitlab-org/container-registry/commit/88750b0054a18d5925cc20ee503d670cf2282d3d))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.80.0 ([3468fd4](https://gitlab.com/gitlab-org/container-registry/commit/3468fd4663cb040a92f09302887b7489647e4b54))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azidentity to v1.10.0 ([260f9c1](https://gitlab.com/gitlab-org/container-registry/commit/260f9c1bfe25dd9cc70f58273977b4d27091b174))
+* **deps:** update module github.com/getsentry/sentry-go to v0.33.0 ([ea0db39](https://gitlab.com/gitlab-org/container-registry/commit/ea0db39b4d2f3265f503ff97d2ed7541ad7c65a0))
+* **deps:** update module github.com/golang-jwt/jwt/v4 to v4.5.2 ([86875fa](https://gitlab.com/gitlab-org/container-registry/commit/86875fa248bfe18d0e92e250fe021bad0067bd09))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.7.5 ([2ae2821](https://gitlab.com/gitlab-org/container-registry/commit/2ae2821be93fcee5803f9d4eba85b5c215f4520f))
+* **deps:** update module github.com/olekukonko/tablewriter to v1 ([cee9480](https://gitlab.com/gitlab-org/container-registry/commit/cee948058a54441f5dec16a655b00e3f1d3f4f7b))
+* **deps:** update module github.com/olekukonko/tablewriter to v1.0.7 ([dc29bf3](https://gitlab.com/gitlab-org/container-registry/commit/dc29bf3d3cd30e58ece9d7f69529fa22a71b662f))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.9.0 ([4758610](https://gitlab.com/gitlab-org/container-registry/commit/4758610fc5888950ad23f4e5089c62f3b43689f7))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.129.0 ([4e5e3f7](https://gitlab.com/gitlab-org/container-registry/commit/4e5e3f7579cd0d909a14740d8ed02e622103e247))
+* **deps:** update module google.golang.org/api to v0.234.0 ([f48150d](https://gitlab.com/gitlab-org/container-registry/commit/f48150db6314f43e4a7557327d33e9d4c16c20bf))
+
+## [4.22.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.21.0-gitlab...v4.22.0-gitlab) (2025-05-19)
+
+### ✨ Features ✨
+
+* add custom user agent to azure ([bbcfebf](https://gitlab.com/gitlab-org/container-registry/commit/bbcfebf39bef9691e79aaaa1edb79d838937a11f))
+* add support for setting user-agent for the GCS next storage driver ([fb16a14](https://gitlab.com/gitlab-org/container-registry/commit/fb16a14473b654837e576093924b64e1ab6c64f0))
+* Add support for Workload Identity to GCS storage driver. ([5e5dcb8](https://gitlab.com/gitlab-org/container-registry/commit/5e5dcb862803b725eb241ee974d2f6ed445afa72))
+* **datastore:** add DB load balancing replication lag tracking ([5fee255](https://gitlab.com/gitlab-org/container-registry/commit/5fee2558c044597c8d04542a29320c110c1ba829))
+* **handlers:** add rate-limiter middleware ([d4e92b3](https://gitlab.com/gitlab-org/container-registry/commit/d4e92b367ee10cd7e22453991a3dd791a14c7a35))
+* support more S3 storage classes ([1d17b6a](https://gitlab.com/gitlab-org/container-registry/commit/1d17b6a18ad963f519de77e6002ee87a615a35b4))
+* use JSON API in gcs next driver ([678013d](https://gitlab.com/gitlab-org/container-registry/commit/678013db9585d336b23a43dd48a5c6ace5171e8c))
+
+### 🐛 Bug Fixes 🐛
+
+* **api:** allow new tag to be created even if matching immutable patterns ([b6e7631](https://gitlab.com/gitlab-org/container-registry/commit/b6e7631863a39ee1542b22ff70ae4a688cb04c74))
+* better context handling in DeleteFiles method of gcs_next, refactor the function ([abf5efd](https://gitlab.com/gitlab-org/container-registry/commit/abf5efdd5ba49c4c1047d7dc2f81bf6444fbe50c))
+* bubble up error from failed sub-repository size calculation ([99be331](https://gitlab.com/gitlab-org/container-registry/commit/99be33188320873f512f33d7ce6deb2518b0902f))
+* make Size() method of the gcs_next Writer correctly report size of the data written so far ([923f25f](https://gitlab.com/gitlab-org/container-registry/commit/923f25f194ecbf93bf44983ec6dea30a5bfd890e))
+* proper context cancellation in gcs_next driver ([6078c25](https://gitlab.com/gitlab-org/container-registry/commit/6078c25dfb3aac4ee59bb312f3490cb95b4fe397))
+
+### ⚡️ Performance Improvements ⚡️
+
+* avoid needlesly sorting results in Delete() call for gcs_next ([fc78910](https://gitlab.com/gitlab-org/container-registry/commit/fc78910928449d0772bd586c1f7dea9cff3cb648))
+
+### ⏮️️ Reverts ⏮️️
+
+* remove fallback on redis cache config for dlb ([c765bf4](https://gitlab.com/gitlab-org/container-registry/commit/c765bf44251a3e000578d36a5a53802d6468e961))
+
+### ⚙️ Build ⚙️
+
+* build gcs driver by default ([d977c9a](https://gitlab.com/gitlab-org/container-registry/commit/d977c9ac70496edd1f19205c3d161417c7b92eb5))
+* **deps:** update module cloud.google.com/go/storage to v1.52.0 ([cc493db](https://gitlab.com/gitlab-org/container-registry/commit/cc493dbd12a54f944ba71a5128d38cd441f07587))
+* **deps:** update module cloud.google.com/go/storage to v1.53.0 ([240796e](https://gitlab.com/gitlab-org/container-registry/commit/240796eed6f78138c197c8bf32e5c17feed00672))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.79.3 ([ddded1c](https://gitlab.com/gitlab-org/container-registry/commit/ddded1c1d8617bad686e783fef017094716a9a63))
+* **deps:** update module github.com/rubenv/sql-migrate to v1.8.0 ([d3741b7](https://gitlab.com/gitlab-org/container-registry/commit/d3741b791f6ec0425c4dba027086b4a691fb5d65))
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.37.0 ([339e80d](https://gitlab.com/gitlab-org/container-registry/commit/339e80d3bc5a8f6e1b93af19fc2559ca277a37d6))
+* **deps:** update module github.com/testcontainers/testcontainers-go/modules/postgres to v0.37.0 ([e2a6301](https://gitlab.com/gitlab-org/container-registry/commit/e2a63014cae0d75d5f8b4f8e4297c2bc87a9b9d5))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.24.0 ([978c6ea](https://gitlab.com/gitlab-org/container-registry/commit/978c6ea4ccec1c2da4c9897df5183e4a2e3d955c))
+* **deps:** update module go.uber.org/mock to v0.5.2 ([4021b8b](https://gitlab.com/gitlab-org/container-registry/commit/4021b8bc231992128b8451dd5e40fc4685c1466b))
+* **deps:** update module golang.org/x/crypto to v0.38.0 ([6d9f5a0](https://gitlab.com/gitlab-org/container-registry/commit/6d9f5a06b62c35d63220eaee72cc6aa04b44b31a))
+* **deps:** update module golang.org/x/net to v0.40.0 ([f2c399b](https://gitlab.com/gitlab-org/container-registry/commit/f2c399b027f19fb3c61e7203baada73b6b83dc46))
+* **deps:** update module google.golang.org/api to v0.231.0 ([90fa3f0](https://gitlab.com/gitlab-org/container-registry/commit/90fa3f040af9edc4db03e5b4b9f1e29adb6b81a3))
+* **deps:** update module google.golang.org/api to v0.232.0 ([789d0e1](https://gitlab.com/gitlab-org/container-registry/commit/789d0e1aff52bea2532472faa6f5e6d2839a6574))
+
 ## [4.21.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.20.0-gitlab...v4.21.0-gitlab) (2025-04-28)
 
 

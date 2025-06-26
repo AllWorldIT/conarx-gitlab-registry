@@ -13,17 +13,22 @@ var (
 	queryTotal              *prometheus.CounterVec
 	timeSince               = time.Since // for test purposes only
 	lbPoolSize              prometheus.Gauge
+	lbPoolStatus            *prometheus.GaugeVec
 	lbLSNCacheOpDuration    *prometheus.HistogramVec
 	lbLSNCacheHits          *prometheus.CounterVec
 	lbDNSLookupDurationHist *prometheus.HistogramVec
 	lbPoolEvents            *prometheus.CounterVec
 	lbTargets               *prometheus.CounterVec
+	lbLagBytes              *prometheus.GaugeVec
+	lbLagSeconds            *prometheus.HistogramVec
 )
 
 const (
 	subsystem      = "database"
 	queryNameLabel = "name"
 	errorLabel     = "error"
+	replicaLabel   = "replica"
+	statusLabel    = "status"
 
 	queryDurationName = "query_duration_seconds"
 	queryDurationDesc = "A histogram of latencies for database queries."
@@ -33,6 +38,12 @@ const (
 
 	lbPoolSizeName = "lb_pool_size"
 	lbPoolSizeDesc = "A gauge for the current number of replicas in the load balancer pool."
+
+	lbPoolStatusName = "lb_pool_status"
+	lbPoolStatusDesc = "A gauge for the current status of each replica in the load balancer pool."
+
+	replicaStatusOnline      = "online"
+	replicaStatusQuarantined = "quarantined"
 
 	lbLSNCacheOpDurationName = "lb_lsn_cache_operation_duration_seconds"
 	lbLSNCacheOpDurationDesc = "A histogram of latencies for database load balancing LSN cache operations."
@@ -52,24 +63,32 @@ const (
 	srvLookupType           = "srv"
 	hostLookupType          = "host"
 
-	lbPoolEventsName           = "lb_pool_events_total"
-	lbPoolEventsDesc           = "A counter of replicas added or removed from the database load balancer pool."
-	lbPoolEventsEventLabel     = "event"
-	lbPoolEventsReplicaAdded   = "replica_added"
-	lbPoolEventsReplicaRemoved = "replica_removed"
+	lbPoolEventsName                = "lb_pool_events_total"
+	lbPoolEventsDesc                = "A counter of replicas added or removed from the database load balancer pool."
+	lbPoolEventsEventLabel          = "event"
+	lbPoolEventsReplicaAdded        = "replica_added"
+	lbPoolEventsReplicaRemoved      = "replica_removed"
+	lbPoolEventsReplicaQuarantined  = "replica_quarantined"
+	lbPoolEventsReplicaReintegrated = "replica_reintegrated"
 
-	lbTargetsName         = "lb_targets_total"
-	lbTargetsDesc         = "A counter for primary and replica target elections during database load balancing."
-	lbTargetTypeLabel     = "target_type"
-	lbFallbackLabel       = "fallback"
-	lbPrimaryType         = "primary"
-	lbReplicaType         = "replica"
-	lbReasonLabel         = "reason"
-	lbFallbackNoCache     = "no_cache"
-	lbFallbackNoReplica   = "no_replica"
-	lbFallbackError       = "error"
-	lbFallbackNotUpToDate = "not_up_to_date"
-	lbReasonSelected      = "selected"
+	lbTargetsName            = "lb_targets_total"
+	lbTargetsDesc            = "A counter for primary and replica target elections during database load balancing."
+	lbTargetTypeLabel        = "target_type"
+	lbFallbackLabel          = "fallback"
+	lbPrimaryType            = "primary"
+	lbReplicaType            = "replica"
+	lbReasonLabel            = "reason"
+	lbFallbackNoCache        = "no_cache"
+	lbFallbackNoReplica      = "no_replica"
+	lbFallbackError          = "error"
+	lbFallbackNotUpToDate    = "not_up_to_date"
+	lbFallbackAllQuarantined = "all_quarantined"
+	lbReasonSelected         = "selected"
+
+	lbLagBytesName   = "lb_lag_bytes"
+	lbLagBytesDesc   = "A gauge for the replication lag in bytes for each replica."
+	lbLagSecondsName = "lb_lag_seconds"
+	lbLagSecondsDesc = "A histogram of replication lag in seconds for each replica."
 )
 
 func init() {
@@ -101,6 +120,16 @@ func init() {
 			Name:      lbPoolSizeName,
 			Help:      lbPoolSizeDesc,
 		})
+
+	lbPoolStatus = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbPoolStatusName,
+			Help:      lbPoolStatusDesc,
+		},
+		[]string{replicaLabel, statusLabel},
+	)
 
 	lbLSNCacheOpDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -154,14 +183,38 @@ func init() {
 		[]string{lbTargetTypeLabel, lbFallbackLabel, lbReasonLabel},
 	)
 
+	lbLagBytes = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbLagBytesName,
+			Help:      lbLagBytesDesc,
+		},
+		[]string{replicaLabel},
+	)
+
+	lbLagSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      lbLagSecondsName,
+			Help:      lbLagSecondsDesc,
+			Buckets:   []float64{0.001, 0.01, 0.1, 0.5, 1, 5, 10, 20, 30, 60}, // 1ms to 60s
+		},
+		[]string{replicaLabel},
+	)
+
 	prometheus.MustRegister(queryDurationHist)
 	prometheus.MustRegister(queryTotal)
 	prometheus.MustRegister(lbPoolSize)
+	prometheus.MustRegister(lbPoolStatus)
 	prometheus.MustRegister(lbLSNCacheOpDuration)
 	prometheus.MustRegister(lbLSNCacheHits)
 	prometheus.MustRegister(lbDNSLookupDurationHist)
 	prometheus.MustRegister(lbPoolEvents)
 	prometheus.MustRegister(lbTargets)
+	prometheus.MustRegister(lbLagBytes)
+	prometheus.MustRegister(lbLagSeconds)
 }
 
 func InstrumentQuery(name string) func() {
@@ -235,6 +288,41 @@ func ReplicaRemoved() {
 	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaRemoved).Inc()
 }
 
+// ReplicaQuarantined increments the counter for load balancing replicas quarantined due to lag.
+func ReplicaQuarantined() {
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaQuarantined).Inc()
+}
+
+// ReplicaReintegrated increments the counter for load balancing replicas reintegrated after quarantine.
+func ReplicaReintegrated() {
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaReintegrated).Inc()
+}
+
+// replicaStatus sets the gauge value for a replica's status. Internal function not meant for direct use.
+// Use ReplicaStatusOnline, ReplicaStatusQuarantined, and ReplicaStatusReintegrated instead.
+func replicaStatus(replicaAddr, status string, value float64) {
+	lbPoolStatus.WithLabelValues(replicaAddr, status).Set(value)
+}
+
+// ReplicaStatusOnline marks a replica as online in the metrics.
+func ReplicaStatusOnline(replicaAddr string) {
+	replicaStatus(replicaAddr, replicaStatusOnline, 1)
+	replicaStatus(replicaAddr, replicaStatusQuarantined, 0)
+}
+
+// ReplicaStatusQuarantined marks a replica as quarantined in the metrics. This only updates status metrics.
+// Call ReplicaQuarantined() separately to increment the appropriate event counter.
+func ReplicaStatusQuarantined(replicaAddr string) {
+	replicaStatus(replicaAddr, replicaStatusOnline, 0)
+	replicaStatus(replicaAddr, replicaStatusQuarantined, 1)
+}
+
+// ReplicaStatusReintegrated marks a quarantined replica as reintegrated (back online) in the metrics. This only
+// updates status metrics. Call ReplicaReintegrated() separately to increment the appropriate event counter.
+func ReplicaStatusReintegrated(replicaAddr string) {
+	ReplicaStatusOnline(replicaAddr)
+}
+
 // PrimaryTarget increments the counter for primary targets selected during load balancing.
 // This method is used when the primary is selected as the intended target, not as a fallback.
 func PrimaryTarget() {
@@ -253,6 +341,12 @@ func PrimaryFallbackNoReplica() {
 	lbTargets.WithLabelValues(lbPrimaryType, "true", lbFallbackNoReplica).Inc()
 }
 
+// PrimaryFallbackAllQuarantined increments the counter for primary targets selected during load balancing
+// as a fallback because all replicas are quarantined.
+func PrimaryFallbackAllQuarantined() {
+	lbTargets.WithLabelValues(lbPrimaryType, "true", lbFallbackAllQuarantined).Inc()
+}
+
 // PrimaryFallbackError increments the counter for primary targets selected during load balancing
 // as a fallback due to an error.
 func PrimaryFallbackError() {
@@ -268,4 +362,14 @@ func PrimaryFallbackNotUpToDate() {
 // ReplicaTarget increments the counter for replica targets successfully selected during load balancing.
 func ReplicaTarget() {
 	lbTargets.WithLabelValues(lbReplicaType, "false", lbReasonSelected).Inc()
+}
+
+// ReplicaLagBytes records the byte lag for a replica.
+func ReplicaLagBytes(replicaAddr string, bytes float64) {
+	lbLagBytes.WithLabelValues(replicaAddr).Set(bytes)
+}
+
+// ReplicaLagSeconds records the time lag for a replica in seconds.
+func ReplicaLagSeconds(replicaAddr string, seconds float64) {
+	lbLagSeconds.WithLabelValues(replicaAddr).Observe(seconds)
 }

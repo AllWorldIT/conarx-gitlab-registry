@@ -152,9 +152,10 @@ func (imh *manifestHandler) HandleGetManifest(w http.ResponseWriter, r *http.Req
 		manifestType = ociImageManifestSchema
 	} else if isManifestList {
 		// nolint: revive // max-control-nesting
-		if manifestList.MediaType == manifestlist.MediaTypeManifestList {
+		switch manifestList.MediaType {
+		case manifestlist.MediaTypeManifestList:
 			manifestType = manifestlistSchema
-		} else if manifestList.MediaType == v1.MediaTypeImageIndex || manifestList.MediaType == "" {
+		case v1.MediaTypeImageIndex, "":
 			manifestType = ociImageIndexSchema
 		}
 	}
@@ -854,6 +855,17 @@ func dbTagManifest(ctx context.Context, db datastore.Handler, cache datastore.Re
 	if err != nil {
 		return fmt.Errorf("failed to find if tag is already being used: %w", err)
 	}
+
+	// Check immutability patterns only for existing tags (we perform a manifest lookup by tag name, so if such tag
+	// exists, there will be a manifest here - no need for a separate tag lookup query).
+	if currentManifest != nil {
+		if patterns, found := dcontext.TagImmutablePatterns(ctx, path); found {
+			if err := validateTagImmutability(ctx, tagName, patterns); err != nil {
+				return err
+			}
+		}
+	}
+
 	if currentManifest != nil && (currentManifest.ID != dbManifest.ID) {
 		l.WithFields(log.Fields{
 			"root_repo":               dbRepo.TopLevelPathSegment(),
@@ -1642,7 +1654,11 @@ func (imh *manifestHandler) validateManifestDeleteRestriction() error {
 	return nil
 }
 
-func (imh *manifestHandler) validateTagRestriction(denyAccessPatterns, immutablePatterns []string) error {
+func (imh *manifestHandler) validateTagDeleteRestriction() error {
+	repoName := imh.Repository.Named().String()
+	denyAccessPatterns, _ := dcontext.TagDeleteDenyAccessPatterns(imh.Context, repoName)
+	immutablePatterns, _ := dcontext.TagImmutablePatterns(imh.Context, repoName)
+
 	if len(denyAccessPatterns)+len(immutablePatterns) > tagPatternMaxCount {
 		return v2.ErrorCodeTagPatternCount.WithDetail(
 			fmt.Errorf("tag pattern count exceeds %d", tagPatternMaxCount),
@@ -1663,20 +1679,26 @@ func (imh *manifestHandler) validateTagRestriction(denyAccessPatterns, immutable
 	return nil
 }
 
-func (imh *manifestHandler) validateTagDeleteRestriction() error {
-	repoName := imh.Repository.Named().String()
-	denyAccessPatterns, _ := dcontext.TagDeleteDenyAccessPatterns(imh.Context, repoName)
-	immutablePatterns, _ := dcontext.TagImmutablePatterns(imh.Context, repoName)
-
-	return imh.validateTagRestriction(denyAccessPatterns, immutablePatterns)
-}
-
 func (imh *manifestHandler) validateTagPushRestriction() error {
 	repoName := imh.Repository.Named().String()
 	denyAccessPatterns, _ := dcontext.TagPushDenyAccessPatterns(imh.Context, repoName)
 	immutablePatterns, _ := dcontext.TagImmutablePatterns(imh.Context, repoName)
 
-	return imh.validateTagRestriction(denyAccessPatterns, immutablePatterns)
+	if len(denyAccessPatterns)+len(immutablePatterns) > tagPatternMaxCount {
+		return v2.ErrorCodeTagPatternCount.WithDetail(
+			fmt.Errorf("tag pattern count exceeds %d", tagPatternMaxCount),
+		)
+	}
+
+	// We only validate access deny patterns here, tag immutability validation is deferred to the point where we know
+	// if the tag being pushed is new or not (see dbTagManifest).
+	if len(denyAccessPatterns) > 0 {
+		if err := validateTagProtection(imh.Context, imh.Tag, denyAccessPatterns); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (imh *manifestHandler) appendManifestDeleteError(err error) {

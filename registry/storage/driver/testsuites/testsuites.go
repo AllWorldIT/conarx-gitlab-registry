@@ -462,13 +462,9 @@ func (s *DriverSuite) TestWriteReadLargeStreams() {
 	//
 	written, err := io.CopyBuffer(writer, blobber.GetReader(), make([]byte, 256*1<<20))
 	require.NoError(s.T(), err)
-	require.EqualValues(s.T(), fileSize, written)
-	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
-	// This is just a workaround for now to enforce correct behavior on other
-	// drivers. The TLDR is that gcs Writer object does not report correct size
-	// until the Commit() is called. This is not the case for other drivers.
-	if s.StorageDriver.Name() != "gcs" {
-		require.EqualValues(s.T(), fileSize, writer.Size())
+	require.Equal(s.T(), fileSize, written)
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
+		require.Equal(s.T(), fileSize, writer.Size())
 	}
 
 	err = writer.Commit()
@@ -498,13 +494,9 @@ func (s *DriverSuite) TestWriteReadSmallStream() {
 
 	written, err := io.CopyBuffer(writer, blobber.GetReader(), make([]byte, 2*1<<20))
 	require.NoError(s.T(), err)
-	require.EqualValues(s.T(), fileSize, written)
-	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
-	// This is just a workaround for now to enforce correct behavior on other
-	// drivers. The TLDR is that gcs Writer object does not report correct size
-	// until the Commit() is called. This is not the case for other drivers.
-	if s.StorageDriver.Name() != "gcs" {
-		require.EqualValues(s.T(), fileSize, writer.Size())
+	require.Equal(s.T(), fileSize, written)
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
+		require.Equal(s.T(), fileSize, writer.Size())
 	}
 
 	err = writer.Commit()
@@ -544,11 +536,7 @@ func (s *DriverSuite) TestConcurentWriteCausesError() {
 	written, err := io.Copy(writerA, blobberA1.GetReader())
 	require.NoError(s.T(), err)
 	require.EqualValues(s.T(), blobberA1.Size(), written)
-	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
-	// This is just a workaround for now to enforce correct behavior on other
-	// drivers. The TLDR is that gcs Writer object does not report correct size
-	// until the Commit() is called. This is not the case for other drivers.
-	if s.StorageDriver.Name() != "gcs" {
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
 		require.EqualValues(s.T(), blobberA1.Size(), writerA.Size())
 	}
 
@@ -558,8 +546,7 @@ func (s *DriverSuite) TestConcurentWriteCausesError() {
 	written, err = io.Copy(writerB, blobberB.GetReader())
 	require.NoError(s.T(), err)
 	require.EqualValues(s.T(), blobberB.Size(), written)
-	// See the comment above
-	if s.StorageDriver.Name() != "gcs" {
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
 		require.EqualValues(s.T(), blobberB.Size(), writerB.Size())
 	}
 
@@ -667,7 +654,9 @@ func (s *DriverSuite) TestContinueStreamAppendLarge() {
 	require.Greater(s.T(), streamSize, azure_v2.MaxChunkSize*3*2)
 	// gcs needs to be refactored, we can't import the constant directly yet as
 	// there are going to be import loops
-	require.Greater(s.T(), streamSize, int64(256*1024*3))
+	// minChunkSize * 20 == defaultChunkSizea, 3KiB is meant to test saving
+	// state session when chunk size is not even.
+	require.Greater(s.T(), streamSize, int64(20*256*1024+3*2<<10))
 	s.testContinueStreamAppend(s.T(), streamSize)
 }
 
@@ -686,8 +675,8 @@ func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
 	contentsChunk123 := blobber.GetAllBytes()
 	// Use uneven sizes to trigger more code paths
 	contentsChunk1 := contentsChunk123[0:chunkSize]
-	contentsChunk2 := contentsChunk123[chunkSize : chunkSize+128]
-	contentsChunk3 := contentsChunk123[chunkSize+128 : 3*chunkSize]
+	contentsChunk2 := contentsChunk123[chunkSize : chunkSize+101] // intentionally a prime
+	contentsChunk3 := contentsChunk123[chunkSize+101 : 3*chunkSize]
 
 	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
 	require.NoError(t, err)
@@ -725,9 +714,46 @@ func (s *DriverSuite) testContinueStreamAppend(t *testing.T, chunkSize int64) {
 	require.Equal(t, blobber.GetAllBytes(), received)
 }
 
+func (s *DriverSuite) TestContinueAppendZeroSizeBlob() {
+	filename := dtestutil.RandomPath(1, 32)
+	defer s.deletePath(s.StorageDriver, firstPart(filename))
+	s.T().Logf("blob path used for testing: %s", filename)
+
+	// Chosen arbitrary
+	var fileSize int64 = 2 * 1 << 20
+	blobber := s.blobberFactory.GetBlobber(fileSize)
+	contentsChunk := blobber.GetAllBytes()
+
+	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
+	require.NoError(s.T(), err)
+	nn, err := writer.Write(make([]byte, 0))
+	require.NoError(s.T(), err)
+	require.Zero(s.T(), nn)
+	require.NoError(s.T(), writer.Close())
+	require.Zero(s.T(), writer.Size())
+
+	writer, err = s.StorageDriver.Writer(s.ctx, filename, true)
+	require.NoError(s.T(), err)
+	require.Zero(s.T(), writer.Size())
+
+	nnn, err := io.Copy(writer, bytes.NewReader(contentsChunk))
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), fileSize, nnn)
+	require.NoError(s.T(), writer.Commit())
+	require.NoError(s.T(), writer.Close())
+	require.Equal(s.T(), fileSize, writer.Size())
+
+	received, err := s.StorageDriver.GetContent(s.ctx, filename)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), blobber.GetAllBytes(), received)
+}
+
 func (s *DriverSuite) TestMaxUploadSize() {
 	if s.StorageDriver.Name() == "inmemory" {
 		s.T().Skip("In-memory driver is known to have OOM issues with large uploads.")
+	}
+	if s.StorageDriver.Name() == "filesystem" {
+		s.T().Skip("filesystem driver tests are running on tmpfs and it does not do chunking so this test would not bring much value")
 	}
 	if slices.Contains([]string{s3_common.V1DriverName, s3_common.V1DriverNameAlt}, s.StorageDriver.Name()) {
 		s.T().Skip("S3 v1 driver has chunk size limitations which aren't planned to be fixed")
@@ -769,10 +795,10 @@ func (s *DriverSuite) TestMaxUploadSize() {
 		require.NoError(s.T(), err)
 		nn, err := io.CopyBuffer(writer, bigChunk, buf)
 		require.NoError(s.T(), err)
-		require.EqualValues(s.T(), bigChunkSize, nn)
+		require.Equal(s.T(), bigChunkSize, nn)
 		totalWritten += nn
 		require.NoError(s.T(), writer.Close())
-		require.EqualValues(s.T(), totalWritten, writer.Size())
+		require.Equal(s.T(), totalWritten, writer.Size())
 
 		if !doAppend {
 			doAppend = true
@@ -786,14 +812,14 @@ func (s *DriverSuite) TestMaxUploadSize() {
 		require.NoError(s.T(), err)
 		nn, err = io.Copy(writer, smallChunk)
 		require.NoError(s.T(), err)
-		require.EqualValues(s.T(), smallChunkSize, nn)
+		require.Equal(s.T(), smallChunkSize, nn)
 		totalWritten += nn
 		if totalWritten >= blobSize {
 			// This is the last write, commit the upload:
 			require.NoError(s.T(), writer.Commit())
 		}
 		require.NoError(s.T(), writer.Close())
-		require.EqualValues(s.T(), totalWritten, writer.Size())
+		require.Equal(s.T(), totalWritten, writer.Size())
 
 		if totalWritten >= blobSize {
 			break
@@ -852,7 +878,7 @@ func (s *DriverSuite) TestMaxUploadSize() {
 
 		if err != nil {
 			if err == io.EOF {
-				require.EqualValues(s.T(), currentOffset, totalWritten, "the object stored in the backend is shorter than expected")
+				require.Equal(s.T(), currentOffset, totalWritten, "the object stored in the backend is shorter than expected")
 			} else {
 				require.NoError(s.T(), err, "reading data back failed")
 			}
@@ -1988,117 +2014,165 @@ func (s *DriverSuite) TestStatCall() {
 
 	err := s.StorageDriver.PutContent(s.ctx, filePath, contentA)
 	require.NoError(s.T(), err)
-
 	err = s.StorageDriver.PutContent(s.ctx, filePathAux, contentA)
 	require.NoError(s.T(), err)
-
 	defer s.deletePath(s.StorageDriver, firstPart(dirPath))
+
+	if s.StorageDriver.Name() != "filesystem" {
+		err = s.StorageDriverRootless.PutContent(s.ctx, filePath, contentA)
+		require.NoError(s.T(), err)
+		err = s.StorageDriverRootless.PutContent(s.ctx, filePathAux, contentA)
+		require.NoError(s.T(), err)
+		defer s.deletePath(s.StorageDriverRootless, firstPart(dirPath))
+	}
 
 	// Call to stat on root directory. The storage healthcheck performs this
 	// exact call to Stat.
 	// PathNotFoundErrors are not considered health check failures. Some
 	// drivers will return a not found here, while others will not return an
 	// error at all. If we get an error, ensure it's a not found.
-	s.Run("RootDirectory", func() {
-		fi, err := s.StorageDriver.Stat(s.ctx, "/")
-		if err != nil {
-			assert.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
-		} else {
-			assert.NotNil(s.T(), fi)
-			assert.Equal(s.T(), "/", fi.Path())
-			assert.True(s.T(), fi.IsDir())
+	for _, name := range []string{"prefixed", "unprefixed"} {
+		var drv storagedriver.StorageDriver
+		switch name {
+		case "prefixed":
+			drv = s.StorageDriver
+		case "unprefixed":
+			drv = s.StorageDriverRootless
 		}
-	})
 
-	s.Run("NonExistentDir", func() {
-		fi, err := s.StorageDriver.Stat(s.ctx, dirPath+"foo")
-		require.Error(s.T(), err)
-		assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
-			DriverName: s.StorageDriver.Name(),
-			Path:       dirPath + "foo",
+		s.Run(fmt.Sprintf("RootDirectory - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, "/")
+			if err != nil {
+				assert.ErrorAs(s.T(), err, new(storagedriver.PathNotFoundError))
+			} else {
+				assert.NotNil(s.T(), fi)
+				assert.Equal(s.T(), "/", fi.Path())
+				assert.True(s.T(), fi.IsDir())
+			}
 		})
-		assert.Nil(s.T(), fi)
-	})
 
-	s.Run("NonExistentPath", func() {
-		fi, err := s.StorageDriver.Stat(s.ctx, filePath+"bar")
-		require.Error(s.T(), err)
-		assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
-			DriverName: s.StorageDriver.Name(),
-			Path:       filePath + "bar",
+		s.Run(fmt.Sprintf("NonExistentDir - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, dirPath+"foo")
+			require.Error(s.T(), err)
+			assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
+				DriverName: drv.Name(),
+				Path:       dirPath + "foo",
+			})
+			assert.Nil(s.T(), fi)
 		})
-		assert.Nil(s.T(), fi)
-	})
 
-	s.Run("FileExists", func() {
-		fi, err := s.StorageDriver.Stat(s.ctx, filePath)
-		require.NoError(s.T(), err)
-		require.NotNil(s.T(), fi)
-		assert.Equal(s.T(), filePath, fi.Path())
-		assert.Equal(s.T(), int64(len(contentA)), fi.Size())
-		assert.False(s.T(), fi.IsDir())
-	})
+		s.Run(fmt.Sprintf("NonExistentPath - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
 
-	s.Run("ModTime", func() {
-		fi, err := s.StorageDriver.Stat(s.ctx, filePath)
-		require.NoError(s.T(), err)
-		assert.NotNil(s.T(), fi)
-		createdTime := fi.ModTime()
-
-		// Sleep and modify the file
-		time.Sleep(time.Second * 10)
-		err = s.StorageDriver.PutContent(s.ctx, filePath, contentB)
-		require.NoError(s.T(), err)
-
-		fi, err = s.StorageDriver.Stat(s.ctx, filePath)
-		require.NoError(s.T(), err)
-		require.NotNil(s.T(), fi)
-		modTime := fi.ModTime()
-
-		// Check if the modification time is after the creation time.
-		// In case of cloud storage services, storage frontend nodes might have
-		// time drift between them, however that should be solved with sleeping
-		// before update.
-		assert.Greaterf(
-			s.T(),
-			modTime,
-			createdTime,
-			"modtime (%s) is before the creation time (%s)", modTime, createdTime,
-		)
-	})
-
-	// Call on directory with one "file"
-	// (do not check ModTime as dirs don't need to support it)
-	s.Run("DirWithFile", func() {
-		fi, err := s.StorageDriver.Stat(s.ctx, dirPath)
-		require.NoError(s.T(), err)
-		require.NotNil(s.T(), fi)
-		assert.Equal(s.T(), dirPath, fi.Path())
-		assert.Zero(s.T(), fi.Size())
-		assert.True(s.T(), fi.IsDir())
-	})
-
-	// Call on directory with another "subdirectory"
-	s.Run("DirWithSubDir", func() {
-		fi, err := s.StorageDriver.Stat(s.ctx, dirPathBase)
-		require.NoError(s.T(), err)
-		require.NotNil(s.T(), fi)
-		assert.Equal(s.T(), dirPathBase, fi.Path())
-		assert.Zero(s.T(), fi.Size())
-		assert.True(s.T(), fi.IsDir())
-	})
-
-	// Call on a partial name of the directory. This should result in
-	// not-found, as partial match is still not a match for a directory.
-	s.Run("DirPartialPrefix", func() {
-		fi, err := s.StorageDriver.Stat(s.ctx, partialPath)
-		require.Error(s.T(), err)
-		assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
-			DriverName: s.StorageDriver.Name(),
-			Path:       partialPath,
+			fi, err := drv.Stat(s.ctx, filePath+"bar")
+			require.Error(s.T(), err)
+			assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
+				DriverName: drv.Name(),
+				Path:       filePath + "bar",
+			})
+			assert.Nil(s.T(), fi)
 		})
-		assert.Nil(s.T(), fi)
-	})
+
+		s.Run(fmt.Sprintf("FileExists - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, filePath)
+			require.NoError(s.T(), err)
+			require.NotNil(s.T(), fi)
+			assert.Equal(s.T(), filePath, fi.Path())
+			assert.Equal(s.T(), int64(len(contentA)), fi.Size())
+			assert.False(s.T(), fi.IsDir())
+		})
+
+		s.Run(fmt.Sprintf("ModTime - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, filePath)
+			require.NoError(s.T(), err)
+			assert.NotNil(s.T(), fi)
+			createdTime := fi.ModTime()
+
+			// Sleep and modify the file
+			time.Sleep(time.Second * 10)
+			err = drv.PutContent(s.ctx, filePath, contentB)
+			require.NoError(s.T(), err)
+
+			fi, err = drv.Stat(s.ctx, filePath)
+			require.NoError(s.T(), err)
+			require.NotNil(s.T(), fi)
+			modTime := fi.ModTime()
+
+			// Check if the modification time is after the creation time.
+			// In case of cloud storage services, storage frontend nodes might have
+			// time drift between them, however that should be solved with sleeping
+			// before update.
+			assert.Greaterf(
+				s.T(),
+				modTime,
+				createdTime,
+				"modtime (%s) is before the creation time (%s)", modTime, createdTime,
+			)
+		})
+
+		// Call on directory with one "file"
+		// (do not check ModTime as dirs don't need to support it)
+		s.Run(fmt.Sprintf("DirWithFile - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, dirPath)
+			require.NoError(s.T(), err)
+			require.NotNil(s.T(), fi)
+			assert.Equal(s.T(), dirPath, fi.Path())
+			assert.Zero(s.T(), fi.Size())
+			assert.True(s.T(), fi.IsDir())
+		})
+
+		// Call on directory with another "subdirectory"
+		s.Run(fmt.Sprintf("DirWithSubDir - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, dirPathBase)
+			require.NoError(s.T(), err)
+			require.NotNil(s.T(), fi)
+			assert.Equal(s.T(), dirPathBase, fi.Path())
+			assert.Zero(s.T(), fi.Size())
+			assert.True(s.T(), fi.IsDir())
+		})
+
+		// Call on a partial name of the directory. This should result in
+		// not-found, as partial match is still not a match for a directory.
+		s.Run(fmt.Sprintf("DirPartialPrefix - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, partialPath)
+			require.Error(s.T(), err)
+			assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
+				DriverName: drv.Name(),
+				Path:       partialPath,
+			})
+			assert.Nil(s.T(), fi)
+		})
+	}
 }
 
 // TestPutContentMultipleTimes checks that if storage driver can overwrite the content
@@ -2255,11 +2329,8 @@ func (s *DriverSuite) TestWalk() {
 	for i := 0; i < numWantedFiles; i++ {
 		// Gather unique directories from the full path, excluding the root directory.
 		p := path.Dir(wantedFiles[i])
-		for {
-			// Guard against non-terminating loops: path.Dir returns "." if the path is empty.
-			if p == rootDirectory || p == "." {
-				break
-			}
+		// Guard against non-terminating loops: path.Dir returns "." if the path is empty.
+		for p != rootDirectory && p != "." {
 			wantedDirectoriesSet[p] = struct{}{}
 			p = path.Dir(p)
 		}
@@ -3196,16 +3267,12 @@ func (s *DriverSuite) testFileStreams(t *testing.T, size int64) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	if !assert.EqualValues(t, size, nn) {
+	if !assert.Equal(t, size, nn) {
 		return
 	}
 
-	// BUG(prozlach): See https://gitlab.com/gitlab-org/container-registry/-/issues/1500
-	// This is just a workaround for now to enforce correct behavior on other
-	// drivers. The TLDR is that gcs Writer object does not report correct size
-	// until the Commit() is called. This is not the case for other drivers.
-	if s.StorageDriver.Name() != "gcs" {
-		if !assert.EqualValues(t, size, writer.Size()) {
+	if s.StorageDriver.Name() != "gcs" || os.Getenv("REGISTRY_GCS_DRIVER") == "next" {
+		if !assert.Equal(t, size, writer.Size()) {
 			return
 		}
 	}

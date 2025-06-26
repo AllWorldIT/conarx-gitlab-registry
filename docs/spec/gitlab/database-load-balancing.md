@@ -274,6 +274,14 @@ Ideally, to avoid unnecessary LSN comparisons against replicas, we would keep tr
 
 Given the above, we will start by applying a fixed TTL of 1 hour to the primary LSN records for each repository in Redis. In the future, the same TTL (maybe with a different duration) will remain in place to shield us from failures in the asynchronous check *or* cases where a repository had no reads for a really long period since the last write. These edge cases could lead to stale records in Redis or unnecessary LSN comparisons.
 
+Primary sticking is not available for [GitLab API](#gitlab-api) endpoints that target multiple repositories, such as
+size measurement requests. In order to determine if a replica is up to date for one of these requests, we would have to
+keep track of LSNs for not just a single leaf repository (the request target) but for the root and intermediate
+repositories as well. This would be fairly complex and resource intensive, with little to no added benefit. For example,
+for size measurement requests, Rails buffers/deduplicates size refreshes for groups and namespaces to reduce load.
+Therefore, there is little to no benefit in always providing the most up-to-date value (from primary) for this
+endpoint, and a trailing value during high replication lag is an acceptable compromise given its high resource usage.
+
 #### Redis
 
 This process will produce a noticeable Redis load:

@@ -543,8 +543,7 @@ var MigrateStatusCmd = &cobra.Command{
 			}
 
 			table := tablewriter.NewWriter(os.Stdout)
-			table.SetHeader([]string{"Migration", "Applied"})
-			table.SetColWidth(80)
+			table.Header([]string{"Migration", "Applied"})
 
 			// Display table rows sorted by migration ID
 			var ids []string
@@ -564,10 +563,14 @@ var MigrateStatusCmd = &cobra.Command{
 					appliedAt = statuses[id].AppliedAt.String()
 				}
 
-				table.Append([]string{name, appliedAt})
+				if tableErr := table.Append([]string{name, appliedAt}); tableErr != nil {
+					return fmt.Errorf("appending table: %w", tableErr)
+				}
 			}
 			_, _ = fmt.Println(mig.Name())
-			table.Render()
+			if tableErr := table.Render(); tableErr != nil {
+				return fmt.Errorf("rendering table: %w", tableErr)
+			}
 		}
 		return nil
 	},
@@ -729,15 +732,18 @@ var BBMStatusCmd = &cobra.Command{
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Batched Background Migration", "Status"})
-		table.SetColWidth(80)
+		table.Header([]string{"Batched Background Migration", "Status"})
 
 		// Display table rows
 		for _, bbm := range bbMigrations {
-			table.Append([]string{bbm.Name, bbm.Status.String()})
+			if tableErr := table.Append([]string{bbm.Name, bbm.Status.String()}); tableErr != nil {
+				return fmt.Errorf("appending table: %w", tableErr)
+			}
 		}
 
-		table.Render()
+		if tableErr := table.Render(); tableErr != nil {
+			return fmt.Errorf("rendering table: %w", tableErr)
+		}
 		return nil
 	},
 }

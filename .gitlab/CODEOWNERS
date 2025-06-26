@@ -1,0 +1,69 @@
+# https://docs.gitlab.com/ee/user/project/code_owners.html
+# These are the default approvers.  Additional rules will overwrite
+# this rule, not append to it.
+
+/ @gitlab-org/maintainers/container-registry
+
+# First entry if not a group, is a primary, all subsequent entries are
+# secondaries, as per
+# https://gitlab.com/gitlab-org/container-registry/-/issues/1587
+
+[Storage drivers] @vespian_gl @hswimelar 
+/registry/storage/driver/
+/docs/storage-drivers/
+
+[Notifications] @vespian_gl @jaime
+/notifications/ 
+
+[CI Tool]  @vespian_gl @jaime
+/script/ci_tool/
+
+[CI]  @jaime @vespian_gl 
+/.gitlab/
+
+[Database] @jdrpereira @suleimiahmed 
+/registry/datastore/
+
+[Database load-balancing] @jdrpereira @suleimiahmed 
+/registry/datastore/**/loadbalancing*.go
+/docs/spec/gitlab/database-load-balancing.md
+
+[Online GC] @jdrpereira
+/registry/gc/
+/docs/spec/gitlab/online-garbage-collection.md
+
+[Rate limiters] @jaime @hswimelar
+/registry/ratelimiter/
+/internal/redis_rate/
+
+[Background migrations] @suleimiahmed @vespian_gl
+/registry/bbm/
+/docs/spec/gitlab/database-background-migrations.md
+
+[Schema migrations] @suleimiahmed @vespian_gl
+/registry/datastore/migrations/mocks/
+/registry/datastore/migrations/postmigrations/migrator.go
+/registry/datastore/migrations/premigrations/migrator.go
+/registry/datastore/migrations/testdata/
+/registry/datastore/migrations/migrations.go
+/registry/datastore/migrations/migrator.go
+/docs/database-migrations.md
+
+[Object Storage Metadata] @hswimelar 
+/registry/storage/
+!/registry/storage/driver/
+!/registry/storage/cache/
+!/registry/internal/
+!/registry/mocks/
+!/registry/storage/garbagecollect*.go
+
+[Authentication and authorization] @jdrpereira @jaime
+/registry/auth/
+
+[Offline GC] @hswimelar @suleimiahmed
+/registry/storage/garbagecollect*.go
+
+[Importer] @hswimelar @jaime
+/registry/datastore/importer*.go
+/registry/datastore/testdata/fixtures/importer/
+/registry/datastore/testdata/golden/TestImporter*/

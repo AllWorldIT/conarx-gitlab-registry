@@ -2065,16 +2065,6 @@ func TestRepositoryStore_EstimatedSizeWithDescendants_TopLevelEmpty(t *testing.T
 	require.Zero(t, size.Bytes())
 }
 
-func TestRepositoryStore_EstimatedSizeWithDescendants_NonTopLevel(t *testing.T) {
-	reloadManifestFixtures(t)
-
-	s := datastore.NewRepositoryStore(suite.db)
-
-	size, err := s.EstimatedSizeWithDescendants(suite.ctx, &models.Repository{NamespaceID: 3, ID: 9, Path: "usage-group/sub-group-1"})
-	require.ErrorIs(t, err, datastore.ErrOnlyRootEstimates)
-	require.Zero(t, size.Bytes())
-}
-
 func TestRepositoryBlobService_Stat(t *testing.T) {
 	reloadBlobFixtures(t)
 
@@ -2090,7 +2080,7 @@ func TestRepositoryBlobService_Stat(t *testing.T) {
 
 	desc, err := rbs.Stat(suite.ctx, dgst)
 	require.NoError(t, err)
-	require.EqualValues(t, distribution.Descriptor{Digest: dgst, Size: int64(108), MediaType: "application/vnd.docker.image.rootfs.diff.tar.gzip"}, desc)
+	require.Equal(t, distribution.Descriptor{Digest: dgst, Size: int64(108), MediaType: "application/vnd.docker.image.rootfs.diff.tar.gzip"}, desc)
 }
 
 func TestRepositoryBlobService_Stat_NotFound(t *testing.T) {
