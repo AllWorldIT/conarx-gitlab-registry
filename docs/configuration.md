@@ -108,6 +108,7 @@ storage:
     bucket: bucketname
     keyfile: /path/to/keyfile
     useragent: container-registry
+    debug_log: false
     credentials:
       type: service_account
       project_id: project_id_string
@@ -504,6 +505,7 @@ storage:
     bucket: bucketname
     keyfile: /path/to/keyfile
     useragent: container-registry
+    debug_log: false
     credentials:
       type: service_account
       project_id: project_id_string

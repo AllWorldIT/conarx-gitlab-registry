@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	dcontext "github.com/docker/distribution/context"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/hashicorp/go-multierror"
@@ -50,6 +51,7 @@ func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
 		return nil, fmt.Errorf("invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
 	}
 	d := &driverNext{
+		logger:        params.logger,
 		bucket:        params.storageClient.Bucket(params.bucket),
 		rootDirectory: rootDirectory,
 		email:         params.email,
@@ -71,6 +73,7 @@ func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
 // driverNext is a storagedriver.StorageDriver implementation backed by GCS
 // Objects are stored at absolute keys in the provided bucket.
 type driverNext struct {
+	logger        dcontext.Logger
 	client        *http.Client
 	bucket        *storage.BucketHandle
 	email         string
@@ -130,7 +133,7 @@ func (d *driverNext) PutContent(ctx context.Context, path string, contents []byt
 		wc.MD5 = h.Sum(nil)
 
 		if len(contents) == 0 {
-			logrus.WithFields(logrus.Fields{
+			d.logger.WithFields(logrus.Fields{
 				"path":   path,
 				"length": len(contents),
 				"stack":  string(debug.Stack()),
@@ -181,6 +184,13 @@ func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.
 	if r.Attrs.ContentType == uploadSessionContentType {
 		_ = r.Close()
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+	}
+	if offset == r.Attrs.Size {
+		d.logger.WithFields(logrus.Fields{
+			"path":            path,
+			"fileSize":        r.Attrs.Size,
+			"requestedOffset": offset,
+		}).Info("Range request at EOF, returning empty reader")
 	}
 	return r, nil
 }
@@ -243,16 +253,23 @@ func putContentsCloseNext(wc *storage.Writer, contents []byte) error {
 }
 
 // putChunkNext either completes upload or submits another chunk.
-func putChunkNext(ctx context.Context, client *http.Client, sessionURI string, chunk []byte, from, totalSize int64) (int64, error) {
+func (w *writerNext) putChunkNext(chunk []byte, totalSize int64) (int64, error) {
+	w.logger.WithFields(logrus.Fields{
+		"chunkStart": w.offset,
+		"chunkEnd":   w.offset + int64(len(chunk)) - 1,
+		"chunkSize":  len(chunk),
+		"totalSize":  totalSize,
+	}).Debug("Uploading chunk")
+
 	// Documentation: https://cloud.google.com/storage/docs/performing-resumable-uploads#chunked-upload
 	bytesPut := int64(0)
 	err := retry(func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPut, sessionURI, bytes.NewReader(chunk))
+		req, err := http.NewRequestWithContext(w.ctx, http.MethodPut, w.sessionURI, bytes.NewReader(chunk))
 		if err != nil {
 			return fmt.Errorf("creating new http request: %w", err)
 		}
 		length := int64(len(chunk))
-		to := from + length - 1
+		to := w.offset + length - 1
 		req.Header.Set("Content-Type", "application/octet-stream")
 		// NOTE(prozlach) fake-gcs-server documents this behavior well:
 		// https://github.com/fsouza/fake-gcs-server/blob/1e954726309326217b4c533bb9646e30f683fa66/fakestorage/upload.go#L467-L501
@@ -294,14 +311,14 @@ func putChunkNext(ctx context.Context, client *http.Client, sessionURI string, c
 		if totalSize >= 0 {
 			size = strconv.FormatInt(totalSize, 10)
 		}
-		if from == to+1 {
+		if w.offset == to+1 {
 			req.Header.Set("Content-Range", fmt.Sprintf("bytes */%v", size))
 		} else {
-			req.Header.Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", from, to, size))
+			req.Header.Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", w.offset, to, size))
 		}
 		req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
 
-		resp, err := client.Do(req)
+		resp, err := w.client.Do(req)
 		if err != nil {
 			return fmt.Errorf("executing http request: %w", err)
 		}
@@ -324,14 +341,20 @@ func putChunkNext(ctx context.Context, client *http.Client, sessionURI string, c
 			if err != nil {
 				return fmt.Errorf("parsing Range header: %w", err)
 			}
-			bytesPut = end - from + 1
+			bytesPut = end - w.offset + 1
+
+			w.logger.WithFields(logrus.Fields{
+				"bytesUploaded": bytesPut,
+				"totalExpected": len(chunk),
+				"rangeHeader":   resp.Header.Get("Range"),
+			}).Debug("Partial chunk upload, continuing")
 			return nil
 		}
 		err = googleapi.CheckMediaResponse(resp)
 		if err != nil {
 			return fmt.Errorf("committing resumable upload: %w", err)
 		}
-		bytesPut = to - from + 1
+		bytesPut = to - w.offset + 1
 		return nil
 	})
 	return bytesPut, err
@@ -341,6 +364,7 @@ func putChunkNext(ctx context.Context, client *http.Client, sessionURI string, c
 // at the location designated by "path" after the call to Commit.
 func (d *driverNext) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	w := &writerNext{
+		logger: d.logger,
 		ctx:    ctx,
 		client: d.client,
 		object: d.bucket.Object(d.pathToKey(path)),
@@ -449,6 +473,19 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 			return nil, fmt.Errorf("fetching next page from iterator: %w", err)
 		}
 
+		if !attrs.Deleted.IsZero() {
+			d.logger.WithFields(logrus.Fields{
+				"path":        d.keyToPath(attrs.Name),
+				"deletedTime": attrs.Deleted,
+			}).Debug("Filtered out deleted object from listing due to eventual consistency")
+		}
+
+		if attrs.ContentType == uploadSessionContentType {
+			d.logger.WithFields(logrus.Fields{
+				"path": d.keyToPath(attrs.Name),
+			}).Debug("Filtered out temporary upload session object from listing")
+		}
+
 		// GCS does not guarantee strong consistency between
 		// DELETE and LIST operations. Check that the object is not deleted,
 		// and filter out any objects with a non-zero time-deleted
@@ -489,7 +526,12 @@ func (d *driverNext) Move(ctx context.Context, sourcePath, destPath string) erro
 	// if deleting the file fails, log the error, but do not fail; the file was successfully copied,
 	// and the original should eventually be cleaned when purging the uploads folder.
 	if err != nil {
-		logrus.Infof("error deleting file: %v due to %v", sourcePath, err)
+		d.logger.WithFields(logrus.Fields{
+			"sourcePath":    sourcePath,
+			"destPath":      destPath,
+			"copySucceeded": true,
+			"deleteError":   err.Error(),
+		}).Info("Move operation: copy succeeded but delete failed, file will need cleanup")
 	}
 	return nil
 }
@@ -572,6 +614,11 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(maxDeleteConcurrency)
 
+	d.logger.WithFields(logrus.Fields{
+		"totalFiles":     len(paths),
+		"maxConcurrency": maxDeleteConcurrency,
+	}).Debug("Starting concurrent file deletion")
+
 	for _, path := range paths {
 		g.Go(func() error {
 			// Check if any context was canceled, if so - skip calling Delete
@@ -606,6 +653,12 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 	// from g.Go in this example, we rely solely on the errors collected
 	// multierror var
 	_ = g.Wait()
+
+	d.logger.WithFields(logrus.Fields{
+		"totalFiles":        len(paths),
+		"successfulDeletes": int(count.Load()),
+		"errors":            errs.Len(),
+	}).Debug("Completed concurrent file deletion")
 
 	return int(count.Load()), errs.ErrorOrNil()
 }
@@ -644,6 +697,20 @@ func (d *driverNext) URLFor(_ context.Context, path string, options map[string]a
 		// If we have a private key and email from service account JSON, use them directly
 		opts.GoogleAccessID = d.email
 		opts.PrivateKey = d.privateKey
+
+		d.logger.WithFields(logrus.Fields{
+			"path":          path,
+			"method":        methodString,
+			"signingMethod": "service_account_key",
+			"expires":       expiresTime,
+		}).Debug("Generating signed URL with service account credentials")
+	} else {
+		d.logger.WithFields(logrus.Fields{
+			"path":          path,
+			"method":        methodString,
+			"signingMethod": "instance_profile",
+			"expires":       expiresTime,
+		}).Debug("Generating signed URL with instance profile credentials")
 	}
 
 	// Signing a URL requires credentials authorized to sign a URL. They can be
@@ -678,22 +745,22 @@ func (d *driverNext) WalkParallel(ctx context.Context, path string, f storagedri
 
 // startSessionNext starts a new resumable upload session. Documentation can be
 // found here: https://cloud.google.com/storage/docs/performing-resumable-uploads#initiate-session
-func startSessionNext(ctx context.Context, client *http.Client, bucket, name string) (uri string, err error) {
+func (w *writerNext) startSessionNext() (uri string, err error) {
 	u := &url.URL{
 		Scheme: "https",
 		// https://cloud.google.com/storage/docs/request-endpoints#typical
 		Host:     "storage.googleapis.com",
-		Path:     fmt.Sprintf("/upload/storage/v1/b/%v/o", bucket),
-		RawQuery: fmt.Sprintf("uploadType=resumable&name=%v", name),
+		Path:     fmt.Sprintf("/upload/storage/v1/b/%v/o", w.object.BucketName()),
+		RawQuery: fmt.Sprintf("uploadType=resumable&name=%v", w.object.ObjectName()),
 	}
 	err = retry(func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
+		req, err := http.NewRequestWithContext(w.ctx, http.MethodPost, u.String(), nil)
 		if err != nil {
 			return err
 		}
 		req.Header.Set("X-Upload-Content-Type", "application/octet-stream")
 		req.Header.Set("Content-Length", "0")
-		resp, err := client.Do(req)
+		resp, err := w.client.Do(req)
 		if err != nil {
 			return fmt.Errorf("executing http request: %w", err)
 		}
@@ -705,6 +772,10 @@ func startSessionNext(ctx context.Context, client *http.Client, bucket, name str
 		uri = resp.Header.Get("Location")
 		return nil
 	})
+	w.logger.WithFields(logrus.Fields{
+		"bucket": w.object.BucketName(),
+		"object": w.object.ObjectName(),
+	}).Debug("Created new resumable upload session")
 	return uri, err
 }
 
@@ -721,6 +792,7 @@ func (d *driverNext) keyToPath(key string) string {
 }
 
 type writerNext struct {
+	logger dcontext.Logger
 	ctx    context.Context
 	client *http.Client
 	object *storage.ObjectHandle
@@ -853,7 +925,7 @@ func (w *writerNext) Commit() error {
 	// is committed even when the buffer is empty. The empty/first loop with
 	// zero-length will actually commit the file.
 	for {
-		n, err := putChunkNext(w.ctx, w.client, w.sessionURI, w.buffer[nn:w.buffSize], w.offset, w.size)
+		n, err := w.putChunkNext(w.buffer[nn:w.buffSize], w.size)
 		nn += n
 		w.offset += n
 		if err != nil {
@@ -878,12 +950,12 @@ func (w *writerNext) writeChunk() error {
 	}
 	// if their is no sessionURI yet, obtain one by starting the session
 	if w.sessionURI == "" {
-		w.sessionURI, err = startSessionNext(w.ctx, w.client, w.object.BucketName(), w.object.ObjectName())
+		w.sessionURI, err = w.startSessionNext()
 	}
 	if err != nil {
 		return err
 	}
-	nn, err := putChunkNext(w.ctx, w.client, w.sessionURI, w.buffer[0:chunkSize], w.offset, -1)
+	nn, err := w.putChunkNext(w.buffer[0:chunkSize], -1)
 	w.offset += nn
 	// shift the remaining bytes to the start of the buffer
 	w.buffSize = int64(copy(w.buffer, w.buffer[nn:w.buffSize])) // nolint: gosec // copy() is always going to be non-negative
@@ -916,6 +988,13 @@ func (w *writerNext) Write(p []byte) (int, error) {
 		// * this follows the semantics of Azure and S3 drivers
 		w.size += int64(n)
 		if w.buffSize == int64(cap(w.buffer)) {
+			w.logger.WithFields(logrus.Fields{
+				"path":         w.object.ObjectName(),
+				"bufferSize":   w.buffSize,
+				"totalWritten": w.size,
+				"chunkNumber":  w.offset/int64(cap(w.buffer)) + 1,
+			}).Debug("Buffer full, initiating chunk upload")
+
 			err = w.writeChunk()
 			if err != nil {
 				break
@@ -983,5 +1062,12 @@ func (w *writerNext) init() error {
 	w.sessionURI = attrs.Metadata["Session-URI"]
 	w.offset = offset
 	w.size = offset + w.buffSize
+
+	w.logger.WithFields(logrus.Fields{
+		"path":          w.object.ObjectName(),
+		"resumedOffset": offset,
+		"bufferedBytes": w.buffSize,
+	}).Debug("Resumed upload session")
+
 	return nil
 }
