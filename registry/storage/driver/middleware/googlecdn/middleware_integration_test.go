@@ -35,6 +35,7 @@ import (
 	dstorage "github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/gcs"
+	btestutil "github.com/docker/distribution/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -69,6 +70,7 @@ func newGCSDriver(t *testing.T) (driver.StorageDriver, string) {
 		"bucket":        os.Getenv("REGISTRY_STORAGE_GCS_BUCKET"),
 		"keyfile":       os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
 		"rootdirectory": root,
+		"logger":        btestutil.NewTestLogger(t),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, d)
