@@ -106,7 +106,7 @@ storage:
     debug_log: false
   gcs:
     bucket: bucketname
-    keyfile: /path/to/keyfile
+    keyfile: /path/to/keyfile.json
     useragent: container-registry
     debug_log: false
     credentials:
@@ -503,7 +503,7 @@ storage:
     debug_log: false
   gcs:
     bucket: bucketname
-    keyfile: /path/to/keyfile
+    keyfile: /path/to/keyfile.json
     useragent: container-registry
     debug_log: false
     credentials:
@@ -581,7 +581,7 @@ You can choose any of these backend storage drivers:
 | `filesystem`           | Uses the local disk to store registry files. It is ideal for development and may be appropriate for some small-scale production applications. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/filesystem.md). |
 | `azure`                | Uses Microsoft Azure Blob Storage ([deprecated version](https://docs.gitlab.com/update/deprecations/#azure-storage-driver-for-the-container-registry)). See the [driver's reference documentation](./storage-drivers/azure_v1.md).                                                                                                                 |
 | `azure_v2`             | Improved Microsoft Azure Blob Storage. See the [driver's reference documentation](./storage-drivers/azure_v2.md).                                                                                                                 |
-| `gcs`                  | Uses Google Cloud Storage. See the [driver's reference documentation](https://github.com/docker/docker.github.io/tree/master/registry/storage-drivers/gcs.md).                                                                                                                           |
+| `gcs`                  | Uses Google Cloud Storage. See the [driver's reference documentation](./storage-drivers/gcs.md). |
 | `s3`                   | Uses Amazon Simple Storage Service (S3) ([deprecated version](https://docs.gitlab.com/update/deprecations/#s3-storage-driver-aws-sdk-v1-for-the-container-registry)). See the [driver's reference documentation](./storage-drivers/s3_v1.md).                                                                  |
 | `s3_v2`                | Improved Amazon Simple Storage Service (S3) driver. See the [driver's reference documentation](./storage-drivers/s3_v2.md).                                 |
 
