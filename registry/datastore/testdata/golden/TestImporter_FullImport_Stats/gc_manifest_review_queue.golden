@@ -1,0 +1,10 @@
+[{"top_level_namespace_id":1,"repository_id":1,"manifest_id":1,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":2,"repository_id":2,"manifest_id":2,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":2,"repository_id":3,"manifest_id":3,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":2,"repository_id":3,"manifest_id":4,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":2,"repository_id":4,"manifest_id":5,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":3,"repository_id":5,"manifest_id":6,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":3,"repository_id":5,"manifest_id":7,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":3,"repository_id":5,"manifest_id":8,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":5,"repository_id":7,"manifest_id":9,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}, 
+ {"top_level_namespace_id":6,"repository_id":8,"manifest_id":10,"review_after":"2020-04-16T12:04:28.95584","review_count":0,"created_at":"2020-04-15T12:04:28.95584","event":"manifest_upload"}]

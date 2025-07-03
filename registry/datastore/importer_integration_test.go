@@ -77,6 +77,24 @@ func overrideDynamicData(tb testing.TB, actual []byte) []byte {
 	re = regexp.MustCompile(`"protected": ".*"`)
 	actual = re.ReplaceAllLiteral(actual, []byte(`"protected": "eyJmb3JtYXRMZW5ndGgiOj"`))
 
+	// Import stats have a large number of timestamp fields which change every run.
+	re = regexp.MustCompile(`"started_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"started_at":"2020-04-15T12:04:28.95584"`))
+	re = regexp.MustCompile(`"finished_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"finished_at":"2020-04-15T12:04:28.95584"`))
+	re = regexp.MustCompile(`"pre_import_started_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"pre_import_started_at":"2020-04-15T12:04:28.95584"`))
+	re = regexp.MustCompile(`"pre_import_finished_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"pre_import_finished_at":"2020-04-15T12:04:28.95584"`))
+	re = regexp.MustCompile(`"tag_import_started_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"tag_import_started_at":"2020-04-15T12:04:28.95584"`))
+	re = regexp.MustCompile(`"tag_import_finished_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"tag_import_finished_at":"2020-04-15T12:04:28.95584"`))
+	re = regexp.MustCompile(`"blob_import_started_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"blob_import_started_at":"2020-04-15T12:04:28.95584"`))
+	re = regexp.MustCompile(`"blob_import_finished_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"blob_import_finished_at":"2020-04-15T12:04:28.95584"`))
+
 	return actual
 }
 
@@ -745,6 +763,33 @@ func TestImporter_ImportAllRepositories(t *testing.T) {
 
 	imp := newImporter(t, suite.db)
 	require.NoError(t, imp.ImportAllRepositories(suite.ctx))
+	validateImport(t, suite.db)
+}
+
+func TestImporter_FullImport_Stats(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "happy-path", datastore.WithImportStatsTracking("test driver"))
+	err := imp.FullImport(suite.ctx)
+	require.NoError(t, err)
+	validateImport(t, suite.db)
+}
+
+func TestImporter_PreImportAll_Stats(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "happy-path", datastore.WithImportStatsTracking("test driver"))
+	err := imp.PreImportAll(suite.ctx)
+	require.NoError(t, err)
+	validateImport(t, suite.db)
+}
+
+func TestImporter_PreImportAll_BadManifestFormat_Stats(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "bad-manifest-format", datastore.WithImportStatsTracking("test driver"))
+	err := imp.PreImportAll(suite.ctx)
+	require.EqualError(t, err, `pre importing all repositories: pre importing tagged manifests: pre importing manifest: retrieving manifest "sha256:a2490cec4484ee6c1068ba3a05f89934010c85242f736280b35343483b2264b6" from filesystem: failed to unmarshal manifest payload: invalid character 's' looking for beginning of value`)
 	validateImport(t, suite.db)
 }
 
