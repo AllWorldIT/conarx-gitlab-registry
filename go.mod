@@ -36,7 +36,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/lib/pq v1.10.9
 	github.com/neilotoole/slogt v1.1.0
-	github.com/olekukonko/tablewriter v1.0.7
+	github.com/olekukonko/tablewriter v1.0.8
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/prometheus/client_golang v1.22.0
