@@ -91,7 +91,7 @@ func (*driverNext) Name() string {
 // This should primarily be used for small objects.
 func (d *driverNext) GetContent(ctx context.Context, path string) ([]byte, error) {
 	name := d.pathToKey(path)
-	// NOTE(prozlach): NewReader is considered indepotent by GCS, hence it is
+	// NOTE(prozlach): NewReader is considered idempotent by GCS, hence it is
 	// retried without a limit until context is canceled. The retries
 	// themselves are enabled by default.
 	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
@@ -367,7 +367,7 @@ func (d *driverNext) Writer(ctx context.Context, path string, doAppend bool) (st
 func (d *driverNext) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
 	var fi storagedriver.FileInfoFields
 
-	// NOTE(prozlach): Attrs is considered indepotent by GCS, hence it is
+	// NOTE(prozlach): Attrs is considered idempotent by GCS, hence it is
 	// retried without a limit until context is canceled. The retries
 	// themselves are enabled by default.
 	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
@@ -392,7 +392,7 @@ func (d *driverNext) Stat(ctx context.Context, path string) (storagedriver.FileI
 	query.Prefix = dirpath
 
 	it := d.bucket.Objects(ctx, query)
-	// NOTE(prozlach): Listing objects is considered indepotent by GCS, hence
+	// NOTE(prozlach): Listing objects is considered idempotent by GCS, hence
 	// it is retried without a limit until context is canceled. The retries
 	// themselves are enabled by default.
 	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
@@ -432,7 +432,7 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 		if errors.Is(err, iterator.Done) {
 			break
 		}
-		// NOTE(prozlach): Listing objects is considered indepotent by GCS,
+		// NOTE(prozlach): Listing objects is considered idempotent by GCS,
 		// hence it is retried without a limit until context is canceled. The
 		// retries themselves are enabled by default.
 		// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
@@ -480,9 +480,9 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 // original object.
 func (d *driverNext) Move(ctx context.Context, sourcePath, destPath string) error {
 	// NOTE(prozlach): Both Delete and Copy operations are conditionally
-	// indepotent, but in our case we do not care - we just want to copy the
-	// original object then to simply remove the old one. Hence we override the
-	// indepotency policy to always retry until the context is canceled. The
+	// idempotent, but in our case we do not care - we just want to copy the
+	// original object and then simply remove the old one. Hence we override the
+	// idempotent policy to always retry until the context is canceled. The
 	// retries themselves are enabled by default.
 	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 	alwaysRetryBucket := d.bucket.Retryer(storage.WithPolicy(storage.RetryAlways))
@@ -526,7 +526,7 @@ func (d *driverNext) listAll(ctx context.Context, prefix string) ([]string, erro
 		if errors.Is(err, iterator.Done) {
 			break
 		}
-		// NOTE(prozlach): Listing objects is considered indepotent by GCS,
+		// NOTE(prozlach): Listing objects is considered idempotent by GCS,
 		// hence it is retried without a limit until context is canceled. The
 		// retries themselves are enabled by default. Docs:
 		// https://cloud.google.com/storage/docs/retry-strategy#go
@@ -545,10 +545,10 @@ func (d *driverNext) listAll(ctx context.Context, prefix string) ([]string, erro
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
 func (d *driverNext) Delete(ctx context.Context, path string) error {
-	// NOTE(prozlach): Delete operation is conditionally indepotent, but in our
-	// case we do not care - we just want to delete the object then to simply
-	// remove the old one. Hence we override the indepotency policy to always
-	// retry until the context is canceled. The retries themselves are enabled
+	// NOTE(prozlach): Delete operation is conditionally idempotent, but in our
+	// case we do not care - we just want to delete the object. Hence we override
+	// the idempotent policy to always retry until the context is canceled.
+	// The retries themselves are enabled by default.
 	// by default.
 	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 	alwaysRetryBucket := d.bucket.Retryer(storage.WithPolicy(storage.RetryAlways))
@@ -619,9 +619,9 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 			default:
 			}
 
-			// NOTE(prozlach): Delete operation is conditionally indepotent,
+			// NOTE(prozlach): Delete operation is conditionally idempotent,
 			// but in our case we do not care - we just want the object to go
-			// away, so we override the indepotency policy to always retry
+			// away, so we override the idempotent policy to always retry
 			// until the context is canceled. The retries themselves are
 			// enabled by default. Docs:
 			// https://cloud.google.com/storage/docs/retry-strategy#go
@@ -817,9 +817,9 @@ func (w *writerNext) Cancel() error {
 	}
 	w.canceled = true
 
-	// NOTE(prozlach): Delete operation is conditionally indepotent, but in our
+	// NOTE(prozlach): Delete operation is conditionally idempotent, but in our
 	// case we do not care - we just want to delete the object. Hence we
-	// override the indepotency policy to always retry until the context is
+	// override the idempotent policy to always retry until the context is
 	// canceled. The retries themselves are enabled by default.
 	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 	err := w.object.Retryer(storage.WithPolicy(storage.RetryAlways)).Delete(w.ctx)
