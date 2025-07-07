@@ -135,11 +135,15 @@ type App struct {
 	manifestRefLimit         int
 	manifestPayloadSizeLimit int
 
+	// dualRedisCache provides dual-cache functionality for gradual Redis cluster migration.
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/1576.
+	dualRedisCache *iredis.DualCache
+
 	// redisCache is the abstraction for manipulating cached data on Redis.
-	redisCache *iredis.Cache
+	redisCache iredis.CacheInterface
 
 	// redisLBCache is the abstraction for the database load balancing Redis cache.
-	redisLBCache *iredis.Cache
+	redisLBCache iredis.CacheInterface
 
 	// rateLimiters expects a slice of ordered limiters by precedence
 	// see configureRateLimiters for implementation details.
@@ -161,7 +165,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		Config:  config,
 		Context: ctx,
 
-		shutdownFuncs: make([]shutdownFunc, 0),
+		shutdownFuncs:  make([]shutdownFunc, 0),
+		dualRedisCache: iredis.NewDualCache(nil, nil),
 	}
 
 	if err := app.initMetaRouter(); err != nil {
@@ -237,6 +242,21 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
 
+	// Initialize dual cache with primary (redisCache) and standby (nil for now).
+	// Feature flags control dual write behavior and read routing for migration.
+	var dualRedisOpts []iredis.DualCacheOption
+	if feature.DualCacheWrite.Enabled() {
+		dualRedisOpts = append(dualRedisOpts, iredis.WithEnableDualWrite())
+	}
+
+	if feature.DualCacheReadFromStandBy.Enabled() {
+		dualRedisOpts = append(dualRedisOpts, iredis.WithReadFromStandBy())
+	}
+
+	app.dualRedisCache = iredis.NewDualCache(app.redisCache, nil, dualRedisOpts...)
+
+	// Redis rate-limiter will be disabled on GitLab.com environments where it is currently enabled (`gstg` and `pre`) so we don't need to support it in the dualCache.
+	// https://gitlab.com/groups/gitlab-com/gl-infra/data-access/durability/-/epics/24#note_2599994238
 	if err := app.configureRedisRateLimiter(ctx, config); err != nil {
 		// Redis rate-limiter is not a strictly required dependency, we simply log and report a failure here
 		// and proceed to not prevent the app from starting.
@@ -426,7 +446,18 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			if err := app.configureRedisLoadBalancingCache(ctx, config); err != nil {
 				return nil, err
 			}
-			dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisLBCache)))
+
+			// Inject redisLBCache as the standby cache to enable dual writes.
+			// When DualCacheWrite is enabled, writes will go to both redisCache (primary) and redisLBCache (standby).
+			app.dualRedisCache.InjectStandByCache(app.redisLBCache)
+			if feature.DualCacheSwapInstances.Enabled() {
+				// Promote standby (redisLBCache) to primary role for all cache operations.
+				app.dualRedisCache.UseStandByAsPrimary()
+			}
+
+			if app.redisLBCache != nil {
+				dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisLBCache)))
+			}
 
 			// service discovery takes precedence over fixed hosts
 			if config.Database.LoadBalancing.Record != "" {
@@ -1560,8 +1591,8 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 		}
 
 		if ctx.useDatabase {
-			if app.redisCache != nil {
-				ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
+			if app.dualRedisCache.IsPrimaryCacheEnabled() {
+				ctx.repoCache = datastore.NewCentralRepositoryCache(app.dualRedisCache)
 			} else {
 				ctx.repoCache = datastore.NewSingleRepositoryCache()
 			}
@@ -1616,8 +1647,8 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 		}
 
 		// Initialize repository cache
-		if app.redisCache != nil {
-			ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
+		if app.dualRedisCache.IsPrimaryCacheEnabled() {
+			ctx.repoCache = datastore.NewCentralRepositoryCache(app.dualRedisCache)
 		} else {
 			ctx.repoCache = datastore.NewSingleRepositoryCache()
 		}
