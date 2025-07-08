@@ -285,7 +285,7 @@ func ParseLogLevelParamV1(logger log.Logger, param any) aws.LogLevelType {
 	}
 
 	logger.Info(
-		fmt.Sprintf("S4 logging level set to %q", strings.Join(logLevelsSet, ",")),
+		fmt.Sprintf("S3 logging level set to %q", strings.Join(logLevelsSet, ",")),
 	)
 
 	return res
