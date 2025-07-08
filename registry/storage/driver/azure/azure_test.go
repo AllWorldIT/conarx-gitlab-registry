@@ -20,7 +20,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/benbjohnson/clock"
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/internal/testutil"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
@@ -161,14 +161,13 @@ func fetchEnvVarsConfiguration() {
 	}
 }
 
-func fetchDriverConfig(rootDirectory string, trimLegacyRootPrefix bool, logger dcontext.Logger) (any, error) {
+func fetchDriverConfig(rootDirectory string, trimLegacyRootPrefix bool) (any, error) {
 	rawParams := map[string]any{
 		common.ParamAccountName:          accountName,
 		common.ParamContainer:            accountContainer,
 		common.ParamRealm:                accountRealm,
 		common.ParamRootDirectory:        rootDirectory,
 		common.ParamTrimLegacyRootPrefix: trimLegacyRootPrefix,
-		storagedriver.ParamLogger:        logger,
 	}
 
 	switch credsType {
@@ -212,8 +211,8 @@ func fetchDriverConfig(rootDirectory string, trimLegacyRootPrefix bool, logger d
 	return parsedParams, nil
 }
 
-func azureDriverConstructor(tb testing.TB, rootDirectory string, trimLegacyRootPrefix bool) (storagedriver.StorageDriver, error) {
-	parsedParams, err := fetchDriverConfig(rootDirectory, trimLegacyRootPrefix, btestutil.NewTestLogger(tb))
+func azureDriverConstructor(rootDirectory string, trimLegacyRootPrefix bool) (storagedriver.StorageDriver, error) {
+	parsedParams, err := fetchDriverConfig(rootDirectory, trimLegacyRootPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("parsing azure login credentials: %w", err)
 	}
@@ -241,12 +240,12 @@ func TestAzureDriverSuite(t *testing.T) {
 	}
 
 	ts := testsuites.NewDriverSuite(
-		context.Background(),
+		log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t))),
 		func() (storagedriver.StorageDriver, error) {
-			return azureDriverConstructor(t, root, true)
+			return azureDriverConstructor(root, true)
 		},
 		func() (storagedriver.StorageDriver, error) {
-			return azureDriverConstructor(t, "", true)
+			return azureDriverConstructor("", true)
 		},
 		nil,
 	)
@@ -263,12 +262,12 @@ func BenchmarkAzureDriverSuite(b *testing.B) {
 	}
 
 	ts := testsuites.NewDriverSuite(
-		context.Background(),
+		log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(b))),
 		func() (storagedriver.StorageDriver, error) {
-			return azureDriverConstructor(b, root, true)
+			return azureDriverConstructor(root, true)
 		},
 		func() (storagedriver.StorageDriver, error) {
-			return azureDriverConstructor(b, "", true)
+			return azureDriverConstructor("", true)
 		},
 		nil,
 	)
@@ -313,10 +312,10 @@ func BenchmarkAzureDriverSuite(b *testing.B) {
 const sampleFileSize = 3542
 
 func ensureBlobFuncFactory(t *testing.T) (string, func(absPath string) func()) {
-	ctx, cancelF := context.WithCancel(context.Background())
+	ctx, cancelF := context.WithCancel(log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t))))
 	t.Cleanup(cancelF)
 
-	rawParams, err := fetchDriverConfig("", false, btestutil.NewTestLogger(t))
+	rawParams, err := fetchDriverConfig("", false)
 	require.NoError(t, err)
 
 	var azBlobClient *azblob.Client
@@ -417,7 +416,7 @@ func TestAzureDriverRootPathStat(t *testing.T) {
 
 	suffix, ensureBlobF := ensureBlobFuncFactory(t)
 
-	tests := []struct {
+	testCases := []struct {
 		name          string
 		rootDirectory string
 		legacyPath    bool
@@ -478,18 +477,21 @@ func TestAzureDriverRootPathStat(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		cleanupF := ensureBlobF(tt.fileToCreate)
+	for _, tc := range testCases {
+		cleanupF := ensureBlobF(tc.fileToCreate)
 		t.Cleanup(cleanupF)
 
-		t.Run(tt.name, func(t *testing.T) {
-			d, err := azureDriverConstructor(t, tt.rootDirectory, !tt.legacyPath)
-			require.NoError(t, err)
+		t.Run(tc.name, func(tt *testing.T) {
+			d, err := azureDriverConstructor(tc.rootDirectory, !tc.legacyPath)
+			require.NoError(tt, err)
 
-			fsInfo, err := d.Stat(context.Background(), fmt.Sprintf("/%s-%s", tt.filename, suffix))
-			require.NoError(t, err)
-			require.False(t, fsInfo.IsDir())
-			require.EqualValues(t, sampleFileSize, fsInfo.Size())
+			fsInfo, err := d.Stat(
+				log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tt))),
+				fmt.Sprintf("/%s-%s", tc.filename, suffix),
+			)
+			require.NoError(tt, err)
+			require.False(tt, fsInfo.IsDir())
+			require.EqualValues(tt, sampleFileSize, fsInfo.Size())
 		})
 	}
 }
@@ -567,10 +569,13 @@ func TestAzureDriverRootPathList(t *testing.T) {
 		t.Cleanup(cleanupF)
 
 		t.Run(tt.name, func(t *testing.T) {
-			d, err := azureDriverConstructor(t, tt.rootDirectory, !tt.legacyPath)
+			d, err := azureDriverConstructor(tt.rootDirectory, !tt.legacyPath)
 			require.NoError(t, err)
 
-			files, err := d.List(context.Background(), "/")
+			files, err := d.List(
+				log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t))),
+				"/",
+			)
 			require.NoError(t, err)
 			require.Contains(t, files, fmt.Sprintf("/%s-%s", tt.filename, suffix))
 		})
@@ -583,10 +588,9 @@ func TestAzureDriver_parseParameters_Bool(t *testing.T) {
 	}
 
 	p := map[string]any{
-		"accountname":             "accountName",
-		"accountkey":              "accountKey",
-		"container":               "container",
-		storagedriver.ParamLogger: btestutil.NewTestLogger(t),
+		"accountname": "accountName",
+		"accountkey":  "accountKey",
+		"container":   "container",
 		// TODO: add string test cases, if needed?
 	}
 
@@ -606,9 +610,9 @@ func TestAzureDriverURLFor_Expiry(t *testing.T) {
 		t.Skip(skipCheck())
 	}
 
-	ctx := context.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 	validRoot := t.TempDir()
-	d, err := azureDriverConstructor(t, validRoot, true)
+	d, err := azureDriverConstructor(validRoot, true)
 	require.NoError(t, err)
 
 	fp := "/foo"
@@ -745,7 +749,7 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 		t.Skip("retries testing is only supported on Azure v2 ATM")
 	}
 
-	ctx := context.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 	rootDirectory := t.TempDir()
 	blobber := btestutil.NewBlober(btestutil.RandomBlob(t, v2.MaxChunkSize*2+1<<20))
 
@@ -1114,7 +1118,7 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 		tt *testing.T,
 		interceptorConfigs []dtestutil.InterceptorConfig,
 	) (storagedriver.StorageDriver, func() bool) {
-		parsedParams, err := fetchDriverConfig(rootDirectory, true, btestutil.NewTestLogger(tt))
+		parsedParams, err := fetchDriverConfig(rootDirectory, true)
 		require.NoError(tt, err)
 		typedParsedParams := parsedParams.(*v2.DriverParameters)
 
@@ -1191,7 +1195,7 @@ func TestAzureDriverRetriesHandling(t *testing.T) {
 				tt.Logf("blob path used for testing: %s", filename)
 				// We can't use `sDriver` below as it has an active interceptor
 				// config that may interfere with cleanup/deletion
-				simpleSDriverConfig, err := fetchDriverConfig(rootDirectory, true, btestutil.NewTestLogger(tt))
+				simpleSDriverConfig, err := fetchDriverConfig(rootDirectory, true)
 				require.NoError(tt, err)
 				simpleSDriver, err := newDriverFn(simpleSDriverConfig)
 				require.NoError(tt, err)

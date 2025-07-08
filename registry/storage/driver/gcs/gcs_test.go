@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/version"
 
@@ -23,11 +24,9 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 
-	dcontext "github.com/docker/distribution/context"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
-	btestutil "github.com/docker/distribution/testutil"
 	slogt "github.com/neilotoole/slogt"
 )
 
@@ -42,7 +41,7 @@ var (
 const maxConcurrency = 10
 
 func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.StorageDriver, error) {
-	ctx := context.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb)))
 	creds, err := google.FindDefaultCredentials(ctx, storage.ScopeFullControl)
 	if err != nil {
 		return nil, fmt.Errorf("Error reading default credentials: %w", err)
@@ -72,7 +71,10 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
 		opts = append(opts, storage.WithJSONReads())
 	}
-	storageClient, err := storage.NewClient(dcontext.Background(), opts...)
+	storageClient, err := storage.NewClient(
+		log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb))),
+		opts...,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating storage client: %w", err)
 	}
@@ -92,7 +94,10 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 	} else {
 		// For compute engine default credentials, attempt to get service
 		// account email. This is optional.
-		serviceInfo, err := metadata.GetWithContext(context.Background(), "instance/service-accounts/default/email")
+		serviceInfo, err := metadata.GetWithContext(
+			log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb))),
+			"instance/service-accounts/default/email",
+		)
 		if err == nil {
 			email = serviceInfo
 		}
@@ -108,12 +113,14 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 	}
 
 	parameters := &driverParameters{
-		logger:         btestutil.NewTestLogger(tb),
-		bucket:         bucket,
-		rootDirectory:  rootDirectory,
-		email:          email,
-		privateKey:     privateKey,
-		client:         oauth2.NewClient(dcontext.Background(), ts),
+		bucket:        bucket,
+		rootDirectory: rootDirectory,
+		email:         email,
+		privateKey:    privateKey,
+		client: oauth2.NewClient(
+			log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb))),
+			ts,
+		),
 		storageClient:  storageClient,
 		chunkSize:      defaultChunkSize,
 		maxConcurrency: maxConcurrency,
@@ -145,7 +152,7 @@ func TestGCSDriverSuite(t *testing.T) {
 	}
 
 	ts := testsuites.NewDriverSuite(
-		context.Background(),
+		log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t))),
 		func() (storagedriver.StorageDriver, error) {
 			return gcsDriverConstructor(t, root)
 		},
@@ -165,7 +172,7 @@ func BenchmarkGCSDriverSuite(b *testing.B) {
 	}
 
 	ts := testsuites.NewDriverSuite(
-		context.Background(),
+		log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(b))),
 		func() (storagedriver.StorageDriver, error) {
 			return gcsDriverConstructor(b, root)
 		},
@@ -196,7 +203,7 @@ func TestGCSDriverCommitEmpty(t *testing.T) {
 	driver := newTempDirDriver(t)
 
 	filename := "/test"
-	ctx := dcontext.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 
 	writer, err := driver.Writer(ctx, filename, false)
 	require.NoErrorf(t, err, "driver.Writer")
@@ -225,7 +232,7 @@ func TestGCSDriverCommit(t *testing.T) {
 	driver := newTempDirDriver(t)
 
 	filename := "/test"
-	ctx := dcontext.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 
 	contents := make([]byte, defaultChunkSize)
 	writer, err := driver.Writer(ctx, filename, false)
@@ -302,7 +309,7 @@ func TestGCSDriverEmptyRootList(t *testing.T) {
 
 	filename := "/test"
 	contents := []byte("contents")
-	ctx := dcontext.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 
 	err = rootedDriver.PutContent(ctx, filename, contents)
 	require.NoError(t, err, "unexpected error creating content")
@@ -343,7 +350,7 @@ func TestGCSDriverSubpathList(t *testing.T) {
 		"/test/subpath/path/test5.txt",
 	}
 	contents := []byte("contents")
-	ctx := dcontext.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 
 	for _, filename := range filenames {
 		err := rootedDriver.PutContent(ctx, filename, contents)
@@ -372,7 +379,7 @@ func TestGCSDriverMoveDirectory(t *testing.T) {
 
 	driver := newTempDirDriver(t)
 
-	ctx := dcontext.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 	contents := []byte("contents")
 	// Create a regular file.
 	err := driver.PutContent(ctx, "/parent/dir/foo", contents)
@@ -392,7 +399,6 @@ func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 		"bucket":    "bucket",
 		"keyfile":   "testdata/key.json",
 		"useragent": userAgent,
-		"logger":    btestutil.NewTestLogger(t),
 	}
 
 	testFn := func(params map[string]any) (any, error) {
@@ -423,7 +429,7 @@ func TestGCSDriverURLFor_Expiry(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	ctx := context.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 	validRoot := t.TempDir()
 	d, err := gcsDriverConstructor(t, validRoot)
 	require.NoError(t, err)
@@ -472,7 +478,7 @@ func TestGCSDriverURLFor_AdditionalQueryParams(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	ctx := context.Background()
+	ctx := log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t)))
 	validRoot := t.TempDir()
 	d, err := gcsDriverConstructor(t, validRoot)
 	require.NoError(t, err)

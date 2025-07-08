@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	dcontext "github.com/docker/distribution/context"
-	rngtestutil "github.com/docker/distribution/testutil"
+	"github.com/docker/distribution/log"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/require"
 
@@ -25,7 +25,11 @@ import (
 
 func prefixedMockedS3DriverConstructorT(t *testing.T, s3Mock common.S3WrapperIf) storagedriver.StorageDriver {
 	rootDir := t.TempDir()
-	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+	parsedParams, err := fetchDriverConfig(
+		rootDir,
+		s3.StorageClassStandard,
+		log.GetLogger(log.WithTestingTB(t)),
+	)
 	require.NoError(t, err)
 
 	parsedParams.S3APIImpl = s3Mock
