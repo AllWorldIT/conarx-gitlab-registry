@@ -15,20 +15,20 @@ package gcs
 import (
 	"bytes"
 	"context"
-	"sync"
-	"sync/atomic"
-
-	// nolint: revive,gosec // imports-blocklist
-	"crypto/md5"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/url"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
+
+	// nolint: revive,gosec // imports-blocklist
 
 	"cloud.google.com/go/storage"
 	"github.com/docker/distribution/log"
@@ -40,6 +40,8 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 )
+
+var crc32cTable = crc32.MakeTable(crc32.Castagnoli)
 
 // NewNext constructs a new driver
 func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
@@ -113,12 +115,7 @@ func (d *driverNext) GetContent(ctx context.Context, path string) ([]byte, error
 // This should primarily be used for small objects.
 func (d *driverNext) PutContent(ctx context.Context, path string, contents []byte) error {
 	// nolint: gosec
-	h := md5.New()
-	_, err := h.Write(contents)
-	if err != nil {
-		return fmt.Errorf("calculating hash: %w", err)
-	}
-	md5sum := h.Sum(nil)
+	crc32c := crc32.Checksum(contents, crc32cTable)
 
 	if len(contents) == 0 {
 		d.logger(ctx).WithFields(logrus.Fields{
@@ -136,7 +133,8 @@ func (d *driverNext) PutContent(ctx context.Context, path string, contents []byt
 	return retry(func() error {
 		wc := d.bucket.Object(d.pathToKey(path)).NewWriter(ctx)
 		wc.ContentType = "application/octet-stream"
-		wc.MD5 = md5sum
+		wc.SendCRC32C = true
+		wc.CRC32C = crc32c
 
 		return putContentsCloseNext(wc, contents)
 	})
@@ -892,8 +890,12 @@ func (w *writerNext) Close() error {
 	}
 
 	// commit the writes by updating the upload session
+	crc32c := crc32.Checksum(w.buffer[0:w.buffSize], crc32cTable)
+
 	err = retry(func() error {
 		wc := w.object.NewWriter(w.ctx)
+		wc.SendCRC32C = true
+		wc.CRC32C = crc32c
 		wc.ContentType = uploadSessionContentType
 		wc.Metadata = map[string]string{
 			"Session-URI": w.sessionURI,
@@ -924,8 +926,11 @@ func (w *writerNext) Commit() error {
 
 	// no session started yet just perform a simple upload
 	if w.sessionURI == "" {
+		crc32c := crc32.Checksum(w.buffer[0:w.buffSize], crc32cTable)
 		err := retry(func() error {
 			wc := w.object.NewWriter(w.ctx)
+			wc.SendCRC32C = true
+			wc.CRC32C = crc32c
 			wc.ContentType = "application/octet-stream"
 			return putContentsCloseNext(wc, w.buffer[0:w.buffSize])
 		})

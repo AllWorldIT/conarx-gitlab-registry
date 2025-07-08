@@ -2296,6 +2296,21 @@ func (s *DriverSuite) TestPutContentMultipleTimes() {
 	require.Equal(s.T(), contentsB, readContents)
 }
 
+// TestPutContentZeroSizeFile checks that zero-size file can be uploaded.
+func (s *DriverSuite) TestPutContentZeroSizeFile() {
+	filename := dtestutil.RandomPath(1, 32)
+	defer s.deletePath(s.StorageDriver, firstPart(filename))
+
+	s.T().Logf("blob path used for testing: %s", filename)
+
+	err := s.StorageDriver.PutContent(s.ctx, filename, make([]byte, 0))
+	require.NoError(s.T(), err)
+
+	readContents, err := s.StorageDriver.GetContent(s.ctx, filename)
+	require.NoError(s.T(), err)
+	require.Empty(s.T(), readContents)
+}
+
 // TestConcurrentStreamReads checks that multiple clients can safely read from
 // the same file simultaneously with various offsets.
 func (s *DriverSuite) TestConcurrentStreamReads() {
