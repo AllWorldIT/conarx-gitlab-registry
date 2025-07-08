@@ -19,7 +19,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/benbjohnson/clock"
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/internal"
 	dstorage "github.com/docker/distribution/registry/storage"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
@@ -80,7 +80,6 @@ func init() {
 
 // driverParameters is a struct that encapsulates all the driver parameters after all values have been set
 type driverParameters struct {
-	logger        dcontext.Logger
 	bucket        string
 	email         string
 	privateKey    []byte
@@ -295,8 +294,6 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 		return nil, fmt.Errorf("maxconcurrency config error: %s", err)
 	}
 
-	logger := parameters[storagedriver.ParamLogger].(dcontext.Logger)
-
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
 	if useNext {
 		debugLogging := false
@@ -308,16 +305,20 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 			}
 		}
 		if debugLogging {
-			// NOTE(prozlach): Casting directly to logrus.Entry is a shortcut here,
-			// as we require Logrus logger for the adapter. In theory we should be
-			// using the context.Logger interface instead of peeking into the
-			// implementation, but this requies a deeper refactoring.
+			// NOTE(prozlach): Casting directly to logrus.Entry is a shortcut
+			// here, as we require Logrus logger for the adapter. In theory we
+			// should be using the log.Logger interface instead of peeking into
+			// the implementation, but this requies a deeper refactoring.
 			//
 			// Hopefully we will switch to slog/zap at some point and this will
 			// become non-issue.
-			logrusEntry, ok := logger.(*logrus.Entry)
-			if !ok {
-				return nil, fmt.Errorf("debug logging requires logrus logger, got %T", logger)
+			logrusEntry, err := log.ToLogrusEntry(
+				log.GetLogger().WithFields(log.Fields{
+					"component": "registry.storage.gcs_next.internal",
+				}),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("converting logger to logrus.Entry: %w", err)
 			}
 			slogger := slog.New(
 				sloglogrus.Option{
@@ -332,7 +333,7 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 			// Only set the environment variable if it's not already set
 			// nolint: revive // max-control-nesting
 			if existingLevel := os.Getenv("GOOGLE_SDK_GO_LOGGING_LEVEL"); existingLevel != "" {
-				logger.WithFields(logrus.Fields{
+				log.GetLogger().WithFields(logrus.Fields{
 					"existing_value":  existingLevel,
 					"requested_value": "debug",
 				}).Warn("GOOGLE_SDK_GO_LOGGING_LEVEL environment variable is already set, not overriding")
@@ -373,7 +374,6 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 	}
 
 	return &driverParameters{
-		logger:         logger,
 		bucket:         fmt.Sprint(bucket),
 		rootDirectory:  fmt.Sprint(rootDirectory),
 		email:          jwtConf.Email,

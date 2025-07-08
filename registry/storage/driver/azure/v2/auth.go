@@ -16,6 +16,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/docker/distribution/version"
@@ -271,9 +272,11 @@ func commonClientSetup(params *DriverParameters, d *driver) {
 		if len(params.DebugLogEvents) > 0 {
 			azlog.SetEvents(params.DebugLogEvents...)
 		}
-		logger := params.Logger
 		azlog.SetListener(func(cls azlog.Event, msg string) {
-			logger.WithField("event_type", cls).Debug(msg)
+			log.GetLogger().WithFields(log.Fields{
+				"component":  "registry.storage.azure_v2.internal",
+				"event_type": cls,
+			}).Debug(msg)
 		})
 	}
 }

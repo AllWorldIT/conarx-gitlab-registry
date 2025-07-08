@@ -34,6 +34,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	dcontext "github.com/docker/distribution/context"
+	dlog "github.com/docker/distribution/log"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
@@ -89,7 +90,7 @@ type Driver struct {
 
 // NewAWSLoggerWrapper returns an aws.Logger which will write log messages to
 // given logger. It is meant as a thin wrapper.
-func NewAWSLoggerWrapper(logger dcontext.Logger) aws.Logger {
+func NewAWSLoggerWrapper(logger dlog.Logger) aws.Logger {
 	return &awsLoggerWrapper{
 		logger: logger,
 	}
@@ -98,7 +99,7 @@ func NewAWSLoggerWrapper(logger dcontext.Logger) aws.Logger {
 // A defaultLogger provides a minimalistic logger satisfying the aws.Logger
 // interface.
 type awsLoggerWrapper struct {
-	logger dcontext.Logger
+	logger dlog.Logger
 }
 
 // Log logs the parameters to the configured logger.
@@ -133,7 +134,7 @@ func NewS3API(params *common.DriverParameters) (s3iface.S3API, error) {
 
 	awsConfig := aws.NewConfig().
 		WithLogLevel(aws.LogLevelType(params.LogLevel)).
-		WithLogger(NewAWSLoggerWrapper(params.Logger))
+		WithLogger(NewAWSLoggerWrapper(dlog.GetLogger()))
 	if params.AccessKey != "" && params.SecretKey != "" {
 		creds := credentials.NewStaticCredentials(
 			params.AccessKey, params.SecretKey, params.SessionToken,

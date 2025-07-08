@@ -179,7 +179,6 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	}
 
 	log := dcontext.GetLogger(app)
-	storageParams[storagedriver.ParamLogger] = log
 
 	var err error
 	app.driver, err = factory.Create(config.Storage.Type(), storageParams)

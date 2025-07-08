@@ -228,5 +228,3 @@ var (
 	ErrAlreadyCommited = fmt.Errorf("already committed")
 	ErrAlreadyCanceled = fmt.Errorf("already canceled")
 )
-
-const ParamLogger = "logger"

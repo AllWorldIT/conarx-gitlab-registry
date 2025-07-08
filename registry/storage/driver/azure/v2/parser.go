@@ -7,8 +7,6 @@ import (
 	"time"
 
 	azlog "github.com/Azure/azure-sdk-for-go/sdk/azcore/log"
-	dcontext "github.com/docker/distribution/context"
-	sdriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
 )
@@ -43,7 +41,6 @@ type DriverParameters struct {
 
 	DebugLog       bool
 	DebugLogEvents []azlog.Event
-	Logger         dcontext.Logger
 
 	Transport http.RoundTripper
 }
@@ -101,7 +98,6 @@ func ParseParameters(parameters map[string]any) (any, error) {
 		return nil, fmt.Errorf("credentials type %q is invalid", res.CredentialsType)
 	}
 
-	res.Logger = parameters[sdriver.ParamLogger].(dcontext.Logger)
 	_, ok = parameters[common.ParamDebugLog]
 	if ok {
 		res.DebugLog, err = parse.Bool(parameters, common.ParamDebugLog, false)

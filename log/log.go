@@ -7,6 +7,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"testing"
 
 	"github.com/docker/distribution/version"
 	"github.com/sirupsen/logrus"
@@ -46,6 +47,15 @@ type Fields = logrus.Fields
 
 type wrapper struct {
 	*logrus.Entry
+}
+
+type logWriterType struct {
+	tb testing.TB
+}
+
+func (l logWriterType) Write(p []byte) (n int, err error) {
+	l.tb.Log(string(p))
+	return len(p), nil
 }
 
 // FromLogrusLogger converts a logrus.Logger into Logger.
@@ -105,6 +115,12 @@ func WithKeys(keys ...any) LogOpt {
 func WithWriter(w io.Writer) LogOpt {
 	return func(o *logOptions) {
 		o.writer = w
+	}
+}
+
+func WithTestingTB(tb testing.TB) LogOpt {
+	return func(o *logOptions) {
+		o.writer = logWriterType{tb: tb}
 	}
 }
 

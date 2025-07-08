@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/smithy-go"
+	"github.com/docker/distribution/log"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
@@ -306,7 +307,11 @@ func TestS3DriverRetriesAndErrorHandling(t *testing.T) {
 		interceptorConfigs []dtestutil.InterceptorConfig,
 		maxRetries int64,
 	) (storagedriver.StorageDriver, func() bool) {
-		parsedParams, err := fetchDriverConfig(rootDirectory, s3.StorageClassStandard, btestutil.NewTestLogger(tt))
+		parsedParams, err := fetchDriverConfig(
+			rootDirectory,
+			s3.StorageClassStandard,
+			log.GetLogger(log.WithTestingTB(tt)),
+		)
 		require.NoError(tt, err)
 		parsedParams.MaxRetries = maxRetries
 
@@ -361,7 +366,11 @@ func TestS3DriverRetriesAndErrorHandling(t *testing.T) {
 				tt.Logf("blob path used for testing: %s", filename)
 				// We can't use `sDriver` below as it has active interceptro
 				// config that may interfere with cleanup/deletion
-				vanillaSDriverConfig, err := fetchDriverConfig(rootDirectory, s3.StorageClassStandard, btestutil.NewTestLogger(tt))
+				vanillaSDriverConfig, err := fetchDriverConfig(
+					rootDirectory,
+					s3.StorageClassStandard,
+					log.GetLogger(log.WithTestingTB(tt)),
+				)
 				require.NoError(tt, err)
 				vanillaSDriver, err := newDriverFn(vanillaSDriverConfig)
 				require.NoError(tt, err)

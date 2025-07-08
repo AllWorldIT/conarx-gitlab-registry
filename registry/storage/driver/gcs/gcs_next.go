@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/log"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/hashicorp/go-multierror"
@@ -51,7 +51,6 @@ func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
 		return nil, fmt.Errorf("invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
 	}
 	d := &driverNext{
-		logger:        params.logger,
 		bucket:        params.storageClient.Bucket(params.bucket).Retryer(storage.WithErrorFunc(ShouldRetry)),
 		rootDirectory: rootDirectory,
 		email:         params.email,
@@ -73,7 +72,6 @@ func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
 // driverNext is a storagedriver.StorageDriver implementation backed by GCS
 // Objects are stored at absolute keys in the provided bucket.
 type driverNext struct {
-	logger        dcontext.Logger
 	client        *http.Client
 	bucket        *storage.BucketHandle
 	email         string
@@ -123,7 +121,7 @@ func (d *driverNext) PutContent(ctx context.Context, path string, contents []byt
 	md5sum := h.Sum(nil)
 
 	if len(contents) == 0 {
-		logrus.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"path":   path,
 			"length": len(contents),
 			"stack":  string(debug.Stack()),
@@ -186,13 +184,25 @@ func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if offset == r.Attrs.Size {
-		d.logger.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"path":            path,
 			"fileSize":        r.Attrs.Size,
 			"requestedOffset": offset,
 		}).Info("Range request at EOF, returning empty reader")
 	}
 	return r, nil
+}
+
+// logger returns a log.Logger decorated with a key/value pair that uniquely
+// identifies all entries as being emitted by this storage driver  component.
+// Instead of relying on a fixed log.Logger instance, this method allows
+// retrieving and extending a base logger embedded in the input context (if
+// any) to preserve relevant key/value pairs introduced upstream (such as a
+// correlation ID, present when calling from the API handlers).
+func (*driverNext) logger(ctx context.Context) log.Logger {
+	return log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"component": "registry.storage.gcs_next.internal",
+	})
 }
 
 func putContentsCloseNext(wc *storage.Writer, contents []byte) error {
@@ -214,9 +224,21 @@ func putContentsCloseNext(wc *storage.Writer, contents []byte) error {
 	return wc.Close()
 }
 
+// logger returns a log.Logger decorated with a key/value pair that uniquely
+// identifies all entries as being emitted by this storage driver  component.
+// Instead of relying on a fixed log.Logger instance, this method allows
+// retrieving and extending a base logger embedded in the input context (if
+// any) to preserve relevant key/value pairs introduced upstream (such as a
+// correlation ID, present when calling from the API handlers).
+func (w *writerNext) logger() log.Logger {
+	return log.GetLogger(log.WithContext(w.ctx)).WithFields(log.Fields{
+		"component": "registry.storage.gcs_next.writer",
+	})
+}
+
 // putChunkNext either completes upload or submits another chunk.
 func (w *writerNext) putChunkNext(chunk []byte, totalSize int64) (int64, error) {
-	w.logger.WithFields(logrus.Fields{
+	w.logger().WithFields(logrus.Fields{
 		"chunkStart": w.offset,
 		"chunkEnd":   w.offset + int64(len(chunk)) - 1,
 		"chunkSize":  len(chunk),
@@ -305,7 +327,7 @@ func (w *writerNext) putChunkNext(chunk []byte, totalSize int64) (int64, error) 
 			}
 			bytesPut = end - w.offset + 1
 
-			w.logger.WithFields(logrus.Fields{
+			w.logger().WithFields(logrus.Fields{
 				"bytesUploaded": bytesPut,
 				"totalExpected": len(chunk),
 				"rangeHeader":   resp.Header.Get("Range"),
@@ -326,7 +348,6 @@ func (w *writerNext) putChunkNext(chunk []byte, totalSize int64) (int64, error) 
 // at the location designated by "path" after the call to Commit.
 func (d *driverNext) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	w := &writerNext{
-		logger: d.logger,
 		ctx:    ctx,
 		client: d.client,
 		object: d.bucket.Object(d.pathToKey(path)),
@@ -441,14 +462,14 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 		}
 
 		if !attrs.Deleted.IsZero() {
-			d.logger.WithFields(logrus.Fields{
+			d.logger(ctx).WithFields(logrus.Fields{
 				"path":        d.keyToPath(attrs.Name),
 				"deletedTime": attrs.Deleted,
 			}).Debug("Filtered out deleted object from listing due to eventual consistency")
 		}
 
 		if attrs.ContentType == uploadSessionContentType {
-			d.logger.WithFields(logrus.Fields{
+			d.logger(ctx).WithFields(logrus.Fields{
 				"path": d.keyToPath(attrs.Name),
 			}).Debug("Filtered out temporary upload session object from listing")
 		}
@@ -503,7 +524,7 @@ func (d *driverNext) Move(ctx context.Context, sourcePath, destPath string) erro
 	// if deleting the file fails, log the error, but do not fail; the file was successfully copied,
 	// and the original should eventually be cleaned when purging the uploads folder.
 	if err != nil {
-		d.logger.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"sourcePath":    sourcePath,
 			"destPath":      destPath,
 			"copySucceeded": true,
@@ -600,7 +621,7 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(maxDeleteConcurrency)
 
-	d.logger.WithFields(logrus.Fields{
+	d.logger(ctx).WithFields(logrus.Fields{
 		"totalFiles":     len(paths),
 		"maxConcurrency": maxDeleteConcurrency,
 	}).Debug("Starting concurrent file deletion")
@@ -646,7 +667,7 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 	// multierror var
 	_ = g.Wait()
 
-	d.logger.WithFields(logrus.Fields{
+	d.logger(ctx).WithFields(logrus.Fields{
 		"totalFiles":        len(paths),
 		"successfulDeletes": int(count.Load()),
 		"errors":            errs.Len(),
@@ -658,7 +679,7 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 // URLFor returns a URL which may be used to retrieve the content stored at
 // the given path, possibly using the given options.
 // Returns ErrUnsupportedMethod if this driver has no privateKey
-func (d *driverNext) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
+func (d *driverNext) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	name := d.pathToKey(path)
 	methodString := http.MethodGet
 	method, ok := options["method"]
@@ -690,14 +711,14 @@ func (d *driverNext) URLFor(_ context.Context, path string, options map[string]a
 		opts.GoogleAccessID = d.email
 		opts.PrivateKey = d.privateKey
 
-		d.logger.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"path":          path,
 			"method":        methodString,
 			"signingMethod": "service_account_key",
 			"expires":       expiresTime,
 		}).Debug("Generating signed URL with service account credentials")
 	} else {
-		d.logger.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"path":          path,
 			"method":        methodString,
 			"signingMethod": "instance_profile",
@@ -765,7 +786,7 @@ func (w *writerNext) startSessionNext() (uri string, err error) {
 		uri = resp.Header.Get("Location")
 		return nil
 	})
-	w.logger.WithFields(logrus.Fields{
+	w.logger().WithFields(logrus.Fields{
 		"bucket": w.object.BucketName(),
 		"object": w.object.ObjectName(),
 	}).Debug("Created new resumable upload session")
@@ -785,7 +806,6 @@ func (d *driverNext) keyToPath(key string) string {
 }
 
 type writerNext struct {
-	logger dcontext.Logger
 	ctx    context.Context
 	client *http.Client
 	object *storage.ObjectHandle
@@ -986,7 +1006,7 @@ func (w *writerNext) Write(p []byte) (int, error) {
 		// * this follows the semantics of Azure and S3 drivers
 		w.size += int64(n)
 		if w.buffSize == int64(cap(w.buffer)) {
-			w.logger.WithFields(logrus.Fields{
+			w.logger().WithFields(logrus.Fields{
 				"path":         w.object.ObjectName(),
 				"bufferSize":   w.buffSize,
 				"totalWritten": w.size,
@@ -1061,7 +1081,7 @@ func (w *writerNext) init() error {
 	w.offset = offset
 	w.size = offset + w.buffSize
 
-	w.logger.WithFields(logrus.Fields{
+	w.logger().WithFields(logrus.Fields{
 		"path":          w.object.ObjectName(),
 		"resumedOffset": offset,
 		"bufferedBytes": w.buffSize,

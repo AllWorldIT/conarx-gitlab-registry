@@ -21,7 +21,6 @@ import (
 	"github.com/docker/distribution/registry/datastore/migrations/postmigrations"
 	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/storage"
-	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	"github.com/docker/distribution/version"
 	"github.com/docker/libtrust"
@@ -198,8 +197,6 @@ var GCCmd = &cobra.Command{
 		if v, ok := (parameters[parallelwalkKey]).(bool); ok && v {
 			maxParallelManifestGets = 10
 		}
-
-		parameters[driver.ParamLogger] = dcontext.GetLogger(ctx)
 
 		driver, err := factory.Create(config.Storage.Type(), parameters)
 		if err != nil {
@@ -613,8 +610,6 @@ var ImportCmd = &cobra.Command{
 			parameters[parallelwalkKey] = false
 			logrus.Info("the 'parallelwalk' configuration parameter has been disabled")
 		}
-
-		parameters[driver.ParamLogger] = dcontext.GetLogger(ctx)
 
 		driver, err := factory.Create(config.Storage.Type(), parameters)
 		if err != nil {
