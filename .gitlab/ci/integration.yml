@@ -560,6 +560,8 @@ base-driver:
 # See https://gitlab.com/gitlab-org/container-registry/-/issues/1527.
 redis:rate:
   extends: .go-version-matrix
+  # https://gitlab.com/gitlab-org/container-registry/-/issues/1632
+  allow_failure: true
   rules:
     - when: on_success
       changes:
