@@ -91,7 +91,7 @@ The release documentation can be found [here](https://gitlab.com/gitlab-org/cont
       1. [ ] Version bump for Pre-Production and Staging.
       1. [ ] Version bump for Production Canary.
       1. [ ] Version bump for Production Main Stage.
-1. [ ] If this is the last registry release in the milestone, open an MR to update [`REGISTRY_SELF_MANAGED_RELEASE_VERSION`](https://gitlab.com/gitlab-org/container-registry/-/blob/master/.gitlab/ci/migrate.yml?ref_type=heads#L9) to the new self-managed release version.
+1. [ ] If this is the final registry release for the milestone, create an MR to update [`REGISTRY_SELF_MANAGED_RELEASE_VERSION`](https://gitlab.com/gitlab-org/container-registry/-/blob/master/.gitlab/ci/migrate.yml?ref_type=heads#L9). Merge this MR after the milestone is complete, and the version has been added to the self-managed release for that milestone. This ensures we can detect breaking changes in registry pre-deploy/post-deploy database migrations between consecutive GitLab releases. You can verify the registry versions for the last GitLab milestone self-managed release by checking [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab/-/blob/18-0-stable/config/software/registry.rb) (update branch to last milestone) and [Charts]( https://gitlab.com/gitlab-org/charts/gitlab/-/blob/master/CHANGELOG.md?ref_type=heads), with Charts milestone mappings available in the [documentation](https://docs.gitlab.com/charts/installation/version_mappings/).
 
 #### Potentially risky deployments
 
