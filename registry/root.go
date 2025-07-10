@@ -70,6 +70,7 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "step-three", "3", false, "perform step three of a multi-step import: alias for `common-blobs`")
 	ImportCmd.Flags().BoolVarP(&logToSTDOUT, "log-to-stdout", "l", false, "write detailed log to std instead of showing progress bars")
 	ImportCmd.Flags().BoolVarP(&dynamicMediaTypes, "dynamic-media-types", "m", true, "record unknown media types during import")
+	ImportCmd.Flags().BoolVarP(&stats, "import-statistics", "i", true, "record import statistics for service ping")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
 
@@ -105,6 +106,7 @@ var (
 	logToSTDOUT          bool
 	dynamicMediaTypes    bool
 	maxBBMJobRetry       *int
+	stats                bool
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -666,6 +668,9 @@ var ImportCmd = &cobra.Command{
 		}
 		if !logToSTDOUT {
 			opts = append(opts, datastore.WithProgressBar)
+		}
+		if stats {
+			opts = append(opts, datastore.WithImportStatsTracking(driver.Name()))
 		}
 
 		err = os.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(dynamicMediaTypes))
