@@ -204,7 +204,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 
 	for _, test := range tt {
 		t.Run(test.name, func(t *testing.T) {
-			d, err := newGoogleCDNStorageMiddleware(nil, test.options)
+			d, _, err := newGoogleCDNStorageMiddleware(nil, test.options)
 			if test.expectedError {
 				require.Nil(t, d)
 				require.EqualError(t, err, test.expectedErrorMsg)
@@ -218,7 +218,7 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 
 func TestNewGoogleCDNStorageMiddlewareWrapsInnerDriver(t *testing.T) {
 	inner := testdriver.New()
-	outer, err := newGoogleCDNStorageMiddleware(inner, map[string]any{
+	outer, _, err := newGoogleCDNStorageMiddleware(inner, map[string]any{
 		"baseurl":    "https://my.google.cdn.com",
 		"privatekey": createTmpKeyFile(t).Name(),
 		"keyname":    "my-key",
@@ -232,7 +232,7 @@ func TestNewGoogleCDNStorageMiddlewareWrapsInnerDriver(t *testing.T) {
 
 func TestURLForBypassIfNotGCSDriver(t *testing.T) {
 	inMemDriver := testdriver.New()
-	d, err := newGoogleCDNStorageMiddleware(inMemDriver, map[string]any{
+	d, _, err := newGoogleCDNStorageMiddleware(inMemDriver, map[string]any{
 		"baseurl":    "https://my.google.cdn.com",
 		"privatekey": createTmpKeyFile(t).Name(),
 		"keyname":    "my-key",

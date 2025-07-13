@@ -2058,7 +2058,7 @@ func applyRepoMiddleware(ctx context.Context, repository distribution.Repository
 // applyStorageMiddleware wraps a storage driver with the configured middlewares
 func applyStorageMiddleware(driver storagedriver.StorageDriver, middlewares []configuration.Middleware) (storagedriver.StorageDriver, error) {
 	for _, mw := range middlewares {
-		smw, err := storagemiddleware.Get(mw.Name, mw.Options, driver)
+		smw, _, err := storagemiddleware.Get(mw.Name, mw.Options, driver)
 		if err != nil {
 			return nil, fmt.Errorf("unable to configure storage middleware (%s): %v", mw.Name, err)
 		}

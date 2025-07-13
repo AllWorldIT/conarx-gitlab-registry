@@ -17,27 +17,27 @@ type redirectStorageMiddleware struct {
 
 var _ storagedriver.StorageDriver = &redirectStorageMiddleware{}
 
-func newRedirectStorageMiddleware(sd storagedriver.StorageDriver, options map[string]any) (storagedriver.StorageDriver, error) {
+func newRedirectStorageMiddleware(sd storagedriver.StorageDriver, options map[string]any) (storagedriver.StorageDriver, func() error, error) {
 	o, ok := options["baseurl"]
 	if !ok {
-		return nil, fmt.Errorf("no baseurl provided")
+		return nil, nil, fmt.Errorf("no baseurl provided")
 	}
 	b, ok := o.(string)
 	if !ok {
-		return nil, fmt.Errorf("baseurl must be a string")
+		return nil, nil, fmt.Errorf("baseurl must be a string")
 	}
 	u, err := url.Parse(b)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse redirect baseurl: %s", b)
+		return nil, nil, fmt.Errorf("unable to parse redirect baseurl: %s", b)
 	}
 	if u.Scheme == "" {
-		return nil, fmt.Errorf("no scheme specified for redirect baseurl")
+		return nil, nil, fmt.Errorf("no scheme specified for redirect baseurl")
 	}
 	if u.Host == "" {
-		return nil, fmt.Errorf("no host specified for redirect baseurl")
+		return nil, nil, fmt.Errorf("no host specified for redirect baseurl")
 	}
 
-	return &redirectStorageMiddleware{StorageDriver: sd, scheme: u.Scheme, host: u.Host}, nil
+	return &redirectStorageMiddleware{StorageDriver: sd, scheme: u.Scheme, host: u.Host}, nil, nil
 }
 
 func (r *redirectStorageMiddleware) URLFor(_ context.Context, path string, _ map[string]any) (string, error) {
