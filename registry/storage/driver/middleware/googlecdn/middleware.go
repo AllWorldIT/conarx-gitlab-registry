@@ -51,15 +51,15 @@ var customParamKeys = map[string]string{
 // newGoogleCDNStorageMiddleware constructs and returns a new Google CDN driver.StorageDriver implementation.
 // Required options: baseurl, authtype, privatekey, keyname
 // Optional options: duration, updatefrequency, iprangesurl, ipfilteredby
-func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options map[string]any) (driver.StorageDriver, error) {
+func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options map[string]any) (driver.StorageDriver, func() error, error) {
 	// parse baseurl
 	base, ok := options["baseurl"]
 	if !ok {
-		return nil, fmt.Errorf("no baseurl provided")
+		return nil, nil, fmt.Errorf("no baseurl provided")
 	}
 	baseURL, ok := base.(string)
 	if !ok {
-		return nil, fmt.Errorf("baseurl must be a string")
+		return nil, nil, fmt.Errorf("baseurl must be a string")
 	}
 	if !strings.Contains(baseURL, "://") {
 		baseURL = "https://" + baseURL
@@ -68,31 +68,31 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 		baseURL += "/"
 	}
 	if _, err := url.Parse(baseURL); err != nil {
-		return nil, fmt.Errorf("invalid baseurl: %v", err)
+		return nil, nil, fmt.Errorf("invalid baseurl: %v", err)
 	}
 
 	// parse privatekey
 	pk, ok := options["privatekey"]
 	if !ok {
-		return nil, fmt.Errorf("no privatekey provided")
+		return nil, nil, fmt.Errorf("no privatekey provided")
 	}
 	keyName, ok := pk.(string)
 	if !ok {
-		return nil, fmt.Errorf("privatekey must be a string")
+		return nil, nil, fmt.Errorf("privatekey must be a string")
 	}
 	key, err := readKeyFile(keyName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read privatekey file: %s", err)
+		return nil, nil, fmt.Errorf("failed to read privatekey file: %s", err)
 	}
 
 	// parse keyname
 	v, ok := options["keyname"]
 	if !ok {
-		return nil, fmt.Errorf("no keyname provided")
+		return nil, nil, fmt.Errorf("no keyname provided")
 	}
 	pkName, ok := v.(string)
 	if !ok {
-		return nil, fmt.Errorf("keyname must be a string")
+		return nil, nil, fmt.Errorf("keyname must be a string")
 	}
 
 	urlSigner := newURLSigner(pkName, key)
@@ -106,7 +106,7 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 		case string:
 			dur, err := time.ParseDuration(d)
 			if err != nil {
-				return nil, fmt.Errorf("invalid duration: %s", err)
+				return nil, nil, fmt.Errorf("invalid duration: %s", err)
 			}
 			duration = dur
 		}
@@ -121,7 +121,7 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 		case string:
 			d, err := time.ParseDuration(v)
 			if err != nil {
-				return nil, fmt.Errorf("invalid updatefrequency: %s", err)
+				return nil, nil, fmt.Errorf("invalid updatefrequency: %s", err)
 			}
 			updateFrequency = d
 		}
@@ -132,7 +132,7 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 	if v, ok := options["iprangesurl"]; ok {
 		s, ok := v.(string)
 		if !ok {
-			return nil, fmt.Errorf("iprangesurl must be a string")
+			return nil, nil, fmt.Errorf("iprangesurl must be a string")
 		}
 		ipRangesURL = s
 	}
@@ -142,7 +142,7 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 	if v, ok := options["ipfilteredby"]; ok {
 		ipFilteredBy, ok := v.(string)
 		if !ok {
-			return nil, fmt.Errorf("ipfilteredby must be a string")
+			return nil, nil, fmt.Errorf("ipfilteredby must be a string")
 		}
 		switch strings.ToLower(strings.TrimSpace(ipFilteredBy)) {
 		case "", "none":
@@ -150,7 +150,7 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 		case "gcp":
 			googleIPs = newGoogleIPs(ipRangesURL, updateFrequency)
 		default:
-			return nil, fmt.Errorf("ipfilteredby must be one of the following values: none|gcp")
+			return nil, nil, fmt.Errorf("ipfilteredby must be one of the following values: none|gcp")
 		}
 	}
 
@@ -160,7 +160,7 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 		baseURL:       baseURL,
 		duration:      duration,
 		googleIPs:     googleIPs,
-	}, nil
+	}, nil, nil
 }
 
 // for testing purposes

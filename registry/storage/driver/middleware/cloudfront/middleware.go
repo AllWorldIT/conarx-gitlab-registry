@@ -42,15 +42,15 @@ var _ storagedriver.StorageDriver = &cloudFrontStorageMiddleware{}
 //	to S3 directly. "awsregion", only regions listed in awsregion options goes to S3 directly
 //
 // awsregion: a comma separated string of AWS regions.
-func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, options map[string]any) (storagedriver.StorageDriver, error) {
+func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, options map[string]any) (storagedriver.StorageDriver, func() error, error) {
 	// parse baseurl
 	base, ok := options["baseurl"]
 	if !ok {
-		return nil, fmt.Errorf("no baseurl provided")
+		return nil, nil, fmt.Errorf("no baseurl provided")
 	}
 	baseURL, ok := base.(string)
 	if !ok {
-		return nil, fmt.Errorf("baseurl must be a string")
+		return nil, nil, fmt.Errorf("baseurl must be a string")
 	}
 	if !strings.Contains(baseURL, "://") {
 		baseURL = "https://" + baseURL
@@ -59,43 +59,43 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 		baseURL += "/"
 	}
 	if _, err := url.Parse(baseURL); err != nil {
-		return nil, fmt.Errorf("invalid baseurl: %v", err)
+		return nil, nil, fmt.Errorf("invalid baseurl: %v", err)
 	}
 
 	// parse privatekey to get pkPath
 	pk, ok := options["privatekey"]
 	if !ok {
-		return nil, fmt.Errorf("no privatekey provided")
+		return nil, nil, fmt.Errorf("no privatekey provided")
 	}
 	pkPath, ok := pk.(string)
 	if !ok {
-		return nil, fmt.Errorf("privatekey must be a string")
+		return nil, nil, fmt.Errorf("privatekey must be a string")
 	}
 
 	// parse keypairid
 	kpid, ok := options["keypairid"]
 	if !ok {
-		return nil, fmt.Errorf("no keypairid provided")
+		return nil, nil, fmt.Errorf("no keypairid provided")
 	}
 	keypairID, ok := kpid.(string)
 	if !ok {
-		return nil, fmt.Errorf("keypairid must be a string")
+		return nil, nil, fmt.Errorf("keypairid must be a string")
 	}
 
 	// get urlSigner from the file specified in pkPath
 	// nolint: gosec
 	pkBytes, err := os.ReadFile(pkPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read privatekey file: %s", err)
+		return nil, nil, fmt.Errorf("failed to read privatekey file: %s", err)
 	}
 
 	block, _ := pem.Decode(pkBytes)
 	if block == nil {
-		return nil, fmt.Errorf("failed to decode private key as an rsa private key")
+		return nil, nil, fmt.Errorf("failed to decode private key as an rsa private key")
 	}
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	urlSigner := sign.NewURLSigner(keypairID, privateKey)
 
@@ -108,7 +108,7 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 		case string:
 			dur, err := time.ParseDuration(d)
 			if err != nil {
-				return nil, fmt.Errorf("invalid duration: %s", err)
+				return nil, nil, fmt.Errorf("invalid duration: %s", err)
 			}
 			duration = dur
 		}
@@ -128,7 +128,7 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 		case string:
 			updateFreq, err := time.ParseDuration(u)
 			if err != nil {
-				return nil, fmt.Errorf("invalid updatefrequency: %s", err)
+				return nil, nil, fmt.Errorf("invalid updatefrequency: %s", err)
 			}
 			duration = updateFreq
 		}
@@ -139,7 +139,7 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 	if i, ok := options["iprangesurl"]; ok {
 		iprangeurl, ok := i.(string)
 		if !ok {
-			return nil, fmt.Errorf("iprangesurl must be a string")
+			return nil, nil, fmt.Errorf("iprangesurl must be a string")
 		}
 		ipRangesURL = iprangeurl
 	}
@@ -149,7 +149,7 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 	if i, ok := options["ipfilteredby"]; ok {
 		ipFilteredBy, ok := i.(string)
 		if !ok {
-			return nil, fmt.Errorf("ipfilteredby only allows a string with the following value: none|aws|awsregion")
+			return nil, nil, fmt.Errorf("ipfilteredby only allows a string with the following value: none|aws|awsregion")
 		}
 
 		switch strings.ToLower(strings.TrimSpace(ipFilteredBy)) {
@@ -161,18 +161,18 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 			var awsRegion []string
 			i, ok := options["awsregion"]
 			if !ok {
-				return nil, fmt.Errorf("awsRegion is not defined")
+				return nil, nil, fmt.Errorf("awsRegion is not defined")
 			}
 			regions, ok := i.(string)
 			if !ok {
-				return nil, fmt.Errorf("awsRegion must be a comma separated string of valid aws regions")
+				return nil, nil, fmt.Errorf("awsRegion must be a comma separated string of valid aws regions")
 			}
 			for _, awsRegions := range strings.Split(regions, ",") {
 				awsRegion = append(awsRegion, strings.ToLower(strings.TrimSpace(awsRegions)))
 			}
 			awsIPs = newAWSIPs(ipRangesURL, updateFrequency, awsRegion)
 		default:
-			return nil, fmt.Errorf("ipfilteredby only allows a string the following value: none|aws|awsregion")
+			return nil, nil, fmt.Errorf("ipfilteredby only allows a string the following value: none|aws|awsregion")
 		}
 	}
 
@@ -182,7 +182,7 @@ func newCloudFrontStorageMiddleware(storageDriver storagedriver.StorageDriver, o
 		baseURL:       baseURL,
 		duration:      duration,
 		awsIPs:        awsIPs,
-	}, nil
+	}, nil, nil
 }
 
 // URLFor attempts to find a url which may be used to retrieve the file at the given path.
