@@ -823,3 +823,12 @@ func TestBackgroundMigrationStore_CountByStatus_NotFound(t *testing.T) {
 	require.Empty(t, statusCount)
 	require.NoError(t, err)
 }
+
+func TestBackgroundMigrationStore_GetPendingWALCount(t *testing.T) {
+	// We won't be able to mock the varying count response for different WAL segment lag
+	// because `pg_stat_archiver` is a system view that provides read-only statistics.
+	s := datastore.NewBackgroundMigrationStore(suite.db)
+	count, err := s.GetPendingWALCount(suite.ctx)
+	require.NoError(t, err)
+	require.Equal(t, -1, count)
+}

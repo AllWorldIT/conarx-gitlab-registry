@@ -596,3 +596,17 @@ func IsDBSupported(ctx context.Context, db *DB) (bool, error) {
 
 	return inSupported, err
 }
+
+// IsArchivingEnabled checks if WAL archiving is enabled.
+func IsArchivingEnabled(ctx context.Context, db *sql.DB) (bool, error) {
+	var mode string
+	defer metrics.InstrumentQuery("wal_archive_mode_check")()
+	err := db.QueryRowContext(ctx, `SELECT current_setting('archive_mode')`).Scan(&mode)
+	if err != nil {
+		return false, err
+	}
+
+	// off, always, or on are the valid values for archive_mode
+	// https://www.postgresql.org/docs/current/runtime-config-wal.html#GUC-ARCHIVE-MODE
+	return mode != "off", nil
+}

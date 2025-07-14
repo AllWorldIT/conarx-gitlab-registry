@@ -24,6 +24,10 @@ const (
 	defaultMaxJobAttempt     = 5
 	defaultJobInterval       = 1 * time.Minute
 	jobIntervalJitterSeconds = 5
+	// walSegmentThreshold defines the maximum number of unarchived WAL segments allowed before background migration jobs are throttled or paused.
+	// Aligns with GitLab's default threshold: https://gitlab.com/gitlab-org/gitlab/blob/c30b91ad44092660069373aeade2ba09d0158d04/lib/gitlab/database/health_status/indicators/write_ahead_log.rb#L10
+	walSegmentThreshold = 42
+	walThresholdKey     = "wal_segment_threshold"
 	// maxRunTimeout caps the duration of each background migration run to 3 mins.
 	maxRunTimeout = 3 * time.Minute
 
@@ -113,12 +117,13 @@ func makeWorkMap(work []Work) (map[string]Work, error) {
 
 // Worker is the Background Migration agent of execution. It listens for pending Background Migration jobs and tries to execute the corresponding work function.
 type Worker struct {
-	Work          map[string]Work
-	logger        log.Logger
-	db            datastore.Handler
-	jobInterval   time.Duration
-	maxJobAttempt int
-	wh            Handler
+	Work                   map[string]Work
+	logger                 log.Logger
+	db                     datastore.Handler
+	jobInterval            time.Duration
+	maxJobAttempt          int
+	isWALThrottlingEnabled bool
+	wh                     Handler
 }
 
 // Handler defines the methods required for handling background migration jobs. It provides flexibility to use different implementations for job management.
@@ -126,6 +131,7 @@ type Worker struct {
 type Handler interface {
 	FindJob(context.Context, datastore.BackgroundMigrationStore) (*models.BackgroundMigrationJob, error)
 	GrabLock(context.Context, datastore.BackgroundMigrationStore) error
+	ShouldThrottle(context.Context, datastore.BackgroundMigrationStore) (bool, error)
 	ExecuteJob(context.Context, datastore.BackgroundMigrationStore, *models.BackgroundMigrationJob) error
 }
 
@@ -143,6 +149,13 @@ func WithJobInterval(d time.Duration) WorkerOption {
 func WithMaxJobAttempt(d int) WorkerOption {
 	return func(jw *Worker) {
 		jw.maxJobAttempt = d
+	}
+}
+
+// WithWALPressureCheck enables WAL pressure checks to throttle background migration runs.
+func WithWALPressureCheck() WorkerOption {
+	return func(jw *Worker) {
+		jw.isWALThrottlingEnabled = true
 	}
 }
 
@@ -191,7 +204,7 @@ func NewWorker(workMap map[string]Work, opts ...WorkerOption) *Worker {
 		opt(jw)
 	}
 
-	jw.logger = jw.logger.WithFields(log.Fields{componentKey: workerName})
+	jw.logger = jw.logger.WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold})
 
 	return jw
 }
@@ -263,6 +276,23 @@ func (jw *Worker) run(ctx context.Context) {
 		return
 	}
 
+	if jw.isWALThrottlingEnabled {
+		// Ensure the WAL pressure is low before proceeding to find and execute any jobs.
+		jw.logger.Info("WAL throttle check...")
+		throttle, err := jw.wh.ShouldThrottle(ctx, bbmStore)
+		if err != nil {
+			jw.logger.WithError(err).Info("WAL throttle check failed")
+			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			return
+		}
+
+		if throttle {
+			jw.logger.WithFields(log.Fields{"throttle_interval_s": jw.jobInterval.Seconds()}).Info("WAL pressure high. Throttling background migration worker")
+			time.Sleep(jw.jobInterval)
+			return
+		}
+	}
+
 	// Search for available jobs
 	jw.logger.Info("searching for job...")
 	job, err := jw.wh.FindJob(ctx, bbmStore)
@@ -303,6 +333,12 @@ func (jw *Worker) run(ctx context.Context) {
 		return
 	}
 
+	// TODO: To limit how soon the next background migration runs (across all registry instances), we need to hold the lock for a minimum duration (`jobInterval`).
+	// However, since transaction-level advisory locks are automatically released when the transaction ends,
+	// enforcing a minimum hold time would require keeping the transaction open, which is undesirable.
+	// Because we're using transaction-level locks (due to PgBouncer's pooling mode), we can't hold the lock past commit.
+	// Ideally, this should be replaced with a Redis-based distributed lock that can be held independently of the transaction lifecycle.
+	// We should revisit this when redis is generally available. https://gitlab.com/gitlab-org/container-registry/-/issues/1639
 	if err = tx.Commit(); err != nil {
 		jw.logger.WithError(err).Error("failed to commit database transaction")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
@@ -323,6 +359,23 @@ func (jw *Worker) GrabLock(ctx context.Context, bbmStore datastore.BackgroundMig
 	jw.logger.Info("obtained lock")
 
 	return nil
+}
+
+// ShouldThrottle returns true if the pending WAL segment count is over the given threshold.
+func (jw *Worker) ShouldThrottle(ctx context.Context, bbmStore datastore.BackgroundMigrationStore) (bool, error) {
+	pending, err := bbmStore.GetPendingWALCount(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// -1 indicates the archiving system is not enabled, in this case we skip throttling.
+	if pending == -1 {
+		jw.logger.Info("WAL count is unavailable because archiving is not enabled. Skipping background migration throttling")
+		return false, nil
+	}
+	jw.logger.WithFields(log.Fields{"pending_wal_segment": pending}).Info("retrieved WAL segment count")
+
+	return pending > walSegmentThreshold, nil
 }
 
 // FindJob checks for any Background Migration job that needs to be executed.

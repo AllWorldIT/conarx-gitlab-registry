@@ -2225,12 +2225,30 @@ func repositoryFromContextWithRegistry(ctx *Context, w http.ResponseWriter, regi
 func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *configuration.Configuration) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
-	// register all work functions with bbmWorker
-	bbmWorker, err := bbm.RegisterWork(bbm.AllWork(),
+	dbWALArchivingEnabled, err := datastore.IsArchivingEnabled(ctx, db.DB)
+	if err != nil {
+		err = fmt.Errorf("checking WAL archiving mode failed: %w", err)
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		l.WithError(err).Warn("background migration: checking WAL archiving mode failed, assuming WAL archiving enabled")
+		// assume WAL archiving is enabled on the database unless specified otherwise.
+		dbWALArchivingEnabled = true
+		// If this assumption is incorrect, each migration run will still perform
+		// its own WAL check and skip wal based throttling if archiving is actually disabled.
+	}
+
+	opts := []bbm.WorkerOption{
 		bbm.WithDB(db),
 		bbm.WithLogger(dlog.GetLogger(dlog.WithContext(ctx))),
 		bbm.WithJobInterval(config.Database.BackgroundMigrations.JobInterval),
 		bbm.WithMaxJobAttempt(config.Database.BackgroundMigrations.MaxJobRetries),
+	}
+
+	if dbWALArchivingEnabled {
+		opts = append(opts, bbm.WithWALPressureCheck())
+	}
+
+	// register all work functions with bbmWorker
+	bbmWorker, err := bbm.RegisterWork(bbm.AllWork(), opts...,
 	)
 	if err != nil {
 		l.WithError(err).Error("background migration worker could not start")

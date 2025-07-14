@@ -84,3 +84,18 @@ func (mr *MockHandlerMockRecorder) GrabLock(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrabLock", reflect.TypeOf((*MockHandler)(nil).GrabLock), arg0, arg1)
 }
+
+// ShouldThrottle mocks base method.
+func (m *MockHandler) ShouldThrottle(arg0 context.Context, arg1 datastore.BackgroundMigrationStore) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ShouldThrottle", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ShouldThrottle indicates an expected call of ShouldThrottle.
+func (mr *MockHandlerMockRecorder) ShouldThrottle(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShouldThrottle", reflect.TypeOf((*MockHandler)(nil).ShouldThrottle), arg0, arg1)
+}
