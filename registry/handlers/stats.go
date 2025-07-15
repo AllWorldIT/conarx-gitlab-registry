@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/docker/distribution/registry/api/errcode"
+	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/version"
 	"github.com/gorilla/handlers"
@@ -71,8 +72,9 @@ func (*RepositoryStats) key(path, op string) string {
 
 // StatisticsAPIResponse is the top-level statistics API response.
 type StatisticsAPIResponse struct {
-	Release  ReleaseStats  `json:"release"`
-	Database DatabaseStats `json:"database"`
+	Release  ReleaseStats               `json:"release"`
+	Database DatabaseStats              `json:"database"`
+	Imports  []*models.ImportStatistics `json:"import,omitempty"`
 }
 
 // ReleaseStats contain information associated with the registry binary itself,
@@ -113,6 +115,16 @@ func (h *statisticsHandler) HandleGetStatistics(w http.ResponseWriter, _ *http.R
 		Database: DatabaseStats{
 			Enabled: h.Config.Database.Enabled,
 		},
+	}
+
+	imports, err := datastore.NewImportStatisticsStore(h.db.Primary()).FindAll(h)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	if len(imports) != 0 {
+		resp.Imports = imports
 	}
 
 	enc := json.NewEncoder(w)

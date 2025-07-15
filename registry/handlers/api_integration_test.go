@@ -33,8 +33,10 @@ import (
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/handlers"
 	internaltestutil "github.com/docker/distribution/registry/internal/testutil"
+	"github.com/docker/distribution/registry/storage"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
+	"github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/docker/distribution/registry/storage/driver/inmemory"
 	"github.com/docker/distribution/testutil"
 	"github.com/docker/distribution/version"
@@ -3223,13 +3225,11 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 }
 
 func TestStatisticsAPI_Get(t *testing.T) {
+	// gitlab/v1 endpoints always 404 if the database is disabled.
+	skipDatabaseNotEnabled(t)
+
 	env := newTestEnv(t)
 	defer env.Shutdown()
-
-	// gitlab/v1 endpoints always 404 if the database is disabled.
-	if !env.config.Database.Enabled {
-		t.Skip("skipping test because the metadata database is not enabled")
-	}
 
 	req, err := env.builder.BuildGitlabV1StatisticsURL()
 	require.NoError(t, err)
@@ -3257,4 +3257,72 @@ func TestStatisticsAPI_Get(t *testing.T) {
 	}
 
 	require.Equal(t, expectedBody, body)
+}
+
+func TestStatisticsAPI_Get_ImportStats(t *testing.T) {
+	skipDatabaseNotEnabled(t)
+
+	rootDir := t.TempDir()
+
+	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
+	defer env1.Shutdown()
+
+	env2 := newTestEnv(t, withFSDriver(rootDir))
+	defer env2.Shutdown()
+
+	tagName := "import-test"
+	repoPath := "my/import/path"
+
+	// Push up image to filesystem storage only environment and import that image to the database.
+	seedRandomSchema2Manifest(t, env1, repoPath, putByTag(tagName))
+
+	driver, err := filesystem.FromParameters(map[string]any{"rootdirectory": rootDir})
+	require.NoError(t, err)
+
+	registry, err := storage.NewRegistry(env2.ctx, driver)
+	require.NoError(t, err)
+
+	importer := datastore.NewImporter(env2.db.Primary(), registry, datastore.WithImportStatsTracking(driver.Name()))
+	err = importer.FullImport(env2.ctx)
+	require.NoError(t, err)
+
+	// Grab the stats from the API.
+	req, err := env2.builder.BuildGitlabV1StatisticsURL()
+	require.NoError(t, err)
+
+	resp, err := http.Get(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var body handlers.StatisticsAPIResponse
+
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&body)
+	require.NoError(t, err)
+
+	// Basic sanity checking to ensure the imports are populated.
+	require.NotNil(t, body.Imports)
+	require.Len(t, body.Imports, 1)
+
+	imp := body.Imports[0]
+	require.EqualValues(t, 1, imp.ManifestsCount)
+	require.EqualValues(t, 1, imp.TagsCount)
+	require.EqualValues(t, 1, imp.RepositoriesCount)
+	require.True(t, imp.PreImport)
+	require.NotNil(t, imp.PreImportStartedAt)
+	require.NotNil(t, imp.PreImportFinishedAt)
+	require.True(t, imp.TagImport)
+	require.NotNil(t, imp.TagImportStartedAt)
+	require.NotNil(t, imp.TagImportFinishedAt)
+	require.True(t, imp.BlobImport)
+	require.NotNil(t, imp.BlobImportStartedAt)
+	require.NotNil(t, imp.BlobImportFinishedAt)
+	require.Equal(t, driver.Name(), imp.StorageDriver)
+
+	// seedRandomSchema2Manifest's implementation could change, so we can't
+	// rely on presize counts and size here.
+	require.NotZero(t, imp.BlobsCount)
+	require.NotZero(t, imp.BlobsSizeBytes)
 }
