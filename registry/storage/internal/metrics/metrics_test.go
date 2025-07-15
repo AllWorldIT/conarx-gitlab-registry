@@ -167,3 +167,30 @@ registry_storage_blob_upload_bytes_count 3
 	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
+
+func TestStorageBackendRetry(t *testing.T) {
+	restore := mockTimeSince(10 * time.Millisecond)
+	defer restore()
+
+	// Test native retries
+	StorageBackendRetry(true)
+	StorageBackendRetry(true)
+
+	// Test custom retries
+	StorageBackendRetry(false)
+	StorageBackendRetry(false)
+	StorageBackendRetry(false)
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_storage_storage_backend_retries_total A counter of retires made while communicating with storage backend.
+# TYPE registry_storage_storage_backend_retries_total counter
+registry_storage_storage_backend_retries_total{type="custom"} 3
+registry_storage_storage_backend_retries_total{type="native"} 2
+`)
+	require.NoError(t, err)
+	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, storageBackendRetriesTotalName)
+
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	require.NoError(t, err)
+}

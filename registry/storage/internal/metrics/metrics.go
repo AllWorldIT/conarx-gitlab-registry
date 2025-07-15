@@ -14,6 +14,8 @@ var (
 	rateLimitStorageTotal                      prometheus.Counter
 
 	timeSince = time.Since // for test purposes only
+
+	storageBackendRetriesTotal *prometheus.CounterVec
 )
 
 const (
@@ -31,6 +33,12 @@ const (
 	cdnRedirectTotalDesc         = "A counter of CDN redirections for blob downloads."
 	rateLimitStorageName         = "rate_limit_total"
 	rateLimitStorageDesc         = "A counter of requests to the storage driver that hit a rate limit."
+
+	storageBackendRetriesTotalName = "storage_backend_retries_total"
+	storageBackendRetriesTotalDesc = "A counter of retires made while communicating with storage backend."
+	// `native` - done using native retry mechanism
+	// `custom` -done using our own/custom retry mechanism
+	storageBackendRetriesTypeLabel = "type"
 )
 
 func init() {
@@ -98,10 +106,22 @@ func init() {
 		},
 	)
 
+	storageBackendRetriesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      storageBackendRetriesTotalName,
+			Help:      storageBackendRetriesTotalDesc,
+		},
+		[]string{storageBackendRetriesTypeLabel},
+	)
+
 	prometheus.MustRegister(blobDownloadBytesHist)
 	prometheus.MustRegister(blobUploadBytesHist)
 	prometheus.MustRegister(cdnRedirectTotal)
 	prometheus.MustRegister(rateLimitStorageTotal)
+
+	prometheus.MustRegister(storageBackendRetriesTotal)
 }
 
 func BlobDownload(redirect bool, size int64) {
@@ -118,4 +138,12 @@ func StorageRatelimit() {
 
 func BlobUpload(size int64) {
 	blobUploadBytesHist.WithLabelValues().Observe(float64(size))
+}
+
+func StorageBackendRetry(nativeRetry bool) {
+	if nativeRetry {
+		storageBackendRetriesTotal.WithLabelValues("native").Inc()
+	} else {
+		storageBackendRetriesTotal.WithLabelValues("custom").Inc()
+	}
 }

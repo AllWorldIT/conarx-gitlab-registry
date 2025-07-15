@@ -142,6 +142,15 @@ type baseEmbed struct {
 type request func() error
 
 func ShouldRetry(err error) bool {
+	return shouldRetryImpl(true, err)
+}
+
+// shouldRetryImpl function determines if the request to GCS should be retried.
+// The interface used by ShouldRetry func is determined by 3rd party package,
+// so we wrap the function in wrapper that passes correct retry type.
+func shouldRetryImpl(nativeRetry bool, err error) bool {
+	metrics.StorageBackendRetry(nativeRetry)
+
 	// Context cancelation/expiry is fatal, do not try to retry:
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
@@ -165,7 +174,7 @@ func retry(req request) error {
 			return nil
 		}
 
-		if !ShouldRetry(err) {
+		if !shouldRetryImpl(false, err) {
 			return err
 		}
 
