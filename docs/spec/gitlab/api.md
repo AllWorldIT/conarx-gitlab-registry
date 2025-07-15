@@ -733,6 +733,52 @@ The response body is an object with several objects containing related statistic
 -----------|-------------------------------------------|---------|--------|-----------|
  `enabled` | True if the metadata database is enabled. | Boolean |        |           |
 
+##### Import
+
+ Key      | Value                             | Type  | Format | Condition                                 |
+----------|-----------------------------------|-------|--------|-------------------------------------------|
+ `import` | A list of import attempt objects. | Array |        | Import attempts recorded in the database. |
+
+###### Import Attempt Object Fields
+
+Each of these objects indicates a single import attempt. Typically, a one-step
+import will produce a single record with `pre_import`, `tag_import`, and `blob_import`
+all equal to `true`. While a multi-step import attempt will produce three records,
+each with the corresponding phase set to `true`, while the others are set to `false`.
+
+For one-step imports `repositories_count`, `tags_count`, and `manifests_count`
+are only recorded from the tag import phase as these will represent the final
+counts imported into the database.
+
+Finally, `blobs_count` and `blobs_size_bytes` are only calculated when a blob
+import is attempted and represent the total blobs in the registry, including
+dangling blobs.
+
+ Key                       | Value                                            | Type    | Format   | Condition                                 |
+---------------------------|--------------------------------------------------|---------|----------|-------------------------------------------|
+ `id`                      | Unique identifier for the import attempt.        | Integer |          | Always present.                           |
+ `created_at`              | Timestamp when the import record was created.    | String  | ISO 8601 | Always present.                           |
+ `started_at`              | Timestamp when the import process started.       | String  | ISO 8601 | Always present.                           |
+ `finished_at`             | Timestamp when the import process completed.     | String  | ISO 8601 | Present when import finished.             |
+ `storage_driver`          | Name of the storage driver used for the import.  | String  |          | Always present.                           |
+ `pre_import`              | Whether pre-import phase was planned.            | Boolean |          | Always present.                           |
+ `tag_import`              | Whether tag import phase was planned.            | Boolean |          | Always present.                           |
+ `blob_import`             | Whether blob import phase was planned.           | Boolean |          | Always present.                           |
+ `repositories_count`      | Number of repositories processed in this import. | Integer |          | Always present.                           |
+ `tags_count`              | Number of tags processed in this import.         | Integer |          | Always present.                           |
+ `manifests_count`         | Number of manifests processed in this import.    | Integer |          | Always present.                           |
+ `blobs_count`             | Number of blobs processed in this import.        | Integer |          | Present when blob import was attempted.   |
+ `blobs_size_bytes`        | Total size of blobs processed in bytes.          | Integer |          | Present when blob import was attempted.   |
+ `pre_import_started_at`   | Timestamp when pre-import phase started.         | String  | ISO 8601 | Present when pre_import was attempted.    |
+ `pre_import_finished_at`  | Timestamp when pre-import phase finished.        | String  | ISO 8601 | Present when pre_import phase completed.  |
+ `pre_import_error`        | Error message from pre-import phase.             | String  |          | Present when pre_import phase failed.     |
+ `tag_import_started_at`   | Timestamp when tag import phase started.         | String  | ISO 8601 | Present when tag_import was attempted.    |
+ `tag_import_finished_at`  | Timestamp when tag import phase finished.        | String  | ISO 8601 | Present when tag_import phase completed.  |
+ `tag_import_error`        | Error message from tag import phase.             | String  |          | Present when tag_import phase failed.     |
+ `blob_import_started_at`  | Timestamp when blob import phase started.        | String  | ISO 8601 | Present when blob_import was attempted.   |
+ `blob_import_finished_at` | Timestamp when blob import phase finished.       | String  | ISO 8601 | Present when blob_import phase completed. |
+ `blob_import_error`       | Error message from blob import phase.            | String  |          | Present when blob_import phase failed.    |
+
 #### Example
 
 ```json
@@ -743,11 +789,64 @@ The response body is an object with several objects containing related statistic
   },
   "database": {
     "enabled": true
-  }
+  },
+  "import": [
+    {
+      "id": 1,
+      "created_at": "2025-07-10T16:34:41.09796Z",
+      "started_at": "2025-07-10T16:34:39.5102Z",
+      "pre_import": true,
+      "tag_import": false,
+      "blob_import": false,
+      "repositories_count": 1,
+      "tags_count": 3,
+      "manifests_count": 3,
+      "storage_driver": "filesystem",
+      "finished_at": "2025-07-10T16:34:41.093222Z",
+      "pre_import_started_at": "2025-07-10T16:34:39.510403Z",
+      "pre_import_finished_at": "2025-07-10T16:34:41.093159Z"
+    },
+    {
+      "id": 2,
+      "created_at": "2025-07-10T16:34:44.681779Z",
+      "started_at": "2025-07-10T16:34:44.611371Z",
+      "pre_import": false,
+      "tag_import": true,
+      "blob_import": false,
+      "repositories_count": 1,
+      "tags_count": 3,
+      "manifests_count": 3,
+      "storage_driver": "filesystem",
+      "finished_at": "2025-07-10T16:34:44.676106Z",
+      "tag_import_started_at": "2025-07-10T16:34:44.611559Z",
+      "tag_import_finished_at": "2025-07-10T16:34:44.675972Z"
+    },
+    {
+      "id": 3,
+      "created_at": "2025-07-10T16:34:48.774293Z",
+      "started_at": "2025-07-10T16:34:48.469669Z",
+      "pre_import": false,
+      "tag_import": false,
+      "blob_import": true,
+      "repositories_count": 0,
+      "tags_count": 0,
+      "manifests_count": 0,
+      "blobs_count": 31,
+      "blobs_size_bytes": 16204713,
+      "storage_driver": "filesystem",
+      "finished_at": "2025-07-10T16:34:48.769978Z",
+      "blob_import_started_at": "2025-07-10T16:34:48.46984Z",
+      "blob_import_finished_at": "2025-07-10T16:34:48.769911Z"
+    }
+  ]
 }
 ```
 
 ## Changes
+
+### 2025-07-14
+
+- Update statistics endpoint to include import statistics.
 
 ### 2025-04-07
 
