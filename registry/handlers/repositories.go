@@ -507,6 +507,9 @@ func getSortOrderParams(sortP string) (string, datastore.SortOrder) {
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution tags list API. `n` is capped
 // to 100 entries by default.
 func (h *repositoryTagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
+	p := h.Repository.Named().Name()
+	l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"path": p})
+
 	filters, err := filterParamsFromRequest(r)
 	if err != nil {
 		h.Errors = append(h.Errors, err)
@@ -517,8 +520,8 @@ func (h *repositoryTagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Req
 	if h.GetRepoCache() != nil {
 		opts = append(opts, datastore.WithRepositoryCache(h.GetRepoCache()))
 	}
-	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
-	p := h.Repository.Named().Name()
+	db := h.db.UpToDateReplica(h.Context, &models.Repository{Path: p})
+	rStore := datastore.NewRepositoryStore(db, opts...)
 	repo, err := rStore.FindByPath(h.Context, p)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -612,6 +615,12 @@ func (h *repositoryTagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Req
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
+
+	l.WithFields(log.Fields{
+		"db_host_type": h.db.TypeOf(db),
+		"db_host_addr": db.Address(),
+		"count":        len(tagsList),
+	}).Info("listed repository tags")
 }
 
 type subRepositoriesHandler struct {
