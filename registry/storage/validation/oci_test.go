@@ -8,7 +8,9 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/context"
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/ocischema"
+	"github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/registry/storage/validation"
 	"github.com/docker/distribution/testutil"
 	"github.com/opencontainers/go-digest"
@@ -376,4 +378,112 @@ func TestVerifyManifest_OCI_PayloadLimits(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVerifyManifest_OCI_AllowedReferenceManifest(t *testing.T) {
+	ctx := context.Background()
+	registry := createRegistry(t)
+	repo := makeRepository(t, registry, "test")
+
+	manifestService, err := testutil.MakeManifestService(repo)
+	require.NoError(t, err)
+
+	manifestTypes := []string{
+		v1.MediaTypeImageManifest,
+		schema2.MediaTypeManifest,
+		manifestlist.MediaTypeManifestList,
+		v1.MediaTypeImageIndex,
+	}
+
+	for _, manifestType := range manifestTypes {
+		t.Run(manifestType, func(t *testing.T) {
+			// put referred manifest.
+			desc := makeManifest(repo, manifestType, t)
+
+			// make OCI referring manifest.
+			m := makeOCIManifestTemplate(t, repo)
+			m.Subject = desc
+			dm2, err := ocischema.FromStruct(m)
+			require.NoError(t, err)
+
+			// validate the referring manifest with the referer subject.
+			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), 2, 0, validation.ManifestURLs{})
+			err = v.Validate(ctx, dm2)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func makeManifest(repo distribution.Repository, mediaType string, t *testing.T) *distribution.Descriptor {
+	ctx := context.Background()
+	desc := &distribution.Descriptor{}
+
+	manifestService, err := testutil.MakeManifestService(repo)
+	require.NoError(t, err)
+
+	// create and push a manifest
+	switch mediaType {
+	case v1.MediaTypeImageManifest:
+		m := makeOCIManifestTemplate(t, repo)
+
+		layer, err := repo.Blobs(ctx).Put(ctx, v1.MediaTypeImageLayer, nil)
+		require.NoError(t, err)
+		m.Layers = []distribution.Descriptor{layer}
+
+		dm, err := ocischema.FromStruct(m)
+		require.NoError(t, err)
+
+		dgst, err := manifestService.Put(ctx, dm)
+		require.NoError(t, err)
+
+		desc.MediaType = mediaType
+		desc.Digest = dgst
+
+	case schema2.MediaTypeManifest:
+		m := makeSchema2ManifestTemplate(t, repo)
+
+		layer, err := repo.Blobs(ctx).Put(ctx, schema2.MediaTypeLayer, nil)
+		require.NoError(t, err)
+		m.Layers = []distribution.Descriptor{layer}
+
+		dm, err := schema2.FromStruct(m)
+		require.NoError(t, err)
+
+		dgst, err := manifestService.Put(ctx, dm)
+		require.NoError(t, err)
+
+		desc.MediaType = mediaType
+		desc.Digest = dgst
+
+	case v1.MediaTypeImageIndex:
+		manifestDescriptors := []manifestlist.ManifestDescriptor{
+			{Descriptor: makeOCIManifestDescriptor(t, repo)},
+		}
+
+		dml, err := manifestlist.FromDescriptors(manifestDescriptors)
+		require.NoError(t, err)
+
+		dgst, err := manifestService.Put(ctx, dml)
+		require.NoError(t, err)
+
+		desc.MediaType = mediaType
+		desc.Digest = dgst
+	case manifestlist.MediaTypeManifestList:
+		descriptors := []manifestlist.ManifestDescriptor{
+			makeManifestDescriptor(t, repo),
+		}
+
+		dml, err := manifestlist.FromDescriptors(descriptors)
+		require.NoError(t, err)
+
+		dgst, err := manifestService.Put(ctx, dml)
+		require.NoError(t, err)
+
+		desc.MediaType = mediaType
+		desc.Digest = dgst
+
+	default:
+		t.Errorf("unknown manifest mediaType provided: %s", mediaType)
+	}
+	return desc
 }

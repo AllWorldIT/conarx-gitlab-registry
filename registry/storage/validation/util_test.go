@@ -36,6 +36,24 @@ func makeOCIManifestTemplate(t *testing.T, repo distribution.Repository) ocische
 	}
 }
 
+// makeOCIManifestDescriptor returns an OCI  manifest descriptor with a pre-pushed manifest placeholder.
+func makeOCIManifestDescriptor(t *testing.T, repo distribution.Repository) distribution.Descriptor {
+	ctx := context.Background()
+
+	manifestService, err := testutil.MakeManifestService(repo)
+	require.NoError(t, err)
+
+	m := makeOCIManifestTemplate(t, repo)
+
+	dm, err := ocischema.FromStruct(m)
+	require.NoError(t, err)
+
+	dgst, err := manifestService.Put(ctx, dm)
+	require.NoError(t, err)
+
+	return distribution.Descriptor{Digest: dgst, MediaType: v1.MediaTypeImageManifest}
+}
+
 func createRegistry(t *testing.T) distribution.Namespace {
 	ctx := context.Background()
 
