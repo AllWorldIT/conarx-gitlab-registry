@@ -9,28 +9,71 @@ backed by Redis. This document specifies the behavior of such limiting.
 
 ## Algorithm
 
-The registry uses a modified copy of the
-[redis_rate](https://github.com/go-redis/redis_rate) package
-available as an [internal package](../../../internal/redis_rate/),
-see the [README](../../../internal/redis_rate/README.md) for reasoning behind this.
+The documentation has been updated to explain how the new algorithm works - instead of thinking
+about a "leaky bucket" that drains tokens, it now tracks when the next valid request should arrive.
+This approach is more accurate and doesn't require background processes to refill tokens.
 
-The `redis_rate` package implements a
-[Generic cell rate algorithm (GCRA)](https://en.wikipedia.org/wiki/Generic_cell_rate_algorithm),
-also known as `leaky bucket`.
+The registry implements rate limiting using a custom Lua script-based
+implementation of the
+[Generic Cell Rate Algorithm (GCRA)](https://en.wikipedia.org/wiki/Generic_cell_rate_algorithm),
+also known as the `leaky bucket` algorithm.
 
-The leaky bucket name is an analogy that helps understand how requests are counted. In short:
+GCRA is a timestamp-based rate limiting algorithm that tracks the
+"theoretical arrival time" (TAT) for the next compliant request rather
+than physically counting tokens. This approach provides several advantages:
 
-1. A bucket is full of "tokens".
-1. When a request is received, a token is taken out of the bucket (leak).
-1. If the bucket is empty, a request will be denied.
-1. The bucket is refilled at a given rate.
-1. Bursts are configurable to allow for sudden spikes in traffic.
+1. **Memory efficiency**: Only stores a single timestamp per rate limit key instead of maintaining token counts
+1. **Atomicity**: The Lua script ensures atomic execution of all rate limiting operations in Redis
+1. **Precision**: Uses high-precision timestamps to accurately track request intervals
+1. **No background processes**: Unlike traditional leaky buckets, GCRA doesn't require background token dripping processes
+
+The algorithm works by:
+
+1. Calculating a TAT (theoretical arrival time) for each request based on the configured rate
+1. Comparing the current request time against the stored TAT
+1. If the request arrives before the TAT, it's rejected (rate limited)
+1. If the request is compliant, the TAT is updated for the next request
+1. Burst capacity is handled by allowing the TAT to fall behind the current time by a configurable amount
 
 ## Redis
 
 The registry requires a rate-limiter Redis instance to be configured, see the
 [rate-limiter](../../configuration.md#ratelimiter) configuration section for available
 connection settings.
+
+### Redis Cluster Support
+
+The rate limiting implementation supports Redis Cluster deployments with the following considerations:
+
+**Key Distribution**: Rate limiting keys are distributed across cluster shards based on Redis's hash slot algorithm
+(CRC16 mod 16384). This ensures even distribution of rate limiting data across the cluster.
+
+**Lua Script Execution**: The GCRA Lua script executes atomically on the specific shard containing the rate limiting
+key. Since each IP-based rate limit uses its own key, rate limiting operations for different IPs will distribute across
+different shards, preventing any single shard from becoming a bottleneck.
+
+**No Cross-Shard Dependencies**: Each rate limiting key is self-contained with its own TAT value, eliminating the need
+for cross-shard operations or global state synchronization.
+
+### Key Format
+
+- Each client (e.g., IP) has its own Redis key.
+- Example key for IP `1.2.3.4`: `registry:api:{rate-limit:ip:1.2.3.4}`
+- The use of hash tags (`{...}`) ensures that all keys related to this IP hash to the same Redis Cluster slot, avoiding cross-slot errors.
+
+Each key is a **Redis hash** containing two fields:
+
+| Field        | Type   | Description                                   |
+|--------------|--------|-----------------------------------------------|
+| `tokens`     | string | Current number of available tokens (float stored as string) |
+| `last_refill`| string | Unix timestamp (seconds) of the last bucket update |
+
+Example contents:
+
+```yaml
+tokens: "6.5"
+last_refill: "1720001234"
+```
 
 ## Limit types
 
@@ -77,14 +120,17 @@ redis:
 
 For a per minute rate period, with a rate of 60 and burst of 100,
 we will allow a given IP to have a burst of up to 100 requests in 1m,
-which is equivalent to the size of the bucket (maximum number of requests). The bucket will
-fill at a rate of 60 tokens per minute. In practice it would look something like this:
+which is equivalent to the maximum burst capacity. The theoretical arrival time
+will advance at a rate of 1 second per request (60 requests per 60 seconds).
+In practice it would look something like this:
 
 - 0 requests at T0
-- Burst of 100 requests at T1 will be allowed
+- Burst of 100 requests at T1 will be allowed (TAT advances to T1 + 100 seconds)
 - Request number 101 arrives at T2
-- The bucket refills at a rate of 60 tokens per minute, or one token every 1s
-- If T2 = now() - t1 < 1s, the request will be denied
+- If T2 < TAT - burst_duration, the request will be denied
+- If T2 >= TAT - burst_duration, the request will be allowed and TAT will be updated
+
+The burst capacity allows for sudden spikes in traffic while maintaining the overall rate limit over time.
 
 ## Response code
 
@@ -107,3 +153,33 @@ a status code `429 Too Many Requests` and the sample payload:
      ]
   }
   ```
+
+## Redis Clustering FAQ
+
+### Does rate limiting traffic hit the same shard?
+
+No. Rate limiting keys are distributed across Redis Cluster shards using Redis's standard hash slot mechanism.
+Each IP address generates a unique key that maps to a specific hash slot, and hash slots are distributed across
+shards. This means:
+
+- Different IP addresses will likely map to different shards
+- No single shard becomes a bottleneck for rate limiting operations
+- The cluster topology is preserved and utilized effectively
+
+### How does this handle high cardinality?
+
+The GCRA implementation is designed for high cardinality scenarios:
+
+- **Minimal memory footprint**: Each rate limiting key stores only a single timestamp value (the TAT)
+- **Automatic cleanup**: Keys can be configured with TTL values to automatically expire unused rate limits
+- **Distributed storage**: Keys are distributed across cluster shards based on their hash, spreading the load
+
+### Are there limits on Redis hash fields per key?
+
+This implementation doesn't use Redis hashes with multiple fields per key. Each rate limiting entity
+(IP address) gets its own individual Redis key containing a single timestamp value. This approach:
+
+- Avoids Redis's hash field limits
+- Supports per-key TTL for automatic cleanup
+- Enables better distribution across cluster shards
+- Simplifies the Lua script implementation

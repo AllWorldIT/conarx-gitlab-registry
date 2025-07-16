@@ -2,50 +2,72 @@ package ratelimiter
 
 import (
 	"context"
+	_ "embed"
+	"errors"
 	"time"
 
 	"github.com/docker/distribution/configuration"
-	"github.com/docker/distribution/internal/redis_rate"
 
 	"github.com/redis/go-redis/v9"
 )
 
-// Limiter implements handlers.RateLimiter using Redis as the backend.
+var errNoResult = errors.New("no result returned")
+
 type Limiter struct {
-	client *redis_rate.Limiter
+	client redis.UniversalClient
 	config *configuration.Limiter
 }
 
-// Result obtained from the Redis rate limiting algorithm.
 type Result struct {
-	Allowed    int
-	Remaining  int
+	Allowed    int64
+	Remaining  int64
+	Reset      int64
 	RetryAfter time.Duration
 }
 
-// New creates a new rate limiter instance.
 func New(client redis.UniversalClient, config *configuration.Limiter) *Limiter {
 	return &Limiter{
-		client: redis_rate.NewLimiter(client),
+		client: client,
 		config: config,
 	}
 }
 
-// Allowed checks if the specified key is allowed to perform the action based on the configured rate limit.
+//go:embed gcra.lua
+var distributedGCRAScript string
+
 func (rl *Limiter) Allowed(ctx context.Context, key string) (*Result, error) {
-	res, err := rl.client.Allow(ctx, key, redis_rate.Limit{
-		Rate:   int(rl.config.Limit.Rate),
-		Burst:  int(rl.config.Limit.Burst),
-		Period: rl.config.Limit.PeriodDuration,
-	})
+	// Use second precision to avoid floating point issues
+	currentTime := float64(time.Now().Unix())
+	capacity := float64(rl.config.Limit.Burst)
+	refillRate := float64(rl.config.Limit.Rate) / rl.config.Limit.PeriodDuration.Seconds()
+	tokensRequested := 1.0
+
+	result, err := rl.client.Eval(ctx, distributedGCRAScript, []string{key},
+		capacity, refillRate, currentTime, tokensRequested).Result()
 	if err != nil {
 		return nil, err
 	}
 
+	if result == nil {
+		return nil, errNoResult
+	}
+
+	results := result.([]any)
+	allowed := results[0].(int64)
+	remaining := results[1].(int64)
+	retryAfterSecs := results[2].(int64)
+	reset := results[3].(int64)
+
+	var retryAfter time.Duration
+	if retryAfterSecs > 0 {
+		retryAfter = time.Duration(retryAfterSecs) * time.Second
+	}
+
 	return &Result{
-		Allowed:    res.Allowed,
-		Remaining:  res.Remaining,
-		RetryAfter: res.RetryAfter,
+		Allowed:    allowed,
+		Remaining:  remaining,
+		RetryAfter: retryAfter,
+		Reset:      reset,
 	}, nil
 }
 
