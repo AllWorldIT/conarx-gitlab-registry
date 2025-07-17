@@ -1,3 +1,43 @@
+## [4.25.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.24.0-gitlab...v4.25.0-gitlab) (2025-07-17)
+
+
+### ✨ Features ✨
+
+* add dual cache interface ([b2fa37d](https://gitlab.com/gitlab-org/container-registry/commit/b2fa37d35613013a8599958d5c8871e0aa3369ff))
+* **api/gitlab/v1:** enable DLB for List Repository Tags API endpoint ([7698d73](https://gitlab.com/gitlab-org/container-registry/commit/7698d73f25cc5b37719a7e128840ed0491af415b))
+* custom GCRA rate limiting implementation ([cef7e0f](https://gitlab.com/gitlab-org/container-registry/commit/cef7e0f1b4a713cf84170626d098edbc56c02c01))
+* enable integrity checks for gcs next storage driver ([295397a](https://gitlab.com/gitlab-org/container-registry/commit/295397a07e451eeb2842222d11242b156a769f2d))
+* **handlers:** expose import stats to v1 stats endpoint ([e2419a9](https://gitlab.com/gitlab-org/container-registry/commit/e2419a9b4419234df93fc22d32399c3744acdd9f))
+* **registry:** import-command: add import-statistics option ([ca99dd7](https://gitlab.com/gitlab-org/container-registry/commit/ca99dd704d86273714b791046af9451b097d4b81))
+* storage middleware for caching URLs ([bd4ec81](https://gitlab.com/gitlab-org/container-registry/commit/bd4ec81bbf84a4bf5df75a55552412b5538bc0f8))
+
+
+### 🐛 Bug Fixes 🐛
+
+* change not implemented status code of rename api ([cb457a1](https://gitlab.com/gitlab-org/container-registry/commit/cb457a190fd8ad0a5363f8e8301e08b63835146a))
+* improve retries handling in gcs next storage driver ([1e4ea3e](https://gitlab.com/gitlab-org/container-registry/commit/1e4ea3e72bc014f309c64273b3caba97aad0159d))
+* validate subject field in manifest database not blob storage ([a3dad3a](https://gitlab.com/gitlab-org/container-registry/commit/a3dad3a561bae96753266bb27b790b9af935a35d))
+
+
+### ⚡️ Performance Improvements ⚡️
+
+* add metrics for gcs storage retries ([f793100](https://gitlab.com/gitlab-org/container-registry/commit/f7931001f428839f7734a171a59a587935c306a0))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.84.0 ([3a398c5](https://gitlab.com/gitlab-org/container-registry/commit/3a398c51682d2d673d8473670eceaaaf2f6d5ce9))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.18.1 ([69bc416](https://gitlab.com/gitlab-org/container-registry/commit/69bc416019bf1bdf645ad6243676a4d1dcc77e2a))
+* **deps:** update module github.com/getsentry/sentry-go to v0.34.1 ([e7b17b2](https://gitlab.com/gitlab-org/container-registry/commit/e7b17b22d6cfaae104f61254c8502c06513a0758))
+* **deps:** update module github.com/olekukonko/tablewriter to v1.0.8 ([e220c7e](https://gitlab.com/gitlab-org/container-registry/commit/e220c7e4f3ce1377c2b038b093598448bba20de6))
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.38.0 ([51dcd31](https://gitlab.com/gitlab-org/container-registry/commit/51dcd3144ff1d202720eddf7d82c3aab02802c04))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.133.0 ([4880e94](https://gitlab.com/gitlab-org/container-registry/commit/4880e94b5ce2cc3e719cafdd5033052f2fbb99ea))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.134.0 ([6dd2b83](https://gitlab.com/gitlab-org/container-registry/commit/6dd2b833ce7f9db86b154d9829ec8568847b5021))
+* **deps:** update module golang.org/x/net to v0.42.0 ([bce0d75](https://gitlab.com/gitlab-org/container-registry/commit/bce0d75007527d33a19024da47f0396d49533357))
+* **deps:** update module golang.org/x/sync to v0.16.0 ([340e4cf](https://gitlab.com/gitlab-org/container-registry/commit/340e4cf040af076d969751c36bd56ca953179fa4))
+* **deps:** update module google.golang.org/api to v0.240.0 ([721b768](https://gitlab.com/gitlab-org/container-registry/commit/721b768c9b4418d22ed3863d5be662b3d9a910ad))
+* **deps:** update module google.golang.org/api to v0.241.0 ([996be04](https://gitlab.com/gitlab-org/container-registry/commit/996be0474fbacc5c58f4d270adbd283cf5e8cff6))
+
 ## [4.24.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.23.1-gitlab...v4.24.0-gitlab) (2025-07-04)
 
 ### ✨ Features ✨
