@@ -926,7 +926,7 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]any
 		}
 	}
 
-	expiresIn := 20 * time.Minute
+	expiresIn := storagedriver.DefaultSignedURLExpiry
 	expires, ok := options["expiry"]
 	if ok {
 		et, ok := expires.(time.Time)

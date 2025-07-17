@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"time"
 )
 
 func Bool(parameters map[string]any, name string, defaultt bool) (bool, error) {
@@ -91,4 +92,61 @@ func Int64(parameters map[string]any, name string, defaultt, minimum, maximum in
 	}
 
 	return rv, nil
+}
+
+// Duration converts parameters[name] to a time.Duration value (using
+// defaultt if nil). It only accepts non-negative durations.
+// It accepts:
+// - time.Duration values (must be non-negative)
+// - strings in Go duration format (e.g., "1h30m", "30s")
+// - int/int64/int32 values (interpreted as seconds, must be non-negative)
+// - uint/uint32/uint64 values (interpreted as seconds)
+// - float64 values (interpreted as seconds, must be non-negative)
+func Duration(parameters map[string]any, name string, defaultt time.Duration) (time.Duration, error) {
+	var dur time.Duration
+	switch value := parameters[name].(type) {
+	case time.Duration:
+		dur = value
+	case string:
+		d, err := time.ParseDuration(value)
+		if err != nil {
+			return defaultt, fmt.Errorf("cannot parse %q string as duration: %w", name, err)
+		}
+		dur = d
+	case int:
+		if value < 0 {
+			return defaultt, fmt.Errorf("%q must be non-negative, got %d", name, value)
+		}
+		dur = time.Duration(value) * time.Second
+	case int64:
+		if value < 0 {
+			return defaultt, fmt.Errorf("%q must be non-negative, got %d", name, value)
+		}
+		dur = time.Duration(value) * time.Second
+	case int32:
+		if value < 0 {
+			return defaultt, fmt.Errorf("%q must be non-negative, got %d", name, value)
+		}
+		dur = time.Duration(value) * time.Second
+	case uint32:
+		dur = time.Duration(value) * time.Second
+	case float64:
+		if value < 0 {
+			return defaultt, fmt.Errorf("%q must be non-negative, got %f", name, value)
+		}
+		// Convert float seconds to duration
+		// Note: this may lose precision for very large values
+		dur = time.Duration(value * float64(time.Second))
+	case nil:
+		return defaultt, nil
+	default:
+		return defaultt, fmt.Errorf("cannot parse %q with type %T as duration", name, value)
+	}
+
+	// Check if the final duration is negative
+	if dur < 0 {
+		return defaultt, fmt.Errorf("%q must be non-negative, got %v", name, dur)
+	}
+
+	return dur, nil
 }

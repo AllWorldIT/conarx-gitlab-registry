@@ -3,6 +3,7 @@ package metrics
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,19 +11,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-// nolint:unparam //(`d` always receives `10 * time.Millisecond)
-func mockTimeSince(d time.Duration) func() {
-	bkp := timeSince
-	timeSince = func(_ time.Time) time.Duration { return d }
-	return func() { timeSince = bkp }
-}
-
 func TestBlobDownload(t *testing.T) {
-	restore := mockTimeSince(10 * time.Millisecond)
-	defer restore()
-
 	BlobDownload(false, 512)
 	BlobDownload(true, 1024)
 	BlobDownload(true, 2048)
@@ -86,9 +78,6 @@ registry_storage_blob_download_bytes_count{redirect="true"} 2
 }
 
 func TestCDNRedirect(t *testing.T) {
-	restore := mockTimeSince(10 * time.Millisecond)
-	defer restore()
-
 	CDNRedirect("cdn", false, "")
 	CDNRedirect("storage", true, "ip")
 
@@ -106,10 +95,7 @@ registry_storage_cdn_redirects_total{backend="storage",bypass="true",bypass_reas
 	require.NoError(t, err)
 }
 
-func TestStorageLimit(t *testing.T) {
-	restore := mockTimeSince(10 * time.Millisecond)
-	defer restore()
-
+func TestStorageRatelimit(t *testing.T) {
 	StorageRatelimit()
 
 	var expected bytes.Buffer
@@ -126,9 +112,6 @@ registry_storage_rate_limit_total 1
 }
 
 func TestBlobUpload(t *testing.T) {
-	restore := mockTimeSince(10 * time.Millisecond)
-	defer restore()
-
 	BlobUpload(512)
 	BlobUpload(1024)
 	BlobUpload(2048)
@@ -169,9 +152,6 @@ registry_storage_blob_upload_bytes_count 3
 }
 
 func TestStorageBackendRetry(t *testing.T) {
-	restore := mockTimeSince(10 * time.Millisecond)
-	defer restore()
-
 	// Test native retries
 	StorageBackendRetry(true)
 	StorageBackendRetry(true)
@@ -193,4 +173,281 @@ registry_storage_storage_backend_retries_total{type="native"} 2
 
 	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
+}
+
+func TestURLCacheRequest(t *testing.T) {
+	// Test cache hits
+	URLCacheRequest(true, "")
+	URLCacheRequest(true, "")
+
+	// Test cache misses with different reasons
+	URLCacheRequest(false, "not_found")
+	URLCacheRequest(false, "error")
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_storage_urlcache_requests_total A counter of the URL cache middleware requests.
+# TYPE registry_storage_urlcache_requests_total counter
+registry_storage_urlcache_requests_total{reason="",result="hit"} 2
+registry_storage_urlcache_requests_total{reason="error",result="miss"} 1
+registry_storage_urlcache_requests_total{reason="not_found",result="miss"} 1
+`)
+	require.NoError(t, err)
+	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, urlCacheRequestsTotalName)
+
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	require.NoError(t, err)
+}
+
+func TestURLCacheObjectSize(t *testing.T) {
+	URLCacheObjectSize(150)  // 150 bytes
+	URLCacheObjectSize(800)  // 800 bytes
+	URLCacheObjectSize(1200) // 1.2KiB
+	URLCacheObjectSize(3000) // ~3KiB
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_storage_urlcache_object_size A histogram of object sizes in the url cache
+# TYPE registry_storage_urlcache_object_size histogram
+registry_storage_urlcache_object_size_bucket{le="100"} 0
+registry_storage_urlcache_object_size_bucket{le="250"} 1
+registry_storage_urlcache_object_size_bucket{le="500"} 1
+registry_storage_urlcache_object_size_bucket{le="750"} 1
+registry_storage_urlcache_object_size_bucket{le="1000"} 2
+registry_storage_urlcache_object_size_bucket{le="1500"} 3
+registry_storage_urlcache_object_size_bucket{le="2048"} 3
+registry_storage_urlcache_object_size_bucket{le="3072"} 4
+registry_storage_urlcache_object_size_bucket{le="5120"} 4
+registry_storage_urlcache_object_size_bucket{le="10240"} 4
+registry_storage_urlcache_object_size_bucket{le="+Inf"} 4
+registry_storage_urlcache_object_size_sum 5150
+registry_storage_urlcache_object_size_count 4
+`)
+	require.NoError(t, err)
+	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, urlCacheObjectSizeName)
+
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
+	require.NoError(t, err)
+}
+
+// AccessTrackerTestSuite tests the AccessTracker functionality
+type AccessTrackerTestSuite struct {
+	suite.Suite
+	registerer *prometheus.Registry
+}
+
+func (s *AccessTrackerTestSuite) SetupTest() {
+	s.registerer = prometheus.NewRegistry()
+	registerMetrics(s.registerer)
+}
+
+func (s *AccessTrackerTestSuite) TestBasicFunctionality() {
+	// Create an access tracker with a short tick interval for testing
+	at, cleanup := NewAccessTracker(50*time.Millisecond, 10)
+	defer cleanup()
+
+	// Track some accesses
+	for i := uint64(1); i < 11; i++ {
+		for j := uint64(0); j < i; j++ {
+			at.Track(i)
+		}
+	}
+
+	// Wait for the ticker to fire and calculate metrics
+	time.Sleep(100 * time.Millisecond)
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_storage_access_tracker_dropped_events A counter of dropped events in the access tracker due to timeout
+# TYPE registry_storage_access_tracker_dropped_events counter
+registry_storage_access_tracker_dropped_events 0
+# HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
+# TYPE registry_storage_object_accesses_distribution histogram
+registry_storage_object_accesses_distribution_bucket{le="0"} 0
+registry_storage_object_accesses_distribution_bucket{le="500"} 10
+registry_storage_object_accesses_distribution_bucket{le="1000"} 10
+registry_storage_object_accesses_distribution_bucket{le="1500"} 10
+registry_storage_object_accesses_distribution_bucket{le="2000"} 10
+registry_storage_object_accesses_distribution_bucket{le="2500"} 10
+registry_storage_object_accesses_distribution_bucket{le="3000"} 10
+registry_storage_object_accesses_distribution_bucket{le="3500"} 10
+registry_storage_object_accesses_distribution_bucket{le="4000"} 10
+registry_storage_object_accesses_distribution_bucket{le="4500"} 10
+registry_storage_object_accesses_distribution_bucket{le="5000"} 10
+registry_storage_object_accesses_distribution_bucket{le="+Inf"} 10
+registry_storage_object_accesses_distribution_sum 55
+registry_storage_object_accesses_distribution_count 10
+# HELP registry_storage_object_accesses_topn Total accesses for top N most frequently accessed objects
+# TYPE registry_storage_object_accesses_topn gauge
+registry_storage_object_accesses_topn{top_n="1"} 10
+registry_storage_object_accesses_topn{top_n="10"} 55
+registry_storage_object_accesses_topn{top_n="all"} 0
+`)
+	require.NoError(s.T(), err)
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesTopNName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesDistributionName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
+	}
+
+	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
+	require.NoError(s.T(), err)
+}
+
+func (s *AccessTrackerTestSuite) TestConcurrentAccess() {
+	at, cleanup := NewAccessTracker(50*time.Millisecond, 1000)
+	defer cleanup()
+
+	// Launch multiple goroutines to track events concurrently
+	var wg sync.WaitGroup
+	numGoroutines := 10
+	eventsPerGoroutine := 100
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(id uint64) {
+			defer wg.Done()
+			for j := 0; j < eventsPerGoroutine; j++ {
+				at.Track(id)
+			}
+		}(uint64(i))
+	}
+
+	wg.Wait()
+
+	// Wait for processing
+	time.Sleep(100 * time.Millisecond)
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_storage_access_tracker_dropped_events A counter of dropped events in the access tracker due to timeout
+# TYPE registry_storage_access_tracker_dropped_events counter
+registry_storage_access_tracker_dropped_events 0
+# HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
+# TYPE registry_storage_object_accesses_distribution histogram
+registry_storage_object_accesses_distribution_bucket{le="0"} 0
+registry_storage_object_accesses_distribution_bucket{le="500"} 10
+registry_storage_object_accesses_distribution_bucket{le="1000"} 10
+registry_storage_object_accesses_distribution_bucket{le="1500"} 10
+registry_storage_object_accesses_distribution_bucket{le="2000"} 10
+registry_storage_object_accesses_distribution_bucket{le="2500"} 10
+registry_storage_object_accesses_distribution_bucket{le="3000"} 10
+registry_storage_object_accesses_distribution_bucket{le="3500"} 10
+registry_storage_object_accesses_distribution_bucket{le="4000"} 10
+registry_storage_object_accesses_distribution_bucket{le="4500"} 10
+registry_storage_object_accesses_distribution_bucket{le="5000"} 10
+registry_storage_object_accesses_distribution_bucket{le="+Inf"} 10
+registry_storage_object_accesses_distribution_sum 1000
+registry_storage_object_accesses_distribution_count 10
+# HELP registry_storage_object_accesses_topn Total accesses for top N most frequently accessed objects
+# TYPE registry_storage_object_accesses_topn gauge
+registry_storage_object_accesses_topn{top_n="1"} 100
+registry_storage_object_accesses_topn{top_n="10"} 1000
+registry_storage_object_accesses_topn{top_n="all"} 0
+`)
+	require.NoError(s.T(), err)
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesTopNName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesDistributionName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
+	}
+
+	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
+	require.NoError(s.T(), err)
+}
+
+func (s *AccessTrackerTestSuite) TestLargeObjectIDs() {
+	at, cleanup := NewAccessTracker(50*time.Millisecond, 10)
+	defer cleanup()
+
+	// Track with maximum uint64 values
+	maxUint64 := ^uint64(0)
+	at.Track(maxUint64)
+	at.Track(maxUint64 - 1)
+	at.Track(maxUint64 - 2)
+
+	time.Sleep(100 * time.Millisecond)
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_storage_access_tracker_dropped_events A counter of dropped events in the access tracker due to timeout
+# TYPE registry_storage_access_tracker_dropped_events counter
+registry_storage_access_tracker_dropped_events 0
+# HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
+# TYPE registry_storage_object_accesses_distribution histogram
+registry_storage_object_accesses_distribution_bucket{le="0"} 0
+registry_storage_object_accesses_distribution_bucket{le="500"} 3
+registry_storage_object_accesses_distribution_bucket{le="1000"} 3
+registry_storage_object_accesses_distribution_bucket{le="1500"} 3
+registry_storage_object_accesses_distribution_bucket{le="2000"} 3
+registry_storage_object_accesses_distribution_bucket{le="2500"} 3
+registry_storage_object_accesses_distribution_bucket{le="3000"} 3
+registry_storage_object_accesses_distribution_bucket{le="3500"} 3
+registry_storage_object_accesses_distribution_bucket{le="4000"} 3
+registry_storage_object_accesses_distribution_bucket{le="4500"} 3
+registry_storage_object_accesses_distribution_bucket{le="5000"} 3
+registry_storage_object_accesses_distribution_bucket{le="+Inf"} 3
+registry_storage_object_accesses_distribution_sum 3
+registry_storage_object_accesses_distribution_count 3
+# HELP registry_storage_object_accesses_topn Total accesses for top N most frequently accessed objects
+# TYPE registry_storage_object_accesses_topn gauge
+registry_storage_object_accesses_topn{top_n="1"} 1
+registry_storage_object_accesses_topn{top_n="all"} 0
+`)
+	require.NoError(s.T(), err)
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesTopNName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesDistributionName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
+	}
+
+	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
+	require.NoError(s.T(), err)
+}
+
+func (s *AccessTrackerTestSuite) TestNoAccesses() {
+	_, cleanup := NewAccessTracker(50*time.Millisecond, 10)
+	defer cleanup()
+
+	// Wait for a tick without tracking anything
+	time.Sleep(100 * time.Millisecond)
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_storage_access_tracker_dropped_events A counter of dropped events in the access tracker due to timeout
+# TYPE registry_storage_access_tracker_dropped_events counter
+registry_storage_access_tracker_dropped_events 0
+# HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
+# TYPE registry_storage_object_accesses_distribution histogram
+registry_storage_object_accesses_distribution_bucket{le="0"} 0
+registry_storage_object_accesses_distribution_bucket{le="500"} 0
+registry_storage_object_accesses_distribution_bucket{le="1000"} 0
+registry_storage_object_accesses_distribution_bucket{le="1500"} 0
+registry_storage_object_accesses_distribution_bucket{le="2000"} 0
+registry_storage_object_accesses_distribution_bucket{le="2500"} 0
+registry_storage_object_accesses_distribution_bucket{le="3000"} 0
+registry_storage_object_accesses_distribution_bucket{le="3500"} 0
+registry_storage_object_accesses_distribution_bucket{le="4000"} 0
+registry_storage_object_accesses_distribution_bucket{le="4500"} 0
+registry_storage_object_accesses_distribution_bucket{le="5000"} 0
+registry_storage_object_accesses_distribution_bucket{le="+Inf"} 0
+registry_storage_object_accesses_distribution_sum 0
+registry_storage_object_accesses_distribution_count 0
+# HELP registry_storage_object_accesses_topn Total accesses for top N most frequently accessed objects
+# TYPE registry_storage_object_accesses_topn gauge
+registry_storage_object_accesses_topn{top_n="all"} 0
+`)
+	require.NoError(s.T(), err)
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesTopNName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesDistributionName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
+	}
+
+	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
+	require.NoError(s.T(), err)
+}
+
+func TestAccessTrackerSuite(t *testing.T) {
+	suite.Run(t, new(AccessTrackerTestSuite))
 }

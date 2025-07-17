@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Version is a string representing the storage driver version, of the form
@@ -228,3 +229,5 @@ var (
 	ErrAlreadyCommited = fmt.Errorf("already committed")
 	ErrAlreadyCanceled = fmt.Errorf("already canceled")
 )
+
+const DefaultSignedURLExpiry = 20 * time.Minute

@@ -222,6 +222,11 @@ middleware:
         awsregion: us-east-1, use-east-2
         updatefrequency: 12h
         iprangesurl: https://ip-ranges.amazonaws.com/ip-ranges.json
+    - name: urlcache
+      options:
+        min_url_validity: 5m
+        default_url_validity: 30m
+        dry_run: false
   storage:
     - name: redirect
       options:
@@ -864,6 +869,11 @@ middleware:
         awsregion: us-east-1, use-east-2
         updatefrequency: 12h
         iprangesurl: https://ip-ranges.amazonaws.com/ip-ranges.json
+    - name: urlcache
+      options:
+        min_url_validity: 5m
+        default_url_validity: 30m
+        dry_run: false
 ```
 
 This is an example configuration of the `googlecdn` storage middleware:
@@ -938,6 +948,41 @@ location of a proxy for the layer stored by the S3 storage driver.
 | Parameter | Required | Description                                                                                                 |
 |-----------|----------|-------------------------------------------------------------------------------------------------------------|
 | `baseurl` | yes      | `SCHEME://HOST` at which layers are served. Can also contain port. For example, `https://example.com:5443`. |
+
+#### `urlcache`
+
+Middleware to cache pre-signed URLs in Redis for re-use.
+This reduces the number of calls to the storage backend for URL generation, improving performance for frequently accessed objects and reduces the load/costs of the underlying IAM service.
+In order to use this middleware, a `cache` Redis section needs to be provided in the configuration as well. 
+
+This middleware is particularly useful when:
+
+- You have a high volume of requests for the same objects
+- Your storage backend has latency or rate limits for URL generation
+- You want to reduce load on your storage backend
+
+| Parameter          | Required | Description                                                                                                                                                                                                                                                                                                            |
+|--------------------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `min_url_validity`   | no       | The minimum time a URL must remain valid before it can be served from cache. URLs with less remaining validity will trigger a cache miss and regeneration. Valid time units are `ns`, `us` (or `µs`), `ms`, `s`, `m`, or `h`. For example, `10m` is valid, but `10 m` is not. Defaults to `10m` (10 minutes).         |
+| `default_url_validity`| no      | The default expiry time for generated URLs when not specified in the request options. Valid time units are `ns`, `us` (or `µs`), `ms`, `s`, `m`, or `h`. Defaults to `20m` (20 minutes). This value must be greater than `min_url_validity`.                                                                           |
+| `dry_run` | no | When set to `true`, registry always fetches signed URL from storage driver, no matter if it was found in cache or not. Defaults to `false`. | 
+
+Example configuration:
+
+```yaml
+middleware:
+  storage:
+    - name: cloudfront
+      options:
+        baseurl: https://my.cloudfronted.domain.com/
+        privatekey: /path/to/pem
+        keypairid: cloudfrontkeypairid
+        duration: 3000s
+    - name: urlcache
+      options:
+        min_url_validity: 5m
+        default_url_validity: 30m
+        dry_run: false
 
 ## `reporting`
 

@@ -48,8 +48,6 @@ const (
 	DefaultRetryTryTimeout = 0 // disabled
 	DefaultRetryDelay      = 4 * time.Second
 	DefaultMaxRetryDelay   = 60 * time.Second
-
-	DefaultSignedURLExpiry = 20 * time.Minute
 )
 
 var ErrCopyStatusPending = errors.New("copy still pending")
@@ -583,7 +581,7 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]any
 		},
 	)
 
-	expiresTime := common.SystemClock.Now().UTC().Add(DefaultSignedURLExpiry)
+	expiresTime := common.SystemClock.Now().UTC().Add(storagedriver.DefaultSignedURLExpiry)
 	expires, ok := options["expiry"]
 	if ok {
 		t, ok := expires.(time.Time)
