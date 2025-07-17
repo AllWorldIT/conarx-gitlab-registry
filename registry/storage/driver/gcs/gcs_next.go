@@ -676,7 +676,6 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 
 // URLFor returns a URL which may be used to retrieve the content stored at
 // the given path, possibly using the given options.
-// Returns ErrUnsupportedMethod if this driver has no privateKey
 func (d *driverNext) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	name := d.pathToKey(path)
 	methodString := http.MethodGet
@@ -688,7 +687,7 @@ func (d *driverNext) URLFor(ctx context.Context, path string, options map[string
 		}
 	}
 
-	expiresTime := systemClock.Now().Add(20 * time.Minute)
+	expiresTime := systemClock.Now().Add(storagedriver.DefaultSignedURLExpiry)
 	expires, ok := options["expiry"]
 	if ok {
 		et, ok := expires.(time.Time)

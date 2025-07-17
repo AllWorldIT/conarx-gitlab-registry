@@ -14,6 +14,7 @@ import (
 	_ "github.com/docker/distribution/registry/storage/driver/middleware/cloudfront"
 	_ "github.com/docker/distribution/registry/storage/driver/middleware/googlecdn"
 	_ "github.com/docker/distribution/registry/storage/driver/middleware/redirect"
+	_ "github.com/docker/distribution/registry/storage/driver/middleware/urlcache"
 	_ "github.com/docker/distribution/registry/storage/driver/s3-aws"
 
 	"go.uber.org/automaxprocs/maxprocs"
