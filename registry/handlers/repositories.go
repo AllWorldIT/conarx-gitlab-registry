@@ -1047,8 +1047,6 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 
 			// prevent the request from proceeding if an ongoing rename operation is underway in the project space
 			if exist {
-				err = errors.New("ongoing rename check: the current repository is undergoing a rename")
-				errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r), errortracking.WithStackTrace())
 				h.Errors = append(h.Errors, v2.ErrorCodeRenameInProgress.WithDetail(fmt.Sprintf("the base repository path: %s, is undergoing a rename", projectPath)))
 				return
 			}
