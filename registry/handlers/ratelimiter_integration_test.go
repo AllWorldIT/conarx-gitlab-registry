@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"context"
+	"math/rand/v2"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,7 +26,9 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 	require.NotEmpty(t, redisAddr, "REDIS_ADDR environment variable must be set")
 
 	t.Run("blocks requests when limit exceeded", func(t *testing.T) {
-		cleanupRedisKeys(t, redisAddr)
+		t.Cleanup(func() {
+			cleanupRedisKeys(t, redisAddr)
+		})
 
 		config := &configuration.Configuration{
 			RateLimiter: configuration.RateLimiter{
@@ -48,7 +51,7 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 		app, err := setupAppWithRateLimiter(t, config)
 		require.NoError(t, err)
 
-		req, resp := createTestRequest("192.168.1.1:12345")
+		req, resp := createTestRequest(testIP())
 		handler := createMiddlewareHandler(app)
 
 		// Should allow 6 burst requests GLOBALLY (not per-shard)
@@ -70,7 +73,9 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("log_only mode never blocks", func(t *testing.T) {
-		cleanupRedisKeys(t, redisAddr)
+		t.Cleanup(func() {
+			cleanupRedisKeys(t, redisAddr)
+		})
 
 		config := &configuration.Configuration{
 			RateLimiter: configuration.RateLimiter{
@@ -93,7 +98,7 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 		app, err := setupAppWithRateLimiter(t, config)
 		require.NoError(t, err)
 
-		req, resp := createTestRequest("192.168.1.2:12345")
+		req, resp := createTestRequest(testIP())
 		handler := createMiddlewareHandler(app)
 
 		// Should never block even after exceeding limit
@@ -106,7 +111,9 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("X-RateLimit-Remaining header decreases correctly", func(t *testing.T) {
-		cleanupRedisKeys(t, redisAddr)
+		t.Cleanup(func() {
+			cleanupRedisKeys(t, redisAddr)
+		})
 
 		config := &configuration.Configuration{
 			RateLimiter: configuration.RateLimiter{
@@ -129,7 +136,7 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 		app, err := setupAppWithRateLimiter(t, config)
 		require.NoError(t, err)
 
-		req, resp := createTestRequest("192.168.1.3:12345")
+		req, resp := createTestRequest(testIP())
 		handler := createMiddlewareHandler(app)
 
 		// Track expected remaining values (GLOBAL burst = 30)
@@ -161,7 +168,13 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("X-RateLimit-Remaining header with different IPs", func(t *testing.T) {
-		cleanupRedisKeys(t, redisAddr)
+		t.Cleanup(func() {
+			cleanupRedisKeys(t, redisAddr)
+		})
+
+		// Generate unique test IPs for this test run
+		testIPs := []string{testIP(), testIP(), testIP()}
+		t.Logf("Using test IPs: %v", testIPs)
 
 		config := &configuration.Configuration{
 			RateLimiter: configuration.RateLimiter{
@@ -187,9 +200,9 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 		handler := createMiddlewareHandler(app)
 
 		// Test different IPs should have independent counters
-		testIPs := []string{"192.168.1.4:12345", "192.168.1.5:12345", "192.168.1.6:12345"}
+		for ipIndex, testIP := range testIPs {
+			t.Logf("=== Testing IP %d: %s ===", ipIndex+1, testIP)
 
-		for _, testIP := range testIPs {
 			req, resp := createTestRequest(testIP)
 
 			// Each IP should start with GLOBAL burst capacity (9)
@@ -222,7 +235,9 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("per-IP rate limiting works correctly across shards", func(t *testing.T) {
-		cleanupRedisKeys(t, redisAddr)
+		t.Cleanup(func() {
+			cleanupRedisKeys(t, redisAddr)
+		})
 
 		config := &configuration.Configuration{
 			RateLimiter: configuration.RateLimiter{
@@ -249,9 +264,7 @@ func TestRateLimiterBasicFunctionality(t *testing.T) {
 
 		// Use IPs that hash to different Redis shards
 		crossShardIPs := []string{
-			"10.0.1.4:12345", // Different shard
-			"10.0.1.1:12345", // Different shard
-			"10.0.1.7:12345", // Different shard
+			testIP(), testIP(), testIP(),
 		}
 
 		// Each IP should be allowed its full GLOBAL burst (9 requests each)
@@ -287,7 +300,9 @@ func TestRateLimiterMultipleLimiters(t *testing.T) {
 	require.NotEmpty(t, redisAddr, "REDIS_ADDR environment variable must be set")
 
 	t.Run("different limiters use separate keys", func(t *testing.T) {
-		cleanupRedisKeys(t, redisAddr)
+		t.Cleanup(func() {
+			cleanupRedisKeys(t, redisAddr)
+		})
 
 		// Test with a single limiter to establish baseline behavior
 		config := &configuration.Configuration{
@@ -311,7 +326,7 @@ func TestRateLimiterMultipleLimiters(t *testing.T) {
 		app, err := setupAppWithRateLimiter(t, config)
 		require.NoError(t, err)
 
-		req, resp := createTestRequest("192.168.1.10:12345")
+		req, resp := createTestRequest(testIP())
 		handler := createMiddlewareHandler(app)
 
 		// Test that one limiter works correctly
@@ -333,7 +348,9 @@ func TestRateLimiterMultipleLimiters(t *testing.T) {
 	})
 
 	t.Run("multiple limiters with same match type interfere", func(t *testing.T) {
-		cleanupRedisKeys(t, redisAddr)
+		t.Cleanup(func() {
+			cleanupRedisKeys(t, redisAddr)
+		})
 
 		// This test documents the key collision behavior
 		config := &configuration.Configuration{
@@ -366,7 +383,7 @@ func TestRateLimiterMultipleLimiters(t *testing.T) {
 		app, err := setupAppWithRateLimiter(t, config)
 		require.NoError(t, err)
 
-		req, resp := createTestRequest("192.168.1.10:12345")
+		req, resp := createTestRequest(testIP())
 		handler := createMiddlewareHandler(app)
 
 		// Due to key collision, the behavior is:
@@ -399,7 +416,9 @@ func TestRateLimiterMultipleLimiters(t *testing.T) {
 	})
 
 	t.Run("limiter precedence affects processing order", func(t *testing.T) {
-		cleanupRedisKeys(t, redisAddr)
+		t.Cleanup(func() {
+			cleanupRedisKeys(t, redisAddr)
+		})
 
 		// Test that demonstrates precedence ordering with different IPs to avoid collision
 		config := &configuration.Configuration{
@@ -432,7 +451,7 @@ func TestRateLimiterMultipleLimiters(t *testing.T) {
 		app, err := setupAppWithRateLimiter(t, config)
 		require.NoError(t, err)
 
-		req, resp := createTestRequest("192.168.1.10:12345")
+		req, resp := createTestRequest(testIP())
 		handler := createMiddlewareHandler(app)
 
 		// Make a single request to verify both limiters process
@@ -451,7 +470,9 @@ func TestRateLimitersBasicWithCleanup(t *testing.T) {
 	redisAddr := os.Getenv("REDIS_ADDR")
 	require.NotEmpty(t, redisAddr, "REDIS_ADDR environment variable must be set")
 
-	cleanupRedisKeys(t, redisAddr)
+	t.Cleanup(func() {
+		cleanupRedisKeys(t, redisAddr)
+	})
 
 	config := &configuration.Configuration{
 		RateLimiter: configuration.RateLimiter{
@@ -474,18 +495,19 @@ func TestRateLimitersBasicWithCleanup(t *testing.T) {
 	app, err := setupAppWithRateLimiter(t, config)
 	require.NoError(t, err)
 
-	req, resp := createTestRequest("192.168.99.1:12345")
+	req, resp := createTestRequest(testIP())
 	handler := createMiddlewareHandler(app)
 
 	// Should be able to make 12 requests (global burst capacity)
 	for i := 1; i <= 12; i++ {
 		handler.ServeHTTP(resp, req)
-		require.Equal(t, http.StatusOK, resp.Code, "Request %d should be allowed", i)
-		require.NotEmpty(t, resp.Header().Get(headerRateLimit))
-		require.NotEmpty(t, resp.Header().Get(headerRateLimitPolicy))
-		require.NotEmpty(t, resp.Header().Get(headerXRateLimitLimit))
-		require.NotEmpty(t, resp.Header().Get(headerXRateLimitRemaining))
-		require.NotEmpty(t, resp.Header().Get(headerXRateLimitReset))
+		assert.Equal(t, http.StatusOK, resp.Code, "Request %d should be allowed", i)
+		assert.NotEmpty(t, resp.Header().Get(headerRateLimit))
+		assert.NotEmpty(t, resp.Header().Get(headerRateLimitPolicy))
+		assert.NotEmpty(t, resp.Header().Get(headerXRateLimitLimit))
+		assert.NotEmpty(t, resp.Header().Get(headerXRateLimitRemaining))
+		assert.NotEmpty(t, resp.Header().Get(headerXRateLimitReset))
+
 		resp = httptest.NewRecorder()
 	}
 
@@ -502,7 +524,9 @@ func TestRateLimitersThresholdCalculation(t *testing.T) {
 	redisAddr := os.Getenv("REDIS_ADDR")
 	require.NotEmpty(t, redisAddr, "REDIS_ADDR environment variable must be set")
 
-	cleanupRedisKeys(t, redisAddr)
+	t.Cleanup(func() {
+		cleanupRedisKeys(t, redisAddr)
+	})
 
 	config := &configuration.Configuration{
 		RateLimiter: configuration.RateLimiter{
@@ -525,7 +549,7 @@ func TestRateLimitersThresholdCalculation(t *testing.T) {
 	app, err := setupAppWithRateLimiter(t, config)
 	require.NoError(t, err)
 
-	req, resp := createTestRequest("192.168.11.1:12345")
+	req, resp := createTestRequest(testIP())
 	handler := createMiddlewareHandler(app)
 
 	// With global burst=30 and threshold=0.6, warning should trigger at 18th request (60% of 30)
@@ -546,7 +570,9 @@ func TestRateLimiterSpecialCaseZeroThreshold(t *testing.T) {
 	redisAddr := os.Getenv("REDIS_ADDR")
 	require.NotEmpty(t, redisAddr, "REDIS_ADDR environment variable must be set")
 
-	cleanupRedisKeys(t, redisAddr)
+	t.Cleanup(func() {
+		cleanupRedisKeys(t, redisAddr)
+	})
 
 	config := &configuration.Configuration{
 		RateLimiter: configuration.RateLimiter{
@@ -573,7 +599,7 @@ func TestRateLimiterSpecialCaseZeroThreshold(t *testing.T) {
 	app, err := setupAppWithRateLimiter(t, config)
 	require.NoError(t, err)
 
-	req, resp := createTestRequest("192.168.20.1:12345")
+	req, resp := createTestRequest(testIP())
 	handler := createMiddlewareHandler(app)
 
 	// Should be able to make 12 requests before being blocked (global burst)
@@ -676,34 +702,19 @@ func cleanupRedisKeys(t *testing.T, redisAddr string) {
 		},
 	}
 
-	var redisClient redis.UniversalClient
-	var err error
-
-	for i := 0; i < 5; i++ {
-		redisClient, err = configureRedisClient(context.Background(), config.Redis.RateLimiter, false, "test")
-		if err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			err = redisClient.Ping(ctx).Err()
-			cancel()
-			if err == nil {
-				break
-			}
-		}
-		t.Logf("Attempt %d: Failed to connect to Redis cluster: %v", i+1, err)
-		time.Sleep(time.Duration(i+1) * time.Second)
-	}
-	require.NoError(t, err, "Failed to connect to Redis cluster after retries")
+	redisClient, err := configureRedisClient(context.Background(), config.Redis.RateLimiter, false, "cleanup")
+	require.NoError(t, err, "Failed to create Redis client for cleanup")
+	defer redisClient.Close()
 
 	ctx := context.Background()
+
 	patterns := []string{
-		"registry:api:rate-limit:*",
-		"rate-limit:*",
-		"rl:*",
-		"*rate*",
+		"registry:api:{rate-limit:ip:*",
+		"registry:api:*",
 	}
 
 	for _, pattern := range patterns {
-		for i := 0; i < 3; i++ {
+		for attempt := 0; attempt < 3; attempt++ {
 			script := fmt.Sprintf("local keys = redis.call('keys', '%s'); for i,k in ipairs(keys) do redis.call('del', k); end; return #keys", pattern)
 			result, err := redisClient.Eval(ctx, script, []string{}).Result()
 			if err == nil {
@@ -712,19 +723,39 @@ func cleanupRedisKeys(t *testing.T, redisAddr string) {
 				}
 				break
 			}
-			t.Logf("Cleanup attempt %d for pattern '%s' failed: %v", i+1, pattern, err)
-			time.Sleep(time.Second)
+			t.Logf("Cleanup attempt %d for pattern '%s' failed: %v", attempt+1, pattern, err)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
-	err = redisClient.FlushAll(ctx).Err()
-	if err != nil {
-		t.Logf("Warning: FLUSHALL failed: %v", err)
-	} else {
-		t.Logf("Performed FLUSHALL to ensure clean state")
+	for attempt := 0; attempt < 3; attempt++ {
+		err = redisClient.FlushAll(ctx).Err()
+		if err == nil {
+			t.Logf("FLUSHALL successful on attempt %d", attempt+1)
+			break
+		}
+		t.Logf("FLUSHALL attempt %d failed: %v", attempt+1, err)
+		time.Sleep(100 * time.Millisecond)
+	}
+	require.NoError(t, err, "FLUSHALL failed after retries")
+
+	time.Sleep(500 * time.Millisecond)
+
+	for attempt := 0; attempt < 5; attempt++ {
+		remainingKeys, err := redisClient.Keys(ctx, "*").Result()
+		if err == nil && len(remainingKeys) == 0 {
+			t.Logf("Verified: No keys remaining after cleanup")
+			break
+		}
+		if err != nil {
+			t.Logf("Verification attempt %d failed: %v", attempt+1, err)
+		} else {
+			t.Logf("Verification attempt %d: %d keys still remain: %v", attempt+1, len(remainingKeys), remainingKeys)
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	t.Logf("Redis cleanup completed")
 }
 
 func TestRedisClusterConnection(t *testing.T) {
@@ -790,8 +821,22 @@ func assertRateLimitHeaders(t *testing.T, resp *httptest.ResponseRecorder) {
 	remaining := strings.Split(header[1], "=")[1]
 	reset := strings.Split(header[2], "=")[1]
 
-	assert.Equal(t, limit, resp.Header().Get("X-Ratelimit-Limit"))
-	assert.Equal(t, remaining, resp.Header().Get("X-Ratelimit-Remaining"))
-	assert.Equal(t, reset, resp.Header().Get("X-Ratelimit-Reset"))
+	assert.Equal(t, limit, resp.Header().Get(headerXRateLimitLimit))
+	assert.Equal(t, remaining, resp.Header().Get(headerXRateLimitRemaining))
+	assert.Equal(t, reset, resp.Header().Get(headerXRateLimitReset))
 	assert.NotEmpty(t, resp.Header().Get(headerRateLimitPolicy))
+}
+
+// testIP generates a semi-random IP address to reduce
+// the likelihood of IP collision which can cause tests to fail
+// if the redis state is not clean, especially in a cluster where
+// there might be a delay in syncing the state amongst shards.
+func testIP() string {
+	// Ensure we stay in private IP range and avoid duplicates
+	ip1 := rand.Uint32N(64)
+	ip2 := rand.Uint32N(128)
+	ip3 := rand.Uint32N(255)
+	port := 12345 + rand.Uint32N(1000)
+
+	return fmt.Sprintf("192.%d.%d.%d:%d", ip1, ip2, ip3, port)
 }

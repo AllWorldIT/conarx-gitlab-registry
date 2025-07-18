@@ -37,13 +37,13 @@ end
 
 -- Check if request can be satisfied
 local allowed = 0
-local remaining = math.max(0, math.floor(tokens))
-
 if tokens >= tokens_requested then
     allowed = 1
     tokens = tokens - tokens_requested
-    remaining = math.max(0, math.floor(tokens))
 end
+
+-- Calculate remaining AFTER consumption
+local remaining = math.max(0, math.floor(tokens))
 
 -- Store state in the SAME key that was passed in (guaranteed same slot)
 redis.call('HMSET', bucket_key, 'tokens', tostring(tokens), 'last_refill', tostring(current_time))
