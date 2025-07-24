@@ -419,9 +419,7 @@ func (c *centralRepositoryCache) HasSizeWithDescendantsTimedOut(ctx context.Cont
 	if _, err := c.cache.Get(setCtx, c.sizeWithDescendantsTimedOutKey(r.Path)); err != nil {
 		// a wrapped redis.Nil is returned when the key is not found in Redis
 		if !errors.Is(err, redis.Nil) {
-			msg := "failed to read size with descendants timeout key from cache"
-			log.GetLogger(log.WithContext(ctx)).WithError(err).Error(msg)
-			errortracking.Capture(fmt.Errorf("%s: %w", msg, err), errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			log.GetLogger(log.WithContext(ctx)).WithError(err).Error("failed to read size with descendants timeout key from cache")
 		}
 		return false
 	}
