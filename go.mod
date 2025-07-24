@@ -53,7 +53,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.38.0
 	github.com/trim21/go-redis-prometheus v0.0.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
-	gitlab.com/gitlab-org/api/client-go v0.134.0
+	gitlab.com/gitlab-org/api/client-go v0.137.0
 	gitlab.com/gitlab-org/labkit v1.24.1
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/mock v0.5.2
@@ -67,7 +67,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.23.0 // indirect
+	cel.dev/expr v0.24.0 // indirect
 	cloud.google.com/go v0.120.1 // indirect
 	cloud.google.com/go/auth v0.16.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
