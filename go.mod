@@ -18,7 +18,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.36.6
 	github.com/aws/aws-sdk-go-v2/config v1.29.18
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.71
-	github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign v1.8.13
+	github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign v1.8.14
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.84.0
 	github.com/aws/smithy-go v1.22.4
 	github.com/benbjohnson/clock v1.3.5
