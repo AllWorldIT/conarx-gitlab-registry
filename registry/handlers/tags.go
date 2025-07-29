@@ -11,6 +11,7 @@ import (
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/datastore"
+	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/gorilla/handlers"
 )
 
@@ -84,6 +85,9 @@ func dbGetTags(
 func (th *tagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
+	p := th.Repository.Named().Name()
+	l := log.GetLogger(log.WithContext(th)).WithFields(log.Fields{"path": p})
+
 	// Pagination headers are currently only supported by the metadata database backend
 	q := r.URL.Query()
 	lastEntry := q.Get("last")
@@ -101,7 +105,8 @@ func (th *tagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
 	var moreEntries bool
 
 	if th.useDatabase {
-		tags, moreEntries, err = dbGetTags(th.Context, th.db.Primary(), th.GetRepoCache(), th.Repository.Named().Name(), filters)
+		db := th.db.UpToDateReplica(th.Context, &models.Repository{Path: p})
+		tags, moreEntries, err = dbGetTags(th.Context, db, th.GetRepoCache(), th.Repository.Named().Name(), filters)
 		if err != nil {
 			th.Errors = append(th.Errors, errcode.FromUnknownError(err))
 			return
@@ -111,6 +116,11 @@ func (th *tagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
 			// so we have to enforce the same behavior here, for consistency.
 			tags = nil
 		}
+
+		l = l.WithFields(log.Fields{
+			"db_host_type": th.db.TypeOf(db),
+			"db_host_addr": db.Address(),
+		})
 	} else {
 		tagService := th.Repository.Tags(th)
 		tags, err = tagService.All(th)
@@ -148,4 +158,8 @@ func (th *tagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
 		th.Errors = append(th.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
 		return
 	}
+
+	l.WithFields(log.Fields{
+		"count": len(tags),
+	}).Info("listed oci repository tags")
 }
