@@ -6,20 +6,88 @@ import (
 	"net/http"
 	"sync"
 
-	prometheus "github.com/docker/distribution/metrics"
-	"github.com/docker/go-metrics"
+	"github.com/docker/distribution/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
-	// eventsCounter counts total events of incoming, success and failure
-	eventsCounter = prometheus.NotificationsNamespace.NewLabeledCounter("events", "The number of total events", "type", "action", "artifact", "endpoint")
-	// pendingGauge measures the pending queue size
-	pendingGauge = prometheus.NotificationsNamespace.NewGauge("pending", "The gauge of pending events in queue", metrics.Total)
-	// statusCounter counts the total notification call per each status code
-	statusCounter = prometheus.NotificationsNamespace.NewLabeledCounter("status", "The number of status code", "code")
-	// errorCounter counts the total nuymber of events that were not sent due to internal errors
-	errorCounter = prometheus.NotificationsNamespace.NewLabeledCounter("errors", "The number of events that were not sent due to internal errors", "endpoint")
+	eventsCounter *prometheus.CounterVec
+	pendingGauge  prometheus.Gauge
+	statusCounter *prometheus.CounterVec
+	errorCounter  *prometheus.CounterVec
 )
+
+const (
+	subsystem = "notifications"
+
+	// Events counter
+	eventsCounterName   = "events"
+	eventsCounterDesc   = "The number of total events"
+	eventsTypeLabel     = "type"
+	eventsActionLabel   = "action"
+	eventsArtifactLabel = "artifact"
+	eventsEndpointLabel = "endpoint"
+
+	// Pending gauge
+	pendingGaugeName = "pending"
+	pendingGaugeDesc = "The gauge of pending events in queue"
+
+	// Status counter
+	statusCounterName = "status"
+	statusCounterDesc = "The number of status code"
+	statusCodeLabel   = "code"
+
+	// Error counter
+	errorCounterName   = "errors"
+	errorCounterDesc   = "The number of events that were not sent due to internal errors"
+	errorEndpointLabel = "endpoint"
+)
+
+func registerMetrics(registerer prometheus.Registerer) {
+	eventsCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      eventsCounterName,
+			Help:      eventsCounterDesc,
+		},
+		[]string{eventsTypeLabel, eventsActionLabel, eventsArtifactLabel, eventsEndpointLabel},
+	)
+
+	pendingGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      pendingGaugeName,
+			Help:      pendingGaugeDesc,
+		},
+	)
+
+	statusCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      statusCounterName,
+			Help:      statusCounterDesc,
+		},
+		[]string{statusCodeLabel},
+	)
+
+	errorCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      errorCounterName,
+			Help:      errorCounterDesc,
+		},
+		[]string{errorEndpointLabel},
+	)
+
+	registerer.MustRegister(eventsCounter)
+	registerer.MustRegister(pendingGauge)
+	registerer.MustRegister(statusCounter)
+	registerer.MustRegister(errorCounter)
+}
 
 // EndpointMetrics track various actions taken by the endpoint, typically by
 // number of events. The goal of this to export it via expvar but we may find
@@ -70,34 +138,34 @@ type endpointMetricsHTTPStatusListener struct {
 	*safeMetrics
 }
 
-var _ httpStatusListener = &endpointMetricsHTTPStatusListener{}
+var _ httpStatusListener = new(endpointMetricsHTTPStatusListener)
 
 func (emsl *endpointMetricsHTTPStatusListener) success(status int, event *Event) {
 	emsl.safeMetrics.Lock()
-	defer emsl.safeMetrics.Unlock()
 	emsl.Statuses[fmt.Sprintf("%d %s", status, http.StatusText(status))]++
 	emsl.Successes++
+	emsl.safeMetrics.Unlock()
 
-	statusCounter.WithValues(fmt.Sprintf("%d %s", status, http.StatusText(status))).Inc(1)
-	eventsCounter.WithValues("Successes", event.Action, event.artifact(), emsl.Endpoint).Inc(1)
+	statusCounter.WithLabelValues(fmt.Sprintf("%d %s", status, http.StatusText(status))).Inc()
+	eventsCounter.WithLabelValues("Successes", event.Action, event.artifact(), emsl.Endpoint).Inc()
 }
 
 func (emsl *endpointMetricsHTTPStatusListener) failure(status int, event *Event) {
 	emsl.safeMetrics.Lock()
-	defer emsl.safeMetrics.Unlock()
 	emsl.Statuses[fmt.Sprintf("%d %s", status, http.StatusText(status))]++
 	emsl.Failures++
+	emsl.safeMetrics.Unlock()
 
-	statusCounter.WithValues(fmt.Sprintf("%d %s", status, http.StatusText(status))).Inc(1)
-	eventsCounter.WithValues("Failures", event.Action, event.artifact(), emsl.Endpoint).Inc(1)
+	statusCounter.WithLabelValues(fmt.Sprintf("%d %s", status, http.StatusText(status))).Inc()
+	eventsCounter.WithLabelValues("Failures", event.Action, event.artifact(), emsl.Endpoint).Inc()
 }
 
 func (emsl *endpointMetricsHTTPStatusListener) err(_ *Event) {
 	emsl.safeMetrics.Lock()
-	defer emsl.safeMetrics.Unlock()
 	emsl.Errors++
+	emsl.safeMetrics.Unlock()
 
-	errorCounter.WithValues(emsl.Endpoint).Inc(1)
+	errorCounter.WithLabelValues(emsl.Endpoint).Inc()
 }
 
 // endpointMetricsEventQueueListener maintains the incoming events counter and
@@ -106,23 +174,24 @@ type endpointMetricsEventQueueListener struct {
 	*safeMetrics
 }
 
+var _ eventQueueListener = new(endpointMetricsEventQueueListener)
+
 func (eqc *endpointMetricsEventQueueListener) ingress(event *Event) {
 	eqc.Lock()
-	defer eqc.Unlock()
-
 	eqc.Events++
 	eqc.Pending++
+	eqc.Unlock()
 
-	eventsCounter.WithValues("Events", event.Action, event.artifact(), eqc.Endpoint).Inc()
-	pendingGauge.Inc(1)
+	eventsCounter.WithLabelValues("Events", event.Action, event.artifact(), eqc.Endpoint).Inc()
+	pendingGauge.Inc()
 }
 
 func (eqc *endpointMetricsEventQueueListener) egress(_ *Event) {
 	eqc.Lock()
-	defer eqc.Unlock()
 	eqc.Pending--
+	eqc.Unlock()
 
-	pendingGauge.Dec(1)
+	pendingGauge.Dec()
 }
 
 // endpoints is global registry of endpoints used to report metrics to expvar
@@ -134,9 +203,8 @@ var endpoints struct {
 // register places the endpoint into expvar so that stats are tracked.
 func register(e *Endpoint) {
 	endpoints.mu.Lock()
-	defer endpoints.mu.Unlock()
-
 	endpoints.registered = append(endpoints.registered, e)
+	endpoints.mu.Unlock()
 }
 
 func init() {
@@ -180,6 +248,7 @@ func init() {
 
 	registry.(*expvar.Map).Set("notifications", &notifications)
 
-	// register prometheus metrics
-	metrics.Register(prometheus.NotificationsNamespace)
+	// NOTE(prozlach): functions are split in order to make this code more
+	// testable. This requires some bigger refactoring though.
+	registerMetrics(prometheus.DefaultRegisterer)
 }
