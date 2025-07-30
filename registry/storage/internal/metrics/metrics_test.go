@@ -10,6 +10,7 @@ import (
 	"github.com/docker/distribution/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -281,7 +282,7 @@ registry_storage_object_accesses_distribution_count 10
 # TYPE registry_storage_object_accesses_topn gauge
 registry_storage_object_accesses_topn{top_n="1"} 10
 registry_storage_object_accesses_topn{top_n="10"} 55
-registry_storage_object_accesses_topn{top_n="all"} 0
+registry_storage_object_accesses_topn{top_n="all"} 55
 `)
 	require.NoError(s.T(), err)
 	names := []string{
@@ -300,8 +301,8 @@ func (s *AccessTrackerTestSuite) TestConcurrentAccess() {
 
 	// Launch multiple goroutines to track events concurrently
 	var wg sync.WaitGroup
-	numGoroutines := 10
-	eventsPerGoroutine := 100
+	numGoroutines := 11
+	eventsPerGoroutine := 102
 
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
@@ -315,9 +316,6 @@ func (s *AccessTrackerTestSuite) TestConcurrentAccess() {
 
 	wg.Wait()
 
-	// Wait for processing
-	time.Sleep(100 * time.Millisecond)
-
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
 # HELP registry_storage_access_tracker_dropped_events A counter of dropped events in the access tracker due to timeout
@@ -326,24 +324,24 @@ registry_storage_access_tracker_dropped_events 0
 # HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
 # TYPE registry_storage_object_accesses_distribution histogram
 registry_storage_object_accesses_distribution_bucket{le="0"} 0
-registry_storage_object_accesses_distribution_bucket{le="500"} 10
-registry_storage_object_accesses_distribution_bucket{le="1000"} 10
-registry_storage_object_accesses_distribution_bucket{le="1500"} 10
-registry_storage_object_accesses_distribution_bucket{le="2000"} 10
-registry_storage_object_accesses_distribution_bucket{le="2500"} 10
-registry_storage_object_accesses_distribution_bucket{le="3000"} 10
-registry_storage_object_accesses_distribution_bucket{le="3500"} 10
-registry_storage_object_accesses_distribution_bucket{le="4000"} 10
-registry_storage_object_accesses_distribution_bucket{le="4500"} 10
-registry_storage_object_accesses_distribution_bucket{le="5000"} 10
-registry_storage_object_accesses_distribution_bucket{le="+Inf"} 10
-registry_storage_object_accesses_distribution_sum 1000
-registry_storage_object_accesses_distribution_count 10
+registry_storage_object_accesses_distribution_bucket{le="500"} 11
+registry_storage_object_accesses_distribution_bucket{le="1000"} 11
+registry_storage_object_accesses_distribution_bucket{le="1500"} 11
+registry_storage_object_accesses_distribution_bucket{le="2000"} 11
+registry_storage_object_accesses_distribution_bucket{le="2500"} 11
+registry_storage_object_accesses_distribution_bucket{le="3000"} 11
+registry_storage_object_accesses_distribution_bucket{le="3500"} 11
+registry_storage_object_accesses_distribution_bucket{le="4000"} 11
+registry_storage_object_accesses_distribution_bucket{le="4500"} 11
+registry_storage_object_accesses_distribution_bucket{le="5000"} 11
+registry_storage_object_accesses_distribution_bucket{le="+Inf"} 11
+registry_storage_object_accesses_distribution_sum 1122
+registry_storage_object_accesses_distribution_count 11
 # HELP registry_storage_object_accesses_topn Total accesses for top N most frequently accessed objects
 # TYPE registry_storage_object_accesses_topn gauge
-registry_storage_object_accesses_topn{top_n="1"} 100
-registry_storage_object_accesses_topn{top_n="10"} 1000
-registry_storage_object_accesses_topn{top_n="all"} 0
+registry_storage_object_accesses_topn{top_n="1"} 102
+registry_storage_object_accesses_topn{top_n="10"} 1020
+registry_storage_object_accesses_topn{top_n="all"} 1122
 `)
 	require.NoError(s.T(), err)
 	names := []string{
@@ -352,8 +350,14 @@ registry_storage_object_accesses_topn{top_n="all"} 0
 		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
 	}
 
-	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
-	require.NoError(s.T(), err)
+	require.EventuallyWithT(
+		s.T(),
+		func(tt *assert.CollectT) {
+			err := testutil.GatherAndCompare(s.registerer, &expected, names...)
+			require.NoError(tt, err)
+		},
+		3*time.Second, 100*time.Millisecond,
+	)
 }
 
 func (s *AccessTrackerTestSuite) TestLargeObjectIDs() {
@@ -365,8 +369,6 @@ func (s *AccessTrackerTestSuite) TestLargeObjectIDs() {
 	at.Track(maxUint64)
 	at.Track(maxUint64 - 1)
 	at.Track(maxUint64 - 2)
-
-	time.Sleep(100 * time.Millisecond)
 
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
@@ -392,7 +394,7 @@ registry_storage_object_accesses_distribution_count 3
 # HELP registry_storage_object_accesses_topn Total accesses for top N most frequently accessed objects
 # TYPE registry_storage_object_accesses_topn gauge
 registry_storage_object_accesses_topn{top_n="1"} 1
-registry_storage_object_accesses_topn{top_n="all"} 0
+registry_storage_object_accesses_topn{top_n="all"} 3
 `)
 	require.NoError(s.T(), err)
 	names := []string{
@@ -401,8 +403,14 @@ registry_storage_object_accesses_topn{top_n="all"} 0
 		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
 	}
 
-	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
-	require.NoError(s.T(), err)
+	require.EventuallyWithT(
+		s.T(),
+		func(tt *assert.CollectT) {
+			err := testutil.GatherAndCompare(s.registerer, &expected, names...)
+			require.NoError(tt, err)
+		},
+		3*time.Second, 100*time.Millisecond,
+	)
 }
 
 func (s *AccessTrackerTestSuite) TestNoAccesses() {
@@ -433,9 +441,6 @@ registry_storage_object_accesses_distribution_bucket{le="5000"} 0
 registry_storage_object_accesses_distribution_bucket{le="+Inf"} 0
 registry_storage_object_accesses_distribution_sum 0
 registry_storage_object_accesses_distribution_count 0
-# HELP registry_storage_object_accesses_topn Total accesses for top N most frequently accessed objects
-# TYPE registry_storage_object_accesses_topn gauge
-registry_storage_object_accesses_topn{top_n="all"} 0
 `)
 	require.NoError(s.T(), err)
 	names := []string{

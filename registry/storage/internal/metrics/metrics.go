@@ -374,10 +374,10 @@ func (at *AccessTracker) calculateMetrics() {
 		case 10000:
 			objectAccessesTopN.WithLabelValues("10000").Set(float64(totalAccesses))
 		}
-	}
 
-	// Emit the "all" metric
-	objectAccessesTopN.WithLabelValues("all").Set(float64(totalAccesses))
+		// Emit the "all" metric
+		objectAccessesTopN.WithLabelValues("all").Set(float64(totalAccesses))
+	}
 
 	// Clear the map for the next period
 	at.counts = make(map[uint64]uint32)
