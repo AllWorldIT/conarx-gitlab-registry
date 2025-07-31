@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -97,7 +99,7 @@ func TestHTTPSink(t *testing.T) {
 		&endpointMetricsHTTPStatusListener{safeMetrics: metrics})
 	var expectedMetrics EndpointMetrics
 	expectedMetrics.Endpoint = t.Name()
-	expectedMetrics.Statuses = make(map[string]int)
+	expectedMetrics.Statuses = make(map[string]int64)
 
 	closeL, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
@@ -158,13 +160,13 @@ func TestHTTPSink(t *testing.T) {
 		},
 	} {
 		if tc.failure {
-			expectedMetrics.Failures += len(tc.events)
+			expectedMetrics.Failures += int64(len(tc.events))
 		} else {
-			expectedMetrics.Successes += len(tc.events)
+			expectedMetrics.Successes += int64(len(tc.events))
 		}
 
 		if tc.statusCode > 0 {
-			expectedMetrics.Statuses[fmt.Sprintf("%d %s", tc.statusCode, http.StatusText(tc.statusCode))] += len(tc.events)
+			expectedMetrics.Statuses[fmt.Sprintf("%d %s", tc.statusCode, http.StatusText(tc.statusCode))] += int64(len(tc.events))
 		}
 
 		url := tc.url
@@ -186,13 +188,30 @@ func TestHTTPSink(t *testing.T) {
 			}
 		}
 
-		require.Equal(t, expectedMetrics, metrics.EndpointMetrics)
+		require.Equal(t, expectedMetrics.Endpoint, metrics.endpoint)
+		require.Equal(t, expectedMetrics.Pending, metrics.pending.Load())
+		require.Equal(t, expectedMetrics.Events, metrics.events.Load())
+		require.Equal(t, expectedMetrics.Successes, metrics.successes.Load())
+		require.Equal(t, expectedMetrics.Failures, metrics.failures.Load())
+		require.Equal(t, expectedMetrics.Errors, metrics.errors.Load())
+		require.Equal(t, expectedMetrics.Statuses, syncMapToPlainMap(metrics.statuses))
 	}
 
 	require.NoError(t, sink.Close())
 
 	// double close returns error
 	require.Error(t, sink.Close())
+}
+
+func syncMapToPlainMap(sm *sync.Map) map[string]int64 {
+	result := make(map[string]int64)
+	sm.Range(func(key, value any) bool {
+		k := key.(string)
+		v := value.(*atomic.Int64)
+		result[k] = v.Load()
+		return true
+	})
+	return result
 }
 
 func createTestEvent(action, mt string) Event {
@@ -235,8 +254,8 @@ func TestHTTPSink_Errors(t *testing.T) {
 	// all events should time out
 	var expectedMetrics EndpointMetrics
 	expectedMetrics.Endpoint = t.Name()
-	expectedMetrics.Statuses = make(map[string]int)
-	expectedMetrics.Errors += len(events)
+	expectedMetrics.Statuses = make(map[string]int64)
+	expectedMetrics.Errors += int64(len(events))
 
 	for _, event := range events {
 		err := sink.Write(&event)
@@ -244,5 +263,11 @@ func TestHTTPSink_Errors(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	require.Equal(t, expectedMetrics, metrics.EndpointMetrics)
+	require.Equal(t, expectedMetrics.Endpoint, metrics.endpoint)
+	require.Equal(t, expectedMetrics.Pending, metrics.pending.Load())
+	require.Equal(t, expectedMetrics.Events, metrics.events.Load())
+	require.Equal(t, expectedMetrics.Successes, metrics.successes.Load())
+	require.Equal(t, expectedMetrics.Failures, metrics.failures.Load())
+	require.Equal(t, expectedMetrics.Errors, metrics.errors.Load())
+	require.Equal(t, expectedMetrics.Statuses, syncMapToPlainMap(metrics.statuses))
 }

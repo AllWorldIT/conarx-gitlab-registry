@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -111,13 +112,18 @@ func (e *Endpoint) URL() string {
 
 // ReadMetrics populates em with metrics from the endpoint.
 func (e *Endpoint) ReadMetrics(em *EndpointMetrics) {
-	e.metrics.Lock()
-	defer e.metrics.Unlock()
+	em.Endpoint = e.metrics.endpoint
+	em.Pending = e.metrics.pending.Load()
+	em.Events = e.metrics.events.Load()
+	em.Successes = e.metrics.successes.Load()
+	em.Failures = e.metrics.failures.Load()
+	em.Errors = e.metrics.errors.Load()
 
-	*em = e.metrics.EndpointMetrics
 	// Map still need to copied in a threadsafe manner.
-	em.Statuses = make(map[string]int)
-	for k, v := range e.metrics.Statuses {
-		em.Statuses[k] = v
-	}
+	em.Statuses = make(map[string]int64)
+	e.metrics.statuses.Range(func(k, v any) bool {
+		em.Statuses[k.(string)] = v.(*atomic.Int64).Load()
+
+		return true
+	})
 }

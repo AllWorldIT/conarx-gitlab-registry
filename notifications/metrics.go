@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"github.com/docker/distribution/metrics"
 	"github.com/prometheus/client_golang/prometheus"
@@ -93,27 +94,37 @@ func registerMetrics(registerer prometheus.Registerer) {
 // number of events. The goal of this to export it via expvar but we may find
 // some other future solution to be better.
 type EndpointMetrics struct {
-	Endpoint  string         // endpoint name to be added to the metrics
-	Pending   int            // events pending in queue
-	Events    int            // total events incoming
-	Successes int            // total events written successfully
-	Failures  int            // total events failed
-	Errors    int            // total events errored
-	Statuses  map[string]int // status code histogram, per call event
+	Endpoint  string           // endpoint name to be added to the metrics
+	Pending   int64            // events pending in queue
+	Events    int64            // total events incoming
+	Successes int64            // total events written successfully
+	Failures  int64            // total events failed
+	Errors    int64            // total events errored
+	Statuses  map[string]int64 // status code histogram, per call event
 }
 
 // safeMetrics guards the metrics implementation with a lock and provides a
 // safe update function.
 type safeMetrics struct {
-	EndpointMetrics
-	sync.Mutex // protects statuses map
+	endpoint  string
+	pending   *atomic.Int64
+	events    *atomic.Int64
+	successes *atomic.Int64
+	failures  *atomic.Int64
+	errors    *atomic.Int64
+	statuses  *sync.Map
 }
 
 // newSafeMetrics returns safeMetrics with map allocated.
 func newSafeMetrics(endpoint string) *safeMetrics {
 	var sm safeMetrics
-	sm.Endpoint = endpoint
-	sm.Statuses = make(map[string]int)
+	sm.endpoint = endpoint
+	sm.pending = new(atomic.Int64)
+	sm.events = new(atomic.Int64)
+	sm.successes = new(atomic.Int64)
+	sm.failures = new(atomic.Int64)
+	sm.errors = new(atomic.Int64)
+	sm.statuses = new(sync.Map)
 	return &sm
 }
 
@@ -141,31 +152,29 @@ type endpointMetricsHTTPStatusListener struct {
 var _ httpStatusListener = new(endpointMetricsHTTPStatusListener)
 
 func (emsl *endpointMetricsHTTPStatusListener) success(status int, event *Event) {
-	emsl.safeMetrics.Lock()
-	emsl.Statuses[fmt.Sprintf("%d %s", status, http.StatusText(status))]++
-	emsl.Successes++
-	emsl.safeMetrics.Unlock()
+	key := fmt.Sprintf("%d %s", status, http.StatusText(status))
+	actual, _ := emsl.statuses.LoadOrStore(key, new(atomic.Int64))
+	actual.(*atomic.Int64).Add(1)
+	emsl.successes.Add(1)
 
-	statusCounter.WithLabelValues(fmt.Sprintf("%d %s", status, http.StatusText(status))).Inc()
-	eventsCounter.WithLabelValues("Successes", event.Action, event.artifact(), emsl.Endpoint).Inc()
+	statusCounter.WithLabelValues(key).Inc()
+	eventsCounter.WithLabelValues("Successes", event.Action, event.artifact(), emsl.endpoint).Inc()
 }
 
 func (emsl *endpointMetricsHTTPStatusListener) failure(status int, event *Event) {
-	emsl.safeMetrics.Lock()
-	emsl.Statuses[fmt.Sprintf("%d %s", status, http.StatusText(status))]++
-	emsl.Failures++
-	emsl.safeMetrics.Unlock()
+	key := fmt.Sprintf("%d %s", status, http.StatusText(status))
+	actual, _ := emsl.statuses.LoadOrStore(key, new(atomic.Int64))
+	actual.(*atomic.Int64).Add(1)
+	emsl.failures.Add(1)
 
-	statusCounter.WithLabelValues(fmt.Sprintf("%d %s", status, http.StatusText(status))).Inc()
-	eventsCounter.WithLabelValues("Failures", event.Action, event.artifact(), emsl.Endpoint).Inc()
+	statusCounter.WithLabelValues(key).Inc()
+	eventsCounter.WithLabelValues("Failures", event.Action, event.artifact(), emsl.endpoint).Inc()
 }
 
 func (emsl *endpointMetricsHTTPStatusListener) err(_ *Event) {
-	emsl.safeMetrics.Lock()
-	emsl.Errors++
-	emsl.safeMetrics.Unlock()
+	emsl.errors.Add(1)
 
-	errorCounter.WithLabelValues(emsl.Endpoint).Inc()
+	errorCounter.WithLabelValues(emsl.endpoint).Inc()
 }
 
 // endpointMetricsEventQueueListener maintains the incoming events counter and
@@ -177,19 +186,15 @@ type endpointMetricsEventQueueListener struct {
 var _ eventQueueListener = new(endpointMetricsEventQueueListener)
 
 func (eqc *endpointMetricsEventQueueListener) ingress(event *Event) {
-	eqc.Lock()
-	eqc.Events++
-	eqc.Pending++
-	eqc.Unlock()
+	eqc.events.Add(1)
+	eqc.pending.Add(1)
 
-	eventsCounter.WithLabelValues("Events", event.Action, event.artifact(), eqc.Endpoint).Inc()
+	eventsCounter.WithLabelValues("Events", event.Action, event.artifact(), eqc.endpoint).Inc()
 	pendingGauge.Inc()
 }
 
 func (eqc *endpointMetricsEventQueueListener) egress(_ *Event) {
-	eqc.Lock()
-	eqc.Pending--
-	eqc.Unlock()
+	eqc.pending.Add(-1)
 
 	pendingGauge.Dec()
 }
