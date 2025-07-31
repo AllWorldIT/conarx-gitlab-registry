@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/docker/distribution"
@@ -141,15 +142,25 @@ func TestEndpointMetricsHTTPStatusListener(t *testing.T) {
 	listener.err(event)
 
 	// Verify safeMetrics internal state
-	sm.Lock()
-	require.Equal(t, 2, sm.Successes)
-	require.Equal(t, 2, sm.Failures)
-	require.Equal(t, 2, sm.Errors)
-	require.Equal(t, 1, sm.Statuses["200 OK"])
-	require.Equal(t, 1, sm.Statuses["201 Created"])
-	require.Equal(t, 1, sm.Statuses["404 Not Found"])
-	require.Equal(t, 1, sm.Statuses["500 Internal Server Error"])
-	sm.Unlock()
+	require.EqualValues(t, 2, sm.successes.Load())
+	require.EqualValues(t, 2, sm.failures.Load())
+	require.EqualValues(t, 2, sm.errors.Load())
+
+	v, ok := sm.statuses.Load("200 OK")
+	require.True(t, ok)
+	require.Equal(t, int64(1), v.(*atomic.Int64).Load())
+
+	v, ok = sm.statuses.Load("201 Created")
+	require.True(t, ok)
+	require.Equal(t, int64(1), v.(*atomic.Int64).Load())
+
+	v, ok = sm.statuses.Load("404 Not Found")
+	require.True(t, ok)
+	require.Equal(t, int64(1), v.(*atomic.Int64).Load())
+
+	v, ok = sm.statuses.Load("500 Internal Server Error")
+	require.True(t, ok)
+	require.Equal(t, int64(1), v.(*atomic.Int64).Load())
 
 	// Verify Prometheus metrics
 	var expected bytes.Buffer
@@ -218,20 +229,16 @@ func TestEndpointMetricsEventQueueListener(t *testing.T) {
 	listener.ingress(event1)
 
 	// Verify internal state after ingress
-	sm.Lock()
-	require.Equal(t, 3, sm.Events)
-	require.Equal(t, 3, sm.Pending)
-	sm.Unlock()
+	require.EqualValues(t, 3, sm.events.Load())
+	require.EqualValues(t, 3, sm.pending.Load())
 
 	// Test egress
 	listener.egress(event1)
 	listener.egress(event2)
 
 	// Verify internal state after egress
-	sm.Lock()
-	require.Equal(t, 3, sm.Events)
-	require.Equal(t, 1, sm.Pending)
-	sm.Unlock()
+	require.EqualValues(t, 3, sm.events.Load())
+	require.EqualValues(t, 1, sm.pending.Load())
 
 	// Verify Prometheus metrics
 	var expected bytes.Buffer
@@ -322,10 +329,9 @@ func TestConcurrentMetricsUpdates(t *testing.T) {
 	wg.Wait()
 
 	// Verify internal state
-	sm.Lock()
 	totalOperations := numGoroutines * operationsPerGoroutine
-	assert.Equal(t, totalOperations, sm.Events)
-	assert.Equal(t, totalOperations/2, sm.Pending) // Half were egressed
+	assert.EqualValues(t, totalOperations, sm.events.Load())
+	assert.EqualValues(t, totalOperations/2, sm.pending.Load()) // Half were egressed
 
 	// Calculate expected counts based on switch statement distribution
 	expectedSuccesses := (totalOperations / 3)
@@ -338,24 +344,23 @@ func TestConcurrentMetricsUpdates(t *testing.T) {
 	}
 	expectedErrors := totalOperations / 3
 
-	assert.Equal(t, expectedSuccesses, sm.Successes)
-	assert.Equal(t, expectedFailures, sm.Failures)
-	assert.Equal(t, expectedErrors, sm.Errors)
-	sm.Unlock()
+	assert.EqualValues(t, expectedSuccesses, sm.successes.Load())
+	assert.EqualValues(t, expectedFailures, sm.failures.Load())
+	assert.EqualValues(t, expectedErrors, sm.errors.Load())
 }
 
 func TestSafeMetricsInitialization(t *testing.T) {
 	sm := newSafeMetrics("init-test")
 
 	// Verify initial state
-	require.Equal(t, "init-test", sm.Endpoint)
-	require.Equal(t, 0, sm.Pending)
-	require.Equal(t, 0, sm.Events)
-	require.Equal(t, 0, sm.Successes)
-	require.Equal(t, 0, sm.Failures)
-	require.Equal(t, 0, sm.Errors)
-	require.NotNil(t, sm.Statuses)
-	require.Empty(t, sm.Statuses)
+	require.Equal(t, "init-test", sm.endpoint)
+	require.Zero(t, sm.pending.Load())
+	require.Zero(t, sm.events.Load())
+	require.Zero(t, sm.successes.Load())
+	require.Zero(t, sm.failures.Load())
+	require.Zero(t, sm.errors.Load())
+	require.NotNil(t, sm.statuses)
+	require.Empty(t, syncMapToPlainMap(sm.statuses))
 }
 
 func TestHTTPStatusCodes(t *testing.T) {
@@ -405,11 +410,10 @@ func TestHTTPStatusCodes(t *testing.T) {
 	}
 
 	// Verify status distribution
-	sm.Lock()
-	defer sm.Unlock()
-
 	for _, tc := range testCases {
-		statusText := fmt.Sprintf("%d %s", tc.status, http.StatusText(tc.status))
-		require.Equal(t, 1, sm.Statuses[statusText], "Status %s should have count 1", statusText)
+		key := fmt.Sprintf("%d %s", tc.status, http.StatusText(tc.status))
+		v, ok := sm.statuses.Load(key)
+		require.True(t, ok)
+		require.Equal(t, int64(1), v.(*atomic.Int64).Load(), "Status %s should have count 1", key)
 	}
 }

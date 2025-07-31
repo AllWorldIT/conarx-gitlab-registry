@@ -79,16 +79,13 @@ func TestEventQueue(t *testing.T) {
 
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	metrics.Lock()
-	defer metrics.Unlock()
-
 	require.Len(t, ts.events, nEvents, "events did not make it to the sink")
 
 	require.True(t, ts.closed, "sink should have been closed")
 
-	require.Equal(t, nEvents, metrics.Events, "unexpected ingress count")
+	require.EqualValues(t, nEvents, metrics.events.Load(), "unexpected ingress count")
 
-	require.Equal(t, 0, metrics.Pending, "unexpected egress count")
+	require.Zero(t, metrics.pending.Load(), "unexpected egress count")
 }
 
 func TestIgnoredSink(t *testing.T) {
