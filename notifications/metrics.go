@@ -13,7 +13,7 @@ import (
 
 var (
 	eventsCounter *prometheus.CounterVec
-	pendingGauge  prometheus.Gauge
+	pendingGauge  *prometheus.GaugeVec
 	statusCounter *prometheus.CounterVec
 	errorCounter  *prometheus.CounterVec
 )
@@ -55,13 +55,14 @@ func registerMetrics(registerer prometheus.Registerer) {
 		[]string{eventsTypeLabel, eventsActionLabel, eventsArtifactLabel, eventsEndpointLabel},
 	)
 
-	pendingGauge = prometheus.NewGauge(
+	pendingGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: metrics.NamespacePrefix,
 			Subsystem: subsystem,
 			Name:      pendingGaugeName,
 			Help:      pendingGaugeDesc,
 		},
+		[]string{eventsEndpointLabel},
 	)
 
 	statusCounter = prometheus.NewCounterVec(
@@ -71,7 +72,7 @@ func registerMetrics(registerer prometheus.Registerer) {
 			Name:      statusCounterName,
 			Help:      statusCounterDesc,
 		},
-		[]string{statusCodeLabel},
+		[]string{statusCodeLabel, eventsEndpointLabel},
 	)
 
 	errorCounter = prometheus.NewCounterVec(
@@ -157,7 +158,7 @@ func (emsl *endpointMetricsHTTPStatusListener) success(status int, event *Event)
 	actual.(*atomic.Int64).Add(1)
 	emsl.successes.Add(1)
 
-	statusCounter.WithLabelValues(key).Inc()
+	statusCounter.WithLabelValues(key, emsl.endpoint).Inc()
 	eventsCounter.WithLabelValues("Successes", event.Action, event.artifact(), emsl.endpoint).Inc()
 }
 
@@ -167,7 +168,7 @@ func (emsl *endpointMetricsHTTPStatusListener) failure(status int, event *Event)
 	actual.(*atomic.Int64).Add(1)
 	emsl.failures.Add(1)
 
-	statusCounter.WithLabelValues(key).Inc()
+	statusCounter.WithLabelValues(key, emsl.endpoint).Inc()
 	eventsCounter.WithLabelValues("Failures", event.Action, event.artifact(), emsl.endpoint).Inc()
 }
 
@@ -190,13 +191,13 @@ func (eqc *endpointMetricsEventQueueListener) ingress(event *Event) {
 	eqc.pending.Add(1)
 
 	eventsCounter.WithLabelValues("Events", event.Action, event.artifact(), eqc.endpoint).Inc()
-	pendingGauge.Inc()
+	pendingGauge.WithLabelValues(eqc.endpoint).Inc()
 }
 
 func (eqc *endpointMetricsEventQueueListener) egress(_ *Event) {
 	eqc.pending.Add(-1)
 
-	pendingGauge.Dec()
+	pendingGauge.WithLabelValues(eqc.endpoint).Dec()
 }
 
 // endpoints is global registry of endpoints used to report metrics to expvar
