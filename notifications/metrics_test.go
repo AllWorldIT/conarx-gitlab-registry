@@ -33,7 +33,7 @@ func TestMetricsExpvar(t *testing.T) {
 	require.NoError(t, err, "unexpected error unmarshaling endpoints")
 
 	if slice, ok := v.([]any); !ok || len(slice) != 1 {
-		t.Logf("expected one-element []interface{}, got %#v", v)
+		t.Logf("expected one-element []any, got %#v", v)
 	}
 }
 
@@ -60,16 +60,16 @@ func TestNotificationsMetrics(t *testing.T) {
 	eventsCounter.WithLabelValues("Events", "pull", "manifest", "webhook-endpoint").Inc()
 	eventsCounter.WithLabelValues("Events", "push", "blob", "webhook-endpoint").Inc()
 
-	// Simulate pending gauge
-	pendingGauge.Inc()
-	pendingGauge.Inc()
-	pendingGauge.Dec()
+	// Simulate pending gauge - now includes endpoint label
+	pendingGauge.WithLabelValues("webhook-endpoint").Inc()
+	pendingGauge.WithLabelValues("webhook-endpoint").Inc()
+	pendingGauge.WithLabelValues("webhook-endpoint").Dec()
 
-	// Simulate status counter
-	statusCounter.WithLabelValues("200 OK").Inc()
-	statusCounter.WithLabelValues("200 OK").Inc()
-	statusCounter.WithLabelValues("404 Not Found").Inc()
-	statusCounter.WithLabelValues("500 Internal Server Error").Inc()
+	// Simulate status counter - now includes endpoint label
+	statusCounter.WithLabelValues("200 OK", "webhook-endpoint").Inc()
+	statusCounter.WithLabelValues("200 OK", "webhook-endpoint").Inc()
+	statusCounter.WithLabelValues("404 Not Found", "webhook-endpoint").Inc()
+	statusCounter.WithLabelValues("500 Internal Server Error", "webhook-endpoint").Inc()
 
 	// Simulate error counter
 	errorCounter.WithLabelValues("webhook-endpoint").Inc()
@@ -89,12 +89,12 @@ registry_notifications_events{action="push",artifact="blob",endpoint="webhook-en
 registry_notifications_events{action="push",artifact="manifest",endpoint="webhook-endpoint",type="Events"} 1
 # HELP registry_notifications_pending The gauge of pending events in queue
 # TYPE registry_notifications_pending gauge
-registry_notifications_pending 1
+registry_notifications_pending{endpoint="webhook-endpoint"} 1
 # HELP registry_notifications_status The number of status code
 # TYPE registry_notifications_status counter
-registry_notifications_status{code="200 OK"} 2
-registry_notifications_status{code="404 Not Found"} 1
-registry_notifications_status{code="500 Internal Server Error"} 1
+registry_notifications_status{code="200 OK",endpoint="webhook-endpoint"} 2
+registry_notifications_status{code="404 Not Found",endpoint="webhook-endpoint"} 1
+registry_notifications_status{code="500 Internal Server Error",endpoint="webhook-endpoint"} 1
 `)
 	require.NoError(t, err)
 
@@ -174,10 +174,10 @@ registry_notifications_events{action="push",artifact="manifest",endpoint="test-e
 registry_notifications_events{action="push",artifact="manifest",endpoint="test-endpoint",type="Successes"} 2
 # HELP registry_notifications_status The number of status code
 # TYPE registry_notifications_status counter
-registry_notifications_status{code="200 OK"} 1
-registry_notifications_status{code="201 Created"} 1
-registry_notifications_status{code="404 Not Found"} 1
-registry_notifications_status{code="500 Internal Server Error"} 1
+registry_notifications_status{code="200 OK",endpoint="test-endpoint"} 1
+registry_notifications_status{code="201 Created",endpoint="test-endpoint"} 1
+registry_notifications_status{code="404 Not Found",endpoint="test-endpoint"} 1
+registry_notifications_status{code="500 Internal Server Error",endpoint="test-endpoint"} 1
 `)
 	require.NoError(t, err)
 
@@ -249,7 +249,7 @@ registry_notifications_events{action="pull",artifact="blob",endpoint="queue-endp
 registry_notifications_events{action="push",artifact="manifest",endpoint="queue-endpoint",type="Events"} 2
 # HELP registry_notifications_pending The gauge of pending events in queue
 # TYPE registry_notifications_pending gauge
-registry_notifications_pending 1
+registry_notifications_pending{endpoint="queue-endpoint"} 1
 `)
 	require.NoError(t, err)
 
@@ -360,7 +360,14 @@ func TestSafeMetricsInitialization(t *testing.T) {
 	require.Zero(t, sm.failures.Load())
 	require.Zero(t, sm.errors.Load())
 	require.NotNil(t, sm.statuses)
-	require.Empty(t, syncMapToPlainMap(sm.statuses))
+
+	// Check that statuses map is empty
+	count := 0
+	sm.statuses.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	require.Zero(t, count, "statuses map should be empty")
 }
 
 func TestHTTPStatusCodes(t *testing.T) {
@@ -416,4 +423,36 @@ func TestHTTPStatusCodes(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, int64(1), v.(*atomic.Int64).Load(), "Status %s should have count 1", key)
 	}
+}
+
+func TestPendingGaugeOperations(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	endpoint := "gauge-test-endpoint"
+
+	// Test Inc method
+	pendingGauge.WithLabelValues(endpoint).Inc()
+	pendingGauge.WithLabelValues(endpoint).Inc()
+	pendingGauge.WithLabelValues(endpoint).Inc()
+
+	// Test Dec method
+	pendingGauge.WithLabelValues(endpoint).Dec()
+
+	// Verify the gauge value
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_notifications_pending The gauge of pending events in queue
+# TYPE registry_notifications_pending gauge
+registry_notifications_pending{endpoint="gauge-test-endpoint"} 2
+`)
+	require.NoError(t, err)
+
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, pendingGaugeName),
+	}
+
+	err = testutil.GatherAndCompare(registry, &expected, names...)
+	require.NoError(t, err)
 }
