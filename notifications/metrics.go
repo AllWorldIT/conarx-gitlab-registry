@@ -23,7 +23,7 @@ const (
 
 	// Events counter
 	eventsCounterName   = "events"
-	eventsCounterDesc   = "The number of total events"
+	eventsCounterDesc   = "The total number of events"
 	eventsTypeLabel     = "type"
 	eventsActionLabel   = "action"
 	eventsArtifactLabel = "artifact"
@@ -31,16 +31,16 @@ const (
 
 	// Pending gauge
 	pendingGaugeName = "pending"
-	pendingGaugeDesc = "The gauge of pending events in queue"
+	pendingGaugeDesc = "The gauge of pending events in queue - queue length"
 
 	// Status counter
 	statusCounterName = "status"
-	statusCounterDesc = "The number of status code"
+	statusCounterDesc = "The number HTTP responses per status code received from notifications endpoint"
 	statusCodeLabel   = "code"
 
 	// Error counter
 	errorCounterName   = "errors"
-	errorCounterDesc   = "The number of events that were not sent due to internal errors"
+	errorCounterDesc   = "The number of events where an error occurred during sending. Sending them MAY be retried."
 	errorEndpointLabel = "endpoint"
 )
 
