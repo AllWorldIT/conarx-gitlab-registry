@@ -84,10 +84,16 @@ func NewEndpoint(name, url string, config EndpointConfig) *Endpoint {
 	// TODO: threshold has been deprecated and we should use MaxRetries with backoffSink instead.
 	// Remove this check along with https://gitlab.com/gitlab-org/container-registry/-/issues/1244.
 	if endpoint.MaxRetries != 0 {
-		endpoint.Sink = newBackoffSink(endpoint.Sink, endpoint.Backoff, endpoint.MaxRetries)
+		endpoint.Sink = newBackoffSink(
+			endpoint.Sink, endpoint.Backoff, endpoint.MaxRetries,
+			endpoint.metrics.deliveryListener(),
+		)
 	} else {
 		log.Warn("notifications `threshold` is deprecated, use maxretries instead. See https://gitlab.com/gitlab-org/container-registry/-/issues/1243.")
-		endpoint.Sink = newRetryingSink(endpoint.Sink, endpoint.Threshold, endpoint.Backoff)
+		endpoint.Sink = newRetryingSink(
+			endpoint.Sink, endpoint.Threshold, endpoint.Backoff,
+			endpoint.metrics.deliveryListener(),
+		)
 	}
 
 	endpoint.Sink = newEventQueue(endpoint.Sink, endpoint.QueuePurgeTimeout, endpoint.metrics.eventQueueListener())
@@ -118,6 +124,9 @@ func (e *Endpoint) ReadMetrics(em *EndpointMetrics) {
 	em.Successes = e.metrics.successes.Load()
 	em.Failures = e.metrics.failures.Load()
 	em.Errors = e.metrics.errors.Load()
+	em.Retries = e.metrics.retries.Load()
+	em.Delivered = e.metrics.delivered.Load()
+	em.Lost = e.metrics.lost.Load()
 
 	// Map still need to copied in a threadsafe manner.
 	em.Statuses = make(map[string]int64)

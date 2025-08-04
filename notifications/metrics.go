@@ -12,14 +12,17 @@ import (
 )
 
 var (
-	eventsCounter *prometheus.CounterVec
-	pendingGauge  *prometheus.GaugeVec
-	statusCounter *prometheus.CounterVec
-	errorCounter  *prometheus.CounterVec
+	eventsCounter   *prometheus.CounterVec
+	pendingGauge    *prometheus.GaugeVec
+	statusCounter   *prometheus.CounterVec
+	errorCounter    *prometheus.CounterVec
+	deliveryCounter *prometheus.CounterVec
+	retriesHist     *prometheus.HistogramVec
 )
 
 const (
-	subsystem = "notifications"
+	subsystem     = "notifications"
+	endpointLabel = "endpoint"
 
 	// Events counter
 	eventsCounterName   = "events"
@@ -27,7 +30,6 @@ const (
 	eventsTypeLabel     = "type"
 	eventsActionLabel   = "action"
 	eventsArtifactLabel = "artifact"
-	eventsEndpointLabel = "endpoint"
 
 	// Pending gauge
 	pendingGaugeName = "pending"
@@ -39,12 +41,22 @@ const (
 	statusCodeLabel   = "code"
 
 	// Error counter
-	errorCounterName   = "errors"
-	errorCounterDesc   = "The number of events where an error occurred during sending. Sending them MAY be retried."
-	errorEndpointLabel = "endpoint"
+	errorCounterName = "errors"
+	errorCounterDesc = "The number of events where an error occurred during sending. Sending them MAY be retried."
+
+	// Message lost counter
+	deliveryCounterName = "delivery"
+	deliveryCounterDesc = "The number of events delivered or lost. Event is lost once the number of retries was exhausted."
+	deliveryTypeLabel   = "delivery_type"
+
+	// Retries Histogram
+	retriesName = "retries"
+	retriesDesc = "The histogram of delivery retries done"
 )
 
 func registerMetrics(registerer prometheus.Registerer) {
+	retryBuckets := []float64{0, 1, 2, 3, 5, 10, 15, 20, 30, 50}
+
 	eventsCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: metrics.NamespacePrefix,
@@ -52,7 +64,7 @@ func registerMetrics(registerer prometheus.Registerer) {
 			Name:      eventsCounterName,
 			Help:      eventsCounterDesc,
 		},
-		[]string{eventsTypeLabel, eventsActionLabel, eventsArtifactLabel, eventsEndpointLabel},
+		[]string{eventsTypeLabel, eventsActionLabel, eventsArtifactLabel, endpointLabel},
 	)
 
 	pendingGauge = prometheus.NewGaugeVec(
@@ -62,7 +74,7 @@ func registerMetrics(registerer prometheus.Registerer) {
 			Name:      pendingGaugeName,
 			Help:      pendingGaugeDesc,
 		},
-		[]string{eventsEndpointLabel},
+		[]string{endpointLabel},
 	)
 
 	statusCounter = prometheus.NewCounterVec(
@@ -72,7 +84,7 @@ func registerMetrics(registerer prometheus.Registerer) {
 			Name:      statusCounterName,
 			Help:      statusCounterDesc,
 		},
-		[]string{statusCodeLabel, eventsEndpointLabel},
+		[]string{statusCodeLabel, endpointLabel},
 	)
 
 	errorCounter = prometheus.NewCounterVec(
@@ -82,13 +94,36 @@ func registerMetrics(registerer prometheus.Registerer) {
 			Name:      errorCounterName,
 			Help:      errorCounterDesc,
 		},
-		[]string{errorEndpointLabel},
+		[]string{endpointLabel},
+	)
+
+	deliveryCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      deliveryCounterName,
+			Help:      deliveryCounterDesc,
+		},
+		[]string{endpointLabel, deliveryTypeLabel},
+	)
+
+	retriesHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      retriesName,
+			Help:      retriesDesc,
+			Buckets:   retryBuckets,
+		},
+		[]string{endpointLabel},
 	)
 
 	registerer.MustRegister(eventsCounter)
 	registerer.MustRegister(pendingGauge)
 	registerer.MustRegister(statusCounter)
 	registerer.MustRegister(errorCounter)
+	registerer.MustRegister(retriesHist)
+	registerer.MustRegister(deliveryCounter)
 }
 
 // EndpointMetrics track various actions taken by the endpoint, typically by
@@ -101,6 +136,9 @@ type EndpointMetrics struct {
 	Successes int64            // total events written successfully
 	Failures  int64            // total events failed
 	Errors    int64            // total events errored
+	Retries   int64            // total number of retries done
+	Delivered int64            // total number of delivered events
+	Lost      int64            // total number of lost events
 	Statuses  map[string]int64 // status code histogram, per call event
 }
 
@@ -113,6 +151,9 @@ type safeMetrics struct {
 	successes *atomic.Int64
 	failures  *atomic.Int64
 	errors    *atomic.Int64
+	retries   *atomic.Int64
+	delivered *atomic.Int64
+	lost      *atomic.Int64
 	statuses  *sync.Map
 }
 
@@ -125,6 +166,9 @@ func newSafeMetrics(endpoint string) *safeMetrics {
 	sm.successes = new(atomic.Int64)
 	sm.failures = new(atomic.Int64)
 	sm.errors = new(atomic.Int64)
+	sm.retries = new(atomic.Int64)
+	sm.delivered = new(atomic.Int64)
+	sm.lost = new(atomic.Int64)
 	sm.statuses = new(sync.Map)
 	return &sm
 }
@@ -140,6 +184,13 @@ func (sm *safeMetrics) httpStatusListener() httpStatusListener {
 // eventQueueListener returns a listener that maintains queue related counters.
 func (sm *safeMetrics) eventQueueListener() eventQueueListener {
 	return &endpointMetricsEventQueueListener{
+		safeMetrics: sm,
+	}
+}
+
+// eventQueueListener returns a listener that maintains queue related counters.
+func (sm *safeMetrics) deliveryListener() deliveryListener {
+	return &endpointMetricsDeliveryListener{
 		safeMetrics: sm,
 	}
 }
@@ -176,6 +227,30 @@ func (emsl *endpointMetricsHTTPStatusListener) err(_ *Event) {
 	emsl.errors.Add(1)
 
 	errorCounter.WithLabelValues(emsl.endpoint).Inc()
+}
+
+// endpointMetricsDeliveryListener maintains the incoming events counter and
+// the queues pending count.
+type endpointMetricsDeliveryListener struct {
+	*safeMetrics
+}
+
+var _ deliveryListener = new(endpointMetricsDeliveryListener)
+
+func (edl *endpointMetricsDeliveryListener) eventDelivered(retriesCount int64) {
+	edl.retries.Add(retriesCount)
+	edl.delivered.Add(1)
+
+	retriesHist.WithLabelValues(edl.endpoint).Observe(float64(retriesCount))
+	deliveryCounter.WithLabelValues(edl.endpoint, "delivered").Inc()
+}
+
+func (edl *endpointMetricsDeliveryListener) eventLost(retriesCount int64) {
+	edl.retries.Add(retriesCount)
+	edl.lost.Add(1)
+
+	retriesHist.WithLabelValues(edl.endpoint).Observe(float64(retriesCount))
+	deliveryCounter.WithLabelValues(edl.endpoint, "lost").Inc()
 }
 
 // endpointMetricsEventQueueListener maintains the incoming events counter and
