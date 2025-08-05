@@ -648,10 +648,10 @@ func newBackoffSink(
 // reached, an error is returned and the event is dropped.
 // It returns early if the sink is closed.
 func (bs *backoffSink) Write(event *Event) error {
-	var retriesCount int64
+	var attempts int64
 
 	op := func() error {
-		defer func() { retriesCount++ }()
+		attempts++
 
 		select {
 		case <-bs.doneCh:
@@ -670,13 +670,13 @@ func (bs *backoffSink) Write(event *Event) error {
 	err := backoff.Retry(op, bs.backoff)
 	if err != nil {
 		for _, listener := range bs.listeners {
-			listener.eventLost(retriesCount - 1)
+			listener.eventLost(attempts - 1)
 		}
 		return err
 	}
 
 	for _, listener := range bs.listeners {
-		listener.eventDelivered(retriesCount - 1)
+		listener.eventDelivered(attempts - 1)
 	}
 	return nil
 }

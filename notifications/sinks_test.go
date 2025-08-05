@@ -305,7 +305,6 @@ func TestBackoffSinkWithDeliveryListener(t *testing.T) {
 		event := createTestEvent("push", "blob")
 		require.NoError(t, s.Write(&event))
 
-		// Due to the bug, successful delivery calls eventLost
 		assert.Zero(t, metrics.lost.Load())
 		assert.Zero(t, metrics.retries.Load()) // retriesCount is incremented after the operation
 		assert.EqualValues(t, 1, metrics.delivered.Load())
@@ -326,7 +325,6 @@ func TestBackoffSinkWithDeliveryListener(t *testing.T) {
 		event := createTestEvent("push", "blob")
 		require.NoError(t, s.Write(&event))
 
-		// Due to the bug, successful delivery calls eventLost
 		assert.Zero(t, metrics.lost.Load())
 		assert.EqualValues(t, 2, metrics.retries.Load()) // 2 failures + 1 success
 		assert.EqualValues(t, 1, metrics.delivered.Load())
@@ -345,7 +343,6 @@ func TestBackoffSinkWithDeliveryListener(t *testing.T) {
 		err := s.Write(&event)
 		require.Error(t, err)
 
-		// Due to the bug, failed delivery calls eventDelivered
 		assert.Zero(t, metrics.delivered.Load())
 		assert.EqualValues(t, 2, metrics.retries.Load()) // maxRetries + 1
 		assert.EqualValues(t, 1, metrics.lost.Load())
