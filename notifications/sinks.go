@@ -524,7 +524,7 @@ main:
 				}
 
 				log.WithError(err).
-					WithField("railure_count", failuresCount).
+					WithField("failure_count", failuresCount).
 					Error("retryingsink: error writing event, retrying")
 				retriesCount++
 			}
