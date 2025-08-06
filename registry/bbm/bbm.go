@@ -354,20 +354,12 @@ func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigr
 	if err != nil {
 		l.WithError(err).Error("background migration failed validation")
 
-		if errors.Is(err, datastore.ErrUnknownColumn) || errors.Is(err, datastore.ErrUnknownTable) || errors.Is(err, ErrWorkFunctionNotFound) {
-			// Mark migration as failed and surface the error to sentry if we don't know the column or the table referenced in the migration
-			var errCode models.BBMErrorCode
-			switch {
-			case errors.Is(err, datastore.ErrUnknownColumn):
-				errCode = models.InvalidColumnBBMErrCode
-			case errors.Is(err, datastore.ErrUnknownTable):
-				errCode = models.InvalidTableBBMErrCode
-			case errors.Is(err, ErrWorkFunctionNotFound):
-				errCode = models.InvalidJobSignatureBBMErrCode
-			}
+		var migrationErr *migrationFailureError
+		if errors.As(err, &migrationErr) {
+			// Mark migration as failed and surface the error to sentry
 			errortracking.Capture(err, errortracking.WithContext(ctx))
 			bbm.Status = models.BackgroundMigrationFailed
-			bbm.ErrorCode = errCode
+			bbm.ErrorCode = migrationErr.ErrorCode
 			return nil, bbmStore.UpdateStatus(ctx, bbm)
 		}
 		return nil, err
@@ -561,10 +553,16 @@ func hasRunAllBBMJobsAtLeastOnce(ctx context.Context, bbmStore datastore.Backgro
 
 func validateMigration(ctx context.Context, bbmStore datastore.BackgroundMigrationStore, workFuncs map[string]Work, bbm *models.BackgroundMigration) error {
 	if _, ok := workFuncs[bbm.JobName]; !ok {
-		return ErrWorkFunctionNotFound
+		return newInvalidJobSignatureError(ErrWorkFunctionNotFound)
 	}
 
 	if err := bbmStore.ValidateMigrationTableAndColumn(ctx, bbm.TargetTable, bbm.TargetColumn); err != nil {
+		if errors.Is(err, datastore.ErrUnknownColumn) {
+			return newInvalidColumnError(err)
+		}
+		if errors.Is(err, datastore.ErrUnknownTable) {
+			return newInvalidTableError(err)
+		}
 		return fmt.Errorf("validating migration: %w", err)
 	}
 	return nil
