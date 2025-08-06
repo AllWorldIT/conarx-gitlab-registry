@@ -164,7 +164,7 @@ func TestRetryingSinkWithDeliveryListener(t *testing.T) {
 		s := newRetryingSink(flaky, 5, 10*time.Millisecond, deliveryListener)
 		defer s.Close()
 
-		const nEvents = 10
+		const nEvents = 1000
 		var wg sync.WaitGroup
 
 		for i := 0; i < nEvents; i++ {
