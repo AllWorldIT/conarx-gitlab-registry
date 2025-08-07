@@ -99,11 +99,14 @@ func newURLCacheStorageMiddleware(
 
 	v, ok := options["_redisCache"]
 	if !ok {
-		return nil, nil, fmt.Errorf("urlcache middleware requires `cache` Redis configured")
+		return nil, nil, fmt.Errorf("`_redisCache` key has not been passed to urlcache middleware") // this should not happen
+	}
+	if v == nil {
+		return nil, nil, fmt.Errorf("redis cache has either been not defined in container registry config or is not usable and it is required by urlcache middleware to work")
 	}
 	redisCache, ok := v.(*iredis.Cache)
 	if !ok {
-		return nil, nil, fmt.Errorf("unusable redis cache object passed to the middleware: %T", v)
+		return nil, nil, fmt.Errorf("redis cache passed to the middleware cannot be used as the type is wrong: %T", v) // this should not happen either
 	}
 
 	at, stopF := metrics.NewAccessTracker(60*time.Second, 100)
