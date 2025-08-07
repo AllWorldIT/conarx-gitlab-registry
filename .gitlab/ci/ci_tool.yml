@@ -7,7 +7,7 @@ ci tool:
   needs: []
   script:
     - pip install --root-user-action ignore -r script/ci_tool/script/requirements.txt
-    - python3 script/ci_tool/script/e2e_stats.py --period 3
+    - python3 script/ci_tool/script/e2e_stats.py --period 3 --gitlab-ci-file .gitlab/ci/integration.yml
   #NOTE(prozlach): Specifying rules is necessary to make child-pipelines work
   rules:
     - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
