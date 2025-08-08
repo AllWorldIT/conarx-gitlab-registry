@@ -1,1 +1,1 @@
-DROP DATABASE ci_analitics;
+DROP DATABASE ci_analitics WITH (FORCE);
