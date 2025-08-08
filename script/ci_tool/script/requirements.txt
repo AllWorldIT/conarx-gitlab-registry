@@ -1,4 +1,18 @@
+# pipdeptree --warn silence  -f > requirements.txt
+click==8.2.1
+psycopg==3.2.9
 python-dateutil==2.9.0.post0
-python-gitlab==4.10.0
-click==8.1.7
-psycopg==3.2.1
+  six==1.17.0
+python-gitlab==6.2.0
+  requests==2.32.4
+    charset-normalizer==3.4.2
+    idna==3.10
+    urllib3==2.5.0
+    certifi==2025.7.14
+  requests-toolbelt==1.0.0
+    requests==2.32.4
+      charset-normalizer==3.4.2
+      idna==3.10
+      urllib3==2.5.0
+      certifi==2025.7.14
+PyYAML==6.0.2
