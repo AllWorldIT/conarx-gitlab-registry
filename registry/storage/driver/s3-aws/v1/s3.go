@@ -1412,6 +1412,34 @@ func (w *writer) Commit() error {
 	}
 	w.committed = true
 
+	// Handle zero-byte uploads: if no parts were uploaded, use PutObject instead
+	// of CompleteMultipartUpload to avoid S3 API violation (multipart uploads
+	// require at least one part)
+	if len(w.parts) == 0 {
+		// Abort the multipart upload since we won't be using it
+		_, abortErr := w.driver.S3.AbortMultipartUploadWithContext(
+			ctx,
+			&s3.AbortMultipartUploadInput{
+				Bucket:   aws.String(w.driver.Bucket),
+				Key:      aws.String(w.key),
+				UploadId: aws.String(w.uploadID),
+			})
+		if abortErr != nil {
+			return fmt.Errorf("aborting unused multipart upload: %w", abortErr)
+		}
+
+		// PutContent needs the content path not the full S3 key
+		path := strings.TrimPrefix(w.key, w.driver.s3Path(""))
+		if path == "" {
+			path = "/"
+		}
+		err = w.driver.PutContent(ctx, path, make([]byte, 0))
+		if err != nil {
+			return fmt.Errorf("creating zero-byte object: %w", err)
+		}
+		return nil
+	}
+
 	var completedUploadedParts completedParts
 	for _, part := range w.parts {
 		completedUploadedParts = append(completedUploadedParts, &s3.CompletedPart{
