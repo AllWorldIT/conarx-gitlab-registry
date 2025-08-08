@@ -3073,6 +3073,40 @@ func (s *DriverSuite) TestRemoveBlob() {
 	assert.Falsef(s.T(), blobsLeft.contains(blob), "blob %q was not deleted", blob.String())
 }
 
+// TestZeroByteBlobUploadSession tests that zero-byte blobs can be uploaded
+// through upload sessions without failing.
+// https://gitlab.com/gitlab-org/container-registry/-/issues/1652
+func (s *DriverSuite) TestZeroByteBlobUploadSession() {
+	filename := dtestutil.RandomPath(1, 32)
+	defer s.deletePath(s.StorageDriver, firstPart(filename))
+	s.T().Logf("Testing zero-byte blob upload via session for path: %s", filename)
+
+	// Create a new Writer (initiate upload session) - this creates a multipart upload for S3 drivers
+	writer, err := s.StorageDriver.Writer(s.ctx, filename, false)
+	require.NoError(s.T(), err, "Failed to create writer for upload session")
+
+	// Do not write any data to the writer
+	// This simulates the scenario where an upload session is started
+	// but completed with zero bytes.
+
+	// Commit the upload
+	err = writer.Commit()
+	require.NoError(s.T(), err, "Failed to commit zero-byte upload session")
+	err = writer.Close()
+	require.NoError(s.T(), err)
+
+	// Verify the zero-byte blob was created successfully
+	stat, err := s.StorageDriver.Stat(s.ctx, filename)
+	require.NoError(s.T(), err, "Failed to stat the uploaded zero-byte blob")
+	require.Equal(s.T(), int64(0), stat.Size(), "Expected zero-byte blob size")
+	require.False(s.T(), stat.IsDir(), "Expected file, not directory")
+
+	// Verify we can read the zero-byte content
+	content, err := s.StorageDriver.GetContent(s.ctx, filename)
+	require.NoError(s.T(), err, "Failed to get content of zero-byte blob")
+	require.Empty(s.T(), content, "Expected empty content for zero-byte blob")
+}
+
 func (s *DriverSuite) benchmarkRemoveBlob(b *testing.B, numBlobs int) {
 	defer s.deletePath(s.StorageDriver, firstPart("docker/"))
 
