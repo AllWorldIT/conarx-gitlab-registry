@@ -166,8 +166,8 @@ func TestStorageBackendRetry(t *testing.T) {
 	_, err := expected.WriteString(`
 # HELP registry_storage_storage_backend_retries_total A counter of retires made while communicating with storage backend.
 # TYPE registry_storage_storage_backend_retries_total counter
-registry_storage_storage_backend_retries_total{type="custom"} 3
-registry_storage_storage_backend_retries_total{type="native"} 2
+registry_storage_storage_backend_retries_total{retry_type="custom"} 3
+registry_storage_storage_backend_retries_total{retry_type="native"} 2
 `)
 	require.NoError(t, err)
 	totalFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, storageBackendRetriesTotalName)

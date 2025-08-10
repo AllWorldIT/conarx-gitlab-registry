@@ -149,20 +149,17 @@ func ShouldRetry(err error) bool {
 // The interface used by ShouldRetry func is determined by 3rd party package,
 // so we wrap the function in wrapper that passes correct retry type.
 func shouldRetryImpl(nativeRetry bool, err error) bool {
-	metrics.StorageBackendRetry(nativeRetry)
-
 	// Context cancelation/expiry is fatal, do not try to retry:
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
 
 	// NOTE(prozlach): http2 stream errors are also retryable
-	var streamError http2.StreamError
-	if errors.As(err, &streamError) {
-		return true
+	shouldRetry := errors.As(err, new(http2.StreamError)) || storage.ShouldRetry(err)
+	if shouldRetry {
+		metrics.StorageBackendRetry(nativeRetry)
 	}
-
-	return storage.ShouldRetry(err)
+	return shouldRetry
 }
 
 func retry(req request) error {

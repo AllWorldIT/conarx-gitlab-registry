@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
+	"github.com/docker/distribution/registry/storage/internal/metrics"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 )
@@ -84,7 +85,13 @@ func (cr *customRetryer) GetRetryToken(ctx context.Context, opErr error) (func(e
 		return nil, fmt.Errorf("throtling GetRetryToken request: %w", err)
 	}
 
-	return cr.RetryerV2.GetRetryToken(ctx, opErr)
+	releaseTokenF, err := cr.RetryerV2.GetRetryToken(ctx, opErr)
+	if err == nil {
+		// NOTE(prozlach): On AWS, all retries are done using native mechanism,
+		// unlinke on GCS
+		metrics.StorageBackendRetry(true)
+	}
+	return releaseTokenF, err
 }
 
 func (cr *customRetryer) GetAttemptToken(ctx context.Context) (func(error) error, error) {
