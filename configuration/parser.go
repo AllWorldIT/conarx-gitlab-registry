@@ -205,6 +205,7 @@ func customSplit(pathStr string) []string {
 		"MIN_URL_VALIDITY":     "xa29",
 		"DEFAULT_URL_VALIDITY": "xa30",
 		"DRY_RUN":              "xa31",
+		"QUEUE_SIZE_LIMIT":     "xa32",
 	}
 
 	// Sort keys by length in descending order to ensure longer matches are replaced first

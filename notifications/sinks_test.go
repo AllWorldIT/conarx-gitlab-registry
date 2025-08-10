@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/distribution"
+	"github.com/docker/distribution/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,7 +58,7 @@ func TestBroadcaster(t *testing.T) {
 func TestEventQueue(t *testing.T) {
 	const nEvents = 1000
 	var ts testSink
-	metrics := newSafeMetrics(t.Name())
+	smetrics := newSafeMetrics(t.Name())
 	eq := newEventQueue(
 		// delayed sync simulates destination slower than channel comms
 		&delayedSink{
@@ -65,11 +68,12 @@ func TestEventQueue(t *testing.T) {
 		// NOTE(prozlach): The very high timeout is motivied by the fact that
 		// we want to avoid any flakes. 60 seconds should be more than enough
 		// to purge the queue buffer. In production this timeout is much lower
-		// as we do not have any devlier guarantees ATM and the purge timeout
+		// as we do not have any devliery guarantees ATM and the purge timeout
 		// is meant only to allow for graceful termination of the queue, not a
 		// reliable delivery.
 		60*time.Second,
-		metrics.eventQueueListener(),
+		DefaultQueueSizeLimit,
+		smetrics.eventQueueListener(),
 	)
 
 	event := createTestEvent("push", "blob")
@@ -85,9 +89,9 @@ func TestEventQueue(t *testing.T) {
 
 	require.True(t, ts.closed, "sink should have been closed")
 
-	require.EqualValues(t, nEvents, metrics.events.Load(), "unexpected ingress count")
+	require.EqualValues(t, nEvents, smetrics.events.Load(), "unexpected ingress count")
 
-	require.Zero(t, metrics.pending.Load(), "unexpected egress count")
+	require.Zero(t, smetrics.pending.Load(), "unexpected egress count")
 }
 
 func TestRetryingSinkWithDeliveryListener(t *testing.T) {
@@ -605,6 +609,52 @@ func (*timingTestSink) Close() error {
 	return nil
 }
 
+type blockableSink struct {
+	Sink
+	blocked chan struct{}
+}
+
+func (bs *blockableSink) Write(event *Event) error {
+	<-bs.blocked // Block until channel is closed
+	return bs.Sink.Write(event)
+}
+
+type eventQueueTrackingListener struct {
+	delegate eventQueueListener
+	onDrop   func(*Event)
+}
+
+func (tl *eventQueueTrackingListener) ingress(event *Event) {
+	tl.delegate.ingress(event)
+}
+
+func (tl *eventQueueTrackingListener) egress(event *Event) {
+	tl.delegate.egress(event)
+}
+
+func (tl *eventQueueTrackingListener) drop(event *Event) {
+	tl.delegate.drop(event)
+	if tl.onDrop != nil {
+		tl.onDrop(event)
+	}
+}
+
+// Helper function to create event with specific media type
+func createTestEventWithMediaType(action, mediaType string) Event {
+	return Event{
+		ID:        fmt.Sprintf("test-%s-%d", action, time.Now().UnixNano()),
+		Action:    action,
+		Timestamp: time.Now(),
+		Target: Target{
+			Repository: "test/repo",
+			Descriptor: distribution.Descriptor{
+				MediaType: mediaType,
+				Digest:    "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+			},
+		},
+	}
+}
+
 // Remove the artificial sinks with delivery reporting since we're using the real ones now
 
 func checkClose(t *testing.T, sink Sink) {
@@ -615,4 +665,358 @@ func checkClose(t *testing.T, sink Sink) {
 
 	// Write after closed should be an error
 	require.ErrorIs(t, sink.Write(&Event{}), ErrSinkClosed, "write after closed should return ErrSinkClosed")
+}
+
+func TestEventQueueMaxSize(t *testing.T) {
+	t.Run("drops events when queue is full", func(t *testing.T) {
+		const maxQueueSize = 10
+		var ts testSink
+		sm := newSafeMetrics(t.Name())
+
+		// Use a very slow sink to ensure the queue fills up
+		slowSink := &delayedSink{
+			Sink:  &ts,
+			delay: 100 * time.Millisecond,
+		}
+
+		eq := newEventQueue(
+			slowSink,
+			60*time.Second,
+			maxQueueSize,
+			sm.eventQueueListener(),
+		)
+		defer eq.Close()
+
+		// Send more events than the queue can hold
+		const totalEvents = 50
+		for i := 0; i < totalEvents; i++ {
+			event := createTestEvent("push", fmt.Sprintf("blob-%d", i))
+			err := eq.Write(&event)
+			require.NoError(t, err, "write should not fail even when dropping")
+		}
+
+		// Wait for processing to complete, as if we processed all events
+		time.Sleep(50 * 100 * time.Millisecond)
+		checkClose(t, eq)
+
+		// Verify metrics
+		assert.EqualValues(t, totalEvents, sm.events.Load(), "all events should be counted as ingress")
+		assert.Positive(t, sm.dropped.Load(), "some events should have been dropped")
+
+		// The number of events processed should be less than total due to drops
+		ts.mu.Lock()
+		processedEvents := len(ts.events)
+		ts.mu.Unlock()
+
+		assert.Less(t, processedEvents, totalEvents, "processed events should be less than total due to drops")
+		assert.EqualValues(t, totalEvents-processedEvents, sm.dropped.Load(), "dropped count should match the difference")
+
+		// Final pending should be 0 after close
+		assert.Zero(t, sm.pending.Load(), "pending should be 0 after close")
+	})
+
+	t.Run("respects exact queue size limit", func(t *testing.T) {
+		const maxQueueSize = 5
+		var ts testSink
+		sm := newSafeMetrics(t.Name())
+
+		// Use a blocked sink to control when events are processed
+		blockedSink := &blockableSink{
+			Sink:    &ts,
+			blocked: make(chan struct{}),
+		}
+
+		eq := newEventQueue(
+			blockedSink,
+			60*time.Second,
+			maxQueueSize,
+			sm.eventQueueListener(),
+		)
+		defer eq.Close()
+
+		// Fill the queue exactly to its limit. We add one extra event because
+		// we also need to account for events stuck in the `Write()` method of
+		// blockedSink
+		for i := 0; i < maxQueueSize+1; i++ {
+			event := createTestEvent("push", fmt.Sprintf("blob-%d", i))
+			err := eq.Write(&event)
+			require.NoError(t, err)
+		}
+
+		// Give time for events to reach the buffer
+		time.Sleep(50 * time.Millisecond)
+
+		// Verify no drops yet
+		assert.Zero(t, sm.dropped.Load(), "no events should be dropped when at limit")
+		assert.EqualValues(t, maxQueueSize+1, sm.events.Load(), "ingress count should match queue size")
+
+		// Send one more event - this should be dropped
+		extraEvent := createTestEvent("push", "extra-blob")
+		err := eq.Write(&extraEvent)
+		require.NoError(t, err)
+
+		// Give time for drop to be recorded
+		time.Sleep(50 * time.Millisecond)
+
+		// Verify the extra event was dropped
+		assert.EqualValues(t, 1, sm.dropped.Load(), "one event should be dropped")
+		assert.EqualValues(t, maxQueueSize+2, sm.events.Load(), "ingress should count all events including dropped")
+
+		// Unblock the sink and let it process
+		close(blockedSink.blocked)
+		time.Sleep(100 * time.Millisecond)
+		checkClose(t, eq)
+
+		// Verify only the events that fit in the queue were processed
+		ts.mu.Lock()
+		assert.Len(t, ts.events, maxQueueSize+1, "only events that fit in queue should be processed")
+		ts.mu.Unlock()
+	})
+
+	t.Run("queue size of 1", func(t *testing.T) {
+		const maxQueueSize = 1
+		var ts testSink
+		sm := newSafeMetrics(t.Name())
+
+		// Use a delayed sink to ensure we can fill the single-slot queue
+		slowSink := &delayedSink{
+			Sink:  &ts,
+			delay: 50 * time.Millisecond,
+		}
+
+		eq := newEventQueue(
+			slowSink,
+			60*time.Second,
+			maxQueueSize,
+			sm.eventQueueListener(),
+		)
+		defer eq.Close()
+
+		// Send multiple events rapidly
+		const totalEvents = 10
+		for i := 0; i < totalEvents; i++ {
+			event := createTestEvent("push", fmt.Sprintf("blob-%d", i))
+			err := eq.Write(&event)
+			require.NoError(t, err)
+		}
+
+		// Wait for processing
+		time.Sleep(600 * time.Millisecond)
+		checkClose(t, eq)
+
+		// With queue size 1 and slow processing, many events should be dropped
+		assert.Positive(t, sm.dropped.Load(), "events should be dropped with queue size 1")
+		assert.EqualValues(t, totalEvents, sm.events.Load(), "all events should be counted")
+
+		ts.mu.Lock()
+		processedCount := len(ts.events)
+		ts.mu.Unlock()
+
+		// At least some events should be processed
+		assert.Positive(t, processedCount, "at least some events should be processed")
+		assert.Less(t, processedCount, totalEvents, "not all events should be processed due to drops")
+	})
+
+	t.Run("concurrent writes with queue limit", func(t *testing.T) {
+		const maxQueueSize = 50
+		var ts testSink
+		sm := newSafeMetrics(t.Name())
+
+		// Use a moderately slow sink
+		slowSink := &delayedSink{
+			Sink:  &ts,
+			delay: 5 * time.Millisecond,
+		}
+
+		eq := newEventQueue(
+			slowSink,
+			60*time.Second,
+			maxQueueSize,
+			sm.eventQueueListener(),
+		)
+		defer eq.Close()
+
+		// Launch multiple goroutines writing events concurrently
+		const numGoroutines = 10
+		const eventsPerGoroutine = 20
+		var wg sync.WaitGroup
+
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(goroutineID int) {
+				defer wg.Done()
+				for j := 0; j < eventsPerGoroutine; j++ {
+					event := createTestEvent("push", fmt.Sprintf("blob-%d-%d", goroutineID, j))
+					err := eq.Write(&event)
+					assert.NoError(t, err, "write should not fail")
+				}
+			}(i)
+		}
+
+		wg.Wait()
+		time.Sleep(100 * time.Millisecond) // Give time for some processing
+		checkClose(t, eq)
+
+		totalEvents := numGoroutines * eventsPerGoroutine
+		assert.EqualValues(t, totalEvents, sm.events.Load(), "all events should be counted as ingress")
+
+		// With concurrent writes and a limited queue, we expect drops
+		assert.Positive(t, sm.dropped.Load(), "some events should be dropped with concurrent writes")
+
+		ts.mu.Lock()
+		processedCount := len(ts.events)
+		ts.mu.Unlock()
+
+		// Verify consistency: processed + dropped = total
+		assert.EqualValues(t, totalEvents, int64(processedCount)+sm.dropped.Load(),
+			"processed + dropped should equal total events")
+	})
+
+	t.Run("queue limit with different event types", func(t *testing.T) {
+		const maxQueueSize = 15
+		var ts testSink
+		sm := newSafeMetrics(t.Name())
+
+		// Track dropped events by type
+		var droppedEvents []string
+		var droppedMu sync.Mutex
+
+		// Custom listener to track what gets dropped
+		trackingListener := &eventQueueTrackingListener{
+			delegate: sm.eventQueueListener(),
+			onDrop: func(event *Event) {
+				droppedMu.Lock()
+				droppedEvents = append(droppedEvents, fmt.Sprintf("%s-%s", event.Action, event.artifact()))
+				droppedMu.Unlock()
+			},
+		}
+
+		slowSink := &delayedSink{
+			Sink:  &ts,
+			delay: 20 * time.Millisecond,
+		}
+
+		eq := newEventQueue(
+			slowSink,
+			60*time.Second,
+			maxQueueSize,
+			trackingListener,
+		)
+		defer eq.Close()
+
+		// Send different types of events to fill and overflow the queue
+		eventTypes := []struct {
+			action    string
+			mediaType string
+			count     int
+		}{
+			{"push", "manifest", 10},
+			{"pull", "blob", 10},
+			{"delete", "manifest", 10},
+			{"mount", "blob", 10},
+		}
+
+		for _, et := range eventTypes {
+			for i := 0; i < et.count; i++ {
+				event := createTestEventWithMediaType(et.action, et.mediaType)
+				event.ID = fmt.Sprintf("%s-%s-%d", et.action, et.mediaType, i)
+				err := eq.Write(&event)
+				require.NoError(t, err)
+			}
+		}
+
+		// Wait for processing
+		time.Sleep(200 * time.Millisecond)
+		checkClose(t, eq)
+
+		// Verify drops occurred
+		droppedMu.Lock()
+		droppedCount := len(droppedEvents)
+		droppedMu.Unlock()
+
+		assert.Positive(t, droppedCount, "events should be dropped")
+		assert.EqualValues(t, droppedCount, sm.dropped.Load(), "tracked drops should match metric")
+
+		// Verify we have a mix of event types in drops
+		droppedMu.Lock()
+		droppedTypes := make(map[string]bool)
+		for _, evt := range droppedEvents {
+			droppedTypes[evt] = true
+		}
+		droppedMu.Unlock()
+
+		assert.Greater(t, len(droppedTypes), 1, "multiple event types should be dropped")
+	})
+}
+
+func TestEventQueueDropMetrics(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	const maxQueueSize = 5
+	var ts testSink
+	sm := newSafeMetrics("drop-metrics-endpoint")
+
+	// Use a very slow sink to ensure drops
+	slowSink := &delayedSink{
+		Sink:  &ts,
+		delay: 100 * time.Millisecond,
+	}
+
+	eq := newEventQueue(
+		slowSink,
+		60*time.Second,
+		maxQueueSize,
+		sm.eventQueueListener(),
+	)
+	defer eq.Close()
+
+	// Send events of different types to cause drops
+	eventConfigs := []struct {
+		action    string
+		mediaType string
+		count     int
+	}{
+		{"push", "application/vnd.docker.distribution.manifest.v2+json", 5},
+		{"pull", "application/octet-stream", 5},
+		{"delete", "application/vnd.docker.distribution.manifest.v2+json", 5},
+	}
+
+	for _, config := range eventConfigs {
+		for i := 0; i < config.count; i++ {
+			event := createTestEventWithMediaType(config.action, config.mediaType)
+			err := eq.Write(&event)
+			require.NoError(t, err)
+		}
+	}
+
+	// Wait for some processing
+	time.Sleep(200 * time.Millisecond)
+	checkClose(t, eq)
+
+	// We can't predict exact drop counts, so just verify structure
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+
+	var droppedEventsFound bool
+	for _, mf := range metricFamilies {
+		if mf.GetName() != fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, eventsCounterName) {
+			continue
+		}
+
+		for _, metric := range mf.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() != "type" || label.GetValue() != "Dropped" {
+					continue
+				}
+
+				droppedEventsFound = true
+				// Verify it has positive value
+				assert.Positive(t, metric.GetCounter().GetValue(), "dropped events counter should be positive")
+			}
+		}
+	}
+
+	require.True(t, droppedEventsFound, "dropped events should be recorded in Prometheus metrics")
 }

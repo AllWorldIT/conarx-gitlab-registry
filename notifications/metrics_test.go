@@ -12,6 +12,7 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/metrics"
+	"github.com/opencontainers/go-digest"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -670,7 +671,7 @@ registry_notifications_retries_count{endpoint="edge-case-endpoint"} 6
 	require.NoError(t, err)
 }
 
-func TestEndpointMetricsIntegration(t *testing.T) {
+func TestEndpointMetricsRetriesFlow(t *testing.T) {
 	// Create a new registry for isolated testing
 	registry := prometheus.NewRegistry()
 	registerMetrics(registry)
@@ -745,4 +746,402 @@ func TestEndpointMetricsIntegration(t *testing.T) {
 	require.EqualValues(t, 1, sm.delivered.Load())
 	require.EqualValues(t, 1, sm.lost.Load())
 	require.EqualValues(t, 7, sm.retries.Load())
+}
+
+func TestEndpointMetricsDropFlow(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("integration-endpoint")
+	httpListener := sm.httpStatusListener()
+	queueListener := sm.eventQueueListener()
+	deliveryListener := sm.deliveryListener()
+
+	// Event 1: Successfully delivered
+	event1 := &Event{
+		ID:     "success-event",
+		Action: "push",
+		Target: Target{
+			Repository: "test/repo",
+			Descriptor: distribution.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:1234567890",
+			},
+		},
+	}
+
+	queueListener.ingress(event1)
+	httpListener.success(200, event1)
+	queueListener.egress(event1)
+	deliveryListener.eventDelivered(0)
+
+	// Event 2: Dropped due to queue overflow
+	event2 := &Event{
+		ID:     "dropped-event",
+		Action: "pull",
+		Target: Target{
+			Repository: "test/repo",
+			Descriptor: distribution.Descriptor{
+				MediaType: "application/octet-stream",
+				Digest:    "sha256:0987654321",
+			},
+		},
+	}
+
+	queueListener.ingress(event2)
+	queueListener.drop(event2)
+
+	// Event 3: Lost after retries
+	event3 := &Event{
+		ID:     "lost-event",
+		Action: "delete",
+		Target: Target{
+			Repository: "test/repo",
+			Descriptor: distribution.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:abcdef1234",
+			},
+		},
+	}
+
+	queueListener.ingress(event3)
+	for i := 0; i < 3; i++ {
+		httpListener.failure(500, event3)
+	}
+	httpListener.err(event3)
+	queueListener.egress(event3)
+	deliveryListener.eventLost(3)
+
+	// Verify final state
+	require.EqualValues(t, 3, sm.events.Load())
+	require.EqualValues(t, 0, sm.pending.Load())
+	require.EqualValues(t, 1, sm.successes.Load())
+	require.EqualValues(t, 3, sm.failures.Load())
+	require.EqualValues(t, 1, sm.errors.Load())
+	require.EqualValues(t, 1, sm.delivered.Load())
+	require.EqualValues(t, 1, sm.lost.Load())
+	require.EqualValues(t, 1, sm.dropped.Load())
+	require.EqualValues(t, 3, sm.retries.Load())
+}
+
+func TestEndpointMetricsDropListener(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("drop-endpoint")
+	listener := sm.eventQueueListener()
+
+	event1 := &Event{
+		ID:     "drop-test-1",
+		Action: "push",
+		Target: Target{
+			Repository: "test/repo",
+			Descriptor: distribution.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:1234567890",
+			},
+		},
+	}
+
+	event2 := &Event{
+		ID:     "drop-test-2",
+		Action: "pull",
+		Target: Target{
+			Repository: "test/repo",
+			Descriptor: distribution.Descriptor{
+				MediaType: "application/octet-stream",
+				Digest:    "sha256:0987654321",
+			},
+		},
+	}
+
+	event3 := &Event{
+		ID:     "drop-test-3",
+		Action: "delete",
+		Target: Target{
+			Repository: "test/repo",
+			Descriptor: distribution.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:1111111111",
+			},
+		},
+	}
+
+	// Test drop functionality
+	listener.drop(event1)
+	listener.drop(event2)
+	listener.drop(event3)
+	listener.drop(event1) // Drop the same event type again
+
+	// Verify internal state
+	require.EqualValues(t, 4, sm.dropped.Load())
+
+	// Verify Prometheus metrics
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_notifications_events The total number of events
+# TYPE registry_notifications_events counter
+registry_notifications_events{action="delete",artifact="manifest",endpoint="drop-endpoint",type="Dropped"} 1
+registry_notifications_events{action="pull",artifact="blob",endpoint="drop-endpoint",type="Dropped"} 1
+registry_notifications_events{action="push",artifact="manifest",endpoint="drop-endpoint",type="Dropped"} 2
+`)
+	require.NoError(t, err)
+
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, eventsCounterName),
+	}
+
+	err = testutil.GatherAndCompare(registry, &expected, names...)
+	require.NoError(t, err)
+}
+
+func TestEndpointMetricsEventQueueWithDrops(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("queue-drop-endpoint")
+	listener := sm.eventQueueListener()
+
+	events := []*Event{
+		{
+			ID:     "test-1",
+			Action: "push",
+			Target: Target{
+				Repository: "test/repo",
+				Descriptor: distribution.Descriptor{
+					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+					Digest:    "sha256:1111111111",
+				},
+			},
+		},
+		{
+			ID:     "test-2",
+			Action: "pull",
+			Target: Target{
+				Repository: "test/repo",
+				Descriptor: distribution.Descriptor{
+					MediaType: "application/octet-stream",
+					Digest:    "sha256:2222222222",
+				},
+			},
+		},
+		{
+			ID:     "test-3",
+			Action: "push",
+			Target: Target{
+				Repository: "test/repo",
+				Descriptor: distribution.Descriptor{
+					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+					Digest:    "sha256:3333333333",
+				},
+			},
+		},
+	}
+
+	// Simulate a scenario where some events are processed and some are dropped
+	// Ingress all events
+	for _, event := range events {
+		listener.ingress(event)
+	}
+
+	// Process first event successfully
+	listener.egress(events[0])
+
+	// Drop second event (e.g., due to queue overflow or timeout)
+	listener.drop(events[1])
+
+	// Process third event successfully
+	listener.egress(events[2])
+
+	// Verify internal state
+	require.EqualValues(t, 3, sm.events.Load())
+	require.EqualValues(t, 0, sm.pending.Load())
+	require.EqualValues(t, 1, sm.dropped.Load())
+
+	// Note: The drop operation doesn't affect the pending count since the event
+	// was never removed from the queue through egress
+
+	// Verify Prometheus metrics
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_notifications_events The total number of events
+# TYPE registry_notifications_events counter
+registry_notifications_events{action="pull",artifact="blob",endpoint="queue-drop-endpoint",type="Dropped"} 1
+registry_notifications_events{action="pull",artifact="blob",endpoint="queue-drop-endpoint",type="Events"} 1
+registry_notifications_events{action="push",artifact="manifest",endpoint="queue-drop-endpoint",type="Events"} 2
+# HELP registry_notifications_pending The gauge of pending events in queue - queue length
+# TYPE registry_notifications_pending gauge
+registry_notifications_pending{endpoint="queue-drop-endpoint"} 1
+`)
+	require.NoError(t, err)
+
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, eventsCounterName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, pendingGaugeName),
+	}
+
+	err = testutil.GatherAndCompare(registry, &expected, names...)
+	require.NoError(t, err)
+}
+
+func TestConcurrentDropMetrics(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("concurrent-drop-endpoint")
+	listener := sm.eventQueueListener()
+
+	var wg sync.WaitGroup
+	numGoroutines := 10
+	dropsPerGoroutine := 50
+
+	// Launch multiple goroutines to drop events concurrently
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(goroutineID int) {
+			defer wg.Done()
+
+			for j := 0; j < dropsPerGoroutine; j++ {
+				event := &Event{
+					ID:     fmt.Sprintf("drop-%d-%d", goroutineID, j),
+					Action: "push",
+					Target: Target{
+						Repository: "test/repo",
+						Descriptor: distribution.Descriptor{
+							MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+							Digest:    "sha256:0000000000",
+						},
+					},
+				}
+				listener.drop(event)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify total drops
+	expectedDrops := int64(numGoroutines * dropsPerGoroutine)
+	require.Equal(t, expectedDrops, sm.dropped.Load())
+
+	// Verify Prometheus metrics
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+
+	var droppedCount float64
+	for _, mf := range metricFamilies {
+		if mf.GetName() == fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, eventsCounterName) {
+			for _, metric := range mf.GetMetric() {
+				hasDroppedType := false
+				hasCorrectEndpoint := false
+				for _, label := range metric.GetLabel() {
+					if label.GetName() == "type" && label.GetValue() == "Dropped" {
+						hasDroppedType = true
+					}
+					if label.GetName() == "endpoint" && label.GetValue() == "concurrent-drop-endpoint" {
+						hasCorrectEndpoint = true
+					}
+				}
+				if hasDroppedType && hasCorrectEndpoint {
+					droppedCount = metric.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+
+	require.InEpsilon(t, float64(expectedDrops), droppedCount, 0.001)
+}
+
+func TestCompleteFlowWithDrops(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("complete-flow-endpoint")
+	httpListener := sm.httpStatusListener()
+	queueListener := sm.eventQueueListener()
+	deliveryListener := sm.deliveryListener()
+
+	// Create multiple events
+	events := make([]*Event, 5)
+	for i := range events {
+		events[i] = &Event{
+			ID:     fmt.Sprintf("flow-event-%d", i),
+			Action: "push",
+			Target: Target{
+				Repository: "test/repo",
+				Descriptor: distribution.Descriptor{
+					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+					Digest:    digest.Digest(fmt.Sprintf("sha256:%d%d%d%d%d%d%d%d%d%d", i, i, i, i, i, i, i, i, i, i)),
+				},
+			},
+		}
+	}
+
+	// Simulate different outcomes for each event
+	// Event 0: Successfully delivered
+	queueListener.ingress(events[0])
+	httpListener.success(200, events[0])
+	queueListener.egress(events[0])
+	deliveryListener.eventDelivered(0)
+
+	// Event 1: Delivered after retries
+	queueListener.ingress(events[1])
+	httpListener.failure(500, events[1])
+	httpListener.failure(503, events[1])
+	httpListener.success(200, events[1])
+	queueListener.egress(events[1])
+	deliveryListener.eventDelivered(2)
+
+	// Event 2: Lost after max retries
+	queueListener.ingress(events[2])
+	for i := 0; i < 5; i++ {
+		httpListener.failure(500, events[2])
+	}
+	httpListener.err(events[2])
+	queueListener.egress(events[2])
+	deliveryListener.eventLost(5)
+
+	// Event 3: Dropped (e.g., queue overflow)
+	queueListener.ingress(events[3])
+	queueListener.drop(events[3])
+	// Note: dropped events don't go through egress
+
+	// Event 4: Dropped after some failed attempts
+	queueListener.ingress(events[4])
+	httpListener.failure(400, events[4])
+	httpListener.failure(400, events[4])
+	queueListener.drop(events[4])
+
+	// Verify final state
+	require.EqualValues(t, 5, sm.events.Load())
+	require.EqualValues(t, 0, sm.pending.Load())
+	require.EqualValues(t, 2, sm.successes.Load())
+	require.EqualValues(t, 9, sm.failures.Load())
+	require.EqualValues(t, 1, sm.errors.Load())
+	require.EqualValues(t, 2, sm.delivered.Load())
+	require.EqualValues(t, 1, sm.lost.Load())
+	require.EqualValues(t, 2, sm.dropped.Load())
+	require.EqualValues(t, 7, sm.retries.Load()) // 0 + 2 + 5 = 7
+
+	// Verify specific status codes
+	v, ok := sm.statuses.Load("200 OK")
+	require.True(t, ok)
+	require.Equal(t, int64(2), v.(*atomic.Int64).Load())
+
+	v, ok = sm.statuses.Load("400 Bad Request")
+	require.True(t, ok)
+	require.Equal(t, int64(2), v.(*atomic.Int64).Load())
+
+	v, ok = sm.statuses.Load("500 Internal Server Error")
+	require.True(t, ok)
+	require.Equal(t, int64(6), v.(*atomic.Int64).Load())
+
+	v, ok = sm.statuses.Load("503 Service Unavailable")
+	require.True(t, ok)
+	require.Equal(t, int64(1), v.(*atomic.Int64).Load())
 }

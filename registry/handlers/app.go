@@ -1107,6 +1107,7 @@ func (app *App) configureEvents(registryConfig *configuration.Configuration) {
 			IgnoredMediaTypes: endpoint.IgnoredMediaTypes,
 			Ignore:            endpoint.Ignore,
 			QueuePurgeTimeout: endpoint.QueuePurgeTimeout,
+			QueueSizeLimit:    endpoint.QueueSizeLimit,
 		})
 
 		sinks = append(sinks, endpoint)
