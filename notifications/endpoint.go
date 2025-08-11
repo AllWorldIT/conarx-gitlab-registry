@@ -23,8 +23,13 @@ const DefaultQueueSizeLimit = 3000
 // NOTE(prozlach): Value chosen arbitrary. Intention was to make registry try
 // to deliver as many notifications as possible, while still being under the
 // threshold which e.g. Kubernetes uses to determine when to start SIGKILL pod
-// that does not stop after SIGINT. NOTE(prozlach): There is no delivery
-// guarantee for notifications ATM, this is best effort.
+// that does not stop after SIGINT. We currently use the default of 30s on
+// gprd. Reference:
+//
+//	https://gitlab.com/gitlab-org/charts/gitlab/-/blob/9f66fdb4dc9d05b3699703551cf14fe7e7dfaa56/doc/charts/registry/_index.md#L172-L172
+//
+// NOTE(prozlach): There is no delivery guarantee for notifications ATM, this
+// is best effort.
 const DefaultQueuePurgeTimeout = 5 * time.Second
 
 // EndpointConfig covers the optional configuration parameters for an active
