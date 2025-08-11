@@ -10,12 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	azruntime "github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/appendblob"
@@ -27,6 +29,7 @@ import (
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
 	"github.com/docker/distribution/registry/storage/driver/base"
+	"github.com/docker/distribution/registry/storage/internal/metrics"
 )
 
 var ErrCorruptedData = errors.New("corrupted data found in the uploaded data")
@@ -117,6 +120,28 @@ func (d *driver) GetContent(ctx context.Context, targetPath string) ([]byte, err
 			TryTimeout:    d.retryTryTimeout,
 			RetryDelay:    d.retryDelay,
 			MaxRetryDelay: d.maxRetryDelay,
+			ShouldRetry: func(resp *http.Response, err error) bool {
+				// NOTE(prozlach): azure-sdk-go does the same thing, we only
+				// piggy-back the metric calculation:
+				// https://github.com/Azure/azure-sdk-for-go/blob/8e0e2345f57218b29d3d411646bac932d0e4358d/sdk/azcore/runtime/policy_retry.go#L179-L190
+				// List of codes can be found in the godoc of the
+				// policy.RetryOptions object:
+				// https://github.com/Azure/azure-sdk-for-go/blob/8e0e2345f57218b29d3d411646bac932d0e4358d/sdk/azcore/policy/policy.go#L114-L124
+				statusCodes := []int{
+					http.StatusRequestTimeout,      // 408
+					http.StatusTooManyRequests,     // 429
+					http.StatusInternalServerError, // 500
+					http.StatusBadGateway,          // 502
+					http.StatusServiceUnavailable,  // 503
+					http.StatusGatewayTimeout,      // 504
+				}
+				shouldRetry := err != nil || azruntime.HasStatusCode(resp, statusCodes...)
+				if shouldRetry {
+					// NOTE(prozlach): Azure has only native retries
+					metrics.StorageBackendRetry(true)
+				}
+				return shouldRetry
+			},
 		},
 	)
 

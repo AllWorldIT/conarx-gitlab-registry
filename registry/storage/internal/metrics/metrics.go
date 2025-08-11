@@ -46,7 +46,7 @@ const (
 	storageBackendRetriesTotalDesc = "A counter of retires made while communicating with storage backend."
 	// `native` - done using native retry mechanism
 	// `custom` -done using our own/custom retry mechanism
-	storageBackendRetriesTypeLabel = "type"
+	storageBackendRetriesTypeLabel = "retry_type"
 
 	urlCacheRequestsTotalName = "urlcache_requests_total"
 	urlCacheRequestsTotalDesc = "A counter of the URL cache middleware requests."
