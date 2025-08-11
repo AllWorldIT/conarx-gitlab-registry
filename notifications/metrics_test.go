@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/metrics"
@@ -95,12 +96,12 @@ func TestNotificationsMetrics(t *testing.T) {
 
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
-# HELP registry_notifications_delivery The number of events delivered or lost. Event is lost once the number of retries was exhausted.
-# TYPE registry_notifications_delivery counter
-registry_notifications_delivery{delivery_type="delivered",endpoint="backup-endpoint"} 1
-registry_notifications_delivery{delivery_type="delivered",endpoint="webhook-endpoint"} 2
-registry_notifications_delivery{delivery_type="lost",endpoint="backup-endpoint"} 2
-registry_notifications_delivery{delivery_type="lost",endpoint="webhook-endpoint"} 1
+# HELP registry_notifications_delivery_total The number of events delivered or lost. Event is lost once the number of retries was exhausted.
+# TYPE registry_notifications_delivery_total counter
+registry_notifications_delivery_total{delivery_type="delivered",endpoint="backup-endpoint"} 1
+registry_notifications_delivery_total{delivery_type="delivered",endpoint="webhook-endpoint"} 2
+registry_notifications_delivery_total{delivery_type="lost",endpoint="backup-endpoint"} 2
+registry_notifications_delivery_total{delivery_type="lost",endpoint="webhook-endpoint"} 1
 # HELP registry_notifications_errors The number of events where an error occurred during sending. Sending them MAY be retried.
 # TYPE registry_notifications_errors counter
 registry_notifications_errors{endpoint="backup-endpoint"} 2
@@ -342,10 +343,10 @@ func TestEndpointMetricsDeliveryListener(t *testing.T) {
 	// Verify Prometheus metrics
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
-# HELP registry_notifications_delivery The number of events delivered or lost. Event is lost once the number of retries was exhausted.
-# TYPE registry_notifications_delivery counter
-registry_notifications_delivery{delivery_type="delivered",endpoint="delivery-endpoint"} 4
-registry_notifications_delivery{delivery_type="lost",endpoint="delivery-endpoint"} 3
+# HELP registry_notifications_delivery_total The number of events delivered or lost. Event is lost once the number of retries was exhausted.
+# TYPE registry_notifications_delivery_total counter
+registry_notifications_delivery_total{delivery_type="delivered",endpoint="delivery-endpoint"} 4
+registry_notifications_delivery_total{delivery_type="lost",endpoint="delivery-endpoint"} 3
 # HELP registry_notifications_retries The histogram of delivery retries done
 # TYPE registry_notifications_retries histogram
 registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="0"} 1
@@ -640,10 +641,10 @@ func TestDeliveryMetricsEdgeCases(t *testing.T) {
 	// Verify histogram buckets for edge cases
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
-# HELP registry_notifications_delivery The number of events delivered or lost. Event is lost once the number of retries was exhausted.
-# TYPE registry_notifications_delivery counter
-registry_notifications_delivery{delivery_type="delivered",endpoint="edge-case-endpoint"} 3
-registry_notifications_delivery{delivery_type="lost",endpoint="edge-case-endpoint"} 3
+# HELP registry_notifications_delivery_total The number of events delivered or lost. Event is lost once the number of retries was exhausted.
+# TYPE registry_notifications_delivery_total counter
+registry_notifications_delivery_total{delivery_type="delivered",endpoint="edge-case-endpoint"} 3
+registry_notifications_delivery_total{delivery_type="lost",endpoint="edge-case-endpoint"} 3
 # HELP registry_notifications_retries The histogram of delivery retries done
 # TYPE registry_notifications_retries histogram
 registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="0"} 2
@@ -746,6 +747,388 @@ func TestEndpointMetricsRetriesFlow(t *testing.T) {
 	require.EqualValues(t, 1, sm.delivered.Load())
 	require.EqualValues(t, 1, sm.lost.Load())
 	require.EqualValues(t, 7, sm.retries.Load())
+}
+
+func TestHTTPLatencyMetrics(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("latency-endpoint")
+	httpListener := sm.httpStatusListener()
+
+	// Test various latencies
+	latencies := []time.Duration{
+		1 * time.Millisecond,
+		5 * time.Millisecond,
+		25 * time.Millisecond,
+		100 * time.Millisecond,
+		500 * time.Millisecond,
+		1 * time.Second,
+		5 * time.Second,
+		30 * time.Second,
+	}
+
+	for _, latency := range latencies {
+		httpListener.latency(latency)
+	}
+
+	// Verify Prometheus metrics
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_notifications_http_latency_seconds The histogram of HTTP delivery latency
+# TYPE registry_notifications_http_latency_seconds histogram
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="0.005"} 2
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="0.01"} 2
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="0.025"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="0.05"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="0.1"} 4
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="0.25"} 4
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="0.5"} 5
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="1"} 6
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="2.5"} 6
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="5"} 7
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="10"} 7
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="25"} 7
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="50"} 8
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="100"} 8
+registry_notifications_http_latency_seconds_bucket{endpoint="latency-endpoint",le="+Inf"} 8
+registry_notifications_http_latency_seconds_sum{endpoint="latency-endpoint"} 36.631
+registry_notifications_http_latency_seconds_count{endpoint="latency-endpoint"} 8
+`)
+	require.NoError(t, err)
+
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, httpLatencyName),
+	}
+
+	err = testutil.GatherAndCompare(registry, &expected, names...)
+	require.NoError(t, err)
+}
+
+func TestTotalLatencyMetrics(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("total-latency-endpoint")
+	queueListener := sm.eventQueueListener()
+
+	// Create events with different timestamps
+	now := time.Now()
+	events := []*Event{
+		{
+			ID:        "event-1",
+			Action:    "push",
+			Timestamp: now.Add(-2 * time.Millisecond),
+			Target: Target{
+				Repository: "test/repo",
+				Descriptor: distribution.Descriptor{
+					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+					Digest:    "sha256:1234567890",
+				},
+			},
+		},
+		{
+			ID:        "event-2",
+			Action:    "pull",
+			Timestamp: now.Add(-50 * time.Millisecond),
+			Target: Target{
+				Repository: "test/repo",
+				Descriptor: distribution.Descriptor{
+					MediaType: "application/octet-stream",
+					Digest:    "sha256:1234567890",
+				},
+			},
+		},
+		{
+			ID:        "event-3",
+			Action:    "push",
+			Timestamp: now.Add(-500 * time.Millisecond),
+			Target: Target{
+				Repository: "test/repo",
+				Descriptor: distribution.Descriptor{
+					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+					Digest:    "sha256:0987654321",
+				},
+			},
+		},
+		{
+			ID:        "event-4",
+			Action:    "delete",
+			Timestamp: now.Add(-2 * time.Second),
+			Target: Target{
+				Repository: "test/repo",
+				Descriptor: distribution.Descriptor{
+					MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+					Digest:    "sha256:1111111111",
+				},
+			},
+		},
+	}
+
+	// Ingress all events
+	for _, event := range events {
+		queueListener.ingress(event)
+	}
+
+	// Sleep briefly to ensure time difference
+	time.Sleep(10 * time.Millisecond)
+
+	// Egress events - this triggers the total latency measurement
+	for _, event := range events {
+		queueListener.egress(event)
+	}
+
+	// Verify that the total latency metric was recorded
+	// We can't check exact values due to timing, but we can verify it was recorded
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+
+	var totalLatencyFound bool
+	var observationCount uint64
+	for _, mf := range metricFamilies {
+		if mf.GetName() != fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, totalLatencyName) {
+			continue
+		}
+		for _, metric := range mf.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() != "endpoint" || label.GetValue() != "total-latency-endpoint" {
+					continue
+				}
+
+				totalLatencyFound = true
+				observationCount = metric.GetHistogram().GetSampleCount()
+				require.Equal(t, uint64(4), observationCount, "Expected 4 latency observations")
+				require.Positive(t, metric.GetHistogram().GetSampleSum(), "Expected positive latency sum")
+				break
+			}
+		}
+	}
+	require.True(t, totalLatencyFound, "Expected to find total latency metric for our endpoint")
+}
+
+func TestConcurrentLatencyMetrics(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("concurrent-latency-endpoint")
+	httpListener := sm.httpStatusListener()
+	queueListener := sm.eventQueueListener()
+
+	var wg sync.WaitGroup
+	numGoroutines := 10
+	operationsPerGoroutine := 100
+
+	// Concurrent HTTP latency updates
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for j := 0; j < operationsPerGoroutine; j++ {
+				// Generate varied latencies
+				latency := time.Duration(j%100) * time.Millisecond
+				httpListener.latency(latency)
+			}
+		}()
+	}
+
+	// Concurrent event processing for total latency
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			for j := 0; j < operationsPerGoroutine; j++ {
+				event := &Event{
+					ID:        fmt.Sprintf("event-%d-%d", i, j),
+					Action:    "push",
+					Timestamp: time.Now().Add(-time.Duration(j%60) * time.Second),
+					Target: Target{
+						Repository: "test/repo",
+						Descriptor: distribution.Descriptor{
+							MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+							Digest:    "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+						},
+					},
+				}
+				queueListener.ingress(event)
+				// Small delay to simulate processing
+				time.Sleep(time.Microsecond)
+				queueListener.egress(event)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify that metrics were recorded correctly
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+
+	var httpLatencyCount, totalLatencyCount uint64
+	for _, mf := range metricFamilies {
+		switch mf.GetName() {
+		case fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, httpLatencyName):
+			for _, metric := range mf.GetMetric() {
+				for _, label := range metric.GetLabel() {
+					if label.GetName() == "endpoint" && label.GetValue() == "concurrent-latency-endpoint" {
+						httpLatencyCount = metric.GetHistogram().GetSampleCount()
+					}
+				}
+			}
+		case fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, totalLatencyName):
+			for _, metric := range mf.GetMetric() {
+				for _, label := range metric.GetLabel() {
+					if label.GetName() == "endpoint" && label.GetValue() == "concurrent-latency-endpoint" {
+						totalLatencyCount = metric.GetHistogram().GetSampleCount()
+					}
+				}
+			}
+		}
+	}
+
+	require.Equal(t, uint64(numGoroutines*operationsPerGoroutine), httpLatencyCount)
+	require.Equal(t, uint64(numGoroutines*operationsPerGoroutine), totalLatencyCount)
+}
+
+func TestLatencyMetricsWithFullFlow(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	sm := newSafeMetrics("flow-endpoint")
+	httpListener := sm.httpStatusListener()
+	queueListener := sm.eventQueueListener()
+	deliveryListener := sm.deliveryListener()
+
+	// Simulate a complete event flow with latency tracking
+	event := &Event{
+		ID:        "flow-event",
+		Action:    "push",
+		Timestamp: time.Now().Add(-30 * time.Second), // Event created 30 seconds ago
+		Target: Target{
+			Repository: "test/repo",
+			Descriptor: distribution.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:flowtest",
+			},
+		},
+	}
+
+	// 1. Event enters queue
+	queueListener.ingress(event)
+
+	// 2. First delivery attempt with HTTP latency
+	httpListener.latency(50 * time.Millisecond)
+	httpListener.failure(500, event)
+
+	// 3. Retry with backoff
+	time.Sleep(100 * time.Millisecond)
+	httpListener.latency(75 * time.Millisecond)
+	httpListener.failure(503, event)
+
+	// 4. Final successful delivery
+	time.Sleep(200 * time.Millisecond)
+	httpListener.latency(25 * time.Millisecond)
+	httpListener.success(200, event)
+
+	// 5. Event leaves queue (triggers total latency measurement)
+	queueListener.egress(event)
+
+	// 6. Report delivery with retries
+	deliveryListener.eventDelivered(2)
+
+	// Verify all metrics are properly recorded
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_notifications_delivery_total The number of events delivered or lost. Event is lost once the number of retries was exhausted.
+# TYPE registry_notifications_delivery_total counter
+registry_notifications_delivery_total{delivery_type="delivered",endpoint="flow-endpoint"} 1
+# HELP registry_notifications_events The total number of events
+# TYPE registry_notifications_events counter
+registry_notifications_events{action="push",artifact="manifest",endpoint="flow-endpoint",type="Events"} 1
+registry_notifications_events{action="push",artifact="manifest",endpoint="flow-endpoint",type="Failures"} 2
+registry_notifications_events{action="push",artifact="manifest",endpoint="flow-endpoint",type="Successes"} 1
+# HELP registry_notifications_http_latency_seconds The histogram of HTTP delivery latency
+# TYPE registry_notifications_http_latency_seconds histogram
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="0.005"} 0
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="0.01"} 0
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="0.025"} 1
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="0.05"} 2
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="0.1"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="0.25"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="0.5"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="1"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="2.5"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="5"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="10"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="25"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="50"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="100"} 3
+registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="+Inf"} 3
+registry_notifications_http_latency_seconds_sum{endpoint="flow-endpoint"} 0.15
+registry_notifications_http_latency_seconds_count{endpoint="flow-endpoint"} 3
+# HELP registry_notifications_pending The gauge of pending events in queue - queue length
+# TYPE registry_notifications_pending gauge
+registry_notifications_pending{endpoint="flow-endpoint"} 0
+# HELP registry_notifications_retries The histogram of delivery retries done
+# TYPE registry_notifications_retries histogram
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="0"} 0
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="1"} 0
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="2"} 1
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="3"} 1
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="5"} 1
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="10"} 1
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="15"} 1
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="20"} 1
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="30"} 1
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="50"} 1
+registry_notifications_retries_bucket{endpoint="flow-endpoint",le="+Inf"} 1
+registry_notifications_retries_sum{endpoint="flow-endpoint"} 2
+registry_notifications_retries_count{endpoint="flow-endpoint"} 1
+# HELP registry_notifications_status The number HTTP responses per status code received from notifications endpoint
+# TYPE registry_notifications_status counter
+registry_notifications_status{code="200 OK",endpoint="flow-endpoint"} 1
+registry_notifications_status{code="500 Internal Server Error",endpoint="flow-endpoint"} 1
+registry_notifications_status{code="503 Service Unavailable",endpoint="flow-endpoint"} 1
+`)
+	require.NoError(t, err)
+
+	names := []string{
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, eventsCounterName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, pendingGaugeName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, statusCounterName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, deliveryCounterName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, retriesName),
+		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, httpLatencyName),
+	}
+
+	err = testutil.GatherAndCompare(registry, &expected, names...)
+	require.NoError(t, err)
+
+	// Also verify that total latency was recorded (can't predict exact value due to timing)
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+
+	var totalLatencyRecorded bool
+	for _, mf := range metricFamilies {
+		if mf.GetName() == fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, totalLatencyName) {
+			for _, metric := range mf.GetMetric() {
+				for _, label := range metric.GetLabel() {
+					if label.GetName() == "endpoint" && label.GetValue() == "flow-endpoint" {
+						require.Equal(t, uint64(1), metric.GetHistogram().GetSampleCount())
+						require.Greater(t, metric.GetHistogram().GetSampleSum(), float64(30), "Total latency should be > 30 seconds")
+						totalLatencyRecorded = true
+						break
+					}
+				}
+			}
+		}
+	}
+	require.True(t, totalLatencyRecorded, "Total latency should have been recorded")
 }
 
 func TestEndpointMetricsDropFlow(t *testing.T) {
