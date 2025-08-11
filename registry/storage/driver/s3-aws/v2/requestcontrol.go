@@ -88,7 +88,7 @@ func (cr *customRetryer) GetRetryToken(ctx context.Context, opErr error) (func(e
 	releaseTokenF, err := cr.RetryerV2.GetRetryToken(ctx, opErr)
 	if err == nil {
 		// NOTE(prozlach): On AWS, all retries are done using native mechanism,
-		// unlinke on GCS
+		// unlike on GCS
 		metrics.StorageBackendRetry(true)
 	}
 	return releaseTokenF, err
