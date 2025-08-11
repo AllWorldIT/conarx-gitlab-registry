@@ -3,6 +3,8 @@ package notifications
 import (
 	"fmt"
 	"math/rand/v2"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1019,4 +1021,201 @@ func TestEventQueueDropMetrics(t *testing.T) {
 	}
 
 	require.True(t, droppedEventsFound, "dropped events should be recorded in Prometheus metrics")
+}
+
+// TestHTTPSinkLatencyMetrics verifies that HTTP latency metrics are properly recorded
+func TestHTTPSinkLatencyMetrics(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	// Create a test server with controlled latency
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount++
+		// Add artificial latency
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	sm := newSafeMetrics("http-latency-test")
+	listener := sm.httpStatusListener()
+
+	// Create HTTP sink with the listener
+	sink := newHTTPSink(server.URL, 5*time.Second, nil, nil, listener)
+	defer sink.Close()
+
+	// Send multiple events to get different latency measurements
+	events := []struct {
+		id       string
+		expected time.Duration
+	}{
+		{"event1", 50 * time.Millisecond},
+		{"event2", 50 * time.Millisecond},
+		{"event3", 50 * time.Millisecond},
+	}
+
+	for _, tc := range events {
+		event := createTestEvent("push", "manifest")
+		event.ID = tc.id
+
+		err := sink.Write(&event)
+		require.NoError(t, err, "failed to write event %s", tc.id)
+	}
+
+	// Verify request count
+	assert.Equal(t, 3, requestCount, "expected 3 requests to be made")
+
+	// Verify HTTP latency metrics were recorded
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+
+	var httpLatencyFound bool
+	var observationCount uint64
+	var totalLatency float64
+
+	for _, mf := range metricFamilies {
+		if mf.GetName() != fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, httpLatencyName) {
+			continue
+		}
+
+		for _, metric := range mf.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() != "endpoint" || label.GetValue() != "http-latency-test" {
+					continue
+				}
+
+				httpLatencyFound = true
+				observationCount = metric.GetHistogram().GetSampleCount()
+				totalLatency = metric.GetHistogram().GetSampleSum()
+
+				// Verify we have the expected number of observations
+				assert.Equal(t, uint64(3), observationCount, "expected 3 latency observations")
+
+				// Verify total latency is reasonable (should be at least 150ms for 3x50ms requests)
+				assert.Greater(t, totalLatency, 0.15, "total latency should be > 150ms")
+				assert.Less(t, totalLatency, 1.0, "total latency should be < 1s (reasonable upper bound)")
+
+				// Check that values fall into expected buckets
+				for i, bucket := range metric.GetHistogram().GetBucket() {
+					if bucket.GetUpperBound() == 0.1 { // 100ms bucket
+						assert.Equal(t, uint64(3), bucket.GetCumulativeCount(),
+							"all 3 requests should be in the 100ms bucket")
+					}
+					if bucket.GetUpperBound() == 0.05 { // 50ms bucket
+						assert.Zero(t, bucket.GetCumulativeCount(),
+							"no requests should be in the 50ms bucket (requests take >50ms)")
+					}
+					_ = i // avoid unused variable
+				}
+				break
+			}
+		}
+	}
+
+	require.True(t, httpLatencyFound, "HTTP latency metric should have been recorded")
+}
+
+// TestEventQueueTotalLatencyMetrics verifies that total latency metrics are properly recorded
+func TestEventQueueTotalLatencyMetrics(t *testing.T) {
+	// Create a new registry for isolated testing
+	registry := prometheus.NewRegistry()
+	registerMetrics(registry)
+
+	var ts testSink
+	sm := newSafeMetrics("total-latency-test")
+	listener := sm.eventQueueListener()
+
+	// Create event queue with listener
+	eq := newEventQueue(&ts, 60*time.Second, DefaultQueueSizeLimit, listener)
+	defer eq.Close()
+
+	// Create events with different ages
+	now := time.Now()
+	testCases := []struct {
+		id          string
+		age         time.Duration
+		description string
+	}{
+		{"fresh-event", 100 * time.Millisecond, "very fresh event"},
+		{"1s-old-event", 1 * time.Second, "1 second old event"},
+		{"5s-old-event", 5 * time.Second, "5 seconds old event"},
+		{"30s-old-event", 30 * time.Second, "30 seconds old event"},
+	}
+
+	// Send events through the queue
+	for _, tc := range testCases {
+		event := createTestEvent("push", "manifest")
+		event.ID = tc.id
+		event.Timestamp = now.Add(-tc.age)
+
+		err := eq.Write(&event)
+		require.NoError(t, err, "failed to write %s", tc.description)
+	}
+
+	// Wait for events to be processed
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify all events were delivered
+	ts.mu.Lock()
+	require.Len(t, ts.events, len(testCases), "all events should have been delivered")
+	ts.mu.Unlock()
+
+	// Verify total latency metrics were recorded
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+
+	var totalLatencyFound bool
+	var observationCount uint64
+	var sumLatency float64
+
+	for _, mf := range metricFamilies {
+		if mf.GetName() != fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, totalLatencyName) {
+			continue
+		}
+
+		for _, metric := range mf.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() != "endpoint" || label.GetValue() != "total-latency-test" {
+					continue
+				}
+
+				totalLatencyFound = true
+				observationCount = metric.GetHistogram().GetSampleCount()
+				sumLatency = metric.GetHistogram().GetSampleSum()
+
+				// Verify we have the expected number of observations
+				assert.Equal(t, uint64(len(testCases)), observationCount,
+					"expected %d latency observations", len(testCases))
+
+				// Verify sum is reasonable (should be at least the sum of our ages)
+				// Note: actual latency will be slightly higher due to processing time
+				minExpectedSum := 0.1 + 1 + 5 + 30 // sum of our test ages in seconds
+				assert.Greater(t, sumLatency, minExpectedSum,
+					"sum latency should be > %.1f seconds", minExpectedSum)
+
+				// Check bucket distribution
+				for _, bucket := range metric.GetHistogram().GetBucket() {
+					switch bucket.GetUpperBound() {
+					case 0.25: // 250ms bucket
+						assert.GreaterOrEqual(t, bucket.GetCumulativeCount(), uint64(1),
+							"at least 1 event should be in 250ms bucket")
+					case 2.5: // 2.5s bucket
+						assert.GreaterOrEqual(t, bucket.GetCumulativeCount(), uint64(2),
+							"at least 2 events should be in 2.5s bucket")
+					case 10: // 10s bucket
+						assert.GreaterOrEqual(t, bucket.GetCumulativeCount(), uint64(3),
+							"at least 3 events should be in 10s bucket")
+					case 50: // 50s bucket
+						assert.Equal(t, uint64(4), bucket.GetCumulativeCount(),
+							"all 4 events should be in 50s bucket")
+					}
+				}
+				break
+			}
+		}
+	}
+
+	require.True(t, totalLatencyFound, "Total latency metric should have been recorded")
 }

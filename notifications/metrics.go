@@ -6,18 +6,21 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/docker/distribution/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
-	eventsCounter   *prometheus.CounterVec
-	pendingGauge    *prometheus.GaugeVec
-	statusCounter   *prometheus.CounterVec
-	errorCounter    *prometheus.CounterVec
-	deliveryCounter *prometheus.CounterVec
-	retriesHist     *prometheus.HistogramVec
+	eventsCounter    *prometheus.CounterVec
+	pendingGauge     *prometheus.GaugeVec
+	statusCounter    *prometheus.CounterVec
+	errorCounter     *prometheus.CounterVec
+	deliveryCounter  *prometheus.CounterVec
+	retriesHist      *prometheus.HistogramVec
+	httpLatencyHist  *prometheus.HistogramVec
+	totalLatencyHist *prometheus.HistogramVec
 )
 
 const (
@@ -45,17 +48,31 @@ const (
 	errorCounterDesc = "The number of events where an error occurred during sending. Sending them MAY be retried."
 
 	// Message lost counter
-	deliveryCounterName = "delivery"
+	deliveryCounterName = "delivery_total"
 	deliveryCounterDesc = "The number of events delivered or lost. Event is lost once the number of retries was exhausted."
 	deliveryTypeLabel   = "delivery_type"
 
 	// Retries Histogram
 	retriesName = "retries"
 	retriesDesc = "The histogram of delivery retries done"
+
+	// HTTP latency Histogram
+	httpLatencyName = "http_latency_seconds"
+	httpLatencyDesc = "The histogram of HTTP delivery latency"
+
+	// Total latency Histogram
+	totalLatencyName = "total_latency_seconds"
+	totalLatencyDesc = "The histogram of total delivery latency"
 )
 
 func registerMetrics(registerer prometheus.Registerer) {
-	retryBuckets := []float64{0, 1, 2, 3, 5, 10, 15, 20, 30, 50}
+	retryBuckets := []float64{
+		0, 1, 2, 3, 5, 10, 15, 20, 30, 50,
+	}
+	// In seconds:
+	deliveryLatencyBuckets := []float64{
+		0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100,
+	}
 
 	eventsCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -118,12 +135,36 @@ func registerMetrics(registerer prometheus.Registerer) {
 		[]string{endpointLabel},
 	)
 
+	httpLatencyHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      httpLatencyName,
+			Help:      httpLatencyDesc,
+			Buckets:   deliveryLatencyBuckets,
+		},
+		[]string{endpointLabel},
+	)
+
+	totalLatencyHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      totalLatencyName,
+			Help:      totalLatencyDesc,
+			Buckets:   deliveryLatencyBuckets,
+		},
+		[]string{endpointLabel},
+	)
+
 	registerer.MustRegister(eventsCounter)
 	registerer.MustRegister(pendingGauge)
 	registerer.MustRegister(statusCounter)
 	registerer.MustRegister(errorCounter)
 	registerer.MustRegister(retriesHist)
 	registerer.MustRegister(deliveryCounter)
+	registerer.MustRegister(httpLatencyHist)
+	registerer.MustRegister(totalLatencyHist)
 }
 
 // EndpointMetrics track various actions taken by the endpoint, typically by
@@ -206,6 +247,10 @@ type endpointMetricsHTTPStatusListener struct {
 
 var _ httpStatusListener = new(endpointMetricsHTTPStatusListener)
 
+func (emsl *endpointMetricsHTTPStatusListener) latency(l time.Duration) {
+	httpLatencyHist.WithLabelValues(emsl.endpoint).Observe(l.Seconds())
+}
+
 func (emsl *endpointMetricsHTTPStatusListener) success(status int, event *Event) {
 	key := fmt.Sprintf("%d %s", status, http.StatusText(status))
 	actual, _ := emsl.statuses.LoadOrStore(key, new(atomic.Int64))
@@ -272,10 +317,11 @@ func (eqc *endpointMetricsEventQueueListener) ingress(event *Event) {
 	pendingGauge.WithLabelValues(eqc.endpoint).Inc()
 }
 
-func (eqc *endpointMetricsEventQueueListener) egress(_ *Event) {
+func (eqc *endpointMetricsEventQueueListener) egress(event *Event) {
 	eqc.pending.Add(-1)
 
 	pendingGauge.WithLabelValues(eqc.endpoint).Dec()
+	totalLatencyHist.WithLabelValues(eqc.endpoint).Observe(time.Since(event.Timestamp).Seconds())
 }
 
 func (eqc *endpointMetricsEventQueueListener) drop(event *Event) {

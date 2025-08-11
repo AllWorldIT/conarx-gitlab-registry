@@ -41,6 +41,73 @@ This gauge increases when events are added to the queue and decreases when they 
 
 - `endpoint`: Name of the configured webhook endpoint
 
+## Delivery Metrics
+
+### Event Delivery Outcomes
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `registry_notifications_delivery` | Counter | `endpoint`, `delivery_type` | Total number of events by final delivery outcome after all retry attempts |
+
+**Label Values:**
+
+- `endpoint`: Name of the configured webhook endpoint
+- `delivery_type`: Final outcome of the event delivery
+  - `delivered` - Event successfully sent to endpoint (may have required retries)
+  - `lost` - Event dropped after exhausting all retry attempts
+
+This metric helps track the reliability of your notification endpoints. A high number of lost events indicates endpoint issues that need investigation.
+
+## Performance Metrics
+
+### Retry Distribution
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `registry_notifications_retries` | Histogram | `endpoint` | Distribution of retry attempts needed before successful delivery or failure |
+
+**Histogram Buckets:** 0, 1, 2, 3, 5, 10, 15, 20, 30, 50 retries
+
+**Label Values:**
+
+- `endpoint`: Name of the configured webhook endpoint
+
+This histogram shows how many retries were needed for each event. Events that succeed on the first attempt (0 retries) indicate healthy endpoints, while higher retry counts suggest intermittent issues.
+
+### HTTP Request Latency
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `registry_notifications_http_latency` | Histogram | `endpoint` | Distribution of HTTP request duration when sending notifications to endpoints (seconds) |
+
+**Histogram Buckets:** 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000 seconds
+
+**Label Values:**
+
+- `endpoint`: Name of the configured webhook endpoint
+
+This metric tracks only the HTTP request time, helping identify slow endpoints or network issues. High latencies can cause queue backups and should be investigated.
+
+### Total Event Processing Latency
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `registry_notifications_total_latency` | Histogram | `endpoint` | Distribution of total time from event creation to successful delivery (seconds) |
+
+**Histogram Buckets:** 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000 seconds
+
+**Label Values:**
+
+- `endpoint`: Name of the configured webhook endpoint
+
+This end-to-end latency includes:
+
+- Queue wait time
+- HTTP request time
+- Any retry delays
+
+High total latencies with low HTTP latencies indicate queue congestion. This metric is calculated from the event timestamp to delivery completion.
+
 ### HTTP Status Metrics
 
 | Metric | Type | Labels | Description |
