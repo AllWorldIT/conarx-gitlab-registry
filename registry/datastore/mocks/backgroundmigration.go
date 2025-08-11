@@ -250,6 +250,21 @@ func (mr *MockBackgroundMigrationStoreMockRecorder) FindNextByStatus(ctx, status
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindNextByStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindNextByStatus), ctx, status)
 }
 
+// GetPendingWALCount mocks base method.
+func (m *MockBackgroundMigrationStore) GetPendingWALCount(ctx context.Context) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPendingWALCount", ctx)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPendingWALCount indicates an expected call of GetPendingWALCount.
+func (mr *MockBackgroundMigrationStoreMockRecorder) GetPendingWALCount(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPendingWALCount", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).GetPendingWALCount), ctx)
+}
+
 // IncrementJobAttempts mocks base method.
 func (m *MockBackgroundMigrationStore) IncrementJobAttempts(ctx context.Context, jobID int) error {
 	m.ctrl.T.Helper()

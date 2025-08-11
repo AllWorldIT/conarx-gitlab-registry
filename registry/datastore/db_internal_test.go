@@ -232,6 +232,53 @@ func TestIsDBSupported(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestIsArchivingEnabled(t *testing.T) {
+	ctx := context.Background()
+	primaryDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	db := &DB{DB: primaryDB}
+
+	// case 1: database archive_mode is off
+	mock.ExpectQuery("SELECT current_setting\\('archive_mode'\\)").WillReturnRows(
+		sqlmock.NewRows([]string{"?column?"}).AddRow("off"),
+	)
+
+	isEnabled, err := IsArchivingEnabled(ctx, db.DB)
+	require.NoError(t, err)
+	require.False(t, isEnabled)
+
+	// case 2: database archive_mode is on
+	mock.ExpectQuery("SELECT current_setting\\('archive_mode'\\)").WillReturnRows(
+		sqlmock.NewRows([]string{"?column?"}).AddRow("on"),
+	)
+
+	isEnabled, err = IsArchivingEnabled(ctx, db.DB)
+	require.NoError(t, err)
+	require.True(t, isEnabled)
+
+	// case 3: database archive_mode is always
+	mock.ExpectQuery("SELECT current_setting\\('archive_mode'\\)").WillReturnRows(
+		sqlmock.NewRows([]string{"?column?"}).AddRow("always"),
+	)
+
+	isEnabled, err = IsArchivingEnabled(ctx, db.DB)
+	require.NoError(t, err)
+	require.True(t, isEnabled)
+
+	// case 4: error
+	mock.ExpectQuery("SELECT current_setting\\('archive_mode'\\)").WillReturnError(fmt.Errorf("query failed"))
+
+	isEnabled, err = IsArchivingEnabled(ctx, db.DB)
+	require.Error(t, err)
+	require.False(t, isEnabled)
+
+	// all expectations were met
+	err = mock.ExpectationsWereMet()
+	require.NoError(t, err)
+}
+
 func TestVersionToServerVersionNum(t *testing.T) {
 	tests := []struct {
 		name        string

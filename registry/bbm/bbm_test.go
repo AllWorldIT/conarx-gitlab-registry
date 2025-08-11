@@ -640,6 +640,47 @@ func TestGrabLock(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestGrabLock tests all the paths on the `ShouldThrottle` method.
+func TestShouldThrottle(t *testing.T) {
+	ctx := context.TODO()
+	worker := NewWorker(nil)
+	setupMocks := func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
+		bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
+
+		gomock.InOrder(
+			bbmStoreMock.EXPECT().GetPendingWALCount(ctx).Return(-1, nil).Times(1),
+			bbmStoreMock.EXPECT().GetPendingWALCount(ctx).Return(0, nil).Times(1),
+			bbmStoreMock.EXPECT().GetPendingWALCount(ctx).Return(walSegmentThreshold, nil).Times(1),
+			bbmStoreMock.EXPECT().GetPendingWALCount(ctx).Return(walSegmentThreshold+1, nil).Times(1),
+			bbmStoreMock.EXPECT().GetPendingWALCount(ctx).Return(0, errAnError).Times(1),
+		)
+
+		return bbmStoreMock
+	}
+
+	bbmStore := setupMocks(gomock.NewController(t))
+
+	throttle, err := worker.ShouldThrottle(ctx, bbmStore)
+	require.NoError(t, err)
+	require.False(t, throttle)
+
+	throttle, err = worker.ShouldThrottle(ctx, bbmStore)
+	require.NoError(t, err)
+	require.False(t, throttle)
+
+	throttle, err = worker.ShouldThrottle(ctx, bbmStore)
+	require.NoError(t, err)
+	require.False(t, throttle)
+
+	throttle, err = worker.ShouldThrottle(ctx, bbmStore)
+	require.NoError(t, err)
+	require.True(t, throttle)
+
+	throttle, err = worker.ShouldThrottle(ctx, bbmStore)
+	require.ErrorIs(t, err, errAnError)
+	require.False(t, throttle)
+}
+
 // TestRegisterWork_Errors tests all the error paths on the `RegisterWork` function.
 func TestRegisterWork_Errors(t *testing.T) {
 	name := "repeated_name"
@@ -671,7 +712,7 @@ func TestRegisterWork(t *testing.T) {
 			expectedWorker: func() *Worker {
 				w := &Worker{
 					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
+					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: defaultMaxJobAttempt,
 				}
@@ -686,7 +727,7 @@ func TestRegisterWork(t *testing.T) {
 			expectedWorker: func() *Worker {
 				w := &Worker{
 					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
+					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
 					jobInterval:   1 * time.Second,
 					maxJobAttempt: defaultMaxJobAttempt,
 				}
@@ -700,7 +741,7 @@ func TestRegisterWork(t *testing.T) {
 			expectedWorker: func() *Worker {
 				w := &Worker{
 					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
+					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: 9,
 				}
@@ -715,7 +756,7 @@ func TestRegisterWork(t *testing.T) {
 				w := &Worker{
 					Work:          make(map[string]Work, 0),
 					db:            &datastore.DB{},
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
+					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: defaultMaxJobAttempt,
 				}
@@ -729,7 +770,7 @@ func TestRegisterWork(t *testing.T) {
 			expectedWorker: func() *Worker {
 				w := &Worker{
 					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{"random_key": "random_value", componentKey: workerName}),
+					logger:        log.GetLogger().WithFields(log.Fields{"random_key": "random_value", componentKey: workerName, walThresholdKey: walSegmentThreshold}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: defaultMaxJobAttempt,
 				}
@@ -743,11 +784,26 @@ func TestRegisterWork(t *testing.T) {
 			expectedWorker: func() *Worker {
 				w := &Worker{
 					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName}),
+					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
 					jobInterval:   defaultJobInterval,
 					maxJobAttempt: defaultMaxJobAttempt,
 					wh:            wh,
 				}
+				return w
+			},
+		},
+		{
+			name: "WithWALPressureCheck",
+			opts: []WorkerOption{WithWALPressureCheck()},
+			expectedWorker: func() *Worker {
+				w := &Worker{
+					Work:                   make(map[string]Work, 0),
+					logger:                 log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
+					jobInterval:            defaultJobInterval,
+					maxJobAttempt:          defaultMaxJobAttempt,
+					isWALThrottlingEnabled: true,
+				}
+				w.wh = w
 				return w
 			},
 		},

@@ -73,6 +73,9 @@ type BackgroundMigrationStore interface {
 	AreFinished(ctx context.Context, names []string) (bool, error)
 	// CountByStatus counts the background migrations by status.
 	CountByStatus(ctx context.Context) (map[models.BackgroundMigrationStatus]int, error)
+	// GetPendingWALCount returns the number of WAL records that are pending archival.
+	// This value is a good indicator of WAL pressure when compared to a threshold.
+	GetPendingWALCount(ctx context.Context) (int, error)
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
@@ -514,6 +517,62 @@ func (bms *backgroundMigrationStore) SyncLock(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// GetPendingWALCount returns the number of WAL (Write-Ahead Log) segments
+// that are pending archival. This value is a good indicator of WAL pressure
+// and can be used to throttle write-heavy operations like background migrations.
+//
+// It compares the current WAL segment being written to with the last segment
+// successfully archived, using system views `pg_stat_archiver` and
+// `pg_current_wal_insert_lsn()`. The segment difference is computed using
+// PostgreSQL's naming convention, where each WAL file represents a 16MB segment.
+// The inspiration for this approach came from GitLab's similar implementation:
+// https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/database/health_status/indicators/write_ahead_log.rb
+func (bms *backgroundMigrationStore) GetPendingWALCount(ctx context.Context) (int, error) {
+	defer metrics.InstrumentQuery("bbm_pending_wal_count")()
+
+	q := `WITH current_wal_file AS (
+			SELECT
+				pg_walfile_name (pg_current_wal_insert_lsn ()) AS pg_walfile_name
+		),
+		current_wal AS (
+			SELECT
+				('x' || substring(pg_walfile_name, 9, 8))::bit(32)::int AS log,
+				('x' || substring(pg_walfile_name, 17, 8))::bit(32)::int AS seg,
+				pg_walfile_name
+			FROM
+				current_wal_file
+		),
+		archive_wal AS (
+			SELECT
+				('x' || substring(last_archived_wal, 9, 8))::bit(32)::int AS log,
+				('x' || substring(last_archived_wal, 17, 8))::bit(32)::int AS seg,
+				last_archived_wal
+			FROM
+				pg_stat_archiver
+		)
+		SELECT
+			((current_wal.log - archive_wal.log) * 256) + (current_wal.seg - archive_wal.seg) AS pending_wal_count
+		FROM
+			current_wal,
+			archive_wal
+`
+
+	var count sql.NullInt64
+	err := bms.db.QueryRowContext(ctx, q).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("retrieving pending WAL count: %w", err)
+	}
+
+	// Query ran, but archive_wal.last_archived_wal is NULL
+	// This indicates archiving is not enabled
+	// https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ARCHIVER-VIEW
+	if !count.Valid {
+		return -1, nil
+	}
+
+	return int(count.Int64), nil
 }
 
 // Pause updates the `status` of all `running` and `active` background migrations to the `pause` state.
