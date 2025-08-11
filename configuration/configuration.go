@@ -997,7 +997,7 @@ type Endpoint struct {
 	IgnoredMediaTypes []string      `yaml:"ignoredmediatypes"` // target media types to ignore
 	Ignore            Ignore        `yaml:"ignore"`            // ignore event types
 	QueuePurgeTimeout time.Duration `yaml:"queuepurgetimeout"` // the amount of time registry tries to sent unsent notifications in the buffer after it received SIGINT
-	QueueSizeLimit    int           `yaml:"queue_size_limit"`  // the maximum size of the notifications queue with events pending for sending
+	QueueSizeLimit    int           `yaml:"queuesizelimit"`    // the maximum size of the notifications queue with events pending for sending
 }
 
 // Events configures notification events.

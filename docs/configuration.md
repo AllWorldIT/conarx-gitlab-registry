@@ -1283,7 +1283,7 @@ accept event notifications.
 | `ignoredmediatypes`|no| A list of target media types to ignore. Events with these target media types are not published to the endpoint.                                                                                                                    |
 | `ignore`  |no| Events with these mediatypes or actions are not published to the endpoint.                                                                                                                                                         |
 | `queuepurgetimeout` | no | The maximum amount of time registry tries to sent unsent notifications in the buffer after it received SIGINT. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. The default is 5 seconds. The zero value is always defaulted to 5 seconds. User may set a very low value (e.g. 1ns) to simulate no-wait if desired. |
-| `queue_size_limit`  | no | The maximum size of the notifications queue with events pending for sending. Once the queue gets full, the events are dropped. The default is 3000. |
+| `queuesizelimit`  | no | The maximum size of the notifications queue with events pending for sending. Once the queue gets full, the events are dropped. The default is 3000. |
 
 #### `ignore`
 
