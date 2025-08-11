@@ -619,7 +619,7 @@ func (rs *retryingSink) Close() error {
 type backoffSink struct {
 	doneCh  chan struct{}
 	sink    Sink
-	backoff backoff.BackOff
+	backoff func() backoff.BackOff
 
 	listeners []deliveryListener
 }
@@ -630,14 +630,16 @@ func newBackoffSink(
 	maxRetries int,
 	listeners ...deliveryListener,
 ) *backoffSink {
-	b := backoff.NewExponentialBackOff()
-	b.InitialInterval = initialInterval
-
 	return &backoffSink{
 		doneCh: make(chan struct{}),
 		sink:   sink,
 		// nolint: gosec
-		backoff: backoff.WithMaxRetries(b, uint64(maxRetries)),
+		backoff: func() backoff.BackOff {
+			b := backoff.NewExponentialBackOff(
+				backoff.WithInitialInterval(initialInterval),
+			)
+			return backoff.WithMaxRetries(b, uint64(maxRetries))
+		},
 
 		listeners: listeners,
 	}
@@ -667,7 +669,7 @@ func (bs *backoffSink) Write(event *Event) error {
 		return nil
 	}
 
-	err := backoff.Retry(op, bs.backoff)
+	err := backoff.Retry(op, bs.backoff())
 	if err != nil {
 		for _, listener := range bs.listeners {
 			listener.eventLost(attempts - 1)
