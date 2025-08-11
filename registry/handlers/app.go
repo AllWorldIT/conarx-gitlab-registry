@@ -2070,7 +2070,7 @@ func (app *App) applyStorageMiddleware(middlewares []configuration.Middleware) e
 				return fmt.Errorf("urlcache storage middleware can only be applied once")
 			}
 			urlCacheMiddlewareAlreadyApplied = true
-			mw.Options["_redisCache"] = app.redisCache
+			mw.Options["_redisCache"] = app.dualRedisCache
 		case "cloudfront", "googlecdn", "redirect":
 			if cdnMiddlewareAlreadyApplied {
 				return fmt.Errorf("using more than one storage CDN middleware is not supported")
