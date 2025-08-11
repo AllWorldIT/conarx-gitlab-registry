@@ -209,17 +209,25 @@ type eventQueue struct {
 
 	wgBufferer *sync.WaitGroup
 	wgSender   *sync.WaitGroup
+
+	maxQueueSize int
 }
 
 // eventQueueListener is called when various events happen on the queue.
 type eventQueueListener interface {
 	ingress(events *Event)
 	egress(events *Event)
+	drop(events *Event)
 }
 
 // newEventQueue returns a queue to the provided sink. If the updater is non-
 // nil, it will be called to update pending metrics on ingress and egress.
-func newEventQueue(sink Sink, queuePurgeTimeout time.Duration, listeners ...eventQueueListener) *eventQueue {
+func newEventQueue(
+	sink Sink,
+	queuePurgeTimeout time.Duration,
+	maxQueueSize int,
+	listeners ...eventQueueListener,
+) *eventQueue {
 	eq := eventQueue{
 		sink:      sink,
 		listeners: listeners,
@@ -233,6 +241,8 @@ func newEventQueue(sink Sink, queuePurgeTimeout time.Duration, listeners ...even
 
 		wgBufferer: new(sync.WaitGroup),
 		wgSender:   new(sync.WaitGroup),
+
+		maxQueueSize: maxQueueSize,
 	}
 
 	eq.wgSender.Add(1)
@@ -286,12 +296,27 @@ main:
 			}
 		} else {
 			front := events.Front()
+			// nolint: revive // max-control-nesting
 			select {
 			case event := <-eq.bufferInCh:
 				for _, listener := range eq.listeners {
 					listener.ingress(event)
 				}
-				events.PushBack(event)
+
+				if events.Len() < eq.maxQueueSize {
+					events.PushBack(event)
+				} else {
+					for _, listener := range eq.listeners {
+						listener.drop(event)
+					}
+
+					log.WithFields(
+						log.Fields{
+							"queue_size": events.Len(),
+							"event_id":   event.ID,
+						},
+					).Warnf("queue full, dropping event")
+				}
 			case eq.bufferOutCh <- front.Value.(*Event):
 				events.Remove(front)
 			case <-eq.doneCh:

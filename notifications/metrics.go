@@ -138,6 +138,7 @@ type EndpointMetrics struct {
 	Errors    int64            // total events errored
 	Retries   int64            // total number of retries done
 	Delivered int64            // total number of delivered events
+	Dropped   int64            // total number of dropped events
 	Lost      int64            // total number of lost events
 	Statuses  map[string]int64 // status code histogram, per call event
 }
@@ -153,6 +154,7 @@ type safeMetrics struct {
 	errors    *atomic.Int64
 	retries   *atomic.Int64
 	delivered *atomic.Int64
+	dropped   *atomic.Int64
 	lost      *atomic.Int64
 	statuses  *sync.Map
 }
@@ -168,6 +170,7 @@ func newSafeMetrics(endpoint string) *safeMetrics {
 	sm.errors = new(atomic.Int64)
 	sm.retries = new(atomic.Int64)
 	sm.delivered = new(atomic.Int64)
+	sm.dropped = new(atomic.Int64)
 	sm.lost = new(atomic.Int64)
 	sm.statuses = new(sync.Map)
 	return &sm
@@ -273,6 +276,13 @@ func (eqc *endpointMetricsEventQueueListener) egress(_ *Event) {
 	eqc.pending.Add(-1)
 
 	pendingGauge.WithLabelValues(eqc.endpoint).Dec()
+}
+
+func (eqc *endpointMetricsEventQueueListener) drop(event *Event) {
+	eqc.dropped.Add(1)
+	eqc.pending.Add(-1)
+
+	eventsCounter.WithLabelValues("Dropped", event.Action, event.artifact(), eqc.endpoint).Inc()
 }
 
 // endpoints is global registry of endpoints used to report metrics to expvar
