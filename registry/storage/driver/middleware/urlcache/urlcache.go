@@ -245,7 +245,12 @@ func (uc *urlCacheStorageMiddleware) URLFor(ctx context.Context, path string, op
 		// NOTE(prozlach): No point in caching it as it will be immediately
 		// expired in Redis anyway. Operator needs to adjust the config or the
 		// bug needs to be fixed. Log and carry on.
-		l.WithFields(logrus.Fields{"remainingValidity": remainingValidity}).Error("requested expiry time violates minimum URL validity setting")
+		l.WithFields(
+			logrus.Fields{
+				"remainingValidity": remainingValidity.String(),
+				"minValidity":       uc.minURLValidity.String(),
+			},
+		).Error("requested expiry time violates minimum URL validity setting")
 		return url, nil
 	}
 
