@@ -213,6 +213,7 @@ azure:
     # https://docs.gitlab.com/ci/yaml/#ruleschanges
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $AZURE_DRIVER_VERSION == "azure_v2"
       allow_failure: false
+    # ci-tool-allowfail azure:\s\[(.*[ ,]azure[ ,].*|azure[ ,].*|.*[ ,]azure)\]
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $AZURE_DRIVER_VERSION == "azure"
       allow_failure: true
     - if: $AZURE_DRIVER_VERSION == "azure_v2"
@@ -556,6 +557,8 @@ base-driver:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/base"
 
+# ci-tool-allowfail redis:rate
+# ci-tool-allowfail redis:rate-limiter:handlers
 redis:rate-limiter:handlers:
   extends: .go-version-matrix
   # TODO: temporarily allow failure while we investigate a better way to run these tests
@@ -578,6 +581,7 @@ redis:rate-limiter:handlers:
     REDIS_CLUSTER_DYNAMIC_IPS: no
     REDIS_CLUSTER_REPLICAS: 0
 
+# ci-tool-allowfail redis-cluster:rate-limiter:handlers
 redis-cluster:rate-limiter:handlers:
   extends: .go-version-matrix
   stage: integration
