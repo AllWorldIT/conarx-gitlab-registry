@@ -1,3 +1,50 @@
+## [4.26.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.25.0-gitlab...v4.26.0-gitlab) (2025-08-12)
+
+
+### ✨ Features ✨
+
+* add endpoint labels to pending and status notification metrics ([c501105](https://gitlab.com/gitlab-org/container-registry/commit/c501105dcddedae3845f72fef24b8ecdd1f851f5))
+* add event delivery and retries metrics ([fa0dc43](https://gitlab.com/gitlab-org/container-registry/commit/fa0dc43513dcef2b8f0248c49545c53eaf790304))
+* add latency histograms for notifications subsystem ([5cb127b](https://gitlab.com/gitlab-org/container-registry/commit/5cb127bb84a1e57ede5096da9f30a9abf8749d15))
+* add storage retries metric for Azure, S3 and improve existing metric fro GCS ([e49688e](https://gitlab.com/gitlab-org/container-registry/commit/e49688e1cd8bfabc02ad43949e13e015c383fdca))
+* **api/v2:** enable DLB for List Repository Tags API endpoint ([52600c2](https://gitlab.com/gitlab-org/container-registry/commit/52600c2b3457dfe3800251aed13a58b8acb64d53))
+* **bbm:** add WAL archive based throttling ([d6e3c58](https://gitlab.com/gitlab-org/container-registry/commit/d6e3c588aa625fd411f18664bf84e4f8922aa410))
+* notifications queue size limits ([6533604](https://gitlab.com/gitlab-org/container-registry/commit/653360462fa93953ee7816eb5f6576b2646dd535))
+
+
+### 🐛 Bug Fixes 🐛
+
+* add s3 zero blon upload support ([575e8c4](https://gitlab.com/gitlab-org/container-registry/commit/575e8c449c487967fe2d9676cea92e7c7164a7fb))
+* prevent races in backoff notifications sink ([2b9058d](https://gitlab.com/gitlab-org/container-registry/commit/2b9058d5c1064e760acd3afc0e938c1aba15a8fa))
+* urlcache should use dual-cache interface ([578e6ff](https://gitlab.com/gitlab-org/container-registry/commit/578e6ff5ac74df9d3c562e5355cb43d1e38d3ea1))
+
+
+### ⚡️ Performance Improvements ⚡️
+
+* remove redundant sentry error ([f3ed0b6](https://gitlab.com/gitlab-org/container-registry/commit/f3ed0b6fe6968bd162f6c99031ea8b217fea2201))
+* remove redundant sentry error ([840696d](https://gitlab.com/gitlab-org/container-registry/commit/840696d361ea01455dd90e945e1cdcee5cbd3115))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.56.0 ([c493a6c](https://gitlab.com/gitlab-org/container-registry/commit/c493a6c03133c946f15c9e8b5ae761b3e6b707a4))
+* **deps:** update module github.com/aws/aws-sdk-go-v2 to v1.36.6 ([ff8ef26](https://gitlab.com/gitlab-org/container-registry/commit/ff8ef26524290b676c93c1880c08c8046a864eb3))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.29.18 ([7470f29](https://gitlab.com/gitlab-org/container-registry/commit/7470f29096df67d223af4c13e4bae53cfeabffa7))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/credentials to v1.17.71 ([233a4b5](https://gitlab.com/gitlab-org/container-registry/commit/233a4b5cb0d1c37c3395b63ee68b850209eb18bd))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/credentials to v1.18.2 ([ec93ac1](https://gitlab.com/gitlab-org/container-registry/commit/ec93ac1a63c349dc7d9b18d2ffeafaea5c5df998))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/credentials to v1.18.3 ([0df3ae0](https://gitlab.com/gitlab-org/container-registry/commit/0df3ae0c40047824ad8c2a5ef2466622fcc8fa2c))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign to v1.8.14 ([0ab3a1a](https://gitlab.com/gitlab-org/container-registry/commit/0ab3a1ad7cbc44b0aba5a58b82bcbb5c3dfb7256))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign to v1.9.1 ([b137552](https://gitlab.com/gitlab-org/container-registry/commit/b1375528bc033c65323167b6b23df30fabee3650))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign to v1.9.2 ([0e9b57f](https://gitlab.com/gitlab-org/container-registry/commit/0e9b57f578dd32fc51d4bfa605935bc61b070bcf))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.85.0 ([e812267](https://gitlab.com/gitlab-org/container-registry/commit/e812267631a01328d5638d487683c5d0c3f7a496))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.86.0 ([cbbcd0b](https://gitlab.com/gitlab-org/container-registry/commit/cbbcd0b8528cd41d0cf33493011e41126d53b936))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.18.2 ([ac3c040](https://gitlab.com/gitlab-org/container-registry/commit/ac3c040bda8405cd950dd76b0643565121779f08))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/storage/azblob to v1.6.2 ([6ce3a81](https://gitlab.com/gitlab-org/container-registry/commit/6ce3a8141b2f2c661c403e5c4ae1af3559387116))
+* **deps:** update module github.com/olekukonko/tablewriter to v1.0.9 ([b16d166](https://gitlab.com/gitlab-org/container-registry/commit/b16d1663b007e2a3acd1e98ed0009dc1c0191a8e))
+* **deps:** update module github.com/testcontainers/testcontainers-go/modules/postgres to v0.38.0 ([653edf3](https://gitlab.com/gitlab-org/container-registry/commit/653edf3829a79035ff4be51fb1d622ce887e2d9b))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.137.0 ([3d83581](https://gitlab.com/gitlab-org/container-registry/commit/3d83581a5b816a3b3b2be2850bc43b1514871524))
+* **deps:** update module google.golang.org/api to v0.242.0 ([4f86b60](https://gitlab.com/gitlab-org/container-registry/commit/4f86b60218deb092af2ac3513efcad65869de15b))
+
 ## [4.25.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.24.0-gitlab...v4.25.0-gitlab) (2025-07-17)
 
 
