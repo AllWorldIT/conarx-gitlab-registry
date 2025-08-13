@@ -37,7 +37,7 @@ func TestNewURLCacheStorageMiddleware(t *testing.T) {
 			name:        "missing redis cache",
 			options:     make(map[string]any),
 			wantErr:     true,
-			errContains: "urlcache middleware requires `cache` Redis configured",
+			errContains: "`_redisCache` key has not been passed to urlcache middleware",
 		},
 		{
 			name: "default configuration with redis",
@@ -231,7 +231,7 @@ func TestNewURLCacheStorageMiddleware(t *testing.T) {
 				"_redisCache": "not a redis cache",
 			},
 			wantErr:     true,
-			errContains: "unusable redis cache object",
+			errContains: "redis cache passed to the middleware cannot be used as the type is wrong",
 		},
 	}
 
