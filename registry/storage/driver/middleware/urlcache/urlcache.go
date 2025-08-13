@@ -28,7 +28,7 @@ const cacheOpTimeout = 500 * time.Millisecond
 // urlCacheStorageMiddleware provides a caching layer for URLFor calls using an in-memory LRU cache.
 type urlCacheStorageMiddleware struct {
 	driver.StorageDriver
-	cache              *iredis.Cache
+	cache              iredis.CacheInterface
 	dryRun             bool
 	minURLValidity     time.Duration
 	defaultURLValidity time.Duration
@@ -104,7 +104,7 @@ func newURLCacheStorageMiddleware(
 	if v == nil {
 		return nil, nil, fmt.Errorf("redis cache has either been not defined in container registry config or is not usable and it is required by urlcache middleware to work")
 	}
-	redisCache, ok := v.(*iredis.Cache)
+	redisCache, ok := v.(iredis.CacheInterface)
 	if !ok {
 		return nil, nil, fmt.Errorf("redis cache passed to the middleware cannot be used as the type is wrong: %T", v) // this should not happen either
 	}
