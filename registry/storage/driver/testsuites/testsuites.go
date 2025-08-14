@@ -1989,41 +1989,71 @@ func (s *DriverSuite) TestDeleteOnlyDeletesSubpaths() {
 func (s *DriverSuite) TestStatCall() {
 	// NOTE(prozlach): We explicitly need a different blob here to confirm that
 	// in-place overwrite was indeed successful.
-	// NOTE(prozlach): The idea is to create a hierarchy in the s3 bucket
-	// where:
-	// * there is one common directory for all the blobs (dirPathBase)
-	// * there are two files in two different "subdirectories" under the same
-	// common directory (dirA, dirB and filePath, filePathAux)
-	// * both subdirectories should share the same prefix so that we could test
-	// a stat on inexistant dir which is actually a common prefix for existing
-	// subdirectories (DirPartialPrefix)
 	contentAB := s.blobberFactory.GetBlobber(4096 * 2).GetAllBytes()
 	contentA := contentAB[:4096]
 	contentB := contentAB[4096:]
-	dirPathBase := dtestutil.RandomPath(1, 24)
-	dirA := "foo" + dtestutil.RandomFilename(13)
-	dirB := "foo" + dtestutil.RandomFilename(13)
-	partialPath := path.Join(dirPathBase, "foo")
-	dirPath := path.Join(dirPathBase, dirA)
-	dirPathAux := path.Join(dirPathBase, dirB)
-	fileName := dtestutil.RandomFilename(32)
-	filePath := path.Join(dirPath, fileName)
-	// Trigger a case where for given prefix there is more than one object
-	filePathAux := path.Join(dirPathAux, fileName)
-	s.T().Logf("directory: %s, filename: %s, filename aux: %s", dirPath, fileName, filePathAux)
 
-	err := s.StorageDriver.PutContent(s.ctx, filePath, contentA)
+	fileNameBase := dtestutil.RandomFilename(32)
+	dirPathBase := "/" + dtestutil.RandomFilename(24)
+
+	dirPathPrefix := path.Join(dirPathBase, "fo")
+	dirPathZero := path.Join(dirPathBase, "foo")
+	dirPathLong := path.Join(dirPathBase, "fooabc")
+	dirPathDot := path.Join(dirPathBase, "foo.")
+	fileDirPathZero := path.Join(dirPathBase, "foo", fileNameBase)
+	fileDirPathLong := path.Join(dirPathLong, fileNameBase)
+	// Trigger a case where for given prefix there is more than one object
+	fileDirPathDot := path.Join(dirPathDot, fileNameBase)
+
+	filePrefix := path.Join(dirPathBase, "bar")
+	fileNotExists := path.Join(dirPathBase, "barb")
+	fileZero := path.Join(dirPathBase, "bara")
+	fileLong := path.Join(dirPathBase, "barabc")
+	fileDot := path.Join(dirPathBase, "bar.a") // Azure shortens `bar.` to just `bar` :|
+
+	s.T().Logf(
+		"fileNameBase: %s, dirPathBase: %s",
+		fileNameBase, dirPathBase,
+	)
+
+	s.T().Logf(
+		"fileZero: %s, fileLong: %s, fileDot: %s, file prefix: %s",
+		fileZero, fileLong, fileDot, filePrefix,
+	)
+
+	s.T().Logf(
+		"dir zero: %s, dir long: %s, dir dot: %s, dir prefix: %s",
+		dirPathZero, dirPathLong, dirPathDot, dirPathPrefix,
+	)
+
+	err := s.StorageDriver.PutContent(s.ctx, fileDirPathLong, contentA)
 	require.NoError(s.T(), err)
-	err = s.StorageDriver.PutContent(s.ctx, filePathAux, contentA)
+	err = s.StorageDriver.PutContent(s.ctx, fileDirPathDot, contentA)
 	require.NoError(s.T(), err)
-	defer s.deletePath(s.StorageDriver, firstPart(dirPath))
+	err = s.StorageDriver.PutContent(s.ctx, fileDirPathZero, contentA)
+	require.NoError(s.T(), err)
+	err = s.StorageDriver.PutContent(s.ctx, fileZero, contentA)
+	require.NoError(s.T(), err)
+	err = s.StorageDriver.PutContent(s.ctx, fileLong, contentA)
+	require.NoError(s.T(), err)
+	err = s.StorageDriver.PutContent(s.ctx, fileDot, contentA)
+	require.NoError(s.T(), err)
+	defer s.deletePath(s.StorageDriver, dirPathBase)
 
 	if s.StorageDriver.Name() != "filesystem" {
-		err = s.StorageDriverRootless.PutContent(s.ctx, filePath, contentA)
+		err = s.StorageDriverRootless.PutContent(s.ctx, fileDirPathLong, contentA)
 		require.NoError(s.T(), err)
-		err = s.StorageDriverRootless.PutContent(s.ctx, filePathAux, contentA)
+		err = s.StorageDriverRootless.PutContent(s.ctx, fileDirPathDot, contentA)
 		require.NoError(s.T(), err)
-		defer s.deletePath(s.StorageDriverRootless, firstPart(dirPath))
+		err = s.StorageDriverRootless.PutContent(s.ctx, fileDirPathZero, contentA)
+		require.NoError(s.T(), err)
+		err = s.StorageDriverRootless.PutContent(s.ctx, fileZero, contentA)
+		require.NoError(s.T(), err)
+		err = s.StorageDriverRootless.PutContent(s.ctx, fileLong, contentA)
+		require.NoError(s.T(), err)
+		err = s.StorageDriverRootless.PutContent(s.ctx, fileDot, contentA)
+		require.NoError(s.T(), err)
+		defer s.deletePath(s.StorageDriverRootless, dirPathBase)
 	}
 
 	// Call to stat on root directory. The storage healthcheck performs this
@@ -2060,11 +2090,11 @@ func (s *DriverSuite) TestStatCall() {
 				s.T().Skip("filesystem driver does not support prefix-less operation")
 			}
 
-			fi, err := drv.Stat(s.ctx, dirPath+"foo")
+			fi, err := drv.Stat(s.ctx, dirPathLong+"bar")
 			require.Error(s.T(), err)
 			assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
 				DriverName: drv.Name(),
-				Path:       dirPath + "foo",
+				Path:       dirPathLong + "bar",
 			})
 			assert.Nil(s.T(), fi)
 		})
@@ -2074,11 +2104,11 @@ func (s *DriverSuite) TestStatCall() {
 				s.T().Skip("filesystem driver does not support prefix-less operation")
 			}
 
-			fi, err := drv.Stat(s.ctx, filePath+"bar")
+			fi, err := drv.Stat(s.ctx, fileDirPathLong+"bar")
 			require.Error(s.T(), err)
 			assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
 				DriverName: drv.Name(),
-				Path:       filePath + "bar",
+				Path:       fileDirPathLong + "bar",
 			})
 			assert.Nil(s.T(), fi)
 		})
@@ -2088,10 +2118,10 @@ func (s *DriverSuite) TestStatCall() {
 				s.T().Skip("filesystem driver does not support prefix-less operation")
 			}
 
-			fi, err := drv.Stat(s.ctx, filePath)
+			fi, err := drv.Stat(s.ctx, fileDirPathLong)
 			require.NoError(s.T(), err)
 			require.NotNil(s.T(), fi)
-			assert.Equal(s.T(), filePath, fi.Path())
+			assert.Equal(s.T(), fileDirPathLong, fi.Path())
 			assert.Equal(s.T(), int64(len(contentA)), fi.Size())
 			assert.False(s.T(), fi.IsDir())
 		})
@@ -2101,17 +2131,17 @@ func (s *DriverSuite) TestStatCall() {
 				s.T().Skip("filesystem driver does not support prefix-less operation")
 			}
 
-			fi, err := drv.Stat(s.ctx, filePath)
+			fi, err := drv.Stat(s.ctx, fileDirPathLong)
 			require.NoError(s.T(), err)
 			assert.NotNil(s.T(), fi)
 			createdTime := fi.ModTime()
 
 			// Sleep and modify the file
 			time.Sleep(time.Second * 10)
-			err = drv.PutContent(s.ctx, filePath, contentB)
+			err = drv.PutContent(s.ctx, fileDirPathLong, contentB)
 			require.NoError(s.T(), err)
 
-			fi, err = drv.Stat(s.ctx, filePath)
+			fi, err = drv.Stat(s.ctx, fileDirPathLong)
 			require.NoError(s.T(), err)
 			require.NotNil(s.T(), fi)
 			modTime := fi.ModTime()
@@ -2135,10 +2165,10 @@ func (s *DriverSuite) TestStatCall() {
 				s.T().Skip("filesystem driver does not support prefix-less operation")
 			}
 
-			fi, err := drv.Stat(s.ctx, dirPath)
+			fi, err := drv.Stat(s.ctx, dirPathLong)
 			require.NoError(s.T(), err)
 			require.NotNil(s.T(), fi)
-			assert.Equal(s.T(), dirPath, fi.Path())
+			assert.Equal(s.T(), dirPathLong, fi.Path())
 			assert.Zero(s.T(), fi.Size())
 			assert.True(s.T(), fi.IsDir())
 		})
@@ -2157,18 +2187,84 @@ func (s *DriverSuite) TestStatCall() {
 			assert.True(s.T(), fi.IsDir())
 		})
 
-		// Call on a partial name of the directory. This should result in
-		// not-found, as partial match is still not a match for a directory.
-		s.Run(fmt.Sprintf("DirPartialPrefix - %s", name), func() {
+		// Call on a directory where there are other directories for which this
+		// directory is a prefix. We include `.` as this test a special
+		// case/issue with lexographic sorting where `.` goes before `/`.
+		// The result should be a directory object/no error.
+		s.Run(fmt.Sprintf("DirPartialPrefix Found - %s", name), func() {
 			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
 				s.T().Skip("filesystem driver does not support prefix-less operation")
 			}
 
-			fi, err := drv.Stat(s.ctx, partialPath)
+			fi, err := drv.Stat(s.ctx, dirPathZero)
+			require.NoError(s.T(), err)
+			require.NotNil(s.T(), fi)
+			assert.Equal(s.T(), dirPathZero, fi.Path())
+			assert.Zero(s.T(), fi.Size())
+			assert.True(s.T(), fi.IsDir())
+		})
+
+		// Call on a partial name of the directory. This should result in
+		// not-found, as partial match is still not a match for a directory.
+		s.Run(fmt.Sprintf("DirPartialPrefix NotFound - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, dirPathPrefix)
 			require.Error(s.T(), err)
 			assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
 				DriverName: drv.Name(),
-				Path:       partialPath,
+				Path:       dirPathPrefix,
+			})
+			assert.Nil(s.T(), fi)
+		})
+
+		// Call on a file where there are other files for which this
+		// file is a prefix. We include `.` as this test a special
+		// case/issue with lexographic sorting where `.` goes before `/`.
+		// The result should be a directory object/no error.
+		s.Run(fmt.Sprintf("FilePartialPrefix Found - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, fileZero)
+			require.NoError(s.T(), err)
+			require.NotNil(s.T(), fi)
+			assert.Equal(s.T(), fileZero, fi.Path())
+			assert.EqualValues(s.T(), len(contentA), fi.Size())
+			assert.False(s.T(), fi.IsDir())
+		})
+
+		// Call on a partial name of the file. This should result in
+		// not-found, as partial match is still not a match.
+		s.Run(fmt.Sprintf("FilePartialPrefix NotFound - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, filePrefix)
+			require.Error(s.T(), err)
+			assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
+				DriverName: drv.Name(),
+				Path:       filePrefix,
+			})
+			assert.Nil(s.T(), fi)
+		})
+
+		// Call on a file that is only a partial match. This should result in
+		// not-found, as partial match is still not a match for a directory.
+		s.Run(fmt.Sprintf("FilePartialPrefixNotTruncated NotFound - %s", name), func() {
+			if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+				s.T().Skip("filesystem driver does not support prefix-less operation")
+			}
+
+			fi, err := drv.Stat(s.ctx, fileNotExists)
+			require.Error(s.T(), err)
+			assert.ErrorIs(s.T(), err, storagedriver.PathNotFoundError{ // nolint: testifylint
+				DriverName: drv.Name(),
+				Path:       fileNotExists,
 			})
 			assert.Nil(s.T(), fi)
 		})

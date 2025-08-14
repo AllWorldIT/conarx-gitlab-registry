@@ -137,7 +137,7 @@ func (p *Parser) Parse(in []byte, v any) error {
 	for _, envVar := range p.env {
 		pathStr := envVar.name
 		if strings.HasPrefix(pathStr, strings.ToUpper(p.prefix)+"_") {
-			path := strings.Split(pathStr, "_")
+			path := customSplit(pathStr)
 
 			err = p.overwriteFields(parseAs, pathStr, path[1:], envVar.value)
 			if err != nil {
@@ -152,6 +152,90 @@ func (p *Parser) Parse(in []byte, v any) error {
 	}
 	reflect.ValueOf(v).Elem().Set(reflect.Indirect(reflect.ValueOf(c)))
 	return nil
+}
+
+// customSplit splits a string on underscores while preserving specific
+// protected substrings.
+//
+// This function splits the input string on "_" delimiters, but treats certain
+// predefined strings (for example "AZURE_V2" and "S3_V2") as atomic units that
+// should not be split, even though they contain underscores.
+func customSplit(pathStr string) []string {
+	// Temporarily replace protected strings with placeholders
+	protectedStrings := map[string]string{
+		// Storage driver names
+		"AZURE_V2": "xb01",
+		"S3_V2":    "xb02",
+
+		// Azure v2 parameters with underscores
+		"CREDENTIALS_TYPE":          "xa01",
+		"TENANT_ID":                 "xa02",
+		"CLIENT_ID":                 "xa03",
+		"DEFAULT_CREDENTIALS":       "xa04",
+		"CLIENT_SECRET":             "xa05",
+		"SHARED_KEY":                "xa06",
+		"MAX_RETRIES":               "xa07",
+		"RETRY_TRY_TIMEOUT":         "xa08",
+		"RETRY_DELAY":               "xa09",
+		"MAX_RETRY_DELAY":           "xa10",
+		"DEBUG_LOG":                 "xa11",
+		"DEBUG_LOG_EVENTS":          "xa12",
+		"API_POOL_INITIAL_INTERVAL": "xa13",
+		"API_POOL_MAX_INTERVAL":     "xa14",
+		"API_POOL_MAX_ELAPSED_TIME": "xa15",
+
+		// S3 v2 parameters with underscores
+		"CHECKSUM_ALGORITHM":        "xa16",
+		"CHECKSUM_DISABLED":         "xa17",
+		"STORAGE_CLASS":             "xa18",
+		"REDUCED_REDUNDANCY":        "xa19",
+		"BUCKET_OWNER_FULL_CONTROL": "xa20",
+
+		// GCS parameters with underscores
+		"PRIVATE_KEY_ID":              "xa21",
+		"PRIVATE_KEY":                 "xa22",
+		"CLIENT_EMAIL":                "xa23",
+		"AUTH_URI":                    "xa24",
+		"TOKEN_URI":                   "xa25",
+		"AUTH_PROVIDER_X509_CERT_URL": "xa26",
+		"CLIENT_X509_CERT_URL":        "xa27",
+		"PROJECT_ID":                  "xa28",
+	}
+
+	// Sort keys by length in descending order to ensure longer matches are replaced first
+	keys := make([]string, 0, len(protectedStrings))
+	for k := range protectedStrings {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		lenI, lenJ := len(keys[i]), len(keys[j])
+		if lenI != lenJ {
+			// Sort by length descending (longer first)
+			return lenI > lenJ
+		}
+		// If same length, sort lexicographically descending
+		return keys[i] > keys[j]
+	})
+
+	temp := pathStr
+	for _, key := range keys {
+		placeholder := protectedStrings[key]
+		pattern := `(^|_)(` + regexp.QuoteMeta(key) + `)(_|$)`
+		re := regexp.MustCompile(pattern)
+		temp = re.ReplaceAllString(temp, "${1}"+placeholder+"${3}")
+	}
+
+	// Split on underscore
+	parts := strings.Split(temp, "_")
+
+	// Restore protected strings
+	for i := range parts {
+		for original, placeholder := range protectedStrings {
+			parts[i] = strings.ReplaceAll(parts[i], placeholder, original)
+		}
+	}
+
+	return parts
 }
 
 // overwriteFields replaces configuration values with alternate values specified

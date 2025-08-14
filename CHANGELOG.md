@@ -1,3 +1,38 @@
+## [4.24.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.23.1-gitlab...v4.24.0-gitlab) (2025-07-04)
+
+### ✨ Features ✨
+
+* add minimum PostgreSQL database version check ([6b8ef00](https://gitlab.com/gitlab-org/container-registry/commit/6b8ef004049af2580ed6608ebac0d0c1e4cd795f))
+* add support for application spdx media type ([b4b57e1](https://gitlab.com/gitlab-org/container-registry/commit/b4b57e1c34ad74b00ae09fd00dfe33c6777fd963))
+* **api/gitlab/v1:** enable DLB for List Sub Repositories API endpoint ([dc25583](https://gitlab.com/gitlab-org/container-registry/commit/dc255833f269db985549d35aa074f6268f837235))
+* improve GCS-next driver debuggability ([fd44b20](https://gitlab.com/gitlab-org/container-registry/commit/fd44b208fdd2ef3301086b4236ebce7f31594efe))
+
+### 🐛 Bug Fixes 🐛
+
+* proper translation of env vars with underscores to the configuration ([98e786e](https://gitlab.com/gitlab-org/container-registry/commit/98e786eda1c57f1d8f9697d4a948310c31d177ff))
+* the Stat call in s3 storage drivers should not rely on lexographical sort only ([cd8513b](https://gitlab.com/gitlab-org/container-registry/commit/cd8513b77707e1194d08e7ff26e0cd3eff53bb5b))
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.29.16 ([d3155da](https://gitlab.com/gitlab-org/container-registry/commit/d3155da86b789140e62ab1c7d985c9fa2f81ccf4))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.29.17 ([7173243](https://gitlab.com/gitlab-org/container-registry/commit/717324344dae6933a2d473d7656c4081841ceb23))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign to v1.8.13 ([0b5eefa](https://gitlab.com/gitlab-org/container-registry/commit/0b5eefa8ead11c0cf0035ef3621d43271b415ba3))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.80.2 ([74078da](https://gitlab.com/gitlab-org/container-registry/commit/74078daf9badd9eb8ea3c1da72bafbf7db3735dc))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.81.0 ([80b23bc](https://gitlab.com/gitlab-org/container-registry/commit/80b23bc42a63236af7ddee1b1225cb247fd30223))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.82.0 ([761a7d1](https://gitlab.com/gitlab-org/container-registry/commit/761a7d1a09b32d6f1e258bc08b03e1ff4a0c8f73))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.83.0 ([30f5b8c](https://gitlab.com/gitlab-org/container-registry/commit/30f5b8cebdadbf6362c0675d68a2e363bfd17b1e))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azidentity to v1.10.1 ([6147438](https://gitlab.com/gitlab-org/container-registry/commit/61474387d18b46d3e3368bbec61d9f40b9efe8b1))
+* **deps:** update module github.com/getsentry/sentry-go to v0.34.0 ([9c424ef](https://gitlab.com/gitlab-org/container-registry/commit/9c424ef771f43c27f3a71d949b16cc024a26221e))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.10.0 ([b09a8d3](https://gitlab.com/gitlab-org/container-registry/commit/b09a8d350f02e88c8cf7b95e5349555a2ffa231f))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.11.0 ([b38470d](https://gitlab.com/gitlab-org/container-registry/commit/b38470d206324343875a07ea41ca354440637025))
+* **deps:** update module gitlab.com/gitlab-org/api/client-go to v0.130.1 ([505055d](https://gitlab.com/gitlab-org/container-registry/commit/505055d2ed82aedfd07a020bbf91f85724567431))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.24.1 ([ebda676](https://gitlab.com/gitlab-org/container-registry/commit/ebda6763266cf2c4242ad5d56ed9933ffc38d939))
+* **deps:** update module golang.org/x/crypto to v0.39.0 ([25053b7](https://gitlab.com/gitlab-org/container-registry/commit/25053b74568329f1199f68507a7c5966340e1b0d))
+* **deps:** update module golang.org/x/sync to v0.15.0 ([714cbe1](https://gitlab.com/gitlab-org/container-registry/commit/714cbe128a2a80c632d03b05f471b1c530c07193))
+* **deps:** update module golang.org/x/time to v0.12.0 ([25ac321](https://gitlab.com/gitlab-org/container-registry/commit/25ac32165779cb606e2a1df5431e4a10a42e74d2))
+* **deps:** update module google.golang.org/api to v0.238.0 ([85bb727](https://gitlab.com/gitlab-org/container-registry/commit/85bb72763552e2350bd8dfae8f4dda1257e059df))
+* **deps:** update module google.golang.org/api to v0.239.0 ([4f533f6](https://gitlab.com/gitlab-org/container-registry/commit/4f533f6dd775ab2f97763c6bb37d2f5223c82402))
+
 ## [4.23.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.23.0-gitlab...v4.23.1-gitlab) (2025-06-05)
 
 ### 🐛 Bug Fixes 🐛

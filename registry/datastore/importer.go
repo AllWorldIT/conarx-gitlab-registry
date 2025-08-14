@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net"
@@ -62,6 +63,7 @@ type Importer struct {
 	manifestStore   ManifestStore
 	tagStore        TagStore
 	blobStore       BlobStore
+	stats           importStatsTracker
 
 	importDanglingManifests bool
 	importDanglingBlobs     bool
@@ -136,6 +138,14 @@ func WithProgressBar(imp *Importer) {
 	imp.showProgressBar = true
 }
 
+// WithImportStatsTracking configures the Importer to record import statistics
+// to the database.
+func WithImportStatsTracking(driverName string) ImporterOption {
+	return func(imp *Importer) {
+		imp.stats = newImportStats(imp.db, driverName)
+	}
+}
+
 // NewImporter creates a new Importer.
 func NewImporter(db *DB, registry distribution.Namespace, opts ...ImporterOption) *Importer {
 	imp := &Importer{
@@ -144,6 +154,8 @@ func NewImporter(db *DB, registry distribution.Namespace, opts ...ImporterOption
 		tagConcurrency: 1,
 		// default manifest pre import retry timeout
 		preImportRetryTimeout: time.Minute,
+		// default noop Stats collector
+		stats: &noopImportStats{},
 	}
 
 	for _, o := range opts {
@@ -613,6 +625,8 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 	total := len(fsTags)
 	semaphore := make(chan struct{}, imp.tagConcurrency)
 	tagResChan := make(chan *tagLookupResponse)
+	// Track duplicate manifests for statistics
+	doneManifests := make(map[int64]struct{})
 
 	l.WithFields(log.Fields{"total": total}).Info("importing tags")
 
@@ -726,10 +740,20 @@ func (imp *Importer) importTags(ctx context.Context, fsRepo distribution.Reposit
 			}
 		}
 
+		// Only count each manifest once for statistics, no matter how many tags there are.
+		// We're not counting manifest list references here, it's unclear how to do this cleanly.
+		if _, ok := doneManifests[dbManifest.ID]; !ok {
+			imp.stats.incManifestCount()
+			doneManifests[dbManifest.ID] = struct{}{}
+		}
+
 		dbTag := &models.Tag{Name: fsTag, RepositoryID: dbRepo.ID, ManifestID: dbManifest.ID, NamespaceID: dbRepo.NamespaceID}
 		if err := imp.tagStore.CreateOrUpdate(ctx, dbTag); err != nil {
 			l.WithError(err).Error("creating tag")
 		}
+
+		// Only count tags we've been able to create in the database.
+		imp.stats.incTagCount()
 	}
 
 	return nil
@@ -842,6 +866,9 @@ func (imp *Importer) preImportTaggedManifests(ctx context.Context, fsRepo distri
 				return fmt.Errorf("pre importing manifest: %w", err)
 			}
 			doneManifests[desc.Digest] = struct{}{}
+			imp.stats.incManifestCount()
+			// Only count tags referencing manifests we've been able to create in the database.
+			imp.stats.incTagCount()
 		}
 	}
 
@@ -1067,6 +1094,9 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 		pre, repos, blobs bool
 	)
 
+	imp.stats.startImport()
+	defer imp.stats.finishImport(ctx)
+
 	// Assign each valid step to a boolean value. This ensures that we only run a
 	// particular step once and in the correct order.
 	steps = append(steps, required)
@@ -1139,33 +1169,42 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 	if pre {
 		start := time.Now()
 		imp.printBar(bar, "step one: import manifests")
+		imp.stats.startPreImport()
 
 		if err := imp.preImportAllRepositories(ctx); err != nil {
+			imp.stats.finishPreImport(err)
 			return fmt.Errorf("pre importing all repositories: %w", err)
 		}
 
+		imp.stats.finishPreImport(err)
 		imp.printBar(bar, fmt.Sprintf("step one completed in %s", time.Since(start).Round(time.Second)))
 	}
 
 	if repos {
 		start := time.Now()
 		imp.printBar(bar, "step two: import tags")
+		imp.stats.startTagImport()
 
 		if err := imp.importAllRepositoriesImpl(ctx); err != nil {
+			imp.stats.finishTagImport(err)
 			return fmt.Errorf("importing all repositories: %w", err)
 		}
 
+		imp.stats.finishTagImport(err)
 		imp.printBar(bar, fmt.Sprintf("step two completed in %s", time.Since(start).Round(time.Second)))
 	}
 
 	if blobs {
-		start := time.Now()
+		start = time.Now()
 		imp.printBar(bar, "step three: import blobs")
+		imp.stats.startBlobImport()
 
 		if err := imp.importBlobsImpl(ctx); err != nil {
+			imp.stats.finishBlobImport(err)
 			return fmt.Errorf("importing blobs: %w", err)
 		}
 
+		imp.stats.finishBlobImport(err)
 		imp.printBar(bar, fmt.Sprintf("step three completed in %s", time.Since(start).Round(time.Second)))
 	}
 
@@ -1188,7 +1227,7 @@ func (imp *Importer) doImport(ctx context.Context, required step, steps ...step)
 
 	l.WithFields(log.Fields{"duration_s": t}).Info("metadata import complete")
 
-	return err
+	return nil
 }
 
 // FullImport populates the registry database with metadata from all repositories in the storage backend.
@@ -1254,6 +1293,9 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 			return nil
 		}
 
+		// Only increment repositories that we've actually been able to find and validate.
+		imp.stats.incRepoCount()
+
 		repoEnd := time.Since(repoStart).Seconds()
 		l.WithFields(log.Fields{"duration_s": repoEnd}).Info("repository pre import complete")
 
@@ -1262,7 +1304,6 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 }
 
 func (imp *Importer) importBlobsImpl(ctx context.Context) error {
-	var index int
 	start := time.Now()
 	l := log.GetLogger(log.WithContext(ctx))
 	l.Info("importing all blobs")
@@ -1281,8 +1322,10 @@ func (imp *Importer) importBlobsImpl(ctx context.Context) error {
 		_ = bar.Close()
 	}()
 
+	index := 0
 	if err := imp.registry.Blobs().Enumerate(ctx, func(desc distribution.Descriptor) error {
-		index++
+		imp.stats.incBlobCount()
+		imp.stats.accBlobsSize(desc.Size)
 		_ = bar.Add(1)
 		l.WithFields(log.Fields{"digest": desc.Digest, "count": index, "size": desc.Size}).Info("importing blob")
 
@@ -1338,6 +1381,7 @@ func (imp *Importer) handleLockers(ctx context.Context, err error) error {
 
 func (imp *Importer) importAllRepositoriesImpl(ctx context.Context) (err error) {
 	var tx Transactor
+
 	defer func() {
 		if lockErr := imp.handleLockers(ctx, err); lockErr != nil {
 			if err != nil {
@@ -1364,6 +1408,8 @@ func (imp *Importer) importAllRepositoriesImpl(ctx context.Context) (err error) 
 
 	index := 0
 	return repositoryEnumerator.Enumerate(ctx, func(path string) error {
+		imp.stats.incRepoCount()
+
 		if !imp.dryRun {
 			tx, err = imp.beginTx(ctx)
 			if err != nil {
@@ -1590,3 +1636,157 @@ func (imp *Importer) printBar(b *progressbar.ProgressBar, s ...string) {
 
 	_, _ = fmt.Println(b)
 }
+
+// importStatsTracker collects, contains the state of, and commits the state of
+// import stats across all import steps to the database.
+//
+// Methods are broken into Start/Finish pairs. The Start methods should be called
+// near the start of the relevant import section, then the End methods should be
+// called with the relevant error value afterwards. This pattern simplies start/end timings and
+// helps manage tracking the state of failed import steps, should there be any.
+type importStatsTracker interface {
+	startImport()
+	finishImport(context.Context)
+	startPreImport()
+	finishPreImport(error)
+	startTagImport()
+	finishTagImport(error)
+	incRepoCount()
+	incTagCount()
+	incManifestCount()
+	incBlobCount()
+	accBlobsSize(int64)
+	startBlobImport()
+	finishBlobImport(error)
+}
+
+// importStats implements importStatsTracker with database persistence.
+type importStats struct {
+	models.ImportStatistics
+
+	statsStore importStatisticsStore
+}
+
+// newImportStats creates a new import statistics tracker.
+func newImportStats(db *DB, driverName string) *importStats {
+	return &importStats{
+		ImportStatistics: models.ImportStatistics{
+			StorageDriver: driverName,
+		},
+		statsStore: importStatisticsStore{db: db},
+	}
+}
+
+// startImport initializes the import statistics.
+func (s *importStats) startImport() {
+	s.StartedAt = time.Now()
+}
+
+// finishImport marks the completion of the entire import process and persists
+// all collected data to the database.
+func (s *importStats) finishImport(ctx context.Context) {
+	s.FinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+
+	if err := s.statsStore.Create(ctx, &s.ImportStatistics); err != nil {
+		log.GetLogger(log.WithContext(ctx)).WithError(err).Error("failed to commit import statistics to the database")
+	}
+}
+
+// startPreImport marks the beginning of the pre-import phase
+func (s *importStats) startPreImport() {
+	s.PreImport = true
+	s.PreImportStartedAt = sql.NullTime{Time: time.Now(), Valid: true}
+}
+
+// finishPreImport marks the completion of the pre-import phase with counts
+func (s *importStats) finishPreImport(err error) {
+	s.PreImportFinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	if err != nil {
+		s.PreImportError = sql.NullString{String: err.Error(), Valid: true}
+	}
+}
+
+// incRepoCount increments the repository count in the statistics.
+func (s *importStats) incRepoCount() {
+	s.RepositoriesCount++
+}
+
+// incTagCount increments the tags count in the statistics.
+func (s *importStats) incTagCount() {
+	s.TagsCount++
+}
+
+// incManifestCount increments the manifest count in the statistics.
+func (s *importStats) incManifestCount() {
+	s.ManifestsCount++
+}
+
+// incBlobCount increments the repository count in the statistics.
+func (s *importStats) incBlobCount() {
+	s.BlobsCount++
+}
+
+// accBlobsSize accumulates the combinined size of all blobs in the statistics.
+func (s *importStats) accBlobsSize(i int64) {
+	s.BlobsSizeBytes += i
+}
+
+// startTagImport marks the beginning of the tag import phase
+func (s *importStats) startTagImport() {
+	s.TagImport = true
+	s.TagImportStartedAt = sql.NullTime{Time: time.Now(), Valid: true}
+
+	// Record only counts from tag import, overriding counts from the pre import
+	// step, if any.
+	//
+	// If we're in a tag import only import, these will already be zero.
+	//
+	// If we're in a multistep import, tag import counts will be the final
+	// counts imported into the database, so it's safe to discard the counts
+	// from the pre import step, which will always precede this step.
+	s.RepositoriesCount = 0
+	s.TagsCount = 0
+	s.ManifestsCount = 0
+}
+
+// finishTagImport marks the completion of the tag import phase with counts
+func (s *importStats) finishTagImport(err error) {
+	s.TagImportFinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	if err != nil {
+		s.TagImportError = sql.NullString{String: err.Error(), Valid: true}
+	}
+}
+
+// startBlobImport marks the beginning of the blob import phase
+func (s *importStats) startBlobImport() {
+	s.BlobImport = true
+	s.BlobImportStartedAt = sql.NullTime{Time: time.Now(), Valid: true}
+}
+
+// finishBlobImport marks the completion of the blob import phase with blob counts
+func (s *importStats) finishBlobImport(err error) {
+	s.BlobImportFinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	if err != nil {
+		s.BlobImportError = sql.NullString{String: err.Error(), Valid: true}
+	}
+}
+
+// noopImportStats implements importStatsTracker with no-op operations
+//
+// This is useful for testing, and so that the user can disable stats collection
+// if they wish.
+type noopImportStats struct{}
+
+func (*noopImportStats) startImport()                 {}
+func (*noopImportStats) finishImport(context.Context) {}
+func (*noopImportStats) startPreImport()              {}
+func (*noopImportStats) finishPreImport(error)        {}
+func (*noopImportStats) startTagImport()              {}
+func (*noopImportStats) finishTagImport(error)        {}
+func (*noopImportStats) startBlobImport()             {}
+func (*noopImportStats) finishBlobImport(error)       {}
+func (*noopImportStats) incManifestCount()            {}
+func (*noopImportStats) incTagCount()                 {}
+func (*noopImportStats) incRepoCount()                {}
+func (*noopImportStats) incBlobCount()                {}
+func (*noopImportStats) accBlobsSize(int64)           {}

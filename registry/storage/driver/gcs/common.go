@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/benbjohnson/clock"
+	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/internal"
 	dstorage "github.com/docker/distribution/registry/storage"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
@@ -26,6 +28,7 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
 	"github.com/docker/distribution/registry/storage/internal/metrics"
 	"github.com/docker/distribution/version"
+	sloglogrus "github.com/samber/slog-logrus/v2"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -76,6 +79,7 @@ func init() {
 
 // driverParameters is a struct that encapsulates all the driver parameters after all values have been set
 type driverParameters struct {
+	logger        dcontext.Logger
 	bucket        string
 	email         string
 	privateKey    []byte
@@ -218,7 +222,7 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 		case int, uint, int32, uint32, uint64, int64:
 			chunkSize = reflect.ValueOf(v).Convert(reflect.TypeOf(chunkSize)).Int()
 		default:
-			return nil, fmt.Errorf("invalid valud for chunksize: %#v", chunkSizeParam)
+			return nil, fmt.Errorf("invalid value for chunksize: %#v", chunkSizeParam)
 		}
 
 		if chunkSize < minChunkSize {
@@ -280,8 +284,56 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 		return nil, fmt.Errorf("maxconcurrency config error: %s", err)
 	}
 
+	logger := parameters[storagedriver.ParamLogger].(dcontext.Logger)
+
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
 	if useNext {
+		debugLogging := false
+
+		if _, ok = parameters["debug_log"]; ok {
+			debugLogging, err = parse.Bool(parameters, "debug_log", false)
+			if err != nil {
+				return nil, fmt.Errorf("parsing parameter %s: %w", "debug_log", err)
+			}
+		}
+		if debugLogging {
+			// NOTE(prozlach): Casting directly to logrus.Entry is a shortcut here,
+			// as we require Logrus logger for the adapter. In theory we should be
+			// using the context.Logger interface instead of peeking into the
+			// implementation, but this requies a deeper refactoring.
+			//
+			// Hopefully we will switch to slog/zap at some point and this will
+			// become non-issue.
+			logrusEntry, ok := logger.(*logrus.Entry)
+			if !ok {
+				return nil, fmt.Errorf("debug logging requires logrus logger, got %T", logger)
+			}
+			slogger := slog.New(
+				sloglogrus.Option{
+					Level:  slog.LevelDebug,
+					Logger: logrusEntry.Logger,
+				}.NewLogrusHandler(),
+			)
+			// NOTE(prozlach): This does not work really, see https://github.com/googleapis/google-cloud-go/issues/12475
+			// As a workaround we set the env variable as well, but this only
+			// makes GCS print logs to stdout using JSON format. Not ideal.
+			//
+			// Only set the environment variable if it's not already set
+			// nolint: revive // max-control-nesting
+			if existingLevel := os.Getenv("GOOGLE_SDK_GO_LOGGING_LEVEL"); existingLevel != "" {
+				logger.WithFields(logrus.Fields{
+					"existing_value":  existingLevel,
+					"requested_value": "debug",
+				}).Warn("GOOGLE_SDK_GO_LOGGING_LEVEL environment variable is already set, not overriding")
+			} else {
+				err = os.Setenv("GOOGLE_SDK_GO_LOGGING_LEVEL", "debug")
+				if err != nil {
+					return nil, fmt.Errorf("setting `GOOGLE_SDK_GO_LOGGING_LEVEL` env var: %w", err)
+				}
+			}
+			opts = append(opts, option.WithLogger(slogger))
+		}
+
 		// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
 		// API. GCS SDK recommends using the JSON API instead, which is done
 		// here by setting WithJSONReads. This ensures consistency with other
@@ -310,6 +362,7 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 	}
 
 	return &driverParameters{
+		logger:         logger,
 		bucket:         fmt.Sprint(bucket),
 		rootDirectory:  fmt.Sprint(rootDirectory),
 		email:          jwtConf.Email,

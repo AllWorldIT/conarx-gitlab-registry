@@ -716,7 +716,24 @@ func migrationDBFromConfig(config *configuration.Configuration) (*datastore.DB, 
 		primaryConfig.Database.Pool.MaxOpen = 1
 	}
 
-	return dbFromConfig(&primaryConfig)
+	db, err := dbFromConfig(&primaryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	inSupported, err := datastore.IsDBSupported(context.Background(), db)
+	if err != nil {
+		log.WithError(err).Error("could not check whether database version is supported")
+		return nil, err
+	}
+
+	if !inSupported {
+		err = fmt.Errorf("the database version is lower than the minimal supported version %s", datastore.MinPostgresqlVersion)
+		log.WithError(err).Errorf("database version is not supported, please upgrade your database to at least %s and try again", datastore.MinPostgresqlVersion)
+		return nil, err
+	}
+
+	return db, nil
 }
 
 // takes a list of cipher suites and converts it to a list of respective tls constants

@@ -126,7 +126,7 @@ release-tools:
 			@semantic-release/git@10 \
 			conventional-changelog-conventionalcommits@6
 dev-tools: release-tools
-	go install go.uber.org/mock/mockgen@v0.4.0
+	go install go.uber.org/mock/mockgen@v0.5.2
 
 # https://github.com/semantic-release/git#environment-variables
 export GIT_AUTHOR_NAME="$(shell git config user.name)"

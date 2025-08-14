@@ -194,6 +194,116 @@ func TestIsInRecovery(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestIsDBSupported(t *testing.T) {
+	ctx := context.Background()
+	primaryDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+
+	db := &DB{DB: primaryDB}
+
+	// case 1: database version is supported (PostgreSQL 15.0)
+	mock.ExpectQuery("SELECT current_setting\\('server_version_num'\\)::integer >= 150000").WillReturnRows(
+		sqlmock.NewRows([]string{"?column?"}).AddRow(true),
+	)
+
+	isSupported, err := IsDBSupported(ctx, db)
+	require.NoError(t, err)
+	require.True(t, isSupported)
+
+	// case 2: database version is not supported (below PostgreSQL 15.0)
+	mock.ExpectQuery("SELECT current_setting\\('server_version_num'\\)::integer >= 150000").WillReturnRows(
+		sqlmock.NewRows([]string{"?column?"}).AddRow(false),
+	)
+
+	isSupported, err = IsDBSupported(ctx, db)
+	require.NoError(t, err)
+	require.False(t, isSupported)
+
+	// case 3: there was a database error (query failure)
+	mock.ExpectQuery("SELECT current_setting\\('server_version_num'\\)::integer >= 150000").WillReturnError(fmt.Errorf("query failed"))
+
+	isSupported, err = IsDBSupported(ctx, db)
+	require.Error(t, err)
+	require.False(t, isSupported)
+
+	// all expectations were met
+	err = mock.ExpectationsWereMet()
+	require.NoError(t, err)
+}
+
+func TestVersionToServerVersionNum(t *testing.T) {
+	tests := []struct {
+		name        string
+		version     string
+		expected    int
+		expectError bool
+	}{
+		{
+			name:        "valid version 15.0",
+			version:     "15.0",
+			expected:    150000,
+			expectError: false,
+		},
+		{
+			name:        "valid version 14.5",
+			version:     "14.5",
+			expected:    140005,
+			expectError: false,
+		},
+		{
+			name:        "valid version 16.2",
+			version:     "16.2",
+			expected:    160002,
+			expectError: false,
+		},
+		{
+			name:        "invalid format - too many parts",
+			version:     "15.0.1",
+			expected:    0,
+			expectError: true,
+		},
+		{
+			name:        "invalid format - single number",
+			version:     "15",
+			expected:    0,
+			expectError: true,
+		},
+		{
+			name:        "invalid major version",
+			version:     "abc.5",
+			expected:    0,
+			expectError: true,
+		},
+		{
+			name:        "invalid minor version",
+			version:     "15.xyz",
+			expected:    0,
+			expectError: true,
+		},
+		{
+			name:        "empty version",
+			version:     "",
+			expected:    0,
+			expectError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(tt *testing.T) {
+			result, err := versionToServerVersionNum(tc.version)
+
+			if tc.expectError {
+				require.Error(tt, err)
+				require.Equal(tt, 0, result)
+			} else {
+				require.NoError(tt, err)
+				require.Equal(tt, tc.expected, result)
+			}
+		})
+	}
+}
+
 // Helper function to create test DB connections
 func createTestDB(t *testing.T, host string) (*sql.DB, *DB) {
 	mockDB, _, err := sqlmock.New()

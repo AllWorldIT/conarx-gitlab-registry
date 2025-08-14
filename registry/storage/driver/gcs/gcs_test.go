@@ -27,11 +27,14 @@ import (
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
 	"github.com/docker/distribution/registry/storage/driver/testsuites"
+	btestutil "github.com/docker/distribution/testutil"
+	slogt "github.com/neilotoole/slogt"
 )
 
 var (
 	bucket       = os.Getenv("REGISTRY_STORAGE_GCS_BUCKET")
 	parallelWalk = os.Getenv("GCS_PARALLEL_WALK")
+	debugLog     = os.Getenv("GCS_DEBUG_LOG")
 
 	userAgent = fmt.Sprintf("container-registry-tests/%s %s", version.Version, runtime.Version())
 )
@@ -49,6 +52,17 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
 	if os.Getenv(registryGCSDriverEnv) == "next" {
+		if debugLog == "true" {
+			sLogger := slogt.New(tb)
+			// NOTE(prozlach): This does not work really, see https://github.com/googleapis/google-cloud-go/issues/12475
+			// As a workaround we set the env variable as well, but this only
+			// makes GCS print logs to stdout using JSON format. Not ideal.
+			err = os.Setenv("GOOGLE_SDK_GO_LOGGING_LEVEL", "debug")
+			if err != nil {
+				return nil, fmt.Errorf("setting `GOOGLE_SDK_GO_LOGGING_LEVEL` env var: %w", err)
+			}
+			opts = append(opts, option.WithLogger(sLogger))
+		}
 		opts = append(opts, option.WithUserAgent(userAgent))
 		// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
 		// API. GCS SDK recommends using the JSON API instead, which is done
@@ -94,6 +108,7 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 	}
 
 	parameters := &driverParameters{
+		logger:         btestutil.NewTestLogger(tb),
 		bucket:         bucket,
 		rootDirectory:  rootDirectory,
 		email:          email,
@@ -377,6 +392,7 @@ func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 		"bucket":    "bucket",
 		"keyfile":   "testdata/key.json",
 		"useragent": userAgent,
+		"logger":    btestutil.NewTestLogger(t),
 	}
 
 	testFn := func(params map[string]any) (any, error) {

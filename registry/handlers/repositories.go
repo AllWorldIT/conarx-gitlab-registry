@@ -632,19 +632,23 @@ func subRepositoriesDispatcher(ctx *Context, _ *http.Request) http.Handler {
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution catalog list API. `n` can not exceed 1000.
 // if no `n` query parameter is specified the default of `100` is used.
 func (h *subRepositoriesHandler) HandleGetSubRepositories(w http.ResponseWriter, r *http.Request) {
+	p := h.Repository.Named().Name()
+	l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"path": p})
+
 	filters, err := filterParamsFromRequest(r)
 	if err != nil {
 		h.Errors = append(h.Errors, err)
 		return
 	}
 
-	// extract the repository name to create the a preliminary repository
-	p := h.Repository.Named().Name()
+	// create the preliminary repository
 	repo := &models.Repository{Path: p}
 
-	// try to find the namespaceid for the repo if it exists
+	// try to find the namespace ID for the repo if it exists
 	topLevelPathSegment := repo.TopLevelPathSegment()
-	nStore := datastore.NewNamespaceStore(h.db.Primary())
+
+	db := h.db.UpToDateReplica(h.Context, repo)
+	nStore := datastore.NewNamespaceStore(db)
 	namespace, err := nStore.FindByName(h.Context, topLevelPathSegment)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -660,7 +664,7 @@ func (h *subRepositoriesHandler) HandleGetSubRepositories(w http.ResponseWriter,
 	repo.NamespaceID = namespace.ID
 	repo.Name = repo.Path[strings.LastIndex(repo.Path, "/")+1:]
 
-	rStore := datastore.NewRepositoryStore(h.db.Primary())
+	rStore := datastore.NewRepositoryStore(db)
 	repoList, err := rStore.FindPaginatedRepositoriesForPath(h.Context, repo, filters)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -702,6 +706,12 @@ func (h *subRepositoriesHandler) HandleGetSubRepositories(w http.ResponseWriter,
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
+
+	l.WithFields(log.Fields{
+		"db_host_type": h.db.TypeOf(db),
+		"db_host_addr": db.Address(),
+		"count":        len(repoList),
+	}).Info("listed sub-repositories")
 }
 
 // RenameRepository renames a given base repository (name and path - if exist) and updates the paths of all sub-repositories originating

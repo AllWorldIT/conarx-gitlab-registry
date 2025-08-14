@@ -22,6 +22,7 @@ import (
 type MockGCBlobTaskStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockGCBlobTaskStoreMockRecorder
+	isgomock struct{}
 }
 
 // MockGCBlobTaskStoreMockRecorder is the mock recorder for MockGCBlobTaskStore.
@@ -42,89 +43,89 @@ func (m *MockGCBlobTaskStore) EXPECT() *MockGCBlobTaskStoreMockRecorder {
 }
 
 // Count mocks base method.
-func (m *MockGCBlobTaskStore) Count(arg0 context.Context) (int, error) {
+func (m *MockGCBlobTaskStore) Count(ctx context.Context) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Count", arg0)
+	ret := m.ctrl.Call(m, "Count", ctx)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Count indicates an expected call of Count.
-func (mr *MockGCBlobTaskStoreMockRecorder) Count(arg0 any) *gomock.Call {
+func (mr *MockGCBlobTaskStoreMockRecorder) Count(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Count), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Count), ctx)
 }
 
 // Delete mocks base method.
-func (m *MockGCBlobTaskStore) Delete(arg0 context.Context, arg1 *models.GCBlobTask) error {
+func (m *MockGCBlobTaskStore) Delete(ctx context.Context, b *models.GCBlobTask) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", arg0, arg1)
+	ret := m.ctrl.Call(m, "Delete", ctx, b)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockGCBlobTaskStoreMockRecorder) Delete(arg0, arg1 any) *gomock.Call {
+func (mr *MockGCBlobTaskStoreMockRecorder) Delete(ctx, b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Delete), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Delete), ctx, b)
 }
 
 // FindAll mocks base method.
-func (m *MockGCBlobTaskStore) FindAll(arg0 context.Context) ([]*models.GCBlobTask, error) {
+func (m *MockGCBlobTaskStore) FindAll(ctx context.Context) ([]*models.GCBlobTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAll", arg0)
+	ret := m.ctrl.Call(m, "FindAll", ctx)
 	ret0, _ := ret[0].([]*models.GCBlobTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAll indicates an expected call of FindAll.
-func (mr *MockGCBlobTaskStoreMockRecorder) FindAll(arg0 any) *gomock.Call {
+func (mr *MockGCBlobTaskStoreMockRecorder) FindAll(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockGCBlobTaskStore)(nil).FindAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockGCBlobTaskStore)(nil).FindAll), ctx)
 }
 
 // IsDangling mocks base method.
-func (m *MockGCBlobTaskStore) IsDangling(arg0 context.Context, arg1 *models.GCBlobTask) (bool, error) {
+func (m *MockGCBlobTaskStore) IsDangling(ctx context.Context, b *models.GCBlobTask) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsDangling", arg0, arg1)
+	ret := m.ctrl.Call(m, "IsDangling", ctx, b)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsDangling indicates an expected call of IsDangling.
-func (mr *MockGCBlobTaskStoreMockRecorder) IsDangling(arg0, arg1 any) *gomock.Call {
+func (mr *MockGCBlobTaskStoreMockRecorder) IsDangling(ctx, b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDangling", reflect.TypeOf((*MockGCBlobTaskStore)(nil).IsDangling), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDangling", reflect.TypeOf((*MockGCBlobTaskStore)(nil).IsDangling), ctx, b)
 }
 
 // Next mocks base method.
-func (m *MockGCBlobTaskStore) Next(arg0 context.Context) (*models.GCBlobTask, error) {
+func (m *MockGCBlobTaskStore) Next(ctx context.Context) (*models.GCBlobTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Next", arg0)
+	ret := m.ctrl.Call(m, "Next", ctx)
 	ret0, _ := ret[0].(*models.GCBlobTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Next indicates an expected call of Next.
-func (mr *MockGCBlobTaskStoreMockRecorder) Next(arg0 any) *gomock.Call {
+func (mr *MockGCBlobTaskStoreMockRecorder) Next(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Next), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Next), ctx)
 }
 
 // Postpone mocks base method.
-func (m *MockGCBlobTaskStore) Postpone(arg0 context.Context, arg1 *models.GCBlobTask, arg2 time.Duration) error {
+func (m *MockGCBlobTaskStore) Postpone(ctx context.Context, b *models.GCBlobTask, d time.Duration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Postpone", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Postpone", ctx, b, d)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Postpone indicates an expected call of Postpone.
-func (mr *MockGCBlobTaskStoreMockRecorder) Postpone(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockGCBlobTaskStoreMockRecorder) Postpone(ctx, b, d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Postpone", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Postpone), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Postpone", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Postpone), ctx, b, d)
 }

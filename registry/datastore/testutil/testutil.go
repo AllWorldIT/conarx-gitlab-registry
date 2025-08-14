@@ -45,6 +45,7 @@ const (
 	GCReviewAfterDefaultsTable   table = "gc_review_after_defaults"
 	BackgroundMigrationTable     table = "batched_background_migrations"
 	BackgroundMigrationJobsTable table = "batched_background_migration_jobs"
+	ImportStatisticsTable        table = "import_statistics"
 )
 
 // AllTables represents all tables in the test database.
@@ -63,6 +64,7 @@ var (
 		GCBlobsLayersTable,
 		GCManifestReviewQueueTable,
 		GCTmpBlobsManifestsTable,
+		ImportStatisticsTable,
 	}
 
 	GCTrackBlobUploadsTrigger = trigger{
@@ -153,7 +155,7 @@ func (t table) DumpAsJSON(ctx context.Context, db datastore.Queryer) ([]byte, er
 		tmpl = "SELECT json_agg(t) FROM (SELECT * FROM %s ORDER BY (top_level_namespace_id, id)) t"
 	case GCManifestReviewQueueTable:
 		tmpl = "SELECT json_agg(t) FROM (SELECT * FROM %s ORDER BY (top_level_namespace_id, repository_id)) t"
-	case GCBlobsLayersTable:
+	case GCBlobsLayersTable, ImportStatisticsTable:
 		tmpl = "SELECT json_agg(t) FROM (SELECT * FROM %s ORDER BY id) t"
 	default:
 		tmpl = "SELECT json_agg(t) FROM (SELECT * FROM %s ORDER BY digest) t"

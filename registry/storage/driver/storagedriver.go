@@ -1,4 +1,4 @@
-//go:generate mockgen -package mocks -destination mocks/storagedriver.go . StorageDeleter
+//go:generate mockgen -package mocks -destination mocks/storagedriver.go . StorageDriver
 
 package driver
 

@@ -22,6 +22,7 @@ import (
 type MockManifestStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockManifestStoreMockRecorder
+	isgomock struct{}
 }
 
 // MockManifestStoreMockRecorder is the mock recorder for MockManifestStore.
@@ -42,160 +43,160 @@ func (m *MockManifestStore) EXPECT() *MockManifestStoreMockRecorder {
 }
 
 // AssociateLayerBlob mocks base method.
-func (m *MockManifestStore) AssociateLayerBlob(arg0 context.Context, arg1 *models.Manifest, arg2 *models.Blob) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AssociateLayerBlob", arg0, arg1, arg2)
+func (m_2 *MockManifestStore) AssociateLayerBlob(ctx context.Context, m *models.Manifest, b *models.Blob) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "AssociateLayerBlob", ctx, m, b)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AssociateLayerBlob indicates an expected call of AssociateLayerBlob.
-func (mr *MockManifestStoreMockRecorder) AssociateLayerBlob(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) AssociateLayerBlob(ctx, m, b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssociateLayerBlob", reflect.TypeOf((*MockManifestStore)(nil).AssociateLayerBlob), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssociateLayerBlob", reflect.TypeOf((*MockManifestStore)(nil).AssociateLayerBlob), ctx, m, b)
 }
 
 // AssociateManifest mocks base method.
-func (m *MockManifestStore) AssociateManifest(arg0 context.Context, arg1, arg2 *models.Manifest) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AssociateManifest", arg0, arg1, arg2)
+func (m_2 *MockManifestStore) AssociateManifest(ctx context.Context, ml, m *models.Manifest) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "AssociateManifest", ctx, ml, m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AssociateManifest indicates an expected call of AssociateManifest.
-func (mr *MockManifestStoreMockRecorder) AssociateManifest(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) AssociateManifest(ctx, ml, m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssociateManifest", reflect.TypeOf((*MockManifestStore)(nil).AssociateManifest), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssociateManifest", reflect.TypeOf((*MockManifestStore)(nil).AssociateManifest), ctx, ml, m)
 }
 
 // Count mocks base method.
-func (m *MockManifestStore) Count(arg0 context.Context) (int, error) {
+func (m *MockManifestStore) Count(ctx context.Context) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Count", arg0)
+	ret := m.ctrl.Call(m, "Count", ctx)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Count indicates an expected call of Count.
-func (mr *MockManifestStoreMockRecorder) Count(arg0 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) Count(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockManifestStore)(nil).Count), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockManifestStore)(nil).Count), ctx)
 }
 
 // Create mocks base method.
-func (m *MockManifestStore) Create(arg0 context.Context, arg1 *models.Manifest) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", arg0, arg1)
+func (m_2 *MockManifestStore) Create(ctx context.Context, m *models.Manifest) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "Create", ctx, m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockManifestStoreMockRecorder) Create(arg0, arg1 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) Create(ctx, m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockManifestStore)(nil).Create), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockManifestStore)(nil).Create), ctx, m)
 }
 
 // CreateOrFind mocks base method.
-func (m *MockManifestStore) CreateOrFind(arg0 context.Context, arg1 *models.Manifest) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrFind", arg0, arg1)
+func (m_2 *MockManifestStore) CreateOrFind(ctx context.Context, m *models.Manifest) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "CreateOrFind", ctx, m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateOrFind indicates an expected call of CreateOrFind.
-func (mr *MockManifestStoreMockRecorder) CreateOrFind(arg0, arg1 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) CreateOrFind(ctx, m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrFind", reflect.TypeOf((*MockManifestStore)(nil).CreateOrFind), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrFind", reflect.TypeOf((*MockManifestStore)(nil).CreateOrFind), ctx, m)
 }
 
 // Delete mocks base method.
-func (m *MockManifestStore) Delete(arg0 context.Context, arg1, arg2, arg3 int64) (*digest.Digest, error) {
+func (m *MockManifestStore) Delete(ctx context.Context, namespaceID, repositoryID, id int64) (*digest.Digest, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Delete", ctx, namespaceID, repositoryID, id)
 	ret0, _ := ret[0].(*digest.Digest)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockManifestStoreMockRecorder) Delete(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) Delete(ctx, namespaceID, repositoryID, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockManifestStore)(nil).Delete), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockManifestStore)(nil).Delete), ctx, namespaceID, repositoryID, id)
 }
 
 // DissociateLayerBlob mocks base method.
-func (m *MockManifestStore) DissociateLayerBlob(arg0 context.Context, arg1 *models.Manifest, arg2 *models.Blob) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DissociateLayerBlob", arg0, arg1, arg2)
+func (m_2 *MockManifestStore) DissociateLayerBlob(ctx context.Context, m *models.Manifest, b *models.Blob) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "DissociateLayerBlob", ctx, m, b)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DissociateLayerBlob indicates an expected call of DissociateLayerBlob.
-func (mr *MockManifestStoreMockRecorder) DissociateLayerBlob(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) DissociateLayerBlob(ctx, m, b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DissociateLayerBlob", reflect.TypeOf((*MockManifestStore)(nil).DissociateLayerBlob), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DissociateLayerBlob", reflect.TypeOf((*MockManifestStore)(nil).DissociateLayerBlob), ctx, m, b)
 }
 
 // DissociateManifest mocks base method.
-func (m *MockManifestStore) DissociateManifest(arg0 context.Context, arg1, arg2 *models.Manifest) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DissociateManifest", arg0, arg1, arg2)
+func (m_2 *MockManifestStore) DissociateManifest(ctx context.Context, ml, m *models.Manifest) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "DissociateManifest", ctx, ml, m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DissociateManifest indicates an expected call of DissociateManifest.
-func (mr *MockManifestStoreMockRecorder) DissociateManifest(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) DissociateManifest(ctx, ml, m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DissociateManifest", reflect.TypeOf((*MockManifestStore)(nil).DissociateManifest), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DissociateManifest", reflect.TypeOf((*MockManifestStore)(nil).DissociateManifest), ctx, ml, m)
 }
 
 // FindAll mocks base method.
-func (m *MockManifestStore) FindAll(arg0 context.Context) (models.Manifests, error) {
+func (m *MockManifestStore) FindAll(ctx context.Context) (models.Manifests, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAll", arg0)
+	ret := m.ctrl.Call(m, "FindAll", ctx)
 	ret0, _ := ret[0].(models.Manifests)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAll indicates an expected call of FindAll.
-func (mr *MockManifestStoreMockRecorder) FindAll(arg0 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) FindAll(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockManifestStore)(nil).FindAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockManifestStore)(nil).FindAll), ctx)
 }
 
 // LayerBlobs mocks base method.
-func (m *MockManifestStore) LayerBlobs(arg0 context.Context, arg1 *models.Manifest) (models.Blobs, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerBlobs", arg0, arg1)
+func (m_2 *MockManifestStore) LayerBlobs(ctx context.Context, m *models.Manifest) (models.Blobs, error) {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "LayerBlobs", ctx, m)
 	ret0, _ := ret[0].(models.Blobs)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LayerBlobs indicates an expected call of LayerBlobs.
-func (mr *MockManifestStoreMockRecorder) LayerBlobs(arg0, arg1 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) LayerBlobs(ctx, m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBlobs", reflect.TypeOf((*MockManifestStore)(nil).LayerBlobs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBlobs", reflect.TypeOf((*MockManifestStore)(nil).LayerBlobs), ctx, m)
 }
 
 // References mocks base method.
-func (m *MockManifestStore) References(arg0 context.Context, arg1 *models.Manifest) (models.Manifests, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "References", arg0, arg1)
+func (m_2 *MockManifestStore) References(ctx context.Context, m *models.Manifest) (models.Manifests, error) {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "References", ctx, m)
 	ret0, _ := ret[0].(models.Manifests)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // References indicates an expected call of References.
-func (mr *MockManifestStoreMockRecorder) References(arg0, arg1 any) *gomock.Call {
+func (mr *MockManifestStoreMockRecorder) References(ctx, m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "References", reflect.TypeOf((*MockManifestStore)(nil).References), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "References", reflect.TypeOf((*MockManifestStore)(nil).References), ctx, m)
 }

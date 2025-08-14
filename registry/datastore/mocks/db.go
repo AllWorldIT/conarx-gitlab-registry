@@ -22,6 +22,7 @@ import (
 type MockHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockHandlerMockRecorder is the mock recorder for MockHandler.
@@ -42,18 +43,18 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 }
 
 // BeginTx mocks base method.
-func (m *MockHandler) BeginTx(arg0 context.Context, arg1 *sql.TxOptions) (datastore.Transactor, error) {
+func (m *MockHandler) BeginTx(ctx context.Context, opts *sql.TxOptions) (datastore.Transactor, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginTx", arg0, arg1)
+	ret := m.ctrl.Call(m, "BeginTx", ctx, opts)
 	ret0, _ := ret[0].(datastore.Transactor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BeginTx indicates an expected call of BeginTx.
-func (mr *MockHandlerMockRecorder) BeginTx(arg0, arg1 any) *gomock.Call {
+func (mr *MockHandlerMockRecorder) BeginTx(ctx, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTx", reflect.TypeOf((*MockHandler)(nil).BeginTx), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTx", reflect.TypeOf((*MockHandler)(nil).BeginTx), ctx, opts)
 }
 
 // Close mocks base method.
@@ -71,10 +72,10 @@ func (mr *MockHandlerMockRecorder) Close() *gomock.Call {
 }
 
 // ExecContext mocks base method.
-func (m *MockHandler) ExecContext(arg0 context.Context, arg1 string, arg2 ...any) (sql.Result, error) {
+func (m *MockHandler) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ExecContext", varargs...)
@@ -84,17 +85,17 @@ func (m *MockHandler) ExecContext(arg0 context.Context, arg1 string, arg2 ...any
 }
 
 // ExecContext indicates an expected call of ExecContext.
-func (mr *MockHandlerMockRecorder) ExecContext(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockHandlerMockRecorder) ExecContext(ctx, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockHandler)(nil).ExecContext), varargs...)
 }
 
 // QueryContext mocks base method.
-func (m *MockHandler) QueryContext(arg0 context.Context, arg1 string, arg2 ...any) (*sql.Rows, error) {
+func (m *MockHandler) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryContext", varargs...)
@@ -104,17 +105,17 @@ func (m *MockHandler) QueryContext(arg0 context.Context, arg1 string, arg2 ...an
 }
 
 // QueryContext indicates an expected call of QueryContext.
-func (mr *MockHandlerMockRecorder) QueryContext(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockHandlerMockRecorder) QueryContext(ctx, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryContext", reflect.TypeOf((*MockHandler)(nil).QueryContext), varargs...)
 }
 
 // QueryRowContext mocks base method.
-func (m *MockHandler) QueryRowContext(arg0 context.Context, arg1 string, arg2 ...any) *datastore.Row {
+func (m *MockHandler) QueryRowContext(ctx context.Context, query string, args ...any) *datastore.Row {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryRowContext", varargs...)
@@ -123,9 +124,9 @@ func (m *MockHandler) QueryRowContext(arg0 context.Context, arg1 string, arg2 ..
 }
 
 // QueryRowContext indicates an expected call of QueryRowContext.
-func (mr *MockHandlerMockRecorder) QueryRowContext(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockHandlerMockRecorder) QueryRowContext(ctx, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRowContext", reflect.TypeOf((*MockHandler)(nil).QueryRowContext), varargs...)
 }
 
@@ -147,6 +148,7 @@ func (mr *MockHandlerMockRecorder) Stats() *gomock.Call {
 type MockTransactor struct {
 	ctrl     *gomock.Controller
 	recorder *MockTransactorMockRecorder
+	isgomock struct{}
 }
 
 // MockTransactorMockRecorder is the mock recorder for MockTransactor.
@@ -181,10 +183,10 @@ func (mr *MockTransactorMockRecorder) Commit() *gomock.Call {
 }
 
 // ExecContext mocks base method.
-func (m *MockTransactor) ExecContext(arg0 context.Context, arg1 string, arg2 ...any) (sql.Result, error) {
+func (m *MockTransactor) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ExecContext", varargs...)
@@ -194,17 +196,17 @@ func (m *MockTransactor) ExecContext(arg0 context.Context, arg1 string, arg2 ...
 }
 
 // ExecContext indicates an expected call of ExecContext.
-func (mr *MockTransactorMockRecorder) ExecContext(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockTransactorMockRecorder) ExecContext(ctx, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockTransactor)(nil).ExecContext), varargs...)
 }
 
 // QueryContext mocks base method.
-func (m *MockTransactor) QueryContext(arg0 context.Context, arg1 string, arg2 ...any) (*sql.Rows, error) {
+func (m *MockTransactor) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryContext", varargs...)
@@ -214,17 +216,17 @@ func (m *MockTransactor) QueryContext(arg0 context.Context, arg1 string, arg2 ..
 }
 
 // QueryContext indicates an expected call of QueryContext.
-func (mr *MockTransactorMockRecorder) QueryContext(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockTransactorMockRecorder) QueryContext(ctx, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryContext", reflect.TypeOf((*MockTransactor)(nil).QueryContext), varargs...)
 }
 
 // QueryRowContext mocks base method.
-func (m *MockTransactor) QueryRowContext(arg0 context.Context, arg1 string, arg2 ...any) *datastore.Row {
+func (m *MockTransactor) QueryRowContext(ctx context.Context, query string, args ...any) *datastore.Row {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryRowContext", varargs...)
@@ -233,9 +235,9 @@ func (m *MockTransactor) QueryRowContext(arg0 context.Context, arg1 string, arg2
 }
 
 // QueryRowContext indicates an expected call of QueryRowContext.
-func (mr *MockTransactorMockRecorder) QueryRowContext(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockTransactorMockRecorder) QueryRowContext(ctx, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRowContext", reflect.TypeOf((*MockTransactor)(nil).QueryRowContext), varargs...)
 }
 
@@ -257,6 +259,7 @@ func (mr *MockTransactorMockRecorder) Rollback() *gomock.Call {
 type MockConnector struct {
 	ctrl     *gomock.Controller
 	recorder *MockConnectorMockRecorder
+	isgomock struct{}
 }
 
 // MockConnectorMockRecorder is the mock recorder for MockConnector.
@@ -277,10 +280,10 @@ func (m *MockConnector) EXPECT() *MockConnectorMockRecorder {
 }
 
 // Open mocks base method.
-func (m *MockConnector) Open(arg0 context.Context, arg1 *datastore.DSN, arg2 ...datastore.Option) (*datastore.DB, error) {
+func (m *MockConnector) Open(ctx context.Context, dsn *datastore.DSN, opts ...datastore.Option) (*datastore.DB, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, dsn}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Open", varargs...)
@@ -290,8 +293,8 @@ func (m *MockConnector) Open(arg0 context.Context, arg1 *datastore.DSN, arg2 ...
 }
 
 // Open indicates an expected call of Open.
-func (mr *MockConnectorMockRecorder) Open(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockConnectorMockRecorder) Open(ctx, dsn any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, dsn}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Open", reflect.TypeOf((*MockConnector)(nil).Open), varargs...)
 }

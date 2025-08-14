@@ -23,6 +23,7 @@ import (
 type MockLoadBalancer struct {
 	ctrl     *gomock.Controller
 	recorder *MockLoadBalancerMockRecorder
+	isgomock struct{}
 }
 
 // MockLoadBalancerMockRecorder is the mock recorder for MockLoadBalancer.
@@ -172,6 +173,7 @@ func (mr *MockLoadBalancerMockRecorder) UpToDateReplica(arg0, arg1 any) *gomock.
 type MockDNSResolver struct {
 	ctrl     *gomock.Controller
 	recorder *MockDNSResolverMockRecorder
+	isgomock struct{}
 }
 
 // MockDNSResolverMockRecorder is the mock recorder for MockDNSResolver.
@@ -192,31 +194,31 @@ func (m *MockDNSResolver) EXPECT() *MockDNSResolverMockRecorder {
 }
 
 // LookupHost mocks base method.
-func (m *MockDNSResolver) LookupHost(arg0 context.Context, arg1 string) ([]string, error) {
+func (m *MockDNSResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LookupHost", arg0, arg1)
+	ret := m.ctrl.Call(m, "LookupHost", ctx, host)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LookupHost indicates an expected call of LookupHost.
-func (mr *MockDNSResolverMockRecorder) LookupHost(arg0, arg1 any) *gomock.Call {
+func (mr *MockDNSResolverMockRecorder) LookupHost(ctx, host any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupHost", reflect.TypeOf((*MockDNSResolver)(nil).LookupHost), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupHost", reflect.TypeOf((*MockDNSResolver)(nil).LookupHost), ctx, host)
 }
 
 // LookupSRV mocks base method.
-func (m *MockDNSResolver) LookupSRV(arg0 context.Context) ([]*net.SRV, error) {
+func (m *MockDNSResolver) LookupSRV(ctx context.Context) ([]*net.SRV, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LookupSRV", arg0)
+	ret := m.ctrl.Call(m, "LookupSRV", ctx)
 	ret0, _ := ret[0].([]*net.SRV)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LookupSRV indicates an expected call of LookupSRV.
-func (mr *MockDNSResolverMockRecorder) LookupSRV(arg0 any) *gomock.Call {
+func (mr *MockDNSResolverMockRecorder) LookupSRV(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupSRV", reflect.TypeOf((*MockDNSResolver)(nil).LookupSRV), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupSRV", reflect.TypeOf((*MockDNSResolver)(nil).LookupSRV), ctx)
 }

@@ -43,6 +43,7 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
 	"github.com/docker/distribution/version"
 	"github.com/hashicorp/go-multierror"
+	log "github.com/sirupsen/logrus"
 	"gitlab.com/gitlab-org/labkit/fips"
 	"golang.org/x/sync/errgroup"
 )
@@ -456,41 +457,87 @@ func (d *driver) statHead(ctx context.Context, path string) (*storagedriver.File
 
 func (d *driver) statList(ctx context.Context, path string) (*storagedriver.FileInfoFields, error) {
 	s3Path := d.s3Path(path)
-	resp, err := d.S3.ListObjectsV2(
-		ctx,
-		&s3.ListObjectsV2Input{
-			Bucket: ptr.String(d.Bucket),
-			Prefix: ptr.String(s3Path),
-			// NOTE(prozlach): Yes, AWS returns objects in lexicographical
-			// order based on their key names for general purpose buckets.
-			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
-			MaxKeys: ptr.Int32(1),
-		})
+	listInput := &s3.ListObjectsV2Input{
+		Bucket:    ptr.String(d.Bucket),
+		Prefix:    ptr.String(s3Path),
+		Delimiter: ptr.String("/"),
+		// NOTE(prozlach): AWS returns objects in lexicographical order
+		// based on their key names for general purpose buckets, but there
+		// is a catch - chars like `.` go before `/` so we need to go
+		// through the list and do exact matching.
+		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+		MaxKeys: ptr.Int32(listMax),
+	}
+	resp, err := d.S3.ListObjectsV2(ctx, listInput)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(resp.Contents) != 1 {
-		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V2DriverName}
-	}
-
-	entry := resp.Contents[0]
 	fi := &storagedriver.FileInfoFields{
 		Path: path,
 	}
 
-	if *entry.Key != s3Path {
-		if len(*entry.Key) > len(s3Path) && (*entry.Key)[len(s3Path)] != '/' {
-			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V2DriverName}
+main:
+	for {
+		// Files matching prefix:
+		noMoreFiles := false
+		noMoreDirs := false
+	loop_files:
+		for _, entry := range resp.Contents {
+			// NOTE(prozlach): These two conditions will never be reached, as
+			// the HEAD version of the stat call makes sure that the exact call
+			// will be handled earlier, and the shorter string will always go
+			// before longer strings (List does here a prefix-matching), so all
+			// other objects will be at least longer than the s3Path one, falling
+			// into `case 1` bucket. Still - I am putting it here for
+			// completeness just in case something changes in the future.
+			switch strings.Compare(*entry.Key, s3Path) {
+			case -1:
+				log.WithFields(log.Fields{
+					"key": *entry.Key,
+				}).Debugln("skipping predecessor entry as it does not match")
+				continue loop_files
+			case 0:
+				log.WithFields(log.Fields{
+					"key": *entry.Key,
+				}).Debugln("entry matched, object found")
+				fi.IsDir = false
+				fi.Size = *entry.Size
+				fi.ModTime = *entry.LastModified
+				return fi, nil
+			case 1:
+				noMoreFiles = true
+				break loop_files
+			}
 		}
-		fi.IsDir = true
-	} else {
-		fi.IsDir = false
-		fi.Size = *entry.Size
-		fi.ModTime = *entry.LastModified
+
+		// Prefix has subdirectories:
+	loop_dirs:
+		for _, commonPrefix := range resp.CommonPrefixes {
+			switch strings.Compare(*commonPrefix.Prefix, s3Path+"/") {
+			case -1:
+				continue loop_dirs
+			case 0:
+				fi.IsDir = true
+				return fi, nil
+			case 1:
+				noMoreDirs = true
+				break loop_dirs
+			}
+		}
+
+		if resp.IsTruncated == nil || !*resp.IsTruncated || (noMoreFiles && noMoreDirs) {
+			break main
+		}
+
+		listInput.ContinuationToken = resp.NextContinuationToken
+		resp, err = d.S3.ListObjectsV2(ctx, listInput)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return fi, nil
+	return nil, storagedriver.PathNotFoundError{Path: path, DriverName: common.V2DriverName}
 }
 
 // Stat retrieves the FileInfo for the given path, including the current size

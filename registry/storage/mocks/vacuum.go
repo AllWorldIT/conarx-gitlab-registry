@@ -21,6 +21,7 @@ import (
 type MockBlobRemover struct {
 	ctrl     *gomock.Controller
 	recorder *MockBlobRemoverMockRecorder
+	isgomock struct{}
 }
 
 // MockBlobRemoverMockRecorder is the mock recorder for MockBlobRemover.
@@ -41,29 +42,29 @@ func (m *MockBlobRemover) EXPECT() *MockBlobRemoverMockRecorder {
 }
 
 // RemoveBlob mocks base method.
-func (m *MockBlobRemover) RemoveBlob(arg0 context.Context, arg1 digest.Digest) error {
+func (m *MockBlobRemover) RemoveBlob(ctx context.Context, dgst digest.Digest) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveBlob", arg0, arg1)
+	ret := m.ctrl.Call(m, "RemoveBlob", ctx, dgst)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveBlob indicates an expected call of RemoveBlob.
-func (mr *MockBlobRemoverMockRecorder) RemoveBlob(arg0, arg1 any) *gomock.Call {
+func (mr *MockBlobRemoverMockRecorder) RemoveBlob(ctx, dgst any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveBlob", reflect.TypeOf((*MockBlobRemover)(nil).RemoveBlob), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveBlob", reflect.TypeOf((*MockBlobRemover)(nil).RemoveBlob), ctx, dgst)
 }
 
 // RemoveBlobs mocks base method.
-func (m *MockBlobRemover) RemoveBlobs(arg0 context.Context, arg1 []digest.Digest) error {
+func (m *MockBlobRemover) RemoveBlobs(ctx context.Context, dgsts []digest.Digest) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveBlobs", arg0, arg1)
+	ret := m.ctrl.Call(m, "RemoveBlobs", ctx, dgsts)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveBlobs indicates an expected call of RemoveBlobs.
-func (mr *MockBlobRemoverMockRecorder) RemoveBlobs(arg0, arg1 any) *gomock.Call {
+func (mr *MockBlobRemoverMockRecorder) RemoveBlobs(ctx, dgsts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveBlobs", reflect.TypeOf((*MockBlobRemover)(nil).RemoveBlobs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveBlobs", reflect.TypeOf((*MockBlobRemover)(nil).RemoveBlobs), ctx, dgsts)
 }

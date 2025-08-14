@@ -22,6 +22,7 @@ import (
 type MockBlobStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockBlobStoreMockRecorder
+	isgomock struct{}
 }
 
 // MockBlobStoreMockRecorder is the mock recorder for MockBlobStore.
@@ -42,88 +43,88 @@ func (m *MockBlobStore) EXPECT() *MockBlobStoreMockRecorder {
 }
 
 // Count mocks base method.
-func (m *MockBlobStore) Count(arg0 context.Context) (int, error) {
+func (m *MockBlobStore) Count(ctx context.Context) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Count", arg0)
+	ret := m.ctrl.Call(m, "Count", ctx)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Count indicates an expected call of Count.
-func (mr *MockBlobStoreMockRecorder) Count(arg0 any) *gomock.Call {
+func (mr *MockBlobStoreMockRecorder) Count(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockBlobStore)(nil).Count), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockBlobStore)(nil).Count), ctx)
 }
 
 // Create mocks base method.
-func (m *MockBlobStore) Create(arg0 context.Context, arg1 *models.Blob) error {
+func (m *MockBlobStore) Create(ctx context.Context, b *models.Blob) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", arg0, arg1)
+	ret := m.ctrl.Call(m, "Create", ctx, b)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockBlobStoreMockRecorder) Create(arg0, arg1 any) *gomock.Call {
+func (mr *MockBlobStoreMockRecorder) Create(ctx, b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockBlobStore)(nil).Create), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockBlobStore)(nil).Create), ctx, b)
 }
 
 // CreateOrFind mocks base method.
-func (m *MockBlobStore) CreateOrFind(arg0 context.Context, arg1 *models.Blob) error {
+func (m *MockBlobStore) CreateOrFind(ctx context.Context, b *models.Blob) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrFind", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateOrFind", ctx, b)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateOrFind indicates an expected call of CreateOrFind.
-func (mr *MockBlobStoreMockRecorder) CreateOrFind(arg0, arg1 any) *gomock.Call {
+func (mr *MockBlobStoreMockRecorder) CreateOrFind(ctx, b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrFind", reflect.TypeOf((*MockBlobStore)(nil).CreateOrFind), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrFind", reflect.TypeOf((*MockBlobStore)(nil).CreateOrFind), ctx, b)
 }
 
 // Delete mocks base method.
-func (m *MockBlobStore) Delete(arg0 context.Context, arg1 digest.Digest) error {
+func (m *MockBlobStore) Delete(ctx context.Context, d digest.Digest) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", arg0, arg1)
+	ret := m.ctrl.Call(m, "Delete", ctx, d)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockBlobStoreMockRecorder) Delete(arg0, arg1 any) *gomock.Call {
+func (mr *MockBlobStoreMockRecorder) Delete(ctx, d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockBlobStore)(nil).Delete), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockBlobStore)(nil).Delete), ctx, d)
 }
 
 // FindAll mocks base method.
-func (m *MockBlobStore) FindAll(arg0 context.Context) (models.Blobs, error) {
+func (m *MockBlobStore) FindAll(ctx context.Context) (models.Blobs, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAll", arg0)
+	ret := m.ctrl.Call(m, "FindAll", ctx)
 	ret0, _ := ret[0].(models.Blobs)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAll indicates an expected call of FindAll.
-func (mr *MockBlobStoreMockRecorder) FindAll(arg0 any) *gomock.Call {
+func (mr *MockBlobStoreMockRecorder) FindAll(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockBlobStore)(nil).FindAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockBlobStore)(nil).FindAll), ctx)
 }
 
 // FindByDigest mocks base method.
-func (m *MockBlobStore) FindByDigest(arg0 context.Context, arg1 digest.Digest) (*models.Blob, error) {
+func (m *MockBlobStore) FindByDigest(ctx context.Context, d digest.Digest) (*models.Blob, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindByDigest", arg0, arg1)
+	ret := m.ctrl.Call(m, "FindByDigest", ctx, d)
 	ret0, _ := ret[0].(*models.Blob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindByDigest indicates an expected call of FindByDigest.
-func (mr *MockBlobStoreMockRecorder) FindByDigest(arg0, arg1 any) *gomock.Call {
+func (mr *MockBlobStoreMockRecorder) FindByDigest(ctx, d any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByDigest", reflect.TypeOf((*MockBlobStore)(nil).FindByDigest), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByDigest", reflect.TypeOf((*MockBlobStore)(nil).FindByDigest), ctx, d)
 }
