@@ -254,6 +254,7 @@ database:structure-sql:
     - ./bin/registry database migrate up config.yml
     # Dump and validate
     - make db-structure-dump
+    - sed -i -e '/^[Rr][Ee][Ss][Tt][Rr][Ii][Cc][Tt] /d' -e '/^[Uu][Nn][Rr][Ee][Ss][Tt][Rr][Ii][Cc][Tt] /d' registry/datastore/migrations/structure.sql
     - git diff --exit-code
   # Stash the db dump for 24 hrs
   artifacts:
