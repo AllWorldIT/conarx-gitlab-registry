@@ -14,7 +14,20 @@ PKG=github.com/docker/distribution
 # Project packages.
 PACKAGES=$(shell go list -tags "${BUILDTAGS}" ./...)
 INTEGRATION_PACKAGE=${PKG}
-COVERAGE_PACKAGES=$(filter-out ${PKG}/registry/storage/driver/%,${PACKAGES})
+# NOTE(prozlach): Exclude tests that are run as separate jobs:
+COVERAGE_PACKAGES=$(filter-out \
+    ${PKG}/registry/storage/driver/filesystem \
+    ${PKG}/registry/storage/driver/filesystem/% \
+    ${PKG}/registry/storage/driver/inmemory \
+    ${PKG}/registry/storage/driver/inmemory/% \
+    ${PKG}/registry/storage/driver/s3-aws \
+    ${PKG}/registry/storage/driver/s3-aws/% \
+    ${PKG}/registry/storage/driver/gcs \
+    ${PKG}/registry/storage/driver/gcs/% \
+    ${PKG}/registry/storage/driver/azure \
+    ${PKG}/registry/storage/driver/azure/% \
+    ${PKG}/registry/storage/driver/middleware/googlecdn \
+    ${PKG}/registry/storage/driver/middleware/googlecdn/%,${PACKAGES})
 GO_TEST ?='go test'
 
 
