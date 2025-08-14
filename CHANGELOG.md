@@ -1,3 +1,10 @@
+## [4.26.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.26.0-gitlab...v4.26.1-gitlab) (2025-08-14)
+
+
+### 🐛 Bug Fixes 🐛
+
+* use redis cache interface instead of concreate object for urlcache init ([2a958da](https://gitlab.com/gitlab-org/container-registry/commit/2a958da141b76569e6b7e0290cf87cd4243d4657))
+
 ## [4.26.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.25.0-gitlab...v4.26.0-gitlab) (2025-08-12)
 
 
