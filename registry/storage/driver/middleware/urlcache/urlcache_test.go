@@ -678,9 +678,9 @@ func (s *URLForTestSuite) TestCacheMissWithExpiryParameterSet() {
 	value, ttl, err := redisCache.GetWithTTL(s.ctx, key)
 	require.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), value)
-	// TTL should be approximately 3 hours minus a small delta for processing time
-	assert.Greater(s.T(), ttl, 2*time.Hour+55*time.Minute)
-	assert.LessOrEqual(s.T(), ttl, 3*time.Hour)
+	// TTL should be approximately 2 hours 50 minutes plus/minus a small delta for processing time
+	assert.Greater(s.T(), ttl, 2*time.Hour+48*time.Minute)
+	assert.LessOrEqual(s.T(), ttl, 2*time.Hour+52*time.Minute)
 
 	// Unmarshal to verify content
 	err = redisCache.UnmarshalGet(s.ctx, key, &cached)

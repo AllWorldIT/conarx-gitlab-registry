@@ -261,7 +261,7 @@ func (uc *urlCacheStorageMiddleware) URLFor(ctx context.Context, path string, op
 		URL: url,
 	}
 	metrics.URLCacheObjectSize(entry.size())
-	err = uc.cache.MarshalSet(setCtx, cacheKey, entry, iredis.WithTTL(remainingValidity))
+	err = uc.cache.MarshalSet(setCtx, cacheKey, entry, iredis.WithTTL(remainingValidity-uc.minURLValidity))
 	if err != nil {
 		l.WithError(err).Info("storing cache entry in Redis")
 	}
