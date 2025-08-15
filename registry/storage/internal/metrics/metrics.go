@@ -198,7 +198,7 @@ func registerMetrics(registerer prometheus.Registerer) {
 			Subsystem: subsystem,
 			Name:      objectAccessesDistributionName,
 			Help:      objectAccessesDistributionDesc,
-			Buckets:   prometheus.LinearBuckets(0, 500, 11), // 0, 500, 1000, ..., 5000
+			Buckets:   prometheus.ExponentialBuckets(10, 2.0, 11),
 		},
 	)
 
