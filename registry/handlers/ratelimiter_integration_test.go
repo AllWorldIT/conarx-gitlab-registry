@@ -17,6 +17,7 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -46,7 +47,6 @@ func (s *RateLimiterTestSuite) SetupTest() {
 // TearDownTest runs after each individual test
 func (s *RateLimiterTestSuite) TearDownTest() {
 	s.T().Logf("Tearing down test: %s", s.T().Name())
-	s.cleanupRedisKeys()
 
 	if s.redisClient != nil {
 		s.redisClient.Close()
@@ -103,22 +103,26 @@ func (s *RateLimiterTestSuite) setupApp(config *configuration.Configuration) *Ap
 
 // createTestRequest creates a test HTTP request with the given remote address
 func (s *RateLimiterTestSuite) createTestRequest(remoteAddr string) (*http.Request, *httptest.ResponseRecorder) {
-	req, _ := http.NewRequest("GET", "/v2/", nil)
+	req, err := http.NewRequest("GET", "/v2/", nil)
+	s.Require().NoError(err)
 	req.RemoteAddr = remoteAddr
 	return req, httptest.NewRecorder()
 }
 
 // createMiddlewareHandler creates a test handler with rate limiting middleware
 func (s *RateLimiterTestSuite) createMiddlewareHandler(app *App) http.Handler {
-	successHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	successHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("success"))
+		msg := []byte("success")
+		n, err := w.Write(msg)
+		s.NoError(err)
+		s.Equal(len(msg), n)
 	})
 	return app.rateLimiterMiddleware(successHandler)
 }
 
 // testIP generates a semi-random IP address to reduce collision likelihood
-func (s *RateLimiterTestSuite) testIP() string {
+func (*RateLimiterTestSuite) testIP() string {
 	ip1 := rand.Uint32N(64)
 	ip2 := rand.Uint32N(128)
 	ip3 := rand.Uint32N(255)
@@ -133,7 +137,7 @@ func (s *RateLimiterTestSuite) assertRateLimitHeaders(resp *httptest.ResponseRec
 
 	// Parse headerRateLimit: limit=%d, remaining=%d, reset=%d
 	header := strings.Split(rateLimitHeader, ",")
-	s.Require().Equal(3, len(header))
+	s.Require().Len(header, 3)
 
 	limit := strings.Split(header[0], "=")[1]
 	remaining := strings.Split(header[1], "=")[1]
@@ -193,53 +197,18 @@ func (s *RateLimiterTestSuite) cleanupRedisKeys() {
 	defer redisClient.Close()
 
 	ctx := context.Background()
+	s.Require().EventuallyWithT(
+		func(tt *assert.CollectT) {
+			err := redisClient.FlushAll(ctx).Err()
+			assert.NoError(tt, err)
+		},
+		5*time.Second,
+		500*time.Millisecond,
+		"flushing Redis databases has failed")
 
-	patterns := []string{
-		"registry:api:{rate-limit:ip:*}",
-		"registry:api:*",
-	}
-
-	for _, pattern := range patterns {
-		for attempt := 0; attempt < 3; attempt++ {
-			script := fmt.Sprintf("local keys = redis.call('keys', '%s'); for i,k in ipairs(keys) do redis.call('del', k); end; return #keys", pattern)
-			result, err := redisClient.Eval(ctx, script, []string{}).Result()
-			if err == nil {
-				if count, ok := result.(int64); ok && count > 0 {
-					s.T().Logf("Deleted %d keys matching pattern '%s'", count, pattern)
-				}
-				break
-			}
-			s.T().Logf("Cleanup attempt %d for pattern '%s' failed: %v", attempt+1, pattern, err)
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-
-	for attempt := 0; attempt < 3; attempt++ {
-		err = redisClient.FlushAll(ctx).Err()
-		if err == nil {
-			s.T().Logf("FLUSHALL successful on attempt %d", attempt+1)
-			break
-		}
-		s.T().Logf("FLUSHALL attempt %d failed: %v", attempt+1, err)
-		time.Sleep(100 * time.Millisecond)
-	}
-	s.Require().NoError(err, "FLUSHALL failed after retries")
-
-	time.Sleep(500 * time.Millisecond)
-
-	for attempt := 0; attempt < 5; attempt++ {
-		remainingKeys, err := redisClient.Keys(ctx, "*").Result()
-		if err == nil && len(remainingKeys) == 0 {
-			s.T().Logf("Verified: No keys remaining after cleanup")
-			break
-		}
-		if err != nil {
-			s.T().Logf("Verification attempt %d failed: %v", attempt+1, err)
-		} else {
-			s.T().Logf("Verification attempt %d: %d keys still remain: %v", attempt+1, len(remainingKeys), remainingKeys)
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
+	remainingKeys, err := redisClient.Keys(ctx, "*").Result()
+	s.Require().NoError(err)
+	s.Require().Empty(remainingKeys)
 
 	s.T().Logf("Redis cleanup completed")
 }
@@ -337,7 +306,7 @@ func (s *RateLimiterTestSuite) TestRateLimitRemainingHeaderDecreasesCorrectly() 
 		s.NotEmpty(remainingHeader, "X-RateLimit-Remaining header should be present for request %d", i+1)
 
 		remaining, err := strconv.Atoi(remainingHeader)
-		s.NoError(err, "X-RateLimit-Remaining should be a valid integer for request %d", i+1)
+		s.Require().NoError(err, "X-RateLimit-Remaining should be a valid integer for request %d", i+1)
 		s.Equal(expectedRemaining[i], remaining,
 			"X-RateLimit-Remaining should be %d for request %d", expectedRemaining[i], i+1)
 		s.assertRateLimitHeaders(resp)
@@ -385,7 +354,7 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 			s.NotEmpty(remainingHeader, "X-RateLimit-Remaining header should be present")
 
 			remaining, err := strconv.Atoi(remainingHeader)
-			s.NoError(err, "X-RateLimit-Remaining should be a valid integer")
+			s.Require().NoError(err, "X-RateLimit-Remaining should be a valid integer")
 			s.Equal(expectedRemaining[i], remaining, "X-RateLimit-Remaining should be %d for request %d from IP %s", expectedRemaining[i], i+1, testIP)
 
 			s.T().Logf("IP %s, Request %d: X-RateLimit-Remaining = %d", testIP, i+1, remaining)
@@ -399,8 +368,8 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 
 		remainingHeader := resp.Header().Get(headerXRateLimitRemaining)
 		remaining, err := strconv.Atoi(remainingHeader)
-		s.NoError(err)
-		s.Equal(0, remaining, "X-RateLimit-Remaining should be 0 when blocked for IP %s", testIP)
+		s.Require().NoError(err)
+		s.Zero(remaining, "X-RateLimit-Remaining should be 0 when blocked for IP %s", testIP)
 	}
 }
 
@@ -530,7 +499,7 @@ func (s *BasicFunctionalityTestSuite) TestBasicFunctionality() {
 	s.Equal(http.StatusTooManyRequests, resp.Code, "13th request should be blocked")
 
 	remainingHeader, err := strconv.Atoi(resp.Header().Get(headerXRateLimitRemaining))
-	s.NoError(err)
+	s.Require().NoError(err)
 	s.Zero(remainingHeader, "Remaining header should be zero, got: %d", remainingHeader)
 }
 
@@ -628,23 +597,23 @@ func (s *RedisConnectionTestSuite) TestRedisClusterConnection() {
 	defer cancel()
 
 	err = redisClient.Ping(ctx).Err()
-	s.NoError(err, "Should be able to PING Redis cluster")
+	s.Require().NoError(err, "Should be able to PING Redis cluster")
 
 	err = redisClient.Set(ctx, "test:connection", "working", 0).Err()
-	s.NoError(err, "Should be able to SET key")
+	s.Require().NoError(err, "Should be able to SET key")
 
 	val, err := redisClient.Get(ctx, "test:connection").Result()
-	s.NoError(err, "Should be able to GET key")
+	s.Require().NoError(err, "Should be able to GET key")
 	s.Equal("working", val, "Value should match")
 
 	if clusterClient, ok := redisClient.(*redis.ClusterClient); ok {
 		nodes, err := clusterClient.ClusterNodes(ctx).Result()
-		s.NoError(err, "Should be able to get cluster nodes")
+		s.Require().NoError(err, "Should be able to get cluster nodes")
 		s.T().Logf("Cluster nodes: %s", nodes)
 	}
 
 	err = redisClient.Del(ctx, "test:connection").Err()
-	s.NoError(err, "Should be able to DELETE key")
+	s.Require().NoError(err, "Should be able to DELETE key")
 
 	s.T().Log("Redis cluster connection test passed")
 }
