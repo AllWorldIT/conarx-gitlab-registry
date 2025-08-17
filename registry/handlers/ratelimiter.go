@@ -15,6 +15,7 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/api/errcode"
 	"github.com/docker/distribution/registry/ratelimiter"
 	"github.com/hashicorp/go-multierror"
@@ -23,9 +24,6 @@ import (
 )
 
 const (
-	componentKey  = "component"
-	componentName = "registry.rate_limiter"
-
 	matchTypeIP    = "ip"
 	matchTypeIPKey = `registry:api:{rate-limit:ip:%s}`
 
@@ -194,8 +192,17 @@ func (app *App) rateLimiterMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		l := dcontext.GetLogger(r.Context())
 		ctx := app.context(w, r)
+		l := log.GetLogger(
+			log.WithContext(ctx),
+		).WithFields(
+			log.Fields{
+				"component": "registry.rate_limiter",
+				"method":    r.Method,
+				"path":      r.URL.Path, // Using path instead of full URL to reduce log size
+				"source_ip": GetIPV4orIPV6Prefix(r.RemoteAddr),
+			},
+		)
 
 		// Process each limiter in order of precedence
 		for _, limiter := range app.rateLimiters {
@@ -211,15 +218,19 @@ func (app *App) rateLimiterMiddleware(next http.Handler) http.Handler {
 
 // processLimiter handles a single rate limiter for a request
 // Returns true if the request was blocked
-func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limiter RateLimiter, l dcontext.Logger) bool {
+func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limiter RateLimiter, l log.Logger) bool {
 	cfg := limiter.Config()
+
+	l = l.WithFields(log.Fields{
+		"name": cfg.Name,
+	})
 
 	key, ok := getRateLimitKey(r, cfg.Match.Type, l)
 	if !ok {
 		return false
 	}
 
-	result, err := limiter.Allowed(r.Context(), key)
+	result, err := limiter.Allowed(ctx, key)
 	if err != nil {
 		serveErrorJSON(w, err, ctx, l)
 		return true // Block the request on error
@@ -230,7 +241,11 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 
 	// Check if rate limit exceeded
 	if result.Allowed <= 0 {
-		logRateLimitedRequest(ctx, r, "request blocked: rate limit exceeded", cfg, result)
+		l.WithFields(logrus.Fields{
+			"log_only":    cfg.LogOnly,
+			"retry_after": result.RetryAfter,     // Essential for understanding when rate limit resets
+			"action":      cfg.Action.HardAction, // Important to know if blocking or just logging
+		}).Info("request blocked: rate limit exceeded")
 
 		if !cfg.LogOnly && cfg.Action.HardAction == "block" {
 			blockRateLimitedRequest(w, r, result, cfg.Match.Type, ctx, l)
@@ -269,18 +284,20 @@ func writeRateLimiterHeaders(w http.ResponseWriter, result *ratelimiter.Result, 
 }
 
 // getRateLimitKey determines the key to use for rate limiting based on match type
-func getRateLimitKey(r *http.Request, matchType string, l dcontext.Logger) (string, bool) {
+func getRateLimitKey(r *http.Request, matchType string, l log.Logger) (string, bool) {
 	switch matchType {
 	case matchTypeIP:
 		return fmt.Sprintf(matchTypeIPKey, encodeIPBase64(GetIPV4orIPV6Prefix(r.RemoteAddr))), true
 	default:
-		l.Warnf("rate_limiter unsupported match type: %s, skipping", matchType)
+		l.Warn(
+			fmt.Sprintf("rate_limiter unsupported match type: %s, skipping", matchType),
+		)
 		return "", false
 	}
 }
 
 // checkWarningThreshold checks if warning threshold is reached and logs appropriately
-func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limiter, l dcontext.Logger) {
+func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limiter, l log.Logger) {
 	warnThreshold := cfg.Action.WarnThreshold
 	// Special case for threshold 0.0 - no warnings needed
 	if warnThreshold <= 0 {
@@ -316,7 +333,6 @@ func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limite
 
 	if usagePercentage >= warnThreshold {
 		logger := l.WithFields(logrus.Fields{
-			"name":           cfg.Name,
 			"description":    cfg.Description,
 			"warn_threshold": warnThreshold,
 			"usage":          usagePercentage,
@@ -334,7 +350,7 @@ func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limite
 }
 
 // blockRateLimitedRequest handles blocking a request that exceeded rate limits
-func blockRateLimitedRequest(w http.ResponseWriter, r *http.Request, result *ratelimiter.Result, matchType string, ctx *Context, l dcontext.Logger) {
+func blockRateLimitedRequest(w http.ResponseWriter, r *http.Request, result *ratelimiter.Result, matchType string, ctx *Context, l log.Logger) {
 	w.Header().Set(headerXRateLimitRemaining, fmt.Sprintf("%d", result.Remaining))
 	w.Header().Set(headerRetryAfter, fmt.Sprintf("%f", result.RetryAfter.Seconds()))
 
@@ -349,28 +365,17 @@ func blockRateLimitedRequest(w http.ResponseWriter, r *http.Request, result *rat
 }
 
 // serveErrorJSON handles serving an error response as JSON
-func serveErrorJSON(w http.ResponseWriter, err error, ctx *Context, l dcontext.Logger) {
+func serveErrorJSON(w http.ResponseWriter, err error, ctx *Context, l log.Logger) {
 	var errorToServe errcode.Error
 	if !errors.As(err, &errorToServe) {
 		errorToServe = errcode.FromUnknownError(err)
 	}
 
 	if err := errcode.ServeJSON(w, errorToServe); err != nil {
-		l.Errorf("error serving error json: %v (from %v)", err, ctx.Errors)
+		l.Error(
+			fmt.Sprintf("error serving error json: %v (from %v)", err, ctx.Errors),
+		)
 	}
-}
-
-func logRateLimitedRequest(ctx *Context, r *http.Request, msg string, limiterConfig *configuration.Limiter, result *ratelimiter.Result) {
-	dcontext.GetLogger(ctx).WithFields(logrus.Fields{
-		componentKey:  componentName,
-		"name":        limiterConfig.Name,
-		"log_only":    limiterConfig.LogOnly,
-		"method":      r.Method,
-		"path":        r.URL.Path, // Using path instead of full URL to reduce log size
-		"source_ip":   GetIPV4orIPV6Prefix(r.RemoteAddr),
-		"retry_after": result.RetryAfter,               // Essential for understanding when rate limit resets
-		"action":      limiterConfig.Action.HardAction, // Important to know if blocking or just logging
-	}).Info(msg)
 }
 
 // GetIPV4orIPV6Prefix returns either the full IPv4 address or the /64 prefix
