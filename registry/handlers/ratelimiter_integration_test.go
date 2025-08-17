@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/log"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -28,6 +29,9 @@ type RateLimiterTestSuite struct {
 	redisClient redis.UniversalClient
 	app         *App
 	config      *configuration.Configuration
+
+	ctx        context.Context
+	ctxCancelF func()
 }
 
 // SetupSuite runs once before all tests in the suite
@@ -42,6 +46,17 @@ func (s *RateLimiterTestSuite) SetupSuite() {
 func (s *RateLimiterTestSuite) SetupTest() {
 	s.T().Logf("Setting up test: %s", s.T().Name())
 	s.cleanupRedisKeys()
+
+	s.ctx, s.ctxCancelF = context.WithCancel(
+		log.WithLogger(
+			context.Background(),
+			log.GetLogger(
+				log.WithTestingTB(
+					s.T(),
+				),
+			),
+		),
+	)
 }
 
 // TearDownTest runs after each individual test
@@ -52,6 +67,8 @@ func (s *RateLimiterTestSuite) TearDownTest() {
 		s.redisClient.Close()
 		s.redisClient = nil
 	}
+
+	s.ctxCancelF()
 }
 
 // TearDownSuite runs once after all tests in the suite
@@ -80,19 +97,18 @@ func (s *RateLimiterTestSuite) setupConfig(limiters []configuration.Limiter) *co
 
 // setupApp creates an App instance with the given configuration
 func (s *RateLimiterTestSuite) setupApp(config *configuration.Configuration) *App {
-	ctx := context.Background()
 	app := &App{
-		Context: ctx,
+		Context: s.ctx,
 		Config:  config,
 	}
 
-	err := app.configureRedisRateLimiter(ctx, config)
+	err := app.configureRedisRateLimiter(s.ctx, config)
 	s.Require().NoError(err)
 
 	s.app = app
 	s.config = config
 
-	s.redisClient, err = configureRedisClient(ctx, config.Redis.RateLimiter, false, "test-suite")
+	s.redisClient, err = configureRedisClient(s.ctx, config.Redis.RateLimiter, false, "test-suite")
 	s.Require().NoError(err, "Failed to create test Redis client")
 
 	return app
@@ -193,17 +209,16 @@ func (s *RateLimiterTestSuite) cleanupRedisKeys() {
 	s.Require().NoError(err, "Failed to create Redis client for cleanup")
 	defer redisClient.Close()
 
-	ctx := context.Background()
 	s.Require().EventuallyWithT(
 		func(tt *assert.CollectT) {
-			err := redisClient.FlushAll(ctx).Err()
+			err := redisClient.FlushAll(s.ctx).Err()
 			assert.NoError(tt, err)
 		},
 		5*time.Second,
 		500*time.Millisecond,
 		"flushing Redis databases has failed")
 
-	remainingKeys, err := redisClient.Keys(ctx, "*").Result()
+	remainingKeys, err := redisClient.Keys(s.ctx, "*").Result()
 	s.Require().NoError(err)
 	s.Require().Empty(remainingKeys)
 
@@ -590,7 +605,7 @@ func (s *RedisConnectionTestSuite) TestRedisClusterConnection() {
 	redisClient, err := configureRedisClient(context.Background(), config.Redis.RateLimiter, false, "test")
 	s.Require().NoError(err, "Failed to create Redis client")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
 
 	err = redisClient.Ping(ctx).Err()
