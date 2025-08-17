@@ -474,7 +474,7 @@ database:api-load-balancing-discovery:
   services:
     - name: redis:alpine
       alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
 
 cache:redis:
   extends: .cache:redis
@@ -571,7 +571,7 @@ redis:rate-limiter:handlers:
   services:
     - name: redis:alpine
       alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
 
 
 .redis-cluster-variables:
@@ -622,7 +622,7 @@ redis-cluster:rate-limiter:handlers:
     REDIS_ADDR: "redis-1:7001,redis-2:7002,redis-3:7003"
     PACKAGE: 'github.com/docker/distribution/registry/handlers'
   script:
-    - $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test -run "TestRateLimiter"
+    - $GO_TEST -v -coverprofile=coverage.out -tags=integration -run "TestRateLimiter"
 
 # cli:schema-migration-dependency is an integration test suite that verifies the dependency resolver for post/pre-deployment schema migrations.
 cli:schema-migration-dependency:

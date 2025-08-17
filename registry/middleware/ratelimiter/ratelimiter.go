@@ -1,4 +1,4 @@
-package handlers
+package ratelimiter
 
 import (
 	"context"
@@ -17,57 +17,67 @@ import (
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/api/errcode"
-	"github.com/docker/distribution/registry/ratelimiter"
 	"github.com/hashicorp/go-multierror"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	matchTypeIP    = "ip"
-	matchTypeIPKey = `registry:api:{rate-limit:ip:%s}`
+	MatchTypeIP    = "ip"
+	MatchTypeIPKey = `registry:api:{rate-limit:ip:%s}`
 
 	// Draft IETF header definitions (draft-ietf-httpapi-ratelimit-headers-07)
 	// https://www.ietf.org/archive/id/draft-ietf-httpapi-ratelimit-headers-07.html
-	headerRateLimit       = "RateLimit"
-	headerRateLimitFormat = "limit=%d, remaining=%d, reset=%d"
-	headerRateLimitPolicy = "RateLimit-Policy"
+	HeaderRateLimit       = "RateLimit"
+	HeaderRateLimitFormat = "limit=%d, remaining=%d, reset=%d"
+	HeaderRateLimitPolicy = "RateLimit-Policy"
 	// Policy format example: 100;w=60 means 100 requests in a 60 seconds window
-	headerRateLimitPolicyFormat = "%d;w=%d"
-	headerRetryAfter            = "Retry-After"
+	HeaderRateLimitPolicyFormat = "%d;w=%d"
+	HeaderRetryAfter            = "Retry-After"
 	// Legacy headers X-RateLimit-* headers
-	headerXRateLimitLimit     = "X-RateLimit-Limit"
-	headerXRateLimitRemaining = "X-RateLimit-Remaining"
-	headerXRateLimitReset     = "X-RateLimit-Reset"
+	HeaderXRateLimitLimit     = "X-RateLimit-Limit"
+	HeaderXRateLimitRemaining = "X-RateLimit-Remaining"
+	HeaderXRateLimitReset     = "X-RateLimit-Reset"
 
 	IPV6PrefixLength = 64
 )
 
 var (
-	validMatchTypes  = []string{matchTypeIP}
+	validMatchTypes  = []string{MatchTypeIP}
 	validWarnActions = []string{"none", "log"}
 	validHardActions = []string{"none", "log", "block"}
 	validPeriods     = []string{"second", "minute", "hour"}
 )
 
-func (app *App) configureRateLimiters(redisClient redis.UniversalClient, config *configuration.RateLimiter) error {
-	l := dcontext.GetLogger(app.Context)
+// RateLimiter represents a rate limiter that can be used to control the rate of requests.
+type RateLimiter interface {
+	// TokensGranted checks if a request is allowed based on the given key and
+	// limits. Returns the number of tokens allowed.
+	TokensGranted(ctx context.Context, key string, tokensRequested float64) (*Result, error)
+	Config() *configuration.Limiter
+}
 
+func NewRateLimitersFromConfig(
+	l dcontext.Logger,
+	redisClient redis.UniversalClient,
+	config []configuration.Limiter,
+) ([]RateLimiter, error) {
 	orderedLimiters, err := parseLimitersConfig(config)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	res := make([]RateLimiter, 0, len(orderedLimiters))
 
 	if len(orderedLimiters) == 0 {
-		return nil
+		return res, nil
 	}
 
-	app.rateLimiters = make([]RateLimiter, 0, len(orderedLimiters))
 	for name, orderedLimiter := range orderedLimiters {
 		cfg := orderedLimiter.Limiter
-		limiter, err := ratelimiter.New(redisClient, cfg)
+		limiter, err := New(redisClient, cfg)
 		if err != nil {
-			return fmt.Errorf("creating rate-limiter instance failed: %w", err)
+			return nil, fmt.Errorf("creating rate-limiter instance failed: %w", err)
 		}
 		l.WithFields(logrus.Fields{
 			"name":           name,
@@ -82,9 +92,9 @@ func (app *App) configureRateLimiters(redisClient redis.UniversalClient, config 
 			"hard_action":    cfg.Action.HardAction,
 		}).Info("Configured rate limiter")
 
-		app.rateLimiters = append(app.rateLimiters, limiter)
+		res = append(res, limiter)
 	}
-	return nil
+	return res, nil
 }
 
 // OrderedLimiter is a helper struct to sort limiters by precedence
@@ -93,15 +103,11 @@ type OrderedLimiter struct {
 	Limiter *configuration.Limiter
 }
 
-func parseLimitersConfig(rateLimiterCfg *configuration.RateLimiter) ([]OrderedLimiter, error) {
-	if !rateLimiterCfg.Enabled {
-		return nil, nil
-	}
-
+func parseLimitersConfig(limiterConfigs []configuration.Limiter) ([]OrderedLimiter, error) {
 	limiters := make(map[string]*configuration.Limiter)
-	keys := make([]string, 0, len(rateLimiterCfg.Limiters))
+	keys := make([]string, 0, len(limiterConfigs))
 	mError := new(multierror.Error)
-	for _, limiterConfig := range rateLimiterCfg.Limiters {
+	for _, limiterConfig := range limiterConfigs {
 		err := validateLimiter(&limiterConfig)
 		if err != nil {
 			mError = multierror.Append(mError, err)
@@ -180,57 +186,15 @@ func validateLimiter(c *configuration.Limiter) error {
 	return mError.ErrorOrNil()
 }
 
-// RateLimiter represents a rate limiter that can be used to control the rate of requests.
-type RateLimiter interface {
-	// TokensGranted checks if a request is allowed based on the given key and
-	// limits. Returns the number of tokens allowed.
-	TokensGranted(ctx context.Context, key string, tokensRequested float64) (*ratelimiter.Result, error)
-	Config() *configuration.Limiter
-}
-
-func (app *App) rateLimiterMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if len(app.rateLimiters) == 0 {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		ctx := app.context(w, r)
-		l := log.GetLogger(
-			log.WithContext(ctx),
-			log.WithKeys(
-				"referer",
-				"user_agent",
-				"root_repo",
-				"vars.name",
-				"vars.reference",
-				"vars.digest",
-				"vars.uuid",
-			),
-		).WithFields(
-			log.Fields{
-				"component": "registry.rate_limiter",
-				"method":    r.Method,
-				"path":      r.URL.Path, // Using path instead of full URL to reduce log size
-				"source_ip": GetIPV4orIPV6Prefix(r.RemoteAddr),
-			},
-		)
-
-		// Process each limiter in order of precedence
-		for _, limiter := range app.rateLimiters {
-			blocked := processLimiter(ctx, w, r, limiter, l)
-			if blocked {
-				return // Request was blocked, don't continue to next limiter or handler
-			}
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-// processLimiter handles a single rate limiter for a request
-// Returns true if the request was blocked
-func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limiter RateLimiter, l log.Logger) bool {
+// ProcessLimiter handles a single rate limiter for a request Returns true if
+// the request was blocked
+func ProcessLimiter(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	limiter RateLimiter,
+	l log.Logger,
+) bool {
 	cfg := limiter.Config()
 
 	l = l.WithFields(log.Fields{
@@ -244,7 +208,7 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 
 	result, err := limiter.TokensGranted(ctx, key, 1.0)
 	if err != nil {
-		serveErrorJSON(w, err, ctx, l)
+		serveErrorJSON(w, err, l)
 		return true // Block the request on error
 	}
 
@@ -261,7 +225,7 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 		}).Info("request blocked: rate limit exceeded")
 
 		if !cfg.LogOnly && cfg.Action.HardAction == "block" {
-			blockRateLimitedRequest(w, r, result, cfg.Match.Type, ctx, l)
+			blockRateLimitedRequest(w, r, result, cfg.Match.Type, l)
 			return true
 		}
 	}
@@ -271,36 +235,36 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 
 // writeRateLimiterHeaders writes the appropriate headers based on the result of the rate limiter
 // it writes to the headerRateLimit, headerRateLimitPolicy and headerXRateLimit* headers
-func writeRateLimiterHeaders(w http.ResponseWriter, result *ratelimiter.Result, rateLimiter RateLimiter) {
+func writeRateLimiterHeaders(w http.ResponseWriter, result *Result, rateLimiter RateLimiter) {
 	cfg := rateLimiter.Config()
 
 	// Set legacy X-RateLimit-* headers for backward compatibility
-	w.Header().Set(headerXRateLimitLimit, fmt.Sprintf("%d", cfg.Limit.Rate))
-	w.Header().Set(headerXRateLimitRemaining, fmt.Sprintf("%d", result.Remaining))
-	w.Header().Set(headerXRateLimitReset, fmt.Sprintf("%d", result.Reset))
+	w.Header().Set(HeaderXRateLimitLimit, fmt.Sprintf("%d", cfg.Limit.Rate))
+	w.Header().Set(HeaderXRateLimitRemaining, fmt.Sprintf("%d", result.Remaining))
+	w.Header().Set(HeaderXRateLimitReset, fmt.Sprintf("%d", result.Reset))
 
 	// Set draft IETF RateLimit header (draft-ietf-httpapi-ratelimit-headers-07)
 	// Format: limit=<limit>, remaining=<remaining>, reset=<reset>
-	w.Header().Set(headerRateLimit, fmt.Sprintf(headerRateLimitFormat,
+	w.Header().Set(HeaderRateLimit, fmt.Sprintf(HeaderRateLimitFormat,
 		cfg.Limit.Rate, result.Remaining, result.Reset))
 
 	// Set RateLimit-Policy header
 	// Format: <limit>;w=<window_in_seconds>
 	windowSeconds := int(cfg.Limit.PeriodDuration.Seconds())
-	w.Header().Set(headerRateLimitPolicy, fmt.Sprintf(headerRateLimitPolicyFormat,
+	w.Header().Set(HeaderRateLimitPolicy, fmt.Sprintf(HeaderRateLimitPolicyFormat,
 		cfg.Limit.Rate, windowSeconds))
 
 	// Set Retry-After header if rate limit exceeded
 	if result.Allowed <= 0 && result.RetryAfter > 0 {
-		w.Header().Set(headerRetryAfter, fmt.Sprintf("%.0f", result.RetryAfter.Seconds()))
+		w.Header().Set(HeaderRetryAfter, fmt.Sprintf("%.0f", result.RetryAfter.Seconds()))
 	}
 }
 
 // getRateLimitKey determines the key to use for rate limiting based on match type
 func getRateLimitKey(r *http.Request, matchType string, l log.Logger) (string, bool) {
 	switch matchType {
-	case matchTypeIP:
-		return fmt.Sprintf(matchTypeIPKey, encodeIPBase64(GetIPV4orIPV6Prefix(r.RemoteAddr))), true
+	case MatchTypeIP:
+		return fmt.Sprintf(MatchTypeIPKey, encodeIPBase64(GetIPV4orIPV6Prefix(r.RemoteAddr))), true
 	default:
 		l.Warn(
 			fmt.Sprintf("rate_limiter unsupported match type: %s, skipping", matchType),
@@ -310,7 +274,7 @@ func getRateLimitKey(r *http.Request, matchType string, l log.Logger) (string, b
 }
 
 // checkWarningThreshold checks if warning threshold is reached and logs appropriately
-func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limiter, l log.Logger) {
+func checkWarningThreshold(result *Result, cfg *configuration.Limiter, l log.Logger) {
 	warnThreshold := cfg.Action.WarnThreshold
 	// Special case for threshold 0.0 - no warnings needed
 	if warnThreshold <= 0 {
@@ -360,9 +324,9 @@ func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limite
 }
 
 // blockRateLimitedRequest handles blocking a request that exceeded rate limits
-func blockRateLimitedRequest(w http.ResponseWriter, r *http.Request, result *ratelimiter.Result, matchType string, ctx *Context, l log.Logger) {
-	w.Header().Set(headerXRateLimitRemaining, fmt.Sprintf("%d", result.Remaining))
-	w.Header().Set(headerRetryAfter, fmt.Sprintf("%f", result.RetryAfter.Seconds()))
+func blockRateLimitedRequest(w http.ResponseWriter, r *http.Request, result *Result, matchType string, l log.Logger) {
+	w.Header().Set(HeaderXRateLimitRemaining, fmt.Sprintf("%d", result.Remaining))
+	w.Header().Set(HeaderRetryAfter, fmt.Sprintf("%f", result.RetryAfter.Seconds()))
 
 	detail := map[string]string{
 		"ip":          GetIPV4orIPV6Prefix(r.RemoteAddr),
@@ -371,20 +335,18 @@ func blockRateLimitedRequest(w http.ResponseWriter, r *http.Request, result *rat
 		"remaining":   fmt.Sprintf("%d", result.Remaining),
 	}
 
-	serveErrorJSON(w, errcode.ErrorCodeTooManyRequests.WithDetail(detail), ctx, l)
+	serveErrorJSON(w, errcode.ErrorCodeTooManyRequests.WithDetail(detail), l)
 }
 
 // serveErrorJSON handles serving an error response as JSON
-func serveErrorJSON(w http.ResponseWriter, err error, ctx *Context, l log.Logger) {
+func serveErrorJSON(w http.ResponseWriter, err error, l log.Logger) {
 	var errorToServe errcode.Error
 	if !errors.As(err, &errorToServe) {
 		errorToServe = errcode.FromUnknownError(err)
 	}
 
 	if err := errcode.ServeJSON(w, errorToServe); err != nil {
-		l.WithError(err).Error(
-			fmt.Sprintf("error serving error json from %v", ctx.Errors),
-		)
+		l.WithError(err).Error("error serving error json")
 	}
 }
 

@@ -1,4 +1,4 @@
-package handlers
+package ratelimiter
 
 import (
 	"fmt"
@@ -31,25 +31,22 @@ var validLimiterCfg = configuration.Limiter{
 
 func TestRateLimiter_parseLimitersConfig_Precedence(t *testing.T) {
 	t.Run("multiple limiters with different precedence", func(t *testing.T) {
-		rateLimiterCfg := &configuration.RateLimiter{
-			Enabled: true,
-			Limiters: []configuration.Limiter{
-				func(cfg configuration.Limiter) configuration.Limiter {
-					cfg.Name = "third"
-					cfg.Precedence = 30
-					return cfg
-				}(validLimiterCfg),
-				func(cfg configuration.Limiter) configuration.Limiter {
-					cfg.Name = "first"
-					cfg.Precedence = 10
-					return cfg
-				}(validLimiterCfg),
-				func(cfg configuration.Limiter) configuration.Limiter {
-					cfg.Name = "second"
-					cfg.Precedence = 20
-					return cfg
-				}(validLimiterCfg),
-			},
+		rateLimiterCfg := []configuration.Limiter{
+			func(cfg configuration.Limiter) configuration.Limiter {
+				cfg.Name = "third"
+				cfg.Precedence = 30
+				return cfg
+			}(validLimiterCfg),
+			func(cfg configuration.Limiter) configuration.Limiter {
+				cfg.Name = "first"
+				cfg.Precedence = 10
+				return cfg
+			}(validLimiterCfg),
+			func(cfg configuration.Limiter) configuration.Limiter {
+				cfg.Name = "second"
+				cfg.Precedence = 20
+				return cfg
+			}(validLimiterCfg),
 		}
 
 		gotCfg, err := parseLimitersConfig(rateLimiterCfg)
@@ -76,20 +73,17 @@ func TestRateLimiter_parseLimitersConfig_Precedence(t *testing.T) {
 	})
 
 	t.Run("multiple limiters with same precedence keeps the order", func(t *testing.T) {
-		rateLimiterCfg := &configuration.RateLimiter{
-			Enabled: true,
-			Limiters: []configuration.Limiter{
-				func(cfg configuration.Limiter) configuration.Limiter {
-					cfg.Name = "third"
-					cfg.Precedence = 30
-					return cfg
-				}(validLimiterCfg),
-				func(cfg configuration.Limiter) configuration.Limiter {
-					cfg.Name = "first"
-					cfg.Precedence = 30
-					return cfg
-				}(validLimiterCfg),
-			},
+		rateLimiterCfg := []configuration.Limiter{
+			func(cfg configuration.Limiter) configuration.Limiter {
+				cfg.Name = "third"
+				cfg.Precedence = 30
+				return cfg
+			}(validLimiterCfg),
+			func(cfg configuration.Limiter) configuration.Limiter {
+				cfg.Name = "first"
+				cfg.Precedence = 30
+				return cfg
+			}(validLimiterCfg),
 		}
 		gotCfg, err := parseLimitersConfig(rateLimiterCfg)
 		require.NoError(t, err)

@@ -49,6 +49,7 @@ import (
 	"github.com/docker/distribution/registry/internal"
 	redismetrics "github.com/docker/distribution/registry/internal/metrics/redis"
 	iredis "github.com/docker/distribution/registry/internal/redis"
+	"github.com/docker/distribution/registry/middleware/ratelimiter"
 	registrymiddleware "github.com/docker/distribution/registry/middleware/registry"
 	repositorymiddleware "github.com/docker/distribution/registry/middleware/repository"
 	"github.com/docker/distribution/registry/storage"
@@ -151,7 +152,7 @@ type App struct {
 
 	// rateLimiters expects a slice of ordered limiters by precedence
 	// see configureRateLimiters for implementation details.
-	rateLimiters []RateLimiter
+	rateLimiters []ratelimiter.RateLimiter
 
 	healthRegistry *health.Registry
 
@@ -267,7 +268,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	// is currently enabled (`gstg` and `pre`) so we don't need to support it
 	// in the dualCache.
 	// https://gitlab.com/groups/gitlab-com/gl-infra/data-access/durability/-/epics/24#note_2599994238
-	if err := app.configureRedisRateLimiter(ctx, config); err != nil {
+	if err := app.ConfigureRedisRateLimiter(ctx, config); err != nil {
 		// Redis rate-limiter is not a strictly required dependency, we simply log and report a failure here
 		// and proceed to not prevent the app from starting.
 		log.WithError(err).Error("failed configuring Redis rate-limiter")
@@ -1170,7 +1171,7 @@ func (app *App) configureEvents(registryConfig *configuration.Configuration) {
 	}
 }
 
-func configureRedisClient(ctx context.Context, config configuration.RedisCommon, metricsEnabled bool, instanceName string) (redis.UniversalClient, error) {
+func ConfigureRedisClient(ctx context.Context, config configuration.RedisCommon, metricsEnabled bool, instanceName string) (redis.UniversalClient, error) {
 	opts := &redis.UniversalOptions{
 		Addrs:            strings.Split(config.Addr, ","),
 		DB:               config.DB,
@@ -1223,7 +1224,7 @@ func (app *App) configureRedisLoadBalancingCache(ctx context.Context, config *co
 		return nil
 	}
 
-	client, err := configureRedisClient(ctx, config.Redis.LoadBalancing, config.HTTP.Debug.Prometheus.Enabled, "loadbalancing")
+	client, err := ConfigureRedisClient(ctx, config.Redis.LoadBalancing, config.HTTP.Debug.Prometheus.Enabled, "loadbalancing")
 	if err != nil {
 		return fmt.Errorf("failed to configure Redis for load balancing: %w", err)
 	}
@@ -1234,7 +1235,7 @@ func (app *App) configureRedisLoadBalancingCache(ctx context.Context, config *co
 	return nil
 }
 
-func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
+func (app *App) ConfigureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
 	l := dlog.GetLogger(dlog.WithContext(app.Context))
 	if !config.RateLimiter.Enabled {
 		l.Warn("rate-limiter is disabled")
@@ -1245,12 +1246,16 @@ func (app *App) configureRedisRateLimiter(ctx context.Context, config *configura
 		return fmt.Errorf("rate-limiting is enabled, but redis for rate-limiter is not defined and is requied")
 	}
 
-	redisClient, err := configureRedisClient(ctx, config.Redis.RateLimiter, config.HTTP.Debug.Prometheus.Enabled, "ratelimiting")
+	redisClient, err := ConfigureRedisClient(ctx, config.Redis.RateLimiter, config.HTTP.Debug.Prometheus.Enabled, "ratelimiting")
 	if err != nil {
 		return fmt.Errorf("failed to configure Redis for rate limiting: %w", err)
 	}
 
-	err = app.configureRateLimiters(redisClient, &config.RateLimiter)
+	app.rateLimiters, err = ratelimiter.NewRateLimitersFromConfig(
+		dcontext.GetLogger(app.Context),
+		redisClient,
+		config.RateLimiter.Limiters,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to configure rate limiting: %w", err)
 	}
@@ -1260,12 +1265,52 @@ func (app *App) configureRedisRateLimiter(ctx context.Context, config *configura
 	return nil
 }
 
+func (app *App) RateLimiterMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(app.rateLimiters) == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ctx := app.context(w, r)
+		l := dlog.GetLogger(
+			dlog.WithContext(ctx),
+			dlog.WithKeys(
+				"referer",
+				"user_agent",
+				"root_repo",
+				"vars.name",
+				"vars.reference",
+				"vars.digest",
+				"vars.uuid",
+			),
+		).WithFields(
+			dlog.Fields{
+				"component": "registry.rate_limiter",
+				"method":    r.Method,
+				"path":      r.URL.Path, // Using path instead of full URL to reduce log size
+				"source_ip": ratelimiter.GetIPV4orIPV6Prefix(r.RemoteAddr),
+			},
+		)
+
+		// Process each limiter in order of precedence
+		for _, limiter := range app.rateLimiters {
+			blocked := ratelimiter.ProcessLimiter(ctx, w, r, limiter, l)
+			if blocked {
+				return // Request was blocked, don't continue to next limiter or handler
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (app *App) configureRedisCache(ctx context.Context, config *configuration.Configuration) error {
 	if !config.Redis.Cache.Enabled {
 		return nil
 	}
 
-	client, err := configureRedisClient(ctx, config.Redis.Cache, config.HTTP.Debug.Prometheus.Enabled, "cache")
+	client, err := ConfigureRedisClient(ctx, config.Redis.Cache, config.HTTP.Debug.Prometheus.Enabled, "cache")
 	if err != nil {
 		return fmt.Errorf("failed to configure Redis for caching: %w", err)
 	}
@@ -1282,7 +1327,7 @@ func (app *App) configureRedisBlobDesc(ctx context.Context, config *configuratio
 		return nil
 	}
 
-	client, err := configureRedisClient(ctx, config.Redis.RedisCommon, false, "")
+	client, err := ConfigureRedisClient(ctx, config.Redis.RedisCommon, false, "")
 	if err != nil {
 		return fmt.Errorf("failed to configure Redis for blob descriptor cache: %w", err)
 	}
@@ -1376,8 +1421,8 @@ func (app *App) initMetaRouter() error {
 	// NOTE(prozlach): redis for rate limiter is a dependency and is checked
 	// later in the code
 	if app.Config.RateLimiter.Enabled {
-		app.router.distribution.Use(app.rateLimiterMiddleware)
-		app.router.gitlab.Use(app.rateLimiterMiddleware)
+		app.router.distribution.Use(app.RateLimiterMiddleware)
+		app.router.gitlab.Use(app.RateLimiterMiddleware)
 	}
 
 	if app.Config.Database.Enabled && app.Config.Database.LoadBalancing.Enabled {
