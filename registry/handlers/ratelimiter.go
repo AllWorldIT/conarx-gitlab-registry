@@ -189,10 +189,11 @@ type RateLimiter interface {
 
 func (app *App) rateLimiterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !app.Config.RateLimiter.Enabled || app.rateLimiters == nil {
+		if len(app.rateLimiters) == 0 {
 			next.ServeHTTP(w, r)
 			return
 		}
+
 		l := dcontext.GetLogger(r.Context())
 		ctx := app.context(w, r)
 

@@ -1233,22 +1233,14 @@ func (app *App) configureRedisLoadBalancingCache(ctx context.Context, config *co
 }
 
 func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
-	if !config.Redis.RateLimiter.Enabled {
-		if config.RateLimiter.Enabled {
-			dlog.GetLogger(dlog.WithContext(app.Context)).
-				Warn(`Redis is disabled but the rate-limiter is enabled.
-					This will result in a no-op configuration.`,
-				)
-		}
+	l := dlog.GetLogger(dlog.WithContext(app.Context))
+	if !config.RateLimiter.Enabled {
+		l.Warn(`rate-limiter is disabled.`)
 		return nil
 	}
 
-	if !config.RateLimiter.Enabled {
-		dlog.GetLogger(dlog.WithContext(app.Context)).
-			Warn(`Redis is enabled but the rate-limiter is disabled.
-					This will result in a no-op configuration.`,
-			)
-		return nil
+	if !config.Redis.RateLimiter.Enabled {
+		return fmt.Errorf("rate-limiting is enabled, but redis for rate-limiter is not defined and is requied")
 	}
 
 	redisClient, err := configureRedisClient(ctx, config.Redis.RateLimiter, config.HTTP.Debug.Prometheus.Enabled, "ratelimiting")
@@ -1261,7 +1253,7 @@ func (app *App) configureRedisRateLimiter(ctx context.Context, config *configura
 		return fmt.Errorf("failed to configure rate limiting: %w", err)
 	}
 
-	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis configured successfully for rate limiting")
+	l.Info("rate limiting has been successfully configured")
 
 	return nil
 }
@@ -1379,7 +1371,9 @@ func (app *App) initMetaRouter() error {
 	app.router.distribution.Use(distributionAPIVersionMiddleware)
 
 	app.router.gitlab.Use(app.gorillaLogMiddleware)
-	if app.Config.RateLimiter.Enabled && app.Config.Redis.RateLimiter.Enabled {
+	// NOTE(prozlach): redis for rate limiter is a dependency and is checked
+	// later in the code
+	if app.Config.RateLimiter.Enabled {
 		app.router.distribution.Use(app.rateLimiterMiddleware)
 		app.router.gitlab.Use(app.rateLimiterMiddleware)
 	}
