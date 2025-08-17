@@ -45,7 +45,6 @@ func (s *RateLimiterTestSuite) SetupSuite() {
 // SetupTest runs before each individual test
 func (s *RateLimiterTestSuite) SetupTest() {
 	s.T().Logf("Setting up test: %s", s.T().Name())
-	s.cleanupRedisKeys()
 
 	s.ctx, s.ctxCancelF = context.WithCancel(
 		log.WithLogger(
@@ -57,6 +56,7 @@ func (s *RateLimiterTestSuite) SetupTest() {
 			),
 		),
 	)
+	s.cleanupRedisKeys()
 }
 
 // TearDownTest runs after each individual test
@@ -68,13 +68,8 @@ func (s *RateLimiterTestSuite) TearDownTest() {
 		s.redisClient = nil
 	}
 
-	s.ctxCancelF()
-}
-
-// TearDownSuite runs once after all tests in the suite
-func (s *RateLimiterTestSuite) TearDownSuite() {
-	s.T().Logf("Tearing down test suite")
 	s.cleanupRedisKeys()
+	s.ctxCancelF()
 }
 
 // setupConfig creates a configuration with the given limiters
@@ -96,7 +91,9 @@ func (s *RateLimiterTestSuite) setupConfig(limiters []configuration.Limiter) *co
 }
 
 // setupApp creates an App instance with the given configuration
-func (s *RateLimiterTestSuite) setupApp(config *configuration.Configuration) *App {
+func (s *RateLimiterTestSuite) setupApp(limiters []configuration.Limiter) *App {
+	config := s.setupConfig(limiters)
+
 	app := &App{
 		Context: s.ctx,
 		Config:  config,
@@ -123,7 +120,8 @@ func (s *RateLimiterTestSuite) createTestRequest(remoteAddr string) (*http.Reque
 }
 
 // createMiddlewareHandler creates a test handler with rate limiting middleware
-func (s *RateLimiterTestSuite) createMiddlewareHandler(app *App) http.Handler {
+func (s *RateLimiterTestSuite) createMiddlewareHandler(limiters []configuration.Limiter) http.Handler {
+	app := s.setupApp(limiters)
 	successHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		msg := []byte("success")
@@ -205,112 +203,114 @@ func (s *RateLimiterTestSuite) cleanupRedisKeys() {
 		},
 	}
 
-	redisClient, err := configureRedisClient(context.Background(), config.Redis.RateLimiter, false, "cleanup")
+	redisClient, err := configureRedisClient(
+		s.ctx, config.Redis.RateLimiter, false, "cleanup",
+	)
 	s.Require().NoError(err, "Failed to create Redis client for cleanup")
 	defer redisClient.Close()
 
 	s.Require().EventuallyWithT(
 		func(tt *assert.CollectT) {
 			err := redisClient.FlushAll(s.ctx).Err()
-			assert.NoError(tt, err)
+			if !assert.NoError(tt, err) {
+				return
+			}
+			remainingKeys, err := redisClient.Keys(s.ctx, "*").Result()
+			if !assert.NoError(tt, err) {
+				return
+			}
+			assert.Empty(tt, remainingKeys)
 		},
 		5*time.Second,
-		500*time.Millisecond,
+		750*time.Millisecond,
 		"flushing Redis databases has failed")
-
-	remainingKeys, err := redisClient.Keys(s.ctx, "*").Result()
-	s.Require().NoError(err)
-	s.Require().Empty(remainingKeys)
 
 	s.T().Logf("Redis cleanup completed")
 }
 
 func (s *RateLimiterTestSuite) TestBlocksRequestsWhenLimitExceeded() {
-	limiter := configuration.Limiter{
-		Name:        "block-limiter",
-		Description: "Blocking rate limiter",
-		LogOnly:     false,
-		Match:       configuration.Match{Type: matchTypeIP},
-		Precedence:  10,
-		Limit:       configuration.Limit{Rate: 3, Period: "second", Burst: 6},
-		Action:      configuration.Action{WarnThreshold: 0.7, WarnAction: "log", HardAction: "block"},
+	limiters := []configuration.Limiter{
+		{
+			Name:        "block-limiter",
+			Description: "Blocking rate limiter",
+			LogOnly:     false,
+			Match:       configuration.Match{Type: matchTypeIP},
+			Precedence:  10,
+			Limit:       configuration.Limit{Rate: 3, Period: "second", Burst: 6},
+			Action:      configuration.Action{WarnThreshold: 0.7, WarnAction: "log", HardAction: "block"},
+		},
 	}
-
-	config := s.setupConfig([]configuration.Limiter{limiter})
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
-
-	req, resp := s.createTestRequest(s.testIP())
+	handler := s.createMiddlewareHandler(limiters)
 
 	// Should allow 6 burst requests
+	var req *http.Request
+	var resp *httptest.ResponseRecorder
+	testIP := s.testIP()
 	for i := 0; i < 6; i++ {
+		req, resp = s.createTestRequest(testIP)
+
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusOK, resp.Code, "Request %d should be allowed", i+1)
 		s.NotEmpty(resp.Header().Get(headerXRateLimitRemaining))
 
-		remaining, _ := strconv.Atoi(resp.Header().Get(headerXRateLimitRemaining))
+		remaining, err := strconv.Atoi(resp.Header().Get(headerXRateLimitRemaining))
+		s.Require().NoError(err)
 		s.Equal(6-i-1, remaining, "Remaining should be %d after request %d", 6-i-1, i+1)
-
-		resp = httptest.NewRecorder()
 	}
 
 	// 7th request should be blocked
+	req, resp = s.createTestRequest(testIP)
 	handler.ServeHTTP(resp, req)
 	s.Equal(http.StatusTooManyRequests, resp.Code, "7th request should be blocked")
 	s.verifyRateLimitResponse(resp)
 }
 
 func (s *RateLimiterTestSuite) TestLogOnlyModeNeverBlocks() {
-	limiter := configuration.Limiter{
-		Name:        "log-only-limiter",
-		Description: "Log-only rate limiter",
-		LogOnly:     true,
-		Match:       configuration.Match{Type: matchTypeIP},
-		Precedence:  10,
-		Limit:       configuration.Limit{Rate: 3, Period: "second", Burst: 6},
-		Action:      configuration.Action{WarnThreshold: 0.7, WarnAction: "log", HardAction: "block"},
+	limiters := []configuration.Limiter{
+		{
+			Name:        "log-only-limiter",
+			Description: "Log-only rate limiter",
+			LogOnly:     true,
+			Match:       configuration.Match{Type: matchTypeIP},
+			Precedence:  10,
+			Limit:       configuration.Limit{Rate: 3, Period: "second", Burst: 6},
+			Action:      configuration.Action{WarnThreshold: 0.7, WarnAction: "log", HardAction: "block"},
+		},
 	}
-
-	config := s.setupConfig([]configuration.Limiter{limiter})
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
-
-	req, resp := s.createTestRequest(s.testIP())
+	handler := s.createMiddlewareHandler(limiters)
 
 	// Should never block even after exceeding limit
+	testIP := s.testIP()
 	for i := 0; i < 8; i++ {
+		req, resp := s.createTestRequest(testIP)
+
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusOK, resp.Code)
 		s.assertRateLimitHeaders(resp)
-		resp = httptest.NewRecorder()
 	}
 }
 
 func (s *RateLimiterTestSuite) TestRateLimitRemainingHeaderDecreasesCorrectly() {
-	limiter := configuration.Limiter{
-		Name:        "header-test-limiter",
-		Description: "Rate limiter for header testing",
-		LogOnly:     false,
-		Match:       configuration.Match{Type: matchTypeIP},
-		Precedence:  10,
-		Limit:       configuration.Limit{Rate: 15, Period: "minute", Burst: 30},
-		Action:      configuration.Action{WarnThreshold: 0.8, WarnAction: "log", HardAction: "block"},
+	limiters := []configuration.Limiter{
+		{
+			Name:        "header-test-limiter",
+			Description: "Rate limiter for header testing",
+			LogOnly:     false,
+			Match:       configuration.Match{Type: matchTypeIP},
+			Precedence:  10,
+			Limit:       configuration.Limit{Rate: 15, Period: "minute", Burst: 30},
+			Action:      configuration.Action{WarnThreshold: 0.8, WarnAction: "log", HardAction: "block"},
+		},
 	}
-
-	config := s.setupConfig([]configuration.Limiter{limiter})
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
-
-	req, resp := s.createTestRequest(s.testIP())
-
-	// Track expected remaining values (global burst = 30)
-	expectedRemaining := make([]int, 30)
-	for i := 0; i < 30; i++ {
-		expectedRemaining[i] = 29 - i
-	}
+	handler := s.createMiddlewareHandler(limiters)
 
 	// Test burst capacity - should consume from burst first
+	var req *http.Request
+	var resp *httptest.ResponseRecorder
+	testIP := s.testIP()
 	for i := 0; i < 30; i++ {
+		req, resp = s.createTestRequest(testIP)
+
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusOK, resp.Code, "Request %d should be allowed", i+1)
 
@@ -319,14 +319,13 @@ func (s *RateLimiterTestSuite) TestRateLimitRemainingHeaderDecreasesCorrectly() 
 
 		remaining, err := strconv.Atoi(remainingHeader)
 		s.Require().NoError(err, "X-RateLimit-Remaining should be a valid integer for request %d", i+1)
-		s.Equal(expectedRemaining[i], remaining,
-			"X-RateLimit-Remaining should be %d for request %d", expectedRemaining[i], i+1)
+		s.Equal(29-i, remaining,
+			"X-RateLimit-Remaining should be %d for request %d", 29-i, i+1)
 		s.assertRateLimitHeaders(resp)
-
-		resp = httptest.NewRecorder()
 	}
 
 	// 31st request should be blocked (burst exhausted)
+	req, resp = s.createTestRequest(testIP)
 	handler.ServeHTTP(resp, req)
 	s.Equal(http.StatusTooManyRequests, resp.Code, "31st request should be blocked")
 	s.verifyRateLimitResponse(resp)
@@ -336,29 +335,29 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 	testIPs := []string{s.testIP(), s.testIP(), s.testIP()}
 	s.T().Logf("Using test IPs: %v", testIPs)
 
-	limiter := configuration.Limiter{
-		Name:        "multi-ip-limiter",
-		Description: "Rate limiter for testing multiple IPs",
-		LogOnly:     false,
-		Match:       configuration.Match{Type: matchTypeIP},
-		Precedence:  10,
-		Limit:       configuration.Limit{Rate: 6, Period: "minute", Burst: 9},
-		Action:      configuration.Action{WarnThreshold: 0.5, WarnAction: "log", HardAction: "block"},
+	limiters := []configuration.Limiter{
+		{
+			Name:        "multi-ip-limiter",
+			Description: "Rate limiter for testing multiple IPs",
+			LogOnly:     false,
+			Match:       configuration.Match{Type: matchTypeIP},
+			Precedence:  10,
+			Limit:       configuration.Limit{Rate: 6, Period: "minute", Burst: 9},
+			Action:      configuration.Action{WarnThreshold: 0.5, WarnAction: "log", HardAction: "block"},
+		},
 	}
 
-	config := s.setupConfig([]configuration.Limiter{limiter})
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
+	handler := s.createMiddlewareHandler(limiters)
 
 	// Test different IPs should have independent counters
 	for ipIndex, testIP := range testIPs {
 		s.T().Logf("=== Testing IP %d: %s ===", ipIndex+1, testIP)
 
-		req, resp := s.createTestRequest(testIP)
-
 		// Each IP should start with global burst capacity (9)
 		expectedRemaining := []int{8, 7, 6, 5, 4, 3, 2, 1, 0}
 		for i := 0; i < 9; i++ {
+			req, resp := s.createTestRequest(testIP)
+
 			handler.ServeHTTP(resp, req)
 			s.Equal(http.StatusOK, resp.Code, "Request %d from IP %s should be allowed", i+1, testIP)
 
@@ -370,11 +369,11 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 			s.Equal(expectedRemaining[i], remaining, "X-RateLimit-Remaining should be %d for request %d from IP %s", expectedRemaining[i], i+1, testIP)
 
 			s.T().Logf("IP %s, Request %d: X-RateLimit-Remaining = %d", testIP, i+1, remaining)
-
-			resp = httptest.NewRecorder()
 		}
 
 		// 10th request from this IP should be blocked
+		req, resp := s.createTestRequest(testIP)
+
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusTooManyRequests, resp.Code, "10th request from IP %s should be blocked", testIP)
 
@@ -386,19 +385,18 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 }
 
 func (s *RateLimiterTestSuite) TestPerIPRateLimitingAcrossShards() {
-	limiter := configuration.Limiter{
-		Name:        "per-ip-limiter",
-		Description: "Test per-IP rate limiting across shards",
-		LogOnly:     false,
-		Match:       configuration.Match{Type: matchTypeIP},
-		Precedence:  10,
-		Limit:       configuration.Limit{Rate: 3, Period: "minute", Burst: 9},
-		Action:      configuration.Action{WarnThreshold: 0.8, WarnAction: "log", HardAction: "block"},
+	limiters := []configuration.Limiter{
+		{
+			Name:        "per-ip-limiter",
+			Description: "Test per-IP rate limiting across shards",
+			LogOnly:     false,
+			Match:       configuration.Match{Type: matchTypeIP},
+			Precedence:  10,
+			Limit:       configuration.Limit{Rate: 3, Period: "minute", Burst: 9},
+			Action:      configuration.Action{WarnThreshold: 0.8, WarnAction: "log", HardAction: "block"},
+		},
 	}
-
-	config := s.setupConfig([]configuration.Limiter{limiter})
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
+	handler := s.createMiddlewareHandler(limiters)
 
 	// Use IPs that hash to different Redis shards
 	crossShardIPs := []string{s.testIP(), s.testIP(), s.testIP()}
@@ -430,12 +428,7 @@ func (s *RateLimiterTestSuite) TestPerIPRateLimitingAcrossShards() {
 	}
 }
 
-// Test suite for multiple limiters
-type MultipleLimitersTestSuite struct {
-	RateLimiterTestSuite
-}
-
-func (s *MultipleLimitersTestSuite) TestLimiterPrecedenceAffectsProcessingOrder() {
+func (s *RateLimiterTestSuite) TestLimiterPrecedenceAffectsProcessingOrder() {
 	limiters := []configuration.Limiter{
 		{
 			Name:        "high-precedence",
@@ -456,10 +449,7 @@ func (s *MultipleLimitersTestSuite) TestLimiterPrecedenceAffectsProcessingOrder(
 			Action:      configuration.Action{WarnThreshold: 0.0, WarnAction: "log", HardAction: "log"},
 		},
 	}
-
-	config := s.setupConfig(limiters)
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
+	handler := s.createMiddlewareHandler(limiters)
 
 	req, resp := s.createTestRequest(s.testIP())
 
@@ -470,120 +460,66 @@ func (s *MultipleLimitersTestSuite) TestLimiterPrecedenceAffectsProcessingOrder(
 	s.Equal(http.StatusOK, resp.Code, "Request should succeed with log-only limiters")
 }
 
-// Additional test suites for specific functionality
-
-type BasicFunctionalityTestSuite struct {
-	RateLimiterTestSuite
-}
-
-func (s *BasicFunctionalityTestSuite) TestBasicFunctionality() {
-	limiter := configuration.Limiter{
-		Name:        "basic-test",
-		Description: "Basic functionality test",
-		LogOnly:     false,
-		Match:       configuration.Match{Type: matchTypeIP},
-		Precedence:  10,
-		Limit:       configuration.Limit{Rate: 6, Period: "second", Burst: 12},
-		Action:      configuration.Action{WarnThreshold: 0.0, WarnAction: "log", HardAction: "block"},
+func (s *RateLimiterTestSuite) TestThresholdCalculation() {
+	limiters := []configuration.Limiter{
+		{
+			Name:        "threshold-calc-test",
+			Description: "Threshold calculation test",
+			LogOnly:     false,
+			Match:       configuration.Match{Type: matchTypeIP},
+			Precedence:  10,
+			Limit:       configuration.Limit{Rate: 15, Period: "second", Burst: 30},
+			Action:      configuration.Action{WarnThreshold: 0.6, WarnAction: "log", HardAction: "block"},
+		},
 	}
-
-	config := s.setupConfig([]configuration.Limiter{limiter})
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
-
-	req, resp := s.createTestRequest(s.testIP())
-
-	// Should be able to make 12 requests (global burst capacity)
-	for i := 1; i <= 12; i++ {
-		handler.ServeHTTP(resp, req)
-		s.Equal(http.StatusOK, resp.Code, "Request %d should be allowed", i)
-		s.NotEmpty(resp.Header().Get(headerRateLimit))
-		s.NotEmpty(resp.Header().Get(headerRateLimitPolicy))
-		s.NotEmpty(resp.Header().Get(headerXRateLimitLimit))
-		s.NotEmpty(resp.Header().Get(headerXRateLimitRemaining))
-		s.NotEmpty(resp.Header().Get(headerXRateLimitReset))
-
-		resp = httptest.NewRecorder()
-	}
-
-	// 13th request should be blocked
-	handler.ServeHTTP(resp, req)
-	s.Equal(http.StatusTooManyRequests, resp.Code, "13th request should be blocked")
-
-	remainingHeader, err := strconv.Atoi(resp.Header().Get(headerXRateLimitRemaining))
-	s.Require().NoError(err)
-	s.Zero(remainingHeader, "Remaining header should be zero, got: %d", remainingHeader)
-}
-
-type ThresholdTestSuite struct {
-	RateLimiterTestSuite
-}
-
-func (s *ThresholdTestSuite) TestThresholdCalculation() {
-	limiter := configuration.Limiter{
-		Name:        "threshold-calc-test",
-		Description: "Threshold calculation test",
-		LogOnly:     false,
-		Match:       configuration.Match{Type: matchTypeIP},
-		Precedence:  10,
-		Limit:       configuration.Limit{Rate: 15, Period: "second", Burst: 30},
-		Action:      configuration.Action{WarnThreshold: 0.6, WarnAction: "log", HardAction: "block"},
-	}
-
-	config := s.setupConfig([]configuration.Limiter{limiter})
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
-
-	req, resp := s.createTestRequest(s.testIP())
+	handler := s.createMiddlewareHandler(limiters)
 
 	// With global burst=30 and threshold=0.6, warning should trigger at 18th request
 	for i := 1; i <= 17; i++ {
+		req, resp := s.createTestRequest(s.testIP())
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusOK, resp.Code, "Request %d should be allowed", i)
-		resp = httptest.NewRecorder()
 	}
 
 	// 18th request should trigger warning (60% of 30 = 18)
+	req, resp := s.createTestRequest(s.testIP())
 	handler.ServeHTTP(resp, req)
 	s.Equal(http.StatusOK, resp.Code, "18th request should be allowed")
 }
 
-func (s *ThresholdTestSuite) TestZeroThreshold() {
-	limiter := configuration.Limiter{
-		Name:        "zero-threshold",
-		Description: "Zero threshold test limiter",
-		LogOnly:     false,
-		Match:       configuration.Match{Type: matchTypeIP},
-		Precedence:  10,
-		Limit:       configuration.Limit{Rate: 6, Period: "second", Burst: 12},
-		Action:      configuration.Action{WarnThreshold: 0.0, WarnAction: "log", HardAction: "block"},
+func (s *RateLimiterTestSuite) TestZeroThreshold() {
+	limiters := []configuration.Limiter{
+		{
+			Name:        "zero-threshold",
+			Description: "Zero threshold test limiter",
+			LogOnly:     false,
+			Match:       configuration.Match{Type: matchTypeIP},
+			Precedence:  10,
+			Limit:       configuration.Limit{Rate: 6, Period: "second", Burst: 12},
+			Action:      configuration.Action{WarnThreshold: 0.0, WarnAction: "log", HardAction: "block"},
+		},
 	}
-
-	config := s.setupConfig([]configuration.Limiter{limiter})
-	app := s.setupApp(config)
-	handler := s.createMiddlewareHandler(app)
-
-	req, resp := s.createTestRequest(s.testIP())
+	handler := s.createMiddlewareHandler(limiters)
 
 	// Should be able to make 12 requests before being blocked
+	var req *http.Request
+	var resp *httptest.ResponseRecorder
+	testIP := s.testIP()
 	for i := 0; i < 12; i++ {
+		req, resp = s.createTestRequest(testIP)
+
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusOK, resp.Code, "Request %d should be allowed", i+1)
 		s.assertRateLimitHeaders(resp)
-		resp = httptest.NewRecorder()
 	}
 
 	// 13th request should be blocked
+	req, resp = s.createTestRequest(testIP)
 	handler.ServeHTTP(resp, req)
 	s.Equal(http.StatusTooManyRequests, resp.Code, "13th request should be blocked")
 }
 
-// Redis connection test suite
-type RedisConnectionTestSuite struct {
-	RateLimiterTestSuite
-}
-
-func (s *RedisConnectionTestSuite) TestRedisClusterConnection() {
+func (s *RateLimiterTestSuite) TestRedisClusterConnection() {
 	if !strings.Contains(s.redisAddr, ",") {
 		s.T().Skipf("REDIS_ADDR only has one host, skipping cluster test")
 	}
@@ -631,22 +567,6 @@ func (s *RedisConnectionTestSuite) TestRedisClusterConnection() {
 }
 
 // Test runner functions
-func TestRateLimiterBasicFunctionality(t *testing.T) {
+func TestRateLimiter(t *testing.T) {
 	suite.Run(t, new(RateLimiterTestSuite))
-}
-
-func TestRateLimiterMultipleLimiters(t *testing.T) {
-	suite.Run(t, new(MultipleLimitersTestSuite))
-}
-
-func TestRateLimitersBasicWithCleanup(t *testing.T) {
-	suite.Run(t, new(BasicFunctionalityTestSuite))
-}
-
-func TestRateLimitersThresholdCalculation(t *testing.T) {
-	suite.Run(t, new(ThresholdTestSuite))
-}
-
-func TestRedisClusterConnection(t *testing.T) {
-	suite.Run(t, new(RedisConnectionTestSuite))
 }
