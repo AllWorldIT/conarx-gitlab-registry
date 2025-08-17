@@ -71,10 +71,7 @@ func (s *RateLimiterTestSuite) setupConfig(limiters []configuration.Limiter) *co
 			RateLimiter: configuration.RedisCommon{
 				Enabled:     true,
 				Addr:        s.redisAddr,
-				DialTimeout: 5 * time.Second,
-				TLS: configuration.RedisTLS{
-					Insecure: true,
-				},
+				DialTimeout: 2 * time.Second,
 			},
 		},
 	}
