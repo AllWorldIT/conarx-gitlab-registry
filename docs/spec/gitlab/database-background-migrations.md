@@ -216,6 +216,36 @@ deactivate Worker
 
 ```
 
+#### Back-off Strategy
+
+The asynchronous background migration worker uses exponential back-off to dynamically adjust sleep intervals between job cycles based on execution outcomes. This strategy ensures rapid job processing when work is available while minimizing resource consumption and coordinating multiple workers during quiet periods or system stress conditions.
+
+##### Back-off Behavior
+
+**Reset to minimum interval (1 minute):**
+
+- Job found and executed successfully — likely more jobs exist
+- Failed to obtain distributed lock — another worker may be processing jobs
+
+**Exponential increase (up to 30 minutes maximum):**
+
+- No jobs found — reduces database load during idle periods  
+- Job execution failed — allows system recovery time
+- High WAL pressure detected — eases database write pressure
+
+##### Sleep Intervals and Jitter
+
+The sleep interval follows an exponential progression with 33% randomization:
+
+```plaintext
+Base intervals: 1min → 2min → 4min → 8min → 16min → 30min (max)
+With jitter:    ±33% random variation around each base interval
+```
+
+For example, a 4-minute base interval becomes 2.7–5.3 minutes randomly. This jitter prevents the "thundering herd" problem when multiple worker instances restart simultaneously, ensuring they don't all compete for jobs at the same time.
+
+Additionally, each worker applies random startup jitter (0–60 seconds) when first starting to further distribute initial job checks across the worker fleet.
+
 ## Synchronously
 
 Synchronous BBMs are executed manually via the registry CLI process, allowing registry administrators to directly manage migrations. Synchronous migration runs offer a higher level of urgency compared to asynchronous migrations, as they attempt to run migrations to completion without interruption. By using the CLI, administrators can initiate, monitor, and verify the completion of these migrations in real-time, providing immediate results and a higher level of control over the migration process. This approach is particularly useful for time-sensitive database updates or when immediate migration completion is required.
@@ -397,11 +427,9 @@ It's worth noting that fresh registry installations can execute and finalize the
 
 ### Work Function Not Found Error
 
-During rolling upgrades or version rollbacks, background migration jobs may fail with a `work function not found` error if some pods do not yet have the required function code. These failures will mark the migration as failed, pending manual intervention.
+During rolling upgrades or version rollbacks, background migration jobs may temporarily log a work function not found error when some worker pods lack the required function code. This transient error triggers exponential backoff (starting from the job interval and increasing up to 30 minutes) until all worker pods are updated with the necessary work functions. Unlike other background migration validation errors, this will not permanently mark the migration as failed, allowing it to automatically resume once the deployment is complete.
 
 To avoid this we need to ensure the registry version containing the migration work function is deployed before inserting the migration into the database. We can do this by only creating background migration records in the database after the corresponding container registry version (with the migration function) has been released and deployed.
-
-Tracking: [#1606](https://gitlab.com/gitlab-org/container-registry/-/issues/1606), [#1610](https://gitlab.com/gitlab-org/container-registry/-/issues/1610), [#1616](https://gitlab.com/gitlab-org/container-registry/-/issues/1616)
 
 ## Debugging
 
