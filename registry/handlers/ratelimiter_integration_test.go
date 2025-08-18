@@ -236,7 +236,7 @@ func (s *RateLimiterTestSuite) TestBlocksRequestsWhenLimitExceeded() {
 			LogOnly:     false,
 			Match:       configuration.Match{Type: matchTypeIP},
 			Precedence:  10,
-			Limit:       configuration.Limit{Rate: 3, Period: "second", Burst: 6},
+			Limit:       configuration.Limit{Rate: 3, Period: "hour", Burst: 6},
 			Action:      configuration.Action{WarnThreshold: 0.7, WarnAction: "log", HardAction: "block"},
 		},
 	}
@@ -273,7 +273,7 @@ func (s *RateLimiterTestSuite) TestLogOnlyModeNeverBlocks() {
 			LogOnly:     true,
 			Match:       configuration.Match{Type: matchTypeIP},
 			Precedence:  10,
-			Limit:       configuration.Limit{Rate: 3, Period: "second", Burst: 6},
+			Limit:       configuration.Limit{Rate: 3, Period: "hour", Burst: 6},
 			Action:      configuration.Action{WarnThreshold: 0.7, WarnAction: "log", HardAction: "block"},
 		},
 	}
@@ -298,7 +298,7 @@ func (s *RateLimiterTestSuite) TestRateLimitRemainingHeaderDecreasesCorrectly() 
 			LogOnly:     false,
 			Match:       configuration.Match{Type: matchTypeIP},
 			Precedence:  10,
-			Limit:       configuration.Limit{Rate: 15, Period: "minute", Burst: 30},
+			Limit:       configuration.Limit{Rate: 15, Period: "hour", Burst: 30},
 			Action:      configuration.Action{WarnThreshold: 0.8, WarnAction: "log", HardAction: "block"},
 		},
 	}
@@ -342,7 +342,7 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 			LogOnly:     false,
 			Match:       configuration.Match{Type: matchTypeIP},
 			Precedence:  10,
-			Limit:       configuration.Limit{Rate: 6, Period: "minute", Burst: 9},
+			Limit:       configuration.Limit{Rate: 6, Period: "hour", Burst: 9},
 			Action:      configuration.Action{WarnThreshold: 0.5, WarnAction: "log", HardAction: "block"},
 		},
 	}
@@ -392,7 +392,7 @@ func (s *RateLimiterTestSuite) TestPerIPRateLimitingAcrossShards() {
 			LogOnly:     false,
 			Match:       configuration.Match{Type: matchTypeIP},
 			Precedence:  10,
-			Limit:       configuration.Limit{Rate: 3, Period: "minute", Burst: 9},
+			Limit:       configuration.Limit{Rate: 3, Period: "hour", Burst: 9},
 			Action:      configuration.Action{WarnThreshold: 0.8, WarnAction: "log", HardAction: "block"},
 		},
 	}
@@ -436,7 +436,7 @@ func (s *RateLimiterTestSuite) TestLimiterPrecedenceAffectsProcessingOrder() {
 			LogOnly:     true,
 			Match:       configuration.Match{Type: "ip"},
 			Precedence:  1,
-			Limit:       configuration.Limit{Rate: 60, Period: "second", Burst: 60},
+			Limit:       configuration.Limit{Rate: 60, Period: "hour", Burst: 60},
 			Action:      configuration.Action{WarnThreshold: 0.0, WarnAction: "log", HardAction: "log"},
 		},
 		{
@@ -445,7 +445,7 @@ func (s *RateLimiterTestSuite) TestLimiterPrecedenceAffectsProcessingOrder() {
 			LogOnly:     true,
 			Match:       configuration.Match{Type: "ip"},
 			Precedence:  2,
-			Limit:       configuration.Limit{Rate: 30, Period: "second", Burst: 30},
+			Limit:       configuration.Limit{Rate: 30, Period: "hour", Burst: 30},
 			Action:      configuration.Action{WarnThreshold: 0.0, WarnAction: "log", HardAction: "log"},
 		},
 	}
@@ -468,7 +468,7 @@ func (s *RateLimiterTestSuite) TestThresholdCalculation() {
 			LogOnly:     false,
 			Match:       configuration.Match{Type: matchTypeIP},
 			Precedence:  10,
-			Limit:       configuration.Limit{Rate: 15, Period: "second", Burst: 30},
+			Limit:       configuration.Limit{Rate: 15, Period: "hour", Burst: 30},
 			Action:      configuration.Action{WarnThreshold: 0.6, WarnAction: "log", HardAction: "block"},
 		},
 	}
@@ -495,7 +495,7 @@ func (s *RateLimiterTestSuite) TestZeroThreshold() {
 			LogOnly:     false,
 			Match:       configuration.Match{Type: matchTypeIP},
 			Precedence:  10,
-			Limit:       configuration.Limit{Rate: 6, Period: "second", Burst: 12},
+			Limit:       configuration.Limit{Rate: 6, Period: "hour", Burst: 12},
 			Action:      configuration.Action{WarnThreshold: 0.0, WarnAction: "log", HardAction: "block"},
 		},
 	}
