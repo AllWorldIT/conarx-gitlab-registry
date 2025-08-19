@@ -30,6 +30,9 @@ Media type IDs are currently implemented with `SMALLINT`, while it's unlikely to
 | `application/vnd.syft+json`                                               |
 | `application/vnd.spack.package`                                           |
 | `application/vnd.oras.config.v1+json`                                     |
+| `application/vnd.opentofu.modulepkg`                                      |
+| `application/vnd.opentofu.provider`                                       |
+| `application/vnd.opentofu.provider-target`                                |
 | `application/vnd.oci.image.manifest.v1+json`                              |
 | `application/vnd.oci.image.layer.v1.tar+zstd`                             |
 | `application/vnd.oci.image.layer.v1.tar+gzip+encrypted`                   |
