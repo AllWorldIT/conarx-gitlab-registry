@@ -264,17 +264,17 @@ func (s *AccessTrackerTestSuite) TestBasicFunctionality() {
 registry_storage_access_tracker_dropped_events 0
 # HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
 # TYPE registry_storage_object_accesses_distribution histogram
-registry_storage_object_accesses_distribution_bucket{le="0"} 0
-registry_storage_object_accesses_distribution_bucket{le="500"} 10
-registry_storage_object_accesses_distribution_bucket{le="1000"} 10
-registry_storage_object_accesses_distribution_bucket{le="1500"} 10
-registry_storage_object_accesses_distribution_bucket{le="2000"} 10
-registry_storage_object_accesses_distribution_bucket{le="2500"} 10
-registry_storage_object_accesses_distribution_bucket{le="3000"} 10
-registry_storage_object_accesses_distribution_bucket{le="3500"} 10
-registry_storage_object_accesses_distribution_bucket{le="4000"} 10
-registry_storage_object_accesses_distribution_bucket{le="4500"} 10
-registry_storage_object_accesses_distribution_bucket{le="5000"} 10
+registry_storage_object_accesses_distribution_bucket{le="10"} 10
+registry_storage_object_accesses_distribution_bucket{le="20"} 10
+registry_storage_object_accesses_distribution_bucket{le="40"} 10
+registry_storage_object_accesses_distribution_bucket{le="80"} 10
+registry_storage_object_accesses_distribution_bucket{le="160"} 10
+registry_storage_object_accesses_distribution_bucket{le="320"} 10
+registry_storage_object_accesses_distribution_bucket{le="640"} 10
+registry_storage_object_accesses_distribution_bucket{le="1280"} 10
+registry_storage_object_accesses_distribution_bucket{le="2560"} 10
+registry_storage_object_accesses_distribution_bucket{le="5120"} 10
+registry_storage_object_accesses_distribution_bucket{le="10240"} 10
 registry_storage_object_accesses_distribution_bucket{le="+Inf"} 10
 registry_storage_object_accesses_distribution_sum 55
 registry_storage_object_accesses_distribution_count 10
@@ -323,17 +323,17 @@ func (s *AccessTrackerTestSuite) TestConcurrentAccess() {
 registry_storage_access_tracker_dropped_events 0
 # HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
 # TYPE registry_storage_object_accesses_distribution histogram
-registry_storage_object_accesses_distribution_bucket{le="0"} 0
-registry_storage_object_accesses_distribution_bucket{le="500"} 11
-registry_storage_object_accesses_distribution_bucket{le="1000"} 11
-registry_storage_object_accesses_distribution_bucket{le="1500"} 11
-registry_storage_object_accesses_distribution_bucket{le="2000"} 11
-registry_storage_object_accesses_distribution_bucket{le="2500"} 11
-registry_storage_object_accesses_distribution_bucket{le="3000"} 11
-registry_storage_object_accesses_distribution_bucket{le="3500"} 11
-registry_storage_object_accesses_distribution_bucket{le="4000"} 11
-registry_storage_object_accesses_distribution_bucket{le="4500"} 11
-registry_storage_object_accesses_distribution_bucket{le="5000"} 11
+registry_storage_object_accesses_distribution_bucket{le="10"} 0
+registry_storage_object_accesses_distribution_bucket{le="20"} 0
+registry_storage_object_accesses_distribution_bucket{le="40"} 0
+registry_storage_object_accesses_distribution_bucket{le="80"} 0
+registry_storage_object_accesses_distribution_bucket{le="160"} 11
+registry_storage_object_accesses_distribution_bucket{le="320"} 11
+registry_storage_object_accesses_distribution_bucket{le="640"} 11
+registry_storage_object_accesses_distribution_bucket{le="1280"} 11
+registry_storage_object_accesses_distribution_bucket{le="2560"} 11
+registry_storage_object_accesses_distribution_bucket{le="5120"} 11
+registry_storage_object_accesses_distribution_bucket{le="10240"} 11
 registry_storage_object_accesses_distribution_bucket{le="+Inf"} 11
 registry_storage_object_accesses_distribution_sum 1122
 registry_storage_object_accesses_distribution_count 11
@@ -377,17 +377,17 @@ func (s *AccessTrackerTestSuite) TestLargeObjectIDs() {
 registry_storage_access_tracker_dropped_events 0
 # HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
 # TYPE registry_storage_object_accesses_distribution histogram
-registry_storage_object_accesses_distribution_bucket{le="0"} 0
-registry_storage_object_accesses_distribution_bucket{le="500"} 3
-registry_storage_object_accesses_distribution_bucket{le="1000"} 3
-registry_storage_object_accesses_distribution_bucket{le="1500"} 3
-registry_storage_object_accesses_distribution_bucket{le="2000"} 3
-registry_storage_object_accesses_distribution_bucket{le="2500"} 3
-registry_storage_object_accesses_distribution_bucket{le="3000"} 3
-registry_storage_object_accesses_distribution_bucket{le="3500"} 3
-registry_storage_object_accesses_distribution_bucket{le="4000"} 3
-registry_storage_object_accesses_distribution_bucket{le="4500"} 3
-registry_storage_object_accesses_distribution_bucket{le="5000"} 3
+registry_storage_object_accesses_distribution_bucket{le="10"} 3
+registry_storage_object_accesses_distribution_bucket{le="20"} 3
+registry_storage_object_accesses_distribution_bucket{le="40"} 3
+registry_storage_object_accesses_distribution_bucket{le="80"} 3
+registry_storage_object_accesses_distribution_bucket{le="160"} 3
+registry_storage_object_accesses_distribution_bucket{le="320"} 3
+registry_storage_object_accesses_distribution_bucket{le="640"} 3
+registry_storage_object_accesses_distribution_bucket{le="1280"} 3
+registry_storage_object_accesses_distribution_bucket{le="2560"} 3
+registry_storage_object_accesses_distribution_bucket{le="5120"} 3
+registry_storage_object_accesses_distribution_bucket{le="10240"} 3
 registry_storage_object_accesses_distribution_bucket{le="+Inf"} 3
 registry_storage_object_accesses_distribution_sum 3
 registry_storage_object_accesses_distribution_count 3
@@ -427,17 +427,17 @@ func (s *AccessTrackerTestSuite) TestNoAccesses() {
 registry_storage_access_tracker_dropped_events 0
 # HELP registry_storage_object_accesses_distribution Distribution of access counts across all objects
 # TYPE registry_storage_object_accesses_distribution histogram
-registry_storage_object_accesses_distribution_bucket{le="0"} 0
-registry_storage_object_accesses_distribution_bucket{le="500"} 0
-registry_storage_object_accesses_distribution_bucket{le="1000"} 0
-registry_storage_object_accesses_distribution_bucket{le="1500"} 0
-registry_storage_object_accesses_distribution_bucket{le="2000"} 0
-registry_storage_object_accesses_distribution_bucket{le="2500"} 0
-registry_storage_object_accesses_distribution_bucket{le="3000"} 0
-registry_storage_object_accesses_distribution_bucket{le="3500"} 0
-registry_storage_object_accesses_distribution_bucket{le="4000"} 0
-registry_storage_object_accesses_distribution_bucket{le="4500"} 0
-registry_storage_object_accesses_distribution_bucket{le="5000"} 0
+registry_storage_object_accesses_distribution_bucket{le="10"} 0
+registry_storage_object_accesses_distribution_bucket{le="20"} 0
+registry_storage_object_accesses_distribution_bucket{le="40"} 0
+registry_storage_object_accesses_distribution_bucket{le="80"} 0
+registry_storage_object_accesses_distribution_bucket{le="160"} 0
+registry_storage_object_accesses_distribution_bucket{le="320"} 0
+registry_storage_object_accesses_distribution_bucket{le="640"} 0
+registry_storage_object_accesses_distribution_bucket{le="1280"} 0
+registry_storage_object_accesses_distribution_bucket{le="2560"} 0
+registry_storage_object_accesses_distribution_bucket{le="5120"} 0
+registry_storage_object_accesses_distribution_bucket{le="10240"} 0
 registry_storage_object_accesses_distribution_bucket{le="+Inf"} 0
 registry_storage_object_accesses_distribution_sum 0
 registry_storage_object_accesses_distribution_count 0
