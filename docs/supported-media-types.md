@@ -4,7 +4,7 @@ The following is the list of supported media types. Any manifest or any of its r
 
 **NOTE**:
 Set the environment variable `REGISTRY_FF_DYNAMIC_MEDIA_TYPES=true` to dynamically add new media types to the registry on push instead of the behavior described above.
-Media type IDs are currently implmented with `SMALLINT`, while it's unlikely to exhaust IDs during normal operations. Publicly facing registries should not enable this feature flag to reduce exposure this possibility.  
+Media type IDs are currently implemented with `SMALLINT`, while it's unlikely to exhaust IDs during normal operations. Publicly facing registries should not enable this feature flag to reduce exposure this possibility.
 
 | Media Type                                                                |
 | ------------------------------------------------------------------------- |
@@ -30,6 +30,9 @@ Media type IDs are currently implmented with `SMALLINT`, while it's unlikely to 
 | `application/vnd.syft+json`                                               |
 | `application/vnd.spack.package`                                           |
 | `application/vnd.oras.config.v1+json`                                     |
+| `application/vnd.opentofu.modulepkg`                                      |
+| `application/vnd.opentofu.provider`                                       |
+| `application/vnd.opentofu.provider-target`                                |
 | `application/vnd.oci.image.manifest.v1+json`                              |
 | `application/vnd.oci.image.layer.v1.tar+zstd`                             |
 | `application/vnd.oci.image.layer.v1.tar+gzip+encrypted`                   |

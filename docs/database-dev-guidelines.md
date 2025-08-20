@@ -110,6 +110,6 @@ table at the time of running the test (which would already have the column `a`
 renamed to `b`).
 
 Alternatively, we could update the golden file manually as well. This update
-flag is useful when whe changed something on our database and we're sure that
+flag is useful when we changed something on our database and we're sure that
 the new output is the correct one, so we can simply use it to refresh all golden
 files to match the new expectation.

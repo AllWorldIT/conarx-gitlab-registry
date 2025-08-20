@@ -8,11 +8,13 @@ import (
 func init() {
 	m := &migrations.Migration{
 		Migration: &migrate.Migration{
-			Id: "20250623090017_add_application_spdx_media_type",
+			Id: "20250819132100_add_opentofu_media_types",
 			Up: []string{
 				`INSERT INTO media_types (media_type)
 					VALUES
-						('application/spdx+json')
+						('application/vnd.opentofu.modulepkg'),
+						('application/vnd.opentofu.provider'),
+						('application/vnd.opentofu.provider-target')
 				EXCEPT
 				SELECT
 					media_type
@@ -22,7 +24,9 @@ func init() {
 			Down: []string{
 				`DELETE FROM media_types
 					WHERE media_type IN (
-						'application/spdx+json'
+						'application/vnd.opentofu.modulepkg',
+						'application/vnd.opentofu.provider',
+						'application/vnd.opentofu.provider-target'
 					)`,
 			},
 		},
