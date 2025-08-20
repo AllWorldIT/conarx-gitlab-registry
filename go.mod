@@ -2,8 +2,6 @@ module github.com/docker/distribution
 
 go 1.23.0
 
-toolchain go1.23.7
-
 require (
 	cloud.google.com/go/compute/metadata v0.7.0
 	cloud.google.com/go/storage v1.56.0
