@@ -20,6 +20,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.86.0
 	github.com/aws/smithy-go v1.22.5
 	github.com/benbjohnson/clock v1.3.5
+	github.com/bsm/redislock v0.9.4
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/docker/go-metrics v0.0.1
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7

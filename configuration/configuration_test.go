@@ -3127,3 +3127,118 @@ rate_limiter:
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_ACTION_HARDACTION", tt, validator)
 }
+
+func TestParseDatabaseMetrics_Enabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  metrics:
+    enabled: %s
+`
+	tt := boolParameterTests()
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, strconv.FormatBool(got.Database.Metrics.Enabled))
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_METRICS_ENABLED", tt, validator)
+}
+
+// TestParseDatabaseMetrics_Interval tests parsing of collection interval.
+// Note: Default value (10s) is defined in the metrics package.
+func TestParseDatabaseMetrics_Interval(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  metrics:
+    interval: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "0s",
+			value: "0s",
+			want:  time.Duration(0),
+		},
+		{
+			name:  "0",
+			value: "0",
+			want:  time.Duration(0),
+		},
+		{
+			name:  "5s",
+			value: "5s",
+			want:  5 * time.Second,
+		},
+		{
+			name:  "10s",
+			value: "10s",
+			want:  10 * time.Second,
+		},
+		{
+			name:  "1m",
+			value: "1m",
+			want:  1 * time.Minute,
+		},
+		{
+			name: "default",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Database.Metrics.Interval)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_METRICS_INTERVAL", tt, validator)
+}
+
+// TestParseDatabaseMetrics_LeaseDuration tests parsing of lease duration.
+// Note: Default value (10s) is defined in the metrics package.
+func TestParseDatabaseMetrics_LeaseDuration(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+  metrics:
+    leaseduration: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "0s",
+			value: "0s",
+			want:  time.Duration(0),
+		},
+		{
+			name:  "0",
+			value: "0",
+			want:  time.Duration(0),
+		},
+		{
+			name:  "15s",
+			value: "15s",
+			want:  15 * time.Second,
+		},
+		{
+			name:  "30s",
+			value: "30s",
+			want:  30 * time.Second,
+		},
+		{
+			name:  "1m",
+			value: "1m",
+			want:  1 * time.Minute,
+		},
+		{
+			name: "default",
+			want: time.Duration(0),
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Database.Metrics.LeaseDuration)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_METRICS_LEASEDURATION", tt, validator)
+}

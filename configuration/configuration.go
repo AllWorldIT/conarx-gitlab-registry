@@ -389,6 +389,16 @@ type StackdriverProfiler struct {
 	KeyFile string `yaml:"keyfile,omitempty"`
 }
 
+// DatabaseMetrics configures database metrics collection
+type DatabaseMetrics struct {
+	// Enabled can be used to enable or disable database metrics collection. Defaults to false.
+	Enabled bool `yaml:"enabled,omitempty"`
+	// Interval is the duration between metrics collection runs. If not set or zero, uses the default from the metrics package (10s).
+	Interval time.Duration `yaml:"interval,omitempty"`
+	// LeaseDuration is the duration of the distributed lock lease. If not set or zero, uses the default from the metrics package (30s).
+	LeaseDuration time.Duration `yaml:"leaseduration,omitempty"`
+}
+
 // Database is the configuration for the registry's metadata database
 type Database struct {
 	// Enabled can be used to enable or bypass the metadata database
@@ -438,6 +448,8 @@ type Database struct {
 	BackgroundMigrations BackgroundMigrations `yaml:"backgroundmigrations,omitempty"`
 	// LoadBalancing can be used to enable and configure database load balancing.
 	LoadBalancing DatabaseLoadBalancing `yaml:"loadbalancing,omitempty"`
+	// Metrics configures database metrics collection
+	Metrics DatabaseMetrics `yaml:"metrics,omitempty"`
 }
 
 // BackgroundMigrations represents the configuration for the asynchronous batched background migrations in the registry.

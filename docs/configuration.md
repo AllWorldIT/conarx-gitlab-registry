@@ -703,7 +703,11 @@ database:
     nameserver: localhost
     port: 8600
     record: db-replica-registry.service.consul
-    replicacheckinterval: 1m  
+    replicacheckinterval: 1m
+  metrics:
+    enabled: true
+    interval: 10s
+    leaseduration: 30s  
 ```
 
 | Parameter  | Required | Description                                                                                                                                                                                                                                          |
@@ -784,6 +788,27 @@ loadbalancing:
 | `port`                 | No       | The port of the nameserver.                                                                                                                                              | `8600`           |
 | `record`               | Yes      | The `SRV` record to look up. This option is required for service discovery to work.                                                                                      |                  |
 | `replicacheckinterval` | No       | The minimum amount of time between checking the status of a replica.                                                                                                     | `1m`             |
+
+### `metrics`
+
+> **Note**: This is an [experimental](https://docs.gitlab.com/policy/development_stages_support/#experiment) feature and should _not_ be used in production.
+
+The `metrics` subsection allows configuring database metrics collection. This feature uses Redis-based distributed locking to ensure only one registry instance collects metrics in clustered environments.
+
+```none
+metrics:
+  enabled: true
+  interval: 10s
+  leaseduration: 30s
+```
+
+| Parameter       | Required | Description                                                                                                                                                                              | Default |
+|-----------------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| `enabled`       | no       | When set to `true`, enables database metrics collection. Defaults to `false`.                                                                                                           | `false` |
+| `interval`      | no       | The interval at which metrics are collected from the database. Defaults to `10s`.                                                                                                      | `10s`   |
+| `leaseduration` | no       | The duration for which the Redis lock is held by the metrics collector. Must be longer than `interval` to ensure continuous collection by the same instance. Defaults to `30s`.       | `30s`   |
+
+The metrics collector uses the Redis cache connection (configured in `redis.cache`) for distributed locking. When enabled, it exposes database metrics as via the Prometheus endpoint.
 
 ## `auth`
 
