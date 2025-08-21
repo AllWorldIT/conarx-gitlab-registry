@@ -519,3 +519,195 @@ registry_database_lb_pool_status{replica="replica-test:5432",status="quarantined
 	err = testutil.GatherAndCompare(reg, &expected3, fullName)
 	require.NoError(t, err)
 }
+
+func TestSetDatabaseRowCount(t *testing.T) {
+	// Create test registry to avoid conflicts with other tests
+	registrar := NewRowCountRegistrar()
+	err := registrar.Register()
+	require.NoError(t, err)
+	defer registrar.Unregister()
+
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(registrar.databaseRows)
+
+	// Set row counts for different queries
+	registrar.SetRowCount("gc_blob_review_queue", 1234)
+	registrar.SetRowCount("repositories", 567)
+	registrar.SetRowCount("gc_blob_review_queue", 2468) // Update existing
+
+	var expected bytes.Buffer
+	_, err = expected.WriteString(`
+# HELP registry_database_rows A gauge for the number of rows in database tables defined by the query_name label
+# TYPE registry_database_rows gauge
+registry_database_rows{query_name="gc_blob_review_queue"} 2468
+registry_database_rows{query_name="repositories"} 567
+`)
+	require.NoError(t, err)
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, databaseRowsName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestInstrumentRowCountCollection(t *testing.T) {
+	// Create test registry to avoid conflicts with other tests
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(databaseRowCountCollectionHist)
+
+	// Use mocked time like other tests for predictable results
+	restore := mockTimeSince(100 * time.Millisecond)
+	defer restore()
+
+	// Simulate a row count collection operation
+	done := InstrumentRowCountCollection()
+	done()
+
+	// Do another one with different duration
+	mockTimeSince(500 * time.Millisecond)
+	done2 := InstrumentRowCountCollection()
+	done2()
+
+	// Verify the metric was recorded - histogram with 2 samples
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_database_row_count_collection_duration_seconds A histogram of total duration for collecting all database row count queries in a single run
+# TYPE registry_database_row_count_collection_duration_seconds histogram
+registry_database_row_count_collection_duration_seconds_bucket{le="0.1"} 1
+registry_database_row_count_collection_duration_seconds_bucket{le="0.5"} 2
+registry_database_row_count_collection_duration_seconds_bucket{le="1"} 2
+registry_database_row_count_collection_duration_seconds_bucket{le="2"} 2
+registry_database_row_count_collection_duration_seconds_bucket{le="5"} 2
+registry_database_row_count_collection_duration_seconds_bucket{le="10"} 2
+registry_database_row_count_collection_duration_seconds_bucket{le="30"} 2
+registry_database_row_count_collection_duration_seconds_bucket{le="60"} 2
+registry_database_row_count_collection_duration_seconds_bucket{le="+Inf"} 2
+registry_database_row_count_collection_duration_seconds_sum 0.6
+registry_database_row_count_collection_duration_seconds_count 2
+`)
+	require.NoError(t, err)
+
+	fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, databaseRowCountCollectionName)
+	err = testutil.GatherAndCompare(reg, &expected, fullName)
+	require.NoError(t, err)
+}
+
+func TestRegistrar(t *testing.T) {
+	t.Run("register and unregister", func(t *testing.T) {
+		// Create a simple gauge for testing
+		gauge := prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "test_metric",
+			Help: "Test metric",
+		})
+
+		registrar := NewRegistrar(gauge)
+
+		// Initial state should be unregistered
+		require.False(t, registrar.IsRegistered())
+
+		// Register
+		err := registrar.Register()
+		require.NoError(t, err)
+		require.True(t, registrar.IsRegistered())
+
+		// Second register should be idempotent
+		err = registrar.Register()
+		require.NoError(t, err)
+		require.True(t, registrar.IsRegistered())
+
+		// Unregister
+		registrar.Unregister()
+		require.False(t, registrar.IsRegistered())
+
+		// Second unregister should be idempotent
+		registrar.Unregister()
+		require.False(t, registrar.IsRegistered())
+	})
+
+	t.Run("handles already registered error", func(t *testing.T) {
+		// Create two registrars with the same metric
+		gauge := prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "test_duplicate_metric",
+			Help: "Test duplicate metric",
+		})
+
+		registrar1 := NewRegistrar(gauge)
+		registrar2 := NewRegistrar(gauge)
+
+		// First registration should succeed
+		err := registrar1.Register()
+		require.NoError(t, err)
+		defer registrar1.Unregister()
+
+		// Second registration should handle AlreadyRegisteredError gracefully
+		err = registrar2.Register()
+		require.NoError(t, err) // Should not return error due to handling AlreadyRegisteredError
+		require.True(t, registrar2.IsRegistered())
+	})
+
+	t.Run("concurrent access", func(t *testing.T) {
+		gauge := prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "test_concurrent_metric",
+			Help: "Test concurrent metric",
+		})
+
+		registrar := NewRegistrar(gauge)
+		defer registrar.Unregister()
+
+		// Test concurrent registration and checking
+		const numGoroutines = 10
+		results := make(chan error, numGoroutines)
+
+		for i := 0; i < numGoroutines; i++ {
+			go func() {
+				err := registrar.Register()
+				results <- err
+			}()
+		}
+
+		// All registrations should succeed due to idempotent behavior
+		for i := 0; i < numGoroutines; i++ {
+			err := <-results
+			require.NoError(t, err)
+		}
+
+		require.True(t, registrar.IsRegistered())
+	})
+
+	t.Run("works with different collector types", func(t *testing.T) {
+		// Test with Counter
+		counter := prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "test_counter_metric",
+			Help: "Test counter metric",
+		})
+		counterRegistrar := NewRegistrar(counter)
+		err := counterRegistrar.Register()
+		require.NoError(t, err)
+		require.True(t, counterRegistrar.IsRegistered())
+		counterRegistrar.Unregister()
+		require.False(t, counterRegistrar.IsRegistered())
+
+		// Test with Histogram
+		histogram := prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "test_histogram_metric",
+			Help: "Test histogram metric",
+		})
+		histogramRegistrar := NewRegistrar(histogram)
+		err = histogramRegistrar.Register()
+		require.NoError(t, err)
+		require.True(t, histogramRegistrar.IsRegistered())
+		histogramRegistrar.Unregister()
+		require.False(t, histogramRegistrar.IsRegistered())
+
+		// Test with GaugeVec
+		gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "test_gauge_vec_metric",
+			Help: "Test gauge vec metric",
+		}, []string{"label"})
+		gaugeVecRegistrar := NewRegistrar(gaugeVec)
+		err = gaugeVecRegistrar.Register()
+		require.NoError(t, err)
+		require.True(t, gaugeVecRegistrar.IsRegistered())
+		gaugeVecRegistrar.Unregister()
+		require.False(t, gaugeVecRegistrar.IsRegistered())
+	})
+}

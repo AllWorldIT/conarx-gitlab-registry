@@ -41,6 +41,7 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
+	dsmetrics "github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/gc"
@@ -141,6 +142,9 @@ type App struct {
 
 	// redisCache is the abstraction for manipulating cached data on Redis.
 	redisCache iredis.CacheInterface
+
+	// redisCacheClient is the raw Redis client used for caching.
+	redisCacheClient redis.UniversalClient
 
 	// redisLBCache is the abstraction for the database load balancing Redis cache.
 	redisLBCache iredis.CacheInterface
@@ -574,6 +578,10 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
 			startBackgroundMigrations(app.Context, app.db.Primary(), config)
+		}
+
+		if err := app.initializeRowCountCollector(config); err != nil {
+			return nil, fmt.Errorf("failed to initialize database metrics collector: %w", err)
 		}
 	}
 
@@ -1258,6 +1266,7 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 		return fmt.Errorf("failed to configure Redis for caching: %w", err)
 	}
 
+	app.redisCacheClient = client
 	app.redisCache = iredis.NewCache(client, iredis.WithDefaultTTL(redisCacheTTL))
 	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis configured successfully for caching")
 
@@ -2346,4 +2355,57 @@ func bbmListenForShutdown(ctx context.Context, c chan os.Signal, doneCh chan str
 	// signal to worker that the program is exiting
 	dlog.GetLogger(dlog.WithContext(ctx)).Info("Background migration worker is shutting down")
 	close(doneCh)
+}
+
+// initializeRowCountCollector initializes the database row count metrics collector
+func (app *App) initializeRowCountCollector(config *configuration.Configuration) error {
+	if !config.Database.Metrics.Enabled {
+		return nil
+	}
+
+	// Check if Redis cache client is available
+	if app.redisCacheClient == nil {
+		return errors.New("database metrics enabled but Redis cache client is not configured")
+	}
+
+	// Create executor function that queries the database
+	executor := func(ctx context.Context, query string, args ...any) (int64, error) {
+		var count int64
+		// Since metrics can be used for alerting purposes, we should default to the primary DB to ensure we always
+		// look at the latest available status.
+		err := app.db.Primary().QueryRowContext(ctx, query, args...).Scan(&count)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return 0, nil
+			}
+			return 0, err
+		}
+		return count, nil
+	}
+
+	// Initialize and start the collector
+	var opts []dsmetrics.CollectorOption
+	if config.Database.Metrics.Interval > 0 {
+		opts = append(opts, dsmetrics.WithInterval(config.Database.Metrics.Interval))
+	}
+	if config.Database.Metrics.LeaseDuration > 0 {
+		opts = append(opts, dsmetrics.WithLeaseDuration(config.Database.Metrics.LeaseDuration))
+	}
+	dbRowCountCollector, err := dsmetrics.NewRowCountCollector(executor, app.redisCacheClient, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create database metrics collector: %w", err)
+	}
+	dbRowCountCollector.Start(app.Context)
+
+	// Register shutdown function
+	app.registerShutdownFunc(
+		func(_ *App, errCh chan error, l dlog.Logger) {
+			l.Info("stopping database row count metrics collector")
+			dbRowCountCollector.Stop()
+			l.Info("database row count metrics collector has been shut down")
+			errCh <- nil
+		},
+	)
+
+	return nil
 }
