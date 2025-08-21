@@ -249,25 +249,45 @@ better-suited to review your change.
 ## Releases
 
 We use [semantic-release](https://semantic-release.gitbook.io/semantic-release/)
-to generate changelog entries, release commits and new git tags. A new release
-is created by the project maintainers, using the `make release` command,
-invoked from their local development machine. A `make release-dry-run` command
-is available to anyone and allows previewing the next release.
+to generate changelog entries and new git tags.
 
-If this is the first time you are generating a release, you must invoke the
-`make dev-tools` command to install the required dependencies. This requires
-having [Node.js](https://nodejs.org/en/) and [npm](https://docs.npmjs.com/cli/)
-installed locally.
+### MR-based release workflow (default)
 
-Once a new tag is pushed to this repository, a CI pipeline is created
-([sample](https://gitlab.com/gitlab-org/container-registry/-/pipelines/713632199)).
-Within the `release` stage, there are several ordered jobs that Maintainers
-are responsible for triggering. These jobs are responsible for releasing in
-several GitLab projects and their sequence is described in the
-[Release Plan](https://gitlab.com/gitlab-org/container-registry/-/blob/master/.gitlab/issue_templates/Release%20Plan.md)
-issue template. A new issue based on the same template is automatically
-created as part of the CI pipeline with title
-`Release Version vX.Y.Z-gitlab`.
+To add review gates and avoid direct pushes to `master`, releases are prepared on a temporary release branch via CI and merged through a Merge Request (MR):
+
+1. A maintainer triggers the `release:prepare` job in the `release` stage on the `master` branch.
+2. The job creates a temporary branch `release/vX.Y.Z` from `master`, updates `CHANGELOG.md`,
+   pushes the branch, and opens an MR targeting `master`.
+3. Maintainers review and approve the MR. Standard approvals apply.
+4. After the MR is merged into `master`, the `release:tag` job detects the updated `CHANGELOG.md`,
+   creates the annotated tag (`vX.Y.Z-gitlab`), and pushes it.
+5. The existing `publish` and downstream release jobs are then available against the new tag.
+
+Notes:
+
+- If no new version is computed (no conventional commits since last release), the prepare job exits without changes.
+
+- The MR is set to remove the source branch on merge.
+
+Required CI variables for automation:
+
+- `RELEASE_TOKEN` (api + write_repository) used to push release branches, open MRs, and create tags.
+
+- Configure Protected Branches to allow the token’s user to push `release/*`.
+
+- Configure Protected Tags to allow the token’s user to create `v*-gitlab`.
+
+- `SLACK_WEBHOOK_URL` remains used by publish flow.
+
+### Legacy local flow (fallback)
+
+If the MR-based flow proves too disruptive, maintainers can temporarily revert to the previous process:
+
+1. Run `make dev-tools` once to install local dependencies.
+2. Preview with `make release-dry-run`.
+3. Create a release with `make release` (commits changelog and pushes tag).
+
+This legacy path still respects semantic-release rules but bypasses the MR gate.
 
 ## Golang Version Support
 
