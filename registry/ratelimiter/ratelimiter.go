@@ -12,9 +12,13 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+//go:embed gcra.lua
+var distributedGCRAScript string
+
 type Limiter struct {
 	client redis.UniversalClient
 	config *configuration.Limiter
+	script *redis.Script
 }
 
 type Result struct {
@@ -24,15 +28,26 @@ type Result struct {
 	RetryAfter time.Duration
 }
 
-func New(client redis.UniversalClient, config *configuration.Limiter) *Limiter {
+func New(client redis.UniversalClient, config *configuration.Limiter) (*Limiter, error) {
+	script := redis.NewScript(distributedGCRAScript)
+
+	// Pre-load the script to Redis during initialization
+	// This ensures the script is cached and subsequent calls use EVALSHA
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Load the script - this caches it in Redis and returns the SHA
+	if err := script.Load(ctx, client).Err(); err != nil {
+		// Log the error but don't fail initialization
+		// The script will be loaded on first use if this fails
+		return nil, fmt.Errorf("loading redis rate-limit script into Redis failed: %w", err)
+	}
 	return &Limiter{
 		client: client,
 		config: config,
-	}
+		script: script,
+	}, nil
 }
-
-//go:embed gcra.lua
-var distributedGCRAScript string
 
 func (rl *Limiter) Allowed(ctx context.Context, key string, tokensRequested float64) (*Result, error) {
 	currentTime := float64(time.Now().Unix())
@@ -43,9 +58,9 @@ func (rl *Limiter) Allowed(ctx context.Context, key string, tokensRequested floa
 	// This handles second/minute/hour periods correctly
 	refillRate := float64(rl.config.Limit.Rate) / rl.config.Limit.PeriodDuration.Seconds()
 
-	result, err := rl.client.Eval(
+	result, err := rl.script.Run(
 		ctx,
-		distributedGCRAScript,
+		rl.client,
 		[]string{key},
 		capacity, refillRate, currentTime, tokensRequested,
 	).Result()

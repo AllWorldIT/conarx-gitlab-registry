@@ -65,7 +65,10 @@ func (app *App) configureRateLimiters(redisClient redis.UniversalClient, config 
 	app.rateLimiters = make([]RateLimiter, 0, len(orderedLimiters))
 	for name, orderedLimiter := range orderedLimiters {
 		cfg := orderedLimiter.Limiter
-		limiter := ratelimiter.New(redisClient, cfg)
+		limiter, err := ratelimiter.New(redisClient, cfg)
+		if err != nil {
+			return fmt.Errorf("creating rate-limiter instance failed: %w", err)
+		}
 		l.WithFields(logrus.Fields{
 			"name":           name,
 			"description":    cfg.Description,
