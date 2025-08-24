@@ -28,9 +28,9 @@ const (
 	endpointLabel = "endpoint"
 
 	// Events counter
-	eventsCounterName   = "events"
+	eventsCounterName   = "events_total"
 	eventsCounterDesc   = "The total number of events"
-	eventsTypeLabel     = "type"
+	eventsTypeLabel     = "type" // eventsTypeLabel=Successes/Failures/Events/Dropped
 	eventsActionLabel   = "action"
 	eventsArtifactLabel = "artifact"
 
@@ -39,21 +39,21 @@ const (
 	pendingGaugeDesc = "The gauge of pending events in queue - queue length"
 
 	// Status counter
-	statusCounterName = "status"
+	statusCounterName = "status_total"
 	statusCounterDesc = "The number HTTP responses per status code received from notifications endpoint"
 	statusCodeLabel   = "code"
 
 	// Error counter
-	errorCounterName = "errors"
+	errorCounterName = "errors_total"
 	errorCounterDesc = "The number of events where an error occurred during sending. Sending them MAY be retried."
 
 	// Message lost counter
 	deliveryCounterName = "delivery_total"
 	deliveryCounterDesc = "The number of events delivered or lost. Event is lost once the number of retries was exhausted."
-	deliveryTypeLabel   = "delivery_type"
+	deliveryTypeLabel   = "delivery_type" // deliveryTypeLabel=delivered/lost
 
 	// Retries Histogram
-	retriesName = "retries"
+	retriesName = "retries_count"
 	retriesDesc = "The histogram of delivery retries done"
 
 	// HTTP latency Histogram

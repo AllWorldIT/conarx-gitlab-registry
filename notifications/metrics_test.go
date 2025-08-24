@@ -102,51 +102,51 @@ registry_notifications_delivery_total{delivery_type="delivered",endpoint="backup
 registry_notifications_delivery_total{delivery_type="delivered",endpoint="webhook-endpoint"} 2
 registry_notifications_delivery_total{delivery_type="lost",endpoint="backup-endpoint"} 2
 registry_notifications_delivery_total{delivery_type="lost",endpoint="webhook-endpoint"} 1
-# HELP registry_notifications_errors The number of events where an error occurred during sending. Sending them MAY be retried.
-# TYPE registry_notifications_errors counter
-registry_notifications_errors{endpoint="backup-endpoint"} 2
-registry_notifications_errors{endpoint="webhook-endpoint"} 1
-# HELP registry_notifications_events The total number of events
-# TYPE registry_notifications_events counter
-registry_notifications_events{action="pull",artifact="manifest",endpoint="webhook-endpoint",type="Events"} 1
-registry_notifications_events{action="push",artifact="blob",endpoint="webhook-endpoint",type="Events"} 1
-registry_notifications_events{action="push",artifact="manifest",endpoint="webhook-endpoint",type="Events"} 1
+# HELP registry_notifications_errors_total The number of events where an error occurred during sending. Sending them MAY be retried.
+# TYPE registry_notifications_errors_total counter
+registry_notifications_errors_total{endpoint="backup-endpoint"} 2
+registry_notifications_errors_total{endpoint="webhook-endpoint"} 1
+# HELP registry_notifications_events_total The total number of events
+# TYPE registry_notifications_events_total counter
+registry_notifications_events_total{action="pull",artifact="manifest",endpoint="webhook-endpoint",type="Events"} 1
+registry_notifications_events_total{action="push",artifact="blob",endpoint="webhook-endpoint",type="Events"} 1
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="webhook-endpoint",type="Events"} 1
 # HELP registry_notifications_pending The gauge of pending events in queue - queue length
 # TYPE registry_notifications_pending gauge
 registry_notifications_pending{endpoint="webhook-endpoint"} 1
-# HELP registry_notifications_retries The histogram of delivery retries done
-# TYPE registry_notifications_retries histogram
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="0"} 0
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="1"} 0
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="2"} 0
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="3"} 0
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="5"} 1
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="10"} 3
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="15"} 3
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="20"} 3
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="30"} 3
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="50"} 3
-registry_notifications_retries_bucket{endpoint="backup-endpoint",le="+Inf"} 3
-registry_notifications_retries_sum{endpoint="backup-endpoint"} 25
-registry_notifications_retries_count{endpoint="backup-endpoint"} 3
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="0"} 1
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="1"} 2
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="2"} 2
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="3"} 3
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="5"} 3
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="10"} 3
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="15"} 3
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="20"} 3
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="30"} 3
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="50"} 3
-registry_notifications_retries_bucket{endpoint="webhook-endpoint",le="+Inf"} 3
-registry_notifications_retries_sum{endpoint="webhook-endpoint"} 4
-registry_notifications_retries_count{endpoint="webhook-endpoint"} 3
-# HELP registry_notifications_status The number HTTP responses per status code received from notifications endpoint
-# TYPE registry_notifications_status counter
-registry_notifications_status{code="200 OK",endpoint="webhook-endpoint"} 2
-registry_notifications_status{code="404 Not Found",endpoint="webhook-endpoint"} 1
-registry_notifications_status{code="500 Internal Server Error",endpoint="webhook-endpoint"} 1
+# HELP registry_notifications_retries_count The histogram of delivery retries done
+# TYPE registry_notifications_retries_count histogram
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="0"} 0
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="1"} 0
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="2"} 0
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="3"} 0
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="5"} 1
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="10"} 3
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="15"} 3
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="20"} 3
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="30"} 3
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="50"} 3
+registry_notifications_retries_count_bucket{endpoint="backup-endpoint",le="+Inf"} 3
+registry_notifications_retries_count_sum{endpoint="backup-endpoint"} 25
+registry_notifications_retries_count_count{endpoint="backup-endpoint"} 3
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="0"} 1
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="1"} 2
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="2"} 2
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="3"} 3
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="5"} 3
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="10"} 3
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="15"} 3
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="20"} 3
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="30"} 3
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="50"} 3
+registry_notifications_retries_count_bucket{endpoint="webhook-endpoint",le="+Inf"} 3
+registry_notifications_retries_count_sum{endpoint="webhook-endpoint"} 4
+registry_notifications_retries_count_count{endpoint="webhook-endpoint"} 3
+# HELP registry_notifications_status_total The number HTTP responses per status code received from notifications endpoint
+# TYPE registry_notifications_status_total counter
+registry_notifications_status_total{code="200 OK",endpoint="webhook-endpoint"} 2
+registry_notifications_status_total{code="404 Not Found",endpoint="webhook-endpoint"} 1
+registry_notifications_status_total{code="500 Internal Server Error",endpoint="webhook-endpoint"} 1
 `)
 	require.NoError(t, err)
 
@@ -219,19 +219,19 @@ func TestEndpointMetricsHTTPStatusListener(t *testing.T) {
 	// Verify Prometheus metrics
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
-# HELP registry_notifications_errors The number of events where an error occurred during sending. Sending them MAY be retried.
-# TYPE registry_notifications_errors counter
-registry_notifications_errors{endpoint="test-endpoint"} 2
-# HELP registry_notifications_events The total number of events
-# TYPE registry_notifications_events counter
-registry_notifications_events{action="push",artifact="manifest",endpoint="test-endpoint",type="Failures"} 2
-registry_notifications_events{action="push",artifact="manifest",endpoint="test-endpoint",type="Successes"} 2
-# HELP registry_notifications_status The number HTTP responses per status code received from notifications endpoint
-# TYPE registry_notifications_status counter
-registry_notifications_status{code="200 OK",endpoint="test-endpoint"} 1
-registry_notifications_status{code="201 Created",endpoint="test-endpoint"} 1
-registry_notifications_status{code="404 Not Found",endpoint="test-endpoint"} 1
-registry_notifications_status{code="500 Internal Server Error",endpoint="test-endpoint"} 1
+# HELP registry_notifications_errors_total The number of events where an error occurred during sending. Sending them MAY be retried.
+# TYPE registry_notifications_errors_total counter
+registry_notifications_errors_total{endpoint="test-endpoint"} 2
+# HELP registry_notifications_events_total The total number of events
+# TYPE registry_notifications_events_total counter
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="test-endpoint",type="Failures"} 2
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="test-endpoint",type="Successes"} 2
+# HELP registry_notifications_status_total The number HTTP responses per status code received from notifications endpoint
+# TYPE registry_notifications_status_total counter
+registry_notifications_status_total{code="200 OK",endpoint="test-endpoint"} 1
+registry_notifications_status_total{code="201 Created",endpoint="test-endpoint"} 1
+registry_notifications_status_total{code="404 Not Found",endpoint="test-endpoint"} 1
+registry_notifications_status_total{code="500 Internal Server Error",endpoint="test-endpoint"} 1
 `)
 	require.NoError(t, err)
 
@@ -297,10 +297,10 @@ func TestEndpointMetricsEventQueueListener(t *testing.T) {
 	// Verify Prometheus metrics
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
-# HELP registry_notifications_events The total number of events
-# TYPE registry_notifications_events counter
-registry_notifications_events{action="pull",artifact="blob",endpoint="queue-endpoint",type="Events"} 1
-registry_notifications_events{action="push",artifact="manifest",endpoint="queue-endpoint",type="Events"} 2
+# HELP registry_notifications_events_total The total number of events
+# TYPE registry_notifications_events_total counter
+registry_notifications_events_total{action="pull",artifact="blob",endpoint="queue-endpoint",type="Events"} 1
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="queue-endpoint",type="Events"} 2
 # HELP registry_notifications_pending The gauge of pending events in queue - queue length
 # TYPE registry_notifications_pending gauge
 registry_notifications_pending{endpoint="queue-endpoint"} 1
@@ -347,21 +347,21 @@ func TestEndpointMetricsDeliveryListener(t *testing.T) {
 # TYPE registry_notifications_delivery_total counter
 registry_notifications_delivery_total{delivery_type="delivered",endpoint="delivery-endpoint"} 4
 registry_notifications_delivery_total{delivery_type="lost",endpoint="delivery-endpoint"} 3
-# HELP registry_notifications_retries The histogram of delivery retries done
-# TYPE registry_notifications_retries histogram
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="0"} 1
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="1"} 2
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="2"} 3
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="3"} 4
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="5"} 5
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="10"} 6
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="15"} 7
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="20"} 7
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="30"} 7
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="50"} 7
-registry_notifications_retries_bucket{endpoint="delivery-endpoint",le="+Inf"} 7
-registry_notifications_retries_sum{endpoint="delivery-endpoint"} 36
-registry_notifications_retries_count{endpoint="delivery-endpoint"} 7
+# HELP registry_notifications_retries_count The histogram of delivery retries done
+# TYPE registry_notifications_retries_count histogram
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="0"} 1
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="1"} 2
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="2"} 3
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="3"} 4
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="5"} 5
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="10"} 6
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="15"} 7
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="20"} 7
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="30"} 7
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="50"} 7
+registry_notifications_retries_count_bucket{endpoint="delivery-endpoint",le="+Inf"} 7
+registry_notifications_retries_count_sum{endpoint="delivery-endpoint"} 36
+registry_notifications_retries_count_count{endpoint="delivery-endpoint"} 7
 `)
 	require.NoError(t, err)
 
@@ -645,21 +645,21 @@ func TestDeliveryMetricsEdgeCases(t *testing.T) {
 # TYPE registry_notifications_delivery_total counter
 registry_notifications_delivery_total{delivery_type="delivered",endpoint="edge-case-endpoint"} 3
 registry_notifications_delivery_total{delivery_type="lost",endpoint="edge-case-endpoint"} 3
-# HELP registry_notifications_retries The histogram of delivery retries done
-# TYPE registry_notifications_retries histogram
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="0"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="1"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="2"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="3"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="5"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="10"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="15"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="20"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="30"} 2
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="50"} 4
-registry_notifications_retries_bucket{endpoint="edge-case-endpoint",le="+Inf"} 6
-registry_notifications_retries_sum{endpoint="edge-case-endpoint"} 300
-registry_notifications_retries_count{endpoint="edge-case-endpoint"} 6
+# HELP registry_notifications_retries_count The histogram of delivery retries done
+# TYPE registry_notifications_retries_count histogram
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="0"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="1"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="2"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="3"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="5"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="10"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="15"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="20"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="30"} 2
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="50"} 4
+registry_notifications_retries_count_bucket{endpoint="edge-case-endpoint",le="+Inf"} 6
+registry_notifications_retries_count_sum{endpoint="edge-case-endpoint"} 300
+registry_notifications_retries_count_count{endpoint="edge-case-endpoint"} 6
 `)
 	require.NoError(t, err)
 
@@ -1047,11 +1047,11 @@ func TestLatencyMetricsWithFullFlow(t *testing.T) {
 # HELP registry_notifications_delivery_total The number of events delivered or lost. Event is lost once the number of retries was exhausted.
 # TYPE registry_notifications_delivery_total counter
 registry_notifications_delivery_total{delivery_type="delivered",endpoint="flow-endpoint"} 1
-# HELP registry_notifications_events The total number of events
-# TYPE registry_notifications_events counter
-registry_notifications_events{action="push",artifact="manifest",endpoint="flow-endpoint",type="Events"} 1
-registry_notifications_events{action="push",artifact="manifest",endpoint="flow-endpoint",type="Failures"} 2
-registry_notifications_events{action="push",artifact="manifest",endpoint="flow-endpoint",type="Successes"} 1
+# HELP registry_notifications_events_total The total number of events
+# TYPE registry_notifications_events_total counter
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="flow-endpoint",type="Events"} 1
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="flow-endpoint",type="Failures"} 2
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="flow-endpoint",type="Successes"} 1
 # HELP registry_notifications_http_latency_seconds The histogram of HTTP delivery latency
 # TYPE registry_notifications_http_latency_seconds histogram
 registry_notifications_http_latency_seconds_bucket{endpoint="flow-endpoint",le="0.005"} 0
@@ -1074,26 +1074,26 @@ registry_notifications_http_latency_seconds_count{endpoint="flow-endpoint"} 3
 # HELP registry_notifications_pending The gauge of pending events in queue - queue length
 # TYPE registry_notifications_pending gauge
 registry_notifications_pending{endpoint="flow-endpoint"} 0
-# HELP registry_notifications_retries The histogram of delivery retries done
-# TYPE registry_notifications_retries histogram
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="0"} 0
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="1"} 0
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="2"} 1
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="3"} 1
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="5"} 1
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="10"} 1
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="15"} 1
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="20"} 1
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="30"} 1
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="50"} 1
-registry_notifications_retries_bucket{endpoint="flow-endpoint",le="+Inf"} 1
-registry_notifications_retries_sum{endpoint="flow-endpoint"} 2
-registry_notifications_retries_count{endpoint="flow-endpoint"} 1
-# HELP registry_notifications_status The number HTTP responses per status code received from notifications endpoint
-# TYPE registry_notifications_status counter
-registry_notifications_status{code="200 OK",endpoint="flow-endpoint"} 1
-registry_notifications_status{code="500 Internal Server Error",endpoint="flow-endpoint"} 1
-registry_notifications_status{code="503 Service Unavailable",endpoint="flow-endpoint"} 1
+# HELP registry_notifications_retries_count The histogram of delivery retries done
+# TYPE registry_notifications_retries_count histogram
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="0"} 0
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="1"} 0
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="2"} 1
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="3"} 1
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="5"} 1
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="10"} 1
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="15"} 1
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="20"} 1
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="30"} 1
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="50"} 1
+registry_notifications_retries_count_bucket{endpoint="flow-endpoint",le="+Inf"} 1
+registry_notifications_retries_count_sum{endpoint="flow-endpoint"} 2
+registry_notifications_retries_count_count{endpoint="flow-endpoint"} 1
+# HELP registry_notifications_status_total The number HTTP responses per status code received from notifications endpoint
+# TYPE registry_notifications_status_total counter
+registry_notifications_status_total{code="200 OK",endpoint="flow-endpoint"} 1
+registry_notifications_status_total{code="500 Internal Server Error",endpoint="flow-endpoint"} 1
+registry_notifications_status_total{code="503 Service Unavailable",endpoint="flow-endpoint"} 1
 `)
 	require.NoError(t, err)
 
@@ -1264,11 +1264,11 @@ func TestEndpointMetricsDropListener(t *testing.T) {
 	// Verify Prometheus metrics
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
-# HELP registry_notifications_events The total number of events
-# TYPE registry_notifications_events counter
-registry_notifications_events{action="delete",artifact="manifest",endpoint="drop-endpoint",type="Dropped"} 1
-registry_notifications_events{action="pull",artifact="blob",endpoint="drop-endpoint",type="Dropped"} 1
-registry_notifications_events{action="push",artifact="manifest",endpoint="drop-endpoint",type="Dropped"} 2
+# HELP registry_notifications_events_total The total number of events
+# TYPE registry_notifications_events_total counter
+registry_notifications_events_total{action="delete",artifact="manifest",endpoint="drop-endpoint",type="Dropped"} 1
+registry_notifications_events_total{action="pull",artifact="blob",endpoint="drop-endpoint",type="Dropped"} 1
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="drop-endpoint",type="Dropped"} 2
 `)
 	require.NoError(t, err)
 
@@ -1350,11 +1350,11 @@ func TestEndpointMetricsEventQueueWithDrops(t *testing.T) {
 	// Verify Prometheus metrics
 	var expected bytes.Buffer
 	_, err := expected.WriteString(`
-# HELP registry_notifications_events The total number of events
-# TYPE registry_notifications_events counter
-registry_notifications_events{action="pull",artifact="blob",endpoint="queue-drop-endpoint",type="Dropped"} 1
-registry_notifications_events{action="pull",artifact="blob",endpoint="queue-drop-endpoint",type="Events"} 1
-registry_notifications_events{action="push",artifact="manifest",endpoint="queue-drop-endpoint",type="Events"} 2
+# HELP registry_notifications_events_total The total number of events
+# TYPE registry_notifications_events_total counter
+registry_notifications_events_total{action="pull",artifact="blob",endpoint="queue-drop-endpoint",type="Dropped"} 1
+registry_notifications_events_total{action="pull",artifact="blob",endpoint="queue-drop-endpoint",type="Events"} 1
+registry_notifications_events_total{action="push",artifact="manifest",endpoint="queue-drop-endpoint",type="Events"} 2
 # HELP registry_notifications_pending The gauge of pending events in queue - queue length
 # TYPE registry_notifications_pending gauge
 registry_notifications_pending{endpoint="queue-drop-endpoint"} 1
