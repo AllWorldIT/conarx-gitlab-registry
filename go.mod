@@ -3,7 +3,7 @@ module github.com/docker/distribution
 go 1.23.0
 
 require (
-	cloud.google.com/go/compute/metadata v0.7.0
+	cloud.google.com/go/compute/metadata v0.8.0
 	cloud.google.com/go/storage v1.56.0
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.2
