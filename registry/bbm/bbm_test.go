@@ -40,13 +40,15 @@ func TestFindJob_Errors(t *testing.T) {
 	ctx := context.TODO()
 
 	tt := []struct {
-		name       string
-		setupMocks func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore
-		worker     *Worker
+		name          string
+		setupMocks    func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore
+		worker        *Worker
+		expectedError error
 	}{
 		{
-			name:   "error when checking for next job",
-			worker: NewWorker(nil),
+			name:          "error when checking for next job",
+			worker:        NewWorker(nil),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				bbmStoreMock.EXPECT().FindNext(ctx).Return(nil, errAnError).Times(1)
@@ -54,8 +56,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when next job function not found and failed update bbm",
-			worker: NewWorker(nil),
+			name:          "error when next job function not found and failed update bbm",
+			worker:        NewWorker(nil),
+			expectedError: ErrWorkFunctionNotFound,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				failedBBM := bbm
@@ -64,15 +67,15 @@ func TestFindJob_Errors(t *testing.T) {
 
 				gomock.InOrder(
 					bbmStoreMock.EXPECT().FindNext(ctx).Return(bbm, nil).Times(1),
-					bbmStoreMock.EXPECT().UpdateStatus(ctx, bbm).Return(errAnError).Times(1),
 				)
 
 				return bbmStoreMock
 			},
 		},
 		{
-			name:   "unknown error when validating table and column",
-			worker: NewWorker(workFunc),
+			name:          "unknown error when validating table and column",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 
@@ -85,8 +88,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when updating bbm after failed validation for table",
-			worker: NewWorker(workFunc),
+			name:          "error when updating bbm after failed validation for table",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				failedBBM := bbm
@@ -103,8 +107,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when updating bbm after failed validation for column",
-			worker: NewWorker(workFunc),
+			name:          "error when updating bbm after failed validation for column",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				failedBBM := bbm
@@ -121,8 +126,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when checking if all jobs for selected bbm have run at least once",
-			worker: NewWorker(workFunc),
+			name:          "error when checking if all jobs for selected bbm have run at least once",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 
@@ -136,8 +142,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when checking for last run job of bbm",
-			worker: NewWorker(workFunc),
+			name:          "error when checking for last run job of bbm",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 
@@ -152,8 +159,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when updating status of new migration to running",
-			worker: NewWorker(workFunc),
+			name:          "error when updating status of new migration to running",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 
@@ -169,8 +177,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when finding a job end cursor",
-			worker: NewWorker(workFunc),
+			name:          "error when finding a job end cursor",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				lastJob := &models.BackgroundMigrationJob{}
@@ -187,8 +196,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when creating a new job",
-			worker: NewWorker(workFunc),
+			name:          "error when creating a new job",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				lastJob := &models.BackgroundMigrationJob{}
@@ -214,8 +224,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when finding failed retryable job",
-			worker: NewWorker(workFunc),
+			name:          "error when finding failed retryable job",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				finalJob := &models.BackgroundMigrationJob{}
@@ -231,8 +242,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "no retryable jobs but error when updating bbm to finished",
-			worker: NewWorker(workFunc),
+			name:          "no retryable jobs but error when updating bbm to finished",
+			worker:        NewWorker(workFunc),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				finalJob := &models.BackgroundMigrationJob{}
@@ -251,8 +263,9 @@ func TestFindJob_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:   "error when updating job failure attempts",
-			worker: NewWorker(workFunc, WithMaxJobAttempt(1)),
+			name:          "error when updating job failure attempts",
+			worker:        NewWorker(workFunc, WithMaxJobAttempt(1)),
+			expectedError: errAnError,
 			setupMocks: func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
 				bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
 				finalJob := &models.BackgroundMigrationJob{}
@@ -279,7 +292,7 @@ func TestFindJob_Errors(t *testing.T) {
 			t.Parallel()
 			bbmStore := test.setupMocks(gomock.NewController(t))
 			job, err := test.worker.FindJob(ctx, bbmStore)
-			require.ErrorIs(t, err, errAnError)
+			require.ErrorIs(t, err, test.expectedError)
 			require.Nil(t, job)
 		})
 	}
@@ -711,10 +724,11 @@ func TestRegisterWork(t *testing.T) {
 			name: "no options",
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
-					jobInterval:   defaultJobInterval,
-					maxJobAttempt: defaultMaxJobAttempt,
+					Work:                       make(map[string]Work, 0),
+					logger:                     log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
+					jobInterval:                defaultJobInterval,
+					maxJobAttempt:              defaultMaxJobAttempt,
+					workerStartupJitterSeconds: defaultWorkerStartupJitterSeconds,
 				}
 
 				w.wh = w
@@ -726,10 +740,11 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithJobInterval(1 * time.Second)},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
-					jobInterval:   1 * time.Second,
-					maxJobAttempt: defaultMaxJobAttempt,
+					Work:                       make(map[string]Work, 0),
+					logger:                     log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
+					jobInterval:                1 * time.Second,
+					maxJobAttempt:              defaultMaxJobAttempt,
+					workerStartupJitterSeconds: defaultWorkerStartupJitterSeconds,
 				}
 				w.wh = w
 				return w
@@ -740,10 +755,11 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithMaxJobAttempt(9)},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
-					jobInterval:   defaultJobInterval,
-					maxJobAttempt: 9,
+					Work:                       make(map[string]Work, 0),
+					logger:                     log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
+					jobInterval:                defaultJobInterval,
+					maxJobAttempt:              9,
+					workerStartupJitterSeconds: defaultWorkerStartupJitterSeconds,
 				}
 				w.wh = w
 				return w
@@ -754,11 +770,12 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithDB(&datastore.DB{})},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          make(map[string]Work, 0),
-					db:            &datastore.DB{},
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
-					jobInterval:   defaultJobInterval,
-					maxJobAttempt: defaultMaxJobAttempt,
+					Work:                       make(map[string]Work, 0),
+					db:                         &datastore.DB{},
+					logger:                     log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
+					jobInterval:                defaultJobInterval,
+					maxJobAttempt:              defaultMaxJobAttempt,
+					workerStartupJitterSeconds: defaultWorkerStartupJitterSeconds,
 				}
 				w.wh = w
 				return w
@@ -769,10 +786,11 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithLogger(log.GetLogger().WithFields(log.Fields{"random_key": "random_value"}))},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{"random_key": "random_value", componentKey: workerName, walThresholdKey: walSegmentThreshold}),
-					jobInterval:   defaultJobInterval,
-					maxJobAttempt: defaultMaxJobAttempt,
+					Work:                       make(map[string]Work, 0),
+					logger:                     log.GetLogger().WithFields(log.Fields{"random_key": "random_value", componentKey: workerName, walThresholdKey: walSegmentThreshold}),
+					jobInterval:                defaultJobInterval,
+					maxJobAttempt:              defaultMaxJobAttempt,
+					workerStartupJitterSeconds: defaultWorkerStartupJitterSeconds,
 				}
 				w.wh = w
 				return w
@@ -783,11 +801,12 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithHandler(wh)},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:          make(map[string]Work, 0),
-					logger:        log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
-					jobInterval:   defaultJobInterval,
-					maxJobAttempt: defaultMaxJobAttempt,
-					wh:            wh,
+					Work:                       make(map[string]Work, 0),
+					logger:                     log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
+					jobInterval:                defaultJobInterval,
+					maxJobAttempt:              defaultMaxJobAttempt,
+					wh:                         wh,
+					workerStartupJitterSeconds: defaultWorkerStartupJitterSeconds,
 				}
 				return w
 			},
@@ -797,11 +816,12 @@ func TestRegisterWork(t *testing.T) {
 			opts: []WorkerOption{WithWALPressureCheck()},
 			expectedWorker: func() *Worker {
 				w := &Worker{
-					Work:                   make(map[string]Work, 0),
-					logger:                 log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
-					jobInterval:            defaultJobInterval,
-					maxJobAttempt:          defaultMaxJobAttempt,
-					isWALThrottlingEnabled: true,
+					Work:                       make(map[string]Work, 0),
+					logger:                     log.GetLogger().WithFields(log.Fields{componentKey: workerName, walThresholdKey: walSegmentThreshold}),
+					jobInterval:                defaultJobInterval,
+					maxJobAttempt:              defaultMaxJobAttempt,
+					isWALThrottlingEnabled:     true,
+					workerStartupJitterSeconds: defaultWorkerStartupJitterSeconds,
 				}
 				w.wh = w
 				return w
@@ -820,11 +840,14 @@ func TestRegisterWork(t *testing.T) {
 	}
 }
 
-// TestWorker_Run tests the run methon of worker.
+// TestWorker_Run tests the run method of worker.
 func TestWorker_Run(t *testing.T) {
 	tests := []struct {
 		name       string
 		setupMocks func(ctrl *gomock.Controller) *Worker
+
+		expectedRunResult runResult
+		expectedErr       error
 	}{
 		{
 			name: "transaction creation failure",
@@ -835,6 +858,8 @@ func TestWorker_Run(t *testing.T) {
 				dbMock.EXPECT().BeginTx(gomock.Any(), nil).Return(nil, errAnError).Times(1)
 				return worker
 			},
+			expectedErr:       errAnError,
+			expectedRunResult: runResult{},
 		},
 		{
 			name: "failed to obtain lock",
@@ -853,6 +878,8 @@ func TestWorker_Run(t *testing.T) {
 
 				return worker
 			},
+			expectedErr:       errAnError,
+			expectedRunResult: runResult{},
 		},
 		{
 			name: "job retrieval failure",
@@ -871,6 +898,10 @@ func TestWorker_Run(t *testing.T) {
 				)
 
 				return worker
+			},
+			expectedErr: errAnError,
+			expectedRunResult: runResult{
+				heldLock: true,
 			},
 		},
 		{
@@ -892,6 +923,9 @@ func TestWorker_Run(t *testing.T) {
 
 				return worker
 			},
+			expectedRunResult: runResult{
+				heldLock: true,
+			},
 		},
 		{
 			name: "no jobs available commit failure",
@@ -912,6 +946,10 @@ func TestWorker_Run(t *testing.T) {
 
 				return worker
 			},
+			expectedErr: errAnError,
+			expectedRunResult: runResult{
+				heldLock: true,
+			},
 		},
 		{
 			name: "job execution failure",
@@ -931,6 +969,11 @@ func TestWorker_Run(t *testing.T) {
 				)
 
 				return worker
+			},
+			expectedErr: errAnError,
+			expectedRunResult: runResult{
+				heldLock: true,
+				foundJob: true,
 			},
 		},
 		{
@@ -953,6 +996,11 @@ func TestWorker_Run(t *testing.T) {
 
 				return worker
 			},
+			expectedErr: errAnError,
+			expectedRunResult: runResult{
+				heldLock: true,
+				foundJob: true,
+			},
 		},
 		{
 			name: "successful run",
@@ -974,6 +1022,36 @@ func TestWorker_Run(t *testing.T) {
 
 				return worker
 			},
+			expectedErr: nil,
+			expectedRunResult: runResult{
+				heldLock: true,
+				foundJob: true,
+			},
+		},
+		{
+			name: "WAL pressure",
+			setupMocks: func(ctrl *gomock.Controller) *Worker {
+				dbMock := mocks.NewMockHandler(ctrl)
+				txMock := mocks.NewMockTransactor(ctrl)
+				handler := bbm_mocks.NewMockHandler(ctrl)
+				worker := NewWorker(nil, WithDB(dbMock), WithHandler(handler), WithWALPressureCheck())
+				bbmStore := datastore.NewBackgroundMigrationStore(txMock)
+
+				gomock.InOrder(
+					dbMock.EXPECT().BeginTx(gomock.Any(), nil).Return(txMock, nil).Times(1),
+					handler.EXPECT().GrabLock(gomock.Any(), bbmStore).Return(nil).Times(1),
+					handler.EXPECT().ShouldThrottle(gomock.Any(), bbmStore).Return(true, nil).Times(1),
+					txMock.EXPECT().Rollback().Return(nil).Times(1),
+				)
+
+				return worker
+			},
+			expectedErr: nil,
+			expectedRunResult: runResult{
+				heldLock:        true,
+				foundJob:        false,
+				highWALPressure: true,
+			},
 		},
 	}
 
@@ -983,7 +1061,90 @@ func TestWorker_Run(t *testing.T) {
 			t.Parallel()
 			worker := test.setupMocks(gomock.NewController(t))
 			// Execute the run method and assert the necessary methods/functions are called
-			worker.run(context.TODO())
+			actualRunResult, actualErr := worker.run(context.TODO())
+
+			require.Equal(t, test.expectedErr, actualErr)
+			require.Equal(t, test.expectedRunResult, actualRunResult)
+		})
+	}
+}
+
+func TestWorker_shouldResetBackOff(t *testing.T) {
+	tests := []struct {
+		name     string
+		result   runResult
+		err      error
+		expected bool // true = reset backoff, false = continue backoff
+	}{
+		{
+			name: "job found - should reset backoff",
+			result: runResult{
+				foundJob:        true,
+				heldLock:        true,
+				highWALPressure: false,
+			},
+			err:      nil,
+			expected: true,
+		},
+		{
+			name: "lock not held - should reset backoff",
+			result: runResult{
+				foundJob:        false,
+				heldLock:        false,
+				highWALPressure: false,
+			},
+			err:      nil,
+			expected: true,
+		},
+		{
+			name: "no job found, lock held - should continue backoff",
+			result: runResult{
+				foundJob:        false,
+				heldLock:        true,
+				highWALPressure: false,
+			},
+			err:      nil,
+			expected: false,
+		},
+		{
+			name: "high WAL pressure - should continue backoff",
+			result: runResult{
+				foundJob:        true, // Even with job found
+				heldLock:        true,
+				highWALPressure: true,
+			},
+			err:      nil,
+			expected: false,
+		},
+		{
+			name: "error occurred - should continue backoff",
+			result: runResult{
+				foundJob:        true, // Even with job found
+				heldLock:        true,
+				highWALPressure: false,
+			},
+			err:      errors.New("some error"),
+			expected: false,
+		},
+		{
+			name: "job found with high WAL pressure - WAL takes precedence",
+			result: runResult{
+				foundJob:        true,
+				heldLock:        true,
+				highWALPressure: true,
+			},
+			err:      nil,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jw := &Worker{
+				logger: log.GetLogger(),
+			}
+			actual := jw.shouldResetBackOff(tt.result, tt.err)
+			require.Equal(t, tt.expected, actual)
 		})
 	}
 }

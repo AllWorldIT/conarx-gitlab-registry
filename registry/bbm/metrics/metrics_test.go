@@ -148,3 +148,58 @@ registry_bbm_migrated_tuples_total{migration_id="foo_migration_id",migration_nam
 	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, totalFullName)
 	require.NoError(t, err)
 }
+
+func TestWorkerSleep(t *testing.T) {
+	WorkerSleep("foo", 10*time.Second)
+	WorkerSleep("foo", 10*time.Millisecond)
+	WorkerSleep("bar", 100*time.Hour)
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_bbm_sleep_duration_seconds A histogram of sleep durations between bbm worker runs.
+# TYPE registry_bbm_sleep_duration_seconds histogram
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="0.5"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="1"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="5"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="15"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="30"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="60"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="300"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="600"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="900"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="1800"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="3600"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="7200"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="10800"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="21600"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="43200"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="86400"} 0
+registry_bbm_sleep_duration_seconds_bucket{worker="bar",le="+Inf"} 1
+registry_bbm_sleep_duration_seconds_sum{worker="bar"} 360000
+registry_bbm_sleep_duration_seconds_count{worker="bar"} 1
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="0.5"} 1
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="1"} 1
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="5"} 1
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="15"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="30"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="60"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="300"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="600"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="900"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="1800"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="3600"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="7200"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="10800"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="21600"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="43200"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="86400"} 2
+registry_bbm_sleep_duration_seconds_bucket{worker="foo",le="+Inf"} 2
+registry_bbm_sleep_duration_seconds_sum{worker="foo"} 10.01
+registry_bbm_sleep_duration_seconds_count{worker="foo"} 2
+`)
+	require.NoError(t, err)
+	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, sleepDurationName)
+
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName)
+	require.NoError(t, err)
+}

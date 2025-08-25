@@ -9,7 +9,11 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/benbjohnson/clock"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/docker/distribution/registry/bbm/metrics"
+	reginternal "github.com/docker/distribution/registry/internal"
+	"github.com/docker/distribution/testutil"
 
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore"
@@ -18,18 +22,27 @@ import (
 	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
+type runResult struct {
+	heldLock        bool
+	foundJob        bool
+	highWALPressure bool
+}
+
 const (
-	componentKey             = "component"
-	workerName               = "registry.bbm.Worker"
-	defaultMaxJobAttempt     = 5
-	defaultJobInterval       = 1 * time.Minute
-	jobIntervalJitterSeconds = 5
+	componentKey                      = "component"
+	workerName                        = "registry.bbm.Worker"
+	defaultMaxJobAttempt              = 5
+	defaultJobInterval                = 1 * time.Minute
+	defaultWorkerStartupJitterSeconds = 60
 	// walSegmentThreshold defines the maximum number of unarchived WAL segments allowed before background migration jobs are throttled or paused.
 	// Aligns with GitLab's default threshold: https://gitlab.com/gitlab-org/gitlab/blob/c30b91ad44092660069373aeade2ba09d0158d04/lib/gitlab/database/health_status/indicators/write_ahead_log.rb#L10
 	walSegmentThreshold = 42
 	walThresholdKey     = "wal_segment_threshold"
 	// maxRunTimeout caps the duration of each background migration run to 3 mins.
 	maxRunTimeout = 3 * time.Minute
+
+	backoffJitterFactor = 0.33
+	maxBackoff          = 30 * time.Minute
 
 	// Background Migration job log keys
 	jobIDKey        = "job_id"
@@ -117,13 +130,14 @@ func makeWorkMap(work []Work) (map[string]Work, error) {
 
 // Worker is the Background Migration agent of execution. It listens for pending Background Migration jobs and tries to execute the corresponding work function.
 type Worker struct {
-	Work                   map[string]Work
-	logger                 log.Logger
-	db                     datastore.Handler
-	jobInterval            time.Duration
-	maxJobAttempt          int
-	isWALThrottlingEnabled bool
-	wh                     Handler
+	Work                       map[string]Work
+	logger                     log.Logger
+	db                         datastore.Handler
+	jobInterval                time.Duration
+	workerStartupJitterSeconds int
+	maxJobAttempt              int
+	isWALThrottlingEnabled     bool
+	wh                         Handler
 }
 
 // Handler defines the methods required for handling background migration jobs. It provides flexibility to use different implementations for job management.
@@ -142,6 +156,13 @@ type WorkerOption func(*Worker)
 func WithJobInterval(d time.Duration) WorkerOption {
 	return func(a *Worker) {
 		a.jobInterval = d
+	}
+}
+
+// WithWorkerStartupJitterSeconds sets the max bound for the startup jitter for a worker.
+func WithWorkerStartupJitterSeconds(d int) WorkerOption {
+	return func(a *Worker) {
+		a.workerStartupJitterSeconds = d
 	}
 }
 
@@ -187,6 +208,9 @@ func (jw *Worker) applyDefaults() {
 	if jw.jobInterval == 0 {
 		jw.jobInterval = defaultJobInterval
 	}
+	if jw.workerStartupJitterSeconds == 0 {
+		jw.workerStartupJitterSeconds = defaultWorkerStartupJitterSeconds
+	}
 	if jw.maxJobAttempt == 0 {
 		jw.maxJobAttempt = defaultMaxJobAttempt
 	}
@@ -216,9 +240,13 @@ func NewWorker(workMap map[string]Work, opts ...WorkerOption) *Worker {
 func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-chan struct{}) (chan struct{}, error) {
 	// gracefullFinish is used to signal to an upstream processes that a worker has completed any in-flight jobs and the upstream can terminate if needed.
 	gracefullFinish := make(chan struct{})
-	// Create a period that this worker searches and executes work on (use a random jitter of jobIntervalJitterSeconds for obscurity).
-	// nolint: gosec
-	ticker := time.NewTicker(jw.jobInterval + time.Duration(rand.IntN(jobIntervalJitterSeconds))*time.Second)
+	b := BackoffConstructor(jw.jobInterval, maxBackoff)
+
+	// nolint: gosec // used only for jitter calculation
+	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(SystemClock.Now().UnixNano())))
+	jitter := time.Duration(r.Int64N(int64(jw.workerStartupJitterSeconds))) * time.Second
+	jw.logger.WithFields(log.Fields{"jitter_s": jitter.Seconds()}).Info("starting bbm worker")
+	SystemClock.Sleep(jitter)
 
 	go func() {
 		for {
@@ -230,12 +258,25 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 				jw.logger.Info("received shutdown signal: shutting down...")
 				close(gracefullFinish)
 				return
-			// A period has elapsed, time to try to find and execute any available jobs.
-			case <-ticker.C:
+			case <-ctx.Done():
+				jw.logger.Info("context canceled: shutting down...")
+				close(gracefullFinish)
+				return
+			default:
+				start := SystemClock.Now()
 				jw.logger.Info("starting worker run...")
 				report := metrics.WorkerRun()
-				jw.run(ctx)
+				res, err := jw.run(ctx)
+				if jw.shouldResetBackOff(res, err) {
+					b.Reset()
+				}
 				report()
+				jw.logger.WithFields(log.Fields{"duration_s": SystemClock.Since(start).Seconds()}).Info("run complete")
+
+				sleep := b.NextBackOff()
+				jw.logger.WithFields(log.Fields{"duration_s": sleep.Seconds()}).Info("sleeping")
+				metrics.WorkerSleep(workerName, sleep)
+				SystemClock.Sleep(sleep)
 			}
 		}
 	}()
@@ -246,7 +287,8 @@ func (jw *Worker) ListenForBackgroundMigration(ctx context.Context, doneChan <-c
 // run is responsible for orchestrating and executing Background Migrations when found.
 // it does this by attempting to obtain the Background Migration distributed lock,
 // before proceeding to find and execute any applicable Background Migration jobs.
-func (jw *Worker) run(ctx context.Context) {
+func (jw *Worker) run(ctx context.Context) (runResult, error) {
+	var runRes runResult
 	// inject correlation id to logs
 	jw.logger = jw.logger.WithFields(log.Fields{correlation.FieldName: correlation.ExtractFromContextOrGenerate(ctx)})
 
@@ -259,7 +301,7 @@ func (jw *Worker) run(ctx context.Context) {
 	if err != nil {
 		jw.logger.WithError(err).Error("failed to create database transaction")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
-		return
+		return runRes, err
 	}
 	defer tx.Rollback()
 
@@ -268,13 +310,15 @@ func (jw *Worker) run(ctx context.Context) {
 	// Grab distributed lock
 	jw.logger.Info("obtaining lock...")
 	if err = jw.wh.GrabLock(ctx, bbmStore); err != nil {
+		jw.logger.WithError(err).Info("failed to obtain lock")
 		if !errors.Is(err, datastore.ErrBackgroundMigrationLockInUse) {
 			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			return runRes, err
 		}
-		jw.logger.WithError(err).Info("failed to obtain lock")
 
-		return
+		return runRes, nil
 	}
+	runRes.heldLock = true
 
 	if jw.isWALThrottlingEnabled {
 		// Ensure the WAL pressure is low before proceeding to find and execute any jobs.
@@ -283,13 +327,12 @@ func (jw *Worker) run(ctx context.Context) {
 		if err != nil {
 			jw.logger.WithError(err).Info("WAL throttle check failed")
 			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
-			return
+			return runRes, err
 		}
 
 		if throttle {
-			jw.logger.WithFields(log.Fields{"throttle_interval_s": jw.jobInterval.Seconds()}).Info("WAL pressure high. Throttling background migration worker")
-			time.Sleep(jw.jobInterval)
-			return
+			runRes.highWALPressure = true
+			return runRes, nil
 		}
 	}
 
@@ -299,16 +342,18 @@ func (jw *Worker) run(ctx context.Context) {
 	if err != nil {
 		jw.logger.WithError(err).Error("failed to find job")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
-		return
+		return runRes, err
 	}
 	if job == nil {
 		jw.logger.Info("no jobs to run...")
 		if err = tx.Commit(); err != nil {
 			jw.logger.WithError(err).Error("failed to commit database transaction")
 			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			return runRes, err
 		}
-		return
+		return runRes, nil
 	}
+	runRes.foundJob = true
 
 	l := jw.logger.WithFields(log.Fields{
 		jobIDKey:        job.ID,
@@ -330,7 +375,7 @@ func (jw *Worker) run(ctx context.Context) {
 	if err != nil {
 		l.WithError(err).Error("failed to execute job")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
-		return
+		return runRes, err
 	}
 
 	// TODO: To limit how soon the next background migration runs (across all registry instances), we need to hold the lock for a minimum duration (`jobInterval`).
@@ -342,11 +387,12 @@ func (jw *Worker) run(ctx context.Context) {
 	if err = tx.Commit(); err != nil {
 		jw.logger.WithError(err).Error("failed to commit database transaction")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
-		return
+		return runRes, err
 	}
 
 	metrics.MigrationRecord(job.BatchSize, job.JobName, fmt.Sprint(job.BBMID))
 	l.Info("finished background migration job run")
+	return runRes, nil
 }
 
 // GrabLock attempts to grab the distributed lock used for co-ordination between all Background Migration processes.
@@ -406,11 +452,14 @@ func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigr
 	err = validateMigration(ctx, bbmStore, jw.Work, bbm)
 	if err != nil {
 		l.WithError(err).Error("background migration failed validation")
+		errortracking.Capture(err, errortracking.WithContext(ctx))
 
 		var migrationErr *migrationFailureError
 		if errors.As(err, &migrationErr) {
-			// Mark migration as failed and surface the error to sentry
-			errortracking.Capture(err, errortracking.WithContext(ctx))
+			if isTransientError(migrationErr) {
+				return nil, err
+			}
+			// Mark migration as failed
 			bbm.Status = models.BackgroundMigrationFailed
 			bbm.ErrorCode = migrationErr.ErrorCode
 			return nil, bbmStore.UpdateStatus(ctx, bbm)
@@ -619,4 +668,56 @@ func validateMigration(ctx context.Context, bbmStore datastore.BackgroundMigrati
 		return fmt.Errorf("validating migration: %w", err)
 	}
 	return nil
+}
+
+var (
+	// for testing purposes (mocks)
+	BackoffConstructor                   = newBackoff
+	SystemClock        reginternal.Clock = clock.New()
+)
+
+func newBackoff(initInterval, maxInterval time.Duration) Backoff {
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = initInterval
+	b.MaxInterval = maxInterval
+	b.RandomizationFactor = backoffJitterFactor
+	b.MaxElapsedTime = 0
+	b.Clock = SystemClock
+	b.Reset()
+
+	return b
+}
+
+// isTransientError returns true if a migration error should not permanently stop a migration.
+func isTransientError(err *migrationFailureError) bool {
+	var isTransient bool
+	if err != nil && err.ErrorCode == models.InvalidJobSignatureBBMErrCode {
+		isTransient = true
+	}
+	return isTransient
+}
+
+// shouldResetBackOff decides whether to reset or continue backoff based on worker results.
+// Returns true if backoff should be reset, false if it should continue.
+func (jw *Worker) shouldResetBackOff(result runResult, err error) bool {
+	if err != nil {
+		// Backoff continues on error
+		jw.logger.WithError(err).Error("failed run. Throttling background migration worker")
+		return false
+	}
+
+	// Backoff continues under high WAL pressure
+	if result.highWALPressure {
+		jw.logger.Info("WAL pressure is high. Throttling background migration worker")
+		return false
+	}
+
+	// Reset backoff when job found or lock not held
+	if result.foundJob || !result.heldLock {
+		return true
+	}
+
+	// Default: continue backoff (no jobs found)
+	jw.logger.Info("no jobs found. Throttling background migration worker")
+	return false
 }
