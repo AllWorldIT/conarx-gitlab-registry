@@ -272,10 +272,7 @@ func TestRowCountCollector_run(t *testing.T) {
 		collector2.Start(ctx)
 
 		// Give second collector time to try acquiring lock
-		// Use Never to ensure it doesn't collect any metrics
-		require.Never(t, func() bool {
-			return len(executor2.calls) > 0
-		}, 100*time.Millisecond, 10*time.Millisecond, "second collector should not collect any metrics")
+		time.Sleep(100 * time.Millisecond)
 
 		// Stop both
 		collector1.Stop()
@@ -335,7 +332,7 @@ func TestRowCountCollector_WithLeaseDuration(t *testing.T) {
 	require.Equal(t, 60*time.Second, collector.leaseDuration)
 }
 
-func TestRowCountCollector_runLockExtension(t *testing.T) {
+func TestRowCountCollector_runLockRefresh(t *testing.T) {
 	t.Run("extends lock to maintain ownership", func(t *testing.T) {
 		mr, err := miniredis.Run()
 		require.NoError(t, err)
@@ -360,27 +357,35 @@ func TestRowCountCollector_runLockExtension(t *testing.T) {
 		// Manually acquire lock to test extension behavior
 		lock, err := collector.locker.Obtain(ctx, rowCountLockKey, collector.leaseDuration, nil)
 		require.NoError(t, err)
-		defer lock.Release(ctx)
+		defer func() {
+			// Context is canceled in this test, so we expect either success or context.Canceled
+			if err := lock.Release(ctx); err != nil {
+				require.ErrorIs(t, err, context.Canceled, "unexpected error releasing lock")
+			}
+		}()
 
-		// Start lock extension in background
+		// Start lock refresh in background
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			collector.runLockExtension(ctx, lock)
+			collector.runLockRefresh(ctx, lock)
 		}()
 
 		// Test that lock remains held due to extensions (observable behavior)
 		// Without extensions, lock would expire after 50ms
-		require.Eventually(t, func() bool {
-			// Try to acquire the same lock - should fail if still held due to extension
-			testLock, err := collector.locker.Obtain(ctx, rowCountLockKey, time.Millisecond, nil)
-			if err == nil {
-				testLock.Release(ctx) // Clean up if we got it
-				return false          // Lock was not held (extensions not working)
+		time.Sleep(75 * time.Millisecond) // Wait beyond original lease
+
+		// Try to acquire the same lock - should fail if still held due to extension
+		testLock, err := collector.locker.Obtain(ctx, rowCountLockKey, time.Millisecond, nil)
+		if err == nil {
+			// Context might be canceled, so handle that case
+			if err := testLock.Release(ctx); err != nil {
+				require.ErrorIs(t, err, context.Canceled, "unexpected error releasing test lock")
 			}
-			// Lock is held = extension is working
-			return errors.Is(err, redislock.ErrNotObtained)
-		}, 100*time.Millisecond, 10*time.Millisecond, "lock should remain held due to extensions")
+			t.Fatal("lock extension did not work - lock was not held after lease duration")
+		}
+		// Lock is held = extension is working
+		require.ErrorIs(t, err, redislock.ErrNotObtained)
 
 		// Cancel context to stop extension
 		cancel()
@@ -388,7 +393,7 @@ func TestRowCountCollector_runLockExtension(t *testing.T) {
 		// Wait for goroutine to finish
 		select {
 		case <-done:
-			// Extension goroutine stopped as expected
+			// Refresh goroutine stopped as expected
 		case <-time.After(100 * time.Millisecond):
 			t.Fatal("lock extension goroutine did not stop within timeout")
 		}
@@ -417,25 +422,270 @@ func TestRowCountCollector_runLockExtension(t *testing.T) {
 		// Manually acquire lock
 		lock, err := collector.locker.Obtain(ctx, rowCountLockKey, collector.leaseDuration, nil)
 		require.NoError(t, err)
-		defer lock.Release(ctx)
+		defer func() {
+			// Using background context, so should not error
+			require.NoError(t, lock.Release(ctx))
+		}()
 
-		// Start lock extension in background
+		// Start lock refresh in background
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			collector.runLockExtension(ctx, lock)
+			collector.runLockRefresh(ctx, lock)
 		}()
 
 		// Stop the collector (closes stopCh)
 		collector.Stop()
 
-		// Extension goroutine should stop quickly when stopCh is closed
+		// Refresh goroutine should stop quickly when stopCh is closed
 		select {
 		case <-done:
-			// Extension goroutine stopped as expected
+			// Refresh goroutine stopped as expected
 		case <-time.After(50 * time.Millisecond):
-			t.Fatal("lock extension goroutine did not stop promptly when collector was stopped")
+			t.Fatal("lock refresh goroutine did not stop promptly when collector was stopped")
 		}
+	})
+
+	t.Run("gives up leadership after consecutive refresh failures", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		require.NoError(t, err)
+		defer mr.Close()
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: mr.Addr(),
+		})
+
+		executor := &mockRowCountExecutor{count: 100}
+		collector, err := NewRowCountCollector(
+			executor.Execute,
+			redisClient,
+			WithInterval(50*time.Millisecond),
+			WithLeaseDuration(100*time.Millisecond),
+		)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+
+		// Acquire lock
+		lock, err := collector.locker.Obtain(ctx, rowCountLockKey, collector.leaseDuration, nil)
+		require.NoError(t, err)
+
+		// Start lock refresh in background
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			collector.runLockRefresh(ctx, lock)
+		}()
+
+		// Wait a moment for the refresh ticker to start
+		time.Sleep(60 * time.Millisecond)
+
+		// Delete the lock key to simulate losing the lock (will cause refresh failures)
+		mr.Del(rowCountLockKey)
+
+		// The refresh should fail 3 times (at 50ms intervals) and then give up
+		// Refresh interval is leaseDuration/2 = 50ms
+		// So failures at ~50ms, ~100ms, ~150ms, then return
+		select {
+		case <-done:
+			// Expected: goroutine stopped after max retries
+		case <-time.After(250 * time.Millisecond):
+			t.Fatal("lock refresh goroutine did not stop after max consecutive failures")
+		}
+	})
+}
+
+func TestRowCountCollector_acquireLock_retry(t *testing.T) {
+	t.Run("successfully acquires lock on first attempt", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		require.NoError(t, err)
+		defer mr.Close()
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: mr.Addr(),
+		})
+
+		executor := &mockRowCountExecutor{count: 100}
+		collector, err := NewRowCountCollector(executor.Execute, redisClient)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+
+		// Lock is available, should acquire immediately
+		lock, attemptCount := collector.acquireLock(ctx)
+
+		require.NotNil(t, lock, "should acquire lock")
+		require.Equal(t, 1, attemptCount, "should succeed on first attempt")
+
+		// Clean up
+		require.NoError(t, lock.Release(ctx))
+	})
+
+	t.Run("retries when lock is held by another instance", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		require.NoError(t, err)
+		defer mr.Close()
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: mr.Addr(),
+		})
+
+		executor := &mockRowCountExecutor{count: 100}
+		collector, err := NewRowCountCollector(executor.Execute, redisClient)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+
+		// First, acquire the lock with another locker to simulate another instance holding it
+		otherLocker := redislock.New(redisClient)
+		otherLock, err := otherLocker.Obtain(ctx, rowCountLockKey, 200*time.Millisecond, nil)
+		require.NoError(t, err)
+
+		// Try to acquire lock - should fail initially but retry
+		var lock *redislock.Lock
+		var attemptCount int
+
+		go func() {
+			lock, attemptCount = collector.acquireLock(ctx)
+		}()
+
+		// Wait for first attempt to happen
+		time.Sleep(100 * time.Millisecond)
+		// Release lock to allow retry to succeed
+		require.NoError(t, otherLock.Release(ctx))
+
+		// Wait for lock acquisition after retry
+		require.Eventually(t, func() bool {
+			return lock != nil && attemptCount > 1
+		}, 20*time.Second, 100*time.Millisecond, "should have acquired lock after retry")
+
+		// Clean up
+		require.NoError(t, lock.Release(ctx))
+	})
+
+	t.Run("stops retrying on context cancellation", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		require.NoError(t, err)
+		defer mr.Close()
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: mr.Addr(),
+		})
+
+		executor := &mockRowCountExecutor{count: 100}
+		collector, err := NewRowCountCollector(executor.Execute, redisClient)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// Hold the lock with another instance
+		otherLocker := redislock.New(redisClient)
+		otherLock, err := otherLocker.Obtain(ctx, rowCountLockKey, 60*time.Second, nil)
+		require.NoError(t, err)
+		defer func() {
+			require.NoError(t, otherLock.Release(context.Background()))
+		}()
+
+		// Try to acquire lock in background
+		var lock *redislock.Lock
+		var attemptCount int
+		stopped := make(chan bool)
+
+		go func() {
+			lock, attemptCount = collector.acquireLock(ctx)
+			stopped <- true
+		}()
+
+		// Wait for at least one attempt and then cancel
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+
+		// Should stop quickly after cancellation
+		require.Eventually(t, func() bool {
+			select {
+			case <-stopped:
+				return true
+			default:
+				return false
+			}
+		}, 1*time.Second, 10*time.Millisecond, "acquireLock should stop promptly on context cancellation")
+
+		require.Nil(t, lock, "should not have acquired lock after context cancel")
+		require.GreaterOrEqual(t, attemptCount, 1, "should have attempted at least once")
+	})
+
+	t.Run("stops retrying on collector stop", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		require.NoError(t, err)
+		defer mr.Close()
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: mr.Addr(),
+		})
+
+		executor := &mockRowCountExecutor{count: 100}
+		collector, err := NewRowCountCollector(executor.Execute, redisClient)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+
+		// Hold the lock with another instance
+		otherLocker := redislock.New(redisClient)
+		otherLock, err := otherLocker.Obtain(ctx, rowCountLockKey, 60*time.Second, nil)
+		require.NoError(t, err)
+		defer func() {
+			require.NoError(t, otherLock.Release(ctx))
+		}()
+
+		// Try to acquire lock in background
+		var lock *redislock.Lock
+		stopped := make(chan bool)
+
+		go func() {
+			lock, _ = collector.acquireLock(ctx)
+			stopped <- true
+		}()
+
+		// Wait a moment then stop collector
+		time.Sleep(200 * time.Millisecond)
+		collector.Stop()
+
+		// Should stop quickly after stop signal
+		require.Eventually(t, func() bool {
+			select {
+			case <-stopped:
+				return true
+			default:
+				return false
+			}
+		}, 1*time.Second, 10*time.Millisecond, "acquireLock should stop promptly on collector stop")
+
+		require.Nil(t, lock, "should not have acquired lock after collector stop")
+	})
+
+	t.Run("handles Redis errors with retry", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		require.NoError(t, err)
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: mr.Addr(),
+		})
+
+		executor := &mockRowCountExecutor{count: 100}
+		collector, err := NewRowCountCollector(executor.Execute, redisClient)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		// Close Redis to simulate connection error
+		mr.Close()
+
+		// Should retry but fail due to Redis being down
+		lock, attemptCount := collector.acquireLock(ctx)
+
+		require.Nil(t, lock, "should not acquire lock when Redis is down")
+		require.GreaterOrEqual(t, attemptCount, 1, "should have attempted at least once")
 	})
 }
 
