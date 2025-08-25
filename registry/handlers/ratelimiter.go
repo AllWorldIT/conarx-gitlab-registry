@@ -195,6 +195,15 @@ func (app *App) rateLimiterMiddleware(next http.Handler) http.Handler {
 		ctx := app.context(w, r)
 		l := log.GetLogger(
 			log.WithContext(ctx),
+			log.WithKeys(
+				"referer",
+				"user_agent",
+				"root_repo",
+				"vars.name",
+				"vars.reference",
+				"vars.digest",
+				"vars.uuid",
+			),
 		).WithFields(
 			log.Fields{
 				"component": "registry.rate_limiter",
