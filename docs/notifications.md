@@ -13,7 +13,7 @@ These metrics provide insights into event processing, delivery success rates, an
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `registry_notifications_events` | Counter | `type`, `action`, `artifact`, `endpoint` | Total number of events processed by the notification system |
+| `registry_notifications_events_total` | Counter | `type`, `action`, `artifact`, `endpoint` | Total number of events processed by the notification system |
 
 **Label Values:**
 
@@ -47,7 +47,7 @@ This gauge increases when events are added to the queue and decreases when they 
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `registry_notifications_delivery` | Counter | `endpoint`, `delivery_type` | Total number of events by final delivery outcome after all retry attempts |
+| `registry_notifications_delivery_total` | Counter | `endpoint`, `delivery_type` | Total number of events by final delivery outcome after all retry attempts |
 
 **Label Values:**
 
@@ -64,7 +64,7 @@ This metric helps track the reliability of your notification endpoints. A high n
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `registry_notifications_retries` | Histogram | `endpoint` | Distribution of retry attempts needed before successful delivery or failure |
+| `registry_notifications_retries_count` | Histogram | `endpoint` | Distribution of retry attempts needed before successful delivery or failure |
 
 **Histogram Buckets:** 0, 1, 2, 3, 5, 10, 15, 20, 30, 50 retries
 
@@ -112,7 +112,7 @@ High total latencies with low HTTP latencies indicate queue congestion. This met
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `registry_notifications_status` | Counter | `code`, `endpoint` | Total number of HTTP response status codes received from endpoints |
+| `registry_notifications_status_total` | Counter | `code`, `endpoint` | Total number of HTTP response status codes received from endpoints |
 
 **Label Values:**
 
@@ -123,7 +123,7 @@ High total latencies with low HTTP latencies indicate queue congestion. This met
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `registry_notifications_errors` | Counter | `endpoint` | Total number of events that failed due to internal errors (not HTTP failures) |
+| `registry_notifications_errors_total` | Counter | `endpoint` | Total number of events that failed due to internal errors (not HTTP failures) |
 
 This metric tracks non-HTTP errors such as:
 
