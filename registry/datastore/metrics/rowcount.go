@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"time"
 
 	"github.com/bsm/redislock"
 	dlog "github.com/docker/distribution/log"
 	"github.com/docker/distribution/metrics"
+	"github.com/docker/distribution/testutil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 	"gitlab.com/gitlab-org/labkit/errortracking"
@@ -24,6 +26,10 @@ const (
 	defaultInterval = 10 * time.Second
 	// defaultLeaseDuration is the default duration of the distributed lock lease
 	defaultLeaseDuration = 30 * time.Second
+	// lockRetryInterval is the fixed interval between lock acquisition attempts
+	lockRetryInterval = 15 * time.Second
+	// lockExtensionMaxRetries is the number of retries for lock extension failures before giving up leadership
+	lockExtensionMaxRetries = 3
 )
 
 // RowCountExecutor is a function that executes a database query and returns the count result.
@@ -184,24 +190,74 @@ func (c *RowCountCollector) registerMetrics() error {
 	return nil
 }
 
+// acquireLock attempts to acquire the distributed lock with fixed interval retry
+func (c *RowCountCollector) acquireLock(ctx context.Context) (*redislock.Lock, int) {
+	// We need to monitor both c.stopCh and ctx.Done() for shutdown signals. We use a fixed retry interval instead of
+	// exponential backoff for simplicity, as lock acquisition is a lightweight operation and the scenarios are limited
+	// (e.g., instance shutdown, Redis unavailable, network issues).
+
+	// Create randomness for jitter calculation
+	// nolint: gosec // used only for jitter calculation
+	r := rand.New(rand.NewChaCha8(testutil.SeedFromUnixNano(time.Now().UnixNano())))
+
+	// Track attempt count
+	attemptCount := 0
+
+	// Check for shutdown before attempting
+	select {
+	case <-c.stopCh:
+		return nil, attemptCount
+	case <-ctx.Done():
+		return nil, attemptCount
+	default:
+	}
+
+	for {
+		attemptCount++
+		c.logger.Info("attempting to obtain database row count metrics lock")
+
+		lock, err := c.locker.Obtain(ctx, rowCountLockKey, c.leaseDuration, nil)
+		if err == nil {
+			// Successfully obtained lock
+			return lock, attemptCount
+		}
+
+		// Calculate retry timing with jitter
+		jitter := time.Duration(r.IntN(1000)) * time.Millisecond
+		retryAfter := lockRetryInterval + jitter
+		l := c.logger.WithFields(dlog.Fields{"retry_after_s": retryAfter.Seconds()})
+
+		if errors.Is(err, redislock.ErrNotObtained) {
+			// This is expected when another instance holds the lock
+			l.Info("database row count metrics lock already obtained by another instance, will retry...")
+		} else {
+			// Other errors (network issues, Redis down, etc.)
+			l.WithError(err).Warn("failed to obtain database row count metrics lock, will retry...")
+		}
+
+		// Sleep with interruption support for both shutdown channels
+		timer := time.NewTimer(retryAfter)
+		select {
+		case <-c.stopCh:
+			timer.Stop()
+			return nil, attemptCount
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, attemptCount
+		case <-timer.C:
+			// Continue to next retry
+		}
+	}
+}
+
 // run is the main collection loop
 func (c *RowCountCollector) run(ctx context.Context) {
 	defer c.wg.Done()
 
-	// Try to acquire the lock initially
-	lock, err := c.locker.Obtain(ctx, rowCountLockKey, c.leaseDuration, nil)
-	if err != nil {
-		if errors.Is(err, redislock.ErrNotObtained) {
-			c.logger.Info("database row count metrics lock already obtained by another instance")
-		} else {
-			c.logger.WithError(err).Error("failed to obtain database row count metrics lock")
-			errortracking.Capture(
-				fmt.Errorf("database row count metrics: failed to obtain lock: %w", err),
-				errortracking.WithContext(ctx),
-				errortracking.WithStackTrace(),
-			)
-		}
-		return
+	// Try to acquire the lock with retries
+	lock, _ := c.acquireLock(ctx)
+	if lock == nil {
+		return // Failed to acquire lock
 	}
 
 	c.logger.Info("obtained database row count metrics lock")
@@ -234,12 +290,12 @@ func (c *RowCountCollector) run(ctx context.Context) {
 		}
 	}()
 
-	// Run lock extension in a separate goroutine to prevent losing leadership. If metrics collection takes longer than
-	// the extension interval, the lock extension would be blocked, causing us to lose leadership while working.
-	lockExtensionDone := make(chan struct{})
+	// Run lock refresh in a separate goroutine to prevent losing leadership. If metrics collection takes longer than
+	// the refresh interval, the lock refresh would be blocked, causing us to lose leadership while working.
+	lockRefreshDone := make(chan struct{})
 	go func() {
-		defer close(lockExtensionDone)
-		c.runLockExtension(ctx, lock)
+		defer close(lockRefreshDone)
+		c.runLockRefresh(ctx, lock)
 	}()
 
 	// Set up collection ticker
@@ -256,8 +312,8 @@ func (c *RowCountCollector) run(ctx context.Context) {
 			return
 		case <-ctx.Done():
 			return
-		case <-lockExtensionDone:
-			c.logger.Warn("lock extension goroutine stopped, releasing leadership")
+		case <-lockRefreshDone:
+			c.logger.Warn("lock refresh goroutine stopped, releasing leadership")
 			return
 		case <-collectionTicker.C:
 			c.collectMetrics(ctx)
@@ -293,12 +349,15 @@ func (c *RowCountCollector) collectMetrics(ctx context.Context) {
 	}
 }
 
-// runLockExtension handles periodic lock extension to maintain leadership
-func (c *RowCountCollector) runLockExtension(ctx context.Context, lock *redislock.Lock) {
+// runLockRefresh handles periodic lock refresh to maintain leadership
+func (c *RowCountCollector) runLockRefresh(ctx context.Context, lock *redislock.Lock) {
 	// Extend lock at half the lease duration to ensure we maintain it
 	extensionInterval := c.leaseDuration / 2
 	extensionTicker := time.NewTicker(extensionInterval)
 	defer extensionTicker.Stop()
+
+	// Track consecutive failures locally
+	consecutiveFailures := 0
 
 	for {
 		select {
@@ -307,16 +366,34 @@ func (c *RowCountCollector) runLockExtension(ctx context.Context, lock *redisloc
 		case <-ctx.Done():
 			return
 		case <-extensionTicker.C:
-			if err := lock.Refresh(ctx, c.leaseDuration, nil); err != nil {
-				c.logger.WithError(err).Error("failed to extend database row count metrics lock, releasing leadership")
-				errortracking.Capture(
-					fmt.Errorf("database row count metrics: failed to extend lock, releasing leadership: %w", err),
-					errortracking.WithContext(ctx),
-					errortracking.WithStackTrace(),
-				)
-				return
+			err := lock.Refresh(ctx, c.leaseDuration, nil)
+			if err != nil {
+				consecutiveFailures++
+				c.logger.WithError(err).WithFields(dlog.Fields{
+					"retry_count": consecutiveFailures,
+				}).Warn("failed to extend database row count metrics lock")
+
+				// Give up leadership after max consecutive failures
+				// nolint:revive // max-control-nesting - acceptable for error handling logic
+				if consecutiveFailures >= lockExtensionMaxRetries {
+					c.logger.WithError(err).Error("failed to extend lock after retries, releasing leadership")
+					errortracking.Capture(
+						fmt.Errorf("database row count metrics: failed to extend lock after %d retries, releasing leadership: %w", consecutiveFailures, err),
+						errortracking.WithContext(ctx),
+						errortracking.WithStackTrace(),
+					)
+					return // Too many failures, release leadership
+				}
+				continue
 			}
-			c.logger.Info("extended database row count metrics lock")
+
+			// Success - reset failure counter if needed
+			if consecutiveFailures > 0 {
+				c.logger.WithFields(dlog.Fields{"retry_count": consecutiveFailures}).Info("successfully extended lock after failures")
+				consecutiveFailures = 0
+			} else {
+				c.logger.Info("extended database row count metrics lock")
+			}
 		}
 	}
 }
