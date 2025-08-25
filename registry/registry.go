@@ -95,7 +95,7 @@ var ServeCmd = &cobra.Command{
 		}
 
 		go func() {
-			opts, err := configureMonitoring(ctx, config)
+			opts, err := configureMonitoring(ctx, config, registry.app.DBStatusChecker)
 			if err != nil {
 				log.WithError(err).Error("failed to configure monitoring service, skipping")
 				return
@@ -410,7 +410,7 @@ func configureAccessLogging(config *configuration.Configuration, h http.Handler)
 	return logkit.AccessLogger(h, logkit.WithAccessLogger(logger), logkit.WithExtraFields(extraFieldGenerator)), nil
 }
 
-func configureMonitoring(ctx context.Context, config *configuration.Configuration) ([]monitoring.Option, error) {
+func configureMonitoring(ctx context.Context, config *configuration.Configuration, dbStatusChecker *health.DBStatusChecker) ([]monitoring.Option, error) {
 	l := dcontext.GetLogger(ctx)
 
 	var opts []monitoring.Option
@@ -426,6 +426,13 @@ func configureMonitoring(ctx context.Context, config *configuration.Configuratio
 		mux.HandleFunc("/debug/vars", expvar.Handler().ServeHTTP)
 		mux.HandleFunc("/debug/health", health.StatusHandler)
 		l.WithFields(log.Fields{"address": addr, "path": "/debug/health"}).Info("starting health checker")
+
+		// This ensures the DBStatusChecker is non-nil, because it has been set in
+		// App.RegisterHealthChecks
+		if config.Health.Database.Enabled && config.Database.Enabled {
+			mux.Handle("/debug/health/db", dbStatusChecker)
+			l.WithFields(log.Fields{"address": addr, "path": "/debug/health/db"}).Info("serving DB health checker")
+		}
 
 		opts = []monitoring.Option{
 			monitoring.WithServeMux(mux),

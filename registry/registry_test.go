@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/configuration"
+	"github.com/docker/distribution/health"
 	"github.com/docker/distribution/registry/internal/testutil"
 	_ "github.com/docker/distribution/registry/storage/driver/inmemory"
 	rngtestutil "github.com/docker/distribution/testutil"
@@ -302,7 +303,7 @@ func TestConfigureMonitoring(t *testing.T) {
 			},
 			monitorConfigFunc: func(config *configuration.Configuration) func() {
 				return func() {
-					opts, err := configureMonitoring(context.Background(), config)
+					opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
 					require.NoError(t, err)
 					err = monitoring.Start(opts...)
 					require.NoError(t, err)
@@ -325,7 +326,7 @@ func TestConfigureMonitoring(t *testing.T) {
 			},
 			monitorConfigFunc: func(config *configuration.Configuration) func() {
 				return func() {
-					opts, err := configureMonitoring(context.Background(), config)
+					opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
 					require.NoError(t, err)
 					// Use local Prometheus registry for each test, otherwise different tests may attempt to register the same
 					// metrics in the default Prometheus registry, causing a panic.
@@ -352,7 +353,7 @@ func TestConfigureMonitoring(t *testing.T) {
 			},
 			monitorConfigFunc: func(config *configuration.Configuration) func() {
 				return func() {
-					opts, err := configureMonitoring(context.Background(), config)
+					opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
 					require.NoError(t, err)
 					// Use local Prometheus registry for each test, otherwise different tests may attempt to register the same
 					// metrics in the default Prometheus registry, causing a panic.

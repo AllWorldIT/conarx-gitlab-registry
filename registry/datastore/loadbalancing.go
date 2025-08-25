@@ -81,6 +81,7 @@ type LoadBalancer interface {
 	StartPoolRefresh(context.Context) error
 	StartLagCheck(context.Context) error
 	TypeOf(*DB) string
+	GetReplicaLagInfo(addr string) *ReplicaLagInfo
 }
 
 // DBLoadBalancer manages connections to a primary database and multiple replicas.
@@ -983,6 +984,14 @@ func (lb *DBLoadBalancer) TypeOf(db *DB) string {
 		}
 	}
 	return HostTypeUnknown
+}
+
+// GetReplicaLagInfo gets the lag info for the replica with the given address.
+func (lb *DBLoadBalancer) GetReplicaLagInfo(addr string) *ReplicaLagInfo {
+	if lb.lagTracker == nil {
+		return nil
+	}
+	return lb.lagTracker.Get(addr)
 }
 
 // primaryLSN returns the primary database's current write location
