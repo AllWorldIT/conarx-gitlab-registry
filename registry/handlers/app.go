@@ -155,6 +155,10 @@ type App struct {
 	// during app object termination in order to gracefully clean up
 	// resources/terminate goroutines
 	shutdownFuncs []shutdownFunc
+
+	// DBStatusChecker is responsible for checking/updating the status of the DB
+	// and replicas in the background.
+	DBStatusChecker *health.DBStatusChecker
 }
 
 // NewApp takes a configuration and returns a configured app, ready to serve
@@ -980,7 +984,13 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 				timeout = defaultDBCheckTimeout
 			}
 
-			check := checks.DBChecker(app.Context, timeout, app.db)
+			// Start DB status checker
+			app.DBStatusChecker = health.NewDBStatusChecker(
+				&health.LoadBalancerShim{DB: app.db},
+				interval, timeout, logger,
+			)
+			app.DBStatusChecker.Start(app.Context)
+			check := app.DBStatusChecker.HealthCheck
 
 			logger.WithFields(
 				dlog.Fields{
