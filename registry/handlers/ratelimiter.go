@@ -251,9 +251,9 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 	// Check if rate limit exceeded
 	if result.Allowed <= 0 {
 		l.WithFields(logrus.Fields{
-			"log_only":    cfg.LogOnly,
-			"retry_after_s": result.RetryAfter.Seconds(),     // Essential for understanding when rate limit resets
-			"action":      cfg.Action.HardAction, // Important to know if blocking or just logging
+			"log_only":      cfg.LogOnly,
+			"retry_after_s": result.RetryAfter.Seconds(), // Essential for understanding when rate limit resets
+			"action":        cfg.Action.HardAction,       // Important to know if blocking or just logging
 		}).Info("request blocked: rate limit exceeded")
 
 		if !cfg.LogOnly && cfg.Action.HardAction == "block" {
