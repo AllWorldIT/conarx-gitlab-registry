@@ -456,6 +456,11 @@ func isConnectivityError(err error) bool {
 
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
+		// Statement timeout/cancellation (57014) is not a connectivity problem.
+		// The error indicates that long/blocked query was canceled not a host failure.
+		if pgErr.Code == pgerrcode.QueryCanceled {
+			return false
+		}
 		if pgerrcode.IsConnectionException(pgErr.Code) ||
 			pgerrcode.IsOperatorIntervention(pgErr.Code) ||
 			pgerrcode.IsInsufficientResources(pgErr.Code) ||
