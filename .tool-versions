@@ -1,7 +1,7 @@
 # Versions of registry dependencies managed by asdf in gdk build.
 golang            1.23.7
 nodejs            22.11.0
-golangci-lint     2.1.6
+golangci-lint     2.4.0
 # For linting documentation
 markdownlint-cli2 0.17.2
 lychee            0.18.1
