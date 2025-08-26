@@ -1235,7 +1235,7 @@ func (app *App) configureRedisLoadBalancingCache(ctx context.Context, config *co
 func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
 	l := dlog.GetLogger(dlog.WithContext(app.Context))
 	if !config.RateLimiter.Enabled {
-		l.Warn(`rate-limiter is disabled.`)
+		l.Warn("rate-limiter is disabled")
 		return nil
 	}
 

@@ -252,7 +252,7 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 	if result.Allowed <= 0 {
 		l.WithFields(logrus.Fields{
 			"log_only":    cfg.LogOnly,
-			"retry_after": result.RetryAfter,     // Essential for understanding when rate limit resets
+			"retry_after_s": result.RetryAfter.Seconds(),     // Essential for understanding when rate limit resets
 			"action":      cfg.Action.HardAction, // Important to know if blocking or just logging
 		}).Info("request blocked: rate limit exceeded")
 
@@ -381,8 +381,8 @@ func serveErrorJSON(w http.ResponseWriter, err error, ctx *Context, l log.Logger
 	}
 
 	if err := errcode.ServeJSON(w, errorToServe); err != nil {
-		l.Error(
-			fmt.Sprintf("error serving error json: %v (from %v)", err, ctx.Errors),
+		l.WithError(err).Error(
+			fmt.Sprintf("error serving error json from %v", ctx.Errors),
 		)
 	}
 }
