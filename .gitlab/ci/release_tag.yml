@@ -1,0 +1,83 @@
+# Post-merge tagging job
+# - Triggers when CHANGELOG.md changes on the target branch
+# - Resolves version and tags the exact release commit (the one that updated CHANGELOG.md)
+# - Uses GitLab API for tagging to avoid push credential issues
+release:tag:
+  stage: release
+  image: node:20-alpine
+  resource_group: release
+  needs: []
+  rules:
+    # Trigger only on push pipelines to the master branch where the merge commit
+    # clearly indicates a release merge/squash AND the commit range includes a CHANGELOG.md change
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_TITLE =~ /^chore\(release\):/'
+      changes:
+        - CHANGELOG.md
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_TITLE =~ /release\/v[0-9]+\.[0-9]+\.[0-9]+/'
+      changes:
+        - CHANGELOG.md
+  before_script:
+    - apk add --no-cache bash curl jq git
+  script:
+    - |
+      set -eo pipefail
+      echo "Deriving release version from CHANGELOG.md or commit message"
+      VERSION=$(grep -Eo '^## \[?[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | head -n1 | sed -E 's/^## \[?//') || true
+      if [ -z "$VERSION" ]; then
+        VERSION=$(echo "$CI_COMMIT_TITLE" | sed -nE 's/^chore\(release\):[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*$/\1/p')
+      fi
+      if [ -z "$VERSION" ]; then
+        echo "Could not detect version from CHANGELOG.md; skipping tag creation."
+        exit 0
+      fi
+      TAG="v${VERSION}-gitlab"
+      echo "Tag to create: $TAG"
+      # Early exit if tag already exists (e.g., created by legacy flow)
+      API_TOKEN="${RELEASE_TOKEN}"
+      if [ -z "$API_TOKEN" ]; then
+        echo "RELEASE_TOKEN is not set; cannot check or create tag."
+        exit 1
+      fi
+      if curl -sf -H "PRIVATE-TOKEN: $API_TOKEN" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags/$TAG" >/dev/null; then
+        echo "Tag $TAG already exists; nothing to do."
+        exit 0
+      fi
+      # Safety: ensure this pipeline's merge came from a release:prepare MR
+      MR_JSON=$(curl -sS --header "PRIVATE-TOKEN: $API_TOKEN" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests")
+      MR_MERGED=$(echo "$MR_JSON" | jq -r '[.[] | select(.state=="merged")] | length')
+      if [ "${MR_MERGED}" = "0" ]; then
+        echo "No merged MR associated with commit $CI_COMMIT_SHA; skipping tag."
+        exit 0
+      fi
+      MR_SOURCE_BRANCH=$(echo "$MR_JSON" | jq -r '[.[] | select(.state=="merged")][0].source_branch // ""')
+      if ! echo "$MR_SOURCE_BRANCH" | grep -Eq '^release/v[0-9]+\.[0-9]+\.[0-9]+$'; then
+        echo "MR source branch ($MR_SOURCE_BRANCH) does not match release/vX.Y.Z; skipping tag."
+        exit 0
+      fi
+      # Determine the exact commit to tag: prefer the release commit over the merge commit
+      if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git fetch --unshallow 2>/dev/null || true
+        git fetch --all --tags --prune
+        CANDIDATE_SHA=$(git log -E --grep "^chore\\(release\\):[[:space:]]*${VERSION}$" -n1 --format=%H || true)
+      fi
+      if [ -z "$CANDIDATE_SHA" ]; then
+        echo "CANDIDATE_SHA is not set; cannot create tag."
+        exit 1
+      fi
+      # Create tag via GitLab API to avoid git push credential issues
+      echo "Creating tag $TAG at $CANDIDATE_SHA via API"
+      RESP=$(curl -sS -w "\n%{http_code}" -X POST \
+        -H "PRIVATE-TOKEN: $API_TOKEN" \
+        --data-urlencode "tag_name=$TAG" \
+        --data-urlencode "ref=$CANDIDATE_SHA" \
+        --data-urlencode "message=Release $TAG" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/repository/tags")
+      BODY=$(echo "$RESP" | head -n -1)
+      CODE=$(echo "$RESP" | tail -n1)
+      if [ "$CODE" != "201" ]; then
+        echo "Failed to create tag ($CODE): $BODY"
+        exit 1
+      fi
+      echo "Tag created: $(echo "$BODY" | jq -r '.name')"

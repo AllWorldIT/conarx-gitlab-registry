@@ -3,6 +3,8 @@ include:
   - local: .gitlab/ci/test.yml
   - local: .gitlab/ci/integration.yml
   - local: .gitlab/ci/release.yml
+  - local: .gitlab/ci/release_prepare.yml
+  - local: .gitlab/ci/release_tag.yml
   - local: .gitlab/ci/document.yml
   - local: .gitlab/ci/child_jobs.yml
   - local: .gitlab/ci/migrate.yml
