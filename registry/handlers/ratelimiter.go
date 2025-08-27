@@ -182,9 +182,9 @@ func validateLimiter(c *configuration.Limiter) error {
 
 // RateLimiter represents a rate limiter that can be used to control the rate of requests.
 type RateLimiter interface {
-	// Allowed checks if a request is allowed based on the given key and limit.
-	// Returns true if the request is allowed, false otherwise.
-	Allowed(ctx context.Context, key string, tokensRequested float64) (*ratelimiter.Result, error)
+	// TokensGranted checks if a request is allowed based on the given key and
+	// limits. Returns the number of tokens allowed.
+	TokensGranted(ctx context.Context, key string, tokensRequested float64) (*ratelimiter.Result, error)
 	Config() *configuration.Limiter
 }
 
@@ -242,7 +242,7 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 		return false
 	}
 
-	result, err := limiter.Allowed(ctx, key, 1.0)
+	result, err := limiter.TokensGranted(ctx, key, 1.0)
 	if err != nil {
 		serveErrorJSON(w, err, ctx, l)
 		return true // Block the request on error

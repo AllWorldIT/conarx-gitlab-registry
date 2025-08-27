@@ -49,7 +49,7 @@ func New(client redis.UniversalClient, config *configuration.Limiter) (*Limiter,
 	}, nil
 }
 
-func (rl *Limiter) Allowed(ctx context.Context, key string, tokensRequested float64) (*Result, error) {
+func (rl *Limiter) TokensGranted(ctx context.Context, key string, tokensRequested float64) (*Result, error) {
 	currentTime := float64(time.Now().Unix())
 
 	capacity := float64(rl.config.Limit.Burst)
