@@ -983,6 +983,19 @@ func (lb *DBLoadBalancer) TypeOf(db *DB) string {
 			return HostTypeReplica
 		}
 	}
+
+	// Fallback to address matching when `*DB` pointer lookup fails (e.g after pool refresh).
+	addr := db.Address()
+	if addr != "" {
+		if lb.primary != nil && lb.primary.Address() == addr {
+			return HostTypePrimary
+		}
+		for _, replica := range lb.replicas {
+			if replica != nil && replica.Address() == addr {
+				return HostTypeReplica
+			}
+		}
+	}
 	return HostTypeUnknown
 }
 
