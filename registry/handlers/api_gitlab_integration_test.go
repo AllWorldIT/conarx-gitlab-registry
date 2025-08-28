@@ -920,6 +920,8 @@ func TestGitlabAPI_RepositoryTagsList_PublishedAt(t *testing.T) {
 		},
 	}
 
+	waitForReplica(t, env.db)
+
 	for tn, test := range tt {
 		t.Run(tn, func(t *testing.T) {
 			sort := "published_at"
