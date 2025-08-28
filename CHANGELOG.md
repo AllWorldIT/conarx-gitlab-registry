@@ -1,3 +1,24 @@
+## [4.27.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.26.1-gitlab...v4.27.0) (2025-08-28)
+
+
+### Features
+
+* add OpenTofu media types ([8465a8d](https://gitlab.com/gitlab-org/container-registry/commit/8465a8d4f28a1290d970551e5ba80fa77522e40b))
+* add retry logic for database row count metrics lock acquisition and extension ([734faad](https://gitlab.com/gitlab-org/container-registry/commit/734faad27213a936d8a3155c1bcdecb39e788296))
+* **bbm:** add support for backoff and avoid func not found ([9d7f100](https://gitlab.com/gitlab-org/container-registry/commit/9d7f10064b16a682f47a7b596229d7c39ac7f779))
+* **datastore:** add database row count metrics with distributed locking ([7a7fa66](https://gitlab.com/gitlab-org/container-registry/commit/7a7fa66718944a25d79a4eb7ca2686269d389d57))
+* new DLB health check endpoint ([42841af](https://gitlab.com/gitlab-org/container-registry/commit/42841af36f61deba73b9cbb5e072f70b4a5fd624))
+
+
+### Bug Fixes
+
+* add retries calculation to all other methods in azure_v2 ([c5588eb](https://gitlab.com/gitlab-org/container-registry/commit/c5588eb88c43c66e904651d2c495ba18537d1189))
+* avoid unknown host and lb recovery on timeouts ([a1ebe0f](https://gitlab.com/gitlab-org/container-registry/commit/a1ebe0fec01fa97405b22bb51bd8d1ae22e0c208))
+* **docs:** correct typos in dev docs ([f540bcc](https://gitlab.com/gitlab-org/container-registry/commit/f540bcc229f79a064aa53e75b2e762266ba54758))
+* fix passing log fields from context to logger in rate-limiter ([1407441](https://gitlab.com/gitlab-org/container-registry/commit/14074410b67b57bddf6959e828778659a0bddd1a))
+* properly set TTL when setting urlcache objects in Redis ([32b9e10](https://gitlab.com/gitlab-org/container-registry/commit/32b9e10012eb1d3500a7d4977c1e0680736b41e6))
+* restore _total suffixes for notifications metrics, add _count to retries histogram ([f0ae24b](https://gitlab.com/gitlab-org/container-registry/commit/f0ae24b563e491eda7667ca8036203304bf1b194))
+
 ## [4.26.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.26.0-gitlab...v4.26.1-gitlab) (2025-08-14)
 
 
