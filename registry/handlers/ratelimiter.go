@@ -65,7 +65,10 @@ func (app *App) configureRateLimiters(redisClient redis.UniversalClient, config 
 	app.rateLimiters = make([]RateLimiter, 0, len(orderedLimiters))
 	for name, orderedLimiter := range orderedLimiters {
 		cfg := orderedLimiter.Limiter
-		limiter := ratelimiter.New(redisClient, cfg)
+		limiter, err := ratelimiter.New(redisClient, cfg)
+		if err != nil {
+			return fmt.Errorf("creating rate-limiter instance failed: %w", err)
+		}
 		l.WithFields(logrus.Fields{
 			"name":           name,
 			"description":    cfg.Description,
@@ -179,9 +182,9 @@ func validateLimiter(c *configuration.Limiter) error {
 
 // RateLimiter represents a rate limiter that can be used to control the rate of requests.
 type RateLimiter interface {
-	// Allowed checks if a request is allowed based on the given key and limit.
-	// Returns true if the request is allowed, false otherwise.
-	Allowed(ctx context.Context, key string) (*ratelimiter.Result, error)
+	// TokensGranted checks if a request is allowed based on the given key and
+	// limits. Returns the number of tokens allowed.
+	TokensGranted(ctx context.Context, key string, tokensRequested float64) (*ratelimiter.Result, error)
 	Config() *configuration.Limiter
 }
 
@@ -239,7 +242,7 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 		return false
 	}
 
-	result, err := limiter.Allowed(ctx, key)
+	result, err := limiter.TokensGranted(ctx, key, 1.0)
 	if err != nil {
 		serveErrorJSON(w, err, ctx, l)
 		return true // Block the request on error
@@ -248,8 +251,9 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 	checkWarningThreshold(result, cfg, l)
 	writeRateLimiterHeaders(w, result, limiter)
 
-	// Check if rate limit exceeded
-	if result.Allowed <= 0 {
+	// NOTE(prozlach): Check if rate limit exceeded. If we got anything less than 1.0 token we
+	// requested above, it means we are denied:
+	if result.Allowed < 1.0 {
 		l.WithFields(logrus.Fields{
 			"log_only":      cfg.LogOnly,
 			"retry_after_s": result.RetryAfter.Seconds(), // Essential for understanding when rate limit resets
@@ -330,10 +334,7 @@ func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limite
 
 		// At this point regularCapacity is fully used, and we're using some of burstCapacity
 		// The amount of burst we're using is represented by result.Allowed
-		burstUsed := burstCapacity - float64(result.Allowed)
-		totalUsed := regularCapacity + burstUsed
-
-		usagePercentage = totalUsed / totalCapacity
+		usagePercentage = 1.0 - float64(result.Allowed)/totalCapacity
 	default:
 		// Normal case - remaining > 0
 		// Higher values mean more usage

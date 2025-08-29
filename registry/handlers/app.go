@@ -237,9 +237,10 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	}
 
 	if err := app.configureRedisCache(ctx, config); err != nil {
-		// Because the Redis cache is not a strictly required dependency (data will be served from the metadata DB if
-		// we're unable to serve or find it in cache) we simply log and report a failure here and proceed to not prevent
-		// the app from starting.
+		// Because the Redis cache is not a strictly required dependency (data
+		// will be served from the metadata DB if we're unable to serve or find
+		// it in cache) we simply log and report a failure here and proceed to
+		// not prevent the app from starting.
 		log.WithError(err).Error("failed configuring Redis cache")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
@@ -257,14 +258,15 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 
 	app.dualRedisCache = iredis.NewDualCache(app.redisCache, nil, dualRedisOpts...)
 
-	// Redis rate-limiter will be disabled on GitLab.com environments where it is currently enabled (`gstg` and `pre`) so we don't need to support it in the dualCache.
-	// https://gitlab.com/groups/gitlab-com/gl-infra/data-access/durability/-/epics/24#note_2599994238
-
 	err = app.applyStorageMiddleware(config.Middleware["storage"])
 	if err != nil {
 		return nil, err
 	}
 
+	// Redis rate-limiter will be disabled on GitLab.com environments where it
+	// is currently enabled (`gstg` and `pre`) so we don't need to support it
+	// in the dualCache.
+	// https://gitlab.com/groups/gitlab-com/gl-infra/data-access/durability/-/epics/24#note_2599994238
 	if err := app.configureRedisRateLimiter(ctx, config); err != nil {
 		// Redis rate-limiter is not a strictly required dependency, we simply log and report a failure here
 		// and proceed to not prevent the app from starting.
