@@ -12,13 +12,13 @@
 /registry/storage/driver/
 /docs/storage-drivers/
 
-[Notifications] @vespian_gl @jaime
+[Notifications] @vespian_gl
 /notifications/ 
 
-[CI Tool]  @vespian_gl @jaime
+[CI Tool]  @vespian_gl @suleimiahmed 
 /script/ci_tool/
 
-[CI]  @jaime @vespian_gl 
+[CI]  @suleimiahmed @vespian_gl 
 /.gitlab/
 
 [Database] @jdrpereira @suleimiahmed 
@@ -32,7 +32,7 @@
 /registry/gc/
 /docs/spec/gitlab/online-garbage-collection.md
 
-[Rate limiters] @jaime @hswimelar
+[Rate limiters] @vespian @hswimelar
 /registry/ratelimiter/
 /internal/redis_rate/
 
@@ -57,13 +57,13 @@
 !/registry/mocks/
 !/registry/storage/garbagecollect*.go
 
-[Authentication and authorization] @jdrpereira @jaime
+[Authentication and authorization] @jdrpereira @suleimiahmed
 /registry/auth/
 
 [Offline GC] @hswimelar @suleimiahmed
 /registry/storage/garbagecollect*.go
 
-[Importer] @hswimelar @jaime
+[Importer] @hswimelar
 /registry/datastore/importer*.go
 /registry/datastore/testdata/fixtures/importer/
 /registry/datastore/testdata/golden/TestImporter*/
