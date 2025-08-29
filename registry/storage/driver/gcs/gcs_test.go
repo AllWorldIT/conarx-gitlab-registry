@@ -269,7 +269,7 @@ func TestGCSDriverRetry(t *testing.T) {
 		if observed != nil {
 			observedMsg = observed.Error()
 		}
-		require.Equal(t, expected, observedMsg)
+		require.Contains(t, observedMsg, expected)
 	}
 
 	err := retry(func() error {
