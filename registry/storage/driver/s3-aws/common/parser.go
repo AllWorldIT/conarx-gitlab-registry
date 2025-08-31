@@ -278,9 +278,8 @@ func ParseLogLevelParamV1(logger log.Logger, param any) aws.LogLevelType {
 			)
 		default:
 			logger.Warn(
-				fmt.Sprintf("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff),
+				fmt.Sprintf("unknown loglevel %q, ignoring", param),
 			)
-			return aws.LogOff
 		}
 	}
 
@@ -357,12 +356,8 @@ func ParseLogLevelParamV2(logger log.Logger, param any) v2_aws.ClientLogMode {
 			)
 		default:
 			logger.Warn(
-				fmt.Sprintf(
-					"unknown loglevel %q, S3 logging level set to %q",
-					param, LogLevelOff,
-				),
+				fmt.Sprintf("unknown loglevel %q, ignoring", param),
 			)
-			return v2_aws.ClientLogMode(0)
 		}
 	}
 
