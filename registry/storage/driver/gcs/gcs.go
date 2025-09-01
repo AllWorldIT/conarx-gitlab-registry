@@ -15,31 +15,35 @@ package gcs
 import (
 	"bytes"
 	"context"
-
-	// nolint: revive,gosec // imports-blocklist
-	"crypto/md5"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/url"
 	"runtime/debug"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	// nolint: revive,gosec // imports-blocklist
+
 	"cloud.google.com/go/storage"
+	"github.com/docker/distribution/log"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 )
 
-// New constructs a new driver
+var crc32cTable = crc32.MakeTable(crc32.Castagnoli)
+
+// New constructs a new GCS driver
 func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 	rootDirectory := strings.Trim(params.rootDirectory, "/")
 	if rootDirectory != "" {
@@ -49,12 +53,11 @@ func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 		return nil, fmt.Errorf("invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
 	}
 	d := &driver{
-		bucket:        params.bucket,
+		bucket:        params.storageClient.Bucket(params.bucket).Retryer(storage.WithErrorFunc(ShouldRetry)),
 		rootDirectory: rootDirectory,
 		email:         params.email,
 		privateKey:    params.privateKey,
 		client:        params.client,
-		storageClient: params.storageClient,
 		chunkSize:     params.chunkSize,
 		parallelWalk:  params.parallelWalk,
 	}
@@ -72,8 +75,7 @@ func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 // Objects are stored at absolute keys in the provided bucket.
 type driver struct {
 	client        *http.Client
-	storageClient *storage.Client
-	bucket        string
+	bucket        *storage.BucketHandle
 	email         string
 	privateKey    []byte
 	rootDirectory string
@@ -89,23 +91,22 @@ func (*driver) Name() string {
 // This should primarily be used for small objects.
 func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 	name := d.pathToKey(path)
-	var rc io.ReadCloser
-	err := retry(func() error {
-		var err error
-		rc, err = d.storageClient.Bucket(d.bucket).Object(name).NewReader(ctx)
-		return err
-	})
+	// NOTE(prozlach): NewReader is considered idempotent by GCS, hence it is
+	// retried without a limit until context is canceled. The retries
+	// themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
+	rc, err := d.bucket.Object(name).NewReader(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating new reader: %w", err)
 	}
 	defer rc.Close()
 
 	p, err := io.ReadAll(rc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading data: %w", err)
 	}
 	return p, nil
 }
@@ -113,131 +114,93 @@ func (d *driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 // PutContent stores the []byte content at a location designated by "path".
 // This should primarily be used for small objects.
 func (d *driver) PutContent(ctx context.Context, path string, contents []byte) error {
-	return retry(func() error {
-		wc := d.storageClient.Bucket(d.bucket).Object(d.pathToKey(path)).NewWriter(ctx)
-		wc.ContentType = "application/octet-stream"
-		// nolint: gosec
-		h := md5.New()
-		_, err := h.Write(contents)
-		if err != nil {
-			return fmt.Errorf("calculating hash: %w", err)
-		}
-		wc.MD5 = h.Sum(nil)
+	// nolint: gosec
+	crc32c := crc32.Checksum(contents, crc32cTable)
 
-		if len(contents) == 0 {
-			logrus.WithFields(logrus.Fields{
-				"path":   path,
-				"length": len(contents),
-				"stack":  string(debug.Stack()),
-			}).Info("PutContent called with 0 bytes")
-		}
+	if len(contents) == 0 {
+		d.logger(ctx).WithFields(logrus.Fields{
+			"path":   path,
+			"length": len(contents),
+			"stack":  string(debug.Stack()),
+		}).Info("PutContent called with 0 bytes")
+	}
+
+	// NOTE(prozlach): Custom retry mechanism has a point here, because we want
+	// to override the whole object if it exist and the upload may happen in a
+	// chunked form, so simply `always retring` a single chunk could create
+	// duplicates. By always starting "from begning" we workaround this issue
+	// in a very simple manner at the expense of re-sending whole data.
+	return retry(func() error {
+		wc := d.bucket.Object(d.pathToKey(path)).NewWriter(ctx)
+		wc.ContentType = "application/octet-stream"
+		wc.SendCRC32C = true
+		wc.CRC32C = crc32c
 
 		return putContentsClose(wc, contents)
 	})
 }
 
-// Reader retrieves an io.ReadCloser for the content stored at "path"
-// with a given byte offset.
-// May be used to resume reading a stream by providing a nonzero offset.
+// Reader retrieves an io.ReadCloser for the content stored at "path" with a
+// given byte offset. May be used to resume reading a stream by providing a
+// nonzero offset.
 func (d *driver) Reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
-	res, err := getObject(d.client, d.bucket, d.pathToKey(path), offset)
+	obj := d.bucket.Object(d.pathToKey(path))
+	// NOTE(milosgajdos/prozlach): If length is negative, the object is read
+	// until the end. The request is retried until the context is canceled as
+	// the operation is idempotent. See links below for more info:
+	// https://pkg.go.dev/cloud.google.com/go/storage#ObjectHandle.NewRangeReader
+	// https://cloud.google.com/storage/docs/retry-strategy
+	r, err := obj.NewRangeReader(ctx, offset, -1)
 	if err != nil {
-		var gcsErr *googleapi.Error
-		if !errors.As(err, &gcsErr) {
-			return nil, err
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 		}
 
-		switch gcsErr.Code {
-		case http.StatusNotFound:
-			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
-		case http.StatusRequestedRangeNotSatisfiable:
-			obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
-			if err != nil {
-				return nil, err
+		var status *googleapi.Error
+		if errors.As(err, &status) {
+			// nolint: revive // max-control-nesting
+			switch status.Code {
+			case http.StatusNotFound:
+				return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+			case http.StatusRequestedRangeNotSatisfiable:
+				attrs, err := obj.Attrs(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("fetching object attributes: %w", err)
+				}
+				if offset == attrs.Size {
+					return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
+				}
+				return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
+			default:
+				return nil, fmt.Errorf("unexpected Google API error: %w", status)
 			}
-			if offset == obj.Size {
-				return io.NopCloser(bytes.NewReader(make([]byte, 0))), nil
-			}
-			return nil, storagedriver.InvalidOffsetError{Path: path, Offset: offset, DriverName: driverName}
-		default:
-			return nil, fmt.Errorf("unexpected Google API error: %w", gcsErr)
 		}
+		return nil, err
 	}
-	if res.Header.Get("Content-Type") == uploadSessionContentType {
-		defer res.Body.Close()
+	if r.Attrs.ContentType == uploadSessionContentType {
+		_ = r.Close()
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
-	return res.Body, nil
+	if offset == r.Attrs.Size {
+		d.logger(ctx).WithFields(logrus.Fields{
+			"path":            path,
+			"fileSize":        r.Attrs.Size,
+			"requestedOffset": offset,
+		}).Info("Range request at EOF, returning empty reader")
+	}
+	return r, nil
 }
 
-func storageDeleteObject(ctx context.Context, client *storage.Client, bucket, name string) error {
-	return retry(func() error {
-		return client.Bucket(bucket).Object(name).Delete(ctx)
+// logger returns a log.Logger decorated with a key/value pair that uniquely
+// identifies all entries as being emitted by this storage driver  component.
+// Instead of relying on a fixed log.Logger instance, this method allows
+// retrieving and extending a base logger embedded in the input context (if
+// any) to preserve relevant key/value pairs introduced upstream (such as a
+// correlation ID, present when calling from the API handlers).
+func (*driver) logger(ctx context.Context) log.Logger {
+	return log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"component": "registry.storage.gcs.internal",
 	})
-}
-
-func storageStatObject(ctx context.Context, client *storage.Client, bucket, name string) (*storage.ObjectAttrs, error) {
-	var obj *storage.ObjectAttrs
-	err := retry(func() error {
-		var err error
-		obj, err = client.Bucket(bucket).Object(name).Attrs(ctx)
-		return err
-	})
-	return obj, err
-}
-
-func storageListObjects(ctx context.Context, client *storage.Client, bucket string, q *storage.Query) (*storage.ObjectIterator, error) {
-	var objs *storage.ObjectIterator
-	err := retry(func() error {
-		var err error
-		objs = client.Bucket(bucket).Objects(ctx, q)
-		return err
-	})
-	return objs, err
-}
-
-func storageCopyObject(ctx context.Context, client *storage.Client, srcBucket, srcName, destBucket, destName string) (*storage.ObjectAttrs, error) {
-	var obj *storage.ObjectAttrs
-	err := retry(func() error {
-		var err error
-		src := client.Bucket(srcBucket).Object(srcName)
-		dst := client.Bucket(destBucket).Object(destName)
-		obj, err = dst.CopierFrom(src).Run(ctx)
-		return err
-	})
-	return obj, err
-}
-
-func getObject(client *http.Client, bucket, name string, offset int64) (*http.Response, error) {
-	// copied from google.golang.org/cloud/storage#NewReader :
-	// to set the additional "Range" header
-	u := &url.URL{
-		Scheme: "https",
-		Host:   "storage.googleapis.com",
-		Path:   fmt.Sprintf("/%s/%s", bucket, name),
-	}
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating new http request: %w", err)
-	}
-	if offset > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
-	}
-	var res *http.Response
-	err = retry(func() error {
-		var err error
-		// nolint: bodyclose // body is closed bit later in the code
-		res, err = client.Do(req)
-		return err
-	})
-	if err != nil {
-		return nil, fmt.Errorf("executing http request: %w", err)
-	}
-	if err := googleapi.CheckMediaResponse(res); err != nil {
-		_ = res.Body.Close()
-		return nil, fmt.Errorf("checking media response: %w", err)
-	}
-	return res, nil
 }
 
 func putContentsClose(wc *storage.Writer, contents []byte) error {
@@ -259,46 +222,121 @@ func putContentsClose(wc *storage.Writer, contents []byte) error {
 	return wc.Close()
 }
 
-func putChunk(client *http.Client, sessionURI string, chunk []byte, from, totalSize int64) (int64, error) {
+// logger returns a log.Logger decorated with a key/value pair that uniquely
+// identifies all entries as being emitted by this storage driver  component.
+// Instead of relying on a fixed log.Logger instance, this method allows
+// retrieving and extending a base logger embedded in the input context (if
+// any) to preserve relevant key/value pairs introduced upstream (such as a
+// correlation ID, present when calling from the API handlers).
+func (w *writer) logger() log.Logger {
+	return log.GetLogger(log.WithContext(w.ctx)).WithFields(log.Fields{
+		"component": "registry.storage.gcs.writer",
+	})
+}
+
+// putChunk either completes upload or submits another chunk.
+func (w *writer) putChunk(chunk []byte, totalSize int64) (int64, error) {
+	w.logger().WithFields(logrus.Fields{
+		"chunkStart": w.offset,
+		"chunkEnd":   w.offset + int64(len(chunk)) - 1,
+		"chunkSize":  len(chunk),
+		"totalSize":  totalSize,
+	}).Debug("Uploading chunk")
+
+	// Documentation: https://cloud.google.com/storage/docs/performing-resumable-uploads#chunked-upload
 	bytesPut := int64(0)
 	err := retry(func() error {
-		req, err := http.NewRequest(http.MethodPut, sessionURI, bytes.NewReader(chunk))
+		req, err := http.NewRequestWithContext(w.ctx, http.MethodPut, w.sessionURI, bytes.NewReader(chunk))
 		if err != nil {
-			return err
+			return fmt.Errorf("creating new http request: %w", err)
 		}
 		length := int64(len(chunk))
-		to := from + length - 1
+		to := w.offset + length - 1
+		req.Header.Set("Content-Type", "application/octet-stream")
+		// NOTE(prozlach) fake-gcs-server documents this behavior well:
+		// https://github.com/fsouza/fake-gcs-server/blob/1e954726309326217b4c533bb9646e30f683fa66/fakestorage/upload.go#L467-L501
+		//
+		// A resumable upload is sent in one or more chunks. The request's
+		// "Content-Range" header is used to determine if more data is expected.
+		//
+		// When sending streaming content, the total size is unknown until the stream
+		// is exhausted. The Go client always sends streaming content. The sequence of
+		// "Content-Range" headers for 2600-byte content sent in 1000-byte chunks are:
+		//
+		//	Content-Range: bytes 0-999/*
+		//	Content-Range: bytes 1000-1999/*
+		//	Content-Range: bytes 2000-2599/*
+		//	Content-Range: bytes */2600
+		//
+		// When sending chunked content of a known size, the total size is sent as
+		// well. The Python client uses this method to upload files and in-memory
+		// content. The sequence of "Content-Range" headers for the 2600-byte content
+		// sent in 1000-byte chunks are:
+		//
+		//	Content-Range: bytes 0-999/2600
+		//	Content-Range: bytes 1000-1999/2600
+		//	Content-Range: bytes 2000-2599/2600
+		//
+		// The server collects the content, analyzes the "Content-Range", and returns a
+		// "308 Permanent Redirect" response if more chunks are expected, and a
+		// "200 OK" response if the upload is complete (the Go client also accepts a
+		// "201 Created" response). The "Range" header in the response should be set to
+		// the size of the content received so far, such as:
+		//
+		//	Range: bytes 0-2000
+		//
+		// The client (such as the Go client) can send a header "X-Guploader-No-308" if
+		// it can't process a native "308 Permanent Redirect". The in-process response
+		// then has a status of "200 OK", with a header "X-Http-Status-Code-Override"
+		// set to "308".
 		size := "*"
 		if totalSize >= 0 {
 			size = strconv.FormatInt(totalSize, 10)
 		}
-		req.Header.Set("Content-Type", "application/octet-stream")
-		if from == to+1 {
+		if w.offset == to+1 {
 			req.Header.Set("Content-Range", fmt.Sprintf("bytes */%v", size))
 		} else {
-			req.Header.Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", from, to, size))
+			req.Header.Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", w.offset, to, size))
 		}
 		req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
 
-		resp, err := client.Do(req)
+		resp, err := w.client.Do(req)
 		if err != nil {
-			return err
+			return fmt.Errorf("executing http request: %w", err)
 		}
 		defer resp.Body.Close()
 		if totalSize < 0 && resp.StatusCode == 308 {
+			// NOTE(prozlach): Quoting google docs:
+			// https://cloud.google.com/storage/docs/performing-resumable-uploads#chunked-upload
+			//
+			// A 200 OK or 201 Created response indicates that the upload was
+			// completed, and no further action is necessary
+			//
+			// A 308 Resume Incomplete response indicates resumable upload is
+			// in progress. If Cloud Storage has not yet persisted any bytes,
+			// the 308 response does not have a Range header. In this case, we
+			// should start upload from the beginning. Otherwise, the 308
+			// response has a Range header, which specifies which bytes Cloud
+			// Storage has persisted so far.
 			groups := rangeHeader.FindStringSubmatch(resp.Header.Get("Range"))
 			end, err := strconv.ParseInt(groups[2], 10, 64)
 			if err != nil {
-				return err
+				return fmt.Errorf("parsing Range header: %w", err)
 			}
-			bytesPut = end - from + 1
+			bytesPut = end - w.offset + 1
+
+			w.logger().WithFields(logrus.Fields{
+				"bytesUploaded": bytesPut,
+				"totalExpected": len(chunk),
+				"rangeHeader":   resp.Header.Get("Range"),
+			}).Debug("Partial chunk upload, continuing")
 			return nil
 		}
 		err = googleapi.CheckMediaResponse(resp)
 		if err != nil {
-			return err
+			return fmt.Errorf("committing resumable upload: %w", err)
 		}
-		bytesPut = to - from + 1
+		bytesPut = to - w.offset + 1
 		return nil
 	})
 	return bytesPut, err
@@ -306,30 +344,54 @@ func putChunk(client *http.Client, sessionURI string, chunk []byte, from, totalS
 
 // Writer returns a FileWriter which will store the content written to it
 // at the location designated by "path" after the call to Commit.
-func (d *driver) Writer(_ context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
-	writer := &writer{
-		client:        d.client,
-		storageClient: d.storageClient,
-		bucket:        d.bucket,
-		name:          d.pathToKey(path),
-		buffer:        make([]byte, d.chunkSize),
+func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
+	w := &writer{
+		ctx:    ctx,
+		client: d.client,
+		object: d.bucket.Object(d.pathToKey(path)),
+		buffer: make([]byte, d.chunkSize),
 	}
 
+	// NOTE(prozlach): Dear future maintainer of this code, the concurency
+	// model that GCS has has some severe limitations.
+	//
+	// In case when we create a new Writer, a new session URL is obtained,
+	// which in turn creates new resumable upload. GCS has last-write-wins
+	// semantic, so in case when multiple Writers are targeting the same path,
+	// the last write commit silently wins. Not ideal, but at least there will
+	// not be data corruption.
+	// The problem starts when there is more than one writer resuming the same
+	// upload - they will read back the same session URL from the temporary
+	// object, and hence try to append to the same in-progress file upload. GCS
+	// ignores data for the offsets that it already committed, so the outcomes
+	// aren't predicable and there is going to be data corruption.
+	// Fortunately there is no need to fix this ATM, as the way that
+	// container-registry creates paths makes collisions impossible(?),
+	// and the filesystem driver is not that consistent too. Only Azure v2
+	// and S3 v2 are ATM.
+	// Fixing it would require some non-trivial refactoring, let's wait until
+	// we have a use-case which would justify it.
+
 	if doAppend {
-		err := writer.init(path)
+		err := w.init()
 		if err != nil {
 			return nil, err
 		}
 	}
-	return writer, nil
+	return w, nil
 }
 
 // Stat retrieves the FileInfo for the given path, including the current
 // size in bytes and the creation time.
 func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
 	var fi storagedriver.FileInfoFields
+
+	// NOTE(prozlach): Attrs is considered idempotent by GCS, hence it is
+	// retried without a limit until context is canceled. The retries
+	// themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 	// try to get as file
-	obj, err := storageStatObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
+	obj, err := d.bucket.Object(d.pathToKey(path)).Attrs(ctx)
 	if err == nil {
 		if obj.ContentType == uploadSessionContentType {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
@@ -348,17 +410,17 @@ func (d *driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 	query := &storage.Query{}
 	query.Prefix = dirpath
 
-	it, err := storageListObjects(ctx, d.storageClient, d.bucket, query)
-	if err != nil {
-		return nil, err
-	}
-
+	it := d.bucket.Objects(ctx, query)
+	// NOTE(prozlach): Listing objects is considered idempotent by GCS, hence
+	// it is retried without a limit until context is canceled. The retries
+	// themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 	attrs, err := it.Next()
-	if err == iterator.Done {
+	if errors.Is(err, iterator.Done) {
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetching next page from iterator: %w", err)
 	}
 
 	fi = storagedriver.FileInfoFields{
@@ -383,18 +445,31 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 	}
 	list := make([]string, 0, 64)
 
-	it, err := storageListObjects(ctx, d.storageClient, d.bucket, query)
-	if err != nil {
-		return nil, err
-	}
-
+	it := d.bucket.Objects(ctx, query)
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
+		// NOTE(prozlach): Listing objects is considered idempotent by GCS,
+		// hence it is retried without a limit until context is canceled. The
+		// retries themselves are enabled by default.
+		// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fetching next page from iterator: %w", err)
+		}
+
+		if !attrs.Deleted.IsZero() {
+			d.logger(ctx).WithFields(logrus.Fields{
+				"path":        d.keyToPath(attrs.Name),
+				"deletedTime": attrs.Deleted,
+			}).Debug("Filtered out deleted object from listing due to eventual consistency")
+		}
+
+		if attrs.ContentType == uploadSessionContentType {
+			d.logger(ctx).WithFields(logrus.Fields{
+				"path": d.keyToPath(attrs.Name),
+			}).Debug("Filtered out temporary upload session object from listing")
 		}
 
 		// GCS does not guarantee strong consistency between
@@ -423,7 +498,17 @@ func (d *driver) List(ctx context.Context, path string) ([]string, error) {
 // Move moves an object stored at sourcePath to destPath, removing the
 // original object.
 func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
-	_, err := storageCopyObject(ctx, d.storageClient, d.bucket, d.pathToKey(sourcePath), d.bucket, d.pathToKey(destPath))
+	// NOTE(prozlach): Both Delete and Copy operations are conditionally
+	// idempotent, but in our case we do not care - we just want to copy the
+	// original object and then simply remove the old one. Hence we override the
+	// idempotent policy to always retry until the context is canceled. The
+	// retries themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
+	alwaysRetryBucket := d.bucket.Retryer(storage.WithPolicy(storage.RetryAlways))
+
+	src := alwaysRetryBucket.Object(d.pathToKey(sourcePath))
+	dst := alwaysRetryBucket.Object(d.pathToKey(destPath))
+	_, err := dst.CopierFrom(src).Run(ctx)
 	if err != nil {
 		var gerr *googleapi.Error
 		if errors.As(err, &gerr) {
@@ -433,11 +518,16 @@ func (d *driver) Move(ctx context.Context, sourcePath, destPath string) error {
 		}
 		return err
 	}
-	err = storageDeleteObject(ctx, d.storageClient, d.bucket, d.pathToKey(sourcePath))
+	err = alwaysRetryBucket.Object(d.pathToKey(sourcePath)).Delete(ctx)
 	// if deleting the file fails, log the error, but do not fail; the file was successfully copied,
 	// and the original should eventually be cleaned when purging the uploads folder.
 	if err != nil {
-		logrus.Infof("error deleting file: %v due to %v", sourcePath, err)
+		d.logger(ctx).WithFields(logrus.Fields{
+			"sourcePath":    sourcePath,
+			"destPath":      destPath,
+			"copySucceeded": true,
+			"deleteError":   err.Error(),
+		}).Info("Move operation: copy succeeded but delete failed, file will need cleanup")
 	}
 	return nil
 }
@@ -448,18 +538,19 @@ func (d *driver) listAll(ctx context.Context, prefix string) ([]string, error) {
 	query := &storage.Query{}
 	query.Prefix = prefix
 	query.Versions = false
-	it, err := storageListObjects(ctx, d.storageClient, d.bucket, query)
-	if err != nil {
-		return nil, err
-	}
 
+	it := d.bucket.Objects(ctx, query)
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
+		// NOTE(prozlach): Listing objects is considered idempotent by GCS,
+		// hence it is retried without a limit until context is canceled. The
+		// retries themselves are enabled by default. Docs:
+		// https://cloud.google.com/storage/docs/retry-strategy#go
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fetching next page from iterator: %w", err)
 		}
 		// GCS does not guarantee strong consistency between
 		// DELETE and LIST operations. Check that the object is not deleted,
@@ -473,107 +564,119 @@ func (d *driver) listAll(ctx context.Context, prefix string) ([]string, error) {
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
 func (d *driver) Delete(ctx context.Context, path string) error {
+	// NOTE(prozlach): Delete operation is conditionally idempotent, but in our
+	// case we do not care - we just want to delete the object. Hence we override
+	// the idempotent policy to always retry until the context is canceled.
+	// The retries themselves are enabled by default.
+	// by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
+	alwaysRetryBucket := d.bucket.Retryer(storage.WithPolicy(storage.RetryAlways))
+
 	prefix := d.pathToDirKey(path)
 	keys, err := d.listAll(ctx, prefix)
 	if err != nil {
 		return err
 	}
 	if len(keys) > 0 {
-		sort.Sort(sort.Reverse(sort.StringSlice(keys)))
-		for _, key := range keys {
-			err := storageDeleteObject(ctx, d.storageClient, d.bucket, key)
+		// NOTE(milosgajdos/prozlach): d.listAll calls (BucketHandle).Objects
+		// Objects will be iterated over lexicographically by name. This means
+		// we don't have to reverse order the slice; we can range over the keys
+		// slice in reverse order
+		// docs:
+		// https://pkg.go.dev/cloud.google.com/go/storage#BucketHandle.Objects
+		for i := len(keys) - 1; i >= 0; i-- {
+			err := alwaysRetryBucket.Object(keys[i]).Delete(ctx)
 			// GCS only guarantees eventual consistency, so listAll might return
 			// paths that no longer exist. If this happens, just ignore any not
 			// found error
-			if errors.Is(err, storage.ErrObjectNotExist) {
-				err = nil
-			}
-			if err != nil {
-				return err
+			if err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
+				return fmt.Errorf("deleting object: %w", err)
 			}
 		}
 		return nil
 	}
-	err = storageDeleteObject(ctx, d.storageClient, d.bucket, d.pathToKey(path))
+	err = alwaysRetryBucket.Object(d.pathToKey(path)).Delete(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	return err
 }
 
-// DeleteFiles deletes a set of files concurrently, using a separate goroutine for each, up to a maximum of
-// maxDeleteConcurrency. Returns the number of successfully deleted files and any errors. This method is idempotent, no
+// DeleteFiles deletes a set of files concurrently, using a separate goroutine
+// for each, up to a maximum of maxDeleteConcurrency. Returns the number of
+// successfully deleted files and any errors. This method is idempotent, no
 // error is returned if a file does not exist.
 func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
-	// collect errors from concurrent requests
-	var errs error
-	errCh := make(chan error)
-	errDone := make(chan struct{})
-	go func() {
-		for err := range errCh {
-			if err != nil {
-				errs = multierror.Append(errs, err)
-			}
-		}
-		errDone <- struct{}{}
-	}()
+	errs := new(multierror.Error)
+	errsMutex := new(sync.Mutex)
 
-	// count the number of successfully deleted files across concurrent requests
-	count := 0
-	countCh := make(chan struct{})
-	countDone := make(chan struct{})
-	go func() {
-		for range countCh {
-			count++
-		}
-		countDone <- struct{}{}
-	}()
+	// Count the number of successfully deleted files across concurrent requests
+	// NOTE(prozlach): Using int32, this gives us up to 2 147 483 648 files
+	// that can be deleted, so it should suffice. By using int64 we would get
+	// linter warnings, esp. on 32bit platforms.
+	count := new(atomic.Int32)
 
-	var wg sync.WaitGroup
-	// limit the number of active goroutines to maxDeleteConcurrency
-	semaphore := make(chan struct{}, maxDeleteConcurrency)
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxDeleteConcurrency)
+
+	d.logger(ctx).WithFields(logrus.Fields{
+		"totalFiles":     len(paths),
+		"maxConcurrency": maxDeleteConcurrency,
+	}).Debug("Starting concurrent file deletion")
 
 	for _, path := range paths {
-		// block if there are maxDeleteConcurrency goroutines
-		semaphore <- struct{}{}
-		wg.Add(1)
+		g.Go(func() error {
+			// Check if any context was canceled, if so - skip calling Delete
+			// as it will fail anyway.
+			select {
+			case <-gctx.Done():
+				errsMutex.Lock()
+				defer errsMutex.Unlock()
 
-		go func(p string) {
-			defer func() {
-				wg.Done()
-				// signal free spot for another goroutine
-				<-semaphore
-			}()
-
-			if err := storageDeleteObject(ctx, d.storageClient, d.bucket, d.pathToKey(p)); err != nil {
-				if !errors.Is(err, storage.ErrObjectNotExist) {
-					errCh <- err
-					return
-				}
+				errs = multierror.Append(errs, gctx.Err())
+				return nil
+			default:
 			}
-			// count successfully deleted files
-			countCh <- struct{}{}
-		}(path)
+
+			// NOTE(prozlach): Delete operation is conditionally idempotent,
+			// but in our case we do not care - we just want the object to go
+			// away, so we override the idempotent policy to always retry
+			// until the context is canceled. The retries themselves are
+			// enabled by default. Docs:
+			// https://cloud.google.com/storage/docs/retry-strategy#go
+			err := d.bucket.Retryer(storage.WithPolicy(storage.RetryAlways)).Object(d.pathToKey(path)).Delete(gctx)
+			if err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
+				errsMutex.Lock()
+				defer errsMutex.Unlock()
+
+				errs = multierror.Append(errs, err)
+			} else {
+				// count successfully deleted files
+				count.Add(1)
+			}
+
+			return nil
+		})
 	}
 
-	wg.Wait()
-	close(semaphore)
-	close(errCh)
-	<-errDone
-	close(countCh)
-	<-countDone
+	// Wait for all goroutines. g.Wait() will return the first error returned
+	// by any g.Go func, or nil if all returned nil. Since we always return nil
+	// from g.Go in this example, we rely solely on the errors collected
+	// multierror var
+	_ = g.Wait()
 
-	return count, errs
+	d.logger(ctx).WithFields(logrus.Fields{
+		"totalFiles":        len(paths),
+		"successfulDeletes": int(count.Load()),
+		"errors":            errs.Len(),
+	}).Debug("Completed concurrent file deletion")
+
+	return int(count.Load()), errs.ErrorOrNil()
 }
 
 // URLFor returns a URL which may be used to retrieve the content stored at
 // the given path, possibly using the given options.
-// Returns ErrUnsupportedMethod if this driver has no privateKey
-func (d *driver) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
-	if d.privateKey == nil {
-		return "", storagedriver.ErrUnsupportedMethod{DriverName: driverName}
-	}
-
+func (d *driver) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	name := d.pathToKey(path)
 	methodString := http.MethodGet
 	method, ok := options["method"]
@@ -594,14 +697,44 @@ func (d *driver) URLFor(_ context.Context, path string, options map[string]any) 
 	}
 
 	opts := &storage.SignedURLOptions{
-		GoogleAccessID:  d.email,
-		PrivateKey:      d.privateKey,
 		Method:          methodString,
 		Expires:         expiresTime,
 		QueryParameters: storagedriver.CustomParams(options, customParamKeys),
 		Scheme:          storage.SigningSchemeV4,
 	}
-	return storage.SignedURL(d.bucket, name, opts)
+
+	if d.privateKey != nil && d.email != "" {
+		// If we have a private key and email from service account JSON, use them directly
+		opts.GoogleAccessID = d.email
+		opts.PrivateKey = d.privateKey
+
+		d.logger(ctx).WithFields(logrus.Fields{
+			"path":          path,
+			"method":        methodString,
+			"signingMethod": "service_account_key",
+			"expires":       expiresTime,
+		}).Debug("Generating signed URL with service account credentials")
+	} else {
+		d.logger(ctx).WithFields(logrus.Fields{
+			"path":          path,
+			"method":        methodString,
+			"signingMethod": "instance_profile",
+			"expires":       expiresTime,
+		}).Debug("Generating signed URL with instance profile credentials")
+	}
+
+	// NOTE(prozlach): Signing a URL requires credentials authorized to sign a
+	// URL. They can be passed through SignedURLOptions with one of the
+	// following options:
+	//    a. a Google service account private key, obtainable from the Google Developers Console
+	//    b. a Google Access ID with iam.serviceAccounts.signBlob permissions
+	//    c. a SignBytes function implementing custom signing.
+	// In this case none of these options are used, which means the SignedURL
+	// function attempts to use the same authentication that was used to
+	// instantiate the Storage client and in our case this is instance profile
+	// credentials.
+	// Doc: https://cloud.google.com/storage/docs/access-control/signing-urls-with-helpers#download-object
+	return d.bucket.SignedURL(name, opts)
 }
 
 // Walk traverses a filesystem defined within driver, starting
@@ -621,32 +754,39 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 	return storagedriver.WalkFallbackParallel(ctx, d, maxWalkConcurrency, path, f)
 }
 
-func startSession(client *http.Client, bucket, name string) (uri string, err error) {
+// startSession starts a new resumable upload session. Documentation can be
+// found here: https://cloud.google.com/storage/docs/performing-resumable-uploads#initiate-session
+func (w *writer) startSession() (uri string, err error) {
 	u := &url.URL{
-		Scheme:   "https",
-		Host:     "www.googleapis.com",
-		Path:     fmt.Sprintf("/upload/storage/v1/b/%v/o", bucket),
-		RawQuery: fmt.Sprintf("uploadType=resumable&name=%v", name),
+		Scheme: "https",
+		// https://cloud.google.com/storage/docs/request-endpoints#typical
+		Host:     "storage.googleapis.com",
+		Path:     fmt.Sprintf("/upload/storage/v1/b/%v/o", w.object.BucketName()),
+		RawQuery: fmt.Sprintf("uploadType=resumable&name=%v", w.object.ObjectName()),
 	}
 	err = retry(func() error {
-		req, err := http.NewRequest(http.MethodPost, u.String(), nil)
+		req, err := http.NewRequestWithContext(w.ctx, http.MethodPost, u.String(), nil)
 		if err != nil {
 			return err
 		}
 		req.Header.Set("X-Upload-Content-Type", "application/octet-stream")
 		req.Header.Set("Content-Length", "0")
-		resp, err := client.Do(req)
+		resp, err := w.client.Do(req)
 		if err != nil {
-			return err
+			return fmt.Errorf("executing http request: %w", err)
 		}
 		defer resp.Body.Close()
 		err = googleapi.CheckMediaResponse(resp)
 		if err != nil {
-			return err
+			return fmt.Errorf("starting new resumable upload session: %w", err)
 		}
 		uri = resp.Header.Get("Location")
 		return nil
 	})
+	w.logger().WithFields(logrus.Fields{
+		"bucket": w.object.BucketName(),
+		"object": w.object.ObjectName(),
+	}).Debug("Created new resumable upload session")
 	return uri, err
 }
 
@@ -663,18 +803,26 @@ func (d *driver) keyToPath(key string) string {
 }
 
 type writer struct {
-	client        *http.Client
-	storageClient *storage.Client
-	bucket        string
-	name          string
-	size          int64
-	offset        int64
-	closed        bool
-	committed     bool
-	canceled      bool
-	sessionURI    string
-	buffer        []byte
-	buffSize      int64
+	ctx    context.Context
+	client *http.Client
+	object *storage.ObjectHandle
+	// size is the amount of data written to this writter using Write(), but
+	// not necessarily committed yet (i.e. offset + buffSize). If Writer was
+	// resumed, then it includes the offset of the data already persisted in
+	// the previous session.
+	size int64
+	// offset is the amount of data persisted in the backend, be it as
+	// resumable upload yet to be committed or data written in
+	// putContentsClose. It does not mean that this data is visible in the
+	// bucket, as resumable uploads require finall call to Commit() to finish
+	// the upload and make the data accessible.
+	offset     int64
+	closed     bool
+	committed  bool
+	canceled   bool
+	sessionURI string
+	buffer     []byte
+	buffSize   int64
 }
 
 // Cancel removes any written content from this FileWriter.
@@ -686,7 +834,12 @@ func (w *writer) Cancel() error {
 	}
 	w.canceled = true
 
-	err := storageDeleteObject(context.Background(), w.storageClient, w.bucket, w.name)
+	// NOTE(prozlach): Delete operation is conditionally idempotent, but in our
+	// case we do not care - we just want to delete the object. Hence we
+	// override the idempotent policy to always retry until the context is
+	// canceled. The retries themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
+	err := w.object.Retryer(storage.WithPolicy(storage.RetryAlways)).Delete(w.ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil
@@ -702,6 +855,8 @@ func (w *writer) Cancel() error {
 	return nil
 }
 
+// Close stores the current resumable upload session in a temporary object
+// provided that the session has not been committed nor canceled yet.
 func (w *writer) Close() error {
 	if w.closed {
 		return storagedriver.ErrAlreadyClosed
@@ -724,18 +879,22 @@ func (w *writer) Close() error {
 		return fmt.Errorf("writing chunk: %w", err)
 	}
 
-	// Copy the remaining bytes from the buffer to the upload session
-	// Normally buffSize will be smaller than minChunkSize. However, in the
-	// unlikely event that the upload session failed to start, this number could be higher.
-	// In this case we can safely clip the remaining bytes to the minChunkSize
+	// Copy the remaining bytes from the buffer to the upload session Normally
+	// buffSize will be smaller than minChunkSize. However, in the unlikely
+	// event that the upload session failed to start, this number could be
+	// higher. In this case we can safely clip the remaining bytes to the
+	// minChunkSize
 	if w.buffSize > minChunkSize {
 		w.buffSize = minChunkSize
 	}
 
 	// commit the writes by updating the upload session
+	crc32c := crc32.Checksum(w.buffer[0:w.buffSize], crc32cTable)
+
 	err = retry(func() error {
-		context := context.Background()
-		wc := w.storageClient.Bucket(w.bucket).Object(w.name).NewWriter(context)
+		wc := w.object.NewWriter(w.ctx)
+		wc.SendCRC32C = true
+		wc.CRC32C = crc32c
 		wc.ContentType = uploadSessionContentType
 		wc.Metadata = map[string]string{
 			"Session-URI": w.sessionURI,
@@ -746,7 +905,6 @@ func (w *writer) Close() error {
 	if err != nil {
 		return fmt.Errorf("writing contents while closing writer: %w", err)
 	}
-	w.size = w.offset + w.buffSize
 	w.buffSize = 0
 	return nil
 }
@@ -767,28 +925,31 @@ func (w *writer) Commit() error {
 
 	// no session started yet just perform a simple upload
 	if w.sessionURI == "" {
+		crc32c := crc32.Checksum(w.buffer[0:w.buffSize], crc32cTable)
 		err := retry(func() error {
-			context := context.Background()
-			wc := w.storageClient.Bucket(w.bucket).Object(w.name).NewWriter(context)
+			wc := w.object.NewWriter(w.ctx)
+			wc.SendCRC32C = true
+			wc.CRC32C = crc32c
 			wc.ContentType = "application/octet-stream"
 			return putContentsClose(wc, w.buffer[0:w.buffSize])
 		})
 		if err != nil {
 			return err
 		}
-		w.size = w.offset + w.buffSize
+		// putContentsClose overwrites the object if it was already
+		// present, so offset is going to be equal to w.size.
+		w.offset = w.size
 		w.buffSize = 0
 		return nil
 	}
-	size := w.offset + w.buffSize
 	var nn int64
-	// loop must be performed at least once to ensure the file is committed even when
-	// the buffer is empty
+	// NOTE(prozlach): loop must be performed at least once to ensure the file
+	// is committed even when the buffer is empty. The empty/first loop with
+	// zero-length will actually commit the file.
 	for {
-		n, err := putChunk(w.client, w.sessionURI, w.buffer[nn:w.buffSize], w.offset, size)
+		n, err := w.putChunk(w.buffer[nn:w.buffSize], w.size)
 		nn += n
 		w.offset += n
-		w.size = w.offset
 		if err != nil {
 			w.buffSize = int64(copy(w.buffer, w.buffer[nn:w.buffSize])) // nolint: gosec // copy() is always going to be non-negative
 			return err
@@ -811,16 +972,13 @@ func (w *writer) writeChunk() error {
 	}
 	// if their is no sessionURI yet, obtain one by starting the session
 	if w.sessionURI == "" {
-		w.sessionURI, err = startSession(w.client, w.bucket, w.name)
+		w.sessionURI, err = w.startSession()
 	}
 	if err != nil {
 		return err
 	}
-	nn, err := putChunk(w.client, w.sessionURI, w.buffer[0:chunkSize], w.offset, -1)
+	nn, err := w.putChunk(w.buffer[0:chunkSize], -1)
 	w.offset += nn
-	if w.offset > w.size {
-		w.size = w.offset
-	}
 	// shift the remaining bytes to the start of the buffer
 	w.buffSize = int64(copy(w.buffer, w.buffer[nn:w.buffSize])) // nolint: gosec // copy() is always going to be non-negative
 
@@ -843,7 +1001,22 @@ func (w *writer) Write(p []byte) (int, error) {
 	for nn < len(p) {
 		n := copy(w.buffer[w.buffSize:], p[nn:])
 		w.buffSize += int64(n) // nolint: gosec // copy() is always going to be non-negative
+		// NOTE(prozlach): It should be safe to bump the size of the writer
+		// before the data is actually committed to the backend for two reasons:
+		// * data is loaded into buffer, even if this attempt to upload data
+		// fails, the caller may retry and the data may get uploaded.
+		// * the writeChunk->putChunkNext methods prune the buffer only when
+		// the data was successfully uploaded.
+		// * this follows the semantics of Azure and S3 drivers
+		w.size += int64(n)
 		if w.buffSize == int64(cap(w.buffer)) {
+			w.logger().WithFields(logrus.Fields{
+				"path":         w.object.ObjectName(),
+				"bufferSize":   w.buffSize,
+				"totalWritten": w.size,
+				"chunkNumber":  w.offset/int64(cap(w.buffer)) + 1,
+			}).Debug("Buffer full, initiating chunk upload")
+
 			err = w.writeChunk()
 			if err != nil {
 				break
@@ -859,31 +1032,64 @@ func (w *writer) Size() int64 {
 	return w.size
 }
 
-func (w *writer) init(path string) error {
-	res, err := getObject(w.client, w.bucket, w.name, 0)
+// init restores resumable upload basing on the Offset and Session-URL metadata
+// and the `tail` of the data that are stored in the temporary object.
+// Due to miminum chunk size limitation for GCS, we can't upload all the bytes
+// remaining in the buffer if there are fewer than minChunkSize, so they are
+// stored in the temporary object created during Close() call, and then read
+// back into the buffer here. The temporary object and the resumable upload coexist
+// until the resumable upload is committed. The Commit operation overrides the
+// temporary object.
+// The buffer size is never smaller than minChunkSize and the amount if tail
+// data is never higher than minChunkSize, hence there is never going to be an
+// overflow/there will always be enough place in the buffer to read back the
+// temporary data in this call.
+func (w *writer) init() error {
+	attrs, err := w.object.Attrs(w.ctx)
 	if err != nil {
 		var gcsErr *googleapi.Error
 		if errors.As(err, &gcsErr) && gcsErr.Code == http.StatusNotFound {
-			return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+			return storagedriver.PathNotFoundError{Path: w.object.ObjectName(), DriverName: driverName}
 		}
 
-		return err
+		return fmt.Errorf("fetching object: %w", err)
 	}
-	defer res.Body.Close()
-	if res.Header.Get("Content-Type") != uploadSessionContentType {
-		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
+	if attrs.ContentType != uploadSessionContentType {
+		return storagedriver.PathNotFoundError{Path: w.object.ObjectName(), DriverName: driverName}
 	}
-	offset, err := strconv.ParseInt(res.Header.Get("X-Goog-Meta-Offset"), 10, 64)
+
+	if attrs.Metadata["Offset"] == "" {
+		return fmt.Errorf("`X-Goog-Meta-Offset` HTTP header has not been set for path %s", w.object.ObjectName())
+	}
+	offset, err := strconv.ParseInt(attrs.Metadata["Offset"], 10, 64)
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing `X-Goog-Meta-Offset` HTTP header: %w", err)
 	}
-	buffer, err := io.ReadAll(res.Body)
+
+	r, err := w.object.NewReader(w.ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing `X-Goog-Meta-Offset` HTTP header: %w", err)
 	}
-	w.sessionURI = res.Header.Get("X-Goog-Meta-Session-URI")
-	w.buffSize = int64(copy(w.buffer, buffer)) // nolint: gosec // copy() is always going to be non-negative
+	defer r.Close()
+
+	for err == nil && w.buffSize < int64(len(w.buffer)) {
+		var n int
+		n, err = r.Read(w.buffer[w.buffSize:])
+		w.buffSize += int64(n)
+	}
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("reading `tail` data during writer resume: %w", err)
+	}
+
+	w.sessionURI = attrs.Metadata["Session-URI"]
 	w.offset = offset
 	w.size = offset + w.buffSize
+
+	w.logger().WithFields(logrus.Fields{
+		"path":          w.object.ObjectName(),
+		"resumedOffset": offset,
+		"bufferedBytes": w.buffSize,
+	}).Debug("Resumed upload session")
+
 	return nil
 }

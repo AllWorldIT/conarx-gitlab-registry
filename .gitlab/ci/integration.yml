@@ -142,7 +142,6 @@ gcs:key_creds:
   parallel:
     matrix:
       - GO_VERSION: [ "1.23", "1.24" ]
-        REGISTRY_GCS_DRIVER: [ "current", "next" ]
   rules:
     - <<: *if-fork-merge-request
       when: never
@@ -164,8 +163,6 @@ gcs:instance_creds:
   parallel:
     matrix:
       - GO_VERSION: [ "1.23", "1.24" ]
-        # Only supported on `next` driver:
-        REGISTRY_GCS_DRIVER: [ "next" ]
  # Do not run in forked projects, as we are running on custom runner with
  # instance-level credentials
   rules:

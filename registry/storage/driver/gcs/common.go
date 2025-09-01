@@ -59,8 +59,6 @@ const (
 	customGitlabGoogleObjectSizeParam  = "x-goog-custom-audit-gitlab-size-bytes"
 )
 
-const registryGCSDriverEnv = "REGISTRY_GCS_DRIVER"
-
 var rangeHeader = regexp.MustCompile(`^bytes=([0-9])+-([0-9]+)$`)
 
 // customParamKeys is the mapping between gitlab keys to gcs signed-redirect-url query parameter keys
@@ -120,19 +118,9 @@ func (d *Wrapper) GCSBucketKey(path string) string {
 	// no other option than hand over the object full path construction to the
 	// underlying GCS driver, instead of manually concatenating the CDN
 	// endpoint with the object path.
-	baseDriver := d.StorageDriver.(*base.Regulator).StorageDriver
+	baseDriver := d.StorageDriver.(*base.Regulator).StorageDriver.(*driver)
 
-	// Type assertion to handle both driver types
-	switch typedDriver := baseDriver.(type) {
-	case *driverNext:
-		return typedDriver.pathToKey(path)
-	case *driver:
-		return typedDriver.pathToKey(path)
-	default:
-		// Handle unexpected driver type or fail gracefully. Depending on
-		// requirements, we might want to log this or handle differently
-		return path
-	}
+	return baseDriver.pathToKey(path)
 }
 
 type baseEmbed struct {
@@ -199,22 +187,15 @@ func retry(req request) error {
 // Required parameters:
 // - bucket
 func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, error) {
-	useNext := os.Getenv(registryGCSDriverEnv) == "next"
-
-	params, err := parseParameters(parameters, useNext)
+	params, err := parseParameters(parameters)
 	if err != nil {
 		return nil, err
 	}
 
-	if useNext {
-		logrus.Warn("Using next-gen GCS driver")
-		return NewNext(params)
-	}
-	logrus.Warn("Using legacy GCS driver")
 	return New(params)
 }
 
-func parseParameters(parameters map[string]any, useNext bool) (*driverParameters, error) {
+func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	bucket, ok := parameters["bucket"]
 	if !ok || fmt.Sprint(bucket) == "" {
 		return nil, fmt.Errorf("no bucket parameter provided")
@@ -301,74 +282,73 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 	}
 
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
-	if useNext {
-		debugLogging := false
+	debugLogging := false
 
-		if _, ok = parameters["debug_log"]; ok {
-			debugLogging, err = parse.Bool(parameters, "debug_log", false)
-			if err != nil {
-				return nil, fmt.Errorf("parsing parameter %s: %w", "debug_log", err)
-			}
-		}
-		if debugLogging {
-			// NOTE(prozlach): Casting directly to logrus.Entry is a shortcut
-			// here, as we require Logrus logger for the adapter. In theory we
-			// should be using the log.Logger interface instead of peeking into
-			// the implementation, but this requies a deeper refactoring.
-			//
-			// Hopefully we will switch to slog/zap at some point and this will
-			// become non-issue.
-			logrusEntry, err := log.ToLogrusEntry(
-				log.GetLogger().WithFields(log.Fields{
-					"component": "registry.storage.gcs_next.internal",
-				}),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("converting logger to logrus.Entry: %w", err)
-			}
-			slogger := slog.New(
-				sloglogrus.Option{
-					Level:  slog.LevelDebug,
-					Logger: logrusEntry.Logger,
-				}.NewLogrusHandler(),
-			)
-			// NOTE(prozlach): This does not work really, see https://github.com/googleapis/google-cloud-go/issues/12475
-			// As a workaround we set the env variable as well, but this only
-			// makes GCS print logs to stdout using JSON format. Not ideal.
-			//
-			// Only set the environment variable if it's not already set
-			// nolint: revive // max-control-nesting
-			if existingLevel := os.Getenv("GOOGLE_SDK_GO_LOGGING_LEVEL"); existingLevel != "" {
-				log.GetLogger().WithFields(logrus.Fields{
-					"existing_value":  existingLevel,
-					"requested_value": "debug",
-				}).Warn("GOOGLE_SDK_GO_LOGGING_LEVEL environment variable is already set, not overriding")
-			} else {
-				err = os.Setenv("GOOGLE_SDK_GO_LOGGING_LEVEL", "debug")
-				if err != nil {
-					return nil, fmt.Errorf("setting `GOOGLE_SDK_GO_LOGGING_LEVEL` env var: %w", err)
-				}
-			}
-			opts = append(opts, option.WithLogger(slogger))
-		}
-
-		// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
-		// API. GCS SDK recommends using the JSON API instead, which is done
-		// here by setting WithJSONReads. This ensures consistency with other
-		// client operations, which all use JSON. JSON will become the default
-		// in a future release of GCS SDK. We only enable it for GCS next.
-		// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
-		opts = append(opts, storage.WithJSONReads())
-
-		if userAgent, ok := parameters["useragent"]; ok {
-			if ua, ok := userAgent.(string); ok && ua != "" {
-				opts = append(opts, option.WithUserAgent(ua))
-			} else {
-				userAgent := fmt.Sprintf("container-registry %s (%s)", version.Version, runtime.Version())
-				opts = append(opts, option.WithUserAgent(userAgent))
-			}
+	if _, ok = parameters["debug_log"]; ok {
+		debugLogging, err = parse.Bool(parameters, "debug_log", false)
+		if err != nil {
+			return nil, fmt.Errorf("parsing parameter %s: %w", "debug_log", err)
 		}
 	}
+	if debugLogging {
+		// NOTE(prozlach): Casting directly to logrus.Entry is a shortcut
+		// here, as we require Logrus logger for the adapter. In theory we
+		// should be using the log.Logger interface instead of peeking into
+		// the implementation, but this requies a deeper refactoring.
+		//
+		// Hopefully we will switch to slog/zap at some point and this will
+		// become non-issue.
+		logrusEntry, err := log.ToLogrusEntry(
+			log.GetLogger().WithFields(log.Fields{
+				"component": "registry.storage.gcs.internal",
+			}),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("converting logger to logrus.Entry: %w", err)
+		}
+		slogger := slog.New(
+			sloglogrus.Option{
+				Level:  slog.LevelDebug,
+				Logger: logrusEntry.Logger,
+			}.NewLogrusHandler(),
+		)
+		// NOTE(prozlach): This does not work really, see https://github.com/googleapis/google-cloud-go/issues/12475
+		// As a workaround we set the env variable as well, but this only
+		// makes GCS print logs to stdout using JSON format. Not ideal.
+		//
+		// Only set the environment variable if it's not already set
+		// nolint: revive // max-control-nesting
+		if existingLevel := os.Getenv("GOOGLE_SDK_GO_LOGGING_LEVEL"); existingLevel != "" {
+			log.GetLogger().WithFields(logrus.Fields{
+				"existing_value":  existingLevel,
+				"requested_value": "debug",
+			}).Warn("GOOGLE_SDK_GO_LOGGING_LEVEL environment variable is already set, not overriding")
+		} else {
+			err = os.Setenv("GOOGLE_SDK_GO_LOGGING_LEVEL", "debug")
+			if err != nil {
+				return nil, fmt.Errorf("setting `GOOGLE_SDK_GO_LOGGING_LEVEL` env var: %w", err)
+			}
+		}
+		opts = append(opts, option.WithLogger(slogger))
+	}
+
+	// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
+	// API. GCS SDK recommends using the JSON API instead, which is done
+	// here by setting WithJSONReads. This ensures consistency with other
+	// client operations, which all use JSON. JSON will become the default
+	// in a future release of GCS SDK.
+	// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
+	opts = append(opts, storage.WithJSONReads())
+
+	if userAgent, ok := parameters["useragent"]; ok {
+		if ua, ok := userAgent.(string); ok && ua != "" {
+			opts = append(opts, option.WithUserAgent(ua))
+		} else {
+			userAgent := fmt.Sprintf("container-registry %s (%s)", version.Version, runtime.Version())
+			opts = append(opts, option.WithUserAgent(userAgent))
+		}
+	}
+
 	storageClient, err := storage.NewClient(context.Background(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("storage client error: %s", err)
