@@ -270,16 +270,16 @@ var MigrateUpCmd = &cobra.Command{
 		}
 
 		// Handle cases where no migration limits are set.
-		var skipNonRequredPreDeployment, skipNonRequredPostDeployment bool
+		var skipNonRequiredPreDeployment, skipNonRequiredPostDeployment bool
 		switch {
 		case MaxNumPostMigrations == nil && MaxNumPreMigrations == nil:
 			var all int
 			MaxNumPostMigrations = &all
 			MaxNumPreMigrations = &all
 		case MaxNumPostMigrations == nil && MaxNumPreMigrations != nil:
-			skipNonRequredPostDeployment = true
+			skipNonRequiredPostDeployment = true
 		case MaxNumPreMigrations == nil && MaxNumPostMigrations != nil:
-			skipNonRequredPreDeployment = true
+			skipNonRequiredPreDeployment = true
 		case *MaxNumPreMigrations < 1 || *MaxNumPostMigrations < 1:
 			return errors.New("both pre and post migration limits must be greater than or equal to 1")
 		}
@@ -291,16 +291,16 @@ var MigrateUpCmd = &cobra.Command{
 
 		// Initialize the list of migrators based on the migration settings.
 		var m []migrations.PureMigrator
-		if SkipPostDeployment && !skipNonRequredPreDeployment {
+		if SkipPostDeployment && !skipNonRequiredPreDeployment {
 			m = append(m, premigrations.NewMigrator(db, premigrations.SkipPostDeployment()))
 		}
 
 		// Add pre-deployment or post-deployment migrators as needed.
 		if !SkipPostDeployment {
 			// if only one type of limit is specified only do the migration pertaining to the specified limit parameter (and any enforced migrations)
-			if skipNonRequredPreDeployment {
+			if skipNonRequiredPreDeployment {
 				m = append(m, postmigrations.NewMigrator(db))
-			} else if skipNonRequredPostDeployment {
+			} else if skipNonRequiredPostDeployment {
 				m = append(m, premigrations.NewMigrator(db))
 			} else {
 				m = append(m, premigrations.NewMigrator(db), postmigrations.NewMigrator(db))
@@ -309,7 +309,7 @@ var MigrateUpCmd = &cobra.Command{
 
 		// Track applied migration counts and execution time.
 		var (
-			totalPostDeployApllied, totalPreDeployApllied, totalBBMApllied int
+			totalPostDeployApplied, totalPreDeployApplied, totalBBMApplied int
 			totalMigrationTime                                             time.Duration
 		)
 		for _, mig := range m {
@@ -344,18 +344,18 @@ var MigrateUpCmd = &cobra.Command{
 
 				// Track the number of applied migrations based on type.
 				if mig.Name() == postmigrations.PostDeployTypeName {
-					totalPostDeployApllied += mr.AppliedCount
-					totalPreDeployApllied += mr.AppliedDependencyCount
+					totalPostDeployApplied += mr.AppliedCount
+					totalPreDeployApplied += mr.AppliedDependencyCount
 				} else {
-					totalPostDeployApllied += mr.AppliedDependencyCount
-					totalPreDeployApllied += mr.AppliedCount
+					totalPostDeployApplied += mr.AppliedDependencyCount
+					totalPreDeployApplied += mr.AppliedCount
 				}
-				totalBBMApllied += mr.AppliedBBMCount
+				totalBBMApplied += mr.AppliedBBMCount
 			}
 		}
 
 		if !dryRun {
-			fmt.Printf("OK: applied %d pre-deployment migration(s), %d post-deployment migration(s) and %d background migration(s) in %.3fs\n", totalPreDeployApllied, totalPostDeployApllied, totalBBMApllied, totalMigrationTime.Seconds())
+			fmt.Printf("OK: applied %d pre-deployment migration(s), %d post-deployment migration(s) and %d background migration(s) in %.3fs\n", totalPreDeployApplied, totalPostDeployApplied, totalBBMApplied, totalMigrationTime.Seconds())
 		}
 
 		return nil
@@ -373,16 +373,16 @@ var MigrateDownCmd = &cobra.Command{
 		}
 
 		// Handle cases where no migration limits are set.
-		var skipNonRequredPreDeployment, skipNonRequredPostDeployment bool
+		var skipNonRequiredPreDeployment, skipNonRequiredPostDeployment bool
 		switch {
 		case MaxNumPostMigrations == nil && MaxNumPreMigrations == nil:
 			var all int
 			MaxNumPostMigrations = &all
 			MaxNumPreMigrations = &all
 		case MaxNumPostMigrations == nil && MaxNumPreMigrations != nil:
-			skipNonRequredPostDeployment = true
+			skipNonRequiredPostDeployment = true
 		case MaxNumPreMigrations == nil && MaxNumPostMigrations != nil:
-			skipNonRequredPreDeployment = true
+			skipNonRequiredPreDeployment = true
 		case *MaxNumPreMigrations < 1 || *MaxNumPostMigrations < 1:
 			return errors.New("both pre and post migration limits must be greater than or equal to 1")
 		}
@@ -395,15 +395,15 @@ var MigrateDownCmd = &cobra.Command{
 		// Initialize the list of migrators based on the migration settings.
 		var m []migrations.PureMigrator
 
-		if SkipPostDeployment && !skipNonRequredPreDeployment {
+		if SkipPostDeployment && !skipNonRequiredPreDeployment {
 			m = append(m, premigrations.NewMigrator(db, premigrations.SkipPostDeployment()))
 		}
 
 		// Add pre-deployment or post-deployment migrators as needed.
 		if !SkipPostDeployment {
-			if skipNonRequredPreDeployment {
+			if skipNonRequiredPreDeployment {
 				m = append(m, postmigrations.NewMigrator(db))
-			} else if skipNonRequredPostDeployment {
+			} else if skipNonRequiredPostDeployment {
 				m = append(m, premigrations.NewMigrator(db))
 			} else {
 				m = append(m, postmigrations.NewMigrator(db), premigrations.NewMigrator(db))
