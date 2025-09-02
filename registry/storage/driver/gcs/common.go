@@ -180,7 +180,7 @@ func retry(req request) error {
 		return storagedriver.TooManyRequestsError{Cause: err}
 	}
 
-	return err
+	return fmt.Errorf("too many retries: %w", err)
 }
 
 // FromParameters constructs a new Driver with a given parameters map
