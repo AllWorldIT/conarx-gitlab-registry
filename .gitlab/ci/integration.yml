@@ -558,9 +558,6 @@ base-driver:
 # ci-tool-allowfail redis:rate-limiter:handlers
 redis:rate-limiter:handlers:
   extends: .go-version-matrix
-  # TODO: temporarily allow failure while we investigate a better way to run these tests
-  # https://gitlab.com/gitlab-org/container-registry/-/issues/1649
-  allow_failure: true
   stage: integration
   variables:
     REDIS_ADDR: "redis:6379"
@@ -582,9 +579,6 @@ redis:rate-limiter:handlers:
 redis-cluster:rate-limiter:handlers:
   extends: .go-version-matrix
   stage: integration
-  # TODO: temporarily allow failure while we investigate a better way to run these tests
-  # https://gitlab.com/gitlab-org/container-registry/-/issues/1649
-  allow_failure: true
   services:
     - name: bitnami/redis-cluster:$REDIS_CLUSTER_VERSION
       alias: redis-1
