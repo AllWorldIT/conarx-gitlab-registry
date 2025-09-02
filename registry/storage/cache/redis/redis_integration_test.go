@@ -1,4 +1,4 @@
-//go:build integration && redis_test
+//go:build integration
 
 package redis_test
 
@@ -15,6 +15,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
+
+func isEligible(t *testing.T) {
+	t.Helper()
+
+	if os.Getenv("REDIS_ADDR") == "" {
+		t.Skip("the 'REDIS_ADDR' environment variable must be set to enable these tests")
+	}
+}
 
 func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
 	var db int
@@ -39,6 +47,8 @@ func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
 }
 
 func flushDB(t *testing.T, client redis.UniversalClient) {
+	isEligible(t)
+
 	require.NoError(t, client.FlushDB(context.Background()).Err(), "unexpected error flushing redis db")
 }
 

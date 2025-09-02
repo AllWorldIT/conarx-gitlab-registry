@@ -1,6 +1,6 @@
-//go:build integration && redis_test
+//go:build integration
 
-package handlers
+package ratelimiter_test
 
 import (
 	"context"
@@ -17,6 +17,8 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/registry/handlers"
+	"github.com/docker/distribution/registry/middleware/ratelimiter"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -27,7 +29,7 @@ type RateLimiterTestSuite struct {
 	suite.Suite
 	redisAddr   string
 	redisClient redis.UniversalClient
-	app         *App
+	app         *handlers.App
 	config      *configuration.Configuration
 
 	ctx        context.Context
@@ -91,21 +93,21 @@ func (s *RateLimiterTestSuite) setupConfig(limiters []configuration.Limiter) *co
 }
 
 // setupApp creates an App instance with the given configuration
-func (s *RateLimiterTestSuite) setupApp(limiters []configuration.Limiter) *App {
+func (s *RateLimiterTestSuite) setupApp(limiters []configuration.Limiter) *handlers.App {
 	config := s.setupConfig(limiters)
 
-	app := &App{
+	app := &handlers.App{
 		Context: s.ctx,
 		Config:  config,
 	}
 
-	err := app.configureRedisRateLimiter(s.ctx, config)
+	err := app.ConfigureRedisRateLimiter(s.ctx, config)
 	s.Require().NoError(err)
 
 	s.app = app
 	s.config = config
 
-	s.redisClient, err = configureRedisClient(s.ctx, config.Redis.RateLimiter, false, "test-suite")
+	s.redisClient, err = handlers.ConfigureRedisClient(s.ctx, config.Redis.RateLimiter, false, "test-suite")
 	s.Require().NoError(err, "Failed to create test Redis client")
 
 	return app
@@ -129,7 +131,7 @@ func (s *RateLimiterTestSuite) createMiddlewareHandler(limiters []configuration.
 		s.NoError(err)
 		s.Equal(len(msg), n)
 	})
-	return app.rateLimiterMiddleware(successHandler)
+	return app.RateLimiterMiddleware(successHandler)
 }
 
 // testIP generates a semi-random IP address to reduce collision likelihood
@@ -143,7 +145,7 @@ func (*RateLimiterTestSuite) testIP() string {
 
 // assertRateLimitHeaders verifies that all expected rate limit headers are present
 func (s *RateLimiterTestSuite) assertRateLimitHeaders(resp *httptest.ResponseRecorder) {
-	rateLimitHeader := resp.Header().Get(headerRateLimit)
+	rateLimitHeader := resp.Header().Get(ratelimiter.HeaderRateLimit)
 	s.Require().NotEmpty(rateLimitHeader)
 
 	// Parse headerRateLimit: limit=%d, remaining=%d, reset=%d
@@ -154,16 +156,16 @@ func (s *RateLimiterTestSuite) assertRateLimitHeaders(resp *httptest.ResponseRec
 	remaining := strings.Split(header[1], "=")[1]
 	reset := strings.Split(header[2], "=")[1]
 
-	s.Equal(limit, resp.Header().Get(headerXRateLimitLimit))
-	s.Equal(remaining, resp.Header().Get(headerXRateLimitRemaining))
-	s.Equal(reset, resp.Header().Get(headerXRateLimitReset))
-	s.NotEmpty(resp.Header().Get(headerRateLimitPolicy))
+	s.Equal(limit, resp.Header().Get(ratelimiter.HeaderXRateLimitLimit))
+	s.Equal(remaining, resp.Header().Get(ratelimiter.HeaderXRateLimitRemaining))
+	s.Equal(reset, resp.Header().Get(ratelimiter.HeaderXRateLimitReset))
+	s.NotEmpty(resp.Header().Get(ratelimiter.HeaderRateLimitPolicy))
 }
 
 // verifyRateLimitResponse checks the response when rate limit is exceeded
 func (s *RateLimiterTestSuite) verifyRateLimitResponse(resp *httptest.ResponseRecorder) {
 	s.assertRateLimitHeaders(resp)
-	s.NotEmpty(resp.Header().Get(headerRetryAfter))
+	s.NotEmpty(resp.Header().Get(ratelimiter.HeaderRetryAfter))
 
 	var errorResponse struct {
 		Errors []struct {
@@ -181,7 +183,7 @@ func (s *RateLimiterTestSuite) verifyRateLimitResponse(resp *httptest.ResponseRe
 
 	detail := errorResponse.Errors[0].Detail
 	s.NotEmpty(detail["ip"])
-	s.Equal(matchTypeIP, detail["limit"])
+	s.Equal(ratelimiter.MatchTypeIP, detail["limit"])
 	s.NotEmpty(detail["retry_after"])
 	s.NotEmpty(detail["remaining"])
 }
@@ -203,7 +205,7 @@ func (s *RateLimiterTestSuite) cleanupRedisKeys() {
 		},
 	}
 
-	redisClient, err := configureRedisClient(
+	redisClient, err := handlers.ConfigureRedisClient(
 		s.ctx, config.Redis.RateLimiter, false, "cleanup",
 	)
 	s.Require().NoError(err, "Failed to create Redis client for cleanup")
@@ -234,7 +236,7 @@ func (s *RateLimiterTestSuite) TestBlocksRequestsWhenLimitExceeded() {
 			Name:        "block-limiter",
 			Description: "Blocking rate limiter",
 			LogOnly:     false,
-			Match:       configuration.Match{Type: matchTypeIP},
+			Match:       configuration.Match{Type: ratelimiter.MatchTypeIP},
 			Precedence:  10,
 			Limit:       configuration.Limit{Rate: 3, Period: "hour", Burst: 6},
 			Action:      configuration.Action{WarnThreshold: 0.7, WarnAction: "log", HardAction: "block"},
@@ -251,9 +253,9 @@ func (s *RateLimiterTestSuite) TestBlocksRequestsWhenLimitExceeded() {
 
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusOK, resp.Code, "Request %d should be allowed", i+1)
-		s.NotEmpty(resp.Header().Get(headerXRateLimitRemaining))
+		s.NotEmpty(resp.Header().Get(ratelimiter.HeaderXRateLimitRemaining))
 
-		remaining, err := strconv.Atoi(resp.Header().Get(headerXRateLimitRemaining))
+		remaining, err := strconv.Atoi(resp.Header().Get(ratelimiter.HeaderXRateLimitRemaining))
 		s.Require().NoError(err)
 		s.Equal(6-i-1, remaining, "Remaining should be %d after request %d", 6-i-1, i+1)
 	}
@@ -271,7 +273,7 @@ func (s *RateLimiterTestSuite) TestLogOnlyModeNeverBlocks() {
 			Name:        "log-only-limiter",
 			Description: "Log-only rate limiter",
 			LogOnly:     true,
-			Match:       configuration.Match{Type: matchTypeIP},
+			Match:       configuration.Match{Type: ratelimiter.MatchTypeIP},
 			Precedence:  10,
 			Limit:       configuration.Limit{Rate: 3, Period: "hour", Burst: 6},
 			Action:      configuration.Action{WarnThreshold: 0.7, WarnAction: "log", HardAction: "block"},
@@ -296,7 +298,7 @@ func (s *RateLimiterTestSuite) TestRateLimitRemainingHeaderDecreasesCorrectly() 
 			Name:        "header-test-limiter",
 			Description: "Rate limiter for header testing",
 			LogOnly:     false,
-			Match:       configuration.Match{Type: matchTypeIP},
+			Match:       configuration.Match{Type: ratelimiter.MatchTypeIP},
 			Precedence:  10,
 			Limit:       configuration.Limit{Rate: 15, Period: "hour", Burst: 30},
 			Action:      configuration.Action{WarnThreshold: 0.8, WarnAction: "log", HardAction: "block"},
@@ -314,7 +316,7 @@ func (s *RateLimiterTestSuite) TestRateLimitRemainingHeaderDecreasesCorrectly() 
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusOK, resp.Code, "Request %d should be allowed", i+1)
 
-		remainingHeader := resp.Header().Get(headerXRateLimitRemaining)
+		remainingHeader := resp.Header().Get(ratelimiter.HeaderXRateLimitRemaining)
 		s.NotEmpty(remainingHeader, "X-RateLimit-Remaining header should be present for request %d", i+1)
 
 		remaining, err := strconv.Atoi(remainingHeader)
@@ -340,7 +342,7 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 			Name:        "multi-ip-limiter",
 			Description: "Rate limiter for testing multiple IPs",
 			LogOnly:     false,
-			Match:       configuration.Match{Type: matchTypeIP},
+			Match:       configuration.Match{Type: ratelimiter.MatchTypeIP},
 			Precedence:  10,
 			Limit:       configuration.Limit{Rate: 6, Period: "hour", Burst: 9},
 			Action:      configuration.Action{WarnThreshold: 0.5, WarnAction: "log", HardAction: "block"},
@@ -361,7 +363,7 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 			handler.ServeHTTP(resp, req)
 			s.Equal(http.StatusOK, resp.Code, "Request %d from IP %s should be allowed", i+1, testIP)
 
-			remainingHeader := resp.Header().Get(headerXRateLimitRemaining)
+			remainingHeader := resp.Header().Get(ratelimiter.HeaderXRateLimitRemaining)
 			s.NotEmpty(remainingHeader, "X-RateLimit-Remaining header should be present")
 
 			remaining, err := strconv.Atoi(remainingHeader)
@@ -377,7 +379,7 @@ func (s *RateLimiterTestSuite) TestDifferentIPsHaveIndependentCounters() {
 		handler.ServeHTTP(resp, req)
 		s.Equal(http.StatusTooManyRequests, resp.Code, "10th request from IP %s should be blocked", testIP)
 
-		remainingHeader := resp.Header().Get(headerXRateLimitRemaining)
+		remainingHeader := resp.Header().Get(ratelimiter.HeaderXRateLimitRemaining)
 		remaining, err := strconv.Atoi(remainingHeader)
 		s.Require().NoError(err)
 		s.Zero(remaining, "X-RateLimit-Remaining should be 0 when blocked for IP %s", testIP)
@@ -390,7 +392,7 @@ func (s *RateLimiterTestSuite) TestPerIPRateLimitingAcrossShards() {
 			Name:        "per-ip-limiter",
 			Description: "Test per-IP rate limiting across shards",
 			LogOnly:     false,
-			Match:       configuration.Match{Type: matchTypeIP},
+			Match:       configuration.Match{Type: ratelimiter.MatchTypeIP},
 			Precedence:  10,
 			Limit:       configuration.Limit{Rate: 3, Period: "hour", Burst: 9},
 			Action:      configuration.Action{WarnThreshold: 0.8, WarnAction: "log", HardAction: "block"},
@@ -466,7 +468,7 @@ func (s *RateLimiterTestSuite) TestThresholdCalculation() {
 			Name:        "threshold-calc-test",
 			Description: "Threshold calculation test",
 			LogOnly:     false,
-			Match:       configuration.Match{Type: matchTypeIP},
+			Match:       configuration.Match{Type: ratelimiter.MatchTypeIP},
 			Precedence:  10,
 			Limit:       configuration.Limit{Rate: 15, Period: "hour", Burst: 30},
 			Action:      configuration.Action{WarnThreshold: 0.6, WarnAction: "log", HardAction: "block"},
@@ -493,7 +495,7 @@ func (s *RateLimiterTestSuite) TestZeroThreshold() {
 			Name:        "zero-threshold",
 			Description: "Zero threshold test limiter",
 			LogOnly:     false,
-			Match:       configuration.Match{Type: matchTypeIP},
+			Match:       configuration.Match{Type: ratelimiter.MatchTypeIP},
 			Precedence:  10,
 			Limit:       configuration.Limit{Rate: 6, Period: "hour", Burst: 12},
 			Action:      configuration.Action{WarnThreshold: 0.0, WarnAction: "log", HardAction: "block"},
@@ -538,7 +540,9 @@ func (s *RateLimiterTestSuite) TestRedisClusterConnection() {
 		},
 	}
 
-	redisClient, err := configureRedisClient(context.Background(), config.Redis.RateLimiter, false, "test")
+	redisClient, err := handlers.ConfigureRedisClient(
+		context.Background(), config.Redis.RateLimiter, false, "test",
+	)
 	s.Require().NoError(err, "Failed to create Redis client")
 
 	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
