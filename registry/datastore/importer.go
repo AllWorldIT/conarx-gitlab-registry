@@ -1293,6 +1293,11 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 			return nil
 		}
 
+		// Use the last published at field to mark the timestamp of a successful import.
+		if err = imp.repositoryStore.UpdateLastPublishedAt(ctx, dbRepo, &models.Tag{CreatedAt: time.Now()}); err != nil {
+			l.WithError(err).Warn("error updating last published at")
+		}
+
 		// Only increment repositories that we've actually been able to find and validate.
 		imp.stats.incRepoCount()
 

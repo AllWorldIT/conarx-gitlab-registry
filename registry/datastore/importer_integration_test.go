@@ -23,6 +23,7 @@ import (
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/filesystem"
 	"github.com/docker/libtrust"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -94,6 +95,10 @@ func overrideDynamicData(tb testing.TB, actual []byte) []byte {
 	actual = re.ReplaceAllLiteral(actual, []byte(`"blob_import_started_at":"2020-04-15T12:04:28.95584"`))
 	re = regexp.MustCompile(`"blob_import_finished_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
 	actual = re.ReplaceAllLiteral(actual, []byte(`"blob_import_finished_at":"2020-04-15T12:04:28.95584"`))
+
+	// Repository last_published_at timestamps change with every test run.
+	re = regexp.MustCompile(`"last_published_at":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d+)?\+\d{2}:\d{2}"`)
+	actual = re.ReplaceAllLiteral(actual, []byte(`"last_published_at":"2020-04-16T12:04:28.95584"`))
 
 	return actual
 }
@@ -791,6 +796,49 @@ func TestImporter_PreImportAll_BadManifestFormat_Stats(t *testing.T) {
 	err := imp.PreImportAll(suite.ctx)
 	require.EqualError(t, err, `pre importing all repositories: pre importing tagged manifests: pre importing manifest: retrieving manifest "sha256:a2490cec4484ee6c1068ba3a05f89934010c85242f736280b35343483b2264b6" from filesystem: failed to unmarshal manifest payload: invalid character 's' looking for beginning of value`)
 	validateImport(t, suite.db)
+}
+
+func TestImporter_PreImportAll_LastPublishedAtDateIsRecent(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "happy-path")
+	err := imp.PreImportAll(suite.ctx)
+	require.NoError(t, err)
+
+	repoStore := datastore.NewRepositoryStore(suite.db)
+	allRepos, err := repoStore.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	// Provide a wide time window as we don't need high precision and we don't
+	// want to have a flaky test.
+	lowerBound := time.Now().Add(-5 * time.Minute)
+	upperBound := time.Now().Add(5 * time.Minute)
+
+	for _, repo := range allRepos {
+		t.Run(repo.Path, func(t *testing.T) {
+			r, err := repoStore.FindByPath(suite.ctx, repo.Path)
+			require.NoError(t, err)
+
+			require.NotNil(t, r.LastPublishedAt)
+			require.True(t, r.LastPublishedAt.Valid)
+			assert.WithinRange(t, r.LastPublishedAt.Time, lowerBound, upperBound)
+		})
+	}
+}
+
+func TestImporter_PreImportAll_LastPublishedAtDateNotUpdatedOnFailure(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "bad-manifest-format")
+	err := imp.PreImportAll(suite.ctx)
+	require.EqualError(t, err, `pre importing all repositories: pre importing tagged manifests: pre importing manifest: retrieving manifest "sha256:a2490cec4484ee6c1068ba3a05f89934010c85242f736280b35343483b2264b6" from filesystem: failed to unmarshal manifest payload: invalid character 's' looking for beginning of value`)
+
+	repoStore := datastore.NewRepositoryStore(suite.db)
+	r, err := repoStore.FindByPath(suite.ctx, "a-yaml-manifest")
+	require.NoError(t, err)
+
+	require.NotNil(t, r.LastPublishedAt)
+	require.False(t, r.LastPublishedAt.Valid)
 }
 
 func restoreLockfiles(t *testing.T, imp *datastore.Importer) func() {
