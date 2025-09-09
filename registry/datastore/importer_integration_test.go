@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -822,6 +823,70 @@ func TestImporter_PreImportAll_LastPublishedAtDateIsRecent(t *testing.T) {
 			require.NotNil(t, r.LastPublishedAt)
 			require.True(t, r.LastPublishedAt.Valid)
 			assert.WithinRange(t, r.LastPublishedAt.Time, lowerBound, upperBound)
+		})
+	}
+}
+
+func TestImporter_PreImportAll_SkipRecent(t *testing.T) {
+	require.NoError(t, testutil.TruncateAllTables(suite.db))
+
+	imp := newImporterWithRoot(t, suite.db, "happy-path", datastore.WithPreImportSkipRecent(72*time.Hour))
+	err := imp.PreImportAll(suite.ctx)
+	require.NoError(t, err)
+
+	repoStore := datastore.NewRepositoryStore(suite.db)
+	allRepos, err := repoStore.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	// Collect last published at times.
+	lastPublishedByRepo := make(map[string]time.Time)
+	for _, repo := range allRepos {
+		t.Run(fmt.Sprintf("%s-validate-last-published-at", repo.Path), func(t *testing.T) {
+			r, err := repoStore.FindByPath(suite.ctx, repo.Path)
+			require.NoError(t, err)
+
+			require.NotNil(t, r.LastPublishedAt)
+			require.True(t, r.LastPublishedAt.Valid)
+
+			lastPublishedByRepo[repo.Path] = r.LastPublishedAt.Time
+		})
+	}
+
+	// Pre import again, ensuring that the last published at time does not change,
+	// indicating that we've skipped pre importing all repositories.
+	err = imp.PreImportAll(suite.ctx)
+	require.NoError(t, err)
+
+	allRepos, err = repoStore.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	for _, repo := range allRepos {
+		t.Run(fmt.Sprintf("%s-skips-already-imported", repo.Path), func(t *testing.T) {
+			r, err := repoStore.FindByPath(suite.ctx, repo.Path)
+			require.NoError(t, err)
+
+			require.NotNil(t, r.LastPublishedAt)
+			require.True(t, r.LastPublishedAt.Valid)
+
+			assert.Equal(t, lastPublishedByRepo[repo.Path], r.LastPublishedAt.Time)
+		})
+	}
+
+	// Pre import again, disabling import skipping. Each new last published date
+	// should be newer than the original last published at date.
+	imp = newImporterWithRoot(t, suite.db, "happy-path")
+	err = imp.PreImportAll(suite.ctx)
+	require.NoError(t, err)
+
+	for _, repo := range allRepos {
+		t.Run(fmt.Sprintf("%s-can-disable-skipping", repo.Path), func(t *testing.T) {
+			r, err := repoStore.FindByPath(suite.ctx, repo.Path)
+			require.NoError(t, err)
+
+			require.NotNil(t, r.LastPublishedAt)
+			require.True(t, r.LastPublishedAt.Valid)
+
+			require.Less(t, lastPublishedByRepo[repo.Path], r.LastPublishedAt.Time)
 		})
 	}
 }
