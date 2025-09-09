@@ -73,6 +73,7 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&stats, "import-statistics", "i", true, "record import statistics for service ping")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
+	ImportCmd.Flags().DurationVarP(&preImportSkipCutoff, "pre-import-skip-recent", "", 72*time.Hour, "skip pre importing repositories pre imported more recently than the provided time offset from now, defaults to 72h (three days ago), use 0 to disable skiping")
 
 	BBMCmd.AddCommand(BBMStatusCmd)
 	BBMCmd.AddCommand(BBMPauseCmd)
@@ -107,6 +108,7 @@ var (
 	dynamicMediaTypes    bool
 	maxBBMJobRetry       *int
 	stats                bool
+	preImportSkipCutoff  time.Duration
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -671,6 +673,9 @@ var ImportCmd = &cobra.Command{
 		}
 		if stats {
 			opts = append(opts, datastore.WithImportStatsTracking(driver.Name()))
+		}
+		if preImportSkipCutoff > 0 {
+			opts = append(opts, datastore.WithPreImportSkipRecent(preImportSkipCutoff))
 		}
 
 		err = os.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(dynamicMediaTypes))
