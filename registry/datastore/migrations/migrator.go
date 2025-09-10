@@ -77,6 +77,7 @@ type PureMigrator interface {
 	DownNPlan(n int) ([]string, error)
 	FindMigrationByID(id string) *Migration
 	HasPending() (bool, error)
+	Count() int
 	LatestVersion() (string, error)
 	Reconfigure(f MigratorOption)
 	Status() (map[string]*MigrationStatus, error)
@@ -271,6 +272,11 @@ func (m *MigratorImpl) HasPending() (bool, error) {
 	}
 
 	return false, nil
+}
+
+// Count returns the number of migrations.
+func (m *MigratorImpl) Count() int {
+	return len(m.migrations)
 }
 
 func (m *MigratorImpl) plan(direction migrate.MigrationDirection, limit int) ([]string, error) {

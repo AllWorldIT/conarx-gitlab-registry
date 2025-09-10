@@ -711,3 +711,44 @@ func TestRegistrar(t *testing.T) {
 		require.False(t, gaugeVecRegistrar.IsRegistered())
 	})
 }
+
+func TestSetTotalMigrationCounts(t *testing.T) {
+	t.Run("sets migration counts without panic", func(t *testing.T) {
+		// This should not panic
+		require.NotPanics(t, func() {
+			SetTotalMigrationCounts(5, 3)
+		})
+	})
+
+	t.Run("handles zero counts", func(t *testing.T) {
+		require.NotPanics(t, func() {
+			SetTotalMigrationCounts(0, 0)
+		})
+	})
+
+	t.Run("verifies prometheus metrics are set correctly", func(t *testing.T) {
+		// Reset metrics before test to ensure clean state
+		totalMigrations.Reset()
+		defer func() { totalMigrations.Reset() }()
+
+		// Set migration counts
+		preCount := 15
+		postCount := 8
+		SetTotalMigrationCounts(preCount, postCount)
+
+		// Expected metrics output
+		var expected bytes.Buffer
+		_, err := expected.WriteString(fmt.Sprintf(`
+# HELP registry_database_migrations_total A gauge for the total number of database migrations (applied + pending)
+# TYPE registry_database_migrations_total gauge
+registry_database_migrations_total{migration_type="post_deployment"} %d
+registry_database_migrations_total{migration_type="pre_deployment"} %d
+`, postCount, preCount))
+		require.NoError(t, err)
+
+		// Verify metrics using testutil.GatherAndCompare with default gatherer
+		fullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, totalMigrationsName)
+		err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, fullName)
+		require.NoError(t, err)
+	})
+}

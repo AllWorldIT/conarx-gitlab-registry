@@ -42,6 +42,7 @@ import (
 	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
 	dsmetrics "github.com/docker/distribution/registry/datastore/metrics"
+	"github.com/docker/distribution/registry/datastore/migrations/postmigrations"
 	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/gc"
@@ -590,6 +591,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		if err := app.initializeRowCountCollector(config); err != nil {
 			return nil, fmt.Errorf("failed to initialize database metrics collector: %w", err)
 		}
+
+		if config.Database.Metrics.Enabled {
+			// Set migration count metrics
+			app.setMigrationCountMetric(app.db.Primary())
+		}
 	}
 
 	// configure storage caches
@@ -723,6 +729,26 @@ func (app *App) handleFilesystemLockFile(ctx context.Context, dbLocker, fsLocker
 	}
 
 	return nil
+}
+
+// setMigrationCountMetric sets the migration count metrics
+func (app *App) setMigrationCountMetric(db *datastore.DB) {
+	log := dcontext.GetLogger(app)
+	log.Debug("setting total migration count metrics")
+
+	preMigrator := premigrations.NewMigrator(db)
+	postMigrator := postmigrations.NewMigrator(db)
+
+	// Get total (applied + pending) number of pre-deployment migrations and post-deployment migrations
+	preCount := preMigrator.Count()
+	postCount := postMigrator.Count()
+
+	dsmetrics.SetTotalMigrationCounts(preCount, postCount)
+
+	log.WithFields(dlog.Fields{
+		"total_pre_migrations":  preCount,
+		"total_post_migrations": postCount,
+	}).Info("total migration count metrics set")
 }
 
 var (
