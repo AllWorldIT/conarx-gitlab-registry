@@ -396,6 +396,39 @@ func TestMigrator_HasPending_Yes(t *testing.T) {
 	require.True(t, pending)
 }
 
+func TestMigrator_Count_PendingAndApplied(t *testing.T) {
+	db, err := testutil.NewDBFromEnv()
+	require.NoError(t, err)
+	defer cleanupDB(t, db)
+
+	all := testmigrations.All()
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(all))
+
+	// Apply all except 3 migrations
+	_, err = m.UpN(len(testmigrations.All()) - 3)
+	require.NoError(t, err)
+
+	// Make sure there are some pending migrations
+	hasPending, err := m.HasPending()
+	require.NoError(t, err)
+	require.True(t, hasPending)
+
+	count := m.Count()
+	require.Equal(t, len(testmigrations.All()), count)
+}
+
+func TestMigrator_Count_NoMigrations(t *testing.T) {
+	db, err := testutil.NewDBFromEnv()
+	require.NoError(t, err)
+	defer cleanupDB(t, db)
+
+	// Create migrator with an empty migration source
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(make([]*migrations.Migration, 0)))
+
+	count := m.Count()
+	require.Equal(t, 0, count)
+}
+
 // clenaupOpts provides functional options for cleaning up the database.
 type clenaupOpts func(*datastore.DB)
 

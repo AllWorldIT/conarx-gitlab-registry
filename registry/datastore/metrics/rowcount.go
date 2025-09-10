@@ -155,6 +155,21 @@ func (c *RowCountCollector) registerQueries() {
 		Query:       "SELECT COUNT(*) FROM gc_blob_review_queue",
 		Args:        nil,
 	})
+
+	// Migration count queries for tracking applied migrations
+	c.RegisterQuery(RowCountQuery{
+		Name:        "applied_pre_migrations",
+		Description: "Number of applied pre-deployment migrations",
+		Query:       "SELECT COUNT(*) FROM schema_migrations",
+		Args:        nil,
+	})
+
+	c.RegisterQuery(RowCountQuery{
+		Name:        "applied_post_migrations",
+		Description: "Number of applied post-deployment migrations",
+		Query:       "SELECT COUNT(*) FROM post_deploy_schema_migrations",
+		Args:        nil,
+	})
 }
 
 // Start begins the row count metrics collection process

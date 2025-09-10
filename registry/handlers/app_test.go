@@ -1124,3 +1124,26 @@ func TestDispatcherGitlab_RepoCacheInitialization(t *testing.T) {
 		})
 	}
 }
+
+func TestApp_initializeMigrationCountMetric(t *testing.T) {
+	ctx := dtestutil.NewContextWithLogger(t)
+
+	t.Run("initializes migration count metrics successfully", func(t *testing.T) {
+		app := &App{
+			Context: ctx,
+		}
+
+		// Create a minimal DB instance for testing
+		// Since the method only uses the DB to create migrators that count files,
+		// we can use a DB with nil sql.DB (the migrators don't actually query the database)
+		testDB := &datastore.DB{
+			DB:  nil, // This is fine since migrators only count migration files
+			DSN: &datastore.DSN{Host: "test", DBName: "test"},
+		}
+
+		// This should not panic and should complete successfully
+		require.NotPanics(t, func() {
+			app.setMigrationCountMetric(testDB)
+		})
+	})
+}
