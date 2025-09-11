@@ -507,6 +507,9 @@ func getSortOrderParams(sortP string) (string, datastore.SortOrder) {
 // using limit (`n`) and last (`last`) query parameters, as in the Docker/OCI Distribution tags list API. `n` is capped
 // to 100 entries by default.
 func (h *repositoryTagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Request) {
+	p := h.Repository.Named().Name()
+	l := log.GetLogger(log.WithContext(h)).WithFields(log.Fields{"path": p})
+
 	filters, err := filterParamsFromRequest(r)
 	if err != nil {
 		h.Errors = append(h.Errors, err)
@@ -517,8 +520,8 @@ func (h *repositoryTagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Req
 	if h.GetRepoCache() != nil {
 		opts = append(opts, datastore.WithRepositoryCache(h.GetRepoCache()))
 	}
-	rStore := datastore.NewRepositoryStore(h.db.Primary(), opts...)
-	p := h.Repository.Named().Name()
+	db := h.db.UpToDateReplica(h.Context, &models.Repository{Path: p})
+	rStore := datastore.NewRepositoryStore(db, opts...)
 	repo, err := rStore.FindByPath(h.Context, p)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
@@ -612,6 +615,12 @@ func (h *repositoryTagsHandler) HandleGetTags(w http.ResponseWriter, r *http.Req
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
+
+	l.WithFields(log.Fields{
+		"db_host_type": h.db.TypeOf(db),
+		"db_host_addr": db.Address(),
+		"count":        len(tagsList),
+	}).Info("listed repository tags")
 }
 
 type subRepositoriesHandler struct {
@@ -723,7 +732,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 
 	// this endpoint is only available on a registry that utilizes the redis cache,
 	// we make sure we fail with a 404 and detailing a missing dependecy error if no redis cache is found
-	if h.App.redisCache == nil {
+	if !h.App.dualRedisCache.IsPrimaryCacheEnabled() {
 		detail := v1.MissingServerDependencyTypeErrorDetail("redis")
 		h.Errors = append(h.Errors, v1.ErrorCodeNotImplemented.WithDetail(detail))
 		return
@@ -800,7 +809,7 @@ func (h *repositoryHandler) RenameRepository(w http.ResponseWriter, r *http.Requ
 		isPathOriginRepo: renameOriginRepo,
 	}
 
-	renamed, err := handleRenameStoreOperation(h.Context, w, rsp, h.App.redisCache, h.db.Primary())
+	renamed, err := handleRenameStoreOperation(h.Context, w, rsp, h.App.dualRedisCache, h.db.Primary())
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
@@ -997,7 +1006,7 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 		_, isRegistryWrite := writeMethods[r.Method]
 		checkOngoingRename := isRegistryWrite && feature.OngoingRenameCheck.Enabled()
 
-		if !checkOngoingRename || !h.useDatabase || h.App.redisCache == nil {
+		if !checkOngoingRename || !h.useDatabase || !h.App.dualRedisCache.IsPrimaryCacheEnabled() {
 			handler.ServeHTTP(w, r)
 			return
 		}
@@ -1015,7 +1024,7 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 		}
 
 		if strings.HasPrefix(repo, projectPath+"/") || (repo == projectPath) {
-			plStore, err := datastore.NewProjectLeaseStore(datastore.NewCentralProjectLeaseCache(h.App.redisCache))
+			plStore, err := datastore.NewProjectLeaseStore(datastore.NewCentralProjectLeaseCache(h.App.dualRedisCache))
 			// prevent the request from proceeding if we cannot gain access to the lease store
 			if err != nil {
 				l.WithError(err).Error("ongoing rename check: failed to instantiate project lease store")
@@ -1150,7 +1159,7 @@ type renameStoreParams struct {
 }
 
 // handleRenameStoreOperation procures the necessary lease on repositories, executes the rename request in our datastore and writes the appropriate response headers.
-func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo renameStoreParams, cache *iredis.Cache, db *datastore.DB) (bool, error) {
+func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo renameStoreParams, cache iredis.CacheInterface, db *datastore.DB) (bool, error) {
 	// create a repository lease store
 	var (
 		opts      []datastore.RepositoryLeaseStoreOption

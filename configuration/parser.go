@@ -200,6 +200,11 @@ func customSplit(pathStr string) []string {
 		"AUTH_PROVIDER_X509_CERT_URL": "xa26",
 		"CLIENT_X509_CERT_URL":        "xa27",
 		"PROJECT_ID":                  "xa28",
+
+		// URLCache middleware parameters with underscores
+		"MIN_URL_VALIDITY":     "xa29",
+		"DEFAULT_URL_VALIDITY": "xa30",
+		"DRY_RUN":              "xa31",
 	}
 
 	// Sort keys by length in descending order to ensure longer matches are replaced first

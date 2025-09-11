@@ -18,7 +18,7 @@ type CloudfrontMiddlewareSuite struct {
 
 func (s *CloudfrontMiddlewareSuite) TestNoConfig() {
 	options := make(map[string]any)
-	_, err := newCloudFrontStorageMiddleware(nil, options)
+	_, _, err := newCloudFrontStorageMiddleware(nil, options)
 	require.ErrorContains(s.T(), err, "no baseurl provided")
 }
 
@@ -51,7 +51,7 @@ pZeMRablbPQdp8/1NyIwimq1VlG0ohQ4P6qhW7E09ZMC
 
 	options["privatekey"] = file.Name()
 	options["keypairid"] = "test"
-	storageDriver, err := newCloudFrontStorageMiddleware(nil, options)
+	storageDriver, _, err := newCloudFrontStorageMiddleware(nil, options)
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), storageDriver, "Driver couldnt be initialized")
 }

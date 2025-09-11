@@ -29,10 +29,18 @@ const (
 	matchTypeIP    = "ip"
 	matchTypeIPKey = `registry:api:{rate-limit:ip:%s}`
 
-	headerXRateLimitRemaining  = "X-RateLimit-Remaining"
-	headerXRateLimitWarning    = "X-RateLimit-Warning"
-	headerXRateLimitPercentage = "X-RateLimit-Percentage"
-	headerRetryAfter           = "Retry-After"
+	// Draft IETF header definitions (draft-ietf-httpapi-ratelimit-headers-07)
+	// https://www.ietf.org/archive/id/draft-ietf-httpapi-ratelimit-headers-07.html
+	headerRateLimit       = "RateLimit"
+	headerRateLimitFormat = "limit=%d, remaining=%d, reset=%d"
+	headerRateLimitPolicy = "RateLimit-Policy"
+	// Policy format example: 100;w=60 means 100 requests in a 60 seconds window
+	headerRateLimitPolicyFormat = "%d;w=%d"
+	headerRetryAfter            = "Retry-After"
+	// Legacy headers X-RateLimit-* headers
+	headerXRateLimitLimit     = "X-RateLimit-Limit"
+	headerXRateLimitRemaining = "X-RateLimit-Remaining"
+	headerXRateLimitReset     = "X-RateLimit-Reset"
 
 	IPV6PrefixLength = 64
 )
@@ -204,34 +212,20 @@ func (app *App) rateLimiterMiddleware(next http.Handler) http.Handler {
 // Returns true if the request was blocked
 func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limiter RateLimiter, l dcontext.Logger) bool {
 	cfg := limiter.Config()
-	// Get the rate limit key based on match type
+
 	key, ok := getRateLimitKey(r, cfg.Match.Type, l)
 	if !ok {
-		return false // Skip this limiter
+		return false
 	}
 
-	// Check if request is allowed by this limiter
 	result, err := limiter.Allowed(r.Context(), key)
 	if err != nil {
 		serveErrorJSON(w, err, ctx, l)
 		return true // Block the request on error
 	}
 
-	// Always set basic rate limit headers
-	w.Header().Set(headerXRateLimitRemaining, fmt.Sprintf("%d", result.Remaining))
-
-	// Check if retry after should be set
-	if result.RetryAfter.Seconds() > 0 {
-		w.Header().Set(headerRetryAfter, fmt.Sprintf("%f", result.RetryAfter.Seconds()))
-	}
-
-	// Check warning threshold
-	thresholdReached, usagePercentage := checkWarningThreshold(result, cfg, l)
-	if thresholdReached {
-		// Set warning headers when threshold is reached
-		w.Header().Set(headerXRateLimitWarning, "true")
-		w.Header().Set(headerXRateLimitPercentage, fmt.Sprintf("%0.2f", usagePercentage*100))
-	}
+	checkWarningThreshold(result, cfg, l)
+	writeRateLimiterHeaders(w, result, limiter)
 
 	// Check if rate limit exceeded
 	if result.Allowed <= 0 {
@@ -239,11 +233,38 @@ func processLimiter(ctx *Context, w http.ResponseWriter, r *http.Request, limite
 
 		if !cfg.LogOnly && cfg.Action.HardAction == "block" {
 			blockRateLimitedRequest(w, r, result, cfg.Match.Type, ctx, l)
-			return true // Request blocked
+			return true
 		}
 	}
 
-	return false // Continue to next limiter
+	return false
+}
+
+// writeRateLimiterHeaders writes the appropriate headers based on the result of the rate limiter
+// it writes to the headerRateLimit, headerRateLimitPolicy and headerXRateLimit* headers
+func writeRateLimiterHeaders(w http.ResponseWriter, result *ratelimiter.Result, rateLimiter RateLimiter) {
+	cfg := rateLimiter.Config()
+
+	// Set legacy X-RateLimit-* headers for backward compatibility
+	w.Header().Set(headerXRateLimitLimit, fmt.Sprintf("%d", cfg.Limit.Rate))
+	w.Header().Set(headerXRateLimitRemaining, fmt.Sprintf("%d", result.Remaining))
+	w.Header().Set(headerXRateLimitReset, fmt.Sprintf("%d", result.Reset))
+
+	// Set draft IETF RateLimit header (draft-ietf-httpapi-ratelimit-headers-07)
+	// Format: limit=<limit>, remaining=<remaining>, reset=<reset>
+	w.Header().Set(headerRateLimit, fmt.Sprintf(headerRateLimitFormat,
+		cfg.Limit.Rate, result.Remaining, result.Reset))
+
+	// Set RateLimit-Policy header
+	// Format: <limit>;w=<window_in_seconds>
+	windowSeconds := int(cfg.Limit.PeriodDuration.Seconds())
+	w.Header().Set(headerRateLimitPolicy, fmt.Sprintf(headerRateLimitPolicyFormat,
+		cfg.Limit.Rate, windowSeconds))
+
+	// Set Retry-After header if rate limit exceeded
+	if result.Allowed <= 0 && result.RetryAfter > 0 {
+		w.Header().Set(headerRetryAfter, fmt.Sprintf("%.0f", result.RetryAfter.Seconds()))
+	}
 }
 
 // getRateLimitKey determines the key to use for rate limiting based on match type
@@ -258,14 +279,13 @@ func getRateLimitKey(r *http.Request, matchType string, l dcontext.Logger) (stri
 }
 
 // checkWarningThreshold checks if warning threshold is reached and logs appropriately
-// Returns true if the warning threshold was reached
-func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limiter, l dcontext.Logger) (bool, float64) {
+func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limiter, l dcontext.Logger) {
 	warnThreshold := cfg.Action.WarnThreshold
 	// Special case for threshold 0.0 - no warnings needed
 	if warnThreshold <= 0 {
 		// Don't log warnings when threshold is 0, but still return true
 		// for rate-limited responses so headers get set
-		return result.Allowed <= 0, 0
+		return
 	}
 
 	// Calculate usage percentage based on the GCRA algorithm behavior
@@ -309,11 +329,7 @@ func checkWarningThreshold(result *ratelimiter.Result, cfg *configuration.Limite
 		default:
 			logger.Debug("rate_limiter reached threshold but no action will be taken")
 		}
-
-		return true, usagePercentage
 	}
-
-	return false, usagePercentage
 }
 
 // blockRateLimitedRequest handles blocking a request that exceeded rate limits

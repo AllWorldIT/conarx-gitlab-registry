@@ -21,7 +21,6 @@ import (
 	"github.com/docker/distribution/registry/datastore/migrations/postmigrations"
 	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/storage"
-	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	"github.com/docker/distribution/version"
 	"github.com/docker/libtrust"
@@ -71,6 +70,7 @@ func init() {
 	ImportCmd.Flags().BoolVarP(&importCommonBlobs, "step-three", "3", false, "perform step three of a multi-step import: alias for `common-blobs`")
 	ImportCmd.Flags().BoolVarP(&logToSTDOUT, "log-to-stdout", "l", false, "write detailed log to std instead of showing progress bars")
 	ImportCmd.Flags().BoolVarP(&dynamicMediaTypes, "dynamic-media-types", "m", true, "record unknown media types during import")
+	ImportCmd.Flags().BoolVarP(&stats, "import-statistics", "i", true, "record import statistics for service ping")
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
 
@@ -106,6 +106,7 @@ var (
 	logToSTDOUT          bool
 	dynamicMediaTypes    bool
 	maxBBMJobRetry       *int
+	stats                bool
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -198,8 +199,6 @@ var GCCmd = &cobra.Command{
 		if v, ok := (parameters[parallelwalkKey]).(bool); ok && v {
 			maxParallelManifestGets = 10
 		}
-
-		parameters[driver.ParamLogger] = dcontext.GetLogger(ctx)
 
 		driver, err := factory.Create(config.Storage.Type(), parameters)
 		if err != nil {
@@ -614,8 +613,6 @@ var ImportCmd = &cobra.Command{
 			logrus.Info("the 'parallelwalk' configuration parameter has been disabled")
 		}
 
-		parameters[driver.ParamLogger] = dcontext.GetLogger(ctx)
-
 		driver, err := factory.Create(config.Storage.Type(), parameters)
 		if err != nil {
 			return fmt.Errorf("failed to construct %s driver: %w", config.Storage.Type(), err)
@@ -671,6 +668,9 @@ var ImportCmd = &cobra.Command{
 		}
 		if !logToSTDOUT {
 			opts = append(opts, datastore.WithProgressBar)
+		}
+		if stats {
+			opts = append(opts, datastore.WithImportStatsTracking(driver.Name()))
 		}
 
 		err = os.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(dynamicMediaTypes))

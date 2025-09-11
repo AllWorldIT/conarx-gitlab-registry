@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guregu/null/v6"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -301,34 +302,36 @@ type ImportStatistics struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// Total import runtime
-	StartedAt  time.Time    `json:"started_at"`
-	FinishedAt sql.NullTime `json:"finished_at,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+	//revive:disable:struct-tag
+	FinishedAt null.Time `json:"finished_at,omitzero"`
 
 	// Pre-import step
-	PreImport           bool           `json:"pre_import"`
-	PreImportStartedAt  sql.NullTime   `json:"pre_import_started_at,omitempty"`
-	PreImportFinishedAt sql.NullTime   `json:"pre_import_finished_at,omitempty"`
-	PreImportError      sql.NullString `json:"pre_import_error,omitempty"`
+	PreImport           bool        `json:"pre_import"`
+	PreImportStartedAt  null.Time   `json:"pre_import_started_at,omitzero"`
+	PreImportFinishedAt null.Time   `json:"pre_import_finished_at,omitzero"`
+	PreImportError      null.String `json:"pre_import_error,omitzero"`
 
 	// Tag import step tracking
-	TagImport           bool           `json:"tag_import"`
-	TagImportStartedAt  sql.NullTime   `json:"tag_import_started_at,omitempty"`
-	TagImportFinishedAt sql.NullTime   `json:"tag_import_finished_at,omitempty"`
-	TagImportError      sql.NullString `json:"tag_import_error,omitempty"`
+	TagImport           bool        `json:"tag_import"`
+	TagImportStartedAt  null.Time   `json:"tag_import_started_at,omitzero"`
+	TagImportFinishedAt null.Time   `json:"tag_import_finished_at,omitzero"`
+	TagImportError      null.String `json:"tag_import_error,omitzero"`
 
 	// Blob import step tracking
-	BlobImport           bool           `json:"blob_import"`
-	BlobImportStartedAt  sql.NullTime   `json:"blob_import_started_at,omitempty"`
-	BlobImportFinishedAt sql.NullTime   `json:"blob_import_finished_at,omitempty"`
-	BlobImportError      sql.NullString `json:"blob_import_error,omitempty"`
+	BlobImport           bool        `json:"blob_import"`
+	BlobImportStartedAt  null.Time   `json:"blob_import_started_at,omitzero"`
+	BlobImportFinishedAt null.Time   `json:"blob_import_finished_at,omitzero"`
+	BlobImportError      null.String `json:"blob_import_error,omitzero"`
 
 	// Final counts
 	RepositoriesCount int64 `json:"repositories_count"`
 	TagsCount         int64 `json:"tags_count"`
 	ManifestsCount    int64 `json:"manifests_count"`
-	BlobsCount        int64 `json:"blobs_count"`
-	BlobsSizeBytes    int64 `json:"blobs_size_bytes"`
+	BlobsCount        int64 `json:"blobs_count,omitzero"`
+	BlobsSizeBytes    int64 `json:"blobs_size_bytes,omitzero"`
 
+	//revive:enable:struct-tag
 	// General info
 	StorageDriver string `json:"storage_driver"`
 }

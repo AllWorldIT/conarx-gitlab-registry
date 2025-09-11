@@ -3,13 +3,13 @@
 package datastore_test
 
 import (
-	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
+	"github.com/guregu/null/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,19 +70,19 @@ func TestImportStatisticsStore_Create_AllFields(t *testing.T) {
 
 	stats := &models.ImportStatistics{
 		StartedAt:            preStart,
-		FinishedAt:           sql.NullTime{Time: finished, Valid: true},
+		FinishedAt:           null.NewTime(finished, true),
 		PreImport:            true,
-		PreImportStartedAt:   sql.NullTime{Time: preStart, Valid: true},
-		PreImportFinishedAt:  sql.NullTime{Time: preFinish, Valid: true},
-		PreImportError:       sql.NullString{String: preError, Valid: true},
+		PreImportStartedAt:   null.NewTime(preStart, true),
+		PreImportFinishedAt:  null.NewTime(preFinish, true),
+		PreImportError:       null.NewString(preError, true),
 		TagImport:            true,
-		TagImportStartedAt:   sql.NullTime{Time: tagStart, Valid: true},
-		TagImportFinishedAt:  sql.NullTime{Time: tagFinish, Valid: true},
-		TagImportError:       sql.NullString{String: tagError, Valid: true},
+		TagImportStartedAt:   null.NewTime(tagStart, true),
+		TagImportFinishedAt:  null.NewTime(tagFinish, true),
+		TagImportError:       null.NewString(tagError, true),
 		BlobImport:           true,
-		BlobImportStartedAt:  sql.NullTime{Time: blobStart, Valid: true},
-		BlobImportFinishedAt: sql.NullTime{Time: blobFinish, Valid: true},
-		BlobImportError:      sql.NullString{String: blobError, Valid: true},
+		BlobImportStartedAt:  null.NewTime(blobStart, true),
+		BlobImportFinishedAt: null.NewTime(blobFinish, true),
+		BlobImportError:      null.NewString(blobError, true),
 		RepositoriesCount:    42,
 		TagsCount:            150,
 		ManifestsCount:       75,
@@ -168,19 +168,19 @@ func TestImportStatisticsStore_FindByID_WithCompleteData(t *testing.T) {
 
 	original := &models.ImportStatistics{
 		StartedAt:            preStart,
-		FinishedAt:           sql.NullTime{Time: finished, Valid: true},
+		FinishedAt:           null.NewTime(finished, true),
 		PreImport:            true,
-		PreImportStartedAt:   sql.NullTime{Time: preStart, Valid: true},
-		PreImportFinishedAt:  sql.NullTime{Time: preFinish, Valid: true},
-		PreImportError:       sql.NullString{String: preError, Valid: true},
+		PreImportStartedAt:   null.NewTime(preStart, true),
+		PreImportFinishedAt:  null.NewTime(preFinish, true),
+		PreImportError:       null.NewString(preError, true),
 		TagImport:            true,
-		TagImportStartedAt:   sql.NullTime{Time: tagStart, Valid: true},
-		TagImportFinishedAt:  sql.NullTime{Time: tagFinish, Valid: true},
-		TagImportError:       sql.NullString{String: tagError, Valid: true},
+		TagImportStartedAt:   null.NewTime(tagStart, true),
+		TagImportFinishedAt:  null.NewTime(tagFinish, true),
+		TagImportError:       null.NewString(tagError, true),
 		BlobImport:           true,
-		BlobImportStartedAt:  sql.NullTime{Time: blobStart, Valid: true},
-		BlobImportFinishedAt: sql.NullTime{Time: blobFinish, Valid: true},
-		BlobImportError:      sql.NullString{String: blobError, Valid: true},
+		BlobImportStartedAt:  null.NewTime(blobStart, true),
+		BlobImportFinishedAt: null.NewTime(blobFinish, true),
+		BlobImportError:      null.NewString(blobError, true),
 		RepositoriesCount:    100,
 		TagsCount:            1000,
 		ManifestsCount:       500,
@@ -372,19 +372,19 @@ func TestImportStatisticsStore_CreateWithNilOptionalFields(t *testing.T) {
 	// Create record with minimal required fields and invalid optional fields
 	stats := &models.ImportStatistics{
 		StartedAt:            time.Now(),
-		FinishedAt:           sql.NullTime{Valid: false},
+		FinishedAt:           null.NewTime(time.Time{}, false),
 		PreImport:            true,
-		PreImportStartedAt:   sql.NullTime{Valid: false},
-		PreImportFinishedAt:  sql.NullTime{Valid: false},
-		PreImportError:       sql.NullString{Valid: false},
+		PreImportStartedAt:   null.NewTime(time.Time{}, false),
+		PreImportFinishedAt:  null.NewTime(time.Time{}, false),
+		PreImportError:       null.NewString("", false),
 		TagImport:            false,
-		TagImportStartedAt:   sql.NullTime{Valid: false},
-		TagImportFinishedAt:  sql.NullTime{Valid: false},
-		TagImportError:       sql.NullString{Valid: false},
+		TagImportStartedAt:   null.NewTime(time.Time{}, false),
+		TagImportFinishedAt:  null.NewTime(time.Time{}, false),
+		TagImportError:       null.NewString("", false),
 		BlobImport:           false,
-		BlobImportStartedAt:  sql.NullTime{Valid: false},
-		BlobImportFinishedAt: sql.NullTime{Valid: false},
-		BlobImportError:      sql.NullString{Valid: false},
+		BlobImportStartedAt:  null.NewTime(time.Time{}, false),
+		BlobImportFinishedAt: null.NewTime(time.Time{}, false),
+		BlobImportError:      null.NewString("", false),
 		RepositoriesCount:    0,
 		TagsCount:            0,
 		ManifestsCount:       0,

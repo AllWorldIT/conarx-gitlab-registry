@@ -74,6 +74,11 @@ The `--dynamic-media-types` option allows unknown media types to be recorded to
 the database during import. This option prevents rare media types from stopping
 the import. Defaults to `true`.
 
+#### Import Statistics
+
+The `--import-statistics` options allows the import to collect and store statistics
+to provide to service ping. Defaults to `true`.
+
 ## Prerequisites
 
 ### Create Database

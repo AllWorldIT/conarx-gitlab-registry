@@ -19,7 +19,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/benbjohnson/clock"
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/internal"
 	dstorage "github.com/docker/distribution/registry/storage"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
@@ -30,6 +30,7 @@ import (
 	"github.com/docker/distribution/version"
 	sloglogrus "github.com/samber/slog-logrus/v2"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/http2"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"
@@ -79,7 +80,6 @@ func init() {
 
 // driverParameters is a struct that encapsulates all the driver parameters after all values have been set
 type driverParameters struct {
-	logger        dcontext.Logger
 	bucket        string
 	email         string
 	privateKey    []byte
@@ -141,6 +141,30 @@ type baseEmbed struct {
 
 type request func() error
 
+func ShouldRetry(err error) bool {
+	return shouldRetryImpl(true, err)
+}
+
+// shouldRetryImpl function determines if the request to GCS should be retried.
+// The interface used by ShouldRetry func is determined by 3rd party package,
+// so we wrap the function in wrapper that passes correct retry type.
+func shouldRetryImpl(nativeRetry bool, err error) bool {
+	metrics.StorageBackendRetry(nativeRetry)
+
+	// Context cancelation/expiry is fatal, do not try to retry:
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	// NOTE(prozlach): http2 stream errors are also retryable
+	var streamError http2.StreamError
+	if errors.As(err, &streamError) {
+		return true
+	}
+
+	return storage.ShouldRetry(err)
+}
+
 func retry(req request) error {
 	backoff := time.Second
 	var err error
@@ -150,17 +174,12 @@ func retry(req request) error {
 			return nil
 		}
 
-		// Context cancelation/expiry is fatal, do not try to retry:
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if !shouldRetryImpl(false, err) {
 			return err
 		}
 
 		gErr := new(googleapi.Error)
-		if !errors.As(err, &gErr) || (gErr.Code != http.StatusTooManyRequests && gErr.Code < http.StatusInternalServerError) {
-			return err
-		}
-
-		if gErr.Code == http.StatusTooManyRequests {
+		if errors.As(err, &gErr) && gErr.Code == http.StatusTooManyRequests {
 			metrics.StorageRatelimit()
 		}
 
@@ -284,8 +303,6 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 		return nil, fmt.Errorf("maxconcurrency config error: %s", err)
 	}
 
-	logger := parameters[storagedriver.ParamLogger].(dcontext.Logger)
-
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
 	if useNext {
 		debugLogging := false
@@ -297,16 +314,20 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 			}
 		}
 		if debugLogging {
-			// NOTE(prozlach): Casting directly to logrus.Entry is a shortcut here,
-			// as we require Logrus logger for the adapter. In theory we should be
-			// using the context.Logger interface instead of peeking into the
-			// implementation, but this requies a deeper refactoring.
+			// NOTE(prozlach): Casting directly to logrus.Entry is a shortcut
+			// here, as we require Logrus logger for the adapter. In theory we
+			// should be using the log.Logger interface instead of peeking into
+			// the implementation, but this requies a deeper refactoring.
 			//
 			// Hopefully we will switch to slog/zap at some point and this will
 			// become non-issue.
-			logrusEntry, ok := logger.(*logrus.Entry)
-			if !ok {
-				return nil, fmt.Errorf("debug logging requires logrus logger, got %T", logger)
+			logrusEntry, err := log.ToLogrusEntry(
+				log.GetLogger().WithFields(log.Fields{
+					"component": "registry.storage.gcs_next.internal",
+				}),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("converting logger to logrus.Entry: %w", err)
 			}
 			slogger := slog.New(
 				sloglogrus.Option{
@@ -321,7 +342,7 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 			// Only set the environment variable if it's not already set
 			// nolint: revive // max-control-nesting
 			if existingLevel := os.Getenv("GOOGLE_SDK_GO_LOGGING_LEVEL"); existingLevel != "" {
-				logger.WithFields(logrus.Fields{
+				log.GetLogger().WithFields(logrus.Fields{
 					"existing_value":  existingLevel,
 					"requested_value": "debug",
 				}).Warn("GOOGLE_SDK_GO_LOGGING_LEVEL environment variable is already set, not overriding")
@@ -362,7 +383,6 @@ func parseParameters(parameters map[string]any, useNext bool) (*driverParameters
 	}
 
 	return &driverParameters{
-		logger:         logger,
 		bucket:         fmt.Sprint(bucket),
 		rootDirectory:  fmt.Sprint(rootDirectory),
 		email:          jwtConf.Email,

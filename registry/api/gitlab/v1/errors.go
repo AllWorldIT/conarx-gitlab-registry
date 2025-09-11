@@ -74,7 +74,7 @@ var ErrorCodeNotImplemented = errcode.Register(errGroup, errcode.ErrorDescriptor
 	Value:          "NOT_IMPLEMENTED",
 	Message:        "operation not available",
 	Description:    "The requested operation is not available",
-	HTTPStatusCode: http.StatusNotFound,
+	HTTPStatusCode: http.StatusNotImplemented,
 })
 
 // ErrorCodeUnknownProjectPath is returned when a project path could not be found for a repository.

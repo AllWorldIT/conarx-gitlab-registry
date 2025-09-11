@@ -135,11 +135,15 @@ type App struct {
 	manifestRefLimit         int
 	manifestPayloadSizeLimit int
 
+	// dualRedisCache provides dual-cache functionality for gradual Redis cluster migration.
+	// https://gitlab.com/gitlab-org/container-registry/-/issues/1576.
+	dualRedisCache *iredis.DualCache
+
 	// redisCache is the abstraction for manipulating cached data on Redis.
-	redisCache *iredis.Cache
+	redisCache iredis.CacheInterface
 
 	// redisLBCache is the abstraction for the database load balancing Redis cache.
-	redisLBCache *iredis.Cache
+	redisLBCache iredis.CacheInterface
 
 	// rateLimiters expects a slice of ordered limiters by precedence
 	// see configureRateLimiters for implementation details.
@@ -161,7 +165,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		Config:  config,
 		Context: ctx,
 
-		shutdownFuncs: make([]shutdownFunc, 0),
+		shutdownFuncs:  make([]shutdownFunc, 0),
+		dualRedisCache: iredis.NewDualCache(nil, nil),
 	}
 
 	if err := app.initMetaRouter(); err != nil {
@@ -174,7 +179,6 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	}
 
 	log := dcontext.GetLogger(app)
-	storageParams[storagedriver.ParamLogger] = log
 
 	var err error
 	app.driver, err = factory.Create(config.Storage.Type(), storageParams)
@@ -216,11 +220,6 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		return nil, err
 	}
 
-	app.driver, err = applyStorageMiddleware(app.driver, config.Middleware["storage"])
-	if err != nil {
-		return nil, err
-	}
-
 	if err := app.configureSecret(config); err != nil {
 		return nil, err
 	}
@@ -235,6 +234,27 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// the app from starting.
 		log.WithError(err).Error("failed configuring Redis cache")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+	}
+
+	// Initialize dual cache with primary (redisCache) and standby (nil for now).
+	// Feature flags control dual write behavior and read routing for migration.
+	var dualRedisOpts []iredis.DualCacheOption
+	if feature.DualCacheWrite.Enabled() {
+		dualRedisOpts = append(dualRedisOpts, iredis.WithEnableDualWrite())
+	}
+
+	if feature.DualCacheReadFromStandBy.Enabled() {
+		dualRedisOpts = append(dualRedisOpts, iredis.WithReadFromStandBy())
+	}
+
+	app.dualRedisCache = iredis.NewDualCache(app.redisCache, nil, dualRedisOpts...)
+
+	// Redis rate-limiter will be disabled on GitLab.com environments where it is currently enabled (`gstg` and `pre`) so we don't need to support it in the dualCache.
+	// https://gitlab.com/groups/gitlab-com/gl-infra/data-access/durability/-/epics/24#note_2599994238
+
+	err = app.applyStorageMiddleware(config.Middleware["storage"])
+	if err != nil {
+		return nil, err
 	}
 
 	if err := app.configureRedisRateLimiter(ctx, config); err != nil {
@@ -426,7 +446,18 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 			if err := app.configureRedisLoadBalancingCache(ctx, config); err != nil {
 				return nil, err
 			}
-			dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisLBCache)))
+
+			// Inject redisLBCache as the standby cache to enable dual writes.
+			// When DualCacheWrite is enabled, writes will go to both redisCache (primary) and redisLBCache (standby).
+			app.dualRedisCache.InjectStandByCache(app.redisLBCache)
+			if feature.DualCacheSwapInstances.Enabled() {
+				// Promote standby (redisLBCache) to primary role for all cache operations.
+				app.dualRedisCache.UseStandByAsPrimary()
+			}
+
+			if app.redisLBCache != nil {
+				dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisLBCache)))
+			}
 
 			// service discovery takes precedence over fixed hosts
 			if config.Database.LoadBalancing.Record != "" {
@@ -1560,8 +1591,8 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 		}
 
 		if ctx.useDatabase {
-			if app.redisCache != nil {
-				ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
+			if app.dualRedisCache.IsPrimaryCacheEnabled() {
+				ctx.repoCache = datastore.NewCentralRepositoryCache(app.dualRedisCache)
 			} else {
 				ctx.repoCache = datastore.NewSingleRepositoryCache()
 			}
@@ -1616,8 +1647,8 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 		}
 
 		// Initialize repository cache
-		if app.redisCache != nil {
-			ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
+		if app.dualRedisCache.IsPrimaryCacheEnabled() {
+			ctx.repoCache = datastore.NewCentralRepositoryCache(app.dualRedisCache)
 		} else {
 			ctx.repoCache = datastore.NewSingleRepositoryCache()
 		}
@@ -2025,16 +2056,80 @@ func applyRepoMiddleware(ctx context.Context, repository distribution.Repository
 	return repository, nil
 }
 
-// applyStorageMiddleware wraps a storage driver with the configured middlewares
-func applyStorageMiddleware(driver storagedriver.StorageDriver, middlewares []configuration.Middleware) (storagedriver.StorageDriver, error) {
+func (app *App) applyStorageMiddleware(middlewares []configuration.Middleware) error {
+	// Make sure that urlcache middleware goes after any CDN middlewares
+	middlewares = reorderMiddlewares(middlewares)
+
+	cdnMiddlewareAlreadyApplied := false
+	urlCacheMiddlewareAlreadyApplied := false
+
 	for _, mw := range middlewares {
-		smw, err := storagemiddleware.Get(mw.Name, mw.Options, driver)
-		if err != nil {
-			return nil, fmt.Errorf("unable to configure storage middleware (%s): %v", mw.Name, err)
+		switch mw.Name {
+		case "urlcache":
+			if urlCacheMiddlewareAlreadyApplied {
+				return fmt.Errorf("urlcache storage middleware can only be applied once")
+			}
+			urlCacheMiddlewareAlreadyApplied = true
+			mw.Options["_redisCache"] = app.redisCache
+		case "cloudfront", "googlecdn", "redirect":
+			if cdnMiddlewareAlreadyApplied {
+				return fmt.Errorf("using more than one storage CDN middleware is not supported")
+			}
+			cdnMiddlewareAlreadyApplied = true
 		}
-		driver = smw
+		smw, stopF, err := storagemiddleware.Get(mw.Name, mw.Options, app.driver)
+		if err != nil {
+			return fmt.Errorf("unable to configure storage middleware (%s): %v", mw.Name, err)
+		}
+		if stopF != nil {
+			app.registerShutdownFunc(
+				func(_ *App, errCh chan error, l dlog.Logger) {
+					l.Info("shutting down storage middleware")
+					errCh <- stopF()
+				},
+			)
+		}
+		app.driver = smw
 	}
-	return driver, nil
+	return nil
+}
+
+// reorderMiddlewares ensures urlcache middleware comes after CDN middlewares
+func reorderMiddlewares(middlewares []configuration.Middleware) []configuration.Middleware {
+	urlCacheIndex := -1
+	lastCDNIndex := -1
+
+	// Find positions of urlcache and last CDN middleware
+	for i, mw := range middlewares {
+		switch mw.Name {
+		case "urlcache":
+			urlCacheIndex = i
+		case "cloudfront", "googlecdn", "redirect":
+			lastCDNIndex = i
+		}
+	}
+
+	// If urlcache is not found or no CDN middleware exists or urlcache is
+	// already after CDN middlewares, return as is:
+	if urlCacheIndex == -1 || lastCDNIndex == -1 || urlCacheIndex > lastCDNIndex {
+		return middlewares
+	}
+
+	// Need to reorder: remove urlcache and insert it after the last CDN middleware
+	result := make([]configuration.Middleware, 0, len(middlewares))
+	urlCacheMiddleware := middlewares[urlCacheIndex]
+
+	for i, mw := range middlewares {
+		if i != urlCacheIndex {
+			result = append(result, mw)
+		}
+		// Insert urlcache after the last CDN middleware
+		if i == lastCDNIndex {
+			result = append(result, urlCacheMiddleware)
+		}
+	}
+
+	return result
 }
 
 // uploadPurgeDefaultConfig provides a default configuration for upload

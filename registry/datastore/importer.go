@@ -2,7 +2,6 @@ package datastore
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net"
@@ -23,6 +22,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/storage/driver"
+	"github.com/guregu/null/v6"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -1685,7 +1685,7 @@ func (s *importStats) startImport() {
 // finishImport marks the completion of the entire import process and persists
 // all collected data to the database.
 func (s *importStats) finishImport(ctx context.Context) {
-	s.FinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	s.FinishedAt = null.NewTime(time.Now(), true)
 
 	if err := s.statsStore.Create(ctx, &s.ImportStatistics); err != nil {
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Error("failed to commit import statistics to the database")
@@ -1695,14 +1695,14 @@ func (s *importStats) finishImport(ctx context.Context) {
 // startPreImport marks the beginning of the pre-import phase
 func (s *importStats) startPreImport() {
 	s.PreImport = true
-	s.PreImportStartedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	s.PreImportStartedAt = null.NewTime(time.Now(), true)
 }
 
 // finishPreImport marks the completion of the pre-import phase with counts
 func (s *importStats) finishPreImport(err error) {
-	s.PreImportFinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	s.PreImportFinishedAt = null.NewTime(time.Now(), true)
 	if err != nil {
-		s.PreImportError = sql.NullString{String: err.Error(), Valid: true}
+		s.PreImportError = null.NewString(err.Error(), true)
 	}
 }
 
@@ -1734,7 +1734,7 @@ func (s *importStats) accBlobsSize(i int64) {
 // startTagImport marks the beginning of the tag import phase
 func (s *importStats) startTagImport() {
 	s.TagImport = true
-	s.TagImportStartedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	s.TagImportStartedAt = null.NewTime(time.Now(), true)
 
 	// Record only counts from tag import, overriding counts from the pre import
 	// step, if any.
@@ -1751,23 +1751,23 @@ func (s *importStats) startTagImport() {
 
 // finishTagImport marks the completion of the tag import phase with counts
 func (s *importStats) finishTagImport(err error) {
-	s.TagImportFinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	s.TagImportFinishedAt = null.NewTime(time.Now(), true)
 	if err != nil {
-		s.TagImportError = sql.NullString{String: err.Error(), Valid: true}
+		s.TagImportError = null.NewString(err.Error(), true)
 	}
 }
 
 // startBlobImport marks the beginning of the blob import phase
 func (s *importStats) startBlobImport() {
 	s.BlobImport = true
-	s.BlobImportStartedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	s.BlobImportStartedAt = null.NewTime(time.Now(), true)
 }
 
 // finishBlobImport marks the completion of the blob import phase with blob counts
 func (s *importStats) finishBlobImport(err error) {
-	s.BlobImportFinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
+	s.BlobImportFinishedAt = null.NewTime(time.Now(), true)
 	if err != nil {
-		s.BlobImportError = sql.NullString{String: err.Error(), Valid: true}
+		s.BlobImportError = null.NewString(err.Error(), true)
 	}
 }
 

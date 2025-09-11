@@ -67,6 +67,11 @@ func (v *Schema2Validator) Validate(ctx context.Context, mnfst *schema2.Deserial
 				}
 			}
 		case schema2.MediaTypeManifest, schema1.MediaTypeManifest:
+			// TODO (suleimi): This validation may be unnecessary. The mnfst.References() call above
+			// only returns config and layer descriptors, not the subject field (which was added in
+			// OCI Image Specification v1.1). Since config/layer descriptors cannot have Docker
+			// manifest media types (application/vnd.docker.distribution.manifest.v2+json or
+			// application/vnd.docker.distribution.manifest.v1+json), this check is possibly redundant.
 			var exists bool
 			exists, err = v.manifestExister.Exists(ctx, descriptor.Digest)
 			if err != nil || !exists {

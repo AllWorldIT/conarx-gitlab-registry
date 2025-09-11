@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -32,7 +33,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/ptr"
 	"github.com/benbjohnson/clock"
-	dcontext "github.com/docker/distribution/context"
+	dlog "github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/internal/testutil"
 	rngtestutil "github.com/docker/distribution/testutil"
 	"github.com/stretchr/testify/assert"
@@ -177,7 +178,7 @@ func fetchEnvVarsConfiguration() {
 	}
 }
 
-func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logger) (*common.DriverParameters, error) {
+func fetchDriverConfig(rootDirectory, storageClass string, logger dlog.Logger) (*common.DriverParameters, error) {
 	rawParams := map[string]any{
 		common.ParamAccessKey:                   accessKey,
 		common.ParamSecretKey:                   secretKey,
@@ -198,7 +199,6 @@ func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logge
 		common.ParamParallelWalk:                true,
 		common.ParamObjectOwnership:             objectOwnership,
 		common.ParamChunkSize:                   common.MinChunkSize,
-		storagedriver.ParamLogger:               logger,
 		common.ParamMultipartCopyChunkSize:      common.DefaultMultipartCopyChunkSize,
 		common.ParamMultipartCopyMaxConcurrency: common.DefaultMultipartCopyMaxConcurrency,
 		common.ParamMultipartCopyThresholdSize:  common.DefaultMultipartCopyThresholdSize,
@@ -235,7 +235,7 @@ func fetchDriverConfig(rootDirectory, storageClass string, logger dcontext.Logge
 	return parsedParams, nil
 }
 
-func s3DriverConstructor(rootDirectory, storageClass string, logger dcontext.Logger) (storagedriver.StorageDriver, error) {
+func s3DriverConstructor(rootDirectory, storageClass string, logger dlog.Logger) (storagedriver.StorageDriver, error) {
 	parsedParams, err := fetchDriverConfig(rootDirectory, storageClass, logger)
 	if err != nil {
 		return nil, fmt.Errorf("parsing s3 parameters: %w", err)
@@ -245,7 +245,11 @@ func s3DriverConstructor(rootDirectory, storageClass string, logger dcontext.Log
 }
 
 func s3DriverConstructorT(t *testing.T, rootDirectory, storageClass string) storagedriver.StorageDriver {
-	d, err := s3DriverConstructor(rootDirectory, storageClass, rngtestutil.NewTestLogger(t))
+	d, err := s3DriverConstructor(
+		rootDirectory,
+		storageClass,
+		dlog.GetLogger(dlog.WithTestingTB(t)),
+	)
 	require.NoError(t, err)
 
 	return d
@@ -253,7 +257,7 @@ func s3DriverConstructorT(t *testing.T, rootDirectory, storageClass string) stor
 
 func prefixedS3DriverConstructorT(t *testing.T) storagedriver.StorageDriver {
 	rootDir := t.TempDir()
-	d, err := s3DriverConstructor(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+	d, err := s3DriverConstructor(rootDir, s3.StorageClassStandard, dlog.GetLogger(dlog.WithTestingTB(t)))
 	require.NoError(t, err)
 
 	return d
@@ -281,12 +285,20 @@ func TestS3DriverSuite(t *testing.T) {
 	root := t.TempDir()
 
 	ts := testsuites.NewDriverSuite(
-		dcontext.Background(),
+		dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t))),
 		func() (storagedriver.StorageDriver, error) {
-			return s3DriverConstructor(root, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+			return s3DriverConstructor(
+				root,
+				s3.StorageClassStandard,
+				dlog.GetLogger(dlog.WithTestingTB(t)),
+			)
 		},
 		func() (storagedriver.StorageDriver, error) {
-			return s3DriverConstructor("", s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+			return s3DriverConstructor(
+				"",
+				s3.StorageClassStandard,
+				dlog.GetLogger(dlog.WithTestingTB(t)),
+			)
 		},
 		nil,
 	)
@@ -301,12 +313,20 @@ func BenchmarkS3DriverSuite(b *testing.B) {
 	root := b.TempDir()
 
 	ts := testsuites.NewDriverSuite(
-		dcontext.Background(),
+		dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(b))),
 		func() (storagedriver.StorageDriver, error) {
-			return s3DriverConstructor(root, s3.StorageClassStandard, rngtestutil.NewTestLogger(b))
+			return s3DriverConstructor(
+				root,
+				s3.StorageClassStandard,
+				dlog.GetLogger(dlog.WithTestingTB(b)),
+			)
 		},
 		func() (storagedriver.StorageDriver, error) {
-			return s3DriverConstructor("", s3.StorageClassStandard, rngtestutil.NewTestLogger(b))
+			return s3DriverConstructor(
+				"",
+				s3.StorageClassStandard,
+				dlog.GetLogger(dlog.WithTestingTB(b)),
+			)
 		},
 		nil,
 	)
@@ -340,9 +360,8 @@ func TestS3DriverPathStyle(t *testing.T) {
 
 	// Base configuration that's common across all tests
 	baseParams := map[string]any{
-		"region":                  "us-west-2",
-		"bucket":                  "test-bucket",
-		storagedriver.ParamLogger: rngtestutil.NewTestLogger(t),
+		"region": "us-west-2",
+		"bucket": "test-bucket",
 	}
 
 	testCases := []struct {
@@ -411,9 +430,12 @@ func TestS3DriverPathStyle(t *testing.T) {
 
 			// Generate a signed URL to verify the path style and endpoint behavior
 			testPath := "/test/file.txt"
-			urlStr, err := d.URLFor(dcontext.Background(), testPath, map[string]any{
-				"method": "GET",
-			})
+			urlStr, err := d.URLFor(
+				dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t))),
+				testPath, map[string]any{
+					"method": "GET",
+				},
+			)
 			require.NoError(tt, err, "unable to generate URL")
 
 			// Verify the endpoint
@@ -442,7 +464,7 @@ func TestS3DriverEmptyRootList(t *testing.T) {
 
 	filename := "/test"
 	contents := []byte("contents")
-	ctx := dcontext.Background()
+	ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t)))
 	err := rootedDriver.PutContent(ctx, filename, contents)
 	require.NoError(t, err, "unexpected error creating content")
 	defer rootedDriver.Delete(ctx, filename)
@@ -533,7 +555,7 @@ func TestS3DriverStorageClass(t *testing.T) {
 
 			filename := "/test-" + strings.ToLower(tc.name)
 			contents := []byte("contents")
-			ctx := dcontext.Background()
+			ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t)))
 
 			err := driver.PutContent(ctx, filename, contents)
 			if err != nil {
@@ -549,7 +571,11 @@ func TestS3DriverStorageClass(t *testing.T) {
 			// NOTE(prozlach): Our storage driver does not expose API method that
 			// allows fetching the storage class of the object, we need to create a
 			// native S3 client to do that.
-			parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+			parsedParams, err := fetchDriverConfig(
+				rootDir,
+				s3.StorageClassStandard,
+				dlog.GetLogger(dlog.WithTestingTB(t)),
+			)
 			require.NoError(t, err)
 
 			var storageClass string
@@ -604,7 +630,7 @@ func TestS3DriverOverThousandBlobs(t *testing.T) {
 
 	standardDriver := prefixedS3DriverConstructorT(t)
 
-	ctx := dcontext.Background()
+	ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t)))
 	for i := 0; i < 1005; i++ {
 		filename := "/thousandfiletest/file" + strconv.Itoa(i)
 		contents := []byte("contents")
@@ -622,7 +648,7 @@ func TestS3DriverURLFor(t *testing.T) {
 		t.Skip(skipMsg)
 	}
 
-	ctx := dcontext.Background()
+	ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t)))
 	d := prefixedS3DriverConstructorT(t)
 
 	fp := "/foo"
@@ -729,7 +755,7 @@ func TestS3DriverMoveWithMultipartCopy(t *testing.T) {
 
 	d := prefixedS3DriverConstructorT(t)
 
-	ctx := dcontext.Background()
+	ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t)))
 	sourcePath := "/source"
 	destPath := "/dest"
 
@@ -766,12 +792,16 @@ func TestFlushObjectTwiceChunkSize(t *testing.T) {
 	}
 
 	rootDir := t.TempDir()
-	parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+	parsedParams, err := fetchDriverConfig(
+		rootDir,
+		s3.StorageClassStandard,
+		dlog.GetLogger(dlog.WithTestingTB(t)),
+	)
 	require.NoError(t, err)
 	d, err := newDriverFn(parsedParams)
 	require.NoError(t, err)
 
-	ctx := dcontext.Background()
+	ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t)))
 	destPath := "/" + dtestutil.RandomFilename(64)
 	defer dtestutil.EnsurePathDeleted(ctx, t, d, destPath)
 	t.Logf("destination blob path used for testing: %s", destPath)
@@ -804,7 +834,11 @@ func TestS3DriverClientTransport(t *testing.T) {
 	}
 
 	rootDir := t.TempDir()
-	driverConfig, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+	driverConfig, err := fetchDriverConfig(
+		rootDir,
+		s3.StorageClassStandard,
+		dlog.GetLogger(dlog.WithTestingTB(t)),
+	)
 	require.NoError(t, err)
 
 	var hostport string
@@ -861,7 +895,11 @@ func TestS3DriverClientTransport(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			parsedParams, err := fetchDriverConfig(rootDir, s3.StorageClassStandard, rngtestutil.NewTestLogger(tt))
+			parsedParams, err := fetchDriverConfig(
+				rootDir,
+				s3.StorageClassStandard,
+				dlog.GetLogger(dlog.WithTestingTB(tt)),
+			)
 			require.NoError(tt, err)
 
 			parsedParams.SkipVerify = tc.skipVerify
@@ -873,7 +911,7 @@ func TestS3DriverClientTransport(t *testing.T) {
 			require.NoError(tt, err)
 
 			// Use List operation to trigger an HTTPS request
-			ctx := dcontext.Background()
+			ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(tt)))
 			_, err = driver.List(ctx, "/")
 
 			if tc.shouldFail {
@@ -969,12 +1007,16 @@ func TestWalkEmptyDir(t *testing.T) {
 	}
 
 	rootDirectory := t.TempDir()
-	parsedParams, err := fetchDriverConfig(rootDirectory, s3.StorageClassStandard, rngtestutil.NewTestLogger(t))
+	parsedParams, err := fetchDriverConfig(
+		rootDirectory,
+		s3.StorageClassStandard,
+		dlog.GetLogger(dlog.WithTestingTB(t)),
+	)
 	require.NoError(t, err)
 	driver, err := newDriverFn(parsedParams)
 	require.NoError(t, err)
 
-	ctx := dcontext.Background()
+	ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t)))
 
 	commonDir := "/" + dtestutil.RandomFilenameRange(8, 8)
 	defer dtestutil.EnsurePathDeleted(ctx, t, driver, commonDir)

@@ -17,10 +17,10 @@ func (l logWriterType) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func NewContextWithLogger(t testing.TB) context.Context {
+func NewContextWithLogger(tb testing.TB) context.Context {
 	ctx := context.Background()
 
-	logger := NewTestLogger(t)
+	logger := NewTestLogger(tb)
 	ctx = dcontext.WithLogger(ctx, logger)
 
 	return ctx

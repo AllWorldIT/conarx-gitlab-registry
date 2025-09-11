@@ -15,23 +15,23 @@ package gcs
 import (
 	"bytes"
 	"context"
-	"sync"
-	"sync/atomic"
-
-	// nolint: revive,gosec // imports-blocklist
-	"crypto/md5"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/url"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	// nolint: revive,gosec // imports-blocklist
+
 	"cloud.google.com/go/storage"
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/log"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/hashicorp/go-multierror"
@@ -40,6 +40,8 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 )
+
+var crc32cTable = crc32.MakeTable(crc32.Castagnoli)
 
 // NewNext constructs a new driver
 func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
@@ -51,8 +53,7 @@ func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
 		return nil, fmt.Errorf("invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
 	}
 	d := &driverNext{
-		logger:        params.logger,
-		bucket:        params.storageClient.Bucket(params.bucket),
+		bucket:        params.storageClient.Bucket(params.bucket).Retryer(storage.WithErrorFunc(ShouldRetry)),
 		rootDirectory: rootDirectory,
 		email:         params.email,
 		privateKey:    params.privateKey,
@@ -73,7 +74,6 @@ func NewNext(params *driverParameters) (storagedriver.StorageDriver, error) {
 // driverNext is a storagedriver.StorageDriver implementation backed by GCS
 // Objects are stored at absolute keys in the provided bucket.
 type driverNext struct {
-	logger        dcontext.Logger
 	client        *http.Client
 	bucket        *storage.BucketHandle
 	email         string
@@ -91,12 +91,11 @@ func (*driverNext) Name() string {
 // This should primarily be used for small objects.
 func (d *driverNext) GetContent(ctx context.Context, path string) ([]byte, error) {
 	name := d.pathToKey(path)
-	var rc io.ReadCloser
-	err := retry(func() error {
-		var err error
-		rc, err = d.bucket.Object(name).NewReader(ctx)
-		return err
-	})
+	// NOTE(prozlach): NewReader is considered idempotent by GCS, hence it is
+	// retried without a limit until context is canceled. The retries
+	// themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
+	rc, err := d.bucket.Object(name).NewReader(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
@@ -115,30 +114,27 @@ func (d *driverNext) GetContent(ctx context.Context, path string) ([]byte, error
 // PutContent stores the []byte content at a location designated by "path".
 // This should primarily be used for small objects.
 func (d *driverNext) PutContent(ctx context.Context, path string, contents []byte) error {
+	// nolint: gosec
+	crc32c := crc32.Checksum(contents, crc32cTable)
+
+	if len(contents) == 0 {
+		d.logger(ctx).WithFields(logrus.Fields{
+			"path":   path,
+			"length": len(contents),
+			"stack":  string(debug.Stack()),
+		}).Info("PutContent called with 0 bytes")
+	}
+
+	// NOTE(prozlach): Custom retry mechanism has a point here, because we want
+	// to override the whole object if it exist and the upload may happen in a
+	// chunked form, so simply `always retring` a single chunk could create
+	// duplicates. By always starting "from begning" we workaround this issue
+	// in a very simple manner at the expense of re-sending whole data.
 	return retry(func() error {
 		wc := d.bucket.Object(d.pathToKey(path)).NewWriter(ctx)
 		wc.ContentType = "application/octet-stream"
-
-		// NOTE(milosgajdos/prozlach): Apparently it's posisble to to upload
-		// 0-byte content to GCS. Setting MD5 on the Writer helps to prevent
-		// presisting that data. If set, the uploaded data is rejected if its
-		// MD5 hash does not match this field. See:
-		// https://pkg.go.dev/cloud.google.com/go/storage#ObjectAttrs
-		// nolint: gosec
-		h := md5.New()
-		_, err := h.Write(contents)
-		if err != nil {
-			return fmt.Errorf("calculating hash: %w", err)
-		}
-		wc.MD5 = h.Sum(nil)
-
-		if len(contents) == 0 {
-			d.logger.WithFields(logrus.Fields{
-				"path":   path,
-				"length": len(contents),
-				"stack":  string(debug.Stack()),
-			}).Info("PutContent called with 0 bytes")
-		}
+		wc.SendCRC32C = true
+		wc.CRC32C = crc32c
 
 		return putContentsCloseNext(wc, contents)
 	})
@@ -186,7 +182,7 @@ func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if offset == r.Attrs.Size {
-		d.logger.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"path":            path,
 			"fileSize":        r.Attrs.Size,
 			"requestedOffset": offset,
@@ -195,42 +191,16 @@ func (d *driverNext) Reader(ctx context.Context, path string, offset int64) (io.
 	return r, nil
 }
 
-func storageDeleteObjectNext(ctx context.Context, bucket *storage.BucketHandle, name string) error {
-	return retry(func() error {
-		return bucket.Object(name).Delete(ctx)
+// logger returns a log.Logger decorated with a key/value pair that uniquely
+// identifies all entries as being emitted by this storage driver  component.
+// Instead of relying on a fixed log.Logger instance, this method allows
+// retrieving and extending a base logger embedded in the input context (if
+// any) to preserve relevant key/value pairs introduced upstream (such as a
+// correlation ID, present when calling from the API handlers).
+func (*driverNext) logger(ctx context.Context) log.Logger {
+	return log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"component": "registry.storage.gcs_next.internal",
 	})
-}
-
-func storageStatObjectNext(ctx context.Context, bucket *storage.BucketHandle, name string) (*storage.ObjectAttrs, error) {
-	var obj *storage.ObjectAttrs
-	err := retry(func() error {
-		var err error
-		obj, err = bucket.Object(name).Attrs(ctx)
-		return err
-	})
-	return obj, err
-}
-
-func storageListObjectsNext(ctx context.Context, bucket *storage.BucketHandle, q *storage.Query) (*storage.ObjectIterator, error) {
-	var objs *storage.ObjectIterator
-	err := retry(func() error {
-		var err error
-		objs = bucket.Objects(ctx, q)
-		return err
-	})
-	return objs, err
-}
-
-func storageCopyObjectNext(ctx context.Context, bucket *storage.BucketHandle, srcName, destName string) (*storage.ObjectAttrs, error) {
-	var obj *storage.ObjectAttrs
-	err := retry(func() error {
-		var err error
-		src := bucket.Object(srcName)
-		dst := bucket.Object(destName)
-		obj, err = dst.CopierFrom(src).Run(ctx)
-		return err
-	})
-	return obj, err
 }
 
 func putContentsCloseNext(wc *storage.Writer, contents []byte) error {
@@ -252,9 +222,21 @@ func putContentsCloseNext(wc *storage.Writer, contents []byte) error {
 	return wc.Close()
 }
 
+// logger returns a log.Logger decorated with a key/value pair that uniquely
+// identifies all entries as being emitted by this storage driver  component.
+// Instead of relying on a fixed log.Logger instance, this method allows
+// retrieving and extending a base logger embedded in the input context (if
+// any) to preserve relevant key/value pairs introduced upstream (such as a
+// correlation ID, present when calling from the API handlers).
+func (w *writerNext) logger() log.Logger {
+	return log.GetLogger(log.WithContext(w.ctx)).WithFields(log.Fields{
+		"component": "registry.storage.gcs_next.writer",
+	})
+}
+
 // putChunkNext either completes upload or submits another chunk.
 func (w *writerNext) putChunkNext(chunk []byte, totalSize int64) (int64, error) {
-	w.logger.WithFields(logrus.Fields{
+	w.logger().WithFields(logrus.Fields{
 		"chunkStart": w.offset,
 		"chunkEnd":   w.offset + int64(len(chunk)) - 1,
 		"chunkSize":  len(chunk),
@@ -343,7 +325,7 @@ func (w *writerNext) putChunkNext(chunk []byte, totalSize int64) (int64, error) 
 			}
 			bytesPut = end - w.offset + 1
 
-			w.logger.WithFields(logrus.Fields{
+			w.logger().WithFields(logrus.Fields{
 				"bytesUploaded": bytesPut,
 				"totalExpected": len(chunk),
 				"rangeHeader":   resp.Header.Get("Range"),
@@ -364,7 +346,6 @@ func (w *writerNext) putChunkNext(chunk []byte, totalSize int64) (int64, error) 
 // at the location designated by "path" after the call to Commit.
 func (d *driverNext) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	w := &writerNext{
-		logger: d.logger,
 		ctx:    ctx,
 		client: d.client,
 		object: d.bucket.Object(d.pathToKey(path)),
@@ -404,8 +385,13 @@ func (d *driverNext) Writer(ctx context.Context, path string, doAppend bool) (st
 // size in bytes and the creation time.
 func (d *driverNext) Stat(ctx context.Context, path string) (storagedriver.FileInfo, error) {
 	var fi storagedriver.FileInfoFields
+
+	// NOTE(prozlach): Attrs is considered idempotent by GCS, hence it is
+	// retried without a limit until context is canceled. The retries
+	// themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 	// try to get as file
-	obj, err := storageStatObjectNext(ctx, d.bucket, d.pathToKey(path))
+	obj, err := d.bucket.Object(d.pathToKey(path)).Attrs(ctx)
 	if err == nil {
 		if obj.ContentType == uploadSessionContentType {
 			return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
@@ -424,13 +410,13 @@ func (d *driverNext) Stat(ctx context.Context, path string) (storagedriver.FileI
 	query := &storage.Query{}
 	query.Prefix = dirpath
 
-	it, err := storageListObjectsNext(ctx, d.bucket, query)
-	if err != nil {
-		return nil, fmt.Errorf("listing objects: %w", err)
-	}
-
+	it := d.bucket.Objects(ctx, query)
+	// NOTE(prozlach): Listing objects is considered idempotent by GCS, hence
+	// it is retried without a limit until context is canceled. The retries
+	// themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 	attrs, err := it.Next()
-	if err == iterator.Done {
+	if errors.Is(err, iterator.Done) {
 		return nil, storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
 	if err != nil {
@@ -459,29 +445,29 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 	}
 	list := make([]string, 0, 64)
 
-	it, err := storageListObjectsNext(ctx, d.bucket, query)
-	if err != nil {
-		return nil, fmt.Errorf("listing objects: %w", err)
-	}
-
+	it := d.bucket.Objects(ctx, query)
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
+		// NOTE(prozlach): Listing objects is considered idempotent by GCS,
+		// hence it is retried without a limit until context is canceled. The
+		// retries themselves are enabled by default.
+		// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
 		if err != nil {
 			return nil, fmt.Errorf("fetching next page from iterator: %w", err)
 		}
 
 		if !attrs.Deleted.IsZero() {
-			d.logger.WithFields(logrus.Fields{
+			d.logger(ctx).WithFields(logrus.Fields{
 				"path":        d.keyToPath(attrs.Name),
 				"deletedTime": attrs.Deleted,
 			}).Debug("Filtered out deleted object from listing due to eventual consistency")
 		}
 
 		if attrs.ContentType == uploadSessionContentType {
-			d.logger.WithFields(logrus.Fields{
+			d.logger(ctx).WithFields(logrus.Fields{
 				"path": d.keyToPath(attrs.Name),
 			}).Debug("Filtered out temporary upload session object from listing")
 		}
@@ -512,7 +498,17 @@ func (d *driverNext) List(ctx context.Context, path string) ([]string, error) {
 // Move moves an object stored at sourcePath to destPath, removing the
 // original object.
 func (d *driverNext) Move(ctx context.Context, sourcePath, destPath string) error {
-	_, err := storageCopyObjectNext(ctx, d.bucket, d.pathToKey(sourcePath), d.pathToKey(destPath))
+	// NOTE(prozlach): Both Delete and Copy operations are conditionally
+	// idempotent, but in our case we do not care - we just want to copy the
+	// original object and then simply remove the old one. Hence we override the
+	// idempotent policy to always retry until the context is canceled. The
+	// retries themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
+	alwaysRetryBucket := d.bucket.Retryer(storage.WithPolicy(storage.RetryAlways))
+
+	src := alwaysRetryBucket.Object(d.pathToKey(sourcePath))
+	dst := alwaysRetryBucket.Object(d.pathToKey(destPath))
+	_, err := dst.CopierFrom(src).Run(ctx)
 	if err != nil {
 		var gerr *googleapi.Error
 		if errors.As(err, &gerr) {
@@ -522,11 +518,11 @@ func (d *driverNext) Move(ctx context.Context, sourcePath, destPath string) erro
 		}
 		return err
 	}
-	err = storageDeleteObjectNext(ctx, d.bucket, d.pathToKey(sourcePath))
+	err = alwaysRetryBucket.Object(d.pathToKey(sourcePath)).Delete(ctx)
 	// if deleting the file fails, log the error, but do not fail; the file was successfully copied,
 	// and the original should eventually be cleaned when purging the uploads folder.
 	if err != nil {
-		d.logger.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"sourcePath":    sourcePath,
 			"destPath":      destPath,
 			"copySucceeded": true,
@@ -542,16 +538,17 @@ func (d *driverNext) listAll(ctx context.Context, prefix string) ([]string, erro
 	query := &storage.Query{}
 	query.Prefix = prefix
 	query.Versions = false
-	it, err := storageListObjectsNext(ctx, d.bucket, query)
-	if err != nil {
-		return nil, fmt.Errorf("listing objects: %w", err)
-	}
 
+	it := d.bucket.Objects(ctx, query)
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
+		// NOTE(prozlach): Listing objects is considered idempotent by GCS,
+		// hence it is retried without a limit until context is canceled. The
+		// retries themselves are enabled by default. Docs:
+		// https://cloud.google.com/storage/docs/retry-strategy#go
 		if err != nil {
 			return nil, fmt.Errorf("fetching next page from iterator: %w", err)
 		}
@@ -567,6 +564,14 @@ func (d *driverNext) listAll(ctx context.Context, prefix string) ([]string, erro
 
 // Delete recursively deletes all objects stored at "path" and its subpaths.
 func (d *driverNext) Delete(ctx context.Context, path string) error {
+	// NOTE(prozlach): Delete operation is conditionally idempotent, but in our
+	// case we do not care - we just want to delete the object. Hence we override
+	// the idempotent policy to always retry until the context is canceled.
+	// The retries themselves are enabled by default.
+	// by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
+	alwaysRetryBucket := d.bucket.Retryer(storage.WithPolicy(storage.RetryAlways))
+
 	prefix := d.pathToDirKey(path)
 	keys, err := d.listAll(ctx, prefix)
 	if err != nil {
@@ -580,7 +585,7 @@ func (d *driverNext) Delete(ctx context.Context, path string) error {
 		// docs:
 		// https://pkg.go.dev/cloud.google.com/go/storage#BucketHandle.Objects
 		for i := len(keys) - 1; i >= 0; i-- {
-			err := storageDeleteObjectNext(ctx, d.bucket, keys[i])
+			err := alwaysRetryBucket.Object(keys[i]).Delete(ctx)
 			// GCS only guarantees eventual consistency, so listAll might return
 			// paths that no longer exist. If this happens, just ignore any not
 			// found error
@@ -590,7 +595,7 @@ func (d *driverNext) Delete(ctx context.Context, path string) error {
 		}
 		return nil
 	}
-	err = storageDeleteObjectNext(ctx, d.bucket, d.pathToKey(path))
+	err = alwaysRetryBucket.Object(d.pathToKey(path)).Delete(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		return storagedriver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
@@ -614,7 +619,7 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(maxDeleteConcurrency)
 
-	d.logger.WithFields(logrus.Fields{
+	d.logger(ctx).WithFields(logrus.Fields{
 		"totalFiles":     len(paths),
 		"maxConcurrency": maxDeleteConcurrency,
 	}).Debug("Starting concurrent file deletion")
@@ -633,7 +638,13 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 			default:
 			}
 
-			err := storageDeleteObjectNext(gctx, d.bucket, d.pathToKey(path))
+			// NOTE(prozlach): Delete operation is conditionally idempotent,
+			// but in our case we do not care - we just want the object to go
+			// away, so we override the idempotent policy to always retry
+			// until the context is canceled. The retries themselves are
+			// enabled by default. Docs:
+			// https://cloud.google.com/storage/docs/retry-strategy#go
+			err := d.bucket.Retryer(storage.WithPolicy(storage.RetryAlways)).Object(d.pathToKey(path)).Delete(gctx)
 			if err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
 				errsMutex.Lock()
 				defer errsMutex.Unlock()
@@ -654,7 +665,7 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 	// multierror var
 	_ = g.Wait()
 
-	d.logger.WithFields(logrus.Fields{
+	d.logger(ctx).WithFields(logrus.Fields{
 		"totalFiles":        len(paths),
 		"successfulDeletes": int(count.Load()),
 		"errors":            errs.Len(),
@@ -665,8 +676,7 @@ func (d *driverNext) DeleteFiles(ctx context.Context, paths []string) (int, erro
 
 // URLFor returns a URL which may be used to retrieve the content stored at
 // the given path, possibly using the given options.
-// Returns ErrUnsupportedMethod if this driver has no privateKey
-func (d *driverNext) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
+func (d *driverNext) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	name := d.pathToKey(path)
 	methodString := http.MethodGet
 	method, ok := options["method"]
@@ -677,7 +687,7 @@ func (d *driverNext) URLFor(_ context.Context, path string, options map[string]a
 		}
 	}
 
-	expiresTime := systemClock.Now().Add(20 * time.Minute)
+	expiresTime := systemClock.Now().Add(storagedriver.DefaultSignedURLExpiry)
 	expires, ok := options["expiry"]
 	if ok {
 		et, ok := expires.(time.Time)
@@ -698,14 +708,14 @@ func (d *driverNext) URLFor(_ context.Context, path string, options map[string]a
 		opts.GoogleAccessID = d.email
 		opts.PrivateKey = d.privateKey
 
-		d.logger.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"path":          path,
 			"method":        methodString,
 			"signingMethod": "service_account_key",
 			"expires":       expiresTime,
 		}).Debug("Generating signed URL with service account credentials")
 	} else {
-		d.logger.WithFields(logrus.Fields{
+		d.logger(ctx).WithFields(logrus.Fields{
 			"path":          path,
 			"method":        methodString,
 			"signingMethod": "instance_profile",
@@ -713,8 +723,9 @@ func (d *driverNext) URLFor(_ context.Context, path string, options map[string]a
 		}).Debug("Generating signed URL with instance profile credentials")
 	}
 
-	// Signing a URL requires credentials authorized to sign a URL. They can be
-	// passed through SignedURLOptions with one of the following options:
+	// NOTE(prozlach): Signing a URL requires credentials authorized to sign a
+	// URL. They can be passed through SignedURLOptions with one of the
+	// following options:
 	//    a. a Google service account private key, obtainable from the Google Developers Console
 	//    b. a Google Access ID with iam.serviceAccounts.signBlob permissions
 	//    c. a SignBytes function implementing custom signing.
@@ -772,7 +783,7 @@ func (w *writerNext) startSessionNext() (uri string, err error) {
 		uri = resp.Header.Get("Location")
 		return nil
 	})
-	w.logger.WithFields(logrus.Fields{
+	w.logger().WithFields(logrus.Fields{
 		"bucket": w.object.BucketName(),
 		"object": w.object.ObjectName(),
 	}).Debug("Created new resumable upload session")
@@ -792,7 +803,6 @@ func (d *driverNext) keyToPath(key string) string {
 }
 
 type writerNext struct {
-	logger dcontext.Logger
 	ctx    context.Context
 	client *http.Client
 	object *storage.ObjectHandle
@@ -824,7 +834,12 @@ func (w *writerNext) Cancel() error {
 	}
 	w.canceled = true
 
-	err := retry(func() error { return w.object.Delete(w.ctx) })
+	// NOTE(prozlach): Delete operation is conditionally idempotent, but in our
+	// case we do not care - we just want to delete the object. Hence we
+	// override the idempotent policy to always retry until the context is
+	// canceled. The retries themselves are enabled by default.
+	// Docs: https://cloud.google.com/storage/docs/retry-strategy#go
+	err := w.object.Retryer(storage.WithPolicy(storage.RetryAlways)).Delete(w.ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil
@@ -874,8 +889,12 @@ func (w *writerNext) Close() error {
 	}
 
 	// commit the writes by updating the upload session
+	crc32c := crc32.Checksum(w.buffer[0:w.buffSize], crc32cTable)
+
 	err = retry(func() error {
 		wc := w.object.NewWriter(w.ctx)
+		wc.SendCRC32C = true
+		wc.CRC32C = crc32c
 		wc.ContentType = uploadSessionContentType
 		wc.Metadata = map[string]string{
 			"Session-URI": w.sessionURI,
@@ -906,8 +925,11 @@ func (w *writerNext) Commit() error {
 
 	// no session started yet just perform a simple upload
 	if w.sessionURI == "" {
+		crc32c := crc32.Checksum(w.buffer[0:w.buffSize], crc32cTable)
 		err := retry(func() error {
 			wc := w.object.NewWriter(w.ctx)
+			wc.SendCRC32C = true
+			wc.CRC32C = crc32c
 			wc.ContentType = "application/octet-stream"
 			return putContentsCloseNext(wc, w.buffer[0:w.buffSize])
 		})
@@ -988,7 +1010,7 @@ func (w *writerNext) Write(p []byte) (int, error) {
 		// * this follows the semantics of Azure and S3 drivers
 		w.size += int64(n)
 		if w.buffSize == int64(cap(w.buffer)) {
-			w.logger.WithFields(logrus.Fields{
+			w.logger().WithFields(logrus.Fields{
 				"path":         w.object.ObjectName(),
 				"bufferSize":   w.buffSize,
 				"totalWritten": w.size,
@@ -1063,7 +1085,7 @@ func (w *writerNext) init() error {
 	w.offset = offset
 	w.size = offset + w.buffSize
 
-	w.logger.WithFields(logrus.Fields{
+	w.logger().WithFields(logrus.Fields{
 		"path":          w.object.ObjectName(),
 		"resumedOffset": offset,
 		"bufferedBytes": w.buffSize,

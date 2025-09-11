@@ -409,7 +409,7 @@ func (d *driver) DeleteFiles(ctx context.Context, paths []string) (int, error) {
 // for specified duration by making use of Azure Storage Shared Access Signatures (SAS).
 // See https://msdn.microsoft.com/en-us/library/azure/ee395415.aspx for more info.
 func (d *driver) URLFor(_ context.Context, path string, options map[string]any) (string, error) {
-	expiresTime := common.SystemClock.Now().UTC().Add(20 * time.Minute) // default expiration
+	expiresTime := common.SystemClock.Now().UTC().Add(storagedriver.DefaultSignedURLExpiry) // default expiration
 	expires, ok := options["expiry"]
 	if ok {
 		t, ok := expires.(time.Time)

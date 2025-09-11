@@ -22,6 +22,36 @@ func (f Feature) Enabled() bool {
 	return env == "true"
 }
 
+// DualCacheWrite enables writing to both primary and standby Redis cache instances.
+// When enabled, all write operations (Set, Delete, MarshalSet, RunScript) will
+// execute on both caches. Standby write failures are logged but don't cause
+// operation failure. This is used during the migration phases of moving redis clusters.
+// https://gitlab.com/gitlab-org/container-registry/-/issues/1576
+var DualCacheWrite = Feature{
+	defaultEnabled: false,
+	EnvVariable:    "REGISTRY_FF_DUAL_CACHE_WRITE",
+}
+
+// DualCacheReadFromStandBy controls which cache instance to use for read operations.
+// When true, reads from standby cache. When false, reads from primary cache.
+// This flag enables switching read traffic during redis cluster migration while maintaining
+// dual writes for consistency.
+// https://gitlab.com/gitlab-org/container-registry/-/issues/1576
+var DualCacheReadFromStandBy = Feature{
+	defaultEnabled: false,
+	EnvVariable:    "REGISTRY_FF_DUAL_CACHE_READ_FROM_STANDBY",
+}
+
+// DualCacheSwapInstances swaps the primary and standby cache roles.
+// When enabled, the standby cache becomes the new primary and vice versa.
+// This is used in the final migration phase to promote the new cache cluster
+// to primary role. After this is done we can disable `DualCacheWrite`.
+// https://gitlab.com/gitlab-org/container-registry/-/issues/1576
+var DualCacheSwapInstances = Feature{
+	defaultEnabled: false,
+	EnvVariable:    "REGISTRY_FF_DUAL_CACHE_SWAP_INSTANCES",
+}
+
 // OngoingRenameCheck is used to check redis for any GitLab projects (i.e base repositories - if exists) that are undergoing a rename.
 // The record to signal that a GitLab project is undergoing a rename is created in redis on a call to `PATCH /gitlab/v1/repositories/<path>/`.
 // This "check" feature is triggered on a "per-repository-write" basis, meaning the number of (read) requests to redis will be at least
@@ -64,6 +94,9 @@ var all = []Feature{
 	OngoingRenameCheck,
 	DynamicMediaTypes,
 	BBMProcess,
+	DualCacheWrite,
+	DualCacheReadFromStandBy,
+	DualCacheSwapInstances,
 }
 
 // KnownEnvVar evaluates whether the input string matches the name of one of the known feature flag env vars.

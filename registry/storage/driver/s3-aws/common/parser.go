@@ -12,8 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/service/s3"
-	dcontext "github.com/docker/distribution/context"
-	"github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
 	"github.com/hashicorp/go-multierror"
 
@@ -208,7 +207,6 @@ type DriverParameters struct {
 	MaxRequestsPerSecond        int64
 	MaxRetries                  int64
 	ParallelWalk                bool
-	Logger                      dcontext.Logger
 	// In order to keep the code dry, we reuse the same struct field and store
 	// the result in a wider (i.e. uint64 instead of uint) type to accommodate
 	// both sdks.
@@ -228,9 +226,11 @@ type DriverParameters struct {
 // ParseLogLevelParamV1 parses given loglevel into a value that sdk v1 accepts.
 // The parameter itself is a comma-separated list of flags/loglevels that user
 // wants to enable.
-func ParseLogLevelParamV1(logger dcontext.Logger, param any) aws.LogLevelType {
+func ParseLogLevelParamV1(logger log.Logger, param any) aws.LogLevelType {
 	if param == nil {
-		logger.Debugf("S3 logging level is not set, defaulting to %q", LogLevelOff)
+		logger.Debug(
+			fmt.Sprintf("S3 logging level is not set, defaulting to %q", LogLevelOff),
+		)
 		return aws.LogOff
 	}
 
@@ -246,7 +246,7 @@ func ParseLogLevelParamV1(logger dcontext.Logger, param any) aws.LogLevelType {
 		case LogLevelOff:
 			// LogLevelOff in the list of loglevels overrides all other log
 			// levels and disables logging
-			logger.Debugf("S3 logging level set to %q", LogLevelOff)
+			logger.Debug(fmt.Sprintf("S3 logging level set to %q", LogLevelOff))
 			return aws.LogOff
 		case LogLevelDebug:
 			res |= aws.LogDebug
@@ -270,14 +270,23 @@ func ParseLogLevelParamV1(logger dcontext.Logger, param any) aws.LogLevelType {
 		case LogSigning, LogRetries, LogRequest, LogRequestWithBody,
 			LogResponse, LogResponseWithBody, LogDeprecatedUsage,
 			LogRequestEventMessage, LogResponseEventMessage:
-			logger.Warnf("S3 driver v2 log level %q has been passed to S3 driver v1. Ignoring. Please adjust your configuration", v)
+			logger.Warn(
+				fmt.Sprintf(
+					"S3 driver v2 log level %q has been passed to S3 driver v1. Ignoring. Please adjust your configuration",
+					v,
+				),
+			)
 		default:
-			logger.Warnf("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff)
+			logger.Warn(
+				fmt.Sprintf("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff),
+			)
 			return aws.LogOff
 		}
 	}
 
-	logger.Infof("S3 logging level set to %q", strings.Join(logLevelsSet, ","))
+	logger.Info(
+		fmt.Sprintf("S3 logging level set to %q", strings.Join(logLevelsSet, ",")),
+	)
 
 	return res
 }
@@ -285,9 +294,11 @@ func ParseLogLevelParamV1(logger dcontext.Logger, param any) aws.LogLevelType {
 // ParseLogLevelParamV2 parses given loglevel into a value that sdk v2 accepts.
 // The parameter itself is a comma-separated list of flags/loglevels that user
 // wants to enable.
-func ParseLogLevelParamV2(logger dcontext.Logger, param any) v2_aws.ClientLogMode {
+func ParseLogLevelParamV2(logger log.Logger, param any) v2_aws.ClientLogMode {
 	if param == nil {
-		logger.Debugf("S3 logging level is not set, defaulting to %q", LogLevelOff)
+		logger.Debug(
+			fmt.Sprintf("S3 logging level is not set, defaulting to %q", LogLevelOff),
+		)
 		// aws sdk v2 does not have a constant for this:
 		return v2_aws.ClientLogMode(0)
 	}
@@ -304,7 +315,7 @@ func ParseLogLevelParamV2(logger dcontext.Logger, param any) v2_aws.ClientLogMod
 		// LogLevelOff in the list of loglevels overrides all other log levels
 		// and disables logging
 		case LogLevelOff:
-			logger.Debugf("S3 logging level set to %q", LogLevelOff)
+			logger.Debug(fmt.Sprintf("S3 logging level set to %q", LogLevelOff))
 			// aws sdk v2 does not have a constant for this:
 			return v2_aws.ClientLogMode(0)
 		case LogSigning:
@@ -338,14 +349,26 @@ func ParseLogLevelParamV2(logger dcontext.Logger, param any) v2_aws.ClientLogMod
 		case LogLevelDebug, LogLevelDebugWithSigning, LogLevelDebugWithHTTPBody,
 			LogLevelDebugWithRequestRetries, LogLevelDebugWithRequestErrors,
 			LogLevelDebugWithEventStreamBody:
-			logger.Warnf("S3 driver v1 log level %q has been passed to S3 driver v2. Ignoring. Please adjust your configuration", v)
+			logger.Warn(
+				fmt.Sprintf(
+					"S3 driver v1 log level %q has been passed to S3 driver v2. Ignoring. Please adjust your configuration",
+					v,
+				),
+			)
 		default:
-			logger.Warnf("unknown loglevel %q, S3 logging level set to %q", param, LogLevelOff)
+			logger.Warn(
+				fmt.Sprintf(
+					"unknown loglevel %q, S3 logging level set to %q",
+					param, LogLevelOff,
+				),
+			)
 			return v2_aws.ClientLogMode(0)
 		}
 	}
 
-	logger.Infof("S3 logging level set to %q", strings.Join(logLevelsSet, ","))
+	logger.Info(
+		fmt.Sprintf("S3 logging level set to %q", strings.Join(logLevelsSet, ",")),
+	)
 
 	return res
 }
@@ -353,6 +376,10 @@ func ParseLogLevelParamV2(logger dcontext.Logger, param any) v2_aws.ClientLogMod
 func ParseParameters(driverVersion string, parameters map[string]any) (*DriverParameters, error) {
 	var mErr *multierror.Error
 	res := new(DriverParameters)
+
+	logger := log.GetLogger().WithFields(log.Fields{
+		"component": "registry.storage.s3-aws.parser",
+	})
 
 	// Providing no values for these is valid in case the user is authenticating
 	// with an IAM on an ec2 instance (in which case the instance credentials will
@@ -542,9 +569,12 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 	if checksumDisabled {
 		// If checksum_disabled is true, ignore checksum_algorithm
 		if checksumAlgorithmParam != nil {
-			logger := parameters[driver.ParamLogger].(dcontext.Logger)
-			logger.Warnf("Both %s and %s parameters provided, %s takes precedence",
-				ParamChecksumDisabled, ParamChecksumAlgorithm, ParamChecksumDisabled)
+			logger.Warn(
+				fmt.Sprintf(
+					"Both %s and %s parameters provided, %s takes precedence",
+					ParamChecksumDisabled, ParamChecksumAlgorithm, ParamChecksumDisabled,
+				),
+			)
 		}
 		defaultChecksumAlgorithm = ""
 	} else if checksumAlgorithmParam != nil {
@@ -645,8 +675,6 @@ func ParseParameters(driverVersion string, parameters map[string]any) (*DriverPa
 		return nil, err
 	}
 
-	logger := parameters[driver.ParamLogger].(dcontext.Logger)
-	res.Logger = logger
 	switch driverVersion {
 	case V1DriverName, V1DriverNameAlt:
 		res.LogLevel = uint64(ParseLogLevelParamV1(logger, parameters[ParamLogLevel]))

@@ -15,9 +15,7 @@ import (
 	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/storage"
-	sdriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/factory"
-	"github.com/docker/distribution/testutil"
 )
 
 func TestNewApp_Lockfiles(t *testing.T) {
@@ -99,7 +97,6 @@ func restoreLockfiles(t *testing.T, config *configuration.Configuration) {
 	t.Helper()
 
 	driverParams := config.Storage.Parameters()
-	driverParams[sdriver.ParamLogger] = testutil.NewTestLogger(t)
 	driver, err := factory.Create(config.Storage.Type(), driverParams)
 	require.NoError(t, err)
 

@@ -104,11 +104,11 @@ func (*noOpRepositoryLeaseCache) Invalidate(_ context.Context, _ string) error {
 
 // centralRepositoryLeaseCache is the interface for the centralized repository lease cache backed by Redis.
 type centralRepositoryLeaseCache struct {
-	cache *iredis.Cache
+	cache iredis.CacheInterface
 }
 
 // NewCentralRepositoryLeaseCache creates an interface for the centralized repository object cache backed by Redis.
-func NewCentralRepositoryLeaseCache(cache *iredis.Cache) RepositoryLeaseCache {
+func NewCentralRepositoryLeaseCache(cache iredis.CacheInterface) RepositoryLeaseCache {
 	return &centralRepositoryLeaseCache{cache}
 }
 

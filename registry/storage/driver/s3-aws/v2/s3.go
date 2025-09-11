@@ -38,6 +38,7 @@ import (
 	"github.com/aws/smithy-go/logging"
 	"github.com/aws/smithy-go/ptr"
 	dcontext "github.com/docker/distribution/context"
+	dlog "github.com/docker/distribution/log"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/docker/distribution/registry/storage/driver/s3-aws/common"
@@ -96,7 +97,7 @@ type Driver struct {
 
 // NewAWSLoggerWrapper returns an aws.Logger which will write log messages to
 // given logger. It is meant as a thin wrapper.
-func NewAWSLoggerWrapper(logger dcontext.Logger) logging.Logger {
+func NewAWSLoggerWrapper(logger dlog.Logger) logging.Logger {
 	return &awsLoggerWrapper{
 		logger: logger,
 	}
@@ -105,7 +106,7 @@ func NewAWSLoggerWrapper(logger dcontext.Logger) logging.Logger {
 // A defaultLogger provides a minimalistic logger satisfying the aws.Logger
 // interface.
 type awsLoggerWrapper struct {
-	logger dcontext.Logger
+	logger dlog.Logger
 }
 
 // Log logs the parameters to the configured logger.
@@ -114,7 +115,7 @@ func (l awsLoggerWrapper) Logf(classification logging.Classification, format str
 		format = "[" + string(classification) + "] " + format
 	}
 
-	l.logger.Debugf(format, v...)
+	l.logger.Debug(fmt.Sprintf(format, v...))
 }
 
 // FromParameters constructs a new Driver with a given parameters map
@@ -140,7 +141,7 @@ func NewS3API(params *common.DriverParameters) (*s3.Client, error) {
 	}
 
 	if params.LogLevel > 0 {
-		cfg.Logger = NewAWSLoggerWrapper(params.Logger)
+		cfg.Logger = NewAWSLoggerWrapper(dlog.GetLogger())
 		cfg.ClientLogMode = aws.ClientLogMode(params.LogLevel)
 	}
 
@@ -945,7 +946,7 @@ func (d *driver) URLFor(ctx context.Context, path string, options map[string]any
 		}
 	}
 
-	expiresIn := 20 * time.Minute
+	expiresIn := storagedriver.DefaultSignedURLExpiry
 	expires, ok := options["expiry"]
 	if ok {
 		et, ok := expires.(time.Time)

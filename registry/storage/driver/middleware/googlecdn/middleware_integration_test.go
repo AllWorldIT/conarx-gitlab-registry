@@ -99,7 +99,7 @@ func TestURLFor(t *testing.T) {
 	testutil.StubClock(t, &systemClock, clockMock)
 
 	// default behavior
-	cdnDriver, err := newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
+	cdnDriver, _, err := newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":    baseURL,
 		"privatekey": keyFile,
 		"keyname":    keyName,
@@ -121,7 +121,7 @@ func TestURLFor(t *testing.T) {
 
 	// custom duration
 	d := 5 * time.Second
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
+	cdnDriver, _, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":    baseURL,
 		"privatekey": keyFile,
 		"keyname":    keyName,
@@ -150,7 +150,7 @@ func TestURLFor(t *testing.T) {
 	)
 	defer srv.Close()
 
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
+	cdnDriver, _, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":      baseURL,
 		"privatekey":   keyFile,
 		"keyname":      keyName,
@@ -183,7 +183,7 @@ func TestURLFor(t *testing.T) {
 	require.Equal(t, expectedURL, cdnURL)
 
 	// IP filter OFF - generate CDN URL even if IP matches
-	cdnDriver, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
+	cdnDriver, _, err = newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
 		"baseurl":      baseURL,
 		"privatekey":   keyFile,
 		"keyname":      keyName,
@@ -268,7 +268,7 @@ func TestURLFor_Download(t *testing.T) {
 		"keyname":    keyName,
 	}
 
-	cdnDriver, err := newGoogleCDNStorageMiddleware(gcsDriver, opts)
+	cdnDriver, _, err := newGoogleCDNStorageMiddleware(gcsDriver, opts)
 	require.NoError(t, err)
 
 	tests := []struct {

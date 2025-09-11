@@ -9,9 +9,8 @@ import (
 	v2_types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
-	sdriver "github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/log"
 	dtestutil "github.com/docker/distribution/registry/storage/driver/internal/testutil"
-	btestutil "github.com/docker/distribution/testutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -521,8 +520,6 @@ func TestParseParameters_in_groups(t *testing.T) {
 	for _, tt := range tests {
 		for _, dv := range []string{V1DriverName, V2DriverName} {
 			t.Run(fmt.Sprintf("%s/%s", tt.name, dv), func(t *testing.T) {
-				tt.params[sdriver.ParamLogger] = btestutil.NewTestLogger(t)
-
 				if tt.restrictDriverVersion != "" && tt.restrictDriverVersion != dv {
 					t.Skip("skipping subtests as it does not apply for this driver")
 				}
@@ -580,10 +577,9 @@ func TestParseParameters_in_groups(t *testing.T) {
 
 func TestParseParameters_individually(t *testing.T) {
 	p := map[string]any{
-		ParamRegion:         "us-west-2",
-		ParamBucket:         "test",
-		ParamV4Auth:         "true",
-		sdriver.ParamLogger: btestutil.NewTestLogger(t),
+		ParamRegion: "us-west-2",
+		ParamBucket: "test",
+		ParamV4Auth: "true",
 	}
 
 	testFn := func(params map[string]any) (any, error) {
@@ -991,7 +987,7 @@ func TestParseLogLevelParam(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			resultV1 := ParseLogLevelParamV1(logger, tc.param)
+			resultV1 := ParseLogLevelParamV1(log.FromLogrusLogger(logger), tc.param)
 			assert.Equal(tt, tc.expectedV1, resultV1)
 
 			if tc.expectWarningV1 {
@@ -999,7 +995,7 @@ func TestParseLogLevelParam(t *testing.T) {
 			}
 			logBuffer.Reset()
 
-			resultV2 := ParseLogLevelParamV2(logger, tc.param)
+			resultV2 := ParseLogLevelParamV2(log.FromLogrusLogger(logger), tc.param)
 			assert.Equal(tt, tc.expectedV2, resultV2)
 
 			if tc.expectWarningV2 {
@@ -1053,7 +1049,6 @@ func TestChecksumDisabledParameter(t *testing.T) {
 				ParamRegion:           "us-west-2",
 				ParamBucket:           "test-bucket",
 				ParamChecksumDisabled: tt.checksumDisabled,
-				sdriver.ParamLogger:   btestutil.NewTestLogger(t),
 			}
 
 			if tt.checksumAlgorithm != "" {
