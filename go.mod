@@ -40,7 +40,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/prometheus/client_golang v1.23.2
-	github.com/redis/go-redis/v9 v9.11.0
+	github.com/redis/go-redis/v9 v9.14.0
 	github.com/rubenv/sql-migrate v1.8.0
 	github.com/samber/slog-logrus/v2 v2.5.2
 	github.com/schollz/progressbar/v3 v3.18.0
