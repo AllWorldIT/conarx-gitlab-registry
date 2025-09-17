@@ -421,18 +421,18 @@ database:background-migrations:
   services:
     - name: redis:alpine
       alias: "redis"
-    - name: bitnami/postgresql:${PG_VERSION}
+    - name: bitnamilegacy/postgresql:${PG_VERSION}
       alias: "primary"
       variables:
         POSTGRESQL_REPLICATION_MODE: "master"
         POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
-    - name: bitnami/postgresql:${PG_VERSION}
+    - name: bitnamilegacy/postgresql:${PG_VERSION}
       alias: "replica1"
       variables:
         POSTGRESQL_REPLICATION_MODE: "slave"
         POSTGRESQL_MASTER_HOST: "primary"
         POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
-    - name: bitnami/postgresql:${PG_VERSION}
+    - name: bitnamilegacy/postgresql:${PG_VERSION}
       alias: "replica2"
       variables:
         POSTGRESQL_REPLICATION_MODE: "slave"
@@ -513,7 +513,7 @@ cache:redis-sentinel:
   services:
     - name: redis:alpine
       alias: "redis"
-    - name: bitnami/redis-sentinel
+    - name: bitnamilegacy/redis-sentinel
       alias: "redis-sentinel"
 
 cache:redis-sentinel-auth:
@@ -533,7 +533,7 @@ cache:redis-sentinel-auth:
   services:
     - name: redis:alpine
       alias: "redis"
-    - name: bitnami/redis-sentinel
+    - name: bitnamilegacy/redis-sentinel
       alias: "redis-sentinel"
       command:
         - /bin/sh
@@ -580,7 +580,7 @@ redis-cluster:rate-limiter:handlers:
   extends: .go-version-matrix
   stage: integration
   services:
-    - name: bitnami/redis-cluster:$REDIS_CLUSTER_VERSION
+    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
       alias: redis-1
       variables:
         <<: *redis-cluster-variables
@@ -590,7 +590,7 @@ redis-cluster:rate-limiter:handlers:
         REDIS_CLUSTER_ANNOUNCE_BUS_PORT: 17001
         REDIS_CLUSTER_CREATOR: yes
 
-    - name: bitnami/redis-cluster:$REDIS_CLUSTER_VERSION
+    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
       alias: redis-2
       variables:
         <<: *redis-cluster-variables
@@ -599,7 +599,7 @@ redis-cluster:rate-limiter:handlers:
         REDIS_CLUSTER_ANNOUNCE_PORT: 7002
         REDIS_CLUSTER_ANNOUNCE_BUS_PORT: 17002
 
-    - name: bitnami/redis-cluster:$REDIS_CLUSTER_VERSION
+    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
       alias: redis-3
       variables:
         <<: *redis-cluster-variables

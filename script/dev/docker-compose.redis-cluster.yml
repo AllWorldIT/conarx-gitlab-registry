@@ -1,6 +1,6 @@
 services:
   redis-7000:
-    image: bitnami/redis-cluster:8.0.2
+    image: bitnamilegacy/redis-cluster:8.0.2
     container_name: redis-7000
     network_mode: host
     environment:
@@ -15,7 +15,7 @@ services:
       REDIS_CLUSTER_CREATOR: yes
 
   redis-7001:
-    image: bitnami/redis-cluster:8.0.2
+    image: bitnamilegacy/redis-cluster:8.0.2
     container_name: redis-7001
     network_mode: host
     environment:
@@ -29,7 +29,7 @@ services:
       REDIS_CLUSTER_REPLICAS: 0
 
   redis-7002:
-    image: bitnami/redis-cluster:8.0.2
+    image: bitnamilegacy/redis-cluster:8.0.2
     container_name: redis-7002
     network_mode: host
     environment:
