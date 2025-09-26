@@ -619,6 +619,11 @@ linters:
           - errcheck
           - dupl
           - gosec
+      # Exclude var-naming rule for packages with common/utils names
+      - path: (cmd/internal/release-cli/utils|registry/storage/driver/azure/common|registry/storage/driver/s3-aws/common)
+        linters:
+          - revive
+        text: "var-naming: avoid meaningless package names"
 
 #     CertPool.Subjects() has been deprecated but there is no alternative
 #	 https://github.com/golang/go/issues/46287

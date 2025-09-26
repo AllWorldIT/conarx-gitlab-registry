@@ -13,12 +13,15 @@ import (
 	"time"
 
 	"github.com/docker/distribution/registry/bbm"
+	"github.com/docker/distribution/registry/bbm/mocks"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	mock "github.com/docker/distribution/registry/datastore/migrations/mocks"
 	_ "github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
+	"github.com/docker/distribution/registry/internal"
+	regmocks "github.com/docker/distribution/registry/internal/mocks"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
@@ -153,10 +156,46 @@ func downMigrate(t *testing.T, db *sql.DB, extra ...string) func() {
 	}
 }
 
+type clockMock struct {
+	*regmocks.MockClock
+	og internal.Clock
+}
+
+type backoffMock struct {
+	*mocks.MockBackoff
+	og func(time.Duration, time.Duration) bbm.Backoff
+}
+
+// reset restores the original BackOff value
+func (b *backoffMock) reset() {
+	bbm.BackoffConstructor = b.og
+}
+
+// reset restores the original clock.Clock value
+func (c *clockMock) reset() {
+	bbm.SystemClock = c.og
+}
+
+// stubClock stubs the system clock with a mock
+func (c *clockMock) stubClock() {
+	c.og = bbm.SystemClock
+	bbm.SystemClock = c.MockClock
+}
+
+// stubBackoff stubs the backoff constructor with a mock
+func (b *backoffMock) stubBackoff() {
+	b.og = bbm.BackoffConstructor
+	bbm.BackoffConstructor = func(_, _ time.Duration) bbm.Backoff {
+		return b.MockBackoff
+	}
+}
+
 type BackgroundMigrationTestSuite struct {
 	suite.Suite
-	db         *datastore.DB
-	dbMigrator migrations.Migrator
+	db          *datastore.DB
+	dbMigrator  migrations.Migrator
+	clockMock   clockMock
+	backoffMock backoffMock
 }
 
 func TestBackgroundMigrationTestSuite(t *testing.T) {
@@ -174,12 +213,34 @@ func (s *BackgroundMigrationTestSuite) SetupSuite() {
 
 	// create a schema migrator to use to run test schema migrations
 	s.dbMigrator = newMigrator(s.T(), s.db.DB, nil, nil)
+	ctrl := gomock.NewController(s.T())
+
+	cMock := regmocks.NewMockClock(ctrl)
+	s.clockMock = clockMock{
+		MockClock: cMock,
+	}
+	s.clockMock.stubClock()
+	now := time.Time{}
+	s.clockMock.EXPECT().Now().Return(now).AnyTimes()
+	s.clockMock.EXPECT().Sleep(gomock.Any()).Do(func(_ time.Duration) {}).AnyTimes()
+	s.clockMock.EXPECT().Since(gomock.Any()).Return(100 * time.Millisecond).AnyTimes()
+
+	bMock := mocks.NewMockBackoff(ctrl)
+	s.backoffMock = backoffMock{
+		MockBackoff: bMock,
+	}
+	s.backoffMock.stubBackoff()
+	s.backoffMock.EXPECT().Reset().Do(func() {}).AnyTimes()
+	s.backoffMock.EXPECT().NextBackOff().Return(time.Duration(0)).AnyTimes()
 }
 
 func (s *BackgroundMigrationTestSuite) TearDownSuite() {
 	s.T().Cleanup(func() {
 		s.db.Close()
+		s.backoffMock.reset()
+		s.clockMock.reset()
 	})
+
 	// Rollback to the standard schema migrations
 	var err error
 	s.T().Log("rolling back base database migrations")
@@ -259,9 +320,9 @@ func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigration(workerCount 
 	// Start Test:
 	// start the BBM process in the background, with the registered work function as specified in the migration record
 	var err error
-	for i := 0; i < workerCount; i++ {
+	for range workerCount {
 		var worker *bbm.Worker
-		worker, err = bbm.RegisterWork([]bbm.Work{{Name: expectedBBM.JobName, Do: CopyIDColumnInTestTableToNewIDColumn}}, bbm.WithJobInterval(100*time.Millisecond), bbm.WithDB(s.db))
+		worker, err = bbm.RegisterWork([]bbm.Work{{Name: expectedBBM.JobName, Do: CopyIDColumnInTestTableToNewIDColumn}}, bbm.WithJobInterval(100*time.Millisecond), bbm.WithDB(s.db), bbm.WithWorkerStartupJitterSeconds(1))
 		s.Require().NoError(err)
 		s.startAsyncBBMWorker(worker)
 	}
@@ -328,14 +389,13 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_UnknownColu
 		[]bbm.Work{{Name: expectedBBM.JobName, Do: CopyIDColumnInTestTableToNewIDColumn}}, bbm.WithJobInterval(100*time.Millisecond), bbm.WithDB(s.db))
 }
 
-// Test_AsyncBackgroundMigration_JobSignatureNotFound tests that if a background migration is introduced and the job signature is not registered in the registry it will be marked as failed.
+// Test_AsyncBackgroundMigration_JobSignatureNotFound tests that if a background migration is introduced and the job signature is not registered in the registry it will not be marked as failed permanently.
 func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobSignatureNotFound() {
 	// Expectations:
 	expectedBBM := models.BackgroundMigration{
 		ID:           1,
 		Name:         "CopyIDColumnInTestTableToNewIDColumn",
-		Status:       models.BackgroundMigrationFailed,
-		ErrorCode:    models.InvalidJobSignatureBBMErrCode,
+		Status:       models.BackgroundMigrationActive,
 		StartID:      1,
 		EndID:        93,
 		TargetTable:  targetBBMTable,
@@ -413,6 +473,7 @@ func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigrationExpected(expe
 
 	// Start Test:
 	// start the BBM process in the background, with the registered work function as specified in the migration record
+	opts = append(opts, bbm.WithWorkerStartupJitterSeconds(1))
 	worker, err := bbm.RegisterWork(work, opts...)
 	s.Require().NoError(err)
 	s.startAsyncBBMWorker(worker)

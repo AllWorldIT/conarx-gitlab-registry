@@ -1,7 +1,10 @@
 package metrics
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/docker/distribution/metrics"
@@ -9,18 +12,19 @@ import (
 )
 
 var (
-	queryDurationHist       *prometheus.HistogramVec
-	queryTotal              *prometheus.CounterVec
-	timeSince               = time.Since // for test purposes only
-	lbPoolSize              prometheus.Gauge
-	lbPoolStatus            *prometheus.GaugeVec
-	lbLSNCacheOpDuration    *prometheus.HistogramVec
-	lbLSNCacheHits          *prometheus.CounterVec
-	lbDNSLookupDurationHist *prometheus.HistogramVec
-	lbPoolEvents            *prometheus.CounterVec
-	lbTargets               *prometheus.CounterVec
-	lbLagBytes              *prometheus.GaugeVec
-	lbLagSeconds            *prometheus.HistogramVec
+	queryDurationHist              *prometheus.HistogramVec
+	queryTotal                     *prometheus.CounterVec
+	timeSince                      = time.Since // for test purposes only
+	lbPoolSize                     prometheus.Gauge
+	lbPoolStatus                   *prometheus.GaugeVec
+	lbLSNCacheOpDuration           *prometheus.HistogramVec
+	lbLSNCacheHits                 *prometheus.CounterVec
+	lbDNSLookupDurationHist        *prometheus.HistogramVec
+	lbPoolEvents                   *prometheus.CounterVec
+	lbTargets                      *prometheus.CounterVec
+	lbLagBytes                     *prometheus.GaugeVec
+	lbLagSeconds                   *prometheus.HistogramVec
+	databaseRowCountCollectionHist prometheus.Histogram
 )
 
 const (
@@ -89,9 +93,20 @@ const (
 	lbLagBytesDesc   = "A gauge for the replication lag in bytes for each replica."
 	lbLagSecondsName = "lb_lag_seconds"
 	lbLagSecondsDesc = "A histogram of replication lag in seconds for each replica."
+
+	databaseRowsName  = "rows"
+	databaseRowsDesc  = "A gauge for the number of rows in database tables defined by the query_name label"
+	databaseRowsLabel = "query_name"
+
+	databaseRowCountCollectionName = "row_count_collection_duration_seconds"
+	databaseRowCountCollectionDesc = "A histogram of total duration for collecting all database row count queries in a single run"
 )
 
 func init() {
+	registerMetrics(prometheus.DefaultRegisterer)
+}
+
+func registerMetrics(registerer prometheus.Registerer) {
 	queryDurationHist = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: metrics.NamespacePrefix,
@@ -204,17 +219,28 @@ func init() {
 		[]string{replicaLabel},
 	)
 
-	prometheus.MustRegister(queryDurationHist)
-	prometheus.MustRegister(queryTotal)
-	prometheus.MustRegister(lbPoolSize)
-	prometheus.MustRegister(lbPoolStatus)
-	prometheus.MustRegister(lbLSNCacheOpDuration)
-	prometheus.MustRegister(lbLSNCacheHits)
-	prometheus.MustRegister(lbDNSLookupDurationHist)
-	prometheus.MustRegister(lbPoolEvents)
-	prometheus.MustRegister(lbTargets)
-	prometheus.MustRegister(lbLagBytes)
-	prometheus.MustRegister(lbLagSeconds)
+	databaseRowCountCollectionHist = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      databaseRowCountCollectionName,
+			Help:      databaseRowCountCollectionDesc,
+			Buckets:   []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}, // 100ms to 60s
+		},
+	)
+
+	registerer.MustRegister(queryDurationHist)
+	registerer.MustRegister(queryTotal)
+	registerer.MustRegister(lbPoolSize)
+	registerer.MustRegister(lbPoolStatus)
+	registerer.MustRegister(lbLSNCacheOpDuration)
+	registerer.MustRegister(lbLSNCacheHits)
+	registerer.MustRegister(lbDNSLookupDurationHist)
+	registerer.MustRegister(lbPoolEvents)
+	registerer.MustRegister(lbTargets)
+	registerer.MustRegister(lbLagBytes)
+	registerer.MustRegister(lbLagSeconds)
+	registerer.MustRegister(databaseRowCountCollectionHist)
 }
 
 func InstrumentQuery(name string) func() {
@@ -372,4 +398,76 @@ func ReplicaLagBytes(replicaAddr string, bytes float64) {
 // ReplicaLagSeconds records the time lag for a replica in seconds.
 func ReplicaLagSeconds(replicaAddr string, seconds float64) {
 	lbLagSeconds.WithLabelValues(replicaAddr).Observe(seconds)
+}
+
+// InstrumentRowCountCollection returns a function that records the duration of row count collection.
+func InstrumentRowCountCollection() func() {
+	start := time.Now()
+	return func() {
+		databaseRowCountCollectionHist.Observe(timeSince(start).Seconds())
+	}
+}
+
+// Registrar manages dynamic registration/deregistration of Prometheus collectors.
+// Useful for conditional monitoring scenarios.
+//
+// IMPORTANT: The Registrar maintains internal state about whether a collector is
+// registered. If the same collector is registered or unregistered outside of this
+// Registrar instance (e.g., by calling prometheus.Register/Unregister directly),
+// the internal state will become inconsistent. All registration operations for a
+// collector managed by a Registrar should go through that Registrar instance.
+type Registrar struct {
+	collector  prometheus.Collector
+	registered bool
+	mu         sync.Mutex
+}
+
+// NewRegistrar creates a new registrar for any Prometheus collector
+func NewRegistrar(collector prometheus.Collector) *Registrar {
+	return &Registrar{
+		collector:  collector,
+		registered: false,
+	}
+}
+
+// Register registers the collector with Prometheus
+func (r *Registrar) Register() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.registered {
+		return nil
+	}
+
+	if err := prometheus.Register(r.collector); err != nil {
+		var alreadyRegisteredErr prometheus.AlreadyRegisteredError
+		if errors.As(err, &alreadyRegisteredErr) {
+			r.registered = true
+			return nil
+		}
+		return fmt.Errorf("failed to register metrics collector: %w", err)
+	}
+
+	r.registered = true
+	return nil
+}
+
+// Unregister removes the collector from Prometheus
+func (r *Registrar) Unregister() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.registered {
+		return
+	}
+
+	prometheus.Unregister(r.collector)
+	r.registered = false
+}
+
+// IsRegistered returns whether the collector is currently registered
+func (r *Registrar) IsRegistered() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.registered
 }

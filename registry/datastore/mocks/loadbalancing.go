@@ -57,6 +57,20 @@ func (mr *MockLoadBalancerMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockLoadBalancer)(nil).Close))
 }
 
+// GetReplicaLagInfo mocks base method.
+func (m *MockLoadBalancer) GetReplicaLagInfo(addr string) *datastore.ReplicaLagInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReplicaLagInfo", addr)
+	ret0, _ := ret[0].(*datastore.ReplicaLagInfo)
+	return ret0
+}
+
+// GetReplicaLagInfo indicates an expected call of GetReplicaLagInfo.
+func (mr *MockLoadBalancerMockRecorder) GetReplicaLagInfo(addr any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReplicaLagInfo", reflect.TypeOf((*MockLoadBalancer)(nil).GetReplicaLagInfo), addr)
+}
+
 // Primary mocks base method.
 func (m *MockLoadBalancer) Primary() *datastore.DB {
 	m.ctrl.T.Helper()

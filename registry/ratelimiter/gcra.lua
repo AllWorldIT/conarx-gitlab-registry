@@ -22,28 +22,43 @@ if stored_tokens == false or stored_tokens == nil or stored_tokens == '' then
 else
     -- Parse existing tokens
     tokens = tonumber(stored_tokens)
-    local last_refill = tonumber(stored_last_refill)
 
-    -- Only do refill calculation if we have valid data
-    if tokens and last_refill and current_time > last_refill then
-        local time_elapsed = current_time - last_refill
-        local tokens_to_add = time_elapsed * refill_rate
-        tokens = math.min(capacity, tokens + tokens_to_add)
-    elseif not tokens then
-        -- Fallback: reinitialize if tokens is invalid
+    local last_refill = tonumber(stored_last_refill)
+    if not last_refill then
+        last_refill = current_time
+    end
+
+    -- Handle invalid tokens separately from invalid last_refill
+    if not tokens then
+        -- Fallback: reinitialize tokens if invalid
         tokens = capacity
+    elseif not tonumber(stored_last_refill) then
+        -- If only last_refill is invalid, reset last_refill to current_time to allow future refills
+        -- This prevents permanent rate limit lockout while maintaining security
+        last_refill = current_time
+        -- Skip refill calculation for this request but enable future refills
+    else
+        -- Both values are valid - proceed with refill calculation (original logic)
+        if current_time > last_refill then
+            local time_elapsed = current_time - last_refill
+            local tokens_to_add = time_elapsed * refill_rate
+            tokens = math.min(capacity, tokens + tokens_to_add)
+        end
     end
 end
 
--- Check if request can be satisfied
+-- Check if we can satisfy the request BEFORE consuming
 local allowed = 0
-local remaining = math.max(0, math.floor(tokens))
-
 if tokens >= tokens_requested then
     allowed = 1
-    tokens = tokens - tokens_requested
-    remaining = math.max(0, math.floor(tokens))
+    tokens = tokens - tokens_requested  -- Only consume if allowed
+else
+    allowed = 0
+    -- Don't consume tokens for denied requests
 end
+
+-- Calculate remaining AFTER consumption
+local remaining = math.max(0, math.floor(tokens))
 
 -- Store state in the SAME key that was passed in (guaranteed same slot)
 redis.call('HMSET', bucket_key, 'tokens', tostring(tokens), 'last_refill', tostring(current_time))

@@ -1,7 +1,7 @@
 # Root directory of the project (absolute path).
 ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-GOLANGCI_VERSION ?= v2.1.6
+GOLANGCI_VERSION ?= v2.4.0
 DOCSLINT_VERSION ?= registry.gitlab.com/gitlab-org/technical-writing/docs-gitlab-com/lint-markdown:alpine-3.21-vale-3.11.2-markdownlint2-0.17.2-lychee-0.18.1
 
 # Used to populate version variable in main package.
@@ -14,7 +14,20 @@ PKG=github.com/docker/distribution
 # Project packages.
 PACKAGES=$(shell go list -tags "${BUILDTAGS}" ./...)
 INTEGRATION_PACKAGE=${PKG}
-COVERAGE_PACKAGES=$(filter-out ${PKG}/registry/storage/driver/%,${PACKAGES})
+# NOTE(prozlach): Exclude tests that are run as separate jobs:
+COVERAGE_PACKAGES=$(filter-out \
+    ${PKG}/registry/storage/driver/filesystem \
+    ${PKG}/registry/storage/driver/filesystem/% \
+    ${PKG}/registry/storage/driver/inmemory \
+    ${PKG}/registry/storage/driver/inmemory/% \
+    ${PKG}/registry/storage/driver/s3-aws \
+    ${PKG}/registry/storage/driver/s3-aws/% \
+    ${PKG}/registry/storage/driver/gcs \
+    ${PKG}/registry/storage/driver/gcs/% \
+    ${PKG}/registry/storage/driver/azure \
+    ${PKG}/registry/storage/driver/azure/% \
+    ${PKG}/registry/storage/driver/middleware/googlecdn \
+    ${PKG}/registry/storage/driver/middleware/googlecdn/%,${PACKAGES})
 GO_TEST ?='go test'
 
 

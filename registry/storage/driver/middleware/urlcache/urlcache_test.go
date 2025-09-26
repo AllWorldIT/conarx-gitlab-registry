@@ -37,7 +37,7 @@ func TestNewURLCacheStorageMiddleware(t *testing.T) {
 			name:        "missing redis cache",
 			options:     make(map[string]any),
 			wantErr:     true,
-			errContains: "urlcache middleware requires `cache` Redis configured",
+			errContains: "`_redisCache` key has not been passed to urlcache middleware",
 		},
 		{
 			name: "default configuration with redis",
@@ -231,7 +231,7 @@ func TestNewURLCacheStorageMiddleware(t *testing.T) {
 				"_redisCache": "not a redis cache",
 			},
 			wantErr:     true,
-			errContains: "unusable redis cache object",
+			errContains: "redis cache passed to the middleware cannot be used as the type is wrong",
 		},
 	}
 
@@ -678,9 +678,9 @@ func (s *URLForTestSuite) TestCacheMissWithExpiryParameterSet() {
 	value, ttl, err := redisCache.GetWithTTL(s.ctx, key)
 	require.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), value)
-	// TTL should be approximately 3 hours minus a small delta for processing time
-	assert.Greater(s.T(), ttl, 2*time.Hour+55*time.Minute)
-	assert.LessOrEqual(s.T(), ttl, 3*time.Hour)
+	// TTL should be approximately 2 hours 50 minutes plus/minus a small delta for processing time
+	assert.Greater(s.T(), ttl, 2*time.Hour+48*time.Minute)
+	assert.LessOrEqual(s.T(), ttl, 2*time.Hour+52*time.Minute)
 
 	// Unmarshal to verify content
 	err = redisCache.UnmarshalGet(s.ctx, key, &cached)

@@ -46,7 +46,7 @@ const (
 	storageBackendRetriesTotalDesc = "A counter of retires made while communicating with storage backend."
 	// `native` - done using native retry mechanism
 	// `custom` -done using our own/custom retry mechanism
-	storageBackendRetriesTypeLabel = "type"
+	storageBackendRetriesTypeLabel = "retry_type"
 
 	urlCacheRequestsTotalName = "urlcache_requests_total"
 	urlCacheRequestsTotalDesc = "A counter of the URL cache middleware requests."
@@ -198,7 +198,7 @@ func registerMetrics(registerer prometheus.Registerer) {
 			Subsystem: subsystem,
 			Name:      objectAccessesDistributionName,
 			Help:      objectAccessesDistributionDesc,
-			Buckets:   prometheus.LinearBuckets(0, 500, 11), // 0, 500, 1000, ..., 5000
+			Buckets:   prometheus.ExponentialBuckets(10, 2.0, 11),
 		},
 	)
 
@@ -374,10 +374,10 @@ func (at *AccessTracker) calculateMetrics() {
 		case 10000:
 			objectAccessesTopN.WithLabelValues("10000").Set(float64(totalAccesses))
 		}
-	}
 
-	// Emit the "all" metric
-	objectAccessesTopN.WithLabelValues("all").Set(float64(totalAccesses))
+		// Emit the "all" metric
+		objectAccessesTopN.WithLabelValues("all").Set(float64(totalAccesses))
+	}
 
 	// Clear the map for the next period
 	at.counts = make(map[uint64]uint32)

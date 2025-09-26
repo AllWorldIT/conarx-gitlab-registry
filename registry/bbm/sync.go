@@ -402,6 +402,12 @@ func (jw *SyncWorker) GrabLock(ctx context.Context, bbmStore datastore.Backgroun
 	return nil
 }
 
+// ShouldThrottle is not required in the SyncWorker implementation.
+// Running the background migration synchronously implies we want to run the migration as fast as possible irregardless of the cost.
+func (*SyncWorker) ShouldThrottle(context.Context, datastore.BackgroundMigrationStore) (bool, error) {
+	return false, nil
+}
+
 // enrichJobWithBBMAttributes enriches the job with attributes from the background migration.
 func enrichJobWithBBMAttributes(job *models.BackgroundMigrationJob, bbm *models.BackgroundMigration) {
 	if job != nil && bbm != nil {

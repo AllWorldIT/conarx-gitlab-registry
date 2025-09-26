@@ -13,13 +13,15 @@ var (
 	jobBatchSize        *prometheus.GaugeVec
 	jobDurationHist     *prometheus.HistogramVec
 	runDurationHist     *prometheus.HistogramVec
+	sleepDurationHist   *prometheus.HistogramVec
 	runCounter          *prometheus.CounterVec
 	migratedTuplesTotal *prometheus.CounterVec
 	buckets             = []float64{.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600} // 0.5s to 1h
 )
 
 const (
-	subsystem = "bbm"
+	subsystem   = "bbm"
+	workerLabel = "worker"
 
 	runDurationName = "run_duration_seconds"
 	runDurationDesc = "A histogram of latencies for batched migration worker runs."
@@ -41,6 +43,9 @@ const (
 
 	migrationNameLabel = "migration_name"
 	migrationIDLabel   = "migration_id"
+
+	sleepDurationName = "sleep_duration_seconds"
+	sleepDurationDesc = "A histogram of sleep durations between bbm worker runs."
 )
 
 func init() {
@@ -106,12 +111,25 @@ func init() {
 		[]string{migrationNameLabel, migrationIDLabel},
 	)
 
+	sleepDurationHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      sleepDurationName,
+			Help:      sleepDurationDesc,
+			// 500ms to 24h
+			Buckets: []float64{.5, 1, 5, 15, 30, 60, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400},
+		},
+		[]string{workerLabel},
+	)
+
 	prometheus.MustRegister(queryDurationHist)
 	prometheus.MustRegister(jobBatchSize)
 	prometheus.MustRegister(jobDurationHist)
 	prometheus.MustRegister(runDurationHist)
 	prometheus.MustRegister(runCounter)
 	prometheus.MustRegister(migratedTuplesTotal)
+	prometheus.MustRegister(sleepDurationHist)
 }
 
 // InstrumentQuery starts a timer to measure the duration of a migration query.
@@ -146,4 +164,8 @@ func WorkerRun() func() {
 // MigrationRecord captures the total number of records migrated for a background migration.
 func MigrationRecord(size int, migrationName, migrationID string) {
 	migratedTuplesTotal.WithLabelValues(migrationName, migrationID).Add(float64(size))
+}
+
+func WorkerSleep(name string, d time.Duration) {
+	sleepDurationHist.WithLabelValues(name).Observe(d.Seconds())
 }

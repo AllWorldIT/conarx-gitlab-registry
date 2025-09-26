@@ -41,6 +41,7 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/datastore"
+	dsmetrics "github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/gc"
@@ -142,6 +143,9 @@ type App struct {
 	// redisCache is the abstraction for manipulating cached data on Redis.
 	redisCache iredis.CacheInterface
 
+	// redisCacheClient is the raw Redis client used for caching.
+	redisCacheClient redis.UniversalClient
+
 	// redisLBCache is the abstraction for the database load balancing Redis cache.
 	redisLBCache iredis.CacheInterface
 
@@ -155,6 +159,10 @@ type App struct {
 	// during app object termination in order to gracefully clean up
 	// resources/terminate goroutines
 	shutdownFuncs []shutdownFunc
+
+	// DBStatusChecker is responsible for checking/updating the status of the DB
+	// and replicas in the background.
+	DBStatusChecker *health.DBStatusChecker
 }
 
 // NewApp takes a configuration and returns a configured app, ready to serve
@@ -575,6 +583,10 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
 			startBackgroundMigrations(app.Context, app.db.Primary(), config)
 		}
+
+		if err := app.initializeRowCountCollector(config); err != nil {
+			return nil, fmt.Errorf("failed to initialize database metrics collector: %w", err)
+		}
 	}
 
 	// configure storage caches
@@ -980,7 +992,13 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 				timeout = defaultDBCheckTimeout
 			}
 
-			check := checks.DBChecker(app.Context, timeout, app.db)
+			// Start DB status checker
+			app.DBStatusChecker = health.NewDBStatusChecker(
+				&health.LoadBalancerShim{DB: app.db},
+				interval, timeout, logger,
+			)
+			app.DBStatusChecker.Start(app.Context)
+			check := app.DBStatusChecker.HealthCheck
 
 			logger.WithFields(
 				dlog.Fields{
@@ -1107,6 +1125,7 @@ func (app *App) configureEvents(registryConfig *configuration.Configuration) {
 			IgnoredMediaTypes: endpoint.IgnoredMediaTypes,
 			Ignore:            endpoint.Ignore,
 			QueuePurgeTimeout: endpoint.QueuePurgeTimeout,
+			QueueSizeLimit:    endpoint.QueueSizeLimit,
 		})
 
 		sinks = append(sinks, endpoint)
@@ -1214,22 +1233,14 @@ func (app *App) configureRedisLoadBalancingCache(ctx context.Context, config *co
 }
 
 func (app *App) configureRedisRateLimiter(ctx context.Context, config *configuration.Configuration) error {
-	if !config.Redis.RateLimiter.Enabled {
-		if config.RateLimiter.Enabled {
-			dlog.GetLogger(dlog.WithContext(app.Context)).
-				Warn(`Redis is disabled but the rate-limiter is enabled.
-					This will result in a no-op configuration.`,
-				)
-		}
+	l := dlog.GetLogger(dlog.WithContext(app.Context))
+	if !config.RateLimiter.Enabled {
+		l.Warn("rate-limiter is disabled")
 		return nil
 	}
 
-	if !config.RateLimiter.Enabled {
-		dlog.GetLogger(dlog.WithContext(app.Context)).
-			Warn(`Redis is enabled but the rate-limiter is disabled.
-					This will result in a no-op configuration.`,
-			)
-		return nil
+	if !config.Redis.RateLimiter.Enabled {
+		return fmt.Errorf("rate-limiting is enabled, but redis for rate-limiter is not defined and is requied")
 	}
 
 	redisClient, err := configureRedisClient(ctx, config.Redis.RateLimiter, config.HTTP.Debug.Prometheus.Enabled, "ratelimiting")
@@ -1242,7 +1253,7 @@ func (app *App) configureRedisRateLimiter(ctx context.Context, config *configura
 		return fmt.Errorf("failed to configure rate limiting: %w", err)
 	}
 
-	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis configured successfully for rate limiting")
+	l.Info("rate limiting has been successfully configured")
 
 	return nil
 }
@@ -1257,6 +1268,7 @@ func (app *App) configureRedisCache(ctx context.Context, config *configuration.C
 		return fmt.Errorf("failed to configure Redis for caching: %w", err)
 	}
 
+	app.redisCacheClient = client
 	app.redisCache = iredis.NewCache(client, iredis.WithDefaultTTL(redisCacheTTL))
 	dlog.GetLogger(dlog.WithContext(app.Context)).Info("redis configured successfully for caching")
 
@@ -1359,7 +1371,9 @@ func (app *App) initMetaRouter() error {
 	app.router.distribution.Use(distributionAPIVersionMiddleware)
 
 	app.router.gitlab.Use(app.gorillaLogMiddleware)
-	if app.Config.RateLimiter.Enabled && app.Config.Redis.RateLimiter.Enabled {
+	// NOTE(prozlach): redis for rate limiter is a dependency and is checked
+	// later in the code
+	if app.Config.RateLimiter.Enabled {
 		app.router.distribution.Use(app.rateLimiterMiddleware)
 		app.router.gitlab.Use(app.rateLimiterMiddleware)
 	}
@@ -2070,7 +2084,7 @@ func (app *App) applyStorageMiddleware(middlewares []configuration.Middleware) e
 				return fmt.Errorf("urlcache storage middleware can only be applied once")
 			}
 			urlCacheMiddlewareAlreadyApplied = true
-			mw.Options["_redisCache"] = app.redisCache
+			mw.Options["_redisCache"] = app.dualRedisCache
 		case "cloudfront", "googlecdn", "redirect":
 			if cdnMiddlewareAlreadyApplied {
 				return fmt.Errorf("using more than one storage CDN middleware is not supported")
@@ -2290,12 +2304,30 @@ func repositoryFromContextWithRegistry(ctx *Context, w http.ResponseWriter, regi
 func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *configuration.Configuration) {
 	l := dlog.GetLogger(dlog.WithContext(ctx))
 
-	// register all work functions with bbmWorker
-	bbmWorker, err := bbm.RegisterWork(bbm.AllWork(),
+	dbWALArchivingEnabled, err := datastore.IsArchivingEnabled(ctx, db.DB)
+	if err != nil {
+		err = fmt.Errorf("checking WAL archiving mode failed: %w", err)
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		l.WithError(err).Warn("background migration: checking WAL archiving mode failed, assuming WAL archiving enabled")
+		// assume WAL archiving is enabled on the database unless specified otherwise.
+		dbWALArchivingEnabled = true
+		// If this assumption is incorrect, each migration run will still perform
+		// its own WAL check and skip wal based throttling if archiving is actually disabled.
+	}
+
+	opts := []bbm.WorkerOption{
 		bbm.WithDB(db),
 		bbm.WithLogger(dlog.GetLogger(dlog.WithContext(ctx))),
 		bbm.WithJobInterval(config.Database.BackgroundMigrations.JobInterval),
 		bbm.WithMaxJobAttempt(config.Database.BackgroundMigrations.MaxJobRetries),
+	}
+
+	if dbWALArchivingEnabled {
+		opts = append(opts, bbm.WithWALPressureCheck())
+	}
+
+	// register all work functions with bbmWorker
+	bbmWorker, err := bbm.RegisterWork(bbm.AllWork(), opts...,
 	)
 	if err != nil {
 		l.WithError(err).Error("background migration worker could not start")
@@ -2327,4 +2359,57 @@ func bbmListenForShutdown(ctx context.Context, c chan os.Signal, doneCh chan str
 	// signal to worker that the program is exiting
 	dlog.GetLogger(dlog.WithContext(ctx)).Info("Background migration worker is shutting down")
 	close(doneCh)
+}
+
+// initializeRowCountCollector initializes the database row count metrics collector
+func (app *App) initializeRowCountCollector(config *configuration.Configuration) error {
+	if !config.Database.Metrics.Enabled {
+		return nil
+	}
+
+	// Check if Redis cache client is available
+	if app.redisCacheClient == nil {
+		return errors.New("database metrics enabled but Redis cache client is not configured")
+	}
+
+	// Create executor function that queries the database
+	executor := func(ctx context.Context, query string, args ...any) (int64, error) {
+		var count int64
+		// Since metrics can be used for alerting purposes, we should default to the primary DB to ensure we always
+		// look at the latest available status.
+		err := app.db.Primary().QueryRowContext(ctx, query, args...).Scan(&count)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return 0, nil
+			}
+			return 0, err
+		}
+		return count, nil
+	}
+
+	// Initialize and start the collector
+	var opts []dsmetrics.CollectorOption
+	if config.Database.Metrics.Interval > 0 {
+		opts = append(opts, dsmetrics.WithInterval(config.Database.Metrics.Interval))
+	}
+	if config.Database.Metrics.LeaseDuration > 0 {
+		opts = append(opts, dsmetrics.WithLeaseDuration(config.Database.Metrics.LeaseDuration))
+	}
+	dbRowCountCollector, err := dsmetrics.NewRowCountCollector(executor, app.redisCacheClient, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create database metrics collector: %w", err)
+	}
+	dbRowCountCollector.Start(app.Context)
+
+	// Register shutdown function
+	app.registerShutdownFunc(
+		func(_ *App, errCh chan error, l dlog.Logger) {
+			l.Info("stopping database row count metrics collector")
+			dbRowCountCollector.Stop()
+			l.Info("database row count metrics collector has been shut down")
+			errCh <- nil
+		},
+	)
+
+	return nil
 }

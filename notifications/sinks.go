@@ -209,17 +209,25 @@ type eventQueue struct {
 
 	wgBufferer *sync.WaitGroup
 	wgSender   *sync.WaitGroup
+
+	maxQueueSize int
 }
 
 // eventQueueListener is called when various events happen on the queue.
 type eventQueueListener interface {
 	ingress(events *Event)
 	egress(events *Event)
+	drop(events *Event)
 }
 
 // newEventQueue returns a queue to the provided sink. If the updater is non-
 // nil, it will be called to update pending metrics on ingress and egress.
-func newEventQueue(sink Sink, queuePurgeTimeout time.Duration, listeners ...eventQueueListener) *eventQueue {
+func newEventQueue(
+	sink Sink,
+	queuePurgeTimeout time.Duration,
+	maxQueueSize int,
+	listeners ...eventQueueListener,
+) *eventQueue {
 	eq := eventQueue{
 		sink:      sink,
 		listeners: listeners,
@@ -233,6 +241,8 @@ func newEventQueue(sink Sink, queuePurgeTimeout time.Duration, listeners ...even
 
 		wgBufferer: new(sync.WaitGroup),
 		wgSender:   new(sync.WaitGroup),
+
+		maxQueueSize: maxQueueSize,
 	}
 
 	eq.wgSender.Add(1)
@@ -286,12 +296,27 @@ main:
 			}
 		} else {
 			front := events.Front()
+			// nolint: revive // max-control-nesting
 			select {
 			case event := <-eq.bufferInCh:
 				for _, listener := range eq.listeners {
 					listener.ingress(event)
 				}
-				events.PushBack(event)
+
+				if events.Len() < eq.maxQueueSize {
+					events.PushBack(event)
+				} else {
+					for _, listener := range eq.listeners {
+						listener.drop(event)
+					}
+
+					log.WithFields(
+						log.Fields{
+							"queue_size": events.Len(),
+							"event_id":   event.ID,
+						},
+					).Warnf("queue full, dropping event")
+				}
 			case eq.bufferOutCh <- front.Value.(*Event):
 				events.Remove(front)
 			case <-eq.doneCh:
@@ -428,6 +453,11 @@ func (imts *ignoredSink) Write(event *Event) error {
 	return imts.Sink.Write(event)
 }
 
+type deliveryListener interface {
+	eventDelivered(retriesCount int64)
+	eventLost(retriesCount int64)
+}
+
 // retryingSink retries the write until success or an ErrSinkClosed is
 // returned. Underlying sink must have p > 0 of succeeding or the sink will
 // block. Internally, it is a circuit breaker retries to manage reset.
@@ -447,12 +477,19 @@ type retryingSink struct {
 		threshold int
 		backoff   time.Duration // time after which we retry after failure.
 	}
+
+	listeners []deliveryListener
 }
 
 // newRetryingSink returns a sink that will retry writes to a sink, backing
 // off on failure. Parameters threshold and backoff adjust the behavior of the
 // circuit breaker.
-func newRetryingSink(sink Sink, threshold int, backoff time.Duration) *retryingSink {
+func newRetryingSink(
+	sink Sink,
+	threshold int,
+	backoff time.Duration,
+	listeners ...deliveryListener,
+) *retryingSink {
 	rs := &retryingSink{
 		sink: sink,
 
@@ -461,6 +498,8 @@ func newRetryingSink(sink Sink, threshold int, backoff time.Duration) *retryingS
 		errCh:    make(chan error),
 
 		wg: new(sync.WaitGroup),
+
+		listeners: listeners,
 	}
 	rs.failures.threshold = threshold
 	rs.failures.backoff = backoff
@@ -481,6 +520,8 @@ main:
 		case <-rs.doneCh:
 			return
 		case event := <-rs.eventsCh:
+			var retriesCount int64 = 0
+
 			for failuresCount := 0; failuresCount < rs.failures.threshold; failuresCount++ {
 				select {
 				case <-rs.doneCh:
@@ -493,6 +534,10 @@ main:
 
 				// Event sent successfully, fetch next event from channel:
 				if err == nil {
+					for _, listener := range rs.listeners {
+						listener.eventDelivered(retriesCount)
+					}
+
 					rs.errCh <- nil
 					continue main
 				}
@@ -504,8 +549,9 @@ main:
 				}
 
 				log.WithError(err).
-					WithField("railure_count", failuresCount).
+					WithField("failure_count", failuresCount).
 					Error("retryingsink: error writing event, retrying")
+				retriesCount++
 			}
 
 			log.WithField("sink", rs.sink).
@@ -528,6 +574,10 @@ main:
 
 					// Event sent successfully, fetch next event from channel:
 					if err == nil {
+						for _, listener := range rs.listeners {
+							listener.eventDelivered(retriesCount)
+						}
+
 						rs.errCh <- nil
 						continue main
 					}
@@ -541,6 +591,7 @@ main:
 					log.WithError(err).
 						WithField("next_retry_time", lastFailureTime.Add(rs.failures.backoff).String()).
 						Error("retryingsink: error writing event, backing off")
+					retriesCount++
 				}
 			}
 		}
@@ -593,18 +644,29 @@ func (rs *retryingSink) Close() error {
 type backoffSink struct {
 	doneCh  chan struct{}
 	sink    Sink
-	backoff backoff.BackOff
+	backoff func() backoff.BackOff
+
+	listeners []deliveryListener
 }
 
-func newBackoffSink(sink Sink, initialInterval time.Duration, maxRetries int) *backoffSink {
-	b := backoff.NewExponentialBackOff()
-	b.InitialInterval = initialInterval
-
+func newBackoffSink(
+	sink Sink,
+	initialInterval time.Duration,
+	maxRetries int,
+	listeners ...deliveryListener,
+) *backoffSink {
 	return &backoffSink{
 		doneCh: make(chan struct{}),
 		sink:   sink,
 		// nolint: gosec
-		backoff: backoff.WithMaxRetries(b, uint64(maxRetries)),
+		backoff: func() backoff.BackOff {
+			b := backoff.NewExponentialBackOff(
+				backoff.WithInitialInterval(initialInterval),
+			)
+			return backoff.WithMaxRetries(b, uint64(maxRetries))
+		},
+
+		listeners: listeners,
 	}
 }
 
@@ -613,7 +675,11 @@ func newBackoffSink(sink Sink, initialInterval time.Duration, maxRetries int) *b
 // reached, an error is returned and the event is dropped.
 // It returns early if the sink is closed.
 func (bs *backoffSink) Write(event *Event) error {
+	var attempts int64
+
 	op := func() error {
+		attempts++
+
 		select {
 		case <-bs.doneCh:
 			return backoff.Permanent(ErrSinkClosed)
@@ -628,7 +694,18 @@ func (bs *backoffSink) Write(event *Event) error {
 		return nil
 	}
 
-	return backoff.Retry(op, bs.backoff)
+	err := backoff.Retry(op, bs.backoff())
+	if err != nil {
+		for _, listener := range bs.listeners {
+			listener.eventLost(attempts - 1)
+		}
+		return err
+	}
+
+	for _, listener := range bs.listeners {
+		listener.eventDelivered(attempts - 1)
+	}
+	return nil
 }
 
 // Close closes the sink and the underlying sink.

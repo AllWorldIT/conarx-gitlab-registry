@@ -28,7 +28,7 @@ const cacheOpTimeout = 500 * time.Millisecond
 // urlCacheStorageMiddleware provides a caching layer for URLFor calls using an in-memory LRU cache.
 type urlCacheStorageMiddleware struct {
 	driver.StorageDriver
-	cache              *iredis.Cache
+	cache              iredis.CacheInterface
 	dryRun             bool
 	minURLValidity     time.Duration
 	defaultURLValidity time.Duration
@@ -99,11 +99,14 @@ func newURLCacheStorageMiddleware(
 
 	v, ok := options["_redisCache"]
 	if !ok {
-		return nil, nil, fmt.Errorf("urlcache middleware requires `cache` Redis configured")
+		return nil, nil, fmt.Errorf("`_redisCache` key has not been passed to urlcache middleware") // this should not happen
 	}
-	redisCache, ok := v.(*iredis.Cache)
+	if v == nil {
+		return nil, nil, fmt.Errorf("redis cache has either been not defined in container registry config or is not usable and it is required by urlcache middleware to work")
+	}
+	redisCache, ok := v.(iredis.CacheInterface)
 	if !ok {
-		return nil, nil, fmt.Errorf("unusable redis cache object passed to the middleware: %T", v)
+		return nil, nil, fmt.Errorf("redis cache passed to the middleware cannot be used as the type is wrong: %T", v) // this should not happen either
 	}
 
 	at, stopF := metrics.NewAccessTracker(60*time.Second, 100)
@@ -242,7 +245,12 @@ func (uc *urlCacheStorageMiddleware) URLFor(ctx context.Context, path string, op
 		// NOTE(prozlach): No point in caching it as it will be immediately
 		// expired in Redis anyway. Operator needs to adjust the config or the
 		// bug needs to be fixed. Log and carry on.
-		l.WithFields(logrus.Fields{"remainingValidity": remainingValidity}).Error("requested expiry time violates minimum URL validity setting")
+		l.WithFields(
+			logrus.Fields{
+				"remainingValidity": remainingValidity.String(),
+				"minValidity":       uc.minURLValidity.String(),
+			},
+		).Error("requested expiry time violates minimum URL validity setting")
 		return url, nil
 	}
 
@@ -253,7 +261,7 @@ func (uc *urlCacheStorageMiddleware) URLFor(ctx context.Context, path string, op
 		URL: url,
 	}
 	metrics.URLCacheObjectSize(entry.size())
-	err = uc.cache.MarshalSet(setCtx, cacheKey, entry, iredis.WithTTL(remainingValidity))
+	err = uc.cache.MarshalSet(setCtx, cacheKey, entry, iredis.WithTTL(remainingValidity-uc.minURLValidity))
 	if err != nil {
 		l.WithError(err).Info("storing cache entry in Redis")
 	}

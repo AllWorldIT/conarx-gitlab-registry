@@ -371,6 +371,36 @@ func TestDBLoadBalancer_TypeOf(t *testing.T) {
 	require.Equal(t, HostTypeUnknown, lb.TypeOf(&DB{DB: unknownDB}))
 }
 
+func TestDBLoadBalancer_TypeOf_AddressFallback(t *testing.T) {
+	// Set up a load balancer with DSN addresses
+	primaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer primaryDB.Close()
+	replicaDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer replicaDB.Close()
+
+	lb := &DBLoadBalancer{
+		primary:  &DB{DB: primaryDB, DSN: &DSN{Host: "primary-host", Port: 5432}},
+		replicas: []*DB{{DB: replicaDB, DSN: &DSN{Host: "replica-host", Port: 5432}}},
+	}
+
+	// Now create different *sql.DB handles that are not pointer-equal, but share the same DSN addresses
+	altPrimaryDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer altPrimaryDB.Close()
+	altReplicaDB, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer altReplicaDB.Close()
+
+	otherPrimary := &DB{DB: altPrimaryDB, DSN: &DSN{Host: "primary-host", Port: 5432}}
+	otherReplica := &DB{DB: altReplicaDB, DSN: &DSN{Host: "replica-host", Port: 5432}}
+
+	// Because pointer identity fails, TypeOf should fall back to address and classify correctly
+	require.Equal(t, HostTypePrimary, lb.TypeOf(otherPrimary))
+	require.Equal(t, HostTypeReplica, lb.TypeOf(otherReplica))
+}
+
 func TestDBLoadBalancer_ThrottledResolveReplicas(t *testing.T) {
 	primaryDB, _, err := sqlmock.New()
 	require.NoError(t, err)
@@ -464,6 +494,11 @@ func TestDBLoadBalancer_IsConnectivityError(t *testing.T) {
 		{
 			name:     "syntax error (42)",
 			err:      &pgconn.PgError{Code: pgerrcode.SyntaxError}, // 42601
+			expected: false,
+		},
+		{
+			name:     "statement timeout (57014) is not connectivity",
+			err:      &pgconn.PgError{Code: pgerrcode.QueryCanceled}, // 57014
 			expected: false,
 		},
 	}

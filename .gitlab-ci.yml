@@ -3,6 +3,8 @@ include:
   - local: .gitlab/ci/test.yml
   - local: .gitlab/ci/integration.yml
   - local: .gitlab/ci/release.yml
+  - local: .gitlab/ci/release_prepare.yml
+  - local: .gitlab/ci/release_tag.yml
   - local: .gitlab/ci/document.yml
   - local: .gitlab/ci/child_jobs.yml
   - local: .gitlab/ci/migrate.yml
@@ -44,7 +46,7 @@ variables:
   PG_PREV_VERSION: "15"
   PG_CURR_VERSION: "16"
   PG_NEXT_VERSION: "17"
-  GOLANGCI_LINT_VERSION: "2.1.6"
+  GOLANGCI_LINT_VERSION: "2.4.0"
 
 stages:
   - validate

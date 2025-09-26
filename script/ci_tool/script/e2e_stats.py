@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import os
+import re
 import shelve
 import traceback
 from datetime import datetime, timedelta
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta
 import click
 import gitlab
 import psycopg
+import yaml
 from dateutil.parser import parse
 
 # Constants
@@ -27,15 +29,53 @@ DEFAULT_PERIOD_DAYS = 63
 CR_PROJECT_ID = 13831684
 
 
-def process_test_report(cursor, test_report, mapping, date, datetime, pipeline_id):
+def parse_gitlab_ci_allowfail_patterns(gitlab_ci_path):
+    """
+    Parse .gitlab-ci.yml file and extract allowfail regexp patterns.
+
+    Returns a list of compiled regular expression objects from comments
+    in the format: #ci-tool-allowfail regexp
+    """
+    allowfail_patterns = []
+
+    try:
+        with open(gitlab_ci_path, 'r') as f:
+            for line in f:
+                # Look for comments with the specific format
+                match = re.search(
+                    r'#\s*ci-tool-allowfail\s+(.+)$', line.strip())
+                if match:
+                    pattern = match.group(1).strip()
+                    try:
+                        compiled_pattern = re.compile(pattern)
+                        allowfail_patterns.append(compiled_pattern)
+                        print(f"Added allowfail pattern: {pattern}")
+                    except re.error as e:
+                        print(
+                            f"Warning: Invalid regexp pattern '{pattern}': {e}")
+    except FileNotFoundError:
+        print(f"Error: GitLab CI file not found at {gitlab_ci_path}")
+        raise
+    except Exception as e:
+        print(f"Error reading GitLab CI file: {e}")
+        raise
+
+    return allowfail_patterns
+
+
+def process_test_report(cursor, test_report, mapping, date, datetime, pipeline_id, allowfail_patterns=None):
     success_tuples = []
     fail_tuples = []
     time_tuples = []
     overall_success = True
 
+    if allowfail_patterns is None:
+        allowfail_patterns = []
+
     for test_suite in test_report.test_suites:
-        if overall_success & test_suite["failed_count"] > 0:
-            overall_success = False
+        # Check if this test suite matches any allowfail pattern
+        is_allowfail = any(pattern.search(
+            test_suite["name"]) for pattern in allowfail_patterns)
 
         variant_group_id = ""
         variant_id = ""
@@ -57,10 +97,17 @@ def process_test_report(cursor, test_report, mapping, date, datetime, pipeline_i
             if variant_id:
                 success_tuples.append((date, variant_id, 1))
         else:
-            fail_tuples.append((date, variant_group_id, 1, 1, pipeline_id))
-            if variant_id:
-                fail_tuples.append((date, variant_id, 1, 1, pipeline_id))
-            overall_success = False
+            if not is_allowfail:
+                fail_tuples.append((date, variant_group_id, 1, 1, pipeline_id))
+                if variant_id:
+                    fail_tuples.append((date, variant_id, 1, 1, pipeline_id))
+                # Already handled overall_success above with allowfail check
+            else:
+                print(
+                    f"Variant Group `{variant_group_name}` allowed to fail")
+                if variant_id:
+                    print(
+                        f"Variant `{test_suite['name']} allowed to fail")
 
         for test_case in test_suite["test_cases"]:
             tc_name_id = mapping[KIND_TYPE_ID_TEST][test_case["name"]]
@@ -69,7 +116,12 @@ def process_test_report(cursor, test_report, mapping, date, datetime, pipeline_i
 
             if test_case["status"] == "failed":
                 fail_tuples.append((date, tc_name_id, 1, 1, pipeline_id))
-                overall_success = False
+                # Don't update overall_success for individual test cases if parent suite is allowfail
+                if not is_allowfail:
+                    overall_success = False
+                else:
+                    print(
+                        f"Testcase {test_case["name"]} allowed to fail")
             elif test_case["status"] == "success":
                 success_tuples.append((date, tc_name_id, 1))
 
@@ -131,7 +183,7 @@ def ensure_mappings(cursor, test_report):
     return mapping
 
 
-def process_pipeline(cursor, pipeline, use_cache, write_jsons):
+def process_pipeline(cursor, pipeline, use_cache, write_jsons, allowfail_patterns):
     test_report = None
 
     if use_cache:
@@ -164,7 +216,7 @@ def process_pipeline(cursor, pipeline, use_cache, write_jsons):
 
     mapping = ensure_mappings(cursor, test_report)
     success_tuples, fail_tuples, time_tuples = process_test_report(
-        cursor, test_report, mapping, date_str, datetime_str, pipeline.id)
+        cursor, test_report, mapping, date_str, datetime_str, pipeline.id, allowfail_patterns)
 
     cursor.executemany(
         """INSERT INTO public.success_ratio (date, kind_id, total_runs)
@@ -215,8 +267,14 @@ def process_pipeline(cursor, pipeline, use_cache, write_jsons):
 @click.option("--db-port", envvar="CI_TOOL_DB_PORT", default=5432, type=click.IntRange(min=1024, max=65536), help="PostgreSQL database port", show_default=True)
 @click.option("--gl-token", envvar="CI_TOOL_GL_TOKEN", help="GitLab API token", required=True)
 @click.option("--period", type=click.IntRange(min=1, max=DEFAULT_PERIOD_DAYS), default=DEFAULT_PERIOD_DAYS, help="Number of days to look back when quering pipeline data from GitLab", show_default=True)
-def main(use_cache, write_jsons, db_host, db_name, db_user, db_pass, db_port, gl_token, period):
+@click.option("--gitlab-ci-file", type=click.Path(exists=True, readable=True), help="Path to .gitlab-ci.yml file", required=True)
+def main(use_cache, write_jsons, db_host, db_name, db_user, db_pass, db_port, gl_token, period, gitlab_ci_file):
     since = datetime.now() - timedelta(days=period)
+
+    # Parse allowfail patterns from GitLab CI file
+    print(f"Parsing allowfail patterns from {gitlab_ci_file}")
+    allowfail_patterns = parse_gitlab_ci_allowfail_patterns(gitlab_ci_file)
+    print(f"Found {len(allowfail_patterns)} allowfail patterns")
 
     print("Connecting to GitLab")
     gl = gitlab.Gitlab(private_token=gl_token)
@@ -240,11 +298,13 @@ def main(use_cache, write_jsons, db_host, db_name, db_user, db_pass, db_port, gl
                 continue
 
             print(f"Processing pipeline ID {pipeline.id}")
-            process_pipeline(cursor, pipeline, use_cache, write_jsons)
+            process_pipeline(cursor, pipeline, use_cache,
+                             write_jsons, allowfail_patterns)
             conn.commit()
     except Exception as e:
         conn.rollback()
         print(f"Error: {e}")
+        traceback.print_exc()
     finally:
         cursor.close()
         conn.close()

@@ -27,7 +27,7 @@ The credentials are stored in 1Password, look for entries starting with `Contain
 
 The database has following configuration:
 
-- engine version 16
+- engine version 17
 - Instance class db.m5.large - 2 vCPU, 8GiB RAM
 - no multi-AZ, no replication
 - storage 40 GiB, general purpose ssd (gp3), 3000 IOPS

@@ -4,14 +4,13 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/docker/distribution/configuration"
 
 	"github.com/redis/go-redis/v9"
 )
-
-var errNoResult = errors.New("no result returned")
 
 type Limiter struct {
 	client redis.UniversalClient
@@ -36,20 +35,28 @@ func New(client redis.UniversalClient, config *configuration.Limiter) *Limiter {
 var distributedGCRAScript string
 
 func (rl *Limiter) Allowed(ctx context.Context, key string) (*Result, error) {
-	// Use second precision to avoid floating point issues
 	currentTime := float64(time.Now().Unix())
+
 	capacity := float64(rl.config.Limit.Burst)
+
+	// Calculate refill rate in tokens per second
+	// This handles second/minute/hour periods correctly
 	refillRate := float64(rl.config.Limit.Rate) / rl.config.Limit.PeriodDuration.Seconds()
+
 	tokensRequested := 1.0
 
-	result, err := rl.client.Eval(ctx, distributedGCRAScript, []string{key},
-		capacity, refillRate, currentTime, tokensRequested).Result()
+	result, err := rl.client.Eval(
+		ctx,
+		distributedGCRAScript,
+		[]string{key},
+		capacity, refillRate, currentTime, tokensRequested,
+	).Result()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("eval of the gcra script failed: %w", err)
 	}
 
 	if result == nil {
-		return nil, errNoResult
+		return nil, errors.New("eval of the gcra script returned no results")
 	}
 
 	results := result.([]any)

@@ -71,6 +71,7 @@ type httpStatusListener interface {
 	success(status int, event *Event)
 	failure(status int, event *Event)
 	err(events *Event)
+	latency(time.Duration)
 }
 
 // Accept makes an attempt to notify the endpoint, returning an error if it
@@ -123,7 +124,14 @@ func (hs *httpSink) run() {
 				continue
 			}
 			req.Header.Set("Content-Type", EventsMediaType)
+
+			start := time.Now()
 			resp, err := hs.client.Do(req)
+			reqDuration := time.Since(start)
+			for _, listener := range hs.listeners {
+				listener.latency(reqDuration)
+			}
+
 			if err != nil {
 				for _, listener := range hs.listeners {
 					listener.err(event)
