@@ -25,6 +25,7 @@ var (
 	lbLagBytes                     *prometheus.GaugeVec
 	lbLagSeconds                   *prometheus.HistogramVec
 	databaseRowCountCollectionHist prometheus.Histogram
+	totalMigrations                *prometheus.GaugeVec
 )
 
 const (
@@ -100,6 +101,12 @@ const (
 
 	databaseRowCountCollectionName = "row_count_collection_duration_seconds"
 	databaseRowCountCollectionDesc = "A histogram of total duration for collecting all database row count queries in a single run"
+
+	totalMigrationsName = "migrations_total"
+	totalMigrationsDesc = "A gauge for the total number of database migrations (applied + pending)"
+	migrationTypeLabel  = "migration_type"
+	preMigrationType    = "pre_deployment"
+	postMigrationType   = "post_deployment"
 )
 
 func init() {
@@ -229,6 +236,16 @@ func registerMetrics(registerer prometheus.Registerer) {
 		},
 	)
 
+	totalMigrations = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      totalMigrationsName,
+			Help:      totalMigrationsDesc,
+		},
+		[]string{migrationTypeLabel},
+	)
+
 	registerer.MustRegister(queryDurationHist)
 	registerer.MustRegister(queryTotal)
 	registerer.MustRegister(lbPoolSize)
@@ -241,6 +258,7 @@ func registerMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(lbLagBytes)
 	registerer.MustRegister(lbLagSeconds)
 	registerer.MustRegister(databaseRowCountCollectionHist)
+	registerer.MustRegister(totalMigrations)
 }
 
 func InstrumentQuery(name string) func() {
@@ -470,4 +488,11 @@ func (r *Registrar) IsRegistered() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.registered
+}
+
+// SetTotalMigrationCounts sets the total migration count metrics.
+// This should be called during application startup with the actual counts.
+func SetTotalMigrationCounts(preCount, postCount int) {
+	totalMigrations.WithLabelValues(preMigrationType).Set(float64(preCount))
+	totalMigrations.WithLabelValues(postMigrationType).Set(float64(postCount))
 }

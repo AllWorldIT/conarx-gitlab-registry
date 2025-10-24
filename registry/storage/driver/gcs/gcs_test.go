@@ -50,27 +50,26 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 	ts := creds.TokenSource
 
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
-	if os.Getenv(registryGCSDriverEnv) == "next" {
-		if debugLog == "true" {
-			sLogger := slogt.New(tb)
-			// NOTE(prozlach): This does not work really, see https://github.com/googleapis/google-cloud-go/issues/12475
-			// As a workaround we set the env variable as well, but this only
-			// makes GCS print logs to stdout using JSON format. Not ideal.
-			err = os.Setenv("GOOGLE_SDK_GO_LOGGING_LEVEL", "debug")
-			if err != nil {
-				return nil, fmt.Errorf("setting `GOOGLE_SDK_GO_LOGGING_LEVEL` env var: %w", err)
-			}
-			opts = append(opts, option.WithLogger(sLogger))
+	if debugLog == "true" {
+		sLogger := slogt.New(tb)
+		// NOTE(prozlach): This does not work really, see https://github.com/googleapis/google-cloud-go/issues/12475
+		// As a workaround we set the env variable as well, but this only
+		// makes GCS print logs to stdout using JSON format. Not ideal.
+		err = os.Setenv("GOOGLE_SDK_GO_LOGGING_LEVEL", "debug")
+		if err != nil {
+			return nil, fmt.Errorf("setting `GOOGLE_SDK_GO_LOGGING_LEVEL` env var: %w", err)
 		}
-		opts = append(opts, option.WithUserAgent(userAgent))
-		// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
-		// API. GCS SDK recommends using the JSON API instead, which is done
-		// here by setting WithJSONReads. This ensures consistency with other
-		// client operations, which all use JSON. JSON will become the default
-		// in a future release of GCS SDK. We only enable it for GCS next.
-		// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
-		opts = append(opts, storage.WithJSONReads())
+		opts = append(opts, option.WithLogger(sLogger))
 	}
+	opts = append(opts, option.WithUserAgent(userAgent))
+	// NOTE(prozlach): By default, reads are made using the Cloud Storage XML
+	// API. GCS SDK recommends using the JSON API instead, which is done
+	// here by setting WithJSONReads. This ensures consistency with other
+	// client operations, which all use JSON. JSON will become the default
+	// in a future release of GCS SDK.
+	// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
+	opts = append(opts, storage.WithJSONReads())
+
 	storageClient, err := storage.NewClient(
 		log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb))),
 		opts...,
@@ -127,14 +126,7 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		parallelWalk:   parallelWalkBool,
 	}
 
-	switch os.Getenv(registryGCSDriverEnv) {
-	case "next":
-		tb.Log("Using next-gen GCS driver")
-		return NewNext(parameters)
-	default:
-		tb.Log("Using legacy GCS driver")
-		return New(parameters)
-	}
+	return New(parameters)
 }
 
 func skipGCS() string {
@@ -269,7 +261,7 @@ func TestGCSDriverRetry(t *testing.T) {
 		if observed != nil {
 			observedMsg = observed.Error()
 		}
-		require.Equal(t, expected, observedMsg)
+		require.Contains(t, observedMsg, expected)
 	}
 
 	err := retry(func() error {
@@ -402,7 +394,7 @@ func TestGCSDriver_parseParameters_Bool(t *testing.T) {
 	}
 
 	testFn := func(params map[string]any) (any, error) {
-		return parseParameters(params, os.Getenv(registryGCSDriverEnv) == "next")
+		return parseParameters(params)
 	}
 
 	opts := dtestutil.Opts{

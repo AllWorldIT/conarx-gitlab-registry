@@ -10,7 +10,6 @@ import (
 	"github.com/docker/distribution/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -291,6 +290,12 @@ registry_storage_object_accesses_topn{top_n="all"} 55
 		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
 	}
 
+	// NOTE(prozlach): We can't simply use here require.EventuallyWithT() as
+	// every GatherAndCompare changes the state of the registrerer. The easiest
+	// option is to simply ensure that AccessTracker had enough time to gather
+	// all the metrics.
+	time.Sleep(time.Second)
+
 	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
 	require.NoError(s.T(), err)
 }
@@ -350,14 +355,14 @@ registry_storage_object_accesses_topn{top_n="all"} 1122
 		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
 	}
 
-	require.EventuallyWithT(
-		s.T(),
-		func(tt *assert.CollectT) {
-			err := testutil.GatherAndCompare(s.registerer, &expected, names...)
-			require.NoError(tt, err)
-		},
-		3*time.Second, 100*time.Millisecond,
-	)
+	// NOTE(prozlach): We can't simply use here require.EventuallyWithT() as
+	// every GatherAndCompare changes the state of the registrerer. The easiest
+	// option is to simply ensure that AccessTracker had enough time to gather
+	// all the metrics.
+	time.Sleep(time.Second)
+
+	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
+	require.NoError(s.T(), err)
 }
 
 func (s *AccessTrackerTestSuite) TestLargeObjectIDs() {
@@ -403,14 +408,14 @@ registry_storage_object_accesses_topn{top_n="all"} 3
 		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
 	}
 
-	require.EventuallyWithT(
-		s.T(),
-		func(tt *assert.CollectT) {
-			err := testutil.GatherAndCompare(s.registerer, &expected, names...)
-			require.NoError(tt, err)
-		},
-		3*time.Second, 100*time.Millisecond,
-	)
+	// NOTE(prozlach): We can't simply use here require.EventuallyWithT() as
+	// every GatherAndCompare changes the state of the registrerer. The easiest
+	// option is to simply ensure that AccessTracker had enough time to gather
+	// all the metrics.
+	time.Sleep(time.Second)
+
+	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
+	require.NoError(s.T(), err)
 }
 
 func (s *AccessTrackerTestSuite) TestNoAccesses() {
@@ -448,6 +453,12 @@ registry_storage_object_accesses_distribution_count 0
 		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, objectAccessesDistributionName),
 		fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, accessTrackerDroppedEventsName),
 	}
+
+	// NOTE(prozlach): We can't simply use here require.EventuallyWithT() as
+	// every GatherAndCompare changes the state of the registrerer. The easiest
+	// option is to simply ensure that AccessTracker had enough time to gather
+	// all the metrics.
+	time.Sleep(time.Second)
 
 	err = testutil.GatherAndCompare(s.registerer, &expected, names...)
 	require.NoError(s.T(), err)

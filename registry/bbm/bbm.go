@@ -98,8 +98,9 @@ func AllWork() []Work {
 }
 
 func copyManifestMediaTypeIDToNewBigIntColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, _ int) error {
-	fmt.Printf(`Copying from column manifests.media_type_id to manifests.media_type_id_convert_to_bigint,  Starting from %s :%d to id:%d`, paginationColumn, paginationAfter, paginationBefore)
 	q := fmt.Sprintf(`UPDATE %s SET media_type_id_convert_to_bigint = media_type_id WHERE %s >= $1 AND %s <= $2`, paginationTable, paginationColumn, paginationColumn)
+	log.GetLogger(log.WithContext(ctx)).
+		Info(fmt.Sprintf(`Copying from column manifests.media_type_id to manifests.media_type_id_convert_to_bigint,  Starting from %s :%d to id:%d`, paginationColumn, paginationAfter, paginationBefore))
 	_, err := db.ExecContext(ctx, q, paginationAfter, paginationBefore)
 	if err != nil {
 		return err
@@ -295,6 +296,9 @@ func (jw *Worker) run(ctx context.Context) (runResult, error) {
 	// Cancel the job worker context when the `maxRunTimeout` duration elapses
 	ctx, cancel := context.WithTimeout(ctx, maxRunTimeout)
 	defer cancel()
+
+	// inject logger into context for work function use
+	ctx = log.WithLogger(ctx, jw.logger)
 
 	// start a transaction to run the background migration process
 	tx, err := jw.db.BeginTx(ctx, nil)

@@ -142,7 +142,6 @@ gcs:key_creds:
   parallel:
     matrix:
       - GO_VERSION: [ "1.23", "1.24" ]
-        REGISTRY_GCS_DRIVER: [ "current", "next" ]
   rules:
     - <<: *if-fork-merge-request
       when: never
@@ -164,8 +163,6 @@ gcs:instance_creds:
   parallel:
     matrix:
       - GO_VERSION: [ "1.23", "1.24" ]
-        # Only supported on `next` driver:
-        REGISTRY_GCS_DRIVER: [ "next" ]
  # Do not run in forked projects, as we are running on custom runner with
  # instance-level credentials
   rules:
@@ -424,18 +421,18 @@ database:background-migrations:
   services:
     - name: redis:alpine
       alias: "redis"
-    - name: bitnami/postgresql:${PG_VERSION}
+    - name: bitnamilegacy/postgresql:${PG_VERSION}
       alias: "primary"
       variables:
         POSTGRESQL_REPLICATION_MODE: "master"
         POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
-    - name: bitnami/postgresql:${PG_VERSION}
+    - name: bitnamilegacy/postgresql:${PG_VERSION}
       alias: "replica1"
       variables:
         POSTGRESQL_REPLICATION_MODE: "slave"
         POSTGRESQL_MASTER_HOST: "primary"
         POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
-    - name: bitnami/postgresql:${PG_VERSION}
+    - name: bitnamilegacy/postgresql:${PG_VERSION}
       alias: "replica2"
       variables:
         POSTGRESQL_REPLICATION_MODE: "slave"
@@ -474,7 +471,7 @@ database:api-load-balancing-discovery:
   services:
     - name: redis:alpine
       alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
 
 cache:redis:
   extends: .cache:redis
@@ -516,7 +513,7 @@ cache:redis-sentinel:
   services:
     - name: redis:alpine
       alias: "redis"
-    - name: bitnami/redis-sentinel
+    - name: bitnamilegacy/redis-sentinel
       alias: "redis-sentinel"
 
 cache:redis-sentinel-auth:
@@ -536,7 +533,7 @@ cache:redis-sentinel-auth:
   services:
     - name: redis:alpine
       alias: "redis"
-    - name: bitnami/redis-sentinel
+    - name: bitnamilegacy/redis-sentinel
       alias: "redis-sentinel"
       command:
         - /bin/sh
@@ -561,9 +558,6 @@ base-driver:
 # ci-tool-allowfail redis:rate-limiter:handlers
 redis:rate-limiter:handlers:
   extends: .go-version-matrix
-  # TODO: temporarily allow failure while we investigate a better way to run these tests
-  # https://gitlab.com/gitlab-org/container-registry/-/issues/1649
-  allow_failure: true
   stage: integration
   variables:
     REDIS_ADDR: "redis:6379"
@@ -571,7 +565,7 @@ redis:rate-limiter:handlers:
   services:
     - name: redis:alpine
       alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test
+  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
 
 
 .redis-cluster-variables:
@@ -585,11 +579,8 @@ redis:rate-limiter:handlers:
 redis-cluster:rate-limiter:handlers:
   extends: .go-version-matrix
   stage: integration
-  # TODO: temporarily allow failure while we investigate a better way to run these tests
-  # https://gitlab.com/gitlab-org/container-registry/-/issues/1649
-  allow_failure: true
   services:
-    - name: bitnami/redis-cluster:$REDIS_CLUSTER_VERSION
+    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
       alias: redis-1
       variables:
         <<: *redis-cluster-variables
@@ -599,7 +590,7 @@ redis-cluster:rate-limiter:handlers:
         REDIS_CLUSTER_ANNOUNCE_BUS_PORT: 17001
         REDIS_CLUSTER_CREATOR: yes
 
-    - name: bitnami/redis-cluster:$REDIS_CLUSTER_VERSION
+    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
       alias: redis-2
       variables:
         <<: *redis-cluster-variables
@@ -608,7 +599,7 @@ redis-cluster:rate-limiter:handlers:
         REDIS_CLUSTER_ANNOUNCE_PORT: 7002
         REDIS_CLUSTER_ANNOUNCE_BUS_PORT: 17002
 
-    - name: bitnami/redis-cluster:$REDIS_CLUSTER_VERSION
+    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
       alias: redis-3
       variables:
         <<: *redis-cluster-variables
@@ -622,7 +613,7 @@ redis-cluster:rate-limiter:handlers:
     REDIS_ADDR: "redis-1:7001,redis-2:7002,redis-3:7003"
     PACKAGE: 'github.com/docker/distribution/registry/handlers'
   script:
-    - $GO_TEST -v -coverprofile=coverage.out -tags=integration,redis_test -run "TestRateLimiter"
+    - $GO_TEST -v -coverprofile=coverage.out -tags=integration -run "TestRateLimiter"
 
 # cli:schema-migration-dependency is an integration test suite that verifies the dependency resolver for post/pre-deployment schema migrations.
 cli:schema-migration-dependency:

@@ -291,7 +291,7 @@ func assertMonitoringResponse(t *testing.T, scheme, addr, targetPath string, exp
 func TestConfigureMonitoring(t *testing.T) {
 	tcs := map[string]struct {
 		config            func() *configuration.Configuration
-		monitorConfigFunc func(config *configuration.Configuration) func()
+		monitorConfigFunc func(ttt *testing.T, config *configuration.Configuration) func()
 		assertionPaths    map[string]int
 	}{
 		"health_handler": {
@@ -301,12 +301,12 @@ func TestConfigureMonitoring(t *testing.T) {
 				config.HTTP.Debug.Addr = addr
 				return config
 			},
-			monitorConfigFunc: func(config *configuration.Configuration) func() {
+			monitorConfigFunc: func(ttt *testing.T, config *configuration.Configuration) func() {
+				opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
+				require.NoError(ttt, err)
 				return func() {
-					opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
-					require.NoError(t, err)
-					err = monitoring.Start(opts...)
-					require.NoError(t, err)
+					err := monitoring.Start(opts...)
+					assert.NoError(ttt, err)
 				}
 			},
 			assertionPaths: map[string]int{
@@ -324,15 +324,15 @@ func TestConfigureMonitoring(t *testing.T) {
 				config.HTTP.Debug.Prometheus.Path = "/metrics"
 				return config
 			},
-			monitorConfigFunc: func(config *configuration.Configuration) func() {
+			monitorConfigFunc: func(ttt *testing.T, config *configuration.Configuration) func() {
+				opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
+				require.NoError(ttt, err)
+				// Use local Prometheus registry for each test, otherwise different tests may attempt to register the same
+				// metrics in the default Prometheus registry, causing a panic.
+				opts = append(opts, monitoring.WithPrometheusRegisterer(prometheus.NewRegistry()))
 				return func() {
-					opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
-					require.NoError(t, err)
-					// Use local Prometheus registry for each test, otherwise different tests may attempt to register the same
-					// metrics in the default Prometheus registry, causing a panic.
-					opts = append(opts, monitoring.WithPrometheusRegisterer(prometheus.NewRegistry()))
-					err = monitoring.Start(opts...)
-					require.NoError(t, err)
+					err := monitoring.Start(opts...)
+					assert.NoError(t, err)
 				}
 			},
 			assertionPaths: map[string]int{
@@ -351,15 +351,15 @@ func TestConfigureMonitoring(t *testing.T) {
 				config.HTTP.Debug.Prometheus.Path = "/metrics"
 				return config
 			},
-			monitorConfigFunc: func(config *configuration.Configuration) func() {
+			monitorConfigFunc: func(ttt *testing.T, config *configuration.Configuration) func() {
+				opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
+				require.NoError(ttt, err)
+				// Use local Prometheus registry for each test, otherwise different tests may attempt to register the same
+				// metrics in the default Prometheus registry, causing a panic.
+				opts = append(opts, monitoring.WithPrometheusRegisterer(prometheus.NewRegistry()))
 				return func() {
-					opts, err := configureMonitoring(context.Background(), config, &health.DBStatusChecker{})
-					require.NoError(t, err)
-					// Use local Prometheus registry for each test, otherwise different tests may attempt to register the same
-					// metrics in the default Prometheus registry, causing a panic.
-					opts = append(opts, monitoring.WithPrometheusRegisterer(prometheus.NewRegistry()))
-					err = monitoring.Start(opts...)
-					require.NoError(t, err)
+					err := monitoring.Start(opts...)
+					assert.NoError(ttt, err)
 				}
 			},
 			assertionPaths: map[string]int{
@@ -372,17 +372,17 @@ func TestConfigureMonitoring(t *testing.T) {
 
 	for tn, tc := range tcs {
 		for _, scheme := range []string{"http", "https"} {
-			t.Run(fmt.Sprintf("%s_%s", tn, scheme), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s_%s", tn, scheme), func(tt *testing.T) {
 				config := tc.config()
 				if scheme == "https" {
 					config.HTTP.Debug.TLS = configuration.DebugTLS{
 						Enabled:     true,
-						Certificate: testutil.TLSCertFilename(t),
-						Key:         testutil.TLSKeytFilename(t),
+						Certificate: testutil.TLSCertFilename(tt),
+						Key:         testutil.TLSKeytFilename(tt),
 					}
 				}
 
-				go tc.monitorConfigFunc(config)()
+				go tc.monitorConfigFunc(tt, config)()
 
 				for path, expectedStatus := range tc.assertionPaths {
 					require.Eventually(t, func() bool {

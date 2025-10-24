@@ -284,6 +284,31 @@ Use "registry database migrate [command] --help" for more information about a co
 - The `registry` binary, built from the source. See the [`Building` section of development environment setup doc](development-environment-setup.md#building) for more
   details.
 
+### Metrics
+
+There are metrics that track the number of total and applied migrations.
+
+Total count of migrations:
+
+- `registry_database_migrations_total{migration_type="pre_deployment"}` - Total count of pre-deployment migrations
+
+- `registry_database_migrations_total{migration_type="post_deployment"}` - Total count of post-deployment migrations
+
+Number of applied migrations:
+
+- `registry_database_rows{query_name="applied_pre_migrations"}` - Number of applied pre-deployment migrations
+
+- `registry_database_rows{query_name="applied_post_migrations"}` - Number of applied post-deployment migrations
+
+The number of pending migrations can be calculated by subtracting the number of applied
+migrations from the number of total migrations. For example, this will give you the number
+of pending post deployment migrations:
+
+```promql
+max(registry_database_migrations_total{migration_type="post_deployment"}) -
+max(registry_database_rows{query_name="applied_post_migrations"})
+```
+
 ### Apply Up Migrations
 
 To apply pending up migrations use the `up` sub-command:

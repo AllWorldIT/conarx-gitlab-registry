@@ -11,6 +11,7 @@ import (
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/datastore"
+	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/gorilla/handlers"
 	"github.com/opencontainers/go-digest"
 )
@@ -89,22 +90,29 @@ func dbBlobLinkExists(ctx context.Context, db datastore.Queryer, repoPath string
 // HandleGetBlob fetches the binary data from backend storage returns it in the
 // response.
 func (bh *blobHandler) HandleGetBlob(w http.ResponseWriter, r *http.Request) {
-	log.GetLogger(log.WithContext(bh)).Debug("HandleGetBlob")
+	p := bh.Repository.Named().Name()
+	l := log.GetLogger(log.WithContext(bh)).WithFields(log.Fields{"path": p})
+	l.Debug("HandleGetBlob")
 
 	var dgst digest.Digest
 	blobs := bh.Repository.Blobs(bh)
 
 	if bh.useDatabase {
-		if err := dbBlobLinkExists(bh.Context, bh.db.Primary(), bh.Repository.Named().Name(), bh.Digest, bh.GetRepoCache()); err != nil {
+		db := bh.db.UpToDateReplica(bh.Context, &models.Repository{Path: p})
+		if err := dbBlobLinkExists(bh.Context, db, p, bh.Digest, bh.GetRepoCache()); err != nil {
 			bh.Errors = append(bh.Errors, errcode.FromUnknownError(err))
 			return
 		}
 
 		dgst = bh.Digest
+		l = l.WithFields(log.Fields{
+			"db_host_type": bh.db.TypeOf(db),
+			"db_host_addr": db.Address(),
+		})
 	} else {
 		desc, err := blobs.Stat(bh, bh.Digest)
 		if err != nil {
-			if err == distribution.ErrBlobUnknown {
+			if errors.Is(err, distribution.ErrBlobUnknown) {
 				bh.Errors = append(bh.Errors, v2.ErrorCodeBlobUnknown.WithDetail(bh.Digest))
 			} else {
 				bh.Errors = append(bh.Errors, errcode.FromUnknownError(err))
@@ -127,6 +135,8 @@ func (bh *blobHandler) HandleGetBlob(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	l.Info("blob downloaded")
 }
 
 // dbDeleteBlob does not actually delete a blob from the database (that's GC's responsibility), it only unlinks it from

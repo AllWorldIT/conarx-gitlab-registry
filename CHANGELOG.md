@@ -1,3 +1,19 @@
+## [4.28.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.27.0-gitlab...v4.28.0) (2025-09-23)
+
+
+### Features
+
+* add metrics for number of total and applied migrations ([b0f4639](https://gitlab.com/gitlab-org/container-registry/commit/b0f4639a31792d5af8c25c945124ec8b6015dbb6))
+* **api:** enable DLB for OCI read blob endpoint ([7da3001](https://gitlab.com/gitlab-org/container-registry/commit/7da30010cc2a1a225120b18a008c741b01060357))
+* make gcs_next driver the main storage driver for gcs ([ddafd4e](https://gitlab.com/gitlab-org/container-registry/commit/ddafd4ebf4e17362a26fa7ce2eab5f900f88dd8f))
+* **registry:** import-command: skip recently pre imported repositories ([187d77f](https://gitlab.com/gitlab-org/container-registry/commit/187d77ff79fb74b4da5bd8c38261666a8666fc41))
+
+
+### Bug Fixes
+
+* log level parsing should ignore unknown log levels ([196650b](https://gitlab.com/gitlab-org/container-registry/commit/196650bc6cfb254f0fd6f9d5ef28e559b9c4da09))
+* make too many retries situations more explicit ([0b8ce13](https://gitlab.com/gitlab-org/container-registry/commit/0b8ce134e0a18f88b5afafc11bcbf37ffb67fce6))
+
 ## [4.27.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.26.1-gitlab...v4.27.0) (2025-08-28)
 
 

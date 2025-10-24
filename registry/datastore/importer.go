@@ -73,6 +73,7 @@ type Importer struct {
 	showProgressBar         bool
 	testingDelay            time.Duration
 	preImportRetryTimeout   time.Duration
+	preImportSkipCuttoff    time.Time
 }
 
 // ImporterOption provides functional options for the Importer.
@@ -143,6 +144,14 @@ func WithProgressBar(imp *Importer) {
 func WithImportStatsTracking(driverName string) ImporterOption {
 	return func(imp *Importer) {
 		imp.stats = newImportStats(imp.db, driverName)
+	}
+}
+
+// WithPreImportSkipRecent configures the Importer to skip pre importing
+// repositories which have been imported sooner than the provided time window.
+func WithPreImportSkipRecent(d time.Duration) ImporterOption {
+	return func(imp *Importer) {
+		imp.preImportSkipCuttoff = time.Now().Add(-d)
 	}
 }
 
@@ -1283,6 +1292,10 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 			return fmt.Errorf("creating or finding repository in database: %w", err)
 		}
 
+		if imp.shouldSkipPreImport(ctx, dbRepo) {
+			return nil
+		}
+
 		if err = imp.preImportTaggedManifests(ctx, fsRepo, dbRepo); err != nil {
 			l.WithError(err).Error("pre importing tagged manifests")
 			// if the storage driver failed to find a repository path (usually due to missing `_manifests/revisions`
@@ -1293,6 +1306,11 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 			return nil
 		}
 
+		// Use the last published at field to mark the timestamp of a successful import.
+		if err = imp.repositoryStore.UpdateLastPublishedAt(ctx, dbRepo, &models.Tag{CreatedAt: time.Now()}); err != nil {
+			l.WithError(err).Warn("error updating last published at")
+		}
+
 		// Only increment repositories that we've actually been able to find and validate.
 		imp.stats.incRepoCount()
 
@@ -1301,6 +1319,24 @@ func (imp *Importer) preImportAllRepositories(ctx context.Context) error {
 
 		return nil
 	})
+}
+
+func (imp *Importer) shouldSkipPreImport(ctx context.Context, dbRepo *models.Repository) bool {
+	if !dbRepo.LastPublishedAt.Valid || imp.preImportSkipCuttoff.IsZero() {
+		return false
+	}
+
+	if dbRepo.LastPublishedAt.Time.After(imp.preImportSkipCuttoff) {
+		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+			"repository":          dbRepo.Path,
+			"skip_cutoff_date":    imp.preImportSkipCuttoff,
+			"last_preimport_date": dbRepo.LastPublishedAt.Time,
+		}).Info("skipping repository pre import: last pre imported after skip cutoff date")
+
+		return true
+	}
+
+	return false
 }
 
 func (imp *Importer) importBlobsImpl(ctx context.Context) error {

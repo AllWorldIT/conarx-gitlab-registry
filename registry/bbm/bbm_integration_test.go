@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/bbm"
 	"github.com/docker/distribution/registry/bbm/mocks"
 	"github.com/docker/distribution/registry/datastore"
@@ -454,7 +455,8 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_JobExceedsR
 
 // CopyIDColumnInTestTableToNewIDColumn is the job function that is executed for a background migration with a `job_signature_name` column value of `CopyIDColumnInTestTableToNewIDColumn`
 func CopyIDColumnInTestTableToNewIDColumn(ctx context.Context, db datastore.Handler, _, paginationColumn string, paginationAfter, paginationBefore, _ int) error {
-	fmt.Printf(`Copying from column id to new_id,  Starting from id %d to %d on column %s`, paginationAfter, paginationBefore, paginationColumn)
+	log.GetLogger(log.WithContext(ctx)).
+		Info(fmt.Printf(`Copying from column id to new_id,  Starting from id %d to %d on column %s`, paginationAfter, paginationBefore, paginationColumn))
 	q := fmt.Sprintf(`UPDATE %s SET %s = %s WHERE id >= $1 AND id <= $2`, targetBBMTable, targetBBMNewColumn, targetBBMColumn)
 	_, err := db.ExecContext(ctx, q, paginationAfter, paginationBefore)
 	if err != nil {
