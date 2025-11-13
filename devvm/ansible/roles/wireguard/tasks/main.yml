@@ -1,0 +1,9 @@
+---
+- import_tasks: wireguard.yml
+  tags: wireguard
+
+- import_tasks: nginx.yml
+  tags: wireguard
+
+- import_tasks: wireguard-ui.yml
+  tags: wireguard

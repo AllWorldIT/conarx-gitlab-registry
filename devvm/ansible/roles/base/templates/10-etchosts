@@ -1,0 +1,5 @@
+#!/bin/sh
+printf "\n"
+printf "Please make sure to add these entries to your /etc/hosts file\n"
+printf "\n"
+printf "%s gitlab.devvm\n" "{{ vip_start_ip }}"

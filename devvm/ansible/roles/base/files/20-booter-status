@@ -1,0 +1,7 @@
+#!/bin/sh
+printf "\n"
+printf "In order to determine if machine is healthy, please execute:\n"
+printf "\n"
+printf "sudo -u dev /home/dev/container-registry/devvm/go/booter -watch\n"
+printf "\n"
+printf "Happy hacking!\n"

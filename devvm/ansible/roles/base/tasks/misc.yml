@@ -1,0 +1,20 @@
+---
+- name: Bump fs-notify limits
+  ansible.builtin.copy:
+    src: 50-fsnotify.conf
+    dest: /etc/sysctl.d/50-fsnotify.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Install additional packages
+  ansible.builtin.apt:
+    state: present
+    name:
+      - sysstat
+      - tree
+      - nginx
+  register: __pkgmgr_result
+  until: __pkgmgr_result is succeeded
+  retries: 3
+  delay: 3

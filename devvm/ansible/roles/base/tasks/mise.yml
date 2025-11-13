@@ -1,0 +1,92 @@
+---
+- name: Install mise dependencies
+  ansible.builtin.apt:
+    state: present
+    name:
+      - curl
+      - gpg
+      - libatomic1 #node dependency
+  register: __pkgmgr_result
+  until: __pkgmgr_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Fetch mise GPG key
+  ansible.builtin.get_url:
+    url: https://mise.jdx.dev/gpg-key.pub
+    dest: /tmp/mise.asc
+    mode: '0644'
+  register: __gpg_result
+  until: __gpg_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Convert and store mise GPG key for apt
+  ansible.builtin.command:
+    cmd: gpg --dearmor --output /etc/apt/keyrings/mise-archive-keyring.gpg /tmp/mise.asc
+    creates: /etc/apt/keyrings/mise-archive-keyring.gpg
+
+- name: Add mise apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.gpg arch=amd64] https://mise.jdx.dev/deb stable main"
+    state: present
+    filename: mise
+    update_cache: yes
+
+- name: Install mise
+  ansible.builtin.apt:
+    name: mise
+    state: present
+  register: __mise_install_result
+  until: __mise_install_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Ensure mise is activated for dev user in bashrc
+  ansible.builtin.lineinfile:
+    path: /home/dev/.bashrc
+    regexp: 'mise activate'
+    line: 'eval "$(mise activate bash)"'
+    create: yes
+  become: true
+  become_user: dev
+
+- name: Update mise plugins
+  ansible.builtin.shell:
+    cmd: |
+      set -eou pipefail
+      eval "$(mise activate bash)"
+      mise plugins update
+    chdir: /home/dev/
+    executable: /bin/bash
+  become: true
+  become_user: dev
+  changed_when: false
+
+- name: Install tools using mise
+  ansible.builtin.shell:
+  args:
+    cmd: |
+      set -eou pipefail
+      eval "$(mise activate bash)"
+      mise --verbose use -y {{ item }}
+    chdir: /home/dev/
+    executable: /bin/bash
+  become: true
+  become_user: dev
+  register: __mise_use_out
+  changed_when: "'installed' in __mise_use_out.stderr"
+  with_items:
+    - go@latest
+    - mc@latest
+    - kind@latest
+    - kubectl@latest
+    - helm@latest
+    - yarn@latest
+    - nodejs@latest

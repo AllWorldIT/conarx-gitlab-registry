@@ -1,0 +1,27 @@
+---
+- name: Create dev group
+  ansible.builtin.group:
+    name: dev
+    gid: 1080
+    state: present
+
+- name: Create dev user
+  ansible.builtin.user:
+    name: dev
+    uid: 1080
+    create_home: true
+    append: yes
+    groups:
+      - sudo
+    group: dev
+    state: present
+    shell: /bin/bash
+
+# GDK bootstrap process will need it:
+- name: Ensure dev user can sudo without password
+  ansible.builtin.copy:
+    content: dev ALL=(ALL:ALL) NOPASSWD:ALL
+    dest: /etc/sudoers.d/dev_sudo
+    owner: root
+    group: root
+    mode: 0640

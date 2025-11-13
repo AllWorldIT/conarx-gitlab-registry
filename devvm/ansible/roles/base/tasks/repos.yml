@@ -1,0 +1,21 @@
+---
+- name: Install deps
+  ansible.builtin.apt:
+    name:
+      - git
+    state: present
+  register: __pkgmgr_result
+  until: __pkgmgr_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Checkout container-registry repo
+  ansible.builtin.git:
+    repo: https://gitlab.com/gitlab-org/container-registry.git
+    dest: /home/dev/container-registry
+    accept_hostkey: true
+    version: master
+  # ssh auth sock issuesr
+  become: true
+  become_flags: -SHE
+  become_user: dev
