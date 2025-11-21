@@ -1,3 +1,10 @@
+## [4.31.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.31.0-gitlab...v4.31.1) (2025-11-21)
+
+
+### Bug Fixes
+
+* **registry:** disable REGISTRY_FF_ENFORCE_LOCKFILES by default ([06e1c57](https://gitlab.com/gitlab-org/container-registry/commit/06e1c57bb5b73c7a10588fbd3407f530f6de8e32))
+
 ## [4.31.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.30.0-gitlab...v4.31.0) (2025-11-05)
 
 
