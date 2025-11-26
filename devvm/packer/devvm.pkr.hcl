@@ -29,8 +29,6 @@ source "googlecompute" "gce" {
   source_image_family     = "${var.image_family}"
   use_os_login            = true
   zone                    = "${var.zone}"
-  temporary_key_pair_type = "ecdsa"
-  temporary_key_pair_bits = 384
   credentials_file        = "${var.account_file}"
   ssh_username            = "ubuntu"
 }
