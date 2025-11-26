@@ -36,8 +36,8 @@ devvm:packer:deploy:
   needs:
     - devvm:packer:validate
   rules:
-    # - <<: *if-fork-merge-request
-    #   when: never
+    - <<: *if-fork-merge-request
+      when: never
     - changes:
         - devvm/ansible/**/*
         - devvm/go/**/*

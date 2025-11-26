@@ -24,13 +24,13 @@ source "googlecompute" "gce" {
   labels = {
     "devvm" = "true"
   }
-  network                 = "devvm-vpc"
-  project_id              = "${var.project_id}"
-  source_image_family     = "${var.image_family}"
-  use_os_login            = true
-  zone                    = "${var.zone}"
-  credentials_file        = "${var.account_file}"
-  ssh_username            = "ubuntu"
+  network             = "devvm-vpc"
+  project_id          = "${var.project_id}"
+  source_image_family = "${var.image_family}"
+  use_os_login        = true
+  zone                = "${var.zone}"
+  credentials_file    = "${var.account_file}"
+  ssh_username        = "ubuntu"
 }
 
 build {
