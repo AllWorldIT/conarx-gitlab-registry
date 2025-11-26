@@ -1,6 +1,3 @@
-.if-fork-merge-request: &if-fork-merge-request
-  if: '($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE != "merge_train") && $CI_PROJECT_NAMESPACE !~ /^gitlab(-org)?($|\/)/'
-
 trigger ci tool:
   stage: aux jobs
   trigger:
