@@ -273,7 +273,7 @@ build CI images:
     - make push-ci-container-images
 
 devvm:packer:fmt:
-  image: registry.gitlab.com/gitlab-org/container-registry/packer-ci:latest
+  image: registry.gitlab.com/gitlab-org/container-registry/packer-ci:v1.0.0
   stage: validate
   script:
     - packer init ./devvm/packer/
@@ -283,7 +283,7 @@ devvm:packer:fmt:
         - devvm/packer/*
 
 devvm:packer:validate:
-  image: registry.gitlab.com/gitlab-org/container-registry/packer-ci:latest
+  image: registry.gitlab.com/gitlab-org/container-registry/packer-ci:v1.0.0
   stage: validate
   script:
     - packer init ./devvm/packer/

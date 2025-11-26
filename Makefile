@@ -180,7 +180,7 @@ rebuild-ci-container-images:
 		-t ${DOCKER_IMAGE_REGISTRY}/kv-ci-valkey:bookworm  \
 		containers/kv-cr/; \
 	docker build --no-cache \
-		-t ${DOCKER_IMAGE_REGISTRY}/packer-ci:latest  \
+		-t ${DOCKER_IMAGE_REGISTRY}/packer-ci:v1.0.0  \
 		containers/packer/; \
 
 .PHONY: push-ci-container-images
@@ -191,7 +191,7 @@ push-ci-container-images:
 	done
 	docker push ${DOCKER_IMAGE_REGISTRY}/kv-ci-valkey:bookworm;
 	docker push ${DOCKER_IMAGE_REGISTRY}/kv-ci-redis:bookworm;
-	docker push ${DOCKER_IMAGE_REGISTRY}/packer-ci:latest;
+	docker push ${DOCKER_IMAGE_REGISTRY}/packer-ci:v1.0.0;
 
 POSTGRES_COMPOSE_FILE := containers/compose-postgres.yml
 
