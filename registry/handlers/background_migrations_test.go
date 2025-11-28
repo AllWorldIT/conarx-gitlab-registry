@@ -652,6 +652,270 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestResumeBackgroundMigrations_Da
 	require.Equal(s.T(), http.StatusInternalServerError, resp.StatusCode)
 }
 
+func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_Success() {
+	// Prepare test data - a failed migration
+	migration := &models.BackgroundMigration{
+		ID:               1,
+		Name:             "migration_1",
+		Status:           models.BackgroundMigrationFailed,
+		JobName:          "job_1",
+		TargetTable:      "public.repositories",
+		TargetColumn:     "id",
+		BatchSize:        100,
+		StartID:          1,
+		EndID:            1000,
+		BatchingStrategy: models.SerialKeySetBatchingBBMStrategy,
+		TotalTupleCount:  sql.NullInt64{Int64: 500, Valid: true},
+		ErrorCode:        models.InvalidTableBBMErrCode,
+	}
+
+	// Setup sqlmock rows for FindById
+	findRows := sqlmock.NewRows([]string{
+		"id",
+		"name",
+		"min_value",
+		"max_value",
+		"batch_size",
+		"status",
+		"job_signature_name",
+		"table_name",
+		"column_name",
+		"failure_error_code",
+		"batching_strategy",
+		"total_tuple_count",
+	})
+
+	errVal, _ := migration.ErrorCode.Value()
+	bStrategy, _ := migration.BatchingStrategy.Value()
+	findRows.AddRow(
+		migration.ID,
+		migration.Name,
+		migration.StartID,
+		migration.EndID,
+		migration.BatchSize,
+		int(migration.Status),
+		migration.JobName,
+		migration.TargetTable,
+		migration.TargetColumn,
+		errVal,
+		bStrategy,
+		migration.TotalTupleCount,
+	)
+
+	// Setup sqlmock rows for UpdateStatus
+	updateRows := sqlmock.NewRows([]string{
+		"status",
+		"failure_error_code",
+	}).AddRow(int(models.BackgroundMigrationActive), nil)
+
+	s.mockAccessCtrl.EXPECT().
+		Authorized(gomock.Any(), auth.Access{
+			Resource: auth.Resource{
+				Type: "registry",
+				Name: "background-migrations",
+			},
+			Action: "*",
+		}).
+		DoAndReturn(func(ctx any, _ ...auth.Access) (any, error) {
+			return ctx, nil
+		})
+
+	// Expect the FindById query
+	s.mockQuerier.ExpectQuery(`SELECT.*FROM.*batched_background_migrations.*WHERE.*id = \$1`).
+		WithArgs(1).
+		WillReturnRows(findRows)
+
+	// Expect the UpdateStatus query
+	s.mockQuerier.ExpectQuery(`UPDATE.*batched_background_migrations.*SET.*status.*failure_error_code.*WHERE.*id.*`).
+		WithArgs(int(models.BackgroundMigrationActive), nil, 1, int(models.BackgroundMigrationRunning), int(models.BackgroundMigrationFinished)).
+		WillReturnRows(updateRows)
+
+	s.mockLB.EXPECT().Primary().Return(&datastore.DB{DB: s.mockPrimaryDB}).Times(2)
+
+	// Make request
+	resp, err := http.Post(fmt.Sprintf("%s/gitlab/v1/restart/1/", s.server.URL), "application/json", nil)
+	require.NoError(s.T(), err)
+	defer resp.Body.Close()
+
+	// Verify response
+	require.Equal(s.T(), http.StatusOK, resp.StatusCode)
+	require.Equal(s.T(), "application/json", resp.Header.Get("Content-Type"))
+
+	var result BackgroundMigrationActionResponse
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(s.T(), err)
+
+	// Verify response content
+	assert.True(s.T(), result.Success)
+	assert.Equal(s.T(), "Background migration 1 has been restarted", result.Message)
+}
+
+func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_Forbidden() {
+	mockChallenge := amocks.NewMockChallenge(s.ctrl)
+	mockChallenge.EXPECT().SetHeaders(gomock.Any(), gomock.Any()).Times(1)
+
+	s.mockAccessCtrl.EXPECT().
+		Authorized(gomock.Any(), auth.Access{
+			Resource: auth.Resource{
+				Type: "registry",
+				Name: "background-migrations",
+			},
+			Action: "*",
+		}).
+		Return(nil, mockChallenge)
+
+	// Make request
+	resp, err := http.Post(fmt.Sprintf("%s/gitlab/v1/restart/1/", s.server.URL), "application/json", nil)
+	require.NoError(s.T(), err)
+	defer resp.Body.Close()
+
+	// Verify 403 Forbidden response
+	require.Equal(s.T(), http.StatusUnauthorized, resp.StatusCode)
+}
+
+func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_InvalidID() {
+	// Expect authorization check
+	s.mockAccessCtrl.EXPECT().
+		Authorized(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx any, _ ...auth.Access) (any, error) {
+			return ctx, nil
+		})
+
+	// Make request with invalid ID
+	resp, err := http.Post(fmt.Sprintf("%s/gitlab/v1/restart/99999999999999999999999999999999999999999999999/", s.server.URL), "application/json", nil)
+	require.NoError(s.T(), err)
+	defer resp.Body.Close()
+
+	// Verify error response
+	require.Equal(s.T(), http.StatusBadRequest, resp.StatusCode)
+}
+
+func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_NotFound() {
+	// Expect authorization check
+	s.mockAccessCtrl.EXPECT().
+		Authorized(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx any, _ ...auth.Access) (any, error) {
+			return ctx, nil
+		})
+
+	// Expect the query to return no rows
+	s.mockQuerier.ExpectQuery(`SELECT.*FROM.*batched_background_migrations.*WHERE.*id.*`).
+		WithArgs(999).
+		WillReturnError(sql.ErrNoRows)
+
+	s.mockLB.EXPECT().Primary().Return(&datastore.DB{DB: s.mockPrimaryDB}).Times(1)
+
+	// Make request
+	resp, err := http.Post(fmt.Sprintf("%s/gitlab/v1/restart/999/", s.server.URL), "application/json", nil)
+	require.NoError(s.T(), err)
+	defer resp.Body.Close()
+
+	// Verify error response
+	require.Equal(s.T(), http.StatusNotFound, resp.StatusCode)
+}
+
+func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_DatabaseError() {
+	// Expect authorization check
+	s.mockAccessCtrl.EXPECT().
+		Authorized(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx any, _ ...auth.Access) (any, error) {
+			return ctx, nil
+		})
+
+	// Expect the query to return an error
+	s.mockQuerier.ExpectQuery(`SELECT.*FROM.*batched_background_migrations.*WHERE.*id.*`).
+		WithArgs(1).
+		WillReturnError(fmt.Errorf("database connection error"))
+
+	s.mockLB.EXPECT().Primary().Return(&datastore.DB{DB: s.mockPrimaryDB}).Times(1)
+
+	// Make request
+	resp, err := http.Post(fmt.Sprintf("%s/gitlab/v1/restart/1/", s.server.URL), "application/json", nil)
+	require.NoError(s.T(), err)
+	defer resp.Body.Close()
+
+	// Verify error response
+	require.Equal(s.T(), http.StatusInternalServerError, resp.StatusCode)
+}
+
+func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_UpdateError() {
+	// Prepare test data
+	migration := &models.BackgroundMigration{
+		ID:               1,
+		Name:             "migration_1",
+		Status:           models.BackgroundMigrationFailed,
+		JobName:          "job_1",
+		TargetTable:      "public.repositories",
+		TargetColumn:     "id",
+		BatchSize:        100,
+		StartID:          1,
+		EndID:            1000,
+		BatchingStrategy: models.SerialKeySetBatchingBBMStrategy,
+		TotalTupleCount:  sql.NullInt64{Int64: 500, Valid: true},
+		ErrorCode:        models.InvalidTableBBMErrCode,
+	}
+
+	// Setup sqlmock rows for FindById
+	findRows := sqlmock.NewRows([]string{
+		"id",
+		"name",
+		"min_value",
+		"max_value",
+		"batch_size",
+		"status",
+		"job_signature_name",
+		"table_name",
+		"column_name",
+		"failure_error_code",
+		"batching_strategy",
+		"total_tuple_count",
+	})
+
+	errVal, _ := migration.ErrorCode.Value()
+	bStrategy, _ := migration.BatchingStrategy.Value()
+	findRows.AddRow(
+		migration.ID,
+		migration.Name,
+		migration.StartID,
+		migration.EndID,
+		migration.BatchSize,
+		int(migration.Status),
+		migration.JobName,
+		migration.TargetTable,
+		migration.TargetColumn,
+		errVal,
+		bStrategy,
+		migration.TotalTupleCount,
+	)
+
+	// Expect authorization check
+	s.mockAccessCtrl.EXPECT().
+		Authorized(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx any, _ ...auth.Access) (any, error) {
+			return ctx, nil
+		})
+
+	// Expect the FindById query
+	s.mockQuerier.ExpectQuery(`SELECT.*FROM.*batched_background_migrations.*WHERE.*id = \$1`).
+		WithArgs(1).
+		WillReturnRows(findRows)
+
+	// Expect the UpdateStatus query to fail
+	s.mockQuerier.ExpectQuery(`UPDATE.*batched_background_migrations.*SET.*status.*failure_error_code.*WHERE.*id.*`).
+		WithArgs(int(models.BackgroundMigrationActive), nil, 1, int(models.BackgroundMigrationRunning), int(models.BackgroundMigrationFinished)).
+		WillReturnError(fmt.Errorf("database update error"))
+
+	s.mockLB.EXPECT().Primary().Return(&datastore.DB{DB: s.mockPrimaryDB}).Times(2)
+
+	// Make request
+	resp, err := http.Post(fmt.Sprintf("%s/gitlab/v1/restart/1/", s.server.URL), "application/json", nil)
+	require.NoError(s.T(), err)
+	defer resp.Body.Close()
+
+	// Verify error response
+	require.Equal(s.T(), http.StatusInternalServerError, resp.StatusCode)
+}
+
 func TestBackgroundMigrationsHandlerTestSuite(t *testing.T) {
 	suite.Run(t, new(BackgroundMigrationsHandlerTestSuite))
 }
