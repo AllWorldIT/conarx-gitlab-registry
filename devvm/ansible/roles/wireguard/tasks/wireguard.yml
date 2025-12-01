@@ -3,25 +3,4 @@
   ansible.builtin.apt:
     name:
       - wireguard
-
-- name: Create WireGuard configuration file
-  ansible.builtin.template:
-    src: wg0.conf.j2
-    dest: /etc/wireguard/wg0.conf
-    owner: root
-    mode: 0600
-  notify: Restart WireGuard
-
-# - name: Enable IP forwarding
-#   ansible.builtin.sysctl:
-#     name: net.ipv4.ip_forward
-#     value: '1'
-#     sysctl_set: yes
-#     state: present
-#     reload: yes
-#
-- name: Start and enable WireGuard service
-  ansible.builtin.service:
-    name: "wg-quick@wg0"
-    state: started
-    enabled: yes
+      - wireguard-tools
