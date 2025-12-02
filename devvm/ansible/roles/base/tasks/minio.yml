@@ -86,7 +86,7 @@
     group: minio-user
     mode: 0640
 
-// Service will be enabled by booter
+# Service will be enabled by booter
 - name: Ensure minio service does not start at boot
   ansible.builtin.systemd:
     daemon_reload: true
