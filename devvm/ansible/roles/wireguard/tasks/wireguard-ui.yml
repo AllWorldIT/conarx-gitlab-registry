@@ -7,29 +7,48 @@
     group: root
     mode: 0600
 
-- name: Run wg-easy container
-  community.docker.docker_container:
-    name: wg-easy
-    # we need >=15.2 to have support for INIT_ALLOWED_IPS
-    image: ghcr.io/wg-easy/wg-easy:15.2.0-beta.3
-    state: present
-    restart_policy: unless-stopped
-    networks:
-      - name: wghub
-        ipv4_address: "{{ wireguard_ui_ip }}"
-    env_file: /etc/default/wg-easy
-    volumes:
-      - "/etc/wg-easy:/etc/wireguard"
-      - /lib/modules:/lib/modules:ro
-    ports:
-      - "51820:51820/udp"
-      - "127.0.0.1:51820:51821/tcp"
-    capabilities:
-      - NET_ADMIN
-      - SYS_MODULE
-    sysctls:
-      net.ipv4.ip_forward: "1"
-      net.ipv4.conf.all.src_valid_mark: "1"
-      net.ipv6.conf.all.disable_ipv6: "1"
-      net.ipv6.conf.all.forwarding: "1"
-      net.ipv6.conf.default.forwarding: "1"
+- name: Create wg-easy systemd service file
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg-easy.service
+    owner: root
+    group: root
+    mode: 0644
+    content: |
+      [Unit]
+      Description=WireGuard Easy
+      After=docker.service network-online.target
+      Wants=network-online.target
+      Requires=docker.service
+
+      [Service]
+      Type=simple
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStartSec=0
+      EnvironmentFile=/etc/default/wg-easy
+      ExecStartPre=-/usr/bin/docker stop wg-easy
+      ExecStartPre=-/usr/bin/docker rm wg-easy
+      ExecStart=/usr/bin/docker run --rm --name wg-easy \
+        --cap-add=NET_ADMIN \
+        --cap-add=SYS_MODULE \
+        --sysctl="net.ipv4.ip_forward=1" \
+        --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
+        --sysctl="net.ipv6.conf.all.disable_ipv6=1" \
+        --sysctl="net.ipv6.conf.all.forwarding=1" \
+        --sysctl="net.ipv6.conf.default.forwarding=1" \
+        --network=wghub \
+        --ip={{ wireguard_ui_ip }} \
+        --env-file=/etc/default/wg-easy \
+        -v /etc/wg-easy:/etc/wireguard \
+        -v /lib/modules:/lib/modules:ro \
+        -p 51820:51820/udp \
+        -p 127.0.0.1:51820:51821/tcp \
+        ghcr.io/wg-easy/wg-easy:15.2.0-beta.3
+      ExecStop=/usr/bin/docker stop wg-easy
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
