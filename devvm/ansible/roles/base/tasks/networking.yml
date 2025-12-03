@@ -1,0 +1,40 @@
+---
+- name: purge ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: absent
+    purge: true
+
+- name: Upload systemd-networkd config
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/network/{{ item }}"
+    owner: root
+    group: root
+    mode: 0644
+  loop:
+    - 10_br-if.netdev
+    - 20_dummy-if.netdev
+    - 30_dummy-if.network
+  register: __base_networkd_conf_updated
+
+- name: restart systemd-networkd
+  ansible.builtin.systemd:
+    name: systemd-networkd
+    state: restarted
+  when: __base_networkd_conf_updated is changed
+
+- name: Set addresation data
+  ansible.builtin.set_fact:
+    network_info:
+      vip_range_start: "{{ vip_start_ip }}"
+      vip_range_end: "{{ vip_end_ip }}"
+      svc_ip: "{{ svc_ip }}"
+
+- name: Write addresation data
+  ansible.builtin.copy:
+    content: "{{ network_info  | to_nice_json }}"
+    dest: /home/dev/.booter-network_info.json
+    owner: dev
+    group: dev
+    mode: 0644

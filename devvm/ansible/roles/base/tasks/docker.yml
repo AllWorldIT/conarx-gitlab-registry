@@ -1,0 +1,35 @@
+---
+- name: Install docker.io and deps
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - python3-docker
+    state: present
+  register: __pkgmgr_result
+  until: __pkgmgr_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Define wghub docker network
+  community.docker.docker_network:
+    name: wghub
+    driver: bridge
+    driver_options:
+      com.docker.network.bridge.enable_ip_masquerade: true
+      com.docker.network.bridge.name: "{{ docker_bridge_name }}"
+    ipam_config:
+      - subnet: "{{ docker_network }}"
+        iprange: "{{ docker_iprange }}"
+
+- name: Ensure that kind always uses this network for our dev user
+  ansible.builtin.lineinfile:
+    path: /home/dev/.profile
+    regexp: KIND_EXPERIMENTAL_DOCKER_NETWORK
+    line: export KIND_EXPERIMENTAL_DOCKER_NETWORK=wghub
+
+- name: Add dev user to docker group
+  ansible.builtin.user:
+    name: dev
+    append: yes
+    groups:
+      - docker

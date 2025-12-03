@@ -1,0 +1,43 @@
+---
+- name: Update packages
+  ansible.builtin.apt:
+    cache_valid_time: 300
+    update_cache: yes
+    upgrade: yes
+    autoremove: yes
+  tags: base
+  register: __pkgmgr_result
+  until: __pkgmgr_result is succeeded
+  retries: 3
+  delay: 3
+
+# NOTE(prozlach): We do not use ASDF intentionally, as there were issues with
+# praefect/gitaly not starting during `gdk install`. Instead, we opted for
+# advanced install which seems to not to have such issues.
+
+- ansible.builtin.import_tasks: users.yml
+  tags: base
+
+- ansible.builtin.import_tasks: networking.yml
+  tags: base
+
+- ansible.builtin.import_tasks: docker.yml
+  tags: base
+
+- ansible.builtin.import_tasks: mise.yml
+  tags: base
+
+- ansible.builtin.import_tasks: misc.yml
+  tags: base
+
+- ansible.builtin.import_tasks: repos.yml
+  tags: base
+
+- ansible.builtin.import_tasks: minio.yml
+  tags: base
+
+- ansible.builtin.import_tasks: devvm.yml
+  tags: base
+
+- ansible.builtin.import_tasks: motd.yml
+  tags: base

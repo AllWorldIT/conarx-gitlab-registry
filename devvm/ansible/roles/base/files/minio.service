@@ -1,0 +1,38 @@
+# /usr/lib/systemd/system/minio.service
+[Unit]
+Description=MinIO
+Documentation=https://docs.min.io
+Wants=network-online.target
+After=network-online.target
+AssertFileIsExecutable=/opt/minio
+
+[Service]
+Type=notify
+
+WorkingDirectory=/usr/local
+
+User=minio-user
+Group=minio-user
+ProtectProc=invisible
+
+EnvironmentFile=-/etc/default/minio
+ExecStart=/opt/minio server $MINIO_OPTS $MINIO_VOLUMES
+Restart=always
+LimitNOFILE=1048576
+
+# Turn-off memory accounting by systemd, which is buggy.
+MemoryAccounting=no
+
+# Specifies the maximum number of threads this process can create
+TasksMax=infinity
+
+# Disable timeout logic and wait until process is stopped
+TimeoutSec=infinity
+
+# Disable killing of MinIO by the kernel's OOM killer
+OOMScoreAdjust=-1000
+
+SendSIGKILL=no
+
+[Install]
+WantedBy=multi-user.target

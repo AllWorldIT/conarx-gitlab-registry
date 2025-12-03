@@ -1,0 +1,14 @@
+[Unit]
+Description=Devvm setup service (booter)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+KillMode=process
+Restart=on-failure
+RestartSec=3s
+ExecStart=/home/dev/container-registry/devvm/go/booter -log-level debug -log-pretty -system-mode
+
+[Install]
+WantedBy=multi-user.target

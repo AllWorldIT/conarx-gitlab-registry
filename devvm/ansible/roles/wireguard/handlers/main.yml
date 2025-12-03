@@ -1,0 +1,16 @@
+---
+# handlers file for ansible-wireguard
+- name: Restart WireGuard
+  ansible.builtin.service:
+    name: wg-quick@wg0
+    state: restarted
+
+- name: Restart wireguard-ui
+  ansible.builtin.service:
+    name: wireguard-ui
+    state: restarted
+
+- name: restart nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted

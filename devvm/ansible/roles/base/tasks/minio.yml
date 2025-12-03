@@ -1,0 +1,94 @@
+---
+
+# Minio is source-only nowadays
+- name: Checkout minio
+  ansible.builtin.git:
+    repo: https://github.com/minio/minio.git
+    dest: /home/dev/minio
+    accept_hostkey: true
+    version: master
+    depth: 1
+  # ssh auth sock issues
+  become: true
+  become_flags: -SHE
+  become_user: dev
+
+- name: Build minio
+  ansible.builtin.shell:
+  args:
+    cmd: |
+      set -eou pipefail
+      eval "$(mise activate bash)"
+
+      go build
+    chdir: /home/dev/minio
+    executable: /bin/bash
+    creates: /home/dev/minio/minio
+  become: true
+  become_user: dev
+
+- name: Copy minio binary to /opt/minio
+  ansible.builtin.copy:
+    src: /home/dev/minio/minio
+    dest: /opt/minio
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create /srv/minio parent directory
+  ansible.builtin.file:
+    path: /srv/minio
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+
+- name: Create minio-user group
+  ansible.builtin.group:
+    name: minio-user
+    state: present
+    system: yes
+  become: yes
+
+- name: Create minio-user user
+  ansible.builtin.user:
+    name: minio-user
+    group: minio-user
+    system: yes
+    create_home: no
+    shell: /usr/sbin/nologin
+    comment: "MinIO Service User"
+  become: yes
+
+- name: Upload minio systemd service
+  ansible.builtin.copy:
+    src: minio.service
+    dest: /etc/systemd/system/minio.service
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create MinIO data directory
+  ansible.builtin.file:
+    path: /srv/minio/data
+    state: directory
+    owner: minio-user
+    group: minio-user
+    mode: '0750'
+  become: yes
+
+- name: Upload minio configuration
+  ansible.builtin.template:
+    src: minio.defaults.j2
+    dest: /etc/default/minio
+    owner: root
+    group: minio-user
+    mode: 0640
+
+- name: Enable minio service
+  ansible.builtin.systemd:
+    daemon_reload: true
+    enabled: true
+    name: minio.service

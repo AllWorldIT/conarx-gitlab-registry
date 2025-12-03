@@ -1,0 +1,10 @@
+# /etc/systemd/system/wireguard-ui.service
+[Unit]
+Description=wireguard-ui
+After=network-online.target
+Wants=network-online.target systemd-networkd-wait-online.service
+
+[Service]
+Restart=on-abnormal
+EnvironmentFile=/etc/wireguard-ui/wireguard-ui.conf
+ExecStart=/usr/bin/wireguard-ui

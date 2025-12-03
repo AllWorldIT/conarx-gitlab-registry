@@ -10,11 +10,11 @@ include:
   stage: validate
   rules:
     # For merge requests, create a pipeline.
-    - if: '$CI_MERGE_REQUEST_IID'
+    - if: "$CI_MERGE_REQUEST_IID"
     # For the default branch, create a pipeline (this includes on schedules, pushes, merges, etc.).
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
     # For tags, create a pipeline.
-    - if: '$CI_COMMIT_TAG'
+    - if: "$CI_COMMIT_TAG"
 
 gemnasium-dependency_scanning:
   <<: *rules-for-scanners
@@ -23,7 +23,7 @@ secret_detection:
   stage: validate
   rules:
     # For merge requests, create a pipeline.
-    - if: '$CI_MERGE_REQUEST_IID'
+    - if: "$CI_MERGE_REQUEST_IID"
 
 semgrep-sast:
   <<: *rules-for-scanners
@@ -68,7 +68,7 @@ codelint:multiarch:
     GOOS: linux
   parallel:
     matrix:
-      - GOARCH: ["386","amd64","arm","arm64"]
+      - GOARCH: ["386", "amd64", "arm", "arm64"]
   cache: {}
   stage: validate
   needs: []
@@ -94,7 +94,6 @@ codelint:multiarch:
       fi
     - golangci-lint run
 
-
 codelint:ui_report:
   cache: {}
   image: golangci/golangci-lint:v${GOLANGCI_LINT_VERSION}
@@ -112,10 +111,10 @@ codelint:ui_report:
       codequality: gl-code-quality-report.json
     paths:
       - gl-code-quality-report.json
-      
+
 modules:tidy:
   stage: validate
-  needs: ['modules:download']
+  needs: ["modules:download"]
   script:
     - go mod tidy
     - git diff --exit-code go.mod go.sum
@@ -124,7 +123,7 @@ modules:download:
   stage: validate
   parallel:
     matrix:
-      - GO_VERSION: [ "1.24", "1.25" ]
+      - GO_VERSION: ["1.24", "1.25"]
   script:
     - go mod download
     # This is an external tool used to run tests, we can save some time by downloading in advance
@@ -140,7 +139,7 @@ modules:download:
     policy: push
 
 mocks:
-  needs: ['modules:download']
+  needs: ["modules:download"]
   stage: validate
   before_script:
     - go install go.uber.org/mock/mockgen@v0.5.2
@@ -153,7 +152,7 @@ mocks:
 # like 32bit Arm (older RaspberryPis). Lets make sure that the compilation
 # does not break in an embarrasing way like e.g. integer overflows:
 build_smoketest:
-  needs: ['modules:download']
+  needs: ["modules:download"]
   stage: validate
   variables:
     GOOS: linux
@@ -162,8 +161,8 @@ build_smoketest:
     CGO_ENABLED: 0
   parallel:
     matrix:
-      - GO_VERSION: [ "1.24", "1.25" ]
-        GOARCH: ["386","amd64","arm","arm64"]
+      - GO_VERSION: ["1.24", "1.25"]
+        GOARCH: ["386", "amd64", "arm", "arm64"]
   before_script:
     - apt-get update
     - apt-get install -y file
@@ -187,7 +186,7 @@ build_smoketest:
     - file ./bin/registry
 
 .schema-migrations:
-  needs: ['modules:download']
+  needs: ["modules:download"]
   extends: .go-pg-version-matrix
   variables:
     FF_NETWORK_PER_BUILD: 1
@@ -257,12 +256,12 @@ database:structure-sql:
     - git diff --exit-code
   # Stash the db dump for 24 hrs
   artifacts:
-        expire_in: 24h
-        when: on_success
-        paths:
-          - registry/datastore/migrations/structure.sql
+    expire_in: 24h
+    when: on_success
+    paths:
+      - registry/datastore/migrations/structure.sql
 
-build postgresql CI image:
+build CI images:
   stage: validate
   extends: .docker
   rules:
@@ -272,3 +271,20 @@ build postgresql CI image:
   script:
     - make rebuild-ci-container-images
     - make push-ci-container-images
+
+devvm:packer:fmt:
+  image: registry.gitlab.com/gitlab-org/container-registry/packer-ci:v1.0.0
+  stage: validate
+  script:
+    - packer init ./devvm/packer/
+    - packer fmt -diff -check ./devvm/packer/
+  rules:
+    - changes:
+        - devvm/packer/*
+
+devvm:packer:validate:
+  image: registry.gitlab.com/gitlab-org/container-registry/packer-ci:v1.0.0
+  stage: validate
+  script:
+    - packer init ./devvm/packer/
+    - packer validate ./devvm/packer/
