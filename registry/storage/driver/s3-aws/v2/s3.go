@@ -418,7 +418,7 @@ func (d *driver) Writer(ctx context.Context, path string, appendParam bool) (sto
 	listResp := &s3.ListPartsOutput{
 		IsTruncated: ptr.Bool(true),
 	}
-	for resp.IsTruncated != nil && *listResp.IsTruncated {
+	for listResp.IsTruncated != nil && *listResp.IsTruncated {
 		// error out if we have pushed more than 100GB of parts
 		if respLoopCount > maxListRespLoop {
 			return nil, ErrMaxListRespExceeded
