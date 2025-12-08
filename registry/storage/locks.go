@@ -23,9 +23,9 @@ type Locker interface {
 	Unlock(ctx context.Context) error
 }
 
-// lockers hold a database and filesystem lockers
+// Lockers hold a database and filesystem lockers
 // and implements the distribution.Lockers interface
-type lockers struct {
+type Lockers struct {
 	DB Locker
 	FS Locker
 }
@@ -195,28 +195,28 @@ func (*FilesystemInUseLocker) path() (string, error) {
 	return pathFor(lockFilePathSpec{name: "filesystem-in-use"})
 }
 
-var _ distribution.Lockers = &lockers{}
+var _ distribution.Lockers = &Lockers{}
 
-func (l *lockers) DBLock(ctx context.Context) error {
+func (l *Lockers) DBLock(ctx context.Context) error {
 	return l.DB.Lock(ctx)
 }
 
-func (l *lockers) DBUnlock(ctx context.Context) error {
+func (l *Lockers) DBUnlock(ctx context.Context) error {
 	return l.DB.Unlock(ctx)
 }
 
-func (l *lockers) DBIsLocked(ctx context.Context) (bool, error) {
+func (l *Lockers) DBIsLocked(ctx context.Context) (bool, error) {
 	return l.DB.IsLocked(ctx)
 }
 
-func (l *lockers) FSLock(ctx context.Context) error {
+func (l *Lockers) FSLock(ctx context.Context) error {
 	return l.FS.Lock(ctx)
 }
 
-func (l *lockers) FSUnlock(ctx context.Context) error {
+func (l *Lockers) FSUnlock(ctx context.Context) error {
 	return l.FS.Unlock(ctx)
 }
 
-func (l *lockers) FSIsLocked(ctx context.Context) (bool, error) {
+func (l *Lockers) FSIsLocked(ctx context.Context) (bool, error) {
 	return l.FS.IsLocked(ctx)
 }

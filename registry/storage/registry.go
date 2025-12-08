@@ -34,7 +34,7 @@ type registry struct {
 	manifestsPayloadSizeLimit    int
 	driver                       storagedriver.StorageDriver
 	db                           datastore.LoadBalancer
-	lockers                      *lockers
+	lockers                      *Lockers
 	redirectExceptions           []*regexp.Regexp
 }
 
@@ -202,7 +202,7 @@ func NewRegistry(_ context.Context, driver storagedriver.StorageDriver, options 
 		statter:                statter,
 		resumableDigestEnabled: true,
 		driver:                 driver,
-		lockers: &lockers{
+		lockers: &Lockers{
 			FS: &FilesystemInUseLocker{Driver: driver},
 			DB: &DatabaseInUseLocker{Driver: driver},
 		},
