@@ -169,6 +169,8 @@ type App struct {
 	// DBStatusChecker is responsible for checking/updating the status of the DB
 	// and replicas in the background.
 	DBStatusChecker *health.DBStatusChecker
+
+	Lockers *storage.Lockers
 }
 
 // NewApp takes a configuration and returns a configured app, ready to serve
@@ -197,6 +199,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	app.driver, err = factory.Create(config.Storage.Type(), storageParams)
 	if err != nil {
 		return nil, err
+	}
+
+	app.Lockers = &storage.Lockers{
+		FS: &storage.FilesystemInUseLocker{Driver: app.driver},
+		DB: &storage.DatabaseInUseLocker{Driver: app.driver},
 	}
 
 	purgeConfig := uploadPurgeDefaultConfig()
@@ -478,10 +485,6 @@ func (app *App) handleFilesystemLockFile(ctx context.Context) error {
 	fsLocker := &storage.FilesystemInUseLocker{Driver: app.driver}
 	dbLocker := &storage.DatabaseInUseLocker{Driver: app.driver}
 
-	if !feature.EnforceLockfiles.Enabled() {
-		return nil
-	}
-
 	log := dcontext.GetLogger(app)
 	dbLocked, err := dbLocker.IsLocked(ctx)
 	if err != nil {
@@ -495,12 +498,17 @@ func (app *App) handleFilesystemLockFile(ctx context.Context) error {
 		return err
 	}
 
-	if fsLocked && dbLocked {
+	if feature.EnforceLockfiles.Enabled() && fsLocked && dbLocked {
 		return ErrInvalidLockfiles
 	}
 
-	if dbLocked {
+	if feature.EnforceLockfiles.Enabled() && dbLocked {
 		return ErrDatabaseInUse
+	}
+
+	// FS is already locked, no reason to enumerate legacy metadata.
+	if fsLocked {
+		return nil
 	}
 
 	repositoryEnumerator, ok := app.registry.(distribution.RepositoryEnumerator)
@@ -525,11 +533,16 @@ func (app *App) handleFilesystemLockFile(ctx context.Context) error {
 			// accidental start up of the registry in database mode
 			// before an import has been completed.
 			if err := fsLocker.Lock(app.Context); err != nil {
-				log.WithError(err).Error("failed to mark filesystem only usage, continuing")
+				log.WithError(err).Error("failed to mark filesystem only usage")
 				return err
 			}
 
-			log.Info("there are existing repositories in the filesystem, locking filesystem")
+			log.WithFields(dlog.Fields{
+				"fs_locked_before":     false,
+				"fs_locked_after":      true,
+				"db_locked":            dbLocked,
+				"ff_enforce_lockfiles": feature.EnforceLockfiles.Enabled(),
+			}).Warn("lockfile state transition: creating filesystem lock")
 		case errors.As(err, new(storagedriver.PathNotFoundError)):
 			log.Debug("no filesystem path found, will not lock filesystem until there are repositories present")
 		default:
@@ -2376,23 +2389,25 @@ func (app *App) initializeMetadataDatabase(ctx context.Context, config *configur
 		return nil, nil
 	}
 
-	fsLocker := &storage.FilesystemInUseLocker{Driver: app.driver}
-	dbLocker := &storage.DatabaseInUseLocker{Driver: app.driver}
 	options := make([]storage.RegistryOption, 0)
 	log := dcontext.GetLogger(app)
 
-	fsLocked, err := fsLocker.IsLocked(ctx)
+	fsLocked, err := app.Lockers.FS.IsLocked(ctx)
 	if err != nil {
 		log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
 		return nil, err
 	}
 
-	dbLocked, err := dbLocker.IsLocked(ctx)
+	dbLocked, err := app.Lockers.DB.IsLocked(ctx)
 	if err != nil {
 		log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
 		return nil, err
 	}
 
+	// When feature.EnforceLockfiles is disabled, we still manage lockfiles (create/remove them)
+	// but we don't block startup on invalid states based on their presence or absence
+	// We need to manage their state because they persist across enabling and disabling
+	// the feature flag see: https://gitlab.com/gitlab-org/container-registry/-/merge_requests/2647
 	if feature.EnforceLockfiles.Enabled() && fsLocked && dbLocked {
 		return nil, ErrInvalidLockfiles
 	}
@@ -2414,7 +2429,7 @@ func (app *App) initializeMetadataDatabase(ctx context.Context, config *configur
 
 	log.Info("using the metadata database")
 
-	if config.Database.IsPrefer() && !dbLocked && !fsLocked && feature.EnforceLockfiles.Enabled() {
+	if feature.EnforceLockfiles.Enabled() && config.Database.IsPrefer() && !dbLocked && !fsLocked {
 		log.Info("database in prefer mode on a fresh install: configured and reachable metadata database required to start")
 	}
 
@@ -2564,11 +2579,18 @@ func (app *App) initializeMetadataDatabase(ctx context.Context, config *configur
 
 	// Now that we've started the database successfully, lock the filesystem
 	// to signal that this object storage needs to be managed by the database.
-	if feature.EnforceLockfiles.Enabled() {
-		if err := dbLocker.Lock(app.Context); err != nil {
-			log.WithError(err).Error("failed to mark filesystem for database only usage, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
-			return nil, err
-		}
+	if err := app.Lockers.DB.Lock(app.Context); err != nil {
+		log.WithError(err).Error("failed to mark filesystem for database only usage")
+		return nil, err
+	}
+
+	if !dbLocked {
+		log.WithFields(dlog.Fields{
+			"db_locked_before":     false,
+			"db_locked_after":      true,
+			"fs_locked":            fsLocked,
+			"ff_enforce_lockfiles": feature.EnforceLockfiles.Enabled(),
+		}).Warn("lockfile state transition: creating database lock")
 	}
 
 	if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
