@@ -506,8 +506,9 @@ func (app *App) handleFilesystemLockFile(ctx context.Context) error {
 		return ErrDatabaseInUse
 	}
 
-	// FS is already locked, no reason to enumerate legacy metadata.
-	if fsLocked {
+	// Skip enumeration if the fs is already locked and there's no db lockfile - this is the expected state.
+	// Otherwise continue to full validation and possible data repair.
+	if fsLocked && !dbLocked {
 		return nil
 	}
 
@@ -537,10 +538,26 @@ func (app *App) handleFilesystemLockFile(ctx context.Context) error {
 				return err
 			}
 
+			dbLockedAfter := dbLocked
+
+			// Repair lockfile state from https://gitlab.com/gitlab-org/container-registry/-/work_items/1776 bug
+			// If the feature flag is disabled and we've locked the filesystem, we should
+			// ensure that only the fslockfile is present.
+			if !feature.EnforceLockfiles.Enabled() && dbLocked {
+				// nolint: revive // max-control-nesting
+				if err := dbLocker.Unlock(app.Context); err != nil {
+					log.WithError(err).Error("failed to remove database-in-use lockfile")
+					return err
+				}
+
+				dbLockedAfter = false
+			}
+
 			log.WithFields(dlog.Fields{
 				"fs_locked_before":     false,
 				"fs_locked_after":      true,
-				"db_locked":            dbLocked,
+				"db_locked_before":     dbLocked,
+				"db_locked_after":      dbLockedAfter,
 				"ff_enforce_lockfiles": feature.EnforceLockfiles.Enabled(),
 			}).Warn("lockfile state transition: creating filesystem lock")
 		case errors.As(err, new(storagedriver.PathNotFoundError)):
@@ -2584,11 +2601,26 @@ func (app *App) initializeMetadataDatabase(ctx context.Context, config *configur
 		return nil, err
 	}
 
+	fsLockedAfter := fsLocked
+
+	// Repair lockfile state from https://gitlab.com/gitlab-org/container-registry/-/work_items/1776 bug
+	// If the feature flag is disabled and we've locked the filesystem, we should
+	// ensure that only the dblockfile is present.
+	if !feature.EnforceLockfiles.Enabled() && fsLocked {
+		if err := app.Lockers.FS.Unlock(app.Context); err != nil {
+			log.WithError(err).Error("failed to remove filesystem-in-use lockfile")
+			return nil, err
+		}
+
+		fsLockedAfter = false
+	}
+
 	if !dbLocked {
 		log.WithFields(dlog.Fields{
 			"db_locked_before":     false,
 			"db_locked_after":      true,
-			"fs_locked":            fsLocked,
+			"fs_locked_before":     fsLocked,
+			"fs_locked_after":      fsLockedAfter,
 			"ff_enforce_lockfiles": feature.EnforceLockfiles.Enabled(),
 		}).Warn("lockfile state transition: creating database lock")
 	}

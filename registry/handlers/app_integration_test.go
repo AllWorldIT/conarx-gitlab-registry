@@ -155,16 +155,22 @@ func TestHandleFilesystemLockFile_BothLocksPresent(t *testing.T) {
 		name               string
 		ffEnforceLockfiles bool
 		expectedErr        error
+		expectDBLock       bool
+		expectFSLock       bool
 	}{
 		{
 			name:               "both locks with ff enabled",
 			ffEnforceLockfiles: true,
 			expectedErr:        handlers.ErrInvalidLockfiles,
+			expectDBLock:       true,
+			expectFSLock:       true,
 		},
 		{
 			name:               "both locks with ff disabled",
 			ffEnforceLockfiles: false,
-			expectedErr:        nil, // No enforcement when FF disabled
+			expectedErr:        nil,   // No enforcement when FF disabled
+			expectDBLock:       false, // Data repair when FF disabled
+			expectFSLock:       true,
 		},
 	}
 
@@ -185,13 +191,22 @@ func TestHandleFilesystemLockFile_BothLocksPresent(t *testing.T) {
 			require.NoError(tt, l.FS.Lock(ctx))
 			require.NoError(tt, l.DB.Lock(ctx))
 
-			app, err := handlers.NewApp(context.Background(), &config)
+			app, appErr := handlers.NewApp(context.Background(), &config)
+
+			locked, err := l.FSIsLocked(ctx)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectFSLock, locked)
+
+			locked, err = l.DBIsLocked(ctx)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectDBLock, locked)
+
 			if tc.expectedErr != nil {
-				assert.ErrorIs(tt, err, tc.expectedErr)
+				assert.ErrorIs(tt, appErr, tc.expectedErr)
 				return
 			}
 
-			require.NoError(tt, err)
+			require.NoError(tt, appErr)
 			assert.NotNil(tt, app)
 		})
 	}
@@ -245,16 +260,22 @@ func TestHandleFilesystemLockFile_DBLockedOnly(t *testing.T) {
 		name               string
 		ffEnforceLockfiles bool
 		expectedErr        error
+		expectDBLock       bool
+		expectFSLock       bool
 	}{
 		{
 			name:               "db locked only with ff enabled",
 			ffEnforceLockfiles: true,
 			expectedErr:        handlers.ErrDatabaseInUse,
+			expectDBLock:       true,
+			expectFSLock:       false,
 		},
 		{
 			name:               "db locked only with ff disabled",
 			ffEnforceLockfiles: false,
-			expectedErr:        nil, // No enforcement when FF disabled
+			expectedErr:        nil,   // No enforcement when FF disabled
+			expectDBLock:       false, // Data repair when FF disabled
+			expectFSLock:       true,
 		},
 	}
 
@@ -275,13 +296,22 @@ func TestHandleFilesystemLockFile_DBLockedOnly(t *testing.T) {
 			require.NoError(tt, l.FS.Unlock(ctx))
 			require.NoError(tt, l.DB.Lock(ctx))
 
-			app, err := handlers.NewApp(context.Background(), &config)
+			app, appErr := handlers.NewApp(context.Background(), &config)
+
+			locked, err := l.FSIsLocked(ctx)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectFSLock, locked)
+
+			locked, err = l.DBIsLocked(ctx)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectDBLock, locked)
+
 			if tc.expectedErr != nil {
-				assert.ErrorIs(tt, err, tc.expectedErr)
+				assert.ErrorIs(tt, appErr, tc.expectedErr)
 				return
 			}
 
-			require.NoError(tt, err)
+			require.NoError(tt, appErr)
 			assert.NotNil(tt, app)
 		})
 	}
@@ -384,13 +414,15 @@ func TestInitializeMetadataDatabase_BothLocksPresent(t *testing.T) {
 		dbMode             configuration.DatabaseEnabled
 		expectedErr        error
 		expectDBLock       bool
+		expectFSLock       bool
 	}{
 		{
 			name:               "both locks with db enabled and ff enabled",
 			ffEnforceLockfiles: true,
 			dbMode:             configuration.DatabaseEnabledTrue,
 			expectedErr:        handlers.ErrInvalidLockfiles,
-			expectDBLock:       false,
+			expectDBLock:       true,
+			expectFSLock:       true,
 		},
 		{
 			name:               "both locks with db enabled and ff disabled",
@@ -398,13 +430,15 @@ func TestInitializeMetadataDatabase_BothLocksPresent(t *testing.T) {
 			dbMode:             configuration.DatabaseEnabledTrue,
 			expectedErr:        nil, // No enforcement, continues initialization
 			expectDBLock:       true,
+			expectFSLock:       false, // Data repair when FF disabled
 		},
 		{
 			name:               "both locks with db prefer and ff enabled",
 			ffEnforceLockfiles: true,
 			dbMode:             configuration.DatabaseEnabledPrefer,
 			expectedErr:        handlers.ErrInvalidLockfiles,
-			expectDBLock:       false,
+			expectDBLock:       true,
+			expectFSLock:       true,
 		},
 		{
 			name:               "both locks with db prefer and ff disabled",
@@ -412,6 +446,7 @@ func TestInitializeMetadataDatabase_BothLocksPresent(t *testing.T) {
 			dbMode:             configuration.DatabaseEnabledPrefer,
 			expectedErr:        nil,
 			expectDBLock:       true,
+			expectFSLock:       false, // Data repair when FF disabled
 		},
 	}
 
@@ -429,6 +464,7 @@ func TestInitializeMetadataDatabase_BothLocksPresent(t *testing.T) {
 			ctx := context.Background()
 			l := newTestLockers(t, &config)
 			require.NoError(tt, l.DB.Lock(ctx))
+			require.NoError(tt, l.FS.Lock(ctx))
 
 			// Reconfigure with database enabled
 			config.Database.Enabled = tc.dbMode
@@ -436,21 +472,23 @@ func TestInitializeMetadataDatabase_BothLocksPresent(t *testing.T) {
 			truncateTables := runMigrations(t, &config)
 			tt.Cleanup(truncateTables)
 
-			app, err := handlers.NewApp(context.Background(), &config)
+			app, appErr := handlers.NewApp(context.Background(), &config)
+
+			locked, err := l.FSIsLocked(ctx)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectFSLock, locked)
+
+			locked, err = l.DBIsLocked(ctx)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectDBLock, locked)
+
 			if tc.expectedErr != nil {
-				assert.ErrorIs(tt, err, tc.expectedErr)
+				assert.ErrorIs(tt, appErr, tc.expectedErr)
 				return
 			}
 
-			require.NoError(tt, err)
+			require.NoError(tt, appErr)
 			assert.NotNil(tt, app)
-
-			// Verify DB lock state
-			if tc.expectDBLock {
-				locked, err := app.Lockers.DBIsLocked(ctx)
-				require.NoError(tt, err)
-				assert.True(tt, locked, "DB lock should be created")
-			}
 		})
 	}
 }
@@ -522,16 +560,22 @@ func TestInitializeMetadataDatabase_FSLockedEnabledMode(t *testing.T) {
 		name               string
 		ffEnforceLockfiles bool
 		expectedErr        error
+		expectDBLock       bool
+		expectFSLock       bool
 	}{
 		{
 			name:               "fs locked enabled mode with ff enabled",
 			ffEnforceLockfiles: true,
 			expectedErr:        handlers.ErrFilesystemInUse,
+			expectDBLock:       false,
+			expectFSLock:       true,
 		},
 		{
 			name:               "fs locked enabled mode with ff disabled",
 			ffEnforceLockfiles: false,
 			expectedErr:        nil, // No enforcement, continues
+			expectDBLock:       true,
+			expectFSLock:       false, // Data repair when FF disabled
 		},
 	}
 
@@ -557,13 +601,22 @@ func TestInitializeMetadataDatabase_FSLockedEnabledMode(t *testing.T) {
 			truncateTables := runMigrations(t, &config)
 			tt.Cleanup(truncateTables)
 
-			app, err := handlers.NewApp(context.Background(), &config)
+			app, appErr := handlers.NewApp(context.Background(), &config)
+
+			locked, err := l.FSIsLocked(ctx)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectFSLock, locked)
+
+			locked, err = l.DBIsLocked(ctx)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectDBLock, locked)
+
 			if tc.expectedErr != nil {
-				assert.ErrorIs(tt, err, tc.expectedErr)
+				assert.ErrorIs(tt, appErr, tc.expectedErr)
 				return
 			}
 
-			require.NoError(tt, err)
+			require.NoError(tt, appErr)
 			assert.NotNil(tt, app)
 		})
 	}
