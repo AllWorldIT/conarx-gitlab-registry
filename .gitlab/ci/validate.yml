@@ -37,9 +37,7 @@ semgrep-sast:
 # linux, brew, apt, snap, etc...). So the idea is to run the linting tools from
 # inside docker container both on the laptops of the developers and in the CI.
 docslint:
-  image: docker:27.2.0
-  services:
-    - docker:dind
+  extends: .docker
   stage: validate
   needs: []
   script:
@@ -108,7 +106,7 @@ codelint:ui_report:
   script:
     # Write the code coverage report to gl-code-quality-report.json
     # and print linting issues to stdout in the format: path/to/file:line description
-    - golangci-lint run --output.code-climate.path=stdout | grep -v "^[0-9]* issues\.$" | tee gl-code-quality-report.json | jq -r '.[] | "\(.location.path):\(.location.lines.begin) \(.description)"'
+    - golangci-lint run --output.code-climate.path=stdout  --show-stats=false | grep -v "^[0-9]* issues\.$" | tee gl-code-quality-report.json | jq -r '.[] | "\(.location.path):\(.location.lines.begin) \(.description)"'
   artifacts:
     reports:
       codequality: gl-code-quality-report.json
@@ -126,7 +124,7 @@ modules:download:
   stage: validate
   parallel:
     matrix:
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
   script:
     - go mod download
     # This is an external tool used to run tests, we can save some time by downloading in advance
@@ -164,7 +162,7 @@ build_smoketest:
     CGO_ENABLED: 0
   parallel:
     matrix:
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
         GOARCH: ["386","amd64","arm","arm64"]
   before_script:
     - apt-get update
@@ -193,19 +191,20 @@ build_smoketest:
   extends: .go-pg-version-matrix
   variables:
     FF_NETWORK_PER_BUILD: 1
-    POSTGRES_PASSWORD: "secret"
-    PGPASSWORD: "secret"
-    POSTGRES_DB: "registry"
+    APP_PASSWORD: Chleboslaw
+    POSTGRES_PASSWORD: Maryna
     REGISTRY_DATABASE_ENABLED: "true"
     REGISTRY_DATABASE_HOST: "db"
     REGISTRY_DATABASE_PORT: "5432"
-    REGISTRY_DATABASE_USER: "postgres"
-    REGISTRY_DATABASE_PASSWORD: "secret"
-    REGISTRY_DATABASE_DBNAME: "registry"
+    REGISTRY_DATABASE_USER: "boryna"
+    REGISTRY_DATABASE_PASSWORD: "Chleboslaw"
+    REGISTRY_DATABASE_DBNAME: "registry_test"
     REGISTRY_DATABASE_SSLMODE: "disable"
   services:
-    - name: postgres:${PG_VERSION}
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_VERSION}
       alias: "db"
+      variables:
+        POSTGRES_ROLE: primary
   before_script:
     - "echo 'version: 0.1' > config.yml"
     - make binaries
@@ -215,18 +214,18 @@ database:schema-migrations:
   extends: .schema-migrations
   stage: validate
   script:
-    - ./bin/registry database migrate up config.yml
-    - ./bin/registry database migrate down --force config.yml
+    - PGPASSWORD=${APP_PASSWORD} ./bin/registry database migrate up config.yml
+    - PGPASSWORD=${APP_PASSWORD} ./bin/registry database migrate down --force config.yml
 
 database:schema-migrations:status:
   extends: .schema-migrations
   stage: validate
   script:
-    - ./bin/registry database migrate status -u config.yml | grep -qw 'false' || exit 1
-    - ./bin/registry database migrate up -n 2 config.yml
-    - ./bin/registry database migrate status --up-to-date config.yml | grep -qw 'false' || exit 1
-    - ./bin/registry database migrate up config.yml
-    - ./bin/registry database migrate status -u config.yml | grep -qw 'true' || exit 1
+    - PGPASSWORD=${APP_PASSWORD} ./bin/registry database migrate status -u config.yml | grep -qw 'false' || exit 1
+    - PGPASSWORD=${APP_PASSWORD} ./bin/registry database migrate up -n 2 config.yml
+    - PGPASSWORD=${APP_PASSWORD} ./bin/registry database migrate status --up-to-date config.yml | grep -qw 'false' || exit 1
+    - PGPASSWORD=${APP_PASSWORD} ./bin/registry database migrate up config.yml
+    - PGPASSWORD=${APP_PASSWORD} ./bin/registry database migrate status -u config.yml | grep -qw 'true' || exit 1
 
 database:structure-sql:
   extends: .schema-migrations
@@ -239,12 +238,12 @@ database:structure-sql:
     PG_FORMATTER_VERSION: "5.0"
     PG_VERSION: $PG_CURR_VERSION
   script:
-    # Install build/make deps
-    - apt-get update && apt-get -y install ca-certificates gnupg lsb-release
-    # Install Postgres client
-    - wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-    - sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-    - apt-get update && apt-get -y install postgresql-client-$PG_VERSION
+    # Install psql client tools
+    - apt update && apt -y install curl ca-certificates postgresql-common
+    - install -d /usr/share/postgresql-common/pgdg
+    - curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    - . /etc/os-release && sh -c "echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $VERSION_CODENAME-pgdg main' > /etc/apt/sources.list.d/pgdg.list"
+    - apt update && apt -y install postgresql-client-${PG_VERSION}
     # Install pgFormatter
     - wget -qO- https://github.com/darold/pgFormatter/archive/refs/tags/v$PG_FORMATTER_VERSION.tar.gz | tar xz
     - cd pgFormatter-$PG_FORMATTER_VERSION
@@ -262,3 +261,14 @@ database:structure-sql:
         when: on_success
         paths:
           - registry/datastore/migrations/structure.sql
+
+build postgresql CI image:
+  stage: validate
+  extends: .docker
+  rules:
+    # NOTE(prozlach): Continously rebuild the image to make sure we are always
+    # basing on the latest upstream image for bugfixes.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - make rebuild-ci-container-images
+    - make push-ci-container-images

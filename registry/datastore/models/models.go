@@ -207,16 +207,18 @@ type RepositoryLease struct {
 
 // BackgroundMigration is the representation of a BBM.
 type BackgroundMigration struct {
-	ID           int
-	Name         string
-	Status       BackgroundMigrationStatus
-	StartID      int
-	EndID        int
-	BatchSize    int
-	JobName      string
-	TargetTable  string
-	TargetColumn string
-	ErrorCode    BBMErrorCode
+	ID               int
+	Name             string
+	Status           BackgroundMigrationStatus
+	StartID          int
+	EndID            int
+	BatchSize        int
+	JobName          string
+	TargetTable      string
+	TargetColumn     string
+	ErrorCode        BBMErrorCode
+	BatchingStrategy BBMStrategy
+	TotalTupleCount  sql.NullInt64
 }
 
 // BackgroundMigrations is a slice of BackgroundMigration pointers.
@@ -235,6 +237,7 @@ type BackgroundMigrationJob struct {
 	PaginationTable  string
 	BatchSize        int
 	ErrorCode        BBMErrorCode
+	BatchingStrategy BBMStrategy
 }
 
 // BackgroundMigrationStatus are the Background Migration and Background Migration job statuses as defined in:
@@ -272,12 +275,13 @@ type BBMErrorCode struct {
 }
 
 var (
-	NullErrCode                    = BBMErrorCode{sql.NullInt16{Valid: false}}
-	UnknownBBMErrorCode            = BBMErrorCode{sql.NullInt16{Int16: 0, Valid: true}}
-	InvalidTableBBMErrCode         = BBMErrorCode{sql.NullInt16{Int16: 1, Valid: true}}
-	InvalidColumnBBMErrCode        = BBMErrorCode{sql.NullInt16{Int16: 2, Valid: true}}
-	InvalidJobSignatureBBMErrCode  = BBMErrorCode{sql.NullInt16{Int16: 3, Valid: true}}
-	JobExceedsMaxAttemptBBMErrCode = BBMErrorCode{sql.NullInt16{Int16: 4, Valid: true}}
+	NullErrCode                       = BBMErrorCode{sql.NullInt16{Valid: false}}
+	UnknownBBMErrorCode               = BBMErrorCode{sql.NullInt16{Int16: 0, Valid: true}}
+	InvalidTableBBMErrCode            = BBMErrorCode{sql.NullInt16{Int16: 1, Valid: true}}
+	InvalidColumnBBMErrCode           = BBMErrorCode{sql.NullInt16{Int16: 2, Valid: true}}
+	InvalidJobSignatureBBMErrCode     = BBMErrorCode{sql.NullInt16{Int16: 3, Valid: true}}
+	JobExceedsMaxAttemptBBMErrCode    = BBMErrorCode{sql.NullInt16{Int16: 4, Valid: true}}
+	InvalidBatchingStrategyBBMErrCode = BBMErrorCode{sql.NullInt16{Int16: 5, Valid: true}}
 )
 
 func (s BBMErrorCode) String() string {
@@ -292,7 +296,32 @@ func (s BBMErrorCode) String() string {
 		return "invalid_job_signature"
 	case JobExceedsMaxAttemptBBMErrCode.Int16:
 		return "max_job_retry"
+	case InvalidBatchingStrategyBBMErrCode.Int16:
+		return "invalid_batching_strategy"
 	}
+}
+
+const (
+	NullKeySetBatchingStrategy   = "NullKeySetBatchingStrategy"
+	SerialKeySetBatchingStrategy = "SerialKeySetBatchingStrategy"
+)
+
+// BBMStrategy represent the strategy for Background Migration and Background Migration jobs as defined in:
+// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/database-background-migrations.md#asynchronous-execution-when-serving-requests-on-the-registry
+type BBMStrategy struct {
+	sql.NullString
+}
+
+var (
+	SerialKeySetBatchingBBMStrategy = BBMStrategy{sql.NullString{Valid: false}}
+	NullBatchingBBMStrategy         = BBMStrategy{sql.NullString{String: NullKeySetBatchingStrategy, Valid: true}}
+)
+
+func (s BBMStrategy) Val() string {
+	if !s.Valid {
+		return SerialKeySetBatchingStrategy
+	}
+	return s.String
 }
 
 // ImportStatistics contains stats for an import from object storage metadata

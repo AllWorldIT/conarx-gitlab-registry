@@ -503,7 +503,7 @@ func TestAzureDriverRootPathList(t *testing.T) {
 
 	suffix, ensureBlobF := ensureBlobFuncFactory(t)
 
-	tests := []struct {
+	testCases := []struct {
 		name          string
 		rootDirectory string
 		legacyPath    bool
@@ -564,20 +564,20 @@ func TestAzureDriverRootPathList(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		cleanupF := ensureBlobF(tt.fileToCreate)
+	for _, tc := range testCases {
+		cleanupF := ensureBlobF(tc.fileToCreate)
 		t.Cleanup(cleanupF)
 
-		t.Run(tt.name, func(t *testing.T) {
-			d, err := azureDriverConstructor(tt.rootDirectory, !tt.legacyPath)
-			require.NoError(t, err)
+		t.Run(tc.name, func(tt *testing.T) {
+			d, err := azureDriverConstructor(tc.rootDirectory, !tc.legacyPath)
+			require.NoError(tt, err)
 
 			files, err := d.List(
-				log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(t))),
+				log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tt))),
 				"/",
 			)
-			require.NoError(t, err)
-			require.Contains(t, files, fmt.Sprintf("/%s-%s", tt.filename, suffix))
+			require.NoError(tt, err)
+			require.Contains(tt, files, fmt.Sprintf("/%s-%s", tc.filename, suffix))
 		})
 	}
 }
@@ -649,7 +649,7 @@ func TestAzureDriverURLFor_Expiry(t *testing.T) {
 }
 
 func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name                    string
 		config                  map[string]any
 		expectedUseLegacyPrefix bool
@@ -704,17 +704,17 @@ func TestAzureDriverInferRootPrefixConfiguration_Valid(t *testing.T) {
 			expectedUseLegacyPrefix: false,
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actualTrimLegacyPrefix, err := common.InferRootPrefixConfiguration(test.config)
-			require.NoError(t, err)
-			require.Equal(t, test.expectedUseLegacyPrefix, actualTrimLegacyPrefix)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			actualTrimLegacyPrefix, err := common.InferRootPrefixConfiguration(tc.config)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedUseLegacyPrefix, actualTrimLegacyPrefix)
 		})
 	}
 }
 
 func TestAzureDriverInferRootPrefixConfiguration_Invalid(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name                    string
 		config                  map[string]any
 		expectedUseLegacyPrefix bool
@@ -734,12 +734,12 @@ func TestAzureDriverInferRootPrefixConfiguration_Invalid(t *testing.T) {
 			},
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			useLegacyRootPrefix, err := common.InferRootPrefixConfiguration(test.config)
-			require.Error(t, err)
-			require.ErrorContains(t, err, "storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be")
-			require.False(t, useLegacyRootPrefix)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			useLegacyRootPrefix, err := common.InferRootPrefixConfiguration(tc.config)
+			require.Error(tt, err)
+			require.ErrorContains(tt, err, "storage.azure.trimlegacyrootprefix' and  'storage.azure.trimlegacyrootprefix' can not both be")
+			require.False(tt, useLegacyRootPrefix)
 		})
 	}
 }

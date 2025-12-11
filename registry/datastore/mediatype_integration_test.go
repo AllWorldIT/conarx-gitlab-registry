@@ -11,7 +11,7 @@ import (
 )
 
 func TestMediaTypeStore_Exists(t *testing.T) {
-	tt := []struct {
+	testCases := []struct {
 		name       string
 		mediaType  string
 		wantExists bool
@@ -37,17 +37,17 @@ func TestMediaTypeStore_Exists(t *testing.T) {
 
 	s := datastore.NewMediaTypeStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			exists, err := s.Exists(suite.ctx, test.mediaType)
-			require.NoError(t, err)
-			require.Equal(t, test.wantExists, exists)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			exists, err := s.Exists(suite.ctx, tc.mediaType)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.wantExists, exists)
 		})
 	}
 }
 
 func TestMediaTypeStore_FindIDMediaTypeExists(t *testing.T) {
-	tt := []struct {
+	testCases := []struct {
 		name      string
 		mediaType string
 		wantID    int
@@ -66,17 +66,17 @@ func TestMediaTypeStore_FindIDMediaTypeExists(t *testing.T) {
 
 	s := datastore.NewMediaTypeStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			id, err := s.FindID(suite.ctx, test.mediaType)
-			require.NoError(t, err)
-			require.Equal(t, test.wantID, id)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			id, err := s.FindID(suite.ctx, tc.mediaType)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.wantID, id)
 		})
 	}
 }
 
 func TestMediaTypeStore_FindIDMediaTypeDoesNotExist(t *testing.T) {
-	tt := []struct {
+	testCases := []struct {
 		name      string
 		mediaType string
 		wantError error
@@ -100,11 +100,11 @@ func TestMediaTypeStore_FindIDMediaTypeDoesNotExist(t *testing.T) {
 
 	s := datastore.NewMediaTypeStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			id, err := s.FindID(suite.ctx, test.mediaType)
-			require.EqualError(t, err, test.wantError.Error())
-			require.Equal(t, 0, id)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			id, err := s.FindID(suite.ctx, tc.mediaType)
+			require.EqualError(tt, err, tc.wantError.Error())
+			require.Equal(tt, 0, id)
 		})
 	}
 }

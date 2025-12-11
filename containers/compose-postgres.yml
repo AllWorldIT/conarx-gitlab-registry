@@ -1,0 +1,44 @@
+services:
+  postgres-primary:
+    image: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:17
+    container_name: postgres-primary
+    environment:
+      POSTGRES_ROLE: primary
+    ports:
+      - "127.0.1.1:5432:5432"
+    networks:
+      - postgres-network
+
+  postgres-replica1:
+    image: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:17
+    container_name: postgres-replica1
+    environment:
+      POSTGRES_ROLE: replica
+      PRIMARY_HOST: postgres-primary
+      REPLICATION_SLOT: 1
+    ports:
+      - "127.0.1.2:5432:5432"
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    networks:
+      - postgres-network
+
+  postgres-replica2:
+    image: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:17
+    container_name: postgres-replica2
+    environment:
+      POSTGRES_ROLE: replica
+      PRIMARY_HOST: postgres-primary
+      REPLICATION_SLOT: 2
+    ports:
+      - "127.0.1.3:5432:5432"
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    networks:
+      - postgres-network
+
+networks:
+  postgres-network:
+    driver: bridge

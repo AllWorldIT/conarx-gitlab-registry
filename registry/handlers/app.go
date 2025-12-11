@@ -98,9 +98,17 @@ var (
 	// ErrDatabaseInUse is returned when the registry attempts to start with an existing database-in-use lockfile
 	// and the database is disabled.
 	ErrDatabaseInUse = errors.New(`registry metadata database in use, please enable the database https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html`)
+	// ErrInvalidLockfiles is returned when the lockfiles state is invalid.
+	ErrInvalidLockfiles = errors.New("database-in-use and filesystem-in-use lockfiles present, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#troubleshooting")
 )
 
-type shutdownFunc func(app *App, errCh chan error, l dlog.Logger)
+type (
+	shutdownFunc   func(app *App, errCh chan error, l dlog.Logger)
+	shutdownConfig struct {
+		sFunc    shutdownFunc
+		sTimeout time.Duration
+	}
+)
 
 // App is a global registry application object. Shared resources can be placed
 // on this object that will be accessible from all requests. Any writable
@@ -138,18 +146,14 @@ type App struct {
 	manifestRefLimit         int
 	manifestPayloadSizeLimit int
 
-	// dualRedisCache provides dual-cache functionality for gradual Redis cluster migration.
-	// https://gitlab.com/gitlab-org/container-registry/-/issues/1576.
-	dualRedisCache *iredis.DualCache
-
 	// redisCache is the abstraction for manipulating cached data on Redis.
-	redisCache iredis.CacheInterface
+	redisCache *iredis.Cache
 
 	// redisCacheClient is the raw Redis client used for caching.
 	redisCacheClient redis.UniversalClient
 
 	// redisLBCache is the abstraction for the database load balancing Redis cache.
-	redisLBCache iredis.CacheInterface
+	redisLBCache *iredis.Cache
 
 	// rateLimiters expects a slice of ordered limiters by precedence
 	// see configureRateLimiters for implementation details.
@@ -157,10 +161,10 @@ type App struct {
 
 	healthRegistry *health.Registry
 
-	// shutdownFuncs is the slice of functions/code that needs to be called
+	// shutdownConfigs is the slice of functions/code that needs to be called
 	// during app object termination in order to gracefully clean up
 	// resources/terminate goroutines
-	shutdownFuncs []shutdownFunc
+	shutdownConfigs []shutdownConfig
 
 	// DBStatusChecker is responsible for checking/updating the status of the DB
 	// and replicas in the background.
@@ -175,8 +179,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		Config:  config,
 		Context: ctx,
 
-		shutdownFuncs:  make([]shutdownFunc, 0),
-		dualRedisCache: iredis.NewDualCache(nil, nil),
+		shutdownConfigs: make([]shutdownConfig, 0),
 	}
 
 	if err := app.initMetaRouter(); err != nil {
@@ -247,28 +250,11 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
 
-	// Initialize dual cache with primary (redisCache) and standby (nil for now).
-	// Feature flags control dual write behavior and read routing for migration.
-	var dualRedisOpts []iredis.DualCacheOption
-	if feature.DualCacheWrite.Enabled() {
-		dualRedisOpts = append(dualRedisOpts, iredis.WithEnableDualWrite())
-	}
-
-	if feature.DualCacheReadFromStandBy.Enabled() {
-		dualRedisOpts = append(dualRedisOpts, iredis.WithReadFromStandBy())
-	}
-
-	app.dualRedisCache = iredis.NewDualCache(app.redisCache, nil, dualRedisOpts...)
-
 	err = app.applyStorageMiddleware(config.Middleware["storage"])
 	if err != nil {
 		return nil, err
 	}
 
-	// Redis rate-limiter will be disabled on GitLab.com environments where it
-	// is currently enabled (`gstg` and `pre`) so we don't need to support it
-	// in the dualCache.
-	// https://gitlab.com/groups/gitlab-com/gl-infra/data-access/durability/-/epics/24#note_2599994238
 	if err := app.ConfigureRedisRateLimiter(ctx, config); err != nil {
 		// Redis rate-limiter is not a strictly required dependency, we simply log and report a failure here
 		// and proceed to not prevent the app from starting.
@@ -401,202 +387,12 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		options = append(options, storage.ManifestPayloadSizeLimit(app.manifestPayloadSizeLimit))
 	}
 
-	fsLocker := &storage.FilesystemInUseLocker{Driver: app.driver}
-	dbLocker := &storage.DatabaseInUseLocker{Driver: app.driver}
 	// Connect to the metadata database, if enabled.
-	if config.Database.Enabled {
-		// Temporary measure to enforce lock files while all the implementation is done
-		// Seehttps://gitlab.com/gitlab-org/container-registry/-/issues/1335
-		if feature.EnforceLockfiles.Enabled() {
-			fsLocked, err := fsLocker.IsLocked(ctx)
-			if err != nil {
-				log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
-				return nil, err
-			}
-
-			if fsLocked {
-				return nil, ErrFilesystemInUse
-			}
-		}
-
-		log.Info("using the metadata database")
-
-		if config.GC.Disabled {
-			log.Warn("garbage collection is disabled")
-		}
-
-		// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
-		options = append(options, storage.UseDatabase)
-
-		dsn := &datastore.DSN{
-			Host:           config.Database.Host,
-			Port:           config.Database.Port,
-			User:           config.Database.User,
-			Password:       config.Database.Password,
-			DBName:         config.Database.DBName,
-			SSLMode:        config.Database.SSLMode,
-			SSLCert:        config.Database.SSLCert,
-			SSLKey:         config.Database.SSLKey,
-			SSLRootCert:    config.Database.SSLRootCert,
-			ConnectTimeout: config.Database.ConnectTimeout,
-		}
-
-		dbOpts := []datastore.Option{
-			datastore.WithLogger(log.WithFields(logrus.Fields{"database": config.Database.DBName})),
-			datastore.WithLogLevel(config.Log.Level),
-			datastore.WithPreparedStatements(config.Database.PreparedStatements),
-			datastore.WithPoolConfig(&datastore.PoolConfig{
-				MaxIdle:     config.Database.Pool.MaxIdle,
-				MaxOpen:     config.Database.Pool.MaxOpen,
-				MaxLifetime: config.Database.Pool.MaxLifetime,
-				MaxIdleTime: config.Database.Pool.MaxIdleTime,
-			}),
-		}
-
-		// nolint: revive // max-control-nesting
-		if config.Database.LoadBalancing.Enabled {
-			if err := app.configureRedisLoadBalancingCache(ctx, config); err != nil {
-				return nil, err
-			}
-
-			// Inject redisLBCache as the standby cache to enable dual writes.
-			// When DualCacheWrite is enabled, writes will go to both redisCache (primary) and redisLBCache (standby).
-			app.dualRedisCache.InjectStandByCache(app.redisLBCache)
-			if feature.DualCacheSwapInstances.Enabled() {
-				// Promote standby (redisLBCache) to primary role for all cache operations.
-				app.dualRedisCache.UseStandByAsPrimary()
-			}
-
-			if app.redisLBCache != nil {
-				dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisLBCache)))
-			}
-
-			// service discovery takes precedence over fixed hosts
-			if config.Database.LoadBalancing.Record != "" {
-				nameserver := config.Database.LoadBalancing.Nameserver
-				port := config.Database.LoadBalancing.Port
-				record := config.Database.LoadBalancing.Record
-				replicaCheckInterval := config.Database.LoadBalancing.ReplicaCheckInterval
-
-				log.WithFields(dlog.Fields{
-					"nameserver":               nameserver,
-					"port":                     port,
-					"record":                   record,
-					"replica_check_interval_s": replicaCheckInterval.Seconds(),
-				}).Info("enabling database load balancing with service discovery")
-
-				resolver := datastore.NewDNSResolver(nameserver, port, record)
-				dbOpts = append(dbOpts,
-					datastore.WithServiceDiscovery(resolver),
-					datastore.WithReplicaCheckInterval(replicaCheckInterval),
-				)
-			} else if len(config.Database.LoadBalancing.Hosts) > 0 {
-				hosts := config.Database.LoadBalancing.Hosts
-				log.WithField("hosts", hosts).Info("enabling database load balancing with static hosts list")
-				dbOpts = append(dbOpts, datastore.WithFixedHosts(hosts))
-			}
-		}
-
-		if config.HTTP.Debug.Prometheus.Enabled {
-			dbOpts = append(dbOpts, datastore.WithMetricsCollection())
-		}
-
-		db, err := datastore.NewDBLoadBalancer(ctx, dsn, dbOpts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize database connections: %w", err)
-		}
-
-		if config.Database.LoadBalancing.Enabled && config.Database.LoadBalancing.ReplicaCheckInterval != 0 {
-			startDBPoolRefresh(ctx, db)
-			startDBLagCheck(ctx, db)
-		}
-
-		inSupported, err := datastore.IsDBSupported(ctx, db.Primary())
-		if err != nil {
-			log.WithError(err).Error("could not check whether database version is supported")
-			return nil, err
-		}
-
-		if !inSupported {
-			err = fmt.Errorf("the database version is lower than the minimal supported version %s", datastore.MinPostgresqlVersion)
-			log.WithError(err).Errorf("database version is not supported, please upgrade your database to at least %s and try again", datastore.MinPostgresqlVersion)
-			return nil, err
-		}
-
-		inRecovery, err := datastore.IsInRecovery(ctx, db.Primary())
-		if err != nil {
-			log.WithError(err).Error("could not check database recovery status")
-			return nil, err
-		}
-
-		if inRecovery {
-			err = errors.New("the database is in read-only mode (in recovery)")
-			log.WithError(err).Error("could not connect to database")
-			log.Warn("if this is a Geo secondary instance, the registry must not point to the default replicated database. Please configure the registry to connect to a separate, writable database on the Geo secondary site.")
-
-			log.Warn("if this is not a Geo secondary instance, the database must not be in read-only mode. Please ensure the database is correctly configured and set to read-write mode.")
-			return nil, err
-		}
-
-		// Skip postdeployment migrations to prevent pending post deployment
-		// migrations from preventing the registry from starting.
-		m := premigrations.NewMigrator(db.Primary(), premigrations.SkipPostDeployment())
-		pending, err := m.HasPending()
-		if err != nil {
-			return nil, fmt.Errorf("failed to check database migrations status: %w", err)
-		}
-		if pending {
-			return nil, fmt.Errorf("there are pending database migrations, use the 'registry database migrate' CLI " +
-				"command to check and apply them")
-		}
-
-		app.db = db
-		app.registerShutdownFunc(
-			func(app *App, errCh chan error, l dlog.Logger) {
-				l.Info("closing database connections")
-				err := app.db.Close()
-				if err != nil {
-					err = fmt.Errorf("database shutdown: %w", err)
-				} else {
-					l.Info("database component has been shut down")
-				}
-				errCh <- err
-			},
-		)
-		options = append(options, storage.Database(app.db))
-
-		// update online GC settings (if needed) in the background to avoid delaying the app start
-		go func() {
-			if err := updateOnlineGCSettings(app.Context, app.db.Primary(), config); err != nil {
-				errortracking.Capture(err, errortracking.WithContext(app.Context), errortracking.WithStackTrace())
-				log.WithError(err).Error("failed to update online GC settings")
-			}
-		}()
-
-		startOnlineGC(app.Context, app.db.Primary(), app.driver, config)
-
-		// Now that we've started the database successfully, lock the filesystem
-		// to signal that this object storage needs to be managed by the database.
-		if feature.EnforceLockfiles.Enabled() {
-			if err := dbLocker.Lock(app.Context); err != nil {
-				log.WithError(err).Error("failed to mark filesystem for database only usage, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
-				return nil, err
-			}
-		}
-
-		if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
-			startBackgroundMigrations(app.Context, app.db.Primary(), config)
-		}
-
-		if err := app.initializeRowCountCollector(config); err != nil {
-			return nil, fmt.Errorf("failed to initialize database metrics collector: %w", err)
-		}
-
-		if config.Database.Metrics.Enabled {
-			// Set migration count metrics
-			app.setMigrationCountMetric(app.db.Primary())
-		}
+	opts, err := app.initializeMetadataDatabase(ctx, config)
+	if err != nil {
+		return nil, err
 	}
+	options = append(options, opts...)
 
 	// configure storage caches
 	// It's possible that the metadata database will fill the same original need
@@ -605,7 +401,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	//
 	// For now, disabling concurrent use of the metadata database and cache
 	// decreases the surface area which we are testing during database development.
-	if cc, ok := config.Storage["cache"]; ok && !config.Database.Enabled {
+	if cc, ok := config.Storage["cache"]; ok && !config.Database.IsEnabled() {
 		v, ok := cc["blobdescriptor"]
 		if !ok {
 			// Backwards compatible: "layerinfo" == "blobdescriptor"
@@ -629,7 +425,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 				log.WithField("type", config.Storage["cache"]).Warn("unknown cache type, caching disabled")
 			}
 		}
-	} else if ok && config.Database.Enabled {
+	} else if ok && config.Database.IsEnabled() {
 		log.Warn("blob descriptor cache is not compatible with metadata database, caching disabled")
 	}
 
@@ -642,8 +438,8 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 	}
 
 	// Check filesystem lock file after registry is initialized
-	if !config.Database.Enabled {
-		if err := app.handleFilesystemLockFile(ctx, dbLocker, fsLocker); err != nil {
+	if !config.Database.IsEnabled() {
+		if err := app.handleFilesystemLockFile(ctx); err != nil {
 			return nil, err
 		}
 
@@ -678,7 +474,10 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 // handleFilesystemLockFile checks if the database lock file exists.
 // If it does not, it checks if the filesystem is in use and locks it
 // if there are existing repositories in the filesystem.
-func (app *App) handleFilesystemLockFile(ctx context.Context, dbLocker, fsLocker storage.Locker) error {
+func (app *App) handleFilesystemLockFile(ctx context.Context) error {
+	fsLocker := &storage.FilesystemInUseLocker{Driver: app.driver}
+	dbLocker := &storage.DatabaseInUseLocker{Driver: app.driver}
+
 	if !feature.EnforceLockfiles.Enabled() {
 		return nil
 	}
@@ -688,6 +487,16 @@ func (app *App) handleFilesystemLockFile(ctx context.Context, dbLocker, fsLocker
 	if err != nil {
 		log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
 		return err
+	}
+
+	fsLocked, err := fsLocker.IsLocked(ctx)
+	if err != nil {
+		log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+		return err
+	}
+
+	if fsLocked && dbLocked {
+		return ErrInvalidLockfiles
 	}
 
 	if dbLocked {
@@ -760,7 +569,7 @@ var (
 )
 
 func updateOnlineGCSettings(ctx context.Context, db datastore.Queryer, config *configuration.Configuration) error {
-	if !config.Database.Enabled || config.GC.Disabled || (config.GC.Blobs.Disabled && config.GC.Manifests.Disabled) {
+	if !config.Database.IsEnabled() || config.GC.Disabled || (config.GC.Blobs.Disabled && config.GC.Manifests.Disabled) {
 		return nil
 	}
 	if config.GC.ReviewAfter == 0 {
@@ -806,7 +615,7 @@ func updateOnlineGCSettings(ctx context.Context, db datastore.Queryer, config *c
 }
 
 func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storagedriver.StorageDriver, config *configuration.Configuration) {
-	if !config.Database.Enabled || config.GC.Disabled || (config.GC.Blobs.Disabled && config.GC.Manifests.Disabled) {
+	if !config.Database.IsEnabled() || config.GC.Disabled || (config.GC.Blobs.Disabled && config.GC.Manifests.Disabled) {
 		return
 	}
 
@@ -976,6 +785,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 			}
 			errCh <- err
 		},
+		time.Duration(0),
 	)
 
 	if app.Config.Health.StorageDriver.Enabled {
@@ -1009,7 +819,7 @@ func (app *App) RegisterHealthChecks(healthRegistries ...*health.Registry) error
 	}
 
 	if app.Config.Health.Database.Enabled {
-		if !app.Config.Database.Enabled {
+		if !app.Config.Database.IsEnabled() {
 			logger.Warn("ignoring database health checks settings as metadata database is not enabled")
 		} else {
 			interval := app.Config.Health.Database.Interval
@@ -1177,6 +987,7 @@ func (app *App) configureEvents(registryConfig *configuration.Configuration) {
 			}
 			errCh <- err
 		},
+		time.Duration(0),
 	)
 
 	// Populate registry event source
@@ -1451,14 +1262,14 @@ func (app *App) initMetaRouter() error {
 		app.router.gitlab.Use(app.RateLimiterMiddleware)
 	}
 
-	if app.Config.Database.Enabled && app.Config.Database.LoadBalancing.Enabled {
+	if app.Config.Database.IsEnabled() && app.Config.Database.LoadBalancing.Enabled {
 		app.router.distribution.Use(app.recordLSNMiddleware)
 		app.router.gitlab.Use(app.recordLSNMiddleware)
 	}
 
 	// Register the handler dispatchers.
 	app.registerDistribution(v2.RouteNameBase, func(_ *Context, _ *http.Request) http.Handler {
-		return distributionAPIBase(app.Config.Database.Enabled)
+		return distributionAPIBase(app.Config.Database.IsEnabled())
 	})
 	app.registerDistribution(v2.RouteNameManifest, manifestDispatcher)
 	app.registerDistribution(v2.RouteNameCatalog, catalogDispatcher)
@@ -1469,7 +1280,7 @@ func (app *App) initMetaRouter() error {
 
 	// Register Gitlab handlers dispatchers.
 
-	h := dbAssertionhandler{dbEnabled: app.Config.Database.Enabled}
+	h := dbAssertionhandler{dbEnabled: app.Config.Database.IsEnabled()}
 
 	app.registerGitlab(v1.Base, h.wrap(func(*Context, *http.Request) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1638,7 +1449,7 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 		r = r.WithContext(ctx)
 
 		// get all metadata either from the database or from the filesystem
-		if app.Config.Database.Enabled {
+		if app.Config.Database.IsEnabled() {
 			ctx.useDatabase = true
 		}
 
@@ -1678,8 +1489,8 @@ func (app *App) dispatcher(dispatch dispatchFunc) http.Handler {
 		}
 
 		if ctx.useDatabase {
-			if app.dualRedisCache.IsPrimaryCacheEnabled() {
-				ctx.repoCache = datastore.NewCentralRepositoryCache(app.dualRedisCache)
+			if app.redisCache != nil {
+				ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
 			} else {
 				ctx.repoCache = datastore.NewSingleRepositoryCache()
 			}
@@ -1734,8 +1545,8 @@ func (app *App) dispatcherGitlab(dispatch dispatchFunc) http.Handler {
 		}
 
 		// Initialize repository cache
-		if app.dualRedisCache.IsPrimaryCacheEnabled() {
-			ctx.repoCache = datastore.NewCentralRepositoryCache(app.dualRedisCache)
+		if app.redisCache != nil {
+			ctx.repoCache = datastore.NewCentralRepositoryCache(app.redisCache)
 		} else {
 			ctx.repoCache = datastore.NewSingleRepositoryCache()
 		}
@@ -2157,7 +1968,7 @@ func (app *App) applyStorageMiddleware(middlewares []configuration.Middleware) e
 				return fmt.Errorf("urlcache storage middleware can only be applied once")
 			}
 			urlCacheMiddlewareAlreadyApplied = true
-			mw.Options["_redisCache"] = app.dualRedisCache
+			mw.Options["_redisCache"] = app.redisCache
 		case "cloudfront", "googlecdn", "redirect":
 			if cdnMiddlewareAlreadyApplied {
 				return fmt.Errorf("using more than one storage CDN middleware is not supported")
@@ -2174,6 +1985,7 @@ func (app *App) applyStorageMiddleware(middlewares []configuration.Middleware) e
 					l.Info("shutting down storage middleware")
 					errCh <- stopF()
 				},
+				time.Duration(0),
 			)
 		}
 		app.driver = smw
@@ -2184,7 +1996,7 @@ func (app *App) applyStorageMiddleware(middlewares []configuration.Middleware) e
 // reorderMiddlewares ensures urlcache middleware comes after CDN middlewares
 func reorderMiddlewares(middlewares []configuration.Middleware) []configuration.Middleware {
 	urlCacheIndex := -1
-	lastCDNIndex := -1
+	firstCDNIndex := -1
 
 	// Find positions of urlcache and last CDN middleware
 	for i, mw := range middlewares {
@@ -2192,27 +2004,33 @@ func reorderMiddlewares(middlewares []configuration.Middleware) []configuration.
 		case "urlcache":
 			urlCacheIndex = i
 		case "cloudfront", "googlecdn", "redirect":
-			lastCDNIndex = i
+			if firstCDNIndex == -1 {
+				firstCDNIndex = i
+			}
 		}
 	}
 
 	// If urlcache is not found or no CDN middleware exists or urlcache is
-	// already after CDN middlewares, return as is:
-	if urlCacheIndex == -1 || lastCDNIndex == -1 || urlCacheIndex > lastCDNIndex {
+	// already before CDN middlewares, return as is:
+	// NOTE(prozlach): the urlcache middleware needs to go **before** other
+	// middlewares not after. It is counterintuitive, but necessary as the
+	// middlewares are then wrapped into each other in the LIFO order.
+	if urlCacheIndex == -1 || firstCDNIndex == -1 || urlCacheIndex < firstCDNIndex {
 		return middlewares
 	}
 
-	// Need to reorder: remove urlcache and insert it after the last CDN middleware
+	// Need to reorder: remove urlcache and insert it before the last CDN middleware
 	result := make([]configuration.Middleware, 0, len(middlewares))
 	urlCacheMiddleware := middlewares[urlCacheIndex]
 
 	for i, mw := range middlewares {
+		// Insert urlcache after the last CDN middleware
+		if i == firstCDNIndex {
+			result = append(result, urlCacheMiddleware)
+		}
+
 		if i != urlCacheIndex {
 			result = append(result, mw)
-		}
-		// Insert urlcache after the last CDN middleware
-		if i == lastCDNIndex {
-			result = append(result, urlCacheMiddleware)
 		}
 	}
 
@@ -2300,24 +2118,49 @@ func startUploadPurger(ctx context.Context, storageDriver storagedriver.StorageD
 	return nil
 }
 
-func (app *App) registerShutdownFunc(f shutdownFunc) {
-	app.shutdownFuncs = append(app.shutdownFuncs, f)
+func (app *App) registerShutdownFunc(sFunc shutdownFunc, sTimeout time.Duration) {
+	app.shutdownConfigs = append(
+		app.shutdownConfigs,
+		shutdownConfig{
+			sFunc:    sFunc,
+			sTimeout: sTimeout,
+		},
+	)
 }
 
 // GracefulShutdown allows the app to free any resources before shutdown.
 func (app *App) GracefulShutdown(ctx context.Context) error {
 	errs := new(multierror.Error)
 	l := dlog.GetLogger(dlog.WithContext(ctx))
-	errCh := make(chan error, len(app.shutdownFuncs))
+	errCh := make(chan error, len(app.shutdownConfigs))
 
 	// NOTE(prozlach): it is important that we are quick during shutdown, as
 	// e.g. k8s can forcefully terminate the pod with SIGKILL if the shutdown
 	// takes too long.
-	for _, f := range app.shutdownFuncs {
-		go f(app, errCh, l)
+	var timeout time.Duration
+	for _, sc := range app.shutdownConfigs {
+		if sc.sTimeout > 0 {
+			if timeout > 0 {
+				timeout = min(timeout, sc.sTimeout)
+			} else {
+				timeout = sc.sTimeout
+			}
+		}
+		go sc.sFunc(app, errCh, l)
 	}
 
-	for i := 0; i < len(app.shutdownFuncs); i++ {
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		// NOTE(prozlach): "downstream" context will not extend the timeout of
+		// the "upstream" context.
+		// So if there is already a timeout set for shutdown, the new one will
+		// be not affect the one that is already set if the new one is further
+		// into the future.
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	for i := 0; i < len(app.shutdownConfigs); i++ {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("app shutdown failed: %w", ctx.Err())
@@ -2482,7 +2325,268 @@ func (app *App) initializeRowCountCollector(config *configuration.Configuration)
 			l.Info("database row count metrics collector has been shut down")
 			errCh <- nil
 		},
+		time.Duration(0),
 	)
 
 	return nil
+}
+
+// initializeBBMProgressCollector initializes the BBM progress Prometheus metrics collector
+func (app *App) initializeBBMProgressCollector(config *configuration.Configuration) error {
+	if !config.Database.Metrics.Enabled || !config.Database.BackgroundMigrations.Enabled {
+		return nil
+	}
+
+	if app.redisCacheClient == nil {
+		return errors.New("database metrics enabled but Redis cache client is not configured")
+	}
+
+	// Executor returning rows for scanning
+	executor := func(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+		return app.db.Primary().QueryContext(ctx, query, args...)
+	}
+
+	var pOpts []dsmetrics.ProgressOption
+	if config.Database.Metrics.Interval > 0 {
+		pOpts = append(pOpts, dsmetrics.WithProgressInterval(config.Database.Metrics.Interval))
+	}
+	if config.Database.Metrics.LeaseDuration > 0 {
+		pOpts = append(pOpts, dsmetrics.WithProgressLeaseDuration(config.Database.Metrics.LeaseDuration))
+	}
+
+	bbmCollector, err := dsmetrics.NewBBMProgressCollector(executor, app.redisCacheClient, pOpts...)
+	if err != nil {
+		return fmt.Errorf("failed to create background migration progress metrics collector: %w", err)
+	}
+	bbmCollector.Start(app.Context)
+
+	app.registerShutdownFunc(
+		func(_ *App, errCh chan error, l dlog.Logger) {
+			l.Info("stopping background migration progress metrics collector")
+			bbmCollector.Stop()
+			errCh <- nil
+		},
+		time.Duration(0),
+	)
+	return nil
+}
+
+func (app *App) initializeMetadataDatabase(ctx context.Context, config *configuration.Configuration) ([]storage.RegistryOption, error) {
+	if !config.Database.IsEnabled() {
+		return nil, nil
+	}
+
+	fsLocker := &storage.FilesystemInUseLocker{Driver: app.driver}
+	dbLocker := &storage.DatabaseInUseLocker{Driver: app.driver}
+	options := make([]storage.RegistryOption, 0)
+	log := dcontext.GetLogger(app)
+
+	fsLocked, err := fsLocker.IsLocked(ctx)
+	if err != nil {
+		log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+		return nil, err
+	}
+
+	dbLocked, err := dbLocker.IsLocked(ctx)
+	if err != nil {
+		log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+		return nil, err
+	}
+
+	if feature.EnforceLockfiles.Enabled() && fsLocked && dbLocked {
+		return nil, ErrInvalidLockfiles
+	}
+
+	// Temporary measure to enforce lock files while all the implementation is done
+	// Seehttps://gitlab.com/gitlab-org/container-registry/-/issues/1335
+	if feature.EnforceLockfiles.Enabled() && fsLocked {
+		if !config.Database.IsPrefer() {
+			return nil, ErrFilesystemInUse
+		}
+
+		log.Warn("database prefer mode enabled, but found filesystem metadata: falling back to legacy metadata")
+
+		// Set that we're in prefer fallback mode so that subsequent config.Database.IsEnabled() checks return false.
+		config.Database.PreferFallback = true
+
+		return nil, nil
+	}
+
+	log.Info("using the metadata database")
+
+	if config.Database.IsPrefer() && !dbLocked && !fsLocked && feature.EnforceLockfiles.Enabled() {
+		log.Info("database in prefer mode on a fresh install: configured and reachable metadata database required to start")
+	}
+
+	if config.GC.Disabled {
+		log.Warn("garbage collection is disabled")
+	}
+
+	// Do not write or check for repository layer link metadata on the filesystem when the database is enabled.
+	options = append(options, storage.UseDatabase)
+
+	dsn := &datastore.DSN{
+		Host:           config.Database.Host,
+		Port:           config.Database.Port,
+		User:           config.Database.User,
+		Password:       config.Database.Password,
+		DBName:         config.Database.DBName,
+		SSLMode:        config.Database.SSLMode,
+		SSLCert:        config.Database.SSLCert,
+		SSLKey:         config.Database.SSLKey,
+		SSLRootCert:    config.Database.SSLRootCert,
+		ConnectTimeout: config.Database.ConnectTimeout,
+	}
+
+	dbOpts := []datastore.Option{
+		datastore.WithLogger(log.WithFields(logrus.Fields{"database": config.Database.DBName})),
+		datastore.WithLogLevel(config.Log.Level),
+		datastore.WithPreparedStatements(config.Database.PreparedStatements),
+		datastore.WithPoolConfig(&datastore.PoolConfig{
+			MaxIdle:     config.Database.Pool.MaxIdle,
+			MaxOpen:     config.Database.Pool.MaxOpen,
+			MaxLifetime: config.Database.Pool.MaxLifetime,
+			MaxIdleTime: config.Database.Pool.MaxIdleTime,
+		}),
+	}
+
+	// nolint: revive // max-control-nesting
+	if config.Database.LoadBalancing.Enabled {
+		if err := app.configureRedisLoadBalancingCache(ctx, config); err != nil {
+			return nil, err
+		}
+		dbOpts = append(dbOpts, datastore.WithLSNCache(datastore.NewCentralRepositoryCache(app.redisLBCache)))
+
+		// service discovery takes precedence over fixed hosts
+		if config.Database.LoadBalancing.Record != "" {
+			nameserver := config.Database.LoadBalancing.Nameserver
+			port := config.Database.LoadBalancing.Port
+			record := config.Database.LoadBalancing.Record
+			replicaCheckInterval := config.Database.LoadBalancing.ReplicaCheckInterval
+
+			log.WithFields(dlog.Fields{
+				"nameserver":               nameserver,
+				"port":                     port,
+				"record":                   record,
+				"replica_check_interval_s": replicaCheckInterval.Seconds(),
+			}).Info("enabling database load balancing with service discovery")
+
+			resolver := datastore.NewDNSResolver(nameserver, port, record)
+			dbOpts = append(dbOpts,
+				datastore.WithServiceDiscovery(resolver),
+				datastore.WithReplicaCheckInterval(replicaCheckInterval),
+			)
+		} else if len(config.Database.LoadBalancing.Hosts) > 0 {
+			hosts := config.Database.LoadBalancing.Hosts
+			log.WithField("hosts", hosts).Info("enabling database load balancing with static hosts list")
+			dbOpts = append(dbOpts, datastore.WithFixedHosts(hosts))
+		}
+	}
+
+	if config.HTTP.Debug.Prometheus.Enabled {
+		dbOpts = append(dbOpts, datastore.WithMetricsCollection())
+	}
+
+	db, err := datastore.NewDBLoadBalancer(ctx, dsn, dbOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize database connections: %w", err)
+	}
+
+	if config.Database.LoadBalancing.Enabled && config.Database.LoadBalancing.ReplicaCheckInterval != 0 {
+		startDBPoolRefresh(ctx, db)
+		startDBLagCheck(ctx, db)
+	}
+
+	inSupported, err := datastore.IsDBSupported(ctx, db.Primary())
+	if err != nil {
+		log.WithError(err).Error("could not check whether database version is supported")
+		return nil, err
+	}
+
+	if !inSupported {
+		err = fmt.Errorf("the database version is lower than the minimal supported version %s", datastore.MinPostgresqlVersion)
+		log.WithError(err).Errorf("database version is not supported, please upgrade your database to at least %s and try again", datastore.MinPostgresqlVersion)
+		return nil, err
+	}
+
+	inRecovery, err := datastore.IsInRecovery(ctx, db.Primary())
+	if err != nil {
+		log.WithError(err).Error("could not check database recovery status")
+		return nil, err
+	}
+
+	if inRecovery {
+		err = errors.New("the database is in read-only mode (in recovery)")
+		log.WithError(err).Error("could not connect to database")
+		log.Warn("if this is a Geo secondary instance, the registry must not point to the default replicated database. Please configure the registry to connect to a separate, writable database on the Geo secondary site.")
+
+		log.Warn("if this is not a Geo secondary instance, the database must not be in read-only mode. Please ensure the database is correctly configured and set to read-write mode.")
+		return nil, err
+	}
+
+	// Skip postdeployment migrations to prevent pending post deployment
+	// migrations from preventing the registry from starting.
+	m := premigrations.NewMigrator(db.Primary(), premigrations.SkipPostDeployment())
+	pending, err := m.HasPending()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check database migrations status: %w", err)
+	}
+	if pending {
+		return nil, fmt.Errorf("there are pending database migrations, use the 'registry database migrate' CLI " +
+			"command to check and apply them")
+	}
+
+	app.db = db
+	app.registerShutdownFunc(
+		func(app *App, errCh chan error, l dlog.Logger) {
+			l.Info("closing database connections")
+			err := app.db.Close()
+			if err != nil {
+				err = fmt.Errorf("database shutdown: %w", err)
+			} else {
+				l.Info("database component has been shut down")
+			}
+			errCh <- err
+		},
+		config.Database.DrainTimeout,
+	)
+	options = append(options, storage.Database(app.db))
+
+	// update online GC settings (if needed) in the background to avoid delaying the app start
+	go func() {
+		if err := updateOnlineGCSettings(app.Context, app.db.Primary(), config); err != nil {
+			errortracking.Capture(err, errortracking.WithContext(app.Context), errortracking.WithStackTrace())
+			log.WithError(err).Error("failed to update online GC settings")
+		}
+	}()
+
+	startOnlineGC(app.Context, app.db.Primary(), app.driver, config)
+
+	// Now that we've started the database successfully, lock the filesystem
+	// to signal that this object storage needs to be managed by the database.
+	if feature.EnforceLockfiles.Enabled() {
+		if err := dbLocker.Lock(app.Context); err != nil {
+			log.WithError(err).Error("failed to mark filesystem for database only usage, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
+			return nil, err
+		}
+	}
+
+	if config.Database.BackgroundMigrations.Enabled && feature.BBMProcess.Enabled() {
+		startBackgroundMigrations(app.Context, app.db.Primary(), config)
+	}
+
+	if err := app.initializeRowCountCollector(config); err != nil {
+		return nil, fmt.Errorf("failed to initialize database metrics collector: %w", err)
+	}
+
+	if err := app.initializeBBMProgressCollector(config); err != nil {
+		return nil, fmt.Errorf("failed to initialize bbm progress metrics collector: %w", err)
+	}
+
+	if config.Database.Metrics.Enabled {
+		// Set migration count metrics
+		app.setMigrationCountMetric(app.db.Primary())
+	}
+
+	return options, nil
 }

@@ -69,7 +69,7 @@ func Test_baseWorker_rollbackOnExit_PanicRecover(t *testing.T) {
 }
 
 func Test_exponentialBackoff(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name  string
 		input int
 		want  time.Duration
@@ -87,10 +87,10 @@ func Test_exponentialBackoff(t *testing.T) {
 		{"beyond max", 9, 24 * time.Hour},
 		{"int64 overflow", 31, 24 * time.Hour},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := exponentialBackoff(tt.input)
-			require.Equal(t, tt.want, got)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			got := exponentialBackoff(tc.input)
+			require.Equal(tt, tc.want, got)
 		})
 	}
 

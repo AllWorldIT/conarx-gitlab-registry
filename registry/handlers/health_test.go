@@ -138,7 +138,7 @@ func TestTCPHealthCheck(t *testing.T) {
 }
 
 func TestHTTPHealthCheck(t *testing.T) {
-	testcases := []struct {
+	testCases := []struct {
 		name            string
 		headersConfig   http.Header
 		expectedHeaders http.Header
@@ -196,16 +196,16 @@ func TestHTTPHealthCheck(t *testing.T) {
 	interval := time.Second
 	threshold := 3
 
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			stopFailing := make(chan struct{})
 
 			checkedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assert.Equal(t, http.MethodHead, r.Method, "expected HEAD request")
+				assert.Equal(tt, http.MethodHead, r.Method, "expected HEAD request")
 				// NOTE(prozlach): we can't use require (which internally uses
 				// `FailNow` from testing package) in a goroutine as we may get
 				// an undefined behavior
-				assert.Equal(t, test.expectedHeaders, r.Header)
+				assert.Equal(tt, tc.expectedHeaders, r.Header)
 				select {
 				case <-stopFailing:
 					w.WriteHeader(http.StatusOK)
@@ -213,7 +213,7 @@ func TestHTTPHealthCheck(t *testing.T) {
 					w.WriteHeader(http.StatusInternalServerError)
 				}
 			}))
-			t.Cleanup(checkedServer.Close)
+			tt.Cleanup(checkedServer.Close)
 
 			config := &configuration.Configuration{
 				Storage: configuration.Storage{
@@ -228,20 +228,20 @@ func TestHTTPHealthCheck(t *testing.T) {
 							Interval:  interval,
 							URI:       checkedServer.URL,
 							Threshold: threshold,
-							Headers:   test.headersConfig,
+							Headers:   tc.headersConfig,
 						},
 					},
 				},
 			}
 
-			ctx := dtestutil.NewContextWithLogger(t)
+			ctx := dtestutil.NewContextWithLogger(tt)
 
 			app, err := NewApp(ctx, config)
-			require.NoError(t, err)
-			t.Cleanup(
+			require.NoError(tt, err)
+			tt.Cleanup(
 				func() {
 					err := app.GracefulShutdown(ctx)
-					require.NoError(t, err)
+					require.NoError(tt, err)
 				},
 			)
 
@@ -255,7 +255,7 @@ func TestHTTPHealthCheck(t *testing.T) {
 
 				if i < threshold-1 {
 					// definitely shouldn't have hit the threshold yet
-					assert.Empty(t, status, "expected 1 item in health check results")
+					assert.Empty(tt, status, "expected 1 item in health check results")
 					continue
 				}
 				if i < threshold+1 {
@@ -263,8 +263,8 @@ func TestHTTPHealthCheck(t *testing.T) {
 					continue
 				}
 
-				require.Len(t, status, 1, "expected 1 item in health check results")
-				require.Equal(t, "downstream service returned unexpected status: 500", status[checkedServer.URL], "did not get expected result for health check")
+				require.Len(tt, status, 1, "expected 1 item in health check results")
+				require.Equal(tt, "downstream service returned unexpected status: 500", status[checkedServer.URL], "did not get expected result for health check")
 
 				break
 			}
@@ -274,7 +274,7 @@ func TestHTTPHealthCheck(t *testing.T) {
 
 			<-time.After(2 * interval)
 
-			assert.Empty(t, healthRegistry.CheckStatus(), "expected 0 items in health check results")
+			assert.Empty(tt, healthRegistry.CheckStatus(), "expected 0 items in health check results")
 		})
 	}
 }

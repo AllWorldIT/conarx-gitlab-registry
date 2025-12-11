@@ -37,3 +37,20 @@ func Get(name string, options map[string]any, storageDriver storagedriver.Storag
 
 	return nil, nil, fmt.Errorf("no storage middleware registered with name: %s", name)
 }
+
+// Clear resets middlewares, it should be used only in tests as registry no
+// longer accesses registered middlewares list after initialization.
+func Clear() {
+	storageMiddlewares = nil
+}
+
+// GcsBucketKeyer is any type that is capable of returning the GCS bucket key which should be cached by Google CDN.
+type GcsBucketKeyer interface {
+	GCSBucketKey(path string) string
+}
+
+// GcsBucketKeyerFetcher is any type that is capable of returning the object
+// fulfilling the GcsBucketKeyer interface
+type GcsBucketKeyerFetcher interface {
+	FetchGCSBucketKeyer() (GcsBucketKeyer, bool)
+}

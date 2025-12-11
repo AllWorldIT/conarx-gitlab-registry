@@ -232,7 +232,7 @@ func testManifestStorageImpl(t *testing.T, schema1Enabled bool, options ...Regis
 
 	deletedManifest, err := ms.Get(ctx, dgst)
 	require.Error(t, err, "unexpected success getting deleted manifest")
-	require.IsType(t, distribution.ErrManifestUnknownRevision{}, err, "unexpected error getting deleted manifest")
+	require.ErrorAs(t, err, new(distribution.ErrManifestUnknownRevision), "unexpected error getting deleted manifest")
 
 	require.Nil(t, deletedManifest, "deleted manifest get returned non-nil")
 

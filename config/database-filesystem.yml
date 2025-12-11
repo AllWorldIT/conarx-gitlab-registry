@@ -21,10 +21,10 @@ database:
   enabled:  true
   host:     127.0.0.1
   port:     5432
-  user:     "registry"
-  password: "apassword"
-  dbname:   "registry_dev"
-  sslmode:  "disable"
+  user:     boryna
+  password: Chleboslaw
+  dbname:   registry_test
+  sslmode:  disable
 http:
   # Registry API will be accessible at localhost:5000
   addr: :5000

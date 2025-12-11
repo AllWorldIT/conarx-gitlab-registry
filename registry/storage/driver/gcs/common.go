@@ -26,6 +26,7 @@ import (
 	"github.com/docker/distribution/registry/storage/driver/base"
 	"github.com/docker/distribution/registry/storage/driver/factory"
 	"github.com/docker/distribution/registry/storage/driver/internal/parse"
+	storagemiddleware "github.com/docker/distribution/registry/storage/driver/middleware"
 	"github.com/docker/distribution/registry/storage/internal/metrics"
 	"github.com/docker/distribution/version"
 	sloglogrus "github.com/samber/slog-logrus/v2"
@@ -121,6 +122,10 @@ func (d *Wrapper) GCSBucketKey(path string) string {
 	baseDriver := d.StorageDriver.(*base.Regulator).StorageDriver.(*driver)
 
 	return baseDriver.pathToKey(path)
+}
+
+func (d *Wrapper) FetchGCSBucketKeyer() (storagemiddleware.GcsBucketKeyer, bool) {
+	return d, true
 }
 
 type baseEmbed struct {

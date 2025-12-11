@@ -448,12 +448,12 @@ func TestNormalizedSplitHostname(t *testing.T) {
 		},
 	}
 	for _, testcase := range testcases {
-		t.Run(testcase.input, func(t *testing.T) {
+		t.Run(testcase.input, func(tt *testing.T) {
 			named, err := ParseNormalizedNamed(testcase.input)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			domain, name := SplitHostname(named)
-			require.Equal(t, domain, testcase.domain)
-			require.Equal(t, name, testcase.name)
+			require.Equal(tt, domain, testcase.domain)
+			require.Equal(tt, name, testcase.name)
 		})
 	}
 }

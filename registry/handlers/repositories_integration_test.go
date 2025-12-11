@@ -81,7 +81,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 		GC: configuration.GC{Disabled: true},
 		Database: configuration.Database{
-			Enabled:     true,
+			Enabled:     configuration.DatabaseEnabledTrue,
 			Host:        dbDSN.Host,
 			Port:        dbDSN.Port,
 			User:        dbDSN.User,
@@ -142,7 +142,7 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 	// fake PG query timeout error
 	pgTimeoutErr := &pgconn.PgError{Code: pgerrcode.QueryCanceled}
 
-	tests := []struct {
+	testCases := []struct {
 		name             string
 		preciseQueryErr  error
 		estimateQueryErr error
@@ -167,8 +167,8 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			dbMock := env.mockDB()
 
 			// first query will be the search by path
@@ -192,51 +192,51 @@ func TestGitlabAPI_GetRepository_SizeWithDescendantsTimeout(t *testing.T) {
 			exp := dbMock.ExpectQuery(`SELECT(.+)coalesce\(sum\(q.size\), 0\)(.+)FROM(.+)WITH RECURSIVE cte AS(.+)WHERE(.+)m.top_level_namespace_id = ?`).
 				WithArgs(want.NamespaceID)
 
-			if tt.preciseQueryErr != nil {
-				exp.WillReturnError(tt.preciseQueryErr)
+			if tc.preciseQueryErr != nil {
+				exp.WillReturnError(tc.preciseQueryErr)
 			} else {
 				exp.WillReturnRows(sqlmock.NewRows([]string{"size"}).AddRow(wantSizePrecise))
 			}
 
 			// Next we must see the app fallback to the simplified estimate query (`FROM ( SELECT DISTINCT ON (digest)` is only
 			// present on that query) if the main one failed.
-			if tt.preciseQueryErr != nil {
+			if tc.preciseQueryErr != nil {
 				exp = dbMock.ExpectQuery(`SELECT(.+)coalesce\(sum\(q.size\), 0\)(.+)FROM \( SELECT DISTINCT ON \(digest\)(.+)WHERE(.+)top_level_namespace_id = ?`).
 					WithArgs(want.NamespaceID)
-				if tt.estimateQueryErr != nil {
-					exp.WillReturnError(tt.estimateQueryErr)
+				if tc.estimateQueryErr != nil {
+					exp.WillReturnError(tc.estimateQueryErr)
 				} else {
 					exp.WillReturnRows(sqlmock.NewRows([]string{"size"}).AddRow(wantSizeEstimate))
 				}
 			}
 
 			resp, err := http.Get(u)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
 			// we make sure that all expectations were met, including that no additional queries were executed
-			require.NoError(t, dbMock.ExpectationsWereMet())
+			require.NoError(tt, dbMock.ExpectationsWereMet())
 
 			// validate API response
-			if tt.estimateQueryErr != nil {
-				require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+			if tc.estimateQueryErr != nil {
+				require.Equal(tt, http.StatusInternalServerError, resp.StatusCode)
 			} else {
-				require.Equal(t, http.StatusOK, resp.StatusCode)
+				require.Equal(tt, http.StatusOK, resp.StatusCode)
 
 				got := RepositoryAPIResponse{}
 				p, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 				err = json.Unmarshal(p, &got)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
-				require.NotNil(t, got.Size)
+				require.NotNil(tt, got.Size)
 
-				if tt.preciseQueryErr != nil {
-					require.Equal(t, wantSizeEstimate, *got.Size)
-					require.Equal(t, sizePrecisionUntagged, got.SizePrecision)
+				if tc.preciseQueryErr != nil {
+					require.Equal(tt, wantSizeEstimate, *got.Size)
+					require.Equal(tt, sizePrecisionUntagged, got.SizePrecision)
 				} else {
-					require.Equal(t, wantSizePrecise, *got.Size)
-					require.Equal(t, sizePrecisionDefault, got.SizePrecision)
+					require.Equal(tt, wantSizePrecise, *got.Size)
+					require.Equal(tt, sizePrecisionDefault, got.SizePrecision)
 				}
 			}
 		})

@@ -305,7 +305,7 @@ func TestRepositoryStore_FindAll_NotFound(t *testing.T) {
 func TestRepositoryStore_FindAllPaginated(t *testing.T) {
 	reloadManifestFixtures(t)
 
-	tt := []struct {
+	testCases := []struct {
 		name     string
 		limit    int
 		lastPath string
@@ -563,22 +563,22 @@ func TestRepositoryStore_FindAllPaginated(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			filters := datastore.FilterParams{
-				MaxEntries: test.limit,
-				LastEntry:  test.lastPath,
+				MaxEntries: tc.limit,
+				LastEntry:  tc.lastPath,
 			}
 
 			rr, err := s.FindAllPaginated(suite.ctx, filters)
 
 			// reset created_at attributes for reproducible comparisons
 			for _, r := range rr {
-				require.NotEmpty(t, r.CreatedAt)
+				require.NotEmpty(tt, r.CreatedAt)
 				r.CreatedAt = time.Time{}
 			}
-			require.NoError(t, err)
-			require.Equal(t, test.expectedRepos, rr)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedRepos, rr)
 		})
 	}
 }
@@ -860,7 +860,7 @@ func TestRepositoryStore_TagsPaginated(t *testing.T) {
 	// stable-9ede8db0
 	r := &models.Repository{NamespaceID: 1, ID: 4}
 
-	tt := []struct {
+	testCases := []struct {
 		name         string
 		limit        int
 		lastName     string
@@ -982,11 +982,11 @@ func TestRepositoryStore_TagsPaginated(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			filters := datastore.FilterParams{
-				MaxEntries: test.limit,
-				LastEntry:  test.lastName,
+				MaxEntries: tc.limit,
+				LastEntry:  tc.lastName,
 			}
 
 			rr, err := s.TagsPaginated(suite.ctx, r, filters)
@@ -996,8 +996,8 @@ func TestRepositoryStore_TagsPaginated(t *testing.T) {
 				r.UpdatedAt = sql.NullTime{}
 			}
 
-			require.NoError(t, err)
-			require.Equal(t, test.expectedTags, rr)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedTags, rr)
 		})
 	}
 }
@@ -1012,7 +1012,7 @@ func TestRepositoryStore_HasTagsAfterName(t *testing.T) {
 	// stable-9ede8db0
 	r := &models.Repository{NamespaceID: 1, ID: 4}
 
-	tt := []struct {
+	testCases := []struct {
 		name     string
 		sort     datastore.SortOrder
 		lastName string
@@ -1077,16 +1077,16 @@ func TestRepositoryStore_HasTagsAfterName(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			filters := datastore.FilterParams{
-				SortOrder: test.sort,
-				LastEntry: test.lastName,
+				SortOrder: tc.sort,
+				LastEntry: tc.lastName,
 			}
 
 			c, err := s.HasTagsAfterName(suite.ctx, r, filters)
-			require.NoError(t, err)
-			require.Equal(t, test.expected, c)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expected, c)
 		})
 	}
 }
@@ -1101,7 +1101,7 @@ func TestRepositoryStore_HasTagsBeforeName(t *testing.T) {
 	// stable-9ede8db0
 	r := &models.Repository{NamespaceID: 1, ID: 4}
 
-	tt := []struct {
+	testCases := []struct {
 		name       string
 		sort       datastore.SortOrder
 		beforeName string
@@ -1166,16 +1166,16 @@ func TestRepositoryStore_HasTagsBeforeName(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			filters := datastore.FilterParams{
-				SortOrder:   test.sort,
-				BeforeEntry: test.beforeName,
+				SortOrder:   tc.sort,
+				BeforeEntry: tc.beforeName,
 			}
 
 			hasMore, err := s.HasTagsBeforeName(suite.ctx, r, filters)
-			require.NoError(t, err)
-			require.Equal(t, test.expected, hasMore)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expected, hasMore)
 		})
 	}
 }
@@ -1216,7 +1216,7 @@ func TestRepositoryStore_Count(t *testing.T) {
 func TestRepositoryStore_CountAfterPath(t *testing.T) {
 	reloadManifestFixtures(t)
 
-	tt := []struct {
+	testCases := []struct {
 		name string
 		path string
 
@@ -1263,11 +1263,11 @@ func TestRepositoryStore_CountAfterPath(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			c, err := s.CountAfterPath(suite.ctx, test.path)
-			require.NoError(t, err)
-			require.Equal(t, test.expectedNumRepos, c)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			c, err := s.CountAfterPath(suite.ctx, tc.path)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedNumRepos, c)
 		})
 	}
 }
@@ -1285,7 +1285,7 @@ func TestRepositoryStore_CountAfterPath_NoRepositories(t *testing.T) {
 func TestRepositoryStore_CountPathSubRepositories(t *testing.T) {
 	reloadManifestFixtures(t)
 
-	tt := []struct {
+	testCases := []struct {
 		name string
 		path string
 		// see testdata/fixtures/[repositories|repository_manifests].sql:
@@ -1322,11 +1322,11 @@ func TestRepositoryStore_CountPathSubRepositories(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			c, err := s.CountPathSubRepositories(suite.ctx, test.namespaceID, test.path)
-			require.NoError(t, err)
-			require.Equal(t, test.expectedNumRepos, c)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			c, err := s.CountPathSubRepositories(suite.ctx, tc.namespaceID, tc.path)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedNumRepos, c)
 		})
 	}
 }
@@ -2524,22 +2524,22 @@ func TestRepositoryStore_TagDetail(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			reloadTagFixtures(t)
+		t.Run(tc.name, func(tt *testing.T) {
+			reloadTagFixtures(tt)
 
 			r := &models.Repository{NamespaceID: 1, ID: 3}
 			s := datastore.NewRepositoryStore(suite.db)
 
 			tagDetail, err := s.TagDetail(suite.ctx, r, tc.tagName)
-			require.NoError(t, err)
-			require.NotNil(t, tagDetail)
+			require.NoError(tt, err)
+			require.NotNil(tt, tagDetail)
 
 			// reset created_at and updated_at attributes for reproducible comparisons
 			tagDetail.CreatedAt = time.Time{}
 			tagDetail.UpdatedAt = sql.NullTime{}
 			tagDetail.PublishedAt = time.Time{}
 
-			require.Equal(t, tc.expectedTag, tagDetail, "tag detail must match")
+			require.Equal(tt, tc.expectedTag, tagDetail, "tag detail must match")
 		})
 	}
 }
@@ -2590,7 +2590,7 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 
 	r := &models.Repository{NamespaceID: 1, ID: 4}
 
-	tt := []struct {
+	testCases := []struct {
 		name         string
 		limit        int
 		beforeName   string
@@ -2664,12 +2664,12 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			filters := datastore.FilterParams{
-				BeforeEntry: test.beforeName,
-				LastEntry:   test.lastName,
-				MaxEntries:  test.limit,
+				BeforeEntry: tc.beforeName,
+				LastEntry:   tc.lastName,
+				MaxEntries:  tc.limit,
 			}
 
 			rr, err := s.TagsDetailPaginated(suite.ctx, r, filters)
@@ -2680,8 +2680,8 @@ func TestRepositoryStore_TagsDetailPaginated(t *testing.T) {
 				r.PublishedAt = time.Time{}
 			}
 
-			require.NoError(t, err)
-			require.Equal(t, test.expectedTags, rr)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedTags, rr)
 		})
 	}
 }
@@ -2742,7 +2742,7 @@ func TestRepositoryStore_TagsDetailPaginated_Sort(t *testing.T) {
 	allAsc := []*models.TagDetail{a, b, c, d, e, f}
 	allDesc := []*models.TagDetail{f, e, d, c, b, a}
 
-	tt := map[string]struct {
+	testCases := map[string]struct {
 		sort         datastore.SortOrder
 		beforeName   string
 		lastName     string
@@ -2841,24 +2841,24 @@ func TestRepositoryStore_TagsDetailPaginated_Sort(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for name, test := range tt {
-		t.Run(name, func(t *testing.T) {
+	for tn, tc := range testCases {
+		t.Run(tn, func(tt *testing.T) {
 			filters := datastore.FilterParams{
-				SortOrder:   test.sort,
-				BeforeEntry: test.beforeName,
-				LastEntry:   test.lastName,
-				MaxEntries:  test.limit,
+				SortOrder:   tc.sort,
+				BeforeEntry: tc.beforeName,
+				LastEntry:   tc.lastName,
+				MaxEntries:  tc.limit,
 			}
 
 			rr, err := s.TagsDetailPaginated(suite.ctx, r, filters)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			// reset created_at and updated_at attributes for reproducible comparisons
 			for _, r := range rr {
 				r.CreatedAt = time.Time{}
 				r.UpdatedAt = sql.NullTime{}
 				r.PublishedAt = time.Time{}
 			}
-			require.Equal(t, test.expectedTags, rr)
+			require.Equal(tt, tc.expectedTags, rr)
 		})
 	}
 }
@@ -2928,7 +2928,7 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 	allAsc := []*models.TagDetail{aaaa, bbbb, cccc, dddd, latest, ffff, eeee}
 	allDesc := []*models.TagDetail{eeee, ffff, latest, dddd, cccc, bbbb, aaaa}
 
-	tt := map[string]struct {
+	testCases := map[string]struct {
 		sort         datastore.SortOrder
 		orderBy      string
 		publishedAt  string
@@ -3001,22 +3001,22 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for name, test := range tt {
-		t.Run(name, func(t *testing.T) {
+	for tn, tc := range testCases {
+		t.Run(tn, func(tt *testing.T) {
 			filters := datastore.FilterParams{
 				OrderBy:     "published_at",
-				SortOrder:   test.sort,
-				LastEntry:   test.lastEntry,
-				PublishedAt: test.publishedAt,
-				MaxEntries:  test.limit,
+				SortOrder:   tc.sort,
+				LastEntry:   tc.lastEntry,
+				PublishedAt: tc.publishedAt,
+				MaxEntries:  tc.limit,
 			}
 
 			receivedTags, err := s.TagsDetailPaginated(suite.ctx, r, filters)
-			require.NoError(t, err)
-			require.Len(t, receivedTags, len(test.expectedTags))
+			require.NoError(tt, err)
+			require.Len(tt, receivedTags, len(tc.expectedTags))
 			for i, receivedTag := range receivedTags {
-				require.Equal(t, test.expectedTags[i].Name, receivedTag.Name)
-				require.Equal(t, test.expectedTags[i].PublishedAt.UTC(), receivedTag.PublishedAt.UTC(), "for tag: %s", receivedTag.Name)
+				require.Equal(tt, tc.expectedTags[i].Name, receivedTag.Name)
+				require.Equal(tt, tc.expectedTags[i].PublishedAt.UTC(), receivedTag.PublishedAt.UTC(), "for tag: %s", receivedTag.Name)
 			}
 		})
 	}
@@ -3025,7 +3025,7 @@ func TestRepositoryStore_TagsDetailPaginated_Sort_PublishedAt(t *testing.T) {
 func TestRepositoryStore_FindPaginatedRepositoriesForPath(t *testing.T) {
 	reloadTagFixtures(t)
 
-	tt := []struct {
+	testCases := []struct {
 		name     string
 		limit    int
 		baseRepo *models.Repository
@@ -3211,23 +3211,23 @@ func TestRepositoryStore_FindPaginatedRepositoriesForPath(t *testing.T) {
 
 	s := datastore.NewRepositoryStore(suite.db)
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			filters := datastore.FilterParams{
-				MaxEntries: test.limit,
-				LastEntry:  test.lastPath,
+				MaxEntries: tc.limit,
+				LastEntry:  tc.lastPath,
 			}
 
-			rr, err := s.FindPaginatedRepositoriesForPath(suite.ctx, test.baseRepo, filters)
+			rr, err := s.FindPaginatedRepositoriesForPath(suite.ctx, tc.baseRepo, filters)
 
 			// reset created_at attributes for reproducible comparisons
 			for _, r := range rr {
-				require.NotEmpty(t, r.CreatedAt)
+				require.NotEmpty(tt, r.CreatedAt)
 				r.CreatedAt = time.Time{}
 			}
 
-			require.NoError(t, err)
-			require.Equal(t, test.expectedRepos, rr)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedRepos, rr)
 		})
 	}
 }
@@ -3296,27 +3296,27 @@ func TestRepositoryStore_RenamePathForSubRepositories(t *testing.T) {
 	}
 
 	s := datastore.NewRepositoryStore(suite.db)
-	t.Run(test.name, func(t *testing.T) {
+	t.Run(test.name, func(tt *testing.T) {
 		err := s.RenamePathForSubRepositories(suite.ctx, test.topLevelNamespaceID, test.baseRepo.Path, test.newPath)
-		require.NoError(t, err)
+		require.NoError(tt, err)
 		// verify base repository remains unchanged
 		actualOldrepo, err := s.FindByPath(suite.ctx, test.baseRepo.Path)
-		require.NoError(t, err)
+		require.NoError(tt, err)
 		// reset created_at attributes for reproducible comparisons
-		require.NotEmpty(t, actualOldrepo.CreatedAt)
+		require.NotEmpty(tt, actualOldrepo.CreatedAt)
 		actualOldrepo.CreatedAt = time.Time{}
-		require.Equal(t, test.baseRepo, actualOldrepo)
+		require.Equal(tt, test.baseRepo, actualOldrepo)
 		// verify only paths were updated for sub-repositories
 		for oldPath, expectedNewRepo := range test.expectedUpdatedRepos {
 			oldrepo, err := s.FindByPath(suite.ctx, oldPath)
-			require.NoError(t, err)
-			require.Empty(t, oldrepo)
+			require.NoError(tt, err)
+			require.Empty(tt, oldrepo)
 			newRepo, err := s.FindByPath(suite.ctx, expectedNewRepo.Path)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			// reset created_at attributes for reproducible comparisons
-			require.NotEmpty(t, newRepo.CreatedAt)
+			require.NotEmpty(tt, newRepo.CreatedAt)
 			newRepo.CreatedAt = time.Time{}
-			require.Equal(t, expectedNewRepo, newRepo)
+			require.Equal(tt, expectedNewRepo, newRepo)
 		}
 	})
 }
@@ -3493,7 +3493,7 @@ func TestRepositoryStore_RenamePathForSubRepositories_OnlyNecessaryChanged(t *te
 
 func TestRepositoryStore_RenameRepository(t *testing.T) {
 	reloadRepositoryFixtures(t)
-	tests := []struct {
+	testCases := []struct {
 		name                string
 		oldPath             string
 		namespaceID         int64
@@ -3536,16 +3536,16 @@ func TestRepositoryStore_RenameRepository(t *testing.T) {
 	}
 
 	s := datastore.NewRepositoryStore(suite.db)
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := s.Rename(suite.ctx, &models.Repository{Path: test.oldPath, NamespaceID: test.namespaceID}, test.newPath, test.newName)
-			require.NoError(t, err)
-			repo, err := s.FindByPath(suite.ctx, test.newPath)
-			require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			err := s.Rename(suite.ctx, &models.Repository{Path: tc.oldPath, NamespaceID: tc.namespaceID}, tc.newPath, tc.newName)
+			require.NoError(tt, err)
+			repo, err := s.FindByPath(suite.ctx, tc.newPath)
+			require.NoError(tt, err)
 			// reset created_at attributes for reproducible comparisons
-			require.NotEmpty(t, repo.CreatedAt)
+			require.NotEmpty(tt, repo.CreatedAt)
 			repo.CreatedAt = time.Time{}
-			require.Equal(t, test.expectedUpdatedRepo, repo)
+			require.Equal(tt, tc.expectedUpdatedRepo, repo)
 		})
 	}
 }

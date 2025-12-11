@@ -47,7 +47,7 @@ func TestSignURLWithPrefix(t *testing.T) {
 		0xb7, 0x70, 0xa3, 0x36, 0xe0, 0x87, 0x0a, 0xe3,
 	} // base64url: nZtRohdNF9m3cKM24IcK4w==
 
-	tests := []struct {
+	testCases := []struct {
 		name       string
 		urlPrefix  string
 		keyName    string
@@ -79,11 +79,11 @@ func TestSignURLWithPrefix(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			signedValue, err := signURLWithPrefix(test.urlPrefix, test.keyName, testKey, test.expiration)
-			require.Equal(t, test.err, err)
-			require.Equal(t, test.expected, signedValue)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			signedValue, err := signURLWithPrefix(tc.urlPrefix, tc.keyName, testKey, tc.expiration)
+			require.Equal(tt, tc.err, err)
+			require.Equal(tt, tc.expected, signedValue)
 		})
 	}
 }

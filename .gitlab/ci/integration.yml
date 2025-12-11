@@ -51,7 +51,7 @@ s3:minio:
   parallel:
     matrix:
       # Regular combinations
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
         S3_DRIVER_VERSION: [ "s3", "s3_v2" ]
   rules:
     - if: $CI_COMMIT_REF_NAME != $CI_DEFAULT_BRANCH
@@ -102,10 +102,10 @@ s3:aws:
   parallel:
     matrix:
       # Regular combinations
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
         S3_DRIVER_VERSION: [ "s3", "s3_v2" ]
         S3_AUTH_MODE: ["key_auth"]
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
         S3_DRIVER_VERSION: [ "s3_v2" ]
         S3_AUTH_MODE: ["instance_auth"]
   rules:
@@ -141,7 +141,7 @@ gcs:key_creds:
   <<: *storage-driver-test
   parallel:
     matrix:
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
   rules:
     - <<: *if-fork-merge-request
       when: never
@@ -162,7 +162,7 @@ gcs:instance_creds:
   <<: *storage-driver-test
   parallel:
     matrix:
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
  # Do not run in forked projects, as we are running on custom runner with
  # instance-level credentials
   rules:
@@ -195,10 +195,10 @@ azure:
   parallel:
     matrix:
       # Regular combinations
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
         AZURE_DRIVER_VERSION: [ "azure", "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "shared_key" ]
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
         AZURE_DRIVER_VERSION: [ "azure_v2" ]
         AZURE_CREDENTIALS_TYPE: [ "client_secret", "default_credentials" ]
  # Do not run in forked projects, as we are running on custom runner with
@@ -280,19 +280,19 @@ api:conformance:
   stage: integration
   variables: &database-variables
     FF_NETWORK_PER_BUILD: 1
-    POSTGRES_PASSWORD: "secret"
-    POSTGRES_DB: "registry_test"
     REGISTRY_DATABASE_ENABLED: "true"
     REGISTRY_DATABASE_HOST: "db"
     REGISTRY_DATABASE_PORT: "5432"
-    REGISTRY_DATABASE_USER: "postgres"
-    REGISTRY_DATABASE_PASSWORD: "secret"
+    REGISTRY_DATABASE_USER: "boryna"
+    REGISTRY_DATABASE_PASSWORD: "Chleboslaw"
     REGISTRY_DATABASE_DBNAME: "registry_test"
     REGISTRY_DATABASE_SSLMODE: "disable"
     TAGS: 'integration'
   services:
-    - name: postgres:${PG_VERSION}-alpine
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_VERSION}
       alias: "db"
+      variables:
+        POSTGRES_ROLE: primary
   script: $GO_TEST -v -timeout=25m -coverprofile=coverage.out -tags=$TAGS
 
 api:online-gc:
@@ -313,20 +313,20 @@ database:verify-postgresql-min-version:
   script:
     # Install bash if not available
     - apk add --no-cache bash
-    
+
     # Run the verification script with bash
     - |
       #!/bin/bash
       set -euo pipefail
-      
+
       # Extract PG_PREV_VERSION from .gitlab-ci.yml
       PG_PREV_VERSION=$(grep -E '^\s*PG_PREV_VERSION:' .gitlab-ci.yml | grep -oE '[0-9]+')
       echo "PG_PREV_VERSION from .gitlab-ci.yml: ${PG_PREV_VERSION}"
-      
+
       # Extract MinPostgresqlVersion from datastore.go (assuming minor version is always 0)
       MIN_PG_VERSION=$(grep -E 'MinPostgresqlVersion.*=' registry/datastore/datastore.go | grep -oE '[0-9]+\.[0-9]+' | cut -d. -f1)
       echo "MinPostgresqlVersion from datastore.go: ${MIN_PG_VERSION}"
-      
+
       # Compare versions
       if [ "${PG_PREV_VERSION}" != "${MIN_PG_VERSION}" ]; then
         echo "ERROR: PostgreSQL minimum version mismatch!"
@@ -389,8 +389,10 @@ database:api-fault-tolerance:
     TAGS: 'integration,toxiproxy'
   services:
     # `services` are not extended, so we have to redeclare `postgres` here.
-    - name: postgres:${PG_VERSION}-alpine
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_VERSION}
       alias: "db"
+      variables:
+        POSTGRES_ROLE: primary
     - name: shopify/toxiproxy
       alias: "toxiproxy"
   script: $GO_TEST -v -coverprofile=coverage.out -tags=$TAGS -run ^TestDBFaultTolerance
@@ -405,45 +407,54 @@ database:background-migrations:
 
 .database-load-balancing: &database-load-balancing
   <<: *database
+  extends:
+    - .go-test
+  parallel:
+    matrix:
+      - PG_VERSION: $PG_PREV_VERSION
+        GO_VERSION: [ "1.24", "1.25" ]
+        KV_TYPE: [ redis, valkey ]
+      - PG_VERSION: $PG_CURR_VERSION
+        GO_VERSION: [ "1.24", "1.25" ]
+        KV_TYPE: [ redis, valkey ]
+      - PG_VERSION: $PG_NEXT_VERSION
+        GO_VERSION: [ "1.24", "1.25" ]
+        KV_TYPE: [ redis, valkey ]
   variables: &database-load-balancing-variables
     <<: *database-variables
-    POSTGRESQL_PASSWORD: "secret"
-    POSTGRESQL_DATABASE: "registry_test"
-    POSTGRESQL_REPLICATION_USER: "repluser"
-    POSTGRESQL_REPLICATION_PASSWORD: "replpassword"
-    POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
-    REGISTRY_DATABASE_HOST: "primary"
+    REGISTRY_DATABASE_HOST: "postgres-primary"
     REGISTRY_DATABASE_LOADBALANCING_ENABLED: "true"
     REGISTRY_REDIS_LOADBALANCING_ENABLED:  "true"
-    REGISTRY_REDIS_LOADBALANCING_ADDR: "redis:6379"
+    REGISTRY_REDIS_LOADBALANCING_ADDR: "kv:6379"
     PACKAGE: "github.com/docker/distribution/registry/handlers"
     TAGS: "integration,handlers_test,api_gitlab_test,api_conformance_test"
   services:
-    - name: redis:alpine
-      alias: "redis"
-    - name: bitnamilegacy/postgresql:${PG_VERSION}
-      alias: "primary"
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: "kv"
       variables:
-        POSTGRESQL_REPLICATION_MODE: "master"
-        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
-    - name: bitnamilegacy/postgresql:${PG_VERSION}
-      alias: "replica1"
+        KV_ROLE: primary
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_VERSION}
+      alias: "postgres-primary"
       variables:
-        POSTGRESQL_REPLICATION_MODE: "slave"
-        POSTGRESQL_MASTER_HOST: "primary"
-        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
-    - name: bitnamilegacy/postgresql:${PG_VERSION}
-      alias: "replica2"
+        POSTGRES_ROLE: primary
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_VERSION}
+      alias: "postgres-replica1"
       variables:
-        POSTGRESQL_REPLICATION_MODE: "slave"
-        POSTGRESQL_MASTER_HOST: "primary"
-        POSTGRESQL_REPLICATION_USE_PASSFILE: "false"
+        POSTGRES_ROLE: replica
+        PRIMARY_HOST: postgres-primary
+        REPLICATION_SLOT: 1
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_VERSION}
+      alias: "postgres-replica2"
+      variables:
+        POSTGRES_ROLE: replica
+        PRIMARY_HOST: postgres-primary
+        REPLICATION_SLOT: 2
     # not needed for all scenarios but avoids having to declare all services in each as `services` can't be extended
     - name: registry.gitlab.com/gitlab-org/container-registry/test-dns-server:28d4a455
       alias: "test-dns-server"
       variables:
         DNS_SERVER_SRV_RECORD: "replica.registry-db.service.consul"
-        DNS_SERVER_REPLY_HOSTS: "replica1,replica2"
+        DNS_SERVER_REPLY_HOSTS: "postgres-replica1,postgres-replica2"
         DNS_SERVER_REPLY_PORT: "5432"
         DNS_SERVER_LISTEN_PORT: "8600"
   script: $GO_TEST -v -timeout=35m -coverprofile=coverage.out -tags=$TAGS
@@ -452,7 +463,7 @@ database:api-load-balancing-hosts:
   <<: *database-load-balancing
   variables:
     <<: *database-load-balancing-variables
-    REGISTRY_DATABASE_LOADBALANCING_HOSTS: "replica1,replica2"
+    REGISTRY_DATABASE_LOADBALANCING_HOSTS: "postgres-replica1,postgres-replica2"
 
 database:api-load-balancing-discovery:
   <<: *database-load-balancing
@@ -462,91 +473,102 @@ database:api-load-balancing-discovery:
     REGISTRY_DATABASE_LOADBALANCING_NAMESERVER: "test-dns-server"
     REGISTRY_DATABASE_LOADBALANCING_PORT: "8600"
 
-.cache:redis: &cache-redis
-  extends: .go-version-matrix
+.cache:kv: &cache-kv
+  extends: .go-test
+  parallel:
+    matrix:
+      - GO_VERSION: [ "1.24", "1.25" ]
+        KV_TYPE: [ redis, valkey ]
   stage: integration
-  variables: &cache-redis-variables
-    REDIS_ADDR: "redis:6379"
+  variables: &cache-kv-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/cache/redis"
-  services:
-    - name: redis:alpine
-      alias: "redis"
   script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
 
-cache:redis:
-  extends: .cache:redis
-
-cache:redis-auth:
-  <<: *cache-redis
+cache:kv:
+  <<: *cache-kv
   variables:
-    <<: *cache-redis-variables
-    # create a Docker network per build so that services can talk with each other
-    FF_NETWORK_PER_BUILD: 1
-    REDIS_USERNAME: "my-redis-user"
-    REDIS_PASSWORD: "my-redis-pass"
+    <<: *cache-kv-variables
+    KV_ADDR: "kv-node1:6379"
   services:
-    - name: redis:alpine
-      alias: "redis"
-      command:
-        - /bin/sh
-        - -c
-        - |
-          echo "Starting Redis..."
-          cat <<EOF > /etc/redis.conf
-          user default off
-          user ${REDIS_USERNAME} on >${REDIS_PASSWORD} allcommands allkeys
-          EOF
-          redis-server /etc/redis.conf
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node1
+      variables:
+        KV_ROLE: primary
+        KV_ANNOUNCE_IP: kv-node1
 
-cache:redis-sentinel:
-  <<: *cache-redis
+cache:kv-auth:
+  <<: *cache-kv
   variables:
-    <<: *cache-redis-variables
+    <<: *cache-kv-variables
     # create a Docker network per build so that services can talk with each other
     FF_NETWORK_PER_BUILD: 1
-    # config for redis-sentinel
-    REDIS_MASTER_HOST: "redis"
-    REDIS_MASTER_SET: "main-redis"
+    KV_ADDR: "kv-node1:6379"
+    KV_USERNAME: "my-kv-user"
+    KV_PASSWORD: "my-kv-pass"
+  services:
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node1
+      variables:
+        KV_ROLE: primary
+        KV_ANNOUNCE_IP: kv-node1
+
+cache:kv-sentinel:
+  <<: *cache-kv
+  variables:
+    <<: *cache-kv-variables
+    # create a Docker network per build so that services can talk with each other
+    FF_NETWORK_PER_BUILD: 1
     # config for app
-    REDIS_ADDR: "redis-sentinel:26379"
-    REDIS_MAIN_NAME: "main-redis"
+    KV_ADDR: "kv-sentinel:6379"
+    KV_MAIN_NAME: "fluffy"
   services:
-    - name: redis:alpine
-      alias: "redis"
-    - name: bitnamilegacy/redis-sentinel
-      alias: "redis-sentinel"
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node1
+      variables:
+        KV_ROLE: primary
+        KV_ANNOUNCE_IP: kv-node1
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node2
+      variables:
+        KV_ROLE: replica
+        KV_ANNOUNCE_IP: kv-node2
+        KV_PRIMARY_HOST: kv-node1
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-sentinel
+      variables:
+        KV_ROLE: sentinel
+        KV_ANNOUNCE_IP: kv-sentinel
+        KV_MONITOR_HOST: kv-node1
 
-cache:redis-sentinel-auth:
-  <<: *cache-redis
+cache:kv-sentinel-auth:
+  <<: *cache-kv
   variables:
-    <<: *cache-redis-variables
+    <<: *cache-kv-variables
     # create a Docker network per build so that services can talk with each other
     FF_NETWORK_PER_BUILD: 1
-    # config for redis-sentinel
-    REDIS_MASTER_HOST: "redis"
-    REDIS_MASTER_SET: "main-redis"
     # config for app
-    REDIS_ADDR: "redis-sentinel:26379"
-    REDIS_MAIN_NAME: "main-redis"
-    REDIS_SENTINEL_USERNAME: "my-sentinel-user"
-    REDIS_SENTINEL_PASSWORD: "my-sentinel-pass"
+    KV_ADDR: "kv-sentinel:6379"
+    KV_MAIN_NAME: "fluffy"
+    KV_SENTINEL_USERNAME: "my-sentinel-user"
+    KV_SENTINEL_PASSWORD: "my-sentinel-pass"
   services:
-    - name: redis:alpine
-      alias: "redis"
-    - name: bitnamilegacy/redis-sentinel
-      alias: "redis-sentinel"
-      command:
-        - /bin/sh
-        - -c
-        - |
-          echo "Starting Redis Sentinel..."
-          cat <<EOF > /opt/bitnami/redis-sentinel/etc/sentinel.conf
-          user default off
-          user ${REDIS_SENTINEL_USERNAME} on >${REDIS_SENTINEL_PASSWORD} +@all
-          sentinel monitor ${REDIS_MAIN_NAME} ${REDIS_MASTER_HOST} 6379 2
-          sentinel resolve-hostnames yes
-          EOF
-          redis-sentinel /opt/bitnami/redis-sentinel/etc/sentinel.conf
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node1
+      variables:
+        KV_ROLE: primary
+        KV_ANNOUNCE_IP: kv-node1
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node2
+      variables:
+        KV_ROLE: replica
+        KV_ANNOUNCE_IP: kv-node2
+        KV_PRIMARY_HOST: kv-node1
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-sentinel
+      variables:
+        KV_ROLE: sentinel
+        KV_ANNOUNCE_IP: kv-sentinel
+        KV_MONITOR_HOST: kv-node1
 
 base-driver:
   <<: *storage-driver-test
@@ -554,66 +576,64 @@ base-driver:
     <<: *storage-driver-variables
     PACKAGE: "github.com/docker/distribution/registry/storage/driver/base"
 
-# ci-tool-allowfail redis:rate
-# ci-tool-allowfail redis:rate-limiter:handlers
-redis:rate-limiter:handlers:
-  extends: .go-version-matrix
-  stage: integration
+kv:rate-limiter:handlers:
+  <<: *cache-kv
   variables:
-    REDIS_ADDR: "redis:6379"
-    PACKAGE: "github.com/docker/distribution/registry/handlers"
+    <<: *cache-kv-variables
+    KV_ADDR: "kv-node1:6379"
+    PACKAGE: 'github.com/docker/distribution/registry/middleware/ratelimiter'
   services:
-    - name: redis:alpine
-      alias: "redis"
-  script: $GO_TEST -v -coverprofile=coverage.out -tags=integration
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node1
+      variables:
+        KV_ROLE: primary
+        KV_ANNOUNCE_IP: kv-node1
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node2
+      variables:
+        KV_ROLE: replica
+        KV_ANNOUNCE_IP: kv-node2
+        KV_PRIMARY_HOST: kv-node1
 
-
-.redis-cluster-variables:
-  variables: &redis-cluster-variables
-    ALLOW_EMPTY_PASSWORD: yes
-    REDIS_NODES: "redis-1:7001 redis-2:7002 redis-3:7003"
-    REDIS_CLUSTER_DYNAMIC_IPS: no
-    REDIS_CLUSTER_REPLICAS: 0
-
-# ci-tool-allowfail redis-cluster:rate-limiter:handlers
-redis-cluster:rate-limiter:handlers:
-  extends: .go-version-matrix
+.kv-cluster: &kv-cluster
+  extends: .go-test
+  parallel:
+    matrix:
+      - GO_VERSION: [ "1.24", "1.25" ]
+        KV_TYPE: [ redis, valkey ]
   stage: integration
+  variables: &kv-cluster-variables
+    KV_ADDR: "kv-node1:6379,kv-node2:6379,kv-node3:6379"
   services:
-    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
-      alias: redis-1
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node1
       variables:
-        <<: *redis-cluster-variables
-        REDIS_PORT_NUMBER: 7001
-        REDIS_CLUSTER_ANNOUNCE_IP: redis-1
-        REDIS_CLUSTER_ANNOUNCE_PORT: 7001
-        REDIS_CLUSTER_ANNOUNCE_BUS_PORT: 17001
-        REDIS_CLUSTER_CREATOR: yes
-
-    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
-      alias: redis-2
+        KV_ROLE: cluster-node
+        KV_ANNOUNCE_IP: kv-node1
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node2
       variables:
-        <<: *redis-cluster-variables
-        REDIS_PORT_NUMBER: 7002
-        REDIS_CLUSTER_ANNOUNCE_IP: redis-2
-        REDIS_CLUSTER_ANNOUNCE_PORT: 7002
-        REDIS_CLUSTER_ANNOUNCE_BUS_PORT: 17002
-
-    - name: bitnamilegacy/redis-cluster:$REDIS_CLUSTER_VERSION
-      alias: redis-3
+        KV_ROLE: cluster-node
+        KV_ANNOUNCE_IP: kv-node2
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-node3
       variables:
-        <<: *redis-cluster-variables
-        REDIS_PORT_NUMBER: 7003
-        REDIS_CLUSTER_ANNOUNCE_IP: redis-3
-        REDIS_CLUSTER_ANNOUNCE_PORT: 7003
-        REDIS_CLUSTER_ANNOUNCE_BUS_PORT: 17003
+        KV_ROLE: cluster-node
+        KV_ANNOUNCE_IP: kv-node3
+    - name: registry.gitlab.com/gitlab-org/container-registry/kv-ci-${KV_TYPE}:bookworm
+      alias: kv-starter
+      variables:
+        KV_ROLE: cluster-starter
+        KV_ANNOUNCE_IP: kv-starter
+        KV_CLUSTER_NODES: kv-node1,kv-node2,kv-node3
 
+kv-cluster:rate-limiter:handlers:
+  <<: *kv-cluster
   variables:
-    REDIS_CLUSTER_VERSION: "8.0.2"
-    REDIS_ADDR: "redis-1:7001,redis-2:7002,redis-3:7003"
-    PACKAGE: 'github.com/docker/distribution/registry/handlers'
+    <<: *kv-cluster-variables
+    PACKAGE: 'github.com/docker/distribution/registry/middleware/ratelimiter'
   script:
-    - $GO_TEST -v -coverprofile=coverage.out -tags=integration -run "TestRateLimiter"
+    - $GO_TEST -v -coverprofile=coverage.out -tags=integration
 
 # cli:schema-migration-dependency is an integration test suite that verifies the dependency resolver for post/pre-deployment schema migrations.
 cli:schema-migration-dependency:
@@ -622,7 +642,7 @@ cli:schema-migration-dependency:
   tags:
     - gitlab-org-docker
   services:
-    - name: docker:27.2.0-dind
+    - name: docker:${DOCKER_VERSION}-dind
       alias: docker
   stage: integration
   variables:

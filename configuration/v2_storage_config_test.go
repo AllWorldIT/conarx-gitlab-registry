@@ -244,7 +244,7 @@ storage:
 
 // TestCustomSplitFunction validates the customSplit function behavior
 func TestCustomSplitFunction(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		input    string
 		expected []string
@@ -276,17 +276,17 @@ func TestCustomSplitFunction(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := customSplit(tt.input)
-			require.Equal(t, tt.expected, result)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			result := customSplit(tc.input)
+			require.Equal(tt, tc.expected, result)
 		})
 	}
 }
 
 // TestParseStorageDriverCaseSensitivity validates case sensitivity in storage driver names
 func TestParseStorageDriverCaseSensitivity(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name       string
 		envValue   string
 		paramEnv   string
@@ -309,28 +309,28 @@ func TestParseStorageDriverCaseSensitivity(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			configYaml := `version: 0.1`
 
-			err := os.Setenv("REGISTRY_STORAGE", tt.envValue)
-			require.NoError(t, err)
+			err := os.Setenv("REGISTRY_STORAGE", tc.envValue)
+			require.NoError(tt, err)
 			defer os.Unsetenv("REGISTRY_STORAGE")
 
-			err = os.Setenv(tt.paramEnv, tt.paramValue)
-			require.NoError(t, err)
-			defer os.Unsetenv(tt.paramEnv)
+			err = os.Setenv(tc.paramEnv, tc.paramValue)
+			require.NoError(tt, err)
+			defer os.Unsetenv(tc.paramEnv)
 
 			config, err := Parse(bytes.NewReader([]byte(configYaml)))
-			require.NoError(t, err)
-			require.Equal(t, tt.expectType, config.Storage.Type())
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectType, config.Storage.Type())
 		})
 	}
 }
 
 // TestCustomSplitAllProtectedStrings validates all protected strings in customSplit
 func TestCustomSplitAllProtectedStrings(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		input    string
 		expected []string
@@ -455,10 +455,10 @@ func TestCustomSplitAllProtectedStrings(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := customSplit(tt.input)
-			require.Equal(t, tt.expected, result)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			result := customSplit(tc.input)
+			require.Equal(tt, tc.expected, result)
 		})
 	}
 }
@@ -466,7 +466,7 @@ func TestCustomSplitAllProtectedStrings(t *testing.T) {
 // TestParseAzureV2AuthenticationMethods tests all Azure v2 authentication parameters
 func TestParseAzureV2AuthenticationMethods(t *testing.T) {
 	// Test 1: Shared Key authentication
-	t.Run("shared_key_auth", func(t *testing.T) {
+	t.Run("shared_key_auth", func(tt *testing.T) {
 		configYaml := `
 version: 0.1
 storage:
@@ -477,16 +477,16 @@ storage:
     container: mycontainer
 `
 		err := os.Setenv("REGISTRY_STORAGE_AZURE_V2_CREDENTIALS_TYPE", "shared_key")
-		require.NoError(t, err)
+		require.NoError(tt, err)
 		defer os.Unsetenv("REGISTRY_STORAGE_AZURE_V2_CREDENTIALS_TYPE")
 
 		config, err := Parse(bytes.NewReader([]byte(configYaml)))
-		require.NoError(t, err)
-		require.Equal(t, "shared_key", config.Storage.Parameters()["credentials_type"])
+		require.NoError(tt, err)
+		require.Equal(tt, "shared_key", config.Storage.Parameters()["credentials_type"])
 	})
 
 	// Test 2: Client Secret authentication
-	t.Run("client_secret_auth", func(t *testing.T) {
+	t.Run("client_secret_auth", func(tt *testing.T) {
 		configYaml := `version: 0.1`
 
 		envVars := map[string]string{
@@ -500,38 +500,38 @@ storage:
 
 		for k, v := range envVars {
 			err := os.Setenv(k, v)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer os.Unsetenv(k)
 		}
 
 		config, err := Parse(bytes.NewReader([]byte(configYaml)))
-		require.NoError(t, err)
-		require.Equal(t, "azure_v2", config.Storage.Type())
-		require.Equal(t, "client_secret", config.Storage.Parameters()["credentials_type"])
-		require.Equal(t, "my-tenant-id", config.Storage.Parameters()["tenant_id"])
-		require.Equal(t, "my-client-id", config.Storage.Parameters()["client_id"])
-		require.Equal(t, "my-secret", config.Storage.Parameters()["secret"])
+		require.NoError(tt, err)
+		require.Equal(tt, "azure_v2", config.Storage.Type())
+		require.Equal(tt, "client_secret", config.Storage.Parameters()["credentials_type"])
+		require.Equal(tt, "my-tenant-id", config.Storage.Parameters()["tenant_id"])
+		require.Equal(tt, "my-client-id", config.Storage.Parameters()["client_id"])
+		require.Equal(tt, "my-secret", config.Storage.Parameters()["secret"])
 	})
 
 	// Test 3: Default Credentials
-	t.Run("default_credentials_auth", func(t *testing.T) {
+	t.Run("default_credentials_auth", func(tt *testing.T) {
 		configYaml := `version: 0.1`
 
 		err := os.Setenv("REGISTRY_STORAGE", "azure_v2")
-		require.NoError(t, err)
+		require.NoError(tt, err)
 		defer os.Unsetenv("REGISTRY_STORAGE")
 
 		err = os.Setenv("REGISTRY_STORAGE_AZURE_V2_CREDENTIALS_TYPE", "default_credentials")
-		require.NoError(t, err)
+		require.NoError(tt, err)
 		defer os.Unsetenv("REGISTRY_STORAGE_AZURE_V2_CREDENTIALS_TYPE")
 
 		err = os.Setenv("REGISTRY_STORAGE_AZURE_V2_CONTAINER", "mycontainer")
-		require.NoError(t, err)
+		require.NoError(tt, err)
 		defer os.Unsetenv("REGISTRY_STORAGE_AZURE_V2_CONTAINER")
 
 		config, err := Parse(bytes.NewReader([]byte(configYaml)))
-		require.NoError(t, err)
-		require.Equal(t, "default_credentials", config.Storage.Parameters()["credentials_type"])
+		require.NoError(tt, err)
+		require.Equal(tt, "default_credentials", config.Storage.Parameters()["credentials_type"])
 	})
 }
 
@@ -771,7 +771,7 @@ storage:
 
 // TestCustomSplitLongestMatchFirst validates that customSplit replaces longest matches first
 func TestCustomSplitLongestMatchFirst(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		input    string
 		expected []string
@@ -827,10 +827,10 @@ func TestCustomSplitLongestMatchFirst(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := customSplit(tt.input)
-			require.Equal(t, tt.expected, result, tt.note)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			result := customSplit(tc.input)
+			require.Equal(tt, tc.expected, result, tc.note)
 		})
 	}
 }
@@ -841,7 +841,7 @@ func TestCustomSplitProtectedStringOrder(t *testing.T) {
 	// when they have overlapping parts
 
 	// Test specific overlapping cases
-	overlappingTests := []struct {
+	testCases := []struct {
 		name        string
 		input       string
 		expected    []string
@@ -867,17 +867,17 @@ func TestCustomSplitProtectedStringOrder(t *testing.T) {
 		},
 	}
 
-	for _, tt := range overlappingTests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := customSplit(tt.input)
-			require.Equal(t, tt.expected, result, tt.explanation)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			result := customSplit(tc.input)
+			require.Equal(tt, tc.expected, result, tc.explanation)
 		})
 	}
 }
 
 // TestParseProtectedStringEmbedded tests that protected strings embedded within larger strings are NOT matched
 func TestParseProtectedStringEmbedded(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		input    string
 		expected []string
@@ -903,10 +903,10 @@ func TestParseProtectedStringEmbedded(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := customSplit(tt.input)
-			require.Equal(t, tt.expected, result, tt.note)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			result := customSplit(tc.input)
+			require.Equal(tt, tc.expected, result, tc.note)
 		})
 	}
 }

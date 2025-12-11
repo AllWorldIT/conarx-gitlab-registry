@@ -540,10 +540,10 @@ func TestS3DriverStorageClass(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			rootDir := t.TempDir()
+		t.Run(tc.name, func(tt *testing.T) {
+			rootDir := tt.TempDir()
 
-			driver := s3DriverConstructorT(t, rootDir, tc.storageClass)
+			driver := s3DriverConstructorT(tt, rootDir, tc.storageClass)
 
 			// Skip storage class verification for StorageClassNone as it's just a config check
 			if tc.storageClass == common.StorageClassNone {
@@ -551,20 +551,20 @@ func TestS3DriverStorageClass(t *testing.T) {
 			}
 
 			driverKeyer, ok := driver.(common.S3BucketKeyer)
-			require.True(t, ok, "driver should implement S3BucketKeyer interface")
+			require.True(tt, ok, "driver should implement S3BucketKeyer interface")
 
 			filename := "/test-" + strings.ToLower(tc.name)
 			contents := []byte("contents")
-			ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(t)))
+			ctx := dlog.WithLogger(context.Background(), dlog.GetLogger(dlog.WithTestingTB(tt)))
 
 			err := driver.PutContent(ctx, filename, contents)
 			if err != nil {
 				// Skip test if the storage class is not supported by the S3 service
 				if strings.Contains(err.Error(), "InvalidStorageClass") {
-					t.Skipf("Storage class %q not supported by this S3 service", tc.storageClass)
+					tt.Skipf("Storage class %q not supported by this S3 service", tc.storageClass)
 					return
 				}
-				require.NoError(t, err, "unexpected error creating content")
+				require.NoError(tt, err, "unexpected error creating content")
 			}
 			defer driver.Delete(ctx, filename)
 
@@ -574,15 +574,15 @@ func TestS3DriverStorageClass(t *testing.T) {
 			parsedParams, err := fetchDriverConfig(
 				rootDir,
 				s3.StorageClassStandard,
-				dlog.GetLogger(dlog.WithTestingTB(t)),
+				dlog.GetLogger(dlog.WithTestingTB(tt)),
 			)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			var storageClass string
 			switch driverVersion {
 			case common.V2DriverName:
 				s3API, err := v2.NewS3API(parsedParams)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
 				resp, err := s3API.GetObject(
 					ctx,
@@ -590,12 +590,12 @@ func TestS3DriverStorageClass(t *testing.T) {
 						Bucket: ptr.String(parsedParams.Bucket),
 						Key:    ptr.String(driverKeyer.S3BucketKey(filename)),
 					})
-				require.NoError(t, err, "unexpected error retrieving object")
+				require.NoError(tt, err, "unexpected error retrieving object")
 				defer resp.Body.Close()
 				storageClass = string(resp.StorageClass)
 			default:
 				s3API, err := v1.NewS3API(parsedParams)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
 				resp, err := s3API.GetObjectWithContext(
 					ctx,
@@ -603,19 +603,19 @@ func TestS3DriverStorageClass(t *testing.T) {
 						Bucket: ptr.String(parsedParams.Bucket),
 						Key:    ptr.String(driverKeyer.S3BucketKey(filename)),
 					})
-				require.NoError(t, err, "unexpected error retrieving object")
+				require.NoError(tt, err, "unexpected error retrieving object")
 				defer resp.Body.Close()
 				storageClass = ptr.ToString(resp.StorageClass)
 			}
 
 			if tc.expectedStorageClass == "" {
 				require.Empty(
-					t, storageClass,
+					tt, storageClass,
 					"unexpected storage class for %s file: %v", tc.name, storageClass,
 				)
 			} else {
 				require.Equalf(
-					t, tc.expectedStorageClass, storageClass,
+					tt, tc.expectedStorageClass, storageClass,
 					"unexpected storage class for %s file: %v", tc.name, storageClass,
 				)
 			}

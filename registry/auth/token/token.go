@@ -11,10 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/docker/libtrust"
 
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/auth"
+	reginternal "github.com/docker/distribution/registry/internal"
 )
 
 const (
@@ -30,6 +32,9 @@ const (
 var (
 	ErrMalformedToken = errors.New("malformed token")
 	ErrInvalidToken   = errors.New("invalid token")
+
+	// for testing purposes
+	systemClock reginternal.Clock = clock.New()
 )
 
 // ResourceActions stores allowed actions on a named and typed resource.
@@ -179,7 +184,7 @@ func (t *Token) Verify(verifyOpts VerifyOptions) error {
 	}
 
 	// Verify that the token is currently usable and not expired.
-	currentTime := time.Now()
+	currentTime := systemClock.Now()
 
 	expWithLeeway := time.Unix(t.Claims.Expiration, 0).Add(Leeway)
 	if currentTime.After(expWithLeeway) {

@@ -157,11 +157,11 @@ func TestAPIConformance(t *testing.T) {
 		})
 
 		for _, o := range envOpts {
-			t.Run(funcName(f)+" "+o.name, func(t *testing.T) {
+			t.Run(funcName(f)+" "+o.name, func(tt *testing.T) {
 				// Use filesystem driver here. This way, we're able to test conformance
 				// with migration mode enabled as the inmemory driver does not support
 				// root directories.
-				rootDir := t.TempDir()
+				rootDir := tt.TempDir()
 
 				o.opts = append(o.opts, withFSDriver(rootDir), withAccessLog)
 
@@ -170,9 +170,9 @@ func TestAPIConformance(t *testing.T) {
 						FanoutTimeout: 3 * time.Second,
 						Endpoints: []configuration.Endpoint{
 							{
-								Name:              t.Name(),
+								Name:              tt.Name(),
 								Disabled:          false,
-								Headers:           http.Header{"test-header": []string{t.Name()}},
+								Headers:           http.Header{"test-header": []string{tt.Name()}},
 								Timeout:           100 * time.Millisecond,
 								Threshold:         1,
 								Backoff:           100 * time.Millisecond,
@@ -184,7 +184,7 @@ func TestAPIConformance(t *testing.T) {
 					o.opts = append(o.opts, withWebhookNotifications(notifCfg))
 				}
 
-				f(t, o.opts...)
+				f(tt, o.opts...)
 			})
 		}
 	}
@@ -200,7 +200,7 @@ func funcName(f func(*testing.T, ...configOpt)) string {
 
 func manifestPutSchema2ByTagIsIdempotent(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "idempotentag"
 	repoPath := "schema2/idempotent"
@@ -239,7 +239,7 @@ func manifestPutSchema2ByTagIsIdempotent(t *testing.T, opts ...configOpt) {
 
 func manifestPutSchema2ByTagSameDigestParallelIsIdempotent(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName1 := "idempotentag-one"
 	tagName2 := "idempotentag-two"
@@ -282,7 +282,7 @@ func manifestPutSchema2ByTagSameDigestParallelIsIdempotent(t *testing.T, opts ..
 // with the same digest in parallel can cause a race condition
 func manifestPutManifestListByTagSameDigestParallelIsIdempotent(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagCount := 2
 	repoPath := "schema2/manifest-list/idempotent"
@@ -345,7 +345,7 @@ func manifestPutManifestListByTagSameDigestParallelIsIdempotent(t *testing.T, op
 
 func manifestPutSchema2ReuseTagManifestToManifest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "replacesmanifesttag"
 	repoPath := "schema2/replacesmanifest"
@@ -408,7 +408,7 @@ func manifestPutSchema2ReuseTagManifestToManifest(t *testing.T, opts ...configOp
 
 func manifestPutSchema2ByTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2happypathtag"
 	repoPath := "schema2/happypath"
@@ -420,7 +420,7 @@ func manifestPutSchema2ByTag(t *testing.T, opts ...configOpt) {
 
 func manifestPutSchema2ByDigest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "schema2/happypath"
 
@@ -431,7 +431,7 @@ func manifestPutSchema2ByDigest(t *testing.T, opts ...configOpt) {
 
 func manifestGetSchema2NonMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2happypathtag"
 	repoPath := "schema2/happypath"
@@ -447,7 +447,7 @@ func manifestGetSchema2NonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 	dgst := digest.FromBytes(payload)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 		etag        string
@@ -482,10 +482,10 @@ func manifestGetSchema2NonMatchingEtag(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
 			if test.etag != "" {
@@ -493,29 +493,29 @@ func manifestGetSchema2NonMatchingEtag(t *testing.T, opts ...configOpt) {
 			}
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusOK, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
-			require.Equal(t, fmt.Sprintf(`"%s"`, dgst), resp.Header.Get("ETag"))
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			require.Equal(tt, fmt.Sprintf(`"%s"`, dgst), resp.Header.Get("ETag"))
 
 			var fetchedManifest *schema2.DeserializedManifest
 			dec := json.NewDecoder(resp.Body)
 
 			err = dec.Decode(&fetchedManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.Equal(t, deserializedManifest, fetchedManifest)
+			require.Equal(tt, deserializedManifest, fetchedManifest)
 
 			if env.ns != nil {
 				sizeStr := resp.Header.Get("Content-Length")
 				size, err := strconv.Atoi(sizeStr)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
 				expectedEvent := buildEventManifestPull(schema2.MediaTypeManifest, repoPath, dgst, int64(size))
-				env.ns.AssertEventNotification(t, expectedEvent)
+				env.ns.AssertEventNotification(tt, expectedEvent)
 			}
 		})
 	}
@@ -523,7 +523,7 @@ func manifestGetSchema2NonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 func manifestGetSchema2MatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2happypathtag"
 	repoPath := "schema2/happypath"
@@ -539,7 +539,7 @@ func manifestGetSchema2MatchingEtag(t *testing.T, opts ...configOpt) {
 
 	dgst := digest.FromBytes(payload)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 		etag        string
@@ -566,24 +566,24 @@ func manifestGetSchema2MatchingEtag(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
 			req.Header.Set("If-None-Match", test.etag)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusNotModified, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusNotModified, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			body, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			require.Empty(t, body)
+			require.NoError(tt, err)
+			require.Empty(tt, body)
 		})
 	}
 }
@@ -591,7 +591,7 @@ func manifestGetSchema2MatchingEtag(t *testing.T, opts ...configOpt) {
 func baseURLAuth(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withSillyAuth)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	v2base, err := env.builder.BuildBaseURL()
 	require.NoError(t, err)
@@ -613,7 +613,7 @@ func baseURLAuth(t *testing.T, opts ...configOpt) {
 	}
 
 	// The v1 API base route returns 404s if the database is not enabled.
-	if env.config.Database.Enabled {
+	if env.config.Database.IsEnabled() {
 		gitLabV1Base, err := env.builder.BuildGitlabV1BaseURL()
 		require.NoError(t, err)
 
@@ -624,47 +624,47 @@ func baseURLAuth(t *testing.T, opts ...configOpt) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name, func(tt *testing.T) {
 			// Get baseurl without auth secret, we should get an auth challenge back.
 			resp, err := http.Get(test.url)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-			require.Equal(t, "Bearer realm=\"test-realm\",service=\"test-service\"", resp.Header.Get("WWW-Authenticate"))
+			require.Equal(tt, http.StatusUnauthorized, resp.StatusCode)
+			require.Equal(tt, "Bearer realm=\"test-realm\",service=\"test-service\"", resp.Header.Get("WWW-Authenticate"))
 
 			// Get baseurl with Authorization header set, which is the only thing
 			// silly auth checks for.
 			req, err := http.NewRequest(http.MethodGet, test.url, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req.Header.Set("Authorization", "sillySecret")
 
 			resp, err = http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusOK, resp.StatusCode)
-			require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-			require.Equal(t, "2", resp.Header.Get("Content-Length"))
-			require.Equal(t, strings.TrimPrefix(version.Version, "v"), resp.Header.Get("Gitlab-Container-Registry-Version"))
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, "application/json", resp.Header.Get("Content-Type"))
+			require.Equal(tt, "2", resp.Header.Get("Content-Length"))
+			require.Equal(tt, strings.TrimPrefix(version.Version, "v"), resp.Header.Get("Gitlab-Container-Registry-Version"))
 
 			if test.wantExtFeatures {
-				require.Equal(t, version.ExtFeatures, resp.Header.Get("Gitlab-Container-Registry-Features"))
-				require.Equal(t, strconv.FormatBool(env.config.Database.Enabled), resp.Header.Get("Gitlab-Container-Registry-Database-Enabled"))
+				require.Equal(tt, version.ExtFeatures, resp.Header.Get("Gitlab-Container-Registry-Features"))
+				require.Equal(tt, strconv.FormatBool(env.config.Database.IsEnabled()), resp.Header.Get("Gitlab-Container-Registry-Database-Enabled"))
 			} else {
-				require.Empty(t, resp.Header.Get("Gitlab-Container-Registry-Features"))
+				require.Empty(tt, resp.Header.Get("Gitlab-Container-Registry-Features"))
 			}
 
 			if test.wantDistributionVersion {
-				require.Equal(t, "registry/2.0", resp.Header.Get("Docker-Distribution-API-Version"))
+				require.Equal(tt, "registry/2.0", resp.Header.Get("Docker-Distribution-API-Version"))
 			} else {
-				require.Empty(t, resp.Header.Get("Docker-Distribution-API-Version"))
+				require.Empty(tt, resp.Header.Get("Docker-Distribution-API-Version"))
 			}
 
 			p, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.Equal(t, "{}", string(p))
+			require.Equal(tt, "{}", string(p))
 		})
 	}
 }
@@ -674,7 +674,7 @@ func baseURLPrefix(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withHTTPPrefix(prefix))
 	env := newTestEnv(t, opts...)
 
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// Test V2 base URL.
 	baseURL, err := env.builder.BuildBaseURL()
@@ -707,7 +707,7 @@ func baseURLPrefix(t *testing.T, opts ...configOpt) {
 	defer resp.Body.Close()
 
 	// The V1 API base route returns 404s if the database is not enabled.
-	if env.config.Database.Enabled {
+	if env.config.Database.IsEnabled() {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 		require.Equal(t, "2", resp.Header.Get("Content-Length"))
@@ -720,7 +720,7 @@ func baseURLPrefix(t *testing.T, opts ...configOpt) {
 
 func manifestPutSchema1ByTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema1tag"
 	repoPath := "schema1"
@@ -773,7 +773,7 @@ func manifestPutSchema1ByTag(t *testing.T, opts ...configOpt) {
 
 func manifestPutSchema2ByDigestConfigNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath1 := "schema2/layersnotassociated1"
 	repoPath2 := "schema2/layersnotassociated2"
@@ -826,7 +826,7 @@ func manifestPutSchema2ByDigestConfigNotAssociatedWithRepository(t *testing.T, o
 
 func manifestPutSchema2MissingConfig(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2missingconfigtag"
 	repoPath := "schema2/missingconfig"
@@ -869,7 +869,7 @@ func manifestPutSchema2MissingConfig(t *testing.T, opts ...configOpt) {
 
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 	}{
@@ -883,27 +883,27 @@ func manifestPutSchema2MissingConfig(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			// Push up the manifest with only the layer blobs pushed up.
 			resp, err := putManifest("putting missing config manifest", test.manifestURL, schema2.MediaTypeManifest, testManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusBadRequest, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			// Test that we have one missing blob.
-			_, p, counts := checkBodyHasErrorCodes(t, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
+			_, p, counts := checkBodyHasErrorCodes(tt, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestBlobUnknown: 1}
 
-			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(tt, expectedCounts, counts, "response body: %s", p)
 		})
 	}
 }
 
 func manifestPutSchema2MissingLayers(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2missinglayerstag"
 	repoPath := "schema2/missinglayers"
@@ -945,7 +945,7 @@ func manifestPutSchema2MissingLayers(t *testing.T, opts ...configOpt) {
 
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 	}{
@@ -959,27 +959,27 @@ func manifestPutSchema2MissingLayers(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			// Push up the manifest with only the config blob pushed up.
 			resp, err := putManifest("putting missing layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusBadRequest, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			// Test that we have two missing blobs, one for each layer.
-			_, p, counts := checkBodyHasErrorCodes(t, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
+			_, p, counts := checkBodyHasErrorCodes(tt, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestBlobUnknown: 2}
 
-			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(tt, expectedCounts, counts, "response body: %s", p)
 		})
 	}
 }
 
 func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2missingconfigandlayerstag"
 	repoPath := "schema2/missingconfigandlayers"
@@ -1026,7 +1026,7 @@ func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 	}{
@@ -1040,20 +1040,20 @@ func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			// Push up the manifest with only the config blob pushed up.
 			resp, err := putManifest("putting missing layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusBadRequest, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			// Test that we have two missing blobs, one for each layer, and one for the config.
-			_, p, counts := checkBodyHasErrorCodes(t, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
+			_, p, counts := checkBodyHasErrorCodes(tt, "putting missing config manifest", resp, v2.ErrorCodeManifestBlobUnknown)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestBlobUnknown: 3}
 
-			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(tt, expectedCounts, counts, "response body: %s", p)
 		})
 	}
 }
@@ -1061,7 +1061,7 @@ func manifestPutSchema2MissingConfigAndLayers(t *testing.T, opts ...configOpt) {
 func manifestPutSchema2ReferencesExceedLimit(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withReferenceLimit(5))
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2toomanylayers"
 	repoPath := "schema2/toomanylayers"
@@ -1106,7 +1106,7 @@ func manifestPutSchema2ReferencesExceedLimit(t *testing.T, opts ...configOpt) {
 
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 	}{
@@ -1120,20 +1120,20 @@ func manifestPutSchema2ReferencesExceedLimit(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			// Push up the manifest.
 			resp, err := putManifest("putting manifest with too many layers", test.manifestURL, schema2.MediaTypeManifest, testManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusBadRequest, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			// Test that we report the reference limit error exactly once.
-			_, p, counts := checkBodyHasErrorCodes(t, "manifest put with layers exceeding limit", resp, v2.ErrorCodeManifestReferenceLimit)
+			_, p, counts := checkBodyHasErrorCodes(tt, "manifest put with layers exceeding limit", resp, v2.ErrorCodeManifestReferenceLimit)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestReferenceLimit: 1}
 
-			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(tt, expectedCounts, counts, "response body: %s", p)
 		})
 	}
 }
@@ -1143,7 +1143,7 @@ func manifestPutSchema2PayloadSizeExceedsLimit(t *testing.T, opts ...configOpt) 
 
 	opts = append(opts, withPayloadSizeLimit(payloadLimit))
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2toobig"
 	repoPath := "schema2/toobig"
@@ -1176,7 +1176,7 @@ func manifestPutSchema2PayloadSizeExceedsLimit(t *testing.T, opts ...configOpt) 
 	manifestPayloadSize := len(payload)
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 	}{
@@ -1190,26 +1190,26 @@ func manifestPutSchema2PayloadSizeExceedsLimit(t *testing.T, opts ...configOpt) 
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			// Push up the manifest.
 			resp, err := putManifest("putting oversized manifest", test.manifestURL, schema2.MediaTypeManifest, testManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusBadRequest, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			// Test that we report the reference limit error exactly once.
-			errs, p, counts := checkBodyHasErrorCodes(t, "manifest put exceeds payload size limit", resp, v2.ErrorCodeManifestPayloadSizeLimit)
+			errs, p, counts := checkBodyHasErrorCodes(tt, "manifest put exceeds payload size limit", resp, v2.ErrorCodeManifestPayloadSizeLimit)
 			expectedCounts := map[errcode.ErrorCode]int{v2.ErrorCodeManifestPayloadSizeLimit: 1}
 
-			require.Equalf(t, expectedCounts, counts, "response body: %s", p)
+			require.Equalf(tt, expectedCounts, counts, "response body: %s", p)
 
-			require.Len(t, errs, 1, "exactly one error")
+			require.Len(tt, errs, 1, "exactly one error")
 			errc, ok := errs[0].(errcode.Error)
-			require.True(t, ok)
+			require.True(tt, ok)
 
-			require.Equal(t,
+			require.Equal(tt,
 				distribution.ErrManifestVerification{
 					distribution.ErrManifestPayloadSizeExceedsLimit{PayloadSize: manifestPayloadSize, Limit: payloadLimit},
 				}.Error(),
@@ -1221,7 +1221,7 @@ func manifestPutSchema2PayloadSizeExceedsLimit(t *testing.T, opts ...configOpt) 
 
 func manifestGetSchema2ByDigestMissingManifest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "missingmanifesttag"
 	repoPath := "schema2/missingmanifest"
@@ -1256,7 +1256,7 @@ func manifestGetSchema2ByDigestMissingManifest(t *testing.T, opts ...configOpt) 
 
 func manifestGetSchema2ByDigestMissingRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "missingrepositorytag"
 	repoPath := "schema2/missingrepository"
@@ -1281,7 +1281,7 @@ func manifestGetSchema2ByDigestMissingRepository(t *testing.T, opts ...configOpt
 
 func manifestGetSchema2ByTagMissingRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "missingrepositorytag"
 	repoPath := "schema2/missingrepository"
@@ -1306,7 +1306,7 @@ func manifestGetSchema2ByTagMissingRepository(t *testing.T, opts ...configOpt) {
 
 func manifestGetSchema2ByTagMissingTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "missingtagtag"
 	repoPath := "schema2/missingtag"
@@ -1331,7 +1331,7 @@ func manifestGetSchema2ByTagMissingTag(t *testing.T, opts ...configOpt) {
 
 func manifestGetSchema2ByDigestNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName1 := "missingrepository1tag"
 	repoPath1 := "schema2/missingrepository1"
@@ -1361,7 +1361,7 @@ func manifestGetSchema2ByDigestNotAssociatedWithRepository(t *testing.T, opts ..
 
 func manifestGetSchema2ByTagNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName1 := "missingrepository1tag"
 	repoPath1 := "schema2/missingrepository1"
@@ -1391,7 +1391,7 @@ func manifestGetSchema2ByTagNotAssociatedWithRepository(t *testing.T, opts ...co
 
 func manifestPutSchema2ByDigestLayersNotAssociatedWithRepository(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath1 := "schema2/layersnotassociated1"
 	repoPath2 := "schema2/layersnotassociated2"
@@ -1444,7 +1444,7 @@ func manifestPutSchema2ByDigestLayersNotAssociatedWithRepository(t *testing.T, o
 
 func manifestPutSchema1ByDigest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "schema1"
 
@@ -1496,7 +1496,7 @@ func manifestPutSchema1ByDigest(t *testing.T, opts ...configOpt) {
 
 func manifestHeadSchema2(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "headtag"
 	repoPath := "schema2/head"
@@ -1512,7 +1512,7 @@ func manifestHeadSchema2(t *testing.T, opts ...configOpt) {
 	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 	}{
@@ -1526,32 +1526,32 @@ func manifestHeadSchema2(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			req, err := http.NewRequest(http.MethodHead, test.manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
 			b, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			require.Empty(t, b, "body should be empty")
+			require.NoError(tt, err)
+			require.Empty(tt, b, "body should be empty")
 
-			require.Equal(t, http.StatusOK, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			cl, err := strconv.Atoi(resp.Header.Get("Content-Length"))
-			require.NoError(t, err)
-			require.Equal(t, len(payload), cl)
+			require.NoError(tt, err)
+			require.Equal(tt, len(payload), cl)
 
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			require.Equal(tt, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
 
 			if env.ns != nil {
 				expectedEvent := buildEventManifestPull(schema2.MediaTypeManifest, repoPath, dgst, int64(cl))
-				env.ns.AssertEventNotification(t, expectedEvent)
+				env.ns.AssertEventNotification(tt, expectedEvent)
 			}
 		})
 	}
@@ -1559,7 +1559,7 @@ func manifestHeadSchema2(t *testing.T, opts ...configOpt) {
 
 func manifestHeadSchema2MissingManifest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "headtag"
 	repoPath := "schema2/missingmanifest"
@@ -1581,7 +1581,7 @@ func manifestHeadSchema2MissingManifest(t *testing.T, opts ...configOpt) {
 
 	tagURL := buildManifestTagURL(t, env, repoPath, "faketag")
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 	}{
@@ -1595,25 +1595,25 @@ func manifestHeadSchema2MissingManifest(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			req, err := http.NewRequest(http.MethodHead, test.manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusNotFound, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusNotFound, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 		})
 	}
 }
 
 func manifestGetSchema2NoAcceptHeaders(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "noaccepttag"
 	repoPath := "schema2/noaccept"
@@ -1628,7 +1628,7 @@ func manifestGetSchema2NoAcceptHeaders(t *testing.T, opts ...configOpt) {
 	tagURL := buildManifestTagURL(t, env, repoPath, tagName)
 	digestURL := buildManifestDigestURL(t, env, repoPath, deserializedManifest)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 	}{
@@ -1642,34 +1642,34 @@ func manifestGetSchema2NoAcceptHeaders(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			// Without any accept headers we should still get a schema2 manifest since
 			// schema1 support has been dropped.
 			resp, err := http.Get(test.manifestURL)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusOK, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
-			require.Equal(t, fmt.Sprintf("%q", dgst), resp.Header.Get("ETag"))
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			require.Equal(tt, fmt.Sprintf("%q", dgst), resp.Header.Get("ETag"))
 
 			var fetchedManifest *schema2.DeserializedManifest
 			dec := json.NewDecoder(resp.Body)
 
 			err = dec.Decode(&fetchedManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.Equal(t, deserializedManifest, fetchedManifest)
+			require.Equal(tt, deserializedManifest, fetchedManifest)
 
 			if env.ns != nil {
 				sizeStr := resp.Header.Get("Content-Length")
 				size, err := strconv.Atoi(sizeStr)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
 				expectedEvent := buildEventManifestPull(schema2.MediaTypeManifest, repoPath, dgst, int64(size))
-				env.ns.AssertEventNotification(t, expectedEvent)
+				env.ns.AssertEventNotification(tt, expectedEvent)
 			}
 		})
 	}
@@ -1678,7 +1678,7 @@ func manifestGetSchema2NoAcceptHeaders(t *testing.T, opts ...configOpt) {
 func manifestDeleteSchema2(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2deletetag"
 	repoPath := "schema2/delete"
@@ -1723,7 +1723,7 @@ func manifestDeleteSchema2(t *testing.T, opts ...configOpt) {
 func manifestDeleteSchema2AlreadyDeleted(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2deleteagain"
 	repoPath := "schema2/deleteagain"
@@ -1763,7 +1763,7 @@ func manifestDeleteSchema2AlreadyDeleted(t *testing.T, opts ...configOpt) {
 func manifestDeleteSchema2Reupload(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2deletereupload"
 	repoPath := "schema2/deletereupload"
@@ -1816,7 +1816,7 @@ func manifestDeleteSchema2Reupload(t *testing.T, opts ...configOpt) {
 func manifestDeleteSchema2MissingManifest(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "schema2/deletemissing"
 
@@ -1844,7 +1844,7 @@ func manifestDeleteSchema2MissingManifest(t *testing.T, opts ...configOpt) {
 func manifestDeleteSchema2ClearsTags(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2deletecleartag"
 	repoPath := "schema2/delete"
@@ -1910,7 +1910,7 @@ func manifestDeleteSchema2ClearsTags(t *testing.T, opts ...configOpt) {
 
 func manifestDeleteSchema2DeleteDisabled(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2deletedisabled"
 	repoPath := "schema2/delete"
@@ -1929,7 +1929,7 @@ func manifestDeleteSchema2DeleteDisabled(t *testing.T, opts ...configOpt) {
 func manifestDeleteTag(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
@@ -1968,7 +1968,7 @@ func manifestDeleteTag(t *testing.T, opts ...configOpt) {
 func manifestDeleteTagUnknown(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
@@ -1993,7 +1993,7 @@ func manifestDeleteTagUnknown(t *testing.T, opts ...configOpt) {
 func manifestDeleteTagUnknownRepository(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
@@ -2015,7 +2015,7 @@ func manifestDeleteTagUnknownRepository(t *testing.T, opts ...configOpt) {
 
 func manifestDeleteTagDeleteDisabled(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
@@ -2033,7 +2033,7 @@ func manifestDeleteTagDeleteDisabled(t *testing.T, opts ...configOpt) {
 
 func manifestPutOCIByTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "ocihappypathtag"
 	repoPath := "oci/happypath"
@@ -2044,7 +2044,7 @@ func manifestPutOCIByTag(t *testing.T, opts ...configOpt) {
 
 func manifestPutOCIByDigest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "oci/happypath"
 
@@ -2054,7 +2054,7 @@ func manifestPutOCIByDigest(t *testing.T, opts ...configOpt) {
 
 func manifestPutOCIWithSubject(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "oci/happypath"
 
@@ -2089,7 +2089,7 @@ func manifestPutOCIWithSubject(t *testing.T, opts ...configOpt) {
 
 func manifestPutOCIWithV2Subject(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "oci/happypath"
 
@@ -2124,7 +2124,7 @@ func manifestPutOCIWithV2Subject(t *testing.T, opts ...configOpt) {
 
 func manifestPutOCIWithNonMatchingSubject(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "oci/happypath"
 
@@ -2177,7 +2177,7 @@ func manifestPutOCIWithNonMatchingSubject(t *testing.T, opts ...configOpt) {
 
 func manifestPutOCIWithArtifactType(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "oci/happypath"
 	artifactType := "application/vnd.dev.cosign.artifact.sbom.v1+json"
@@ -2205,7 +2205,7 @@ func manifestPutOCIWithArtifactType(t *testing.T, opts ...configOpt) {
 
 func manifestGetOCINonMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "ocihappypathtag"
 	repoPath := "oci/happypath"
@@ -2221,7 +2221,7 @@ func manifestGetOCINonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 	dgst := digest.FromBytes(payload)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 		etag        string
@@ -2256,10 +2256,10 @@ func manifestGetOCINonMatchingEtag(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			req.Header.Set("Accept", v1.MediaTypeImageManifest)
 			if test.etag != "" {
@@ -2267,29 +2267,29 @@ func manifestGetOCINonMatchingEtag(t *testing.T, opts ...configOpt) {
 			}
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusOK, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
-			require.Equal(t, fmt.Sprintf(`"%s"`, dgst), resp.Header.Get("ETag"))
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			require.Equal(tt, fmt.Sprintf(`"%s"`, dgst), resp.Header.Get("ETag"))
 
 			var fetchedManifest *ocischema.DeserializedManifest
 			dec := json.NewDecoder(resp.Body)
 
 			err = dec.Decode(&fetchedManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.Equal(t, deserializedManifest, fetchedManifest)
+			require.Equal(tt, deserializedManifest, fetchedManifest)
 
 			if env.ns != nil {
 				sizeStr := resp.Header.Get("Content-Length")
 				size, err := strconv.Atoi(sizeStr)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
 				expectedEvent := buildEventManifestPull(v1.MediaTypeImageManifest, repoPath, dgst, int64(size))
-				env.ns.AssertEventNotification(t, expectedEvent)
+				env.ns.AssertEventNotification(tt, expectedEvent)
 			}
 		})
 	}
@@ -2297,7 +2297,7 @@ func manifestGetOCINonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 func manifestGetOCIMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "ocihappypathtag"
 	repoPath := "oci/happypath"
@@ -2313,7 +2313,7 @@ func manifestGetOCIMatchingEtag(t *testing.T, opts ...configOpt) {
 
 	dgst := digest.FromBytes(payload)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 		etag        string
@@ -2340,31 +2340,31 @@ func manifestGetOCIMatchingEtag(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			req.Header.Set("Accept", v1.MediaTypeImageManifest)
 			req.Header.Set("If-None-Match", test.etag)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusNotModified, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusNotModified, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			body, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			require.Empty(t, body)
+			require.NoError(tt, err)
+			require.Empty(tt, body)
 		})
 	}
 }
 
 func manifestPutOCIImageIndexByTag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "ociindexhappypathtag"
 	repoPath := "ociindex/happypath"
@@ -2375,7 +2375,7 @@ func manifestPutOCIImageIndexByTag(t *testing.T, opts ...configOpt) {
 
 func manifestPutOCIImageIndexByDigest(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "ociindex/happypath"
 
@@ -2424,7 +2424,7 @@ func validateManifestPutWithNonDistributableLayers(t *testing.T, env *testEnv, r
 func manifestPutOCIWithNonDistributableLayers(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withoutManifestURLValidation)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "non-distributable"
 	repoRef, err := reference.WithName(repoPath)
@@ -2462,7 +2462,7 @@ func manifestPutOCIWithNonDistributableLayers(t *testing.T, opts ...configOpt) {
 func manifestPutSchema2WithNonDistributableLayers(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withoutManifestURLValidation)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoPath := "non-distributable"
 	repoRef, err := reference.WithName(repoPath)
@@ -2499,7 +2499,7 @@ func manifestPutSchema2WithNonDistributableLayers(t *testing.T, opts ...configOp
 
 func manifestGetOCIIndexNonMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "ociindexhappypathtag"
 	repoPath := "ociindex/happypath"
@@ -2515,7 +2515,7 @@ func manifestGetOCIIndexNonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 	dgst := digest.FromBytes(payload)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 		etag        string
@@ -2550,10 +2550,10 @@ func manifestGetOCIIndexNonMatchingEtag(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			req.Header.Set("Accept", v1.MediaTypeImageIndex)
 			if test.etag != "" {
@@ -2561,29 +2561,29 @@ func manifestGetOCIIndexNonMatchingEtag(t *testing.T, opts ...configOpt) {
 			}
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusOK, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
-			require.Equal(t, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
-			require.Equal(t, fmt.Sprintf(`"%s"`, dgst), resp.Header.Get("ETag"))
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, dgst.String(), resp.Header.Get("Docker-Content-Digest"))
+			require.Equal(tt, fmt.Sprintf(`"%s"`, dgst), resp.Header.Get("ETag"))
 
 			var fetchedManifest *manifestlist.DeserializedManifestList
 			dec := json.NewDecoder(resp.Body)
 
 			err = dec.Decode(&fetchedManifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.Equal(t, deserializedManifest, fetchedManifest)
+			require.Equal(tt, deserializedManifest, fetchedManifest)
 
 			if env.ns != nil {
 				sizeStr := resp.Header.Get("Content-Length")
 				size, err := strconv.Atoi(sizeStr)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
 				expectedEvent := buildEventManifestPull(v1.MediaTypeImageIndex, repoPath, dgst, int64(size))
-				env.ns.AssertEventNotification(t, expectedEvent)
+				env.ns.AssertEventNotification(tt, expectedEvent)
 			}
 		})
 	}
@@ -2591,7 +2591,7 @@ func manifestGetOCIIndexNonMatchingEtag(t *testing.T, opts ...configOpt) {
 
 func manifestGetOCIIndexMatchingEtag(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "ociindexhappypathtag"
 	repoPath := "ociindex/happypath"
@@ -2607,7 +2607,7 @@ func manifestGetOCIIndexMatchingEtag(t *testing.T, opts ...configOpt) {
 
 	dgst := digest.FromBytes(payload)
 
-	tt := []struct {
+	tc := []struct {
 		name        string
 		manifestURL string
 		etag        string
@@ -2634,31 +2634,31 @@ func manifestGetOCIIndexMatchingEtag(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			req.Header.Set("Accept", v1.MediaTypeImageIndex)
 			req.Header.Set("If-None-Match", test.etag)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusNotModified, resp.StatusCode)
-			require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+			require.Equal(tt, http.StatusNotModified, resp.StatusCode)
+			require.Equal(tt, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 
 			body, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			require.Empty(t, body)
+			require.NoError(tt, err)
+			require.Empty(tt, body)
 		})
 	}
 }
 
 func manifestGetManifestListFallbackToSchema2(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "manifestlistfallbacktag"
 	repoPath := "manifestlist/fallback"
@@ -2745,7 +2745,7 @@ func manifestGetManifestListFallbackToSchema2(t *testing.T, opts ...configOpt) {
 
 func blobGet(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// create repository with a layer
 	args := makeBlobArgs(t)
@@ -2780,7 +2780,7 @@ func blobGet(t *testing.T, opts ...configOpt) {
 
 func blobGetRepositoryNotFound(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	args := makeBlobArgs(t)
 	ref, err := reference.WithDigest(args.imageName, args.layerDigest)
@@ -2799,7 +2799,7 @@ func blobGetRepositoryNotFound(t *testing.T, opts ...configOpt) {
 func blobGetBlobNotFound(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// create repository with a layer
 	args := makeBlobArgs(t)
@@ -2822,7 +2822,7 @@ func blobGetBlobNotFound(t *testing.T, opts ...configOpt) {
 
 func blobHead(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// create repository with a layer
 	args := makeBlobArgs(t)
@@ -2856,7 +2856,7 @@ func blobHead(t *testing.T, opts ...configOpt) {
 
 func blobHeadRepositoryNotFound(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	args := makeBlobArgs(t)
 	ref, err := reference.WithDigest(args.imageName, args.layerDigest)
@@ -2878,7 +2878,7 @@ func blobHeadRepositoryNotFound(t *testing.T, opts ...configOpt) {
 func blobHeadBlobNotFound(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// create repository with a layer
 	args := makeBlobArgs(t)
@@ -2904,7 +2904,7 @@ func blobHeadBlobNotFound(t *testing.T, opts ...configOpt) {
 
 func blobDeleteDisabled(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// create repository with a layer
 	args := makeBlobArgs(t)
@@ -2921,7 +2921,7 @@ func blobDeleteDisabled(t *testing.T, opts ...configOpt) {
 func blobDeleteImpl(t *testing.T, opts ...configOpt) string {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	t.Cleanup(env.Shutdown)
+	env.Cleanup(t)
 
 	// create repository with a layer
 	args := makeBlobArgs(t)
@@ -2964,7 +2964,7 @@ func blobDeleteAlreadyDeleted(t *testing.T, opts ...configOpt) {
 func blobDeleteUnknownRepository(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// Create url for a blob whose repository does not exist.
 	args := makeBlobArgs(t)
@@ -2987,7 +2987,7 @@ func blobDeleteUnknownRepository(t *testing.T, opts ...configOpt) {
 
 func tagsGet(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
@@ -3011,7 +3011,7 @@ func tagsGet(t *testing.T, opts ...configOpt) {
 
 	createRepositoryWithMultipleIdenticalTags(t, env, imageName.Name(), shuffledTags)
 
-	tt := []struct {
+	testCases := []struct {
 		name                string
 		runWithoutDBEnabled bool
 		queryParams         url.Values
@@ -3106,35 +3106,35 @@ func tagsGet(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			if !test.runWithoutDBEnabled && !env.config.Database.Enabled {
-				t.Skip("skipping test because the metadata database is not enabled")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			if !tc.runWithoutDBEnabled && !env.config.Database.IsEnabled() {
+				tt.Skip("skipping test because the metadata database is not enabled")
 			}
 
-			tagsURL, err := env.builder.BuildTagsURL(imageName, test.queryParams)
-			require.NoError(t, err)
+			tagsURL, err := env.builder.BuildTagsURL(imageName, tc.queryParams)
+			require.NoError(tt, err)
 
 			resp, err := http.Get(tagsURL)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
 
 			var body tagsAPIResponse
 			dec := json.NewDecoder(resp.Body)
 			err = dec.Decode(&body)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.Equal(t, test.expectedBody, body)
-			require.Equal(t, test.expectedLinkHeader, resp.Header.Get("Link"))
+			require.Equal(tt, tc.expectedBody, body)
+			require.Equal(tt, tc.expectedLinkHeader, resp.Header.Get("Link"))
 		})
 	}
 }
 
 func tagsGetRepositoryNotFound(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
@@ -3154,7 +3154,7 @@ func tagsGetRepositoryNotFound(t *testing.T, opts ...configOpt) {
 func tagsGetEmptyRepository(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
@@ -3199,7 +3199,7 @@ func tagsGetEmptyRepository(t *testing.T, opts ...configOpt) {
 func manifestDeleteTagNotification(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err, "building named object")
@@ -3234,7 +3234,7 @@ func manifestDeleteTagNotification(t *testing.T, opts ...configOpt) {
 func manifestDeleteTagNotificationWithAuth(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err, "building named object")
@@ -3290,7 +3290,7 @@ func manifestDeleteTagNotificationWithAuth(t *testing.T, opts ...configOpt) {
 func manifestDeleteTagWithSameImageID(t *testing.T, opts ...configOpt) {
 	opts = append(opts, withDelete)
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err, "building named object")
@@ -3342,7 +3342,7 @@ type catalogAPIResponse struct {
 // catalogGet tests the /v2/_catalog endpoint
 func catalogGet(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	sortedRepos := []string{
 		"2j2ar",
@@ -3365,7 +3365,7 @@ func catalogGet(t *testing.T, opts ...configOpt) {
 		createRepository(t, env, repo, "latest")
 	}
 
-	tt := []struct {
+	tc := []struct {
 		name               string
 		queryParams        url.Values
 		expectedBody       catalogAPIResponse
@@ -3458,31 +3458,31 @@ func catalogGet(t *testing.T, opts ...configOpt) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range tc {
+		t.Run(test.name, func(tt *testing.T) {
 			catalogURL, err := env.builder.BuildCatalogURL(test.queryParams)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			resp, err := http.Get(catalogURL)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
 
 			var body catalogAPIResponse
 			dec := json.NewDecoder(resp.Body)
 			err = dec.Decode(&body)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.Equal(t, test.expectedBody, body)
-			require.Equal(t, test.expectedLinkHeader, resp.Header.Get("Link"))
+			require.Equal(tt, test.expectedBody, body)
+			require.Equal(tt, test.expectedLinkHeader, resp.Header.Get("Link"))
 		})
 	}
 }
 
 func catalogGetEmpty(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	catalogURL, err := env.builder.BuildCatalogURL()
 	require.NoError(t, err)
@@ -3504,7 +3504,7 @@ func catalogGetEmpty(t *testing.T, opts ...configOpt) {
 
 func catalogGetTooLarge(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	catalogURL, err := env.builder.BuildCatalogURL(url.Values{"n": []string{"500000000000"}})
 	require.NoError(t, err)

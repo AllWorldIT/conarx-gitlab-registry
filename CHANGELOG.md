@@ -1,3 +1,75 @@
+## [4.31.1](https://gitlab.com/gitlab-org/container-registry/compare/v4.31.0-gitlab...v4.31.1) (2025-11-21)
+
+
+### Bug Fixes
+
+* **registry:** disable REGISTRY_FF_ENFORCE_LOCKFILES by default ([06e1c57](https://gitlab.com/gitlab-org/container-registry/commit/06e1c57bb5b73c7a10588fbd3407f530f6de8e32))
+
+## [4.31.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.30.0-gitlab...v4.31.0) (2025-11-05)
+
+
+### Features
+
+* add index validation for NullBatchingStrategy in background migrations ([90c6880](https://gitlab.com/gitlab-org/container-registry/commit/90c688023eec212945a629bf698941336760fdae))
+* **datastore:** add replica connectivity tracking with quarantine mechanism ([e652d0d](https://gitlab.com/gitlab-org/container-registry/commit/e652d0d9dbac2eaaf5380d17ca9fa884b7c61c71))
+* **registry:** add database prefer mode ([7bfefd8](https://gitlab.com/gitlab-org/container-registry/commit/7bfefd8ed35806e906c5e52b3fbe1d9eec21d2cf))
+* **registry:** check for invalid lockfiles state on startup ([9d8efa1](https://gitlab.com/gitlab-org/container-registry/commit/9d8efa12197fb954da2f23d0c86f98c3ad80cf18))
+* **registry:** import-command: allow user to determine detail log directory ([f7dadb1](https://gitlab.com/gitlab-org/container-registry/commit/f7dadb1cd290229eac85add38fb60a8014be5de1))
+
+
+### Bug Fixes
+
+* add support for recursive introspection of GCSBucketKeyer interface ([e35a438](https://gitlab.com/gitlab-org/container-registry/commit/e35a438660a4b62b65fda3b837a8e79eac67c9b9))
+* bbm progress metric collection and log field collition ([1dcbaf7](https://gitlab.com/gitlab-org/container-registry/commit/1dcbaf70f76816efe433d59a67e4e58d7ca82690))
+* race condition in TestDBLoadBalancer_ProcessQueryError ([78e4646](https://gitlab.com/gitlab-org/container-registry/commit/78e46466460a3c1c757ae74e517b8cf19032ef5f))
+
+## [4.30.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.29.0-gitlab...v4.30.0) (2025-10-27)
+
+
+### Features
+
+* **bbm:** add bbm progress tracking metric ([395441e](https://gitlab.com/gitlab-org/container-registry/commit/395441e6b505ecea88e2258a0a64acdf9a9de0dc))
+* **configuration:** allow database.enabled to accept bool and string values ([ad39c18](https://gitlab.com/gitlab-org/container-registry/commit/ad39c18698cecd2c5f58de9e2210b7eecc28230b))
+* **datastore:** create null index on blob id columns ([cf1af7f](https://gitlab.com/gitlab-org/container-registry/commit/cf1af7f7764e950576f20a39558039c59b1107e8))
+
+
+### Bug Fixes
+
+* improve registry shutdown behaviour ([d0e12e3](https://gitlab.com/gitlab-org/container-registry/commit/d0e12e327795affbd0e4d1fbc6f900c7c3157c43))
+* make sure urlcache is last in the storage CDNs chain ([47568f0](https://gitlab.com/gitlab-org/container-registry/commit/47568f09e9634bcb982585a7684ce919e0b01424))
+* **notifications:** Remove deprecated retryingSink with backoffSink and add backward compatibility ([ba2dc33](https://gitlab.com/gitlab-org/container-registry/commit/ba2dc330c414297c25a500257e69f5b3508ccdf9))
+
+
+### Performance Improvements
+
+* **handlers:** pass non-zero value for ids cap ([a33cb4c](https://gitlab.com/gitlab-org/container-registry/commit/a33cb4c0cbcb5aad4943dac099f5c3b279474014))
+
+
+### Reverts
+
+* Revert "chore(datastore): clarify tags present import error message" ([5445a81](https://gitlab.com/gitlab-org/container-registry/commit/5445a8195b951fd3593c13de96695b7808cf7837))
+* Revert "chore: log also" ([94a0838](https://gitlab.com/gitlab-org/container-registry/commit/94a0838b3f11e087072fd0e6c1e76f0f0cd30e65))
+
+## [4.29.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.28.0-gitlab...v4.29.0) (2025-10-13)
+
+
+### Features
+
+* add docker attestation media types ([139ef50](https://gitlab.com/gitlab-org/container-registry/commit/139ef50d14028f3f5a3389c5e570d1aaa3dc7e08))
+* add docker compose media types ([141d386](https://gitlab.com/gitlab-org/container-registry/commit/141d3860e8a9d42577e27dfe5d042b4794fc6289))
+* add new cosign media types ([90e65c7](https://gitlab.com/gitlab-org/container-registry/commit/90e65c74fdc72fdfa096954c2f129638b8e292f7))
+* **api:** enable DLB for OCI read manifest endpoint ([b5fc6f8](https://gitlab.com/gitlab-org/container-registry/commit/b5fc6f8f0ca2a3c7d0cc6eac8fe15d7ba5565f02))
+* **bbm:** add null batching strategy ([137d130](https://gitlab.com/gitlab-org/container-registry/commit/137d1304159e266cd3c43c17d4f41e284ab8c8d3))
+* **datastore:** add id column to blobs table ([dbaaab8](https://gitlab.com/gitlab-org/container-registry/commit/dbaaab8f9ff2b51d1308c3273ea5e2a8496d21a2))
+* expose Prometheus metrics for the count of overdue GC tasks ([d92df3f](https://gitlab.com/gitlab-org/container-registry/commit/d92df3f30edfa0196f824feae3b33469b4a8470e))
+* expose Prometheus metrics for the size of the GC manifests queue ([401aaac](https://gitlab.com/gitlab-org/container-registry/commit/401aaac52a3ed71a1fd6e9872e6222e14e546ff7))
+* **registry:** enable REGISTRY_FF_ENFORCE_LOCKFILES by default ([2123002](https://gitlab.com/gitlab-org/container-registry/commit/2123002d1c16a81bf4a601356479e33032b75705))
+
+
+### Reverts
+
+* **cache:** remove dual cache code ([5eb8a8c](https://gitlab.com/gitlab-org/container-registry/commit/5eb8a8cde90d1d06e50294a461a53d56d92c5308))
+
 ## [4.28.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.27.0-gitlab...v4.28.0) (2025-09-23)
 
 

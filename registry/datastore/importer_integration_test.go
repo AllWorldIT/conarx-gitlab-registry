@@ -104,6 +104,20 @@ func overrideDynamicData(tb testing.TB, actual []byte) []byte {
 	return actual
 }
 
+// overrideSequentialData is required to override all sequence columns that change with every test run. This is needed to ensure
+// that we can consistently compare the output of a database dump with the stored reference snapshots (.golden files)
+func overrideSequentialData(tb testing.TB, actual []byte, columns ...string) []byte {
+	tb.Helper()
+
+	// the sequential column data for some tables changes depending on the posgres sequence name, staring value and increment value
+	for _, column := range columns {
+		re := regexp.MustCompile(fmt.Sprintf(`"%s":\d+`, column))
+		actual = re.ReplaceAllLiteral(actual, []byte(fmt.Sprintf(`"%s":1`, column)))
+	}
+
+	return actual
+}
+
 func newImporter(t *testing.T, db *datastore.DB, opts ...datastore.ImporterOption) *datastore.Importer {
 	t.Helper()
 
@@ -126,15 +140,21 @@ func newImporterWithRoot(t *testing.T, db *datastore.DB, root string, opts ...da
 
 // Dump each table as JSON and compare the output against reference snapshots (.golden files)
 func validateImport(t *testing.T, db *datastore.DB) {
-	for _, tt := range testutil.AllTables {
-		t.Run(string(tt), func(t *testing.T) {
-			actual, err := tt.DumpAsJSON(suite.ctx, db)
-			require.NoError(t, err, "error dumping table")
+	for _, tn := range testutil.AllTables {
+		t.Run(string(tn), func(tt *testing.T) {
+			actual, err := tn.DumpAsJSON(suite.ctx, db)
+			require.NoError(tt, err, "error dumping table")
 
 			// see testdata/golden/<test name>/<table>.golden
-			p := filepath.Join(suite.goldenPath, t.Name()+".golden")
-			actual = overrideDynamicData(t, actual)
-			testutil.CompareWithGoldenFile(t, p, actual, *create, *update)
+			p := filepath.Join(suite.goldenPath, tt.Name()+".golden")
+			actual = overrideDynamicData(tt, actual)
+			// for blobs table, we do not need to compare the sequential `id` column populated by the database
+			// because while it is sequentially incremented, it's not purely deterministic
+			// as it depends on the test order and database state.
+			if tn == testutil.BlobsTable {
+				actual = overrideSequentialData(tt, actual, "id")
+			}
+			testutil.CompareWithGoldenFile(tt, p, actual, *create, *update)
 		})
 	}
 }
@@ -526,7 +546,7 @@ func TestImporter_FullImport_ErrTagsTableNotEmpty(t *testing.T) {
 	// Now try to import the entire contents of the registry including what was previously imported.
 	// Expect importer to fail because the tags table is not empty.
 	imp2 := newImporter(t, suite.db)
-	require.EqualError(t, imp2.FullImport(suite.ctx), "importing all repositories: tags table is not empty")
+	require.EqualError(t, imp2.FullImport(suite.ctx), "importing all repositories: halting import to protect data: tags already present in database - this may be an imported registry! If you are retrying an import, you must manually truncate the tags table before retrying: see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#troubleshooting")
 }
 
 func TestImporter_ImportAllRepositories_UnknownLayerMediaType(t *testing.T) {
@@ -816,13 +836,13 @@ func TestImporter_PreImportAll_LastPublishedAtDateIsRecent(t *testing.T) {
 	upperBound := time.Now().Add(5 * time.Minute)
 
 	for _, repo := range allRepos {
-		t.Run(repo.Path, func(t *testing.T) {
+		t.Run(repo.Path, func(tt *testing.T) {
 			r, err := repoStore.FindByPath(suite.ctx, repo.Path)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.NotNil(t, r.LastPublishedAt)
-			require.True(t, r.LastPublishedAt.Valid)
-			assert.WithinRange(t, r.LastPublishedAt.Time, lowerBound, upperBound)
+			require.NotNil(tt, r.LastPublishedAt)
+			require.True(tt, r.LastPublishedAt.Valid)
+			assert.WithinRange(tt, r.LastPublishedAt.Time, lowerBound, upperBound)
 		})
 	}
 }
@@ -841,12 +861,12 @@ func TestImporter_PreImportAll_SkipRecent(t *testing.T) {
 	// Collect last published at times.
 	lastPublishedByRepo := make(map[string]time.Time)
 	for _, repo := range allRepos {
-		t.Run(fmt.Sprintf("%s-validate-last-published-at", repo.Path), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-validate-last-published-at", repo.Path), func(tt *testing.T) {
 			r, err := repoStore.FindByPath(suite.ctx, repo.Path)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.NotNil(t, r.LastPublishedAt)
-			require.True(t, r.LastPublishedAt.Valid)
+			require.NotNil(tt, r.LastPublishedAt)
+			require.True(tt, r.LastPublishedAt.Valid)
 
 			lastPublishedByRepo[repo.Path] = r.LastPublishedAt.Time
 		})
@@ -861,14 +881,14 @@ func TestImporter_PreImportAll_SkipRecent(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, repo := range allRepos {
-		t.Run(fmt.Sprintf("%s-skips-already-imported", repo.Path), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-skips-already-imported", repo.Path), func(tt *testing.T) {
 			r, err := repoStore.FindByPath(suite.ctx, repo.Path)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.NotNil(t, r.LastPublishedAt)
-			require.True(t, r.LastPublishedAt.Valid)
+			require.NotNil(tt, r.LastPublishedAt)
+			require.True(tt, r.LastPublishedAt.Valid)
 
-			assert.Equal(t, lastPublishedByRepo[repo.Path], r.LastPublishedAt.Time)
+			assert.Equal(tt, lastPublishedByRepo[repo.Path], r.LastPublishedAt.Time)
 		})
 	}
 
@@ -879,14 +899,14 @@ func TestImporter_PreImportAll_SkipRecent(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, repo := range allRepos {
-		t.Run(fmt.Sprintf("%s-can-disable-skipping", repo.Path), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-can-disable-skipping", repo.Path), func(tt *testing.T) {
 			r, err := repoStore.FindByPath(suite.ctx, repo.Path)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.NotNil(t, r.LastPublishedAt)
-			require.True(t, r.LastPublishedAt.Valid)
+			require.NotNil(tt, r.LastPublishedAt)
+			require.True(tt, r.LastPublishedAt.Valid)
 
-			require.Less(t, lastPublishedByRepo[repo.Path], r.LastPublishedAt.Time)
+			require.Less(tt, lastPublishedByRepo[repo.Path], r.LastPublishedAt.Time)
 		})
 	}
 }

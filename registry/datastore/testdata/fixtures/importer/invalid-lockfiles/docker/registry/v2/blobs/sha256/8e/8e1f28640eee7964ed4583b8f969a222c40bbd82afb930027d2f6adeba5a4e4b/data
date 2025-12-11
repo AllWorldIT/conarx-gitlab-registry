@@ -1,0 +1,22 @@
+{
+   "schemaVersion": 1,
+   "name": "d-schema1",
+   "tag": "latest",
+   "architecture": "amd64",
+   "fsLayers": [
+      {
+         "blobSum": "sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4"
+      },
+      {
+         "blobSum": "sha256:e2334dd9fee4b77e48a8f2d793904118a3acf26f1f2e72a3d79c6cae993e07f0"
+      }
+   ],
+   "history": [
+      {
+         "v1Compatibility": "{\"architecture\":\"amd64\",\"config\":{\"Hostname\":\"\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":[\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"],\"Cmd\":[\"sh\"],\"ArgsEscaped\":true,\"Image\":\"sha256:b0acc7ebf5092fcdd0fe097448529147e6619bd051f03ccf25b29bcae87e783f\",\"Volumes\":null,\"WorkingDir\":\"\",\"Entrypoint\":null,\"OnBuild\":null,\"Labels\":null},\"container\":\"f7e67f16a539f8bbf53aae18cdb5f8c53e6a56930e7660010d9396ae77f7acfa\",\"container_config\":{\"Hostname\":\"f7e67f16a539\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":[\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"],\"Cmd\":[\"/bin/sh\",\"-c\",\"#(nop) \",\"CMD [\\\"sh\\\"]\"],\"ArgsEscaped\":true,\"Image\":\"sha256:b0acc7ebf5092fcdd0fe097448529147e6619bd051f03ccf25b29bcae87e783f\",\"Volumes\":null,\"WorkingDir\":\"\",\"Entrypoint\":null,\"OnBuild\":null,\"Labels\":{}},\"created\":\"2020-04-14T19:19:53.590635493Z\",\"docker_version\":\"18.09.7\",\"id\":\"9fe025227098ae424167d958a251947559d8a176b7ef4e7feeb38a16eb337446\",\"os\":\"linux\",\"parent\":\"bd4f6324ef6faaa275ef12c5ba3e48fc0fdf8974230d141b8c0bfcc6ef077a28\",\"throwaway\":true}"
+      },
+      {
+         "v1Compatibility": "{\"id\":\"bd4f6324ef6faaa275ef12c5ba3e48fc0fdf8974230d141b8c0bfcc6ef077a28\",\"created\":\"2020-04-14T19:19:53.444488372Z\",\"container_config\":{\"Cmd\":[\"/bin/sh -c #(nop) ADD file:09a89925137e1b768ef1f0e7d1d7325eb2b4f1a0895b3aa8dfc98b0c75f3f507 in / \"]}}"
+      }
+   ]
+}

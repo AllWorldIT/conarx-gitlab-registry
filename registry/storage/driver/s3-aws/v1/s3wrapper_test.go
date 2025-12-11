@@ -40,7 +40,7 @@ var (
 )
 
 func TestWrapAWSerr(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name          string
 		inputError    error
 		expectedError error
@@ -78,9 +78,9 @@ func TestWrapAWSerr(t *testing.T) {
 	}
 	t.Logf("Running %s test", t.Name())
 	t.Parallel()
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			require.ErrorIs(t, test.expectedError, wrapAWSerr(test.inputError))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			require.ErrorIs(tt, tc.expectedError, wrapAWSerr(tc.inputError))
 		})
 	}
 }
@@ -128,7 +128,7 @@ func deleteObjectsWithContext(failedRequests, maxRetries int) (*s3.DeleteObjects
 }
 
 func TestDeleteObjectsWithContext_retryableErrors(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name                 string
 		failedRequests       int
 		maxRetries           int
@@ -148,21 +148,21 @@ func TestDeleteObjectsWithContext_retryableErrors(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			out, counter, err := deleteObjectsWithContext(test.failedRequests, test.maxRetries)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			out, counter, err := deleteObjectsWithContext(tc.failedRequests, tc.maxRetries)
 
-			require.NotNil(t, out, "expected output, got nil")
+			require.NotNil(tt, out, "expected output, got nil")
 
-			require.NoError(t, err, "expected no error")
+			require.NoError(tt, err, "expected no error")
 
-			require.Len(t, out.Errors, test.expectedOutputErrors, "output error counts do not match")
+			require.Len(tt, out.Errors, tc.expectedOutputErrors, "output error counts do not match")
 
-			totalRequests := int32(test.failedRequests)
-			if test.maxRetries < test.failedRequests {
-				totalRequests = int32(test.maxRetries) + 1
+			totalRequests := int32(tc.failedRequests)
+			if tc.maxRetries < tc.failedRequests {
+				totalRequests = int32(tc.maxRetries) + 1
 			}
-			require.Equal(t, counter, totalRequests, "request counts do not match")
+			require.Equal(tt, counter, totalRequests, "request counts do not match")
 		})
 	}
 }

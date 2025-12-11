@@ -123,7 +123,7 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 			return &datastore.DB{DSN: dsn}, nil
 		}).AnyTimes()
 
-	tests := []struct {
+	testCases := []struct {
 		name         string
 		primaryDSN   *datastore.DSN
 		replicaHosts []string
@@ -161,20 +161,20 @@ func TestNewDBLoadBalancer_WithFixedHosts_ConnectionError(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			lb, err := datastore.NewDBLoadBalancer(
 				context.Background(),
-				tt.primaryDSN,
+				tc.primaryDSN,
 				datastore.WithConnector(mockConnector),
-				datastore.WithFixedHosts(tt.replicaHosts),
+				datastore.WithFixedHosts(tc.replicaHosts),
 			)
-			if tt.expectedErr != "" {
-				require.Nil(t, lb)
-				require.ErrorContains(t, err, tt.expectedErr)
+			if tc.expectedErr != "" {
+				require.Nil(tt, lb)
+				require.ErrorContains(tt, err, tc.expectedErr)
 			} else {
-				require.NotNil(t, lb)
-				require.NoError(t, err)
+				require.NotNil(tt, lb)
+				require.NoError(tt, err)
 			}
 		})
 	}
@@ -427,7 +427,7 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 		SSLMode:  primaryDSN.SSLMode,
 	}
 
-	tests := []struct {
+	testCases := []struct {
 		name           string
 		primaryDSN     *datastore.DSN
 		mockExpectFunc func()
@@ -478,22 +478,22 @@ func TestNewDBLoadBalancer_WithServiceDiscovery_ConnectionError(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.mockExpectFunc()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			tc.mockExpectFunc()
 
 			lb, err := datastore.NewDBLoadBalancer(
 				context.Background(),
-				tt.primaryDSN,
+				tc.primaryDSN,
 				datastore.WithConnector(mockConnector),
 				datastore.WithServiceDiscovery(mockResolver),
 			)
-			if tt.expectedErr != "" {
-				require.Nil(t, lb)
-				require.ErrorContains(t, err, tt.expectedErr)
+			if tc.expectedErr != "" {
+				require.Nil(tt, lb)
+				require.ErrorContains(tt, err, tc.expectedErr)
 			} else {
-				require.NotNil(t, lb)
-				require.NoError(t, err)
+				require.NotNil(tt, lb)
+				require.NoError(tt, err)
 			}
 		})
 	}
@@ -645,7 +645,7 @@ func TestNewDBLoadBalancer_MetricsCollection_Primary(t *testing.T) {
 	require.NoError(t, err)
 	defer primaryMockDB.Close()
 
-	tests := []struct {
+	testCases := []struct {
 		name                  string
 		enableMetrics         bool
 		openPrimarySucceeds   bool
@@ -671,11 +671,11 @@ func TestNewDBLoadBalancer_MetricsCollection_Primary(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			mockConnector.EXPECT().Open(gomock.Any(), primaryDSN, gomock.Any()).
 				DoAndReturn(func(_ context.Context, _ *datastore.DSN, _ ...datastore.Option) (*datastore.DB, error) {
-					if tt.openPrimarySucceeds {
+					if tc.openPrimarySucceeds {
 						return &datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil
 					}
 					return nil, errors.New("failed to open connection")
@@ -687,28 +687,28 @@ func TestNewDBLoadBalancer_MetricsCollection_Primary(t *testing.T) {
 				datastore.WithConnector(mockConnector),
 				datastore.WithPrometheusRegisterer(reg),
 			}
-			if tt.enableMetrics {
+			if tc.enableMetrics {
 				options = append(options, datastore.WithMetricsCollection())
 			}
 
 			lb, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
-			if tt.openPrimarySucceeds {
-				require.NoError(t, err)
-				require.NotNil(t, lb)
+			if tc.openPrimarySucceeds {
+				require.NoError(tt, err)
+				require.NotNil(tt, lb)
 			} else {
-				require.Error(t, err)
-				require.Nil(t, lb)
+				require.Error(tt, err)
+				require.Nil(tt, lb)
 			}
 
 			// verify registered metrics
 			metricCount, err := testutil.GatherAndCount(reg)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			if tt.wantMetricsRegistered {
-				require.NotZero(t, metricCount)
+			if tc.wantMetricsRegistered {
+				require.NotZero(tt, metricCount)
 				// verify that custom labels were added to all metrics
 				metrics, err := reg.Gather()
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
 				var hostTypeLabelFound, hostAddrLabelFound bool
 				for _, m := range metrics {
@@ -717,18 +717,18 @@ func TestNewDBLoadBalancer_MetricsCollection_Primary(t *testing.T) {
 							switch label.GetName() {
 							case "host_type":
 								hostTypeLabelFound = true
-								require.Equal(t, datastore.HostTypePrimary, label.GetValue())
+								require.Equal(tt, datastore.HostTypePrimary, label.GetValue())
 							case "host_addr":
 								hostAddrLabelFound = true
-								require.Equal(t, lb.Primary().Address(), label.GetValue())
+								require.Equal(tt, lb.Primary().Address(), label.GetValue())
 							}
 						}
 					}
 				}
-				require.True(t, hostTypeLabelFound)
-				require.True(t, hostAddrLabelFound)
+				require.True(tt, hostTypeLabelFound)
+				require.True(tt, hostAddrLabelFound)
 			} else {
-				require.Zero(t, metricCount)
+				require.Zero(tt, metricCount)
 			}
 		})
 	}
@@ -780,7 +780,7 @@ func TestNewDBLoadBalancer_MetricsCollection_Replicas(t *testing.T) {
 	require.NoError(t, err)
 	defer primaryMockDB.Close()
 
-	tests := []struct {
+	testCases := []struct {
 		name                         string
 		enableMetrics                bool
 		openReplica1Succeeds         bool
@@ -817,8 +817,8 @@ func TestNewDBLoadBalancer_MetricsCollection_Replicas(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			reg := prometheus.NewRegistry()
 
 			// Mock connections according to expectations
@@ -826,14 +826,14 @@ func TestNewDBLoadBalancer_MetricsCollection_Replicas(t *testing.T) {
 				Return(&datastore.DB{DB: primaryMockDB, DSN: primaryDSN}, nil).Times(1)
 			mockConnector.EXPECT().Open(gomock.Any(), replica1DSN, gomock.Any()).
 				DoAndReturn(func(_ context.Context, _ *datastore.DSN, _ ...datastore.Option) (*datastore.DB, error) {
-					if tt.openReplica1Succeeds {
+					if tc.openReplica1Succeeds {
 						return &datastore.DB{DB: replicaMockDB1, DSN: replica1DSN}, nil
 					}
 					return nil, errors.New("failed to open replica 1 connection")
 				}).Times(1)
 			mockConnector.EXPECT().Open(gomock.Any(), replica2DSN, gomock.Any()).
 				DoAndReturn(func(_ context.Context, _ *datastore.DSN, _ ...datastore.Option) (*datastore.DB, error) {
-					if tt.openReplica2Succeeds {
+					if tc.openReplica2Succeeds {
 						return &datastore.DB{DB: replicaMockDB2, DSN: replica2DSN}, nil
 					}
 					return nil, errors.New("failed to open replica 2 connection")
@@ -845,24 +845,24 @@ func TestNewDBLoadBalancer_MetricsCollection_Replicas(t *testing.T) {
 				datastore.WithPrometheusRegisterer(reg),
 				datastore.WithFixedHosts([]string{"replica1", "replica2"}),
 			}
-			if tt.enableMetrics {
+			if tc.enableMetrics {
 				options = append(options, datastore.WithMetricsCollection())
 			}
 
 			_, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			// Verify registered metrics
 			metricCount, err := testutil.GatherAndCount(reg)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			metrics, err := reg.Gather()
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			if tt.enableMetrics {
-				require.NotZero(t, metricCount)
+			if tc.enableMetrics {
+				require.NotZero(tt, metricCount)
 			} else {
-				require.Zero(t, metricCount)
+				require.Zero(tt, metricCount)
 			}
 
 			// Scan all registered metrics and keep track of which labels are found
@@ -886,7 +886,7 @@ func TestNewDBLoadBalancer_MetricsCollection_Replicas(t *testing.T) {
 					// Check for primary labels
 					if hostType == datastore.HostTypePrimary {
 						primaryLabelsFound = true
-						require.Equal(t, primaryDSN.Address(), hostAddr)
+						require.Equal(tt, primaryDSN.Address(), hostAddr)
 					}
 					// Check for replica labels
 					if hostType == datastore.HostTypeReplica {
@@ -900,13 +900,13 @@ func TestNewDBLoadBalancer_MetricsCollection_Replicas(t *testing.T) {
 				}
 			}
 
-			require.Equal(t, tt.enableMetrics, primaryLabelsFound)
-			if tt.wantReplicaMetricsRegistered {
-				require.Equal(t, tt.openReplica1Succeeds, replica1LabelsFound)
-				require.Equal(t, tt.openReplica2Succeeds, replica2LabelsFound)
+			require.Equal(tt, tc.enableMetrics, primaryLabelsFound)
+			if tc.wantReplicaMetricsRegistered {
+				require.Equal(tt, tc.openReplica1Succeeds, replica1LabelsFound)
+				require.Equal(tt, tc.openReplica2Succeeds, replica2LabelsFound)
 			} else {
-				require.False(t, replica1LabelsFound)
-				require.False(t, replica2LabelsFound)
+				require.False(tt, replica1LabelsFound)
+				require.False(tt, replica2LabelsFound)
 			}
 		})
 	}
@@ -2007,7 +2007,7 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 	require.NoError(t, err)
 	defer replica3MockDB.Close()
 
-	tests := []struct {
+	testCases := []struct {
 		name                     string
 		setupMocks               func()
 		numberOfResolveCalls     int
@@ -2196,10 +2196,10 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Set up mocks
-			tt.setupMocks()
+			tc.setupMocks()
 
 			// Initialize load balancer with the test Prometheus registry
 			reg := prometheus.NewRegistry()
@@ -2212,22 +2212,22 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 
 			ctx := context.Background()
 			lb, err := datastore.NewDBLoadBalancer(ctx, primaryDSN, options...)
-			require.NoError(t, err)
-			require.NotNil(t, lb)
+			require.NoError(tt, err)
+			require.NotNil(tt, lb)
 
 			// Resolve replicas
-			for i := 0; i < tt.numberOfResolveCalls; i++ {
+			for i := 0; i < tc.numberOfResolveCalls; i++ {
 				err = lb.ResolveReplicas(ctx)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 
 			// Verify registered metrics
 			metricCount, err := testutil.GatherAndCount(reg)
-			require.NoError(t, err)
-			require.NotZero(t, metricCount)
+			require.NoError(tt, err)
+			require.NotZero(tt, metricCount)
 
 			metrics, err := reg.Gather()
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			// Search for relevant matching labels
 			labelsFound := make(map[string]string, 0)
@@ -2248,18 +2248,18 @@ func TestDBLoadBalancer_ResolveReplicas_MetricsCollection(t *testing.T) {
 			}
 
 			// Verify the presence and correctness of expected host addresses and type labels
-			for expectedAddr, expectedType := range tt.expectedLabelAddrTypeMap {
+			for expectedAddr, expectedType := range tc.expectedLabelAddrTypeMap {
 				foundType, found := labelsFound[expectedAddr]
-				require.True(t, found)
-				require.Equal(t, expectedType, foundType)
+				require.True(tt, found)
+				require.Equal(tt, expectedType, foundType)
 			}
 
 			// Ensure there are no extra host type/addr labels beyond the expected ones
-			require.Len(t, labelsFound, len(tt.expectedLabelAddrTypeMap))
+			require.Len(tt, labelsFound, len(tc.expectedLabelAddrTypeMap))
 
 			// Cleanup before next test
-			if tt.cleanup != nil {
-				tt.cleanup(t)
+			if tc.cleanup != nil {
+				tc.cleanup(tt)
 			}
 		})
 	}
@@ -2732,7 +2732,7 @@ func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
 	query := "SELECT pg_last_wal_replay_lsn (.+) SELECT pg_wal_lsn_diff"
 	column := "pg_wal_lsn_diff"
 
-	tests := []struct {
+	testCases := []struct {
 		name         string
 		getLSNReturn string
 		getLSNError  error
@@ -2770,14 +2770,14 @@ func TestDBLoadBalancer_UpToDateReplica(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lsnCacheMock.EXPECT().GetLSN(gomock.Any(), repo).Return(tt.getLSNReturn, tt.getLSNError).Times(1)
-			if tt.getLSNError == nil && tt.getLSNReturn != "" {
-				expectSingleRowQuery(replicaMock, query, column, tt.queryResult, tt.queryError, primaryLSN)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			lsnCacheMock.EXPECT().GetLSN(gomock.Any(), repo).Return(tc.getLSNReturn, tc.getLSNError).Times(1)
+			if tc.getLSNError == nil && tc.getLSNReturn != "" {
+				expectSingleRowQuery(replicaMock, query, column, tc.queryResult, tc.queryError, primaryLSN)
 			}
 			db := lb.UpToDateReplica(ctx, repo)
-			require.Equal(t, tt.expectedDB, db.DB)
+			require.Equal(tt, tc.expectedDB, db.DB)
 		})
 	}
 

@@ -6,7 +6,7 @@ include:
   - local: .gitlab/ci/release_prepare.yml
   - local: .gitlab/ci/release_tag.yml
   - local: .gitlab/ci/document.yml
-  - local: .gitlab/ci/child_jobs.yml
+  - local: .gitlab/ci/aux_jobs.yml
   - local: .gitlab/ci/migrate.yml
   - component: ${CI_SERVER_FQDN}/gitlab-org/components/danger-review/danger-review@2.1.0
     inputs:
@@ -38,31 +38,43 @@ default:
 variables:
   FF_TIMESTAMPS: 1
   # default Go version
-  GO_VERSION: "1.23"
+  GO_VERSION: "1.24"
   BUILDTAGS: "continuous_profiler_stackdriver"
   CGO_ENABLED: "1"
   GOPATH: $CI_PROJECT_DIR/.GOPATH
-  GOTESTSUM_VERSION: v1.12.0
+  GOTESTSUM_VERSION: v1.13.0
   PG_PREV_VERSION: "15"
   PG_CURR_VERSION: "16"
   PG_NEXT_VERSION: "17"
-  GOLANGCI_LINT_VERSION: "2.4.0"
+  GOLANGCI_LINT_VERSION: "2.5.0"
+  DOCKER_VERSION: "28.4"
 
 stages:
   - validate
   - test
   - integration
   - migrate
+  - aux jobs
   - release
-  - child jobs
   - document
 
 .go-pg-version-matrix:
   parallel:
     matrix:
       - PG_VERSION: $PG_PREV_VERSION
-        GO_VERSION: [ "1.23", "1.24" ]
+        GO_VERSION: [ "1.24", "1.25" ]
       - PG_VERSION: $PG_CURR_VERSION
-        GO_VERSION: [ "1.23", "1.24" ]
+        GO_VERSION: [ "1.24", "1.25" ]
       - PG_VERSION: $PG_NEXT_VERSION
-        GO_VERSION: [ "1.23", "1.24" ]
+        GO_VERSION: [ "1.24", "1.25" ]
+
+# docker defaults
+.docker:
+  image: docker:${DOCKER_VERSION}-cli
+  services:
+    - docker:${DOCKER_VERSION}-dind
+  tags:
+    - gitlab-org-docker
+  before_script:
+    - apk add --no-cache make bash
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login --username "${CI_REGISTRY_USER}" --password-stdin "${CI_REGISTRY}"

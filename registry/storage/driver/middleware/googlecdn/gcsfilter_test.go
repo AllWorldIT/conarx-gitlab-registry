@@ -203,7 +203,7 @@ func TestEligibleForGCS(t *testing.T) {
 		return dcontext.WithRequest(empty, req)
 	}
 
-	cases := []struct {
+	testCases := []struct {
 		Context  context.Context
 		Expected bool
 	}{
@@ -212,11 +212,11 @@ func TestEligibleForGCS(t *testing.T) {
 		{Context: makeContext("192.168.0.2"), Expected: false},
 	}
 
-	for _, testCase := range cases {
+	for _, tc := range testCases {
 		name := fmt.Sprintf("Client IP = %v",
-			testCase.Context.Value("http.request.ip"))
-		t.Run(name, func(t *testing.T) {
-			require.Equal(t, testCase.Expected, eligibleForGCS(testCase.Context, googleIPs))
+			tc.Context.Value("http.request.ip"))
+		t.Run(name, func(tt *testing.T) {
+			require.Equal(tt, tc.Expected, eligibleForGCS(tc.Context, googleIPs))
 		})
 	}
 }
@@ -238,7 +238,7 @@ func TestEligibleForGCSWithGCPIPNotInitialized(t *testing.T) {
 		return dcontext.WithRequest(empty, req)
 	}
 
-	cases := []struct {
+	testCases := []struct {
 		Context  context.Context
 		Expected bool
 	}{
@@ -247,11 +247,11 @@ func TestEligibleForGCSWithGCPIPNotInitialized(t *testing.T) {
 		{Context: makeContext("192.168.0.2"), Expected: false},
 	}
 
-	for _, testCase := range cases {
+	for _, tc := range testCases {
 		name := fmt.Sprintf("Client IP = %v",
-			testCase.Context.Value("http.request.ip"))
-		t.Run(name, func(t *testing.T) {
-			require.Equal(t, testCase.Expected, eligibleForGCS(testCase.Context, googleIPs))
+			tc.Context.Value("http.request.ip"))
+		t.Run(name, func(tt *testing.T) {
+			require.Equal(tt, tc.Expected, eligibleForGCS(tc.Context, googleIPs))
 		})
 	}
 }

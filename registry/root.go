@@ -74,6 +74,7 @@ func init() {
 	ImportCmd.Flags().StringVarP(&debugAddr, "debug-server", "s", "", "run a pprof debug server at <address:port>")
 	ImportCmd.Flags().VarP(nullableInt{&tagConcurrency}, "tag-concurrency", "t", "limit the number of tags to retrieve concurrently, only applicable on gcs backed storage")
 	ImportCmd.Flags().DurationVarP(&preImportSkipCutoff, "pre-import-skip-recent", "", 72*time.Hour, "skip pre importing repositories pre imported more recently than the provided time offset from now, defaults to 72h (three days ago), use 0 to disable skiping")
+	ImportCmd.Flags().StringVarP(&logDir, "log-directory", "", "", "directory that detail log files will be written to, ignored when --log-to-stdout is used")
 
 	BBMCmd.AddCommand(BBMStatusCmd)
 	BBMCmd.AddCommand(BBMPauseCmd)
@@ -109,6 +110,7 @@ var (
 	maxBBMJobRetry       *int
 	stats                bool
 	preImportSkipCutoff  time.Duration
+	logDir               string
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -186,7 +188,7 @@ var GCCmd = &cobra.Command{
 			return fmt.Errorf("configuration error: %w", err)
 		}
 
-		if config.Database.Enabled {
+		if config.Database.IsEnabled() {
 			return errors.New("the garbage-collect command is not compatible with database metadata, please use online garbage collection instead")
 		}
 
@@ -676,6 +678,9 @@ var ImportCmd = &cobra.Command{
 		}
 		if preImportSkipCutoff > 0 {
 			opts = append(opts, datastore.WithPreImportSkipRecent(preImportSkipCutoff))
+		}
+		if logDir != "" {
+			opts = append(opts, datastore.WithLogDir(logDir))
 		}
 
 		err = os.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(dynamicMediaTypes))

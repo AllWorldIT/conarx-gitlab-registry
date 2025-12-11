@@ -508,7 +508,7 @@ func TestGCSDriverURLFor_AdditionalQueryParams(t *testing.T) {
 }
 
 func TestGCSDriverCustomParams(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name              string
 		opt               map[string]any
 		expectedURLValues url.Values
@@ -560,9 +560,9 @@ func TestGCSDriverCustomParams(t *testing.T) {
 			},
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			require.Equal(t, test.expectedURLValues, storagedriver.CustomParams(test.opt, customParamKeys))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			require.Equal(tt, tc.expectedURLValues, storagedriver.CustomParams(tc.opt, customParamKeys))
 		})
 	}
 }

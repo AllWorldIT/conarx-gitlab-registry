@@ -10,7 +10,7 @@ import (
 )
 
 func TestInjectCustomKeyOpts(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name        string
 		extraOptMap map[string]any
 		opt         map[string]any
@@ -53,10 +53,10 @@ func TestInjectCustomKeyOpts(t *testing.T) {
 			},
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			injectCustomKeyOpts(test.ctx(), test.opt, test.extraOptMap)
-			require.Equal(t, test.expectedOpt, test.opt)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			injectCustomKeyOpts(tc.ctx(), tc.opt, tc.extraOptMap)
+			require.Equal(tt, tc.expectedOpt, tc.opt)
 		})
 	}
 }

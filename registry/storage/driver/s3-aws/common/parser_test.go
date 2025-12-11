@@ -17,7 +17,7 @@ import (
 )
 
 func TestParseParameters_in_groups(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name                  string
 		restrictDriverVersion string
 		params                map[string]any
@@ -517,58 +517,58 @@ func TestParseParameters_in_groups(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tc := range testCases {
 		for _, dv := range []string{V1DriverName, V2DriverName} {
-			t.Run(fmt.Sprintf("%s/%s", tt.name, dv), func(t *testing.T) {
-				if tt.restrictDriverVersion != "" && tt.restrictDriverVersion != dv {
-					t.Skip("skipping subtests as it does not apply for this driver")
+			t.Run(fmt.Sprintf("%s/%s", tc.name, dv), func(tt *testing.T) {
+				if tc.restrictDriverVersion != "" && tc.restrictDriverVersion != dv {
+					tt.Skip("skipping subtests as it does not apply for this driver")
 				}
 
-				result, err := ParseParameters(dv, tt.params)
+				result, err := ParseParameters(dv, tc.params)
 
-				if tt.expectedError {
-					assert.Error(t, err)
-					if tt.errorContains != "" {
-						assert.Contains(t, err.Error(), tt.errorContains)
+				if tc.expectedError {
+					assert.Error(tt, err)
+					if tc.errorContains != "" {
+						assert.Contains(tt, err.Error(), tc.errorContains)
 					}
 					return
 				}
 
-				require.NoError(t, err)
-				require.NotNil(t, result)
+				require.NoError(tt, err)
+				require.NotNil(tt, result)
 
-				if tt.expected != nil {
+				if tc.expected != nil {
 					// Check all fields in DriverParameters
-					assert.Equal(t, tt.expected.AccessKey, result.AccessKey, "AccessKey mismatch")
-					assert.Equal(t, tt.expected.SecretKey, result.SecretKey, "SecretKey mismatch")
-					assert.Equal(t, tt.expected.Region, result.Region, "Region mismatch")
-					assert.Equal(t, tt.expected.RegionEndpoint, result.RegionEndpoint, "RegionEndpoint mismatch")
-					assert.Equal(t, tt.expected.Bucket, result.Bucket, "Bucket mismatch")
-					assert.Equal(t, tt.expected.RootDirectory, result.RootDirectory, "RootDirectory mismatch")
-					assert.Equal(t, tt.expected.StorageClass, result.StorageClass, "StorageClass mismatch")
-					assert.Equal(t, tt.expected.ObjectACL, result.ObjectACL, "ObjectACL mismatch")
-					assert.Equal(t, tt.expected.ObjectOwnership, result.ObjectOwnership, "ObjectOwnership mismatch")
+					assert.Equal(tt, tc.expected.AccessKey, result.AccessKey, "AccessKey mismatch")
+					assert.Equal(tt, tc.expected.SecretKey, result.SecretKey, "SecretKey mismatch")
+					assert.Equal(tt, tc.expected.Region, result.Region, "Region mismatch")
+					assert.Equal(tt, tc.expected.RegionEndpoint, result.RegionEndpoint, "RegionEndpoint mismatch")
+					assert.Equal(tt, tc.expected.Bucket, result.Bucket, "Bucket mismatch")
+					assert.Equal(tt, tc.expected.RootDirectory, result.RootDirectory, "RootDirectory mismatch")
+					assert.Equal(tt, tc.expected.StorageClass, result.StorageClass, "StorageClass mismatch")
+					assert.Equal(tt, tc.expected.ObjectACL, result.ObjectACL, "ObjectACL mismatch")
+					assert.Equal(tt, tc.expected.ObjectOwnership, result.ObjectOwnership, "ObjectOwnership mismatch")
 
 					// Boolean flags
-					assert.Equal(t, tt.expected.Encrypt, result.Encrypt, "Encrypt mismatch")
-					assert.Equal(t, tt.expected.Secure, result.Secure, "Secure mismatch")
-					assert.Equal(t, tt.expected.SkipVerify, result.SkipVerify, "SkipVerify mismatch")
-					assert.Equal(t, tt.expected.V4Auth, result.V4Auth, "V4Auth mismatch")
-					assert.Equal(t, tt.expected.PathStyle, result.PathStyle, "PathStyle mismatch")
-					assert.Equal(t, tt.expected.ParallelWalk, result.ParallelWalk, "ParallelWalk mismatch")
+					assert.Equal(tt, tc.expected.Encrypt, result.Encrypt, "Encrypt mismatch")
+					assert.Equal(tt, tc.expected.Secure, result.Secure, "Secure mismatch")
+					assert.Equal(tt, tc.expected.SkipVerify, result.SkipVerify, "SkipVerify mismatch")
+					assert.Equal(tt, tc.expected.V4Auth, result.V4Auth, "V4Auth mismatch")
+					assert.Equal(tt, tc.expected.PathStyle, result.PathStyle, "PathStyle mismatch")
+					assert.Equal(tt, tc.expected.ParallelWalk, result.ParallelWalk, "ParallelWalk mismatch")
 
 					// Numeric parameters
-					assert.Equal(t, tt.expected.ChunkSize, result.ChunkSize, "ChunkSize mismatch")
-					assert.Equal(t, tt.expected.MultipartCopyChunkSize, result.MultipartCopyChunkSize, "MultipartCopyChunkSize mismatch")
-					assert.Equal(t, tt.expected.MultipartCopyMaxConcurrency, result.MultipartCopyMaxConcurrency, "MultipartCopyMaxConcurrency mismatch")
-					assert.Equal(t, tt.expected.MultipartCopyThresholdSize, result.MultipartCopyThresholdSize, "MultipartCopyThresholdSize mismatch")
-					assert.Equal(t, tt.expected.MaxRequestsPerSecond, result.MaxRequestsPerSecond, "MaxRequestsPerSecond mismatch")
-					assert.Equal(t, tt.expected.MaxRetries, result.MaxRetries, "MaxRetries mismatch")
+					assert.Equal(tt, tc.expected.ChunkSize, result.ChunkSize, "ChunkSize mismatch")
+					assert.Equal(tt, tc.expected.MultipartCopyChunkSize, result.MultipartCopyChunkSize, "MultipartCopyChunkSize mismatch")
+					assert.Equal(tt, tc.expected.MultipartCopyMaxConcurrency, result.MultipartCopyMaxConcurrency, "MultipartCopyMaxConcurrency mismatch")
+					assert.Equal(tt, tc.expected.MultipartCopyThresholdSize, result.MultipartCopyThresholdSize, "MultipartCopyThresholdSize mismatch")
+					assert.Equal(tt, tc.expected.MaxRequestsPerSecond, result.MaxRequestsPerSecond, "MaxRequestsPerSecond mismatch")
+					assert.Equal(tt, tc.expected.MaxRetries, result.MaxRetries, "MaxRetries mismatch")
 
 					// Other configurations
-					assert.Equal(t, tt.expected.KeyID, result.KeyID, "KeyID mismatch")
-					assert.Equal(t, tt.expected.LogLevel, result.LogLevel, "LogLevel mismatch")
-					assert.Equal(t, tt.expected.ChecksumAlgorithm, result.ChecksumAlgorithm, "ChecksumAlgorithm mismatch")
+					assert.Equal(tt, tc.expected.KeyID, result.KeyID, "KeyID mismatch")
+					assert.Equal(tt, tc.expected.LogLevel, result.LogLevel, "LogLevel mismatch")
+					assert.Equal(tt, tc.expected.ChecksumAlgorithm, result.ChecksumAlgorithm, "ChecksumAlgorithm mismatch")
 				}
 			})
 		}
@@ -775,27 +775,27 @@ func TestParseParameters_individually(t *testing.T) {
 		},
 	}
 
-	for tn, tt := range tcs {
-		t.Run(tn, func(t *testing.T) {
+	for tn, tc := range tcs {
+		t.Run(tn, func(tt *testing.T) {
 			opts := dtestutil.Opts{
-				Defaultt:          tt.defaultt,
-				ParamName:         tt.paramName,
-				DriverParamName:   tt.driverParamName,
-				OriginalParams:    tt.parameters,
-				NilAllowed:        tt.nilAllowed,
-				EmptyAllowed:      tt.emptyAllowed,
-				NonTypeAllowed:    tt.nonTypeAllowed,
-				Required:          tt.required,
+				Defaultt:          tc.defaultt,
+				ParamName:         tc.paramName,
+				DriverParamName:   tc.driverParamName,
+				OriginalParams:    tc.parameters,
+				NilAllowed:        tc.nilAllowed,
+				EmptyAllowed:      tc.emptyAllowed,
+				NonTypeAllowed:    tc.nonTypeAllowed,
+				Required:          tc.required,
 				ParseParametersFn: testFn,
 			}
 
-			dtestutil.AssertByDefaultType(t, opts)
+			dtestutil.AssertByDefaultType(tt, opts)
 		})
 	}
 }
 
 func TestParseLogLevelParam(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name            string
 		param           any
 		expectedV1      aws.LogLevelType
@@ -985,7 +985,7 @@ func TestParseLogLevelParam(t *testing.T) {
 	})
 	logger.SetLevel(logrus.DebugLevel)
 
-	for _, tc := range tests {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
 			resultV1 := ParseLogLevelParamV1(log.FromLogrusLogger(logger), tc.param)
 			assert.Equal(tt, tc.expectedV1, resultV1)
@@ -1006,7 +1006,7 @@ func TestParseLogLevelParam(t *testing.T) {
 }
 
 func TestChecksumDisabledParameter(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name                 string
 		checksumDisabled     any
 		checksumAlgorithm    string
@@ -1043,22 +1043,22 @@ func TestChecksumDisabledParameter(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			params := map[string]any{
 				ParamRegion:           "us-west-2",
 				ParamBucket:           "test-bucket",
-				ParamChecksumDisabled: tt.checksumDisabled,
+				ParamChecksumDisabled: tc.checksumDisabled,
 			}
 
-			if tt.checksumAlgorithm != "" {
-				params[ParamChecksumAlgorithm] = tt.checksumAlgorithm
+			if tc.checksumAlgorithm != "" {
+				params[ParamChecksumAlgorithm] = tc.checksumAlgorithm
 			}
 
 			result, err := ParseParameters(V2DriverName, params)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedDisabled, result.ChecksumDisabled)
-			assert.Equal(t, tt.expectedAlgorithm, result.ChecksumAlgorithm)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expectedDisabled, result.ChecksumDisabled)
+			assert.Equal(tt, tc.expectedAlgorithm, result.ChecksumAlgorithm)
 		})
 	}
 }

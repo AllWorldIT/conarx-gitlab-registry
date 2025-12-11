@@ -10,7 +10,7 @@
   extends: .go-test
   parallel:
     matrix:
-      - GO_VERSION: [ "1.23", "1.24" ]
+      - GO_VERSION: [ "1.24", "1.25" ]
 
 coverage:
   extends: .go-version-matrix
@@ -74,14 +74,12 @@ oci-conformance:
     OCI_DELETE_MANIFEST_BEFORE_BLOBS: 1
     # Other
     FF_NETWORK_PER_BUILD: 1
-    POSTGRES_DB: "registry_dev"
-    POSTGRES_USER: "registry"
-    POSTGRES_PASSWORD: "apassword"
-    PGPASSWORD: "apassword"
     REGISTRY_DATABASE_HOST: "db"
   services:
-    - name: postgres:${PG_CURR_VERSION}-alpine
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_CURR_VERSION}
       alias: "db"
+      variables:
+        POSTGRES_ROLE: primary
   script:
     - ./conformance.test
 
@@ -101,8 +99,10 @@ oci-conformance:
     REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED: "true"
     REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: "registry/datastore/testdata/fixtures/importer/happy-path"
   services:
-    - name: postgres:${PG_VERSION}-alpine
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_VERSION}
       alias: "db"
+      variables:
+        POSTGRES_ROLE: primary
   before_script:
     - make binaries
     - chmod +x ./bin/*

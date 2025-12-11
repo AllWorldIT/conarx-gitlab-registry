@@ -9,7 +9,7 @@ import (
 )
 
 func TestAudienceList_Unmarshal(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name        string
 		value       string
 		expected    AudienceList
@@ -83,24 +83,24 @@ func TestAudienceList_Unmarshal(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			var actual AudienceList
-			err := json.Unmarshal([]byte(tt.value), &actual)
-			if tt.shouldError {
-				require.Zero(t, actual)
-				require.Error(t, err)
+			err := json.Unmarshal([]byte(tc.value), &actual)
+			if tc.shouldError {
+				require.Zero(tt, actual)
+				require.Error(tt, err)
 				return
 			}
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, actual)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expected, actual)
 		})
 	}
 }
 
 func TestAudienceList_Marshal(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		value    AudienceList
 		expected []byte
@@ -127,12 +127,12 @@ func TestAudienceList_Marshal(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual, err := json.Marshal(tt.value)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			actual, err := json.Marshal(tc.value)
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, actual)
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expected, actual)
 		})
 	}
 }

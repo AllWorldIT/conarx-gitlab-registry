@@ -290,7 +290,7 @@ notifications:
       url: https://my.listener.com/event
       headers: <http.Header>
       timeout: 1s
-      threshold: 10
+      threshold: 10 # DEPRECATED: will be transparently translated into maxretries, use maxretries for full control 
       maxretries: 5
       backoff: 1s
       ignoredmediatypes:
@@ -1272,7 +1272,8 @@ notifications:
       url: https://my.listener.com/event
       headers: <http.Header>
       timeout: 1s
-      threshold: 10
+      threshold: 10 # DEPRECATED: will be transparently translated into maxretries, use maxretries for full control 
+      maxretries: 5
       backoff: 1s
       ignoredmediatypes:
         - application/octet-stream
@@ -1302,13 +1303,36 @@ accept event notifications.
 | `url`     | yes      | The URL to which events should be published.                                                                                                                                                                                       |
 | `headers` | yes      | A list of static headers to add to each request. Each header's name is a key beneath `headers`, and each value is a list of payloads for that header name. Values must always be lists.                                            |
 | `timeout` | yes      | A value for the HTTP timeout. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used.                                  |
-| `threshold` | yes    | DEPRECATED: use maxretries instead, more details [here](https://gitlab.com/gitlab-org/container-registry/-/issues/1243). An integer specifying how long to wait before backing off a failure.                                                            |
-| `maxretries` | no | An integer specifying the maximum number of times to retry sending a failed event. `threshold` is ignored when defining this field.                                                                                                |
-| `backoff` | yes      | How long the system backs off before retrying after a failure. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. |
+| `threshold` | no    | **DEPRECATED**: This parameter is deprecated in favor of `maxretries`. When `maxretries` is not set, `threshold` will be automatically translated to an equivalent `maxretries` value based on the configured `backoff` time. The translation uses a time window calculation to determine the appropriate number of retries. See [here](#migration-from-threshold-to-maxretries) for migration details. |
+| `maxretries` | no | An integer specifying the maximum number of times to retry sending a failed event before dropping it. When this field is defined, it takes precedence over `threshold`. If neither `threshold` nor `maxretries` is specified, defaults to 10. |
+| `backoff` | yes      | The base backoff duration between retry attempts. Used as the initial interval in an exponential backoff strategy. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. |
 | `ignoredmediatypes`|no| A list of target media types to ignore. Events with these target media types are not published to the endpoint.                                                                                                                    |
 | `ignore`  |no| Events with these mediatypes or actions are not published to the endpoint.                                                                                                                                                         |
 | `queuepurgetimeout` | no | The maximum amount of time registry tries to sent unsent notifications in the buffer after it received SIGINT. A positive integer and an optional suffix indicating the unit of time, which may be `ns`, `us`, `ms`, `s`, `m`, or `h`. If you omit the unit of time, `ns` is used. The default is 5 seconds. The zero value is always defaulted to 5 seconds. User may set a very low value (e.g. 1ns) to simulate no-wait if desired. |
 | `queuesizelimit`  | no | The maximum size of the notifications queue with events pending for sending. Once the queue gets full, the events are dropped. The default is 3000. |
+
+#### Migration from `threshold` to `maxretries`
+
+The `threshold` parameter has been deprecated in favor of `maxretries` to better align with exponential backoff retry strategies.
+The registry automatically translates `threshold` values to equivalent `maxretries` values when `maxretries` is not explicitly set.
+
+**Translation behavior:**
+
+- If only `maxretries` is set: Uses the specified value directly
+- If only `threshold` is set: Automatically translates to `maxretries` based on the `backoff` duration
+- If neither is set: Defaults to `maxretries: 10`
+
+**Translation formula:**
+The translation calculates how many retries can fit within a time window of `120 * backoff_duration` seconds, using exponential backoff with a multiplier of 1.5.
+The resulting `maxretries` will be at least equal to the original `threshold` value to maintain backward compatibility.
+
+**Examples:**
+
+- `threshold: 10, backoff: 1s` → `maxretries: 10`
+- `threshold: 5, backoff: 2s` → `maxretries: 10`
+- `threshold: 15, backoff: 1s` → `maxretries: 15` (maintains minimum threshold)
+
+**Recommendation:** Update your configuration to use `maxretries` directly to avoid automatic translation and have explicit control over retry behavior.
 
 #### `ignore`
 

@@ -20,6 +20,7 @@ var (
 		"20240604074846_create_batched_background_migration_jobs_table",
 		"20240711175726_add_background_migration_failure_error_code_column",
 		"20241031081325_add_background_migration_timing_columns",
+		"20250904041325_add_batching_strategy_and_total_tuple_count",
 	}
 
 	// Enforced background migration

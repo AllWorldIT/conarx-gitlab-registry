@@ -137,7 +137,7 @@ func TestVerifyManifest_ManifestList_ReferenceLimits(t *testing.T) {
 	registry := createRegistry(t)
 	repo := makeRepository(t, registry, "test")
 
-	tests := []struct {
+	testCases := []struct {
 		name      string
 		manifests int
 		refLimit  int
@@ -175,25 +175,25 @@ func TestVerifyManifest_ManifestList_ReferenceLimits(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			descriptors := make([]manifestlist.ManifestDescriptor, 0)
 
 			// Create a random manifest for each of the specified manifests.
-			for i := 0; i < tt.manifests; i++ {
-				descriptors = append(descriptors, makeManifestDescriptor(t, repo))
+			for i := 0; i < tc.manifests; i++ {
+				descriptors = append(descriptors, makeManifestDescriptor(tt, repo))
 			}
 
 			dml, err := manifestlist.FromDescriptors(descriptors)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			v := manifestlistValidator(t, repo, tt.refLimit, 0)
+			v := manifestlistValidator(tt, repo, tc.refLimit, 0)
 
 			err = v.Validate(ctx, dml)
-			if tt.wantErr {
-				require.Error(t, err)
+			if tc.wantErr {
+				require.Error(tt, err)
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 		})
 	}
@@ -215,7 +215,7 @@ func TestVerifyManifest_ManifestList_PayloadLimits(t *testing.T) {
 
 	baseManifestListSize := len(payload)
 
-	tests := map[string]struct {
+	testCases := map[string]struct {
 		payloadLimit int
 		wantErr      bool
 		expectedErr  error
@@ -245,16 +245,16 @@ func TestVerifyManifest_ManifestList_PayloadLimits(t *testing.T) {
 		},
 	}
 
-	for tn, tt := range tests {
-		t.Run(tn, func(t *testing.T) {
-			v := manifestlistValidator(t, repo, 0, tt.payloadLimit)
+	for tn, tc := range testCases {
+		t.Run(tn, func(tt *testing.T) {
+			v := manifestlistValidator(tt, repo, 0, tc.payloadLimit)
 
 			err = v.Validate(ctx, dml)
-			if tt.wantErr {
-				require.Error(t, err)
-				require.EqualError(t, err, tt.expectedErr.Error())
+			if tc.wantErr {
+				require.Error(tt, err)
+				require.EqualError(tt, err, tc.expectedErr.Error())
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 		})
 	}

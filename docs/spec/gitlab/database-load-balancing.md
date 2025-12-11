@@ -165,7 +165,12 @@ To ensure fault tolerance, the Container Registry will:
 
 - Gracefully expire open connections if the list of hosts changes, ensuring that stale connections are closed;
 
-- Fallback to the primary server if all replicas are unavailable or unresponsive. This also relates to [Primary Sticking](#primary-sticking).
+- Fallback to the primary server if all replicas are unavailable or unresponsive. This also relates to [Primary Sticking](#primary-sticking);
+
+- Quarantine replicas that exhibit connectivity issues to prevent cascading failures and flapping behavior:
+  - **Consecutive failure tracking**: A replica is quarantined after 3 consecutive connectivity failures during connection attempts;
+  - **Flapping detection**: A replica is quarantined if it is added/removed from the pool 5 or more times within a 60-second sliding window, indicating unstable connectivity;
+  - **Auto-reintegration**: Quarantined replicas are automatically reintegrated after a 5-minute quarantine period, allowing recovery from transient issues.
 
 The following diagram illustrates the fault tolerance process:
 
@@ -382,9 +387,13 @@ The Container Registry will generate log entries for each of the following event
 - Changes to the replica list;
 - Expiry of open connections when the replica list changes;
 - Replica added to or removed from the pool based on DNS lookup and probing results;
+- Replica connectivity failures and successes during connection attempts;
+- Pool events (replica add/remove) tracked for flapping detection;
+- Replica quarantined due to connectivity issues (consecutive failures or flapping behavior);
+- Quarantined replica reintegrated into the pool after connectivity quarantine period expires;
 - Periodic replication lag checks, indicating the lag values for each replica. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2);
 - Replica quarantined due to exceeding the lag thresholds. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2);
-- Quarantined replica reintegrated into the pool. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2);
+- Quarantined replica reintegrated into the pool after catching up on replication lag. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2);
 - Tracking of write operation for each repository in Redis;
 - Read operations, indicating whether the query was routed to the primary or a replica (and which one) and why (e.g. routed to primary due to sticking; routed to replica due to round-robin election). Due to volume, these entries should carry the `DEBUG` log level;
 - Fallbacks of read requests to the primary or a different replica due to the unavailability of replicas.
@@ -398,7 +407,7 @@ The Container Registry will export the following Prometheus metrics:
 | `registry_database_lb_lookup_duration_seconds`              | Histogram | Histogram of latencies for DNS lookups. `error=<true/false>` and `lookup_type=<srv/host>` labels.                                                                                                                                                                                                                                                                  |
 | `registry_database_lb_pool_size`                            | Gauge     | Current number of replicas in the pool.                                                                                                                                                                                                                                                                                                                            |
 | `registry_database_lb_pool_status`                          | Gauge     | Status of each replica in the pool. `replica` and `status=<online/quarantined>` labels. Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2).                                                                                                                                                                                              |
-| `registry_database_lb_pool_events_total`                    | Counter   | Number of replicas added (`event=replica_added`) to the pool or removed (`event=replica_removed`) based on DNS lookup and probing results. <br />Number of replicas quarantined (`event=replica_quarantined`) or reintegrated (`event=replica_reintegrated`) due to lag thresholds (part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2)). |
+| `registry_database_lb_pool_events_total`                    | Counter   | Number of replicas added (`event=replica_added`, `reason=discovered`) to the pool or removed (`event=replica_removed`, `reason=removed_from_dns`) based on DNS lookup and probing results. <br />Number of replicas quarantined (`event=replica_quarantined`) or reintegrated (`event=replica_reintegrated`) with `reason=<replication_lag\|connectivity>` label to distinguish between lag-based quarantine (part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2)) and connectivity-based quarantine (consecutive failures or flapping detection). |
 | `registry_database_lb_lag_bytes`                            | Gauge     | Replication lag in bytes for each replica (identified by a `replica` label). Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2).                                                                                                                                                                                                         |
 | `registry_database_lb_lag_seconds`                          | Histogram | Replication lag in seconds for each replica (identified by a `replica` label). Part of [Phase 2](https://gitlab.com/groups/gitlab-org/-/epics/8591#phase-2).                                                                                                                                                                                                       |
 | `registry_database_lb_targets_total`                        | Counter   | A counter for primary and replica target elections during database load balancing. `target_type=<primary/replica>`, `fallback=<true/false>`, and `reason=<selected/no_cache/no_replica/error/not_up_to_date>` labels.                                                                                                                                              |

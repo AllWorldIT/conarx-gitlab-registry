@@ -19,30 +19,30 @@ import (
 func isEligible(t *testing.T) {
 	t.Helper()
 
-	if os.Getenv("REDIS_ADDR") == "" {
-		t.Skip("the 'REDIS_ADDR' environment variable must be set to enable these tests")
+	if os.Getenv("KV_ADDR") == "" {
+		t.Skip("the 'KV_ADDR' environment variable must be set to enable these tests")
 	}
 }
 
 func poolOptsFromEnv(t *testing.T) *redis.UniversalOptions {
 	var db int
-	s := os.Getenv("REDIS_DB")
+	s := os.Getenv("KV_DB")
 	if s == "" {
 		db = 0
 	} else {
 		i, err := strconv.Atoi(s)
-		require.NoError(t, err, "error parsing 'REDIS_DB' environment variable")
+		require.NoError(t, err, "error parsing 'KV_DB' environment variable")
 		db = i
 	}
 
 	return &redis.UniversalOptions{
-		Addrs:            strings.Split(os.Getenv("REDIS_ADDR"), ","),
+		Addrs:            strings.Split(os.Getenv("KV_ADDR"), ","),
 		DB:               db,
-		Username:         os.Getenv("REDIS_USERNAME"),
-		Password:         os.Getenv("REDIS_PASSWORD"),
-		MasterName:       os.Getenv("REDIS_MAIN_NAME"),
-		SentinelUsername: os.Getenv("REDIS_SENTINEL_USERNAME"),
-		SentinelPassword: os.Getenv("REDIS_SENTINEL_PASSWORD"),
+		Username:         os.Getenv("KV_USERNAME"),
+		Password:         os.Getenv("KV_PASSWORD"),
+		MasterName:       os.Getenv("KV_MAIN_NAME"),
+		SentinelUsername: os.Getenv("KV_SENTINEL_USERNAME"),
+		SentinelPassword: os.Getenv("KV_SENTINEL_PASSWORD"),
 	}
 }
 

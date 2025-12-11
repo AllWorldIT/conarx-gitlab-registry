@@ -25,7 +25,7 @@ func TestWithRequest(t *testing.T) {
 	req.Header.Set("User-Agent", "test/0.1")
 
 	ctx := WithRequest(Background(), &req)
-	for _, testcase := range []struct {
+	for _, tc := range []struct {
 		key      string
 		expected any
 	}{
@@ -64,16 +64,16 @@ func TestWithRequest(t *testing.T) {
 			key: "http.request.startedat",
 		},
 	} {
-		v := ctx.Value(testcase.key)
+		v := ctx.Value(tc.key)
 
-		require.NotNilf(t, v, "value not found for %q", testcase.key)
+		require.NotNilf(t, v, "value not found for %q", tc.key)
 
-		if testcase.expected != nil {
-			require.Equalf(t, testcase.expected, v, "%s", testcase.key)
+		if tc.expected != nil {
+			require.Equalf(t, tc.expected, v, "%s", tc.key)
 		}
 
 		// Key specific checks!
-		switch testcase.key {
+		switch tc.key {
 		case "http.request.id":
 			assert.IsType(t, "", v)
 		case "http.request.startedat":
@@ -98,7 +98,7 @@ func TestWithRequest_MappedKeys(t *testing.T) {
 	req.Header.Set("User-Agent", "test/0.1")
 
 	ctx := WithRequest(Background(), &req)
-	for _, testcase := range []struct {
+	for _, tc := range []struct {
 		key      string
 		expected any
 	}{
@@ -127,12 +127,12 @@ func TestWithRequest_MappedKeys(t *testing.T) {
 			expected: req.RemoteAddr,
 		},
 	} {
-		v := ctx.Value(testcase.key)
+		v := ctx.Value(tc.key)
 
-		require.NotNil(t, v, "value not found for %q", testcase.key)
+		require.NotNil(t, v, "value not found for %q", tc.key)
 
-		if testcase.expected != nil {
-			assert.Equal(t, testcase.expected, v, "%s", testcase.key)
+		if tc.expected != nil {
+			assert.Equal(t, tc.expected, v, "%s", tc.key)
 		}
 	}
 }
@@ -217,7 +217,7 @@ func TestWithVars(t *testing.T) {
 	}
 
 	ctx := WithVars(Background(), &req)
-	for _, testcase := range []struct {
+	for _, tc := range []struct {
 		key      string
 		expected any
 	}{
@@ -234,9 +234,9 @@ func TestWithVars(t *testing.T) {
 			expected: "qwer",
 		},
 	} {
-		v := ctx.Value(testcase.key)
+		v := ctx.Value(tc.key)
 
-		require.Equalf(t, testcase.expected, v, "%q", testcase.key)
+		require.Equalf(t, tc.expected, v, "%q", tc.key)
 	}
 }
 
@@ -298,7 +298,7 @@ func TestRemoteAddr(t *testing.T) {
 }
 
 func TestWithCFRayID(t *testing.T) {
-	testcases := []struct {
+	testCases := []struct {
 		name                 string
 		requestHeaders       map[string]string
 		expectedContextValue any
@@ -321,12 +321,12 @@ func TestWithCFRayID(t *testing.T) {
 		},
 	}
 	t.Logf("Running Test %s", t.Name())
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			ctx := context.TODO()
-			req := generateRequestWithHeaders(test.requestHeaders)
+			req := generateRequestWithHeaders(tc.requestHeaders)
 			actualContext := WithCFRayID(ctx, req)
-			require.Equal(t, test.expectedContextValue, actualContext.Value(CFRayIDLogKey))
+			require.Equal(tt, tc.expectedContextValue, actualContext.Value(CFRayIDLogKey))
 		})
 	}
 }

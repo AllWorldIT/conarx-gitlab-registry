@@ -105,7 +105,7 @@ func TestRateLimiter_parseLimitersConfig_Precedence(t *testing.T) {
 }
 
 func TestRateLimiter_validateLimiter(t *testing.T) {
-	tcs := map[string]struct {
+	testCases := map[string]struct {
 		cfg         *configuration.Limiter
 		expectedErr error
 	}{
@@ -142,15 +142,15 @@ func TestRateLimiter_validateLimiter(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tcs {
-		t.Run(name, func(t *testing.T) {
+	for name, tc := range testCases {
+		t.Run(name, func(tt *testing.T) {
 			got := validateLimiter(tc.cfg)
 			if tc.expectedErr == nil {
-				require.NoError(t, got)
+				require.NoError(tt, got)
 				return
 			}
 
-			require.EqualError(t, got, tc.expectedErr.Error())
+			require.EqualError(tt, got, tc.expectedErr.Error())
 		})
 	}
 }

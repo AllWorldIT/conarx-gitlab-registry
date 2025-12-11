@@ -20,7 +20,7 @@ import (
 var fakeTimestamp = time.Date(2025, 1, 2, 12, 24, 5, 123456789, time.UTC)
 
 func TestDBHealthCheck(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		description string
 		db          LoadBalancer
 		pingInfo    map[string]*pingInfo
@@ -71,17 +71,17 @@ func TestDBHealthCheck(t *testing.T) {
 		expectedErr: "ping timed out",
 	}}
 
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.description, func(tt *testing.T) {
 			su := DBStatusChecker{
-				db:       test.db,
-				pingInfo: test.pingInfo,
+				db:       tc.db,
+				pingInfo: tc.pingInfo,
 			}
 			err := su.HealthCheck()
-			if test.expectedErr == "" {
-				require.NoError(t, err)
+			if tc.expectedErr == "" {
+				require.NoError(tt, err)
 			} else {
-				require.ErrorContains(t, err, test.expectedErr)
+				require.ErrorContains(tt, err, tc.expectedErr)
 			}
 		})
 	}
@@ -168,7 +168,7 @@ func TestUpdatePingInfo(t *testing.T) {
 }
 
 func TestGetDBStatus(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		description string
 		db          LoadBalancer
 		pingInfo    map[string]*pingInfo
@@ -390,15 +390,15 @@ func TestGetDBStatus(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.description, func(tt *testing.T) {
 			su := &DBStatusChecker{
-				db:       test.db,
-				pingInfo: test.pingInfo,
+				db:       tc.db,
+				pingInfo: tc.pingInfo,
 				timeout:  10 * time.Millisecond,
 			}
 			obtained := su.getStatus()
-			assert.Equal(t, test.expected, obtained, test.description)
+			assert.Equal(tt, tc.expected, obtained, tc.description)
 		})
 	}
 }

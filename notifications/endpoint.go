@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/docker/distribution/configuration"
@@ -48,18 +49,89 @@ type EndpointConfig struct {
 	QueueSizeLimit    int
 }
 
+// translateBackoffParams translates old backoff parameters (threshold, backoff)
+// into new parameters (maxretries, backoff) based on a time window calculation.
+//
+// The time window scale factor (120s for 1s backoff) was arbitrarily chosen based on:
+//   - GitLab's production configuration for their large SaaS installation (1s backoff, 10 max retries)
+//   - The necessity to limit retry attempts to avoid head-of-line blocking
+//   - The need to prevent infinite retries which would ultimately lead to dropped notifications
+//     anyway, as the registry will start dropping events to protect itself from RAM exhaustion
+//
+// Parameters:
+//   - threshold: number of immediate retries in the old system (used as minimum for maxretries)
+//   - backoff: base backoff duration in the old system, becomes InitialInterval in the new system
+//
+// Returns:
+//   - maxretries: calculated number of maximum retries for the new system (at least threshold)
+func translateBackoffParams(threshold int, backoffTime time.Duration) int {
+	// Calculate time window: 120s for 1s backoff, scales linearly
+	// timeWindow = 120 * backoff_in_seconds
+	timeWindow := 120 * backoffTime
+
+	// Cap time window at DefaultMaxElapsedTime
+	if timeWindow > backoff.DefaultMaxElapsedTime {
+		timeWindow = backoff.DefaultMaxElapsedTime
+	}
+
+	// Calculate maxretries using reverse calculation of backoff algorithm
+	// Assumes RandomizationFactor = 0 for predictable calculations
+	currentInterval := backoffTime
+	cumulativeTime := time.Duration(0)
+	retryCount := 0
+
+	// Simulate the backoff algorithm until we exceed the time window
+	for cumulativeTime < timeWindow {
+		// Add the delay to cumulative time
+		cumulativeTime += currentInterval
+
+		// If we've exceeded the time window, don't count this retry
+		if cumulativeTime > timeWindow {
+			break
+		}
+
+		retryCount++
+
+		// Calculate next interval using the same logic as the library
+		currentInterval = time.Duration(float64(currentInterval) * backoff.DefaultMultiplier)
+		if currentInterval > backoff.DefaultMaxInterval {
+			currentInterval = backoff.DefaultMaxInterval
+		}
+	}
+
+	if retryCount < threshold {
+		return threshold
+	}
+	return retryCount
+}
+
 // defaults set any zero-valued fields to a reasonable default.
 func (ec *EndpointConfig) defaults() {
 	if ec.Timeout <= 0 {
 		ec.Timeout = time.Second
 	}
 
-	if ec.Threshold <= 0 {
-		ec.Threshold = 10
-	}
-
 	if ec.Backoff <= 0 {
 		ec.Backoff = time.Second
+	}
+
+	if ec.MaxRetries == 0 {
+		// NOTE(prozlach): in order to keep old behavior intact if possible,
+		// if maxRetries is not defined, we check if threshold is. If not - we
+		// assume defaults for maxRetries. If yes - we translate threshold to
+		// maxRetries.
+		if ec.Threshold <= 0 {
+			log.Info("defaulting maxRetries parameter to 10")
+			ec.MaxRetries = 10
+		} else {
+			ec.MaxRetries = translateBackoffParams(ec.Threshold, ec.Backoff)
+			log.Warnf(
+				"notifications `threshold` is deprecated, please use `maxretries` instead. "+
+					"Value `threshold` of %d has been converted to `maxretries` of %d. "+
+					"See https://gitlab.com/gitlab-org/container-registry/-/issues/1243 for more details.",
+				ec.Threshold, ec.MaxRetries,
+			)
+		}
 	}
 
 	if ec.QueuePurgeTimeout <= 0 {
@@ -99,23 +171,12 @@ func NewEndpoint(name, url string, config EndpointConfig) *Endpoint {
 
 	// Configures the inmemory queue, retry, http pipeline.
 	endpoint.Sink = newHTTPSink(
-		endpoint.url, endpoint.Timeout, endpoint.Headers,
-		endpoint.Transport, endpoint.metrics.httpStatusListener())
+		endpoint.url, endpoint.Timeout, endpoint.Headers, endpoint.Transport, endpoint.metrics.httpStatusListener(),
+	)
 
-	// TODO: threshold has been deprecated and we should use MaxRetries with backoffSink instead.
-	// Remove this check along with https://gitlab.com/gitlab-org/container-registry/-/issues/1244.
-	if endpoint.MaxRetries != 0 {
-		endpoint.Sink = newBackoffSink(
-			endpoint.Sink, endpoint.Backoff, endpoint.MaxRetries,
-			endpoint.metrics.deliveryListener(),
-		)
-	} else {
-		log.Warn("notifications `threshold` is deprecated, use maxretries instead. See https://gitlab.com/gitlab-org/container-registry/-/issues/1243.")
-		endpoint.Sink = newRetryingSink(
-			endpoint.Sink, endpoint.Threshold, endpoint.Backoff,
-			endpoint.metrics.deliveryListener(),
-		)
-	}
+	endpoint.Sink = newBackoffSink(
+		endpoint.Sink, endpoint.Backoff, endpoint.MaxRetries, endpoint.metrics.deliveryListener(),
+	)
 
 	endpoint.Sink = newEventQueue(
 		endpoint.Sink,

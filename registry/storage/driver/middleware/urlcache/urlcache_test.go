@@ -237,7 +237,7 @@ func TestNewURLCacheStorageMiddleware(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, tc.options)
+			middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, tc.options)
 			if cleanup != nil {
 				defer cleanup()
 			}
@@ -429,9 +429,9 @@ func TestCacheEntrySize(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(tt *testing.T) {
 			size := tc.entry.size()
-			assert.Equal(t, tc.expectedSize, size)
+			assert.Equal(tt, tc.expectedSize, size)
 		})
 	}
 }
@@ -472,7 +472,7 @@ func (s *URLForTestSuite) TestCacheMissEntryNotSeenBefore() {
 		Times(1)
 
 	redisCache := testutil.RedisCache(s.T(), 0)
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 	})
 	require.NoError(s.T(), err)
@@ -498,7 +498,7 @@ func (s *URLForTestSuite) TestCacheHitWithSufficientValidity() {
 	mockDriver.EXPECT().URLFor(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
 	redisCache := testutil.RedisCache(s.T(), 0)
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 	})
 	require.NoError(s.T(), err)
@@ -527,7 +527,7 @@ func (s *URLForTestSuite) TestErrorFromUnderlyingDriverNotCached() {
 		Times(1)
 
 	redisCache := testutil.RedisCache(s.T(), 0)
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 	})
 	require.NoError(s.T(), err)
@@ -555,7 +555,7 @@ func (s *URLForTestSuite) TestDryRunMode() {
 		Times(2)
 
 	redisCache := testutil.RedisCache(s.T(), 0)
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 		"dry_run":     true,
 	})
@@ -581,7 +581,7 @@ func (s *URLForTestSuite) TestMinURLValidityCheck() {
 		Times(1)
 
 	redisCache := testutil.RedisCache(s.T(), 0)
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache":      redisCache,
 		"min_url_validity": 10 * time.Minute,
 	})
@@ -616,7 +616,7 @@ func (s *URLForTestSuite) TestOptionsNilVsSetSameCacheBehavior() {
 		Times(1)
 
 	redisCache := testutil.RedisCache(s.T(), 0)
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 	})
 	require.NoError(s.T(), err)
@@ -653,7 +653,7 @@ func (s *URLForTestSuite) TestCacheMissWithExpiryParameterSet() {
 		Times(1)
 
 	redisCache := testutil.RedisCache(s.T(), 0)
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 	})
 	require.NoError(s.T(), err)
@@ -696,7 +696,7 @@ func (s *URLForTestSuite) TestRedisSetError() {
 
 	redisCache, redisMock := testutil.RedisCacheMock(s.T(), 0)
 
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 	})
 	require.NoError(s.T(), err)
@@ -732,7 +732,7 @@ func (s *URLForTestSuite) TestRedisGetError() {
 
 	redisCache, redisMock := testutil.RedisCacheMock(s.T(), 0)
 
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 	})
 	require.NoError(s.T(), err)
@@ -776,7 +776,7 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	redisCache := testutil.RedisCache(t, 0)
-	middleware, cleanup, err := newURLCacheStorageMiddleware(mockDriver, map[string]any{
+	middleware, cleanup, err := NewURLCacheStorageMiddleware(mockDriver, map[string]any{
 		"_redisCache": redisCache,
 	})
 	require.NoError(t, err)

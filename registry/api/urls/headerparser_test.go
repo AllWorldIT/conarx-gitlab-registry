@@ -133,24 +133,24 @@ func TestParseForwardedHeader(t *testing.T) {
 			expectedError: true,
 		},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(tt *testing.T) {
 			parsed, rest, err := parseForwardedHeader(tc.raw)
 			if tc.expectedError {
-				require.Error(t, err)
+				require.Error(tt, err)
 				// NOTE(prozlach) if error is there, we are done too
 				return
 			}
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			assert.Equal(t, tc.expected, parsed)
-			assert.Len(t, parsed, len(tc.expected))
+			assert.Equal(tt, tc.expected, parsed)
+			assert.Len(tt, parsed, len(tc.expected))
 
 			for key, value := range tc.expected {
-				assert.Contains(t, parsed, key)
-				assert.Equal(t, value, parsed[key])
+				assert.Contains(tt, parsed, key)
+				assert.Equal(tt, value, parsed[key])
 			}
 
-			assert.Equal(t, tc.expectedRest, rest)
+			assert.Equal(tt, tc.expectedRest, rest)
 		})
 	}
 }

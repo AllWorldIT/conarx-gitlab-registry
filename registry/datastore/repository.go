@@ -330,11 +330,11 @@ func (*singleRepositoryCache) GetLSN(context.Context, *models.Repository) (strin
 
 // centralRepositoryCache is the interface for the centralized repository object cache backed by Redis.
 type centralRepositoryCache struct {
-	cache iredis.CacheInterface
+	cache *iredis.Cache
 }
 
 // NewCentralRepositoryCache creates an interface for the centralized repository object cache backed by Redis.
-func NewCentralRepositoryCache(cache iredis.CacheInterface) RepositoryCache {
+func NewCentralRepositoryCache(cache *iredis.Cache) RepositoryCache {
 	return &centralRepositoryCache{cache}
 }
 

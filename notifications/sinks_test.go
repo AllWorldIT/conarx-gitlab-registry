@@ -96,102 +96,6 @@ func TestEventQueue(t *testing.T) {
 	require.Zero(t, smetrics.pending.Load(), "unexpected egress count")
 }
 
-func TestRetryingSinkWithDeliveryListener(t *testing.T) {
-	t.Run("successful delivery on first attempt", func(tt *testing.T) {
-		metrics := newSafeMetrics(tt.Name())
-		deliveryListener := metrics.deliveryListener()
-		ts := &testSink{}
-
-		s := newRetryingSink(ts, 3, 10*time.Millisecond, deliveryListener)
-		defer s.Close()
-
-		event := createTestEvent("push", "blob")
-		require.NoError(tt, s.Write(&event))
-
-		assert.EqualValues(tt, 1, metrics.delivered.Load())
-		assert.Zero(tt, metrics.retries.Load())
-
-		ts.mu.Lock()
-		assert.Len(tt, ts.events, 1, "event should be in test sink")
-		ts.mu.Unlock()
-	})
-
-	t.Run("successful delivery after retries", func(tt *testing.T) {
-		metrics := newSafeMetrics(tt.Name())
-		deliveryListener := metrics.deliveryListener()
-
-		failing := &failingSink{
-			failBelowCount: 2,
-			Sink:           &testSink{},
-		}
-
-		s := newRetryingSink(failing, 3, 10*time.Millisecond, deliveryListener)
-		defer s.Close()
-
-		event := createTestEvent("push", "blob")
-		require.NoError(tt, s.Write(&event))
-
-		assert.EqualValues(tt, 1, metrics.delivered.Load())
-		assert.Positive(tt, metrics.retries.Load())
-	})
-
-	t.Run("delivery with backoff period", func(tt *testing.T) {
-		metrics := newSafeMetrics(tt.Name())
-		deliveryListener := metrics.deliveryListener()
-
-		failing := &failingSink{
-			failBelowCount: 5,
-			Sink:           &testSink{},
-		}
-
-		s := newRetryingSink(failing, 3, 50*time.Millisecond, deliveryListener)
-		defer s.Close()
-
-		event := createTestEvent("push", "blob")
-		start := time.Now()
-		require.NoError(tt, s.Write(&event))
-		elapsed := time.Since(start)
-
-		assert.Greater(tt, elapsed, 50*time.Millisecond)
-		assert.EqualValues(tt, 1, metrics.delivered.Load())
-		assert.Positive(tt, metrics.retries.Load())
-	})
-
-	t.Run("concurrent writes", func(tt *testing.T) {
-		metrics := newSafeMetrics(tt.Name())
-		deliveryListener := metrics.deliveryListener()
-
-		// Flaky sink that fails 30% of the time
-		flaky := &flakySink{
-			rate: 0.3,
-			Sink: &testSink{},
-		}
-
-		s := newRetryingSink(flaky, 5, 10*time.Millisecond, deliveryListener)
-		defer s.Close()
-
-		const nEvents = 1000
-		var wg sync.WaitGroup
-
-		for i := 0; i < nEvents; i++ {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				event := createTestEvent("push", fmt.Sprintf("blob-%d", i))
-				assert.NoError(tt, s.Write(&event))
-			}(i)
-		}
-
-		wg.Wait()
-
-		// All events should be delivered (retryingSink retries indefinitely)
-		assert.EqualValues(tt, nEvents, metrics.delivered.Load())
-
-		// Should have some retries due to 30% failure rate
-		assert.Positive(tt, metrics.retries.Load())
-	})
-}
-
 func TestIgnoredSink(t *testing.T) {
 	blob := createTestEvent("push", "blob")
 	manifest := createTestEvent("pull", "manifest")
@@ -229,36 +133,6 @@ func TestIgnoredSink(t *testing.T) {
 	}
 }
 
-func TestRetryingSink(t *testing.T) {
-	// Make a sync that fails most of the time, ensuring that all the events
-	// make it through.
-	var ts testSink
-	flaky := &flakySink{
-		rate: 0.9, // 90% failure rate
-		Sink: &ts,
-	}
-	s := newRetryingSink(flaky, 3, 10*time.Millisecond)
-
-	event := createTestEvent("push", "blob")
-	errCh := make(chan error, 10)
-	for i := 1; i <= 10; i++ {
-		go func() {
-			errCh <- s.Write(&event)
-		}()
-	}
-
-	for i := 1; i <= 10; i++ {
-		require.NoErrorf(t, <-errCh, "error writing event %d", i)
-	}
-
-	checkClose(t, s)
-
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
-	require.Len(t, ts.events, 10, "events not propagated")
-}
-
 func TestBackoffSink(t *testing.T) {
 	tcs := map[string]struct {
 		maxRetries    int
@@ -278,7 +152,7 @@ func TestBackoffSink(t *testing.T) {
 	}
 
 	for tn, tc := range tcs {
-		t.Run(tn, func(t *testing.T) {
+		t.Run(tn, func(tt *testing.T) {
 			failing := &failingSink{
 				failBelowCount: tc.failCount,
 				Sink:           &testSink{},
@@ -288,19 +162,19 @@ func TestBackoffSink(t *testing.T) {
 			event := createTestEvent("push", "blob")
 			err := s.Write(&event)
 			if tc.expectedError {
-				require.Error(t, err)
+				require.Error(tt, err)
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 
-			checkClose(t, s)
+			checkClose(tt, s)
 		})
 	}
 }
 
 func TestBackoffSinkWithDeliveryListener(t *testing.T) {
-	t.Run("successful delivery on first attempt", func(t *testing.T) {
-		metrics := newSafeMetrics(t.Name())
+	t.Run("successful delivery on first attempt", func(tt *testing.T) {
+		metrics := newSafeMetrics(tt.Name())
 		deliveryListener := metrics.deliveryListener()
 		ts := &testSink{}
 
@@ -309,15 +183,15 @@ func TestBackoffSinkWithDeliveryListener(t *testing.T) {
 		defer s.Close()
 
 		event := createTestEvent("push", "blob")
-		require.NoError(t, s.Write(&event))
+		require.NoError(tt, s.Write(&event))
 
-		assert.Zero(t, metrics.lost.Load())
-		assert.Zero(t, metrics.retries.Load()) // retriesCount is incremented after the operation
-		assert.EqualValues(t, 1, metrics.delivered.Load())
+		assert.Zero(tt, metrics.lost.Load())
+		assert.Zero(tt, metrics.retries.Load()) // retriesCount is incremented after the operation
+		assert.EqualValues(tt, 1, metrics.delivered.Load())
 	})
 
-	t.Run("successful delivery with backoff", func(t *testing.T) {
-		metrics := newSafeMetrics(t.Name())
+	t.Run("successful delivery with backoff", func(tt *testing.T) {
+		metrics := newSafeMetrics(tt.Name())
 		deliveryListener := metrics.deliveryListener()
 
 		failing := &failingSink{
@@ -329,15 +203,15 @@ func TestBackoffSinkWithDeliveryListener(t *testing.T) {
 		defer s.Close()
 
 		event := createTestEvent("push", "blob")
-		require.NoError(t, s.Write(&event))
+		require.NoError(tt, s.Write(&event))
 
-		assert.Zero(t, metrics.lost.Load())
-		assert.EqualValues(t, 2, metrics.retries.Load()) // 2 failures + 1 success
-		assert.EqualValues(t, 1, metrics.delivered.Load())
+		assert.Zero(tt, metrics.lost.Load())
+		assert.EqualValues(tt, 2, metrics.retries.Load()) // 2 failures + 1 success
+		assert.EqualValues(tt, 1, metrics.delivered.Load())
 	})
 
-	t.Run("lost event after max retries", func(t *testing.T) {
-		metrics := newSafeMetrics(t.Name())
+	t.Run("lost event after max retries", func(tt *testing.T) {
+		metrics := newSafeMetrics(tt.Name())
 		deliveryListener := metrics.deliveryListener()
 
 		alwaysFailing := &alwaysFailingSink{}
@@ -347,15 +221,15 @@ func TestBackoffSinkWithDeliveryListener(t *testing.T) {
 
 		event := createTestEvent("push", "blob")
 		err := s.Write(&event)
-		require.Error(t, err)
+		require.Error(tt, err)
 
-		assert.Zero(t, metrics.delivered.Load())
-		assert.EqualValues(t, 2, metrics.retries.Load()) // maxRetries + 1
-		assert.EqualValues(t, 1, metrics.lost.Load())
+		assert.Zero(tt, metrics.delivered.Load())
+		assert.EqualValues(tt, 2, metrics.retries.Load()) // maxRetries + 1
+		assert.EqualValues(tt, 1, metrics.lost.Load())
 	})
 
-	t.Run("verify exponential backoff timing", func(t *testing.T) {
-		metrics := newSafeMetrics(t.Name())
+	t.Run("verify exponential backoff timing", func(tt *testing.T) {
+		metrics := newSafeMetrics(tt.Name())
 		deliveryListener := metrics.deliveryListener()
 
 		// Track timing of attempts
@@ -375,25 +249,33 @@ func TestBackoffSinkWithDeliveryListener(t *testing.T) {
 		defer s.Close()
 
 		event := createTestEvent("push", "blob")
-		require.NoError(t, s.Write(&event))
+		require.NoError(tt, s.Write(&event))
 		endTime := time.Now()
 
-		require.Len(t, attempts, 3, "should have made 3 attempts")
+		require.Len(tt, attempts, 3, "should have made 3 attempts")
 
 		firstInterval := attempts[1].Sub(attempts[0])
-		require.Greater(t, firstInterval, 249*time.Millisecond)
-		require.Less(t, firstInterval, 751*time.Millisecond)
+		// NOTE(prozlach): Second attempt: ~500ms delay (could range from 250ms
+		// to 750ms due to randomization). Add extra 50ms for the upper bound
+		// to account for goroutine scheuduling and unpredictable resources in
+		// shared CI runners.
+		require.Greater(tt, firstInterval, 249*time.Millisecond)
+		require.Less(tt, firstInterval, (750+50)*time.Millisecond)
 
 		secondInterval := attempts[2].Sub(attempts[1])
-		require.Greater(t, secondInterval, 374*time.Millisecond)
-		require.Less(t, secondInterval, 1126*time.Millisecond)
+		require.Greater(tt, secondInterval, 374*time.Millisecond)
+		// NOTE(prozlach): Third attempt: ~750ms delay (could range from 375ms
+		// to 1125ms due to randomization). Add extra 100ms for the upper bound
+		// to account for goroutine scheuduling and unpredictable resources in
+		// shared CI runners.
+		require.Less(tt, secondInterval, (1125+100)*time.Millisecond)
 
 		totalTime := endTime.Sub(attempts[0])
-		require.Greater(t, totalTime, (250+375)*time.Millisecond)
+		require.Greater(tt, totalTime, (250+375)*time.Millisecond)
 	})
 
-	t.Run("multiple events with mixed outcomes", func(t *testing.T) {
-		metrics := newSafeMetrics(t.Name())
+	t.Run("multiple events with mixed outcomes", func(tt *testing.T) {
+		metrics := newSafeMetrics(tt.Name())
 		deliveryListener := metrics.deliveryListener()
 
 		// Flaky sink that fails 50% of the time
@@ -417,57 +299,18 @@ func TestBackoffSinkWithDeliveryListener(t *testing.T) {
 			}
 		}
 
-		require.EqualValues(t, failCount, metrics.lost.Load())
-		require.EqualValues(t, successCount, metrics.delivered.Load())
-		require.EqualValues(t, nEvents, metrics.lost.Load()+metrics.delivered.Load())
+		require.EqualValues(tt, failCount, metrics.lost.Load())
+		require.EqualValues(tt, successCount, metrics.delivered.Load())
+		require.EqualValues(tt, nEvents, metrics.lost.Load()+metrics.delivered.Load())
 
 		// Should have retries due to 50% failure rate
-		require.Positive(t, metrics.retries.Load())
+		require.Positive(tt, metrics.retries.Load())
 	})
 }
 
 func TestConcurrentDeliveryReporting(t *testing.T) {
-	t.Run("retryingSink concurrent writes", func(t *testing.T) {
-		metrics := newSafeMetrics(t.Name())
-		deliveryListener := metrics.deliveryListener()
-
-		// Create a flaky sink that fails 30% of the time
-		flaky := &flakySink{
-			rate: 0.3,
-			Sink: &testSink{},
-		}
-
-		s := newRetryingSink(flaky, 5, 5*time.Millisecond, deliveryListener)
-		defer s.Close()
-
-		const nGoroutines = 10
-		const nEventsPerGoroutine = 10
-
-		var wg sync.WaitGroup
-		for i := 0; i < nGoroutines; i++ {
-			wg.Add(1)
-			go func(goroutineID int) {
-				defer wg.Done()
-				for j := 0; j < nEventsPerGoroutine; j++ {
-					event := createTestEvent("push", fmt.Sprintf("blob-%d-%d", goroutineID, j))
-					assert.NoError(t, s.Write(&event))
-				}
-			}(i)
-		}
-
-		wg.Wait()
-
-		totalEvents := nGoroutines * nEventsPerGoroutine
-		// All events should be delivered (retryingSink retries indefinitely)
-		require.EqualValues(t, totalEvents, metrics.delivered.Load())
-		require.Zero(t, metrics.lost.Load())
-
-		// Should have some retries due to 30% failure rate
-		require.Positive(t, metrics.retries.Load())
-	})
-
-	t.Run("backoffSink concurrent writes", func(t *testing.T) {
-		metrics := newSafeMetrics(t.Name())
+	t.Run("backoffSink concurrent writes", func(tt *testing.T) {
+		metrics := newSafeMetrics(tt.Name())
 		deliveryListener := metrics.deliveryListener()
 
 		// Create a flaky sink that fails 40% of the time
@@ -504,15 +347,15 @@ func TestConcurrentDeliveryReporting(t *testing.T) {
 
 		totalEvents := nGoroutines * nEventsPerGoroutine
 		// All events should be either delivered or lost
-		require.EqualValues(t, totalEvents, metrics.delivered.Load()+metrics.lost.Load())
-		require.Equal(t, successCount.Load(), metrics.delivered.Load())
-		require.Equal(t, failCount.Load(), metrics.lost.Load())
+		require.EqualValues(tt, totalEvents, metrics.delivered.Load()+metrics.lost.Load())
+		require.Equal(tt, successCount.Load(), metrics.delivered.Load())
+		require.Equal(tt, failCount.Load(), metrics.lost.Load())
 
 		// With 40% failure rate and 4 retries, most should be delivered
-		require.Greater(t, metrics.delivered.Load(), metrics.lost.Load())
+		require.Greater(tt, metrics.delivered.Load(), metrics.lost.Load())
 
 		// Should have retries
-		require.Positive(t, metrics.retries.Load())
+		require.Positive(tt, metrics.retries.Load())
 	})
 }
 
@@ -670,10 +513,10 @@ func checkClose(t *testing.T, sink Sink) {
 }
 
 func TestEventQueueMaxSize(t *testing.T) {
-	t.Run("drops events when queue is full", func(t *testing.T) {
+	t.Run("drops events when queue is full", func(tt *testing.T) {
 		const maxQueueSize = 10
 		var ts testSink
-		sm := newSafeMetrics(t.Name())
+		sm := newSafeMetrics(tt.Name())
 
 		// Use a very slow sink to ensure the queue fills up
 		slowSink := &delayedSink{
@@ -694,33 +537,33 @@ func TestEventQueueMaxSize(t *testing.T) {
 		for i := 0; i < totalEvents; i++ {
 			event := createTestEvent("push", fmt.Sprintf("blob-%d", i))
 			err := eq.Write(&event)
-			require.NoError(t, err, "write should not fail even when dropping")
+			require.NoError(tt, err, "write should not fail even when dropping")
 		}
 
 		// Wait for processing to complete, as if we processed all events
 		time.Sleep(50 * 100 * time.Millisecond)
-		checkClose(t, eq)
+		checkClose(tt, eq)
 
 		// Verify metrics
-		assert.EqualValues(t, totalEvents, sm.events.Load(), "all events should be counted as ingress")
-		assert.Positive(t, sm.dropped.Load(), "some events should have been dropped")
+		assert.EqualValues(tt, totalEvents, sm.events.Load(), "all events should be counted as ingress")
+		assert.Positive(tt, sm.dropped.Load(), "some events should have been dropped")
 
 		// The number of events processed should be less than total due to drops
 		ts.mu.Lock()
 		processedEvents := len(ts.events)
 		ts.mu.Unlock()
 
-		assert.Less(t, processedEvents, totalEvents, "processed events should be less than total due to drops")
-		assert.EqualValues(t, totalEvents-processedEvents, sm.dropped.Load(), "dropped count should match the difference")
+		assert.Less(tt, processedEvents, totalEvents, "processed events should be less than total due to drops")
+		assert.EqualValues(tt, totalEvents-processedEvents, sm.dropped.Load(), "dropped count should match the difference")
 
 		// Final pending should be 0 after close
-		assert.Zero(t, sm.pending.Load(), "pending should be 0 after close")
+		assert.Zero(tt, sm.pending.Load(), "pending should be 0 after close")
 	})
 
-	t.Run("respects exact queue size limit", func(t *testing.T) {
+	t.Run("respects exact queue size limit", func(tt *testing.T) {
 		const maxQueueSize = 5
 		var ts testSink
-		sm := newSafeMetrics(t.Name())
+		sm := newSafeMetrics(tt.Name())
 
 		// Use a blocked sink to control when events are processed
 		blockedSink := &blockableSink{
@@ -742,43 +585,43 @@ func TestEventQueueMaxSize(t *testing.T) {
 		for i := 0; i < maxQueueSize+1; i++ {
 			event := createTestEvent("push", fmt.Sprintf("blob-%d", i))
 			err := eq.Write(&event)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 		}
 
 		// Give time for events to reach the buffer
 		time.Sleep(50 * time.Millisecond)
 
 		// Verify no drops yet
-		assert.Zero(t, sm.dropped.Load(), "no events should be dropped when at limit")
-		assert.EqualValues(t, maxQueueSize+1, sm.events.Load(), "ingress count should match queue size")
+		assert.Zero(tt, sm.dropped.Load(), "no events should be dropped when at limit")
+		assert.EqualValues(tt, maxQueueSize+1, sm.events.Load(), "ingress count should match queue size")
 
 		// Send one more event - this should be dropped
 		extraEvent := createTestEvent("push", "extra-blob")
 		err := eq.Write(&extraEvent)
-		require.NoError(t, err)
+		require.NoError(tt, err)
 
 		// Give time for drop to be recorded
 		time.Sleep(50 * time.Millisecond)
 
 		// Verify the extra event was dropped
-		assert.EqualValues(t, 1, sm.dropped.Load(), "one event should be dropped")
-		assert.EqualValues(t, maxQueueSize+2, sm.events.Load(), "ingress should count all events including dropped")
+		assert.EqualValues(tt, 1, sm.dropped.Load(), "one event should be dropped")
+		assert.EqualValues(tt, maxQueueSize+2, sm.events.Load(), "ingress should count all events including dropped")
 
 		// Unblock the sink and let it process
 		close(blockedSink.blocked)
 		time.Sleep(100 * time.Millisecond)
-		checkClose(t, eq)
+		checkClose(tt, eq)
 
 		// Verify only the events that fit in the queue were processed
 		ts.mu.Lock()
-		assert.Len(t, ts.events, maxQueueSize+1, "only events that fit in queue should be processed")
+		assert.Len(tt, ts.events, maxQueueSize+1, "only events that fit in queue should be processed")
 		ts.mu.Unlock()
 	})
 
-	t.Run("queue size of 1", func(t *testing.T) {
+	t.Run("queue size of 1", func(tt *testing.T) {
 		const maxQueueSize = 1
 		var ts testSink
-		sm := newSafeMetrics(t.Name())
+		sm := newSafeMetrics(tt.Name())
 
 		// Use a delayed sink to ensure we can fill the single-slot queue
 		slowSink := &delayedSink{
@@ -799,30 +642,30 @@ func TestEventQueueMaxSize(t *testing.T) {
 		for i := 0; i < totalEvents; i++ {
 			event := createTestEvent("push", fmt.Sprintf("blob-%d", i))
 			err := eq.Write(&event)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 		}
 
 		// Wait for processing
 		time.Sleep(600 * time.Millisecond)
-		checkClose(t, eq)
+		checkClose(tt, eq)
 
 		// With queue size 1 and slow processing, many events should be dropped
-		assert.Positive(t, sm.dropped.Load(), "events should be dropped with queue size 1")
-		assert.EqualValues(t, totalEvents, sm.events.Load(), "all events should be counted")
+		assert.Positive(tt, sm.dropped.Load(), "events should be dropped with queue size 1")
+		assert.EqualValues(tt, totalEvents, sm.events.Load(), "all events should be counted")
 
 		ts.mu.Lock()
 		processedCount := len(ts.events)
 		ts.mu.Unlock()
 
 		// At least some events should be processed
-		assert.Positive(t, processedCount, "at least some events should be processed")
-		assert.Less(t, processedCount, totalEvents, "not all events should be processed due to drops")
+		assert.Positive(tt, processedCount, "at least some events should be processed")
+		assert.Less(tt, processedCount, totalEvents, "not all events should be processed due to drops")
 	})
 
-	t.Run("concurrent writes with queue limit", func(t *testing.T) {
+	t.Run("concurrent writes with queue limit", func(tt *testing.T) {
 		const maxQueueSize = 50
 		var ts testSink
-		sm := newSafeMetrics(t.Name())
+		sm := newSafeMetrics(tt.Name())
 
 		// Use a moderately slow sink
 		slowSink := &delayedSink{
@@ -850,34 +693,34 @@ func TestEventQueueMaxSize(t *testing.T) {
 				for j := 0; j < eventsPerGoroutine; j++ {
 					event := createTestEvent("push", fmt.Sprintf("blob-%d-%d", goroutineID, j))
 					err := eq.Write(&event)
-					assert.NoError(t, err, "write should not fail")
+					assert.NoError(tt, err, "write should not fail")
 				}
 			}(i)
 		}
 
 		wg.Wait()
 		time.Sleep(100 * time.Millisecond) // Give time for some processing
-		checkClose(t, eq)
+		checkClose(tt, eq)
 
 		totalEvents := numGoroutines * eventsPerGoroutine
-		assert.EqualValues(t, totalEvents, sm.events.Load(), "all events should be counted as ingress")
+		assert.EqualValues(tt, totalEvents, sm.events.Load(), "all events should be counted as ingress")
 
 		// With concurrent writes and a limited queue, we expect drops
-		assert.Positive(t, sm.dropped.Load(), "some events should be dropped with concurrent writes")
+		assert.Positive(tt, sm.dropped.Load(), "some events should be dropped with concurrent writes")
 
 		ts.mu.Lock()
 		processedCount := len(ts.events)
 		ts.mu.Unlock()
 
 		// Verify consistency: processed + dropped = total
-		assert.EqualValues(t, totalEvents, int64(processedCount)+sm.dropped.Load(),
+		assert.EqualValues(tt, totalEvents, int64(processedCount)+sm.dropped.Load(),
 			"processed + dropped should equal total events")
 	})
 
-	t.Run("queue limit with different event types", func(t *testing.T) {
+	t.Run("queue limit with different event types", func(tt *testing.T) {
 		const maxQueueSize = 15
 		var ts testSink
-		sm := newSafeMetrics(t.Name())
+		sm := newSafeMetrics(tt.Name())
 
 		// Track dropped events by type
 		var droppedEvents []string
@@ -923,21 +766,21 @@ func TestEventQueueMaxSize(t *testing.T) {
 				event := createTestEventWithMediaType(et.action, et.mediaType)
 				event.ID = fmt.Sprintf("%s-%s-%d", et.action, et.mediaType, i)
 				err := eq.Write(&event)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 		}
 
 		// Wait for processing
 		time.Sleep(200 * time.Millisecond)
-		checkClose(t, eq)
+		checkClose(tt, eq)
 
 		// Verify drops occurred
 		droppedMu.Lock()
 		droppedCount := len(droppedEvents)
 		droppedMu.Unlock()
 
-		assert.Positive(t, droppedCount, "events should be dropped")
-		assert.EqualValues(t, droppedCount, sm.dropped.Load(), "tracked drops should match metric")
+		assert.Positive(tt, droppedCount, "events should be dropped")
+		assert.EqualValues(tt, droppedCount, sm.dropped.Load(), "tracked drops should match metric")
 
 		// Verify we have a mix of event types in drops
 		droppedMu.Lock()
@@ -947,7 +790,7 @@ func TestEventQueueMaxSize(t *testing.T) {
 		}
 		droppedMu.Unlock()
 
-		assert.Greater(t, len(droppedTypes), 1, "multiple event types should be dropped")
+		assert.Greater(tt, len(droppedTypes), 1, "multiple event types should be dropped")
 	})
 }
 

@@ -35,6 +35,8 @@ import (
 	dstorage "github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/gcs"
+	"github.com/docker/distribution/registry/storage/driver/middleware/urlcache"
+	"github.com/docker/distribution/registry/storage/driver/testdriver"
 	btestutil "github.com/docker/distribution/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -271,7 +273,7 @@ func TestURLFor_Download(t *testing.T) {
 	cdnDriver, _, err := newGoogleCDNStorageMiddleware(gcsDriver, opts)
 	require.NoError(t, err)
 
-	tests := []struct {
+	testCases := []struct {
 		name string
 		opts map[string]any
 	}{
@@ -289,24 +291,24 @@ func TestURLFor_Download(t *testing.T) {
 			},
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			test := test
-			t.Parallel()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			test := tc
+			tt.Parallel()
 			cdnURL, err := cdnDriver.URLFor(ctx, objPath, test.opts)
-			require.NoError(t, err)
-			require.Regexp(t, fmt.Sprintf("^%s.*", baseURL), cdnURL)
-			verifyCustomURLParamsExist(t, cdnURL, test.opts)
+			require.NoError(tt, err)
+			require.Regexp(tt, fmt.Sprintf("^%s.*", baseURL), cdnURL)
+			verifyCustomURLParamsExist(tt, cdnURL, test.opts)
 
 			// nolint: bodyclose // body is! closed
 			resp, err = http.Get(cdnURL)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
-			require.Equal(t, http.StatusOK, resp.StatusCode)
+			require.Equal(tt, http.StatusOK, resp.StatusCode)
 
 			body, err = io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			require.Equal(t, objChecksum, sha256.Sum256(body))
+			require.NoError(tt, err)
+			require.Equal(tt, objChecksum, sha256.Sum256(body))
 		})
 	}
 }
@@ -326,4 +328,114 @@ func verifyCustomURLParamsExist(t *testing.T, urlString string, opts map[string]
 			require.Equal(t, urlQueryParam.Get(customGitlabKey), fmt.Sprintf("%v", val))
 		}
 	}
+}
+
+func TestBucketKeyerSupportDiscovery(t *testing.T) {
+	t.Parallel()
+	skipGCSTest(t)
+
+	gcsDriver, root := newGCSDriver(t)
+	inMemDriver := testdriver.New()
+
+	// we don't need a real CDN and/or object to point to for these tests,
+	// we're just doing syntax/logic validations
+	keyFile := createTmpKeyFile(t).Name()
+	baseURL := "https://my.google.cdn.com"
+	keyName := "my-key"
+	objectPath := "/foo/bar"
+
+	keyBytes, err := readKeyFile(keyFile)
+	require.NoError(t, err)
+
+	// freeze system clock for reproducible URL expiration durations
+	clockMock := clock.NewMock()
+	clockMock.Set(time.Now())
+	testutil.StubClock(t, &systemClock, clockMock)
+
+	t.Run("with supporteded storage driver", func(tt *testing.T) {
+		// default behavior
+		cdnDriver, _, err := newGoogleCDNStorageMiddleware(gcsDriver, map[string]any{
+			"baseurl":    baseURL,
+			"privatekey": keyFile,
+			"keyname":    keyName,
+		})
+		require.NoError(tt, err)
+
+		cdnURL, err := cdnDriver.URLFor(context.Background(), objectPath, nil)
+		require.NoError(tt, err)
+
+		expectedURL, err := signURLWithPrefix(
+			baseURL+root+objectPath,
+			keyName,
+			keyBytes,
+			clockMock.Now().Add(defaultDuration),
+		)
+
+		require.NoError(tt, err)
+		require.Equal(tt, expectedURL, cdnURL)
+	})
+
+	t.Run("with supporteded storage driver and supported middleware in between", func(tt *testing.T) {
+		redisCache := testutil.RedisCache(tt, 0)
+		urlcacheMiddleware, cleanup, err := urlcache.NewURLCacheStorageMiddleware(gcsDriver, map[string]any{
+			"_redisCache":      redisCache,
+			"min_url_validity": 10 * time.Minute,
+		})
+
+		require.NoError(tt, err)
+		defer cleanup()
+
+		cdnDriver, _, err := newGoogleCDNStorageMiddleware(urlcacheMiddleware, map[string]any{
+			"baseurl":    baseURL,
+			"privatekey": keyFile,
+			"keyname":    keyName,
+		})
+		require.NoError(tt, err)
+
+		cdnURL, err := cdnDriver.URLFor(context.Background(), objectPath, nil)
+		require.NoError(tt, err)
+
+		expectedURL, err := signURLWithPrefix(
+			baseURL+root+objectPath,
+			keyName,
+			keyBytes,
+			clockMock.Now().Add(defaultDuration),
+		)
+
+		require.NoError(tt, err)
+		require.Equal(tt, expectedURL, cdnURL)
+	})
+
+	t.Run("with unsupporteded storage driver and supported middleware in between", func(tt *testing.T) {
+		redisCache := testutil.RedisCache(tt, 0)
+		urlcacheMiddleware, cleanup, err := urlcache.NewURLCacheStorageMiddleware(inMemDriver, map[string]any{
+			"_redisCache":      redisCache,
+			"min_url_validity": 10 * time.Minute,
+		})
+
+		require.NoError(tt, err)
+		defer cleanup()
+
+		cdnDriver, _, err := newGoogleCDNStorageMiddleware(urlcacheMiddleware, map[string]any{
+			"baseurl":    baseURL,
+			"privatekey": keyFile,
+			"keyname":    keyName,
+		})
+		require.NoError(t, err)
+
+		_, err = cdnDriver.URLFor(context.Background(), objectPath, nil)
+		require.ErrorAs(tt, err, new(driver.ErrUnsupportedMethod))
+	})
+
+	t.Run("with unsupporteded storage driver", func(tt *testing.T) {
+		cdnDriver, _, err := newGoogleCDNStorageMiddleware(inMemDriver, map[string]any{
+			"baseurl":    baseURL,
+			"privatekey": keyFile,
+			"keyname":    keyName,
+		})
+		require.NoError(tt, err)
+
+		_, err = cdnDriver.URLFor(context.Background(), objectPath, nil)
+		require.ErrorAs(tt, err, new(driver.ErrUnsupportedMethod))
+	})
 }

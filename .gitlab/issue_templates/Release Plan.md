@@ -50,10 +50,10 @@ See [Product Development Timeline](https://about.gitlab.com/handbook/engineering
 
 ### 2. Release
 
-1. [ ] Run the `make release-dry-run` command.
-1. [ ] Review each MR in the new release and check if the ~"cannot-rollback" or the ~"high-risk-change" label has been applied. If any MR contains the label:
-   1. [ ] Ensure that _no_ code changes that rely on the ~"cannot-rollback" MRg are included in this release. These should be separated into two consecutive releases.
-1. [ ] Run the `make release` command. A new tag should have been created and pushed.
+1. [ ] Trigger the `release:prepare` job in the `release` stage on the `master` branch.
+1. [ ] Review the release MR created during the step above. For each change in the new release, check if the ~"cannot-rollback" or the ~"high-risk-change" label has been applied. If any MR contains the label:
+   1. [ ] Ensure that _no_ code changes that rely on the ~"cannot-rollback" MRs are included in this release. These should be separated into two consecutive releases.
+1. [ ] Get the release MR approved and merged. The `release:tag` job detects the updated changelog and creates a new annotated tag.
 
 <details>
 <summary><b>Documentation/resources</b></summary>
@@ -121,6 +121,27 @@ The release documentation can be found [here](https://gitlab.com/gitlab-org/cont
 
 1. [ ] Assign label ~"workflow::verification" once all changes have been merged.
 1. [ ] Assign label ~"workflow::production" once all changes have been deployed.
-1. Close this issue.
+1. [ ] Close this issue.
+1. [ ] Use Duo to generate a Mean Time to Merge Report with the following prompt and include the output in the issue comments:
+
+<details>
+<summary><b>Prompt</b></summary>
+
+```
+Generate a report covering the mean time to production for the commits listed under the
+"What's New in this Version" section of this issue description, excluding the "build" category.
+Be sure to include all and only these commits. For each commit, find the linked
+merge request and use that data where directed. Present results in a single combined
+summary table with the following: commit short sha, MR title formatted as a
+link back to the MR, commit category (no emoji), MR authored date, MR merge date,
+days to merge, days to production. Use this issue's closed date as the date these
+commits reached production. Use the MR closed date as the merge date. Use the MR
+authored date as the authored date. Include the date used for the production date
+before the table. Summarize the overall mean time to merge and to production at
+the end. Also summarize the number of days the release workflow process extended
+mean time to production based on the number of days this issue remained open.
+Only present the data, do not make recommendations. Do not truncate the tool output.
+```
+</details>
 
 /label ~"devops::package" ~"section::ci" ~"group::container registry" ~"Category:Container Registry" ~golang ~"workflow::in dev" ~"type::maintenance" ~"maintenance::release"

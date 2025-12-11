@@ -53,7 +53,7 @@ func TestCache_Set(t *testing.T) {
 	defaultTTL := 5 * time.Minute
 	cache := iredis.NewCache(db, iredis.WithDefaultTTL(defaultTTL))
 
-	tests := []struct {
+	testCases := []struct {
 		name  string
 		key   string
 		value string
@@ -73,19 +73,19 @@ func TestCache_Set(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mock.ExpectSet(tt.key, tt.value, tt.ttl).SetVal("OK")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			mock.ExpectSet(tc.key, tc.value, tc.ttl).SetVal("OK")
 
-			if tt.ttl == defaultTTL {
-				err := cache.Set(context.Background(), tt.key, tt.value)
-				require.NoError(t, err)
+			if tc.ttl == defaultTTL {
+				err := cache.Set(context.Background(), tc.key, tc.value)
+				require.NoError(tt, err)
 			} else {
-				err := cache.Set(context.Background(), tt.key, tt.value, iredis.WithTTL(tt.ttl))
-				require.NoError(t, err)
+				err := cache.Set(context.Background(), tc.key, tc.value, iredis.WithTTL(tc.ttl))
+				require.NoError(tt, err)
 			}
 
-			require.NoError(t, mock.ExpectationsWereMet())
+			require.NoError(tt, mock.ExpectationsWereMet())
 		})
 	}
 }
@@ -148,7 +148,7 @@ func TestCache_MarshalSet(t *testing.T) {
 	}
 	data, _ := msgpack.Marshal(testObj)
 
-	tests := []struct {
+	testCases := []struct {
 		name string
 		key  string
 		ttl  time.Duration
@@ -165,19 +165,19 @@ func TestCache_MarshalSet(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mock.ExpectSet(tt.key, data, tt.ttl).SetVal("OK")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			mock.ExpectSet(tc.key, data, tc.ttl).SetVal("OK")
 
-			if tt.ttl == defaultTTL {
-				err := cache.MarshalSet(context.Background(), tt.key, testObj)
-				require.NoError(t, err)
+			if tc.ttl == defaultTTL {
+				err := cache.MarshalSet(context.Background(), tc.key, testObj)
+				require.NoError(tt, err)
 			} else {
-				err := cache.MarshalSet(context.Background(), tt.key, testObj, iredis.WithTTL(tt.ttl))
-				require.NoError(t, err)
+				err := cache.MarshalSet(context.Background(), tc.key, testObj, iredis.WithTTL(tc.ttl))
+				require.NoError(tt, err)
 			}
 
-			require.NoError(t, mock.ExpectationsWereMet())
+			require.NoError(tt, mock.ExpectationsWereMet())
 		})
 	}
 }

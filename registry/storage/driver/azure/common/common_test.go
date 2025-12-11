@@ -9,7 +9,7 @@ import (
 )
 
 func TestAzureDriverPathToKey(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name          string
 		rootDirectory string
 		providedPath  string
@@ -102,14 +102,14 @@ func TestAzureDriverPathToKey(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rootDirectory := strings.Trim(tt.rootDirectory, "/")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			rootDirectory := strings.Trim(tc.rootDirectory, "/")
 			if rootDirectory != "" {
 				rootDirectory += "/"
 			}
-			d := common.NewPather(rootDirectory, tt.legacyPath)
-			require.Equal(t, tt.expectedPath, d.PathToKey(tt.providedPath))
+			d := common.NewPather(rootDirectory, tc.legacyPath)
+			require.Equal(tt, tc.expectedPath, d.PathToKey(tc.providedPath))
 		})
 	}
 }

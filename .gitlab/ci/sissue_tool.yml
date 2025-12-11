@@ -1,0 +1,14 @@
+stages:
+  - main
+
+sissue tool:
+  image: python:3.12
+  stage: main
+  allow_failure: false
+  needs: []
+  script:
+    - pip install --root-user-action ignore -r script/sissue_router/requirements.txt
+    - python3 script/sissue_router/sissue_router.py --period 90 --verbose 
+  #NOTE(prozlach): Specifying rules is necessary to make child-pipelines work
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"

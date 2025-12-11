@@ -19,75 +19,98 @@ import (
 )
 
 func TestNewApp_Lockfiles(t *testing.T) {
-	tcs := map[string]struct {
+	testCases := map[string]struct {
 		path               string
-		dbEnabled          bool
+		dbEnabled          configuration.DatabaseEnabled
 		ffEnforceLockfiles bool
 		expectedErr        error
 	}{
 		"filesystem-in-use with db disabled and ff enabled": {
 			path:               "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:          false,
+			dbEnabled:          configuration.DatabaseEnabledFalse,
 			ffEnforceLockfiles: true,
 			expectedErr:        nil,
 		},
 		"filesystem-in-use with db enabled and ff enabled": {
 			path:               "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:          true,
+			dbEnabled:          configuration.DatabaseEnabledTrue,
 			ffEnforceLockfiles: true,
 			expectedErr:        handlers.ErrFilesystemInUse,
 		},
 		"filesystem-in-use with db enabled and ff disabled": {
 			path:               "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:          true,
+			dbEnabled:          configuration.DatabaseEnabledTrue,
+			ffEnforceLockfiles: false,
+			expectedErr:        nil,
+		},
+		"filesystem-in-use with db prefer and ff enabled": {
+			path:               "../datastore/testdata/fixtures/importer/happy-path",
+			dbEnabled:          configuration.DatabaseEnabledPrefer,
+			ffEnforceLockfiles: true,
+			expectedErr:        nil,
+		},
+		"filesystem-in-use with db prefer and ff disabled": {
+			path:               "../datastore/testdata/fixtures/importer/happy-path",
+			dbEnabled:          configuration.DatabaseEnabledPrefer,
 			ffEnforceLockfiles: false,
 			expectedErr:        nil,
 		},
 		"database-in-use with db disabled and ff enabled": {
 			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:          false,
+			dbEnabled:          configuration.DatabaseEnabledFalse,
 			ffEnforceLockfiles: true,
 			expectedErr:        handlers.ErrDatabaseInUse,
 		},
 		"database-in-use with db disabled and ff disabled": {
 			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:          false,
+			dbEnabled:          configuration.DatabaseEnabledFalse,
 			ffEnforceLockfiles: false,
 			expectedErr:        nil,
 		},
 		"database-in-use with db enabled and ff enabled": {
 			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:          true,
+			dbEnabled:          configuration.DatabaseEnabledTrue,
+			ffEnforceLockfiles: true,
+			expectedErr:        nil,
+		},
+		"database-in-use with db prefer and ff disabled": {
+			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			dbEnabled:          configuration.DatabaseEnabledPrefer,
+			ffEnforceLockfiles: false,
+			expectedErr:        nil,
+		},
+		"database-in-use with db prefer and ff enabled": {
+			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			dbEnabled:          configuration.DatabaseEnabledPrefer,
 			ffEnforceLockfiles: true,
 			expectedErr:        nil,
 		},
 	}
 
-	for tn, tc := range tcs {
-		t.Run(tn, func(t *testing.T) {
+	for tn, tc := range testCases {
+		t.Run(tn, func(tt *testing.T) {
 			if os.Getenv("REGISTRY_DATABASE_ENABLED") != "true" {
-				t.Skip("Skipping test as database is disabled")
+				tt.Skip("Skipping test as database is disabled")
 			}
 
-			t.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
+			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
 
 			opts := []configOpt{withFSDriver(tc.path)}
-			if !tc.dbEnabled {
-				opts = append(opts, withDBDisabled)
-			}
 
 			config := newConfig(opts...)
+			config.Database.Enabled = tc.dbEnabled
+
 			app, err := handlers.NewApp(context.Background(), &config)
 			if tc.expectedErr != nil {
-				require.ErrorIs(t, err, tc.expectedErr)
+				require.ErrorIs(tt, err, tc.expectedErr)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, app)
+			require.NoError(tt, err)
+			require.NotNil(tt, app)
 
-			t.Cleanup(func() {
-				restoreLockfiles(t, &config)
+			tt.Cleanup(func() {
+				restoreLockfiles(tt, &config)
 			})
 		})
 	}

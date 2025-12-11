@@ -36,3 +36,10 @@ func newInvalidJobSignatureError(err error) *migrationFailureError {
 		ErrorCode: models.InvalidJobSignatureBBMErrCode,
 	}
 }
+
+func newInvalidBatchingStrategy(err error) *migrationFailureError {
+	return &migrationFailureError{
+		Err:       err,
+		ErrorCode: models.InvalidJobSignatureBBMErrCode,
+	}
+}

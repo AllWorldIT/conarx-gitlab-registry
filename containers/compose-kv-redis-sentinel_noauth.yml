@@ -1,0 +1,78 @@
+x-healthcheck-common: &healthcheck-common
+  test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+  interval: 3s
+  timeout: 2s
+  retries: 5
+  start_period: 3s
+
+x-kv-common: &kv-common
+  image: registry.gitlab.com/gitlab-org/container-registry/kv-ci-redis:bookworm
+  sysctls:
+    - net.core.somaxconn=65535
+  networks:
+    - kv-network
+
+services:
+  kv-sentinel:
+    <<: *kv-common
+    container_name: kv-sentinel
+    healthcheck:
+      <<: *healthcheck-common
+      test: ["CMD-SHELL", "redis-cli -p 6379 ping | grep PONG"]
+    ports:
+      - "127.0.1.1:6379:6379"
+    environment:
+      KV_TYPE: redis
+      KV_ROLE: sentinel
+      KV_ANNOUNCE_IP: kv-sentinel
+      KV_MAIN_NAME: "fluffy"
+      KV_MONITOR_HOST: kv-node1
+    depends_on:
+      kv-node1:
+        condition: service_healthy
+      kv-node2:
+        condition: service_healthy
+      kv-node3:
+        condition: service_healthy
+
+  kv-node1:
+    <<: *kv-common
+    container_name: kv-node1
+    healthcheck:
+      <<: *healthcheck-common
+    ports:
+      - "127.0.1.2:6379:6379"
+    environment:
+      KV_TYPE: redis
+      KV_ROLE: primary
+      KV_ANNOUNCE_IP: kv-node1
+
+  kv-node2:
+    <<: *kv-common
+    container_name: kv-node2
+    healthcheck:
+      <<: *healthcheck-common
+    ports:
+      - "127.0.1.3:6379:6379"
+    environment:
+      KV_TYPE: redis
+      KV_ROLE: replica
+      KV_ANNOUNCE_IP: kv-node2
+      KV_PRIMARY_HOST: kv-node1
+
+  kv-node3:
+    <<: *kv-common
+    container_name: kv-node3
+    healthcheck:
+      <<: *healthcheck-common
+    ports:
+      - "127.0.1.4:6379:6379"
+    environment:
+      KV_TYPE: redis
+      KV_ROLE: replica
+      KV_ANNOUNCE_IP: kv-node3
+      KV_PRIMARY_HOST: kv-node1
+
+networks:
+  kv-network:
+    driver: bridge

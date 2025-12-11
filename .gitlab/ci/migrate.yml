@@ -6,11 +6,13 @@
 
 .base_migration_config:
   variables:
-    REGISTRY_SELF_MANAGED_RELEASE_VERSION: "v4.27.0-gitlab"
+    REGISTRY_SELF_MANAGED_RELEASE_VERSION: "v4.28.0-gitlab"
     DOCKER_HOST: tcp://docker:2375
-    POSTGRES_DB: registry_dev
-    POSTGRES_USER: registry
-    POSTGRES_PASSWORD: apassword
+    APP_DATABASE: registry_test
+    APP_USER: boryna
+    APP_PASSWORD: Chleboslaw
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: Maryna
     REGISTRY_DATABASE_HOST: db
     REGISTRY_OLD_IMAGE: registry.gitlab.com/gitlab-org/build/cng/gitlab-container-registry:${REGISTRY_SELF_MANAGED_RELEASE_VERSION}
 
@@ -19,15 +21,17 @@
 #TODO: This job is convoluted because of the nature of dind. Consider building the older registry from source https://gitlab.com/gitlab-org/container-registry/-/issues/1520.
 migrate:init-db-with-last-release:
   extends: .base_migration_config
-  image: docker:27.2.0
+  image: docker:${DOCKER_VERSION}
   stage: migrate
   tags:
     - gitlab-org-docker # For dind runners
   services:
-      - name: docker:27.2.0-dind
+      - name: docker:${DOCKER_VERSION}-dind
         alias: docker
-      - name: postgres:${PG_CURR_VERSION}-alpine
-        alias: "db"
+      - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_CURR_VERSION}
+        alias: db
+        variables:
+          POSTGRES_ROLE: primary
   script:
     - echo "Pulling old registry image $REGISTRY_OLD_IMAGE"
     - docker pull $REGISTRY_OLD_IMAGE
@@ -58,7 +62,7 @@ migrate:init-db-with-last-release:
       fi
     - ping -w 2 $POSTGRES_IP
     - docker run --rm --add-host="db:$POSTGRES_IP" -v $(pwd)/config/database-filesystem.yml:/config/database-filesystem.yml -e REGISTRY_DATABASE_HOST=${REGISTRY_DATABASE_HOST} --entrypoint \registry $REGISTRY_OLD_IMAGE \database migrate up /config/database-filesystem.yml
-    - docker run --rm --add-host="db:$POSTGRES_IP" -e PGPASSWORD=$POSTGRES_PASSWORD postgres:${PG_CURR_VERSION}-alpine pg_dump -h $REGISTRY_DATABASE_HOST -U $POSTGRES_USER -d $POSTGRES_DB > db_dump.sql
+    - docker run --rm --add-host="db:$POSTGRES_IP" -e PGPASSWORD=$POSTGRES_PASSWORD postgres:${PG_CURR_VERSION}-alpine pg_dump -h $REGISTRY_DATABASE_HOST -U $POSTGRES_USER -d $APP_DATABASE > db_dump.sql
   needs: []
   artifacts:
     paths:
@@ -75,19 +79,21 @@ migrate:init-db-with-last-release:
   image: golang:$GO_VERSION
   stage: migrate
   services:
-      - name: postgres:${PG_CURR_VERSION}-alpine
+      - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_CURR_VERSION}
         alias: "db"
+        variables:
+          POSTGRES_ROLE: primary
   dependencies:
     - migrate:init-db-with-last-release  # Ensure the artifact from this job is available
   script:
     # Install psql client tools
-    - apt-get update && apt-get install -y lsb-release
-    - apt update && apt -y install gnupg2 wget nano
-    - sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-    - curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc |  gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+    - apt update && apt -y install curl ca-certificates postgresql-common
+    - install -d /usr/share/postgresql-common/pgdg
+    - curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    - . /etc/os-release && sh -c "echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $VERSION_CODENAME-pgdg main' > /etc/apt/sources.list.d/pgdg.list"
     - apt update && apt -y install postgresql-client-${PG_CURR_VERSION}
     - echo "Restoring database from dump..."
-    - PGPASSWORD=$POSTGRES_PASSWORD psql -h ${REGISTRY_DATABASE_HOST} -U $POSTGRES_USER -d $POSTGRES_DB -f db_dump.sql  # Load the dump file into PostgreSQL
+    - PGPASSWORD=$POSTGRES_PASSWORD psql -h ${REGISTRY_DATABASE_HOST} -U $POSTGRES_USER -d $APP_DATABASE -f db_dump.sql  # Load the dump file into PostgreSQL
     - make bin/registry
     - echo "Running new registry migration..."
     - MIGRATION_CMD="./bin/registry database migrate up"
@@ -98,7 +104,7 @@ migrate:init-db-with-last-release:
     - echo "Executing $MIGRATION_CMD"
     - eval $MIGRATION_CMD
     - echo "Dumping the database after migration..."
-    - PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h db -U $POSTGRES_USER -d $POSTGRES_DB  > $DUMP_FILE
+    - PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h db -U $POSTGRES_USER -d $APP_DATABASE  > $DUMP_FILE
   artifacts:
     paths:
       - db_dump_new_skip_post_deploy.sql  # Save the new dump file

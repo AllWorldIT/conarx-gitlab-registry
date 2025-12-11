@@ -39,7 +39,7 @@ func TestNewAgent(t *testing.T) {
 		w    worker.Worker
 		opts []AgentOption
 	}
-	tests := []struct {
+	testCases := []struct {
 		name string
 		args args
 		want *Agent
@@ -134,23 +134,23 @@ func TestNewAgent(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := NewAgent(tt.args.w, tt.args.opts...)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			got := NewAgent(tc.args.w, tc.args.opts...)
 
-			require.Equal(t, tt.want.worker, got.worker)
-			require.Equal(t, tt.want.initialInterval, got.initialInterval)
-			require.Equal(t, tt.want.maxBackoff, got.maxBackoff)
-			require.Equal(t, tt.want.noIdleBackoff, got.noIdleBackoff)
+			require.Equal(tt, tc.want.worker, got.worker)
+			require.Equal(tt, tc.want.initialInterval, got.initialInterval)
+			require.Equal(tt, tc.want.maxBackoff, got.maxBackoff)
+			require.Equal(tt, tc.want.noIdleBackoff, got.noIdleBackoff)
 
 			// we have to cast loggers and compare only their public fields
-			wantLogger, err := log.ToLogrusEntry(tt.want.logger)
-			require.NoError(t, err)
+			wantLogger, err := log.ToLogrusEntry(tc.want.logger)
+			require.NoError(tt, err)
 			gotLogger, err := log.ToLogrusEntry(got.logger)
-			require.NoError(t, err)
-			require.Equal(t, wantLogger.Logger.Level, gotLogger.Logger.Level)
-			require.Equal(t, wantLogger.Logger.Formatter, gotLogger.Logger.Formatter)
-			require.Equal(t, wantLogger.Logger.Out, gotLogger.Logger.Out)
+			require.NoError(tt, err)
+			require.Equal(tt, wantLogger.Logger.Level, gotLogger.Logger.Level)
+			require.Equal(tt, wantLogger.Logger.Formatter, gotLogger.Logger.Formatter)
+			require.Equal(tt, wantLogger.Logger.Out, gotLogger.Logger.Out)
 		})
 	}
 }

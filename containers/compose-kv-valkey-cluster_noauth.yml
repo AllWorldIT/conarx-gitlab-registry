@@ -1,0 +1,71 @@
+x-healthcheck-common: &healthcheck-common
+  test: ["CMD", "valkey-cli", "--raw", "incr", "ping"]
+  interval: 3s
+  timeout: 2s
+  retries: 5
+  start_period: 3s
+
+x-kv-common: &kv-common
+  image: registry.gitlab.com/gitlab-org/container-registry/kv-ci-valkey:bookworm
+  sysctls:
+    - net.core.somaxconn=65535
+  networks:
+    - kv-network
+
+services:
+  kv-node1:
+    <<: *kv-common
+    container_name: kv-node1
+    healthcheck:
+      <<: *healthcheck-common
+    ports:
+      - "127.0.1.1:6379:6379"
+    environment:
+      KV_TYPE: valkey
+      KV_ROLE: cluster-node
+      KV_ANNOUNCE_IP: kv-node1
+
+  kv-node2:
+    <<: *kv-common
+    container_name: kv-node2
+    healthcheck:
+      <<: *healthcheck-common
+    ports:
+      - "127.0.1.2:6379:6379"
+    environment:
+      KV_TYPE: valkey
+      KV_ROLE: cluster-node
+      KV_ANNOUNCE_IP: kv-node2
+
+  kv-node3:
+    <<: *kv-common
+    container_name: kv-node3
+    healthcheck:
+      <<: *healthcheck-common
+    ports:
+      - "127.0.1.3:6379:6379"
+    environment:
+      KV_TYPE: valkey
+      KV_ROLE: cluster-node
+      KV_ANNOUNCE_IP: kv-node3
+
+  kv-starter:
+    <<: *kv-common
+    restart: no
+    container_name: kv-starter
+    depends_on:
+      kv-node1:
+        condition: service_healthy
+      kv-node2:
+        condition: service_healthy
+      kv-node3:
+        condition: service_healthy
+    environment:
+      KV_TYPE: valkey
+      KV_ROLE: cluster-starter
+      KV_ANNOUNCE_IP: kv-starter
+      KV_CLUSTER_NODES: kv-node1,kv-node2,kv-node3
+
+networks:
+  kv-network:
+    driver: bridge

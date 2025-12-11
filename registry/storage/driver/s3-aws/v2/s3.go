@@ -131,6 +131,16 @@ func FromParameters(parameters map[string]any) (storagedriver.StorageDriver, err
 // NewS3API constructs a new native s3 client with the given AWS credentials,
 // region, encryption flag, and bucketName
 func NewS3API(params *common.DriverParameters) (*s3.Client, error) {
+	if !params.V4Auth {
+		dlog.GetLogger().WithFields(log.Fields{
+			"component": "registry.storage.s3_v2.internal",
+		}).Warn(
+			"WARNING: Configuration enables deprecated Amazon S3 Signature Version 2. " +
+				"The s3_v2 driver supports only S3 Signature Version 4 and ignores Version 2 option." +
+				"Issue: https://gitlab.com/gitlab-org/container-registry/-/issues/1449",
+		)
+	}
+
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
 		config.WithRegion(params.Region),

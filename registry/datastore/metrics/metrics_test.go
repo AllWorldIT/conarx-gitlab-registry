@@ -254,7 +254,7 @@ func TestHostLookup(t *testing.T) {
 	testDNSLookup(t, HostLookup, hostLookupType)
 }
 
-func testPoolOperation(t *testing.T, event string, eventFunc func()) {
+func testPoolOperation(t *testing.T, event, reason string, eventFunc func()) {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(lbPoolEvents)
 	defer func() { lbPoolEvents.Reset() }()
@@ -265,9 +265,12 @@ func testPoolOperation(t *testing.T, event string, eventFunc func()) {
 	tmplFormat := `
 # HELP registry_database_lb_pool_events_total A counter of replicas added or removed from the database load balancer pool.
 # TYPE registry_database_lb_pool_events_total counter
-registry_database_lb_pool_events_total{event="{{.Event}}"} 2
+registry_database_lb_pool_events_total{event="{{.Event}}",reason="{{.Reason}}"} 2
 `
-	tmplData := struct{ Event string }{event}
+	tmplData := struct {
+		Event  string
+		Reason string
+	}{event, reason}
 
 	var expected bytes.Buffer
 	tmpl, err := template.New(t.Name()).Parse(tmplFormat)
@@ -280,19 +283,27 @@ registry_database_lb_pool_events_total{event="{{.Event}}"} 2
 }
 
 func TestReplicaAdded(t *testing.T) {
-	testPoolOperation(t, lbPoolEventsReplicaAdded, ReplicaAdded)
+	testPoolOperation(t, lbPoolEventsReplicaAdded, lbAddReasonDNS, ReplicaAdded)
 }
 
 func TestReplicaRemoved(t *testing.T) {
-	testPoolOperation(t, lbPoolEventsReplicaRemoved, ReplicaRemoved)
+	testPoolOperation(t, lbPoolEventsReplicaRemoved, lbRemoveReasonDNS, ReplicaRemoved)
 }
 
-func TestReplicaQuarantined(t *testing.T) {
-	testPoolOperation(t, lbPoolEventsReplicaQuarantined, ReplicaQuarantined)
+func TestReplicaQuarantinedForLag(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaQuarantined, lbQuarantineReasonLag, ReplicaQuarantinedForLag)
 }
 
-func TestReplicaReintegrated(t *testing.T) {
-	testPoolOperation(t, lbPoolEventsReplicaReintegrated, ReplicaReintegrated)
+func TestReplicaQuarantinedForConnectivity(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaQuarantined, lbQuarantineReasonConnectivity, ReplicaQuarantinedForConnectivity)
+}
+
+func TestReplicaReintegratedFromLag(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaReintegrated, lbQuarantineReasonLag, ReplicaReintegratedFromLag)
+}
+
+func TestReplicaReintegratedFromConnectivity(t *testing.T) {
+	testPoolOperation(t, lbPoolEventsReplicaReintegrated, lbQuarantineReasonConnectivity, ReplicaReintegratedFromConnectivity)
 }
 
 func testTarget(t *testing.T, targetType string, fallback bool, reason string, targetFunc func()) {

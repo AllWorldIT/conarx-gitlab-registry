@@ -28,7 +28,7 @@ const cacheOpTimeout = 500 * time.Millisecond
 // urlCacheStorageMiddleware provides a caching layer for URLFor calls using an in-memory LRU cache.
 type urlCacheStorageMiddleware struct {
 	driver.StorageDriver
-	cache              iredis.CacheInterface
+	cache              *iredis.Cache
 	dryRun             bool
 	minURLValidity     time.Duration
 	defaultURLValidity time.Duration
@@ -54,10 +54,10 @@ func (ce CacheEntry) size() int64 {
 // defaultMinURLValidity is the minimum time a URL must be valid before we serve it from cache
 const defaultMinURLValidity = 10 * time.Minute
 
-// newURLCacheStorageMiddleware constructs and returns a new URL cache driver.StorageDriver implementation.
+// NewURLCacheStorageMiddleware constructs and returns a new URL cache driver.StorageDriver implementation.
 // Required options: none (all options are optional with sensible defaults)
 // Optional options: minurlvalidity, defaulturlvalidity, maxcacheentries
-func newURLCacheStorageMiddleware(
+func NewURLCacheStorageMiddleware(
 	storageDriver driver.StorageDriver,
 	options map[string]any,
 ) (driver.StorageDriver, func() error, error) {
@@ -104,7 +104,7 @@ func newURLCacheStorageMiddleware(
 	if v == nil {
 		return nil, nil, fmt.Errorf("redis cache has either been not defined in container registry config or is not usable and it is required by urlcache middleware to work")
 	}
-	redisCache, ok := v.(iredis.CacheInterface)
+	redisCache, ok := v.(*iredis.Cache)
 	if !ok {
 		return nil, nil, fmt.Errorf("redis cache passed to the middleware cannot be used as the type is wrong: %T", v) // this should not happen either
 	}
@@ -178,6 +178,18 @@ func (*urlCacheStorageMiddleware) logger(ctx context.Context) log.Logger {
 	return log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
 		"component": "registry.storage.middleware.urlcache",
 	})
+}
+
+func (uc *urlCacheStorageMiddleware) FetchGCSBucketKeyer() (storagemiddleware.GcsBucketKeyer, bool) {
+	keyerFetcher, ok := uc.StorageDriver.(storagemiddleware.GcsBucketKeyerFetcher)
+	if !ok {
+		return nil, false
+	}
+	keyer, ok := keyerFetcher.FetchGCSBucketKeyer()
+	if !ok {
+		return nil, false
+	}
+	return keyer, true
 }
 
 // URLFor returns a URL which may be used to retrieve the content stored at the given path, possibly using the given
@@ -271,5 +283,5 @@ func (uc *urlCacheStorageMiddleware) URLFor(ctx context.Context, path string, op
 
 func init() {
 	// nolint: gosec // ignore when backend is already registered
-	_ = storagemiddleware.Register("urlcache", newURLCacheStorageMiddleware)
+	_ = storagemiddleware.Register("urlcache", NewURLCacheStorageMiddleware)
 }

@@ -306,6 +306,100 @@ func (s *BackgroundMigrationTestSuite) TestSyncRunSingleRunningBBM() {
 	s.testSyncRunSingleActiveRunningBBM(models.BackgroundMigrationRunning)
 }
 
+// TestSyncBackgroundMigration_NullBatching tests end-to-end execution for a null-batching strategy via sync worker
+func (s *BackgroundMigrationTestSuite) TestSyncBackgroundMigration_NullBatching() {
+	// Insert a null-batching BBM record
+	bbmName := "BackfillNewIDWhereNullSync"
+	up, down := upDownForNullBatchingBM(models.BackgroundMigration{
+		Name:             bbmName,
+		BatchSize:        20,
+		Status:           models.BackgroundMigrationActive,
+		JobName:          bbmName,
+		TargetTable:      targetBBMTable,
+		TargetColumn:     targetBBMNullColumn,
+		BatchingStrategy: models.NullBatchingBBMStrategy,
+	})
+	m := newMigrator(s.T(), s.db.DB, up, down)
+	m.runSchemaMigration(s.T())
+
+	// Run sync worker with registered null backfill work
+	opts := []bbm.SyncWorkerOption{
+		bbm.WithWorkMap(map[string]bbm.Work{
+			bbmName: {Name: bbmName, Do: BackfillNewIDWhereNull},
+		}),
+	}
+	err := bbm.NewSyncWorker(s.db, opts...).Run(context.Background())
+	s.Require().NoError(err)
+
+	// Assert bbm finished and no remaining NULLs
+	expected := &models.BackgroundMigration{
+		ID:           1,
+		Name:         bbmName,
+		Status:       models.BackgroundMigrationFinished,
+		ErrorCode:    models.BBMErrorCode{},
+		TargetTable:  targetBBMTable,
+		TargetColumn: targetBBMNullColumn,
+		BatchSize:    20,
+		JobName:      bbmName,
+	}
+	s.requireBBMFinally(bbmName, expected)
+	s.requireNoNulls(targetBBMTable, targetBBMNullColumn)
+	// Assert total_tuple_count matches computed expected from table/column for null-batching
+	s.requireTotalTupleCountMatches(bbmName)
+}
+
+// TestSyncBackgroundMigration_NullBatchingNoIdx tests a case where null-batching strategy does not have required indexes
+func (s *BackgroundMigrationTestSuite) TestSyncBackgroundMigration_NullBatchingNoIdx() {
+	// Insert a null-batching BBM record
+	bbmName := "BackfillNewIDWhereNullSyncNoIdx"
+	up, down := upDownForNullBatchingBM(models.BackgroundMigration{
+		Name:             bbmName,
+		BatchSize:        20,
+		Status:           models.BackgroundMigrationActive,
+		JobName:          bbmName,
+		TargetTable:      targetBBMTable,
+		TargetColumn:     targetBBMNullColumnNoIdx,
+		BatchingStrategy: models.NullBatchingBBMStrategy,
+	})
+	m := newMigrator(s.T(), s.db.DB, up, down)
+	m.runSchemaMigration(s.T())
+
+	// Run sync worker with registered null backfill work
+	opts := []bbm.SyncWorkerOption{
+		bbm.WithWorkMap(map[string]bbm.Work{
+			bbmName: {Name: bbmName, Do: BackfillNewIDWhereNull},
+		}),
+	}
+	err := bbm.NewSyncWorker(s.db, opts...).Run(context.Background())
+	s.Require().ErrorIs(err, bbm.ErrNoNullIndex)
+}
+
+// TestSyncBackgroundMigration_NullBatchingBadIdx tests a case where column that null-batching strategy targets has index, but it is not the correct one
+func (s *BackgroundMigrationTestSuite) TestSyncBackgroundMigration_NullBatchingBadIdx() {
+	// Insert a null-batching BBM record
+	bbmName := "BackfillNewIDWhereNullSyncBadIdx"
+	up, down := upDownForNullBatchingBM(models.BackgroundMigration{
+		Name:             bbmName,
+		BatchSize:        20,
+		Status:           models.BackgroundMigrationActive,
+		JobName:          bbmName,
+		TargetTable:      targetBBMTable,
+		TargetColumn:     targetBBMNullColumnBadIdx,
+		BatchingStrategy: models.NullBatchingBBMStrategy,
+	})
+	m := newMigrator(s.T(), s.db.DB, up, down)
+	m.runSchemaMigration(s.T())
+
+	// Run sync worker with registered null backfill work
+	opts := []bbm.SyncWorkerOption{
+		bbm.WithWorkMap(map[string]bbm.Work{
+			bbmName: {Name: bbmName, Do: BackfillNewIDWhereNull},
+		}),
+	}
+	err := bbm.NewSyncWorker(s.db, opts...).Run(context.Background())
+	s.Require().ErrorIs(err, bbm.ErrNoNullIndex)
+}
+
 // testSyncRunSingleActiveRunningBBM is a helper function to test the behavior of a single active or running background migration.
 func (s *BackgroundMigrationTestSuite) testSyncRunSingleActiveRunningBBM(status models.BackgroundMigrationStatus) {
 	// Insert background migration fixtures
@@ -369,6 +463,8 @@ func (s *BackgroundMigrationTestSuite) testSyncRunSingleActiveRunningBBM(status 
 		err := db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
 		return exists, err
 	})
+	// Assert total_tuple_count matches computed expected from table/column when first job was created
+	s.requireTotalTupleCountMatches(expectedBBM.Name)
 }
 
 // testSyncRunMultipleActiveRunningBBM is a helper function to test the behavior of multiple active or running background migrations.
@@ -459,6 +555,9 @@ func (s *BackgroundMigrationTestSuite) testSyncRunMultipleActiveRunningBBM(statu
 	s.requireBBMJobsFinally(expectedBBM1.Name, expectedBBMJobs1)
 	s.requireBBMFinally(expectedBBM2.Name, expectedBBM2)
 	s.requireBBMJobsFinally(expectedBBM2.Name, expectedBBMJobs2)
+	// Assert total_tuple_count matches computed expected from table/column for both migrations
+	s.requireTotalTupleCountMatches(expectedBBM1.Name)
+	s.requireTotalTupleCountMatches(expectedBBM2.Name)
 }
 
 // TestSyncRunAllStateCombinationsBBM tests the behavior of all state combinations in the background migration process.

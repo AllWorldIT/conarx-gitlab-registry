@@ -1,2 +1,2 @@
-[{"size":1509,"created_at":"2020-04-15T12:04:28.95584","media_type_id":8,"digest":"\\x01a187dde48cd289ac374ad8539930628314bc581a481cdb41409c9289419ddb72"}, 
- {"size":2803255,"created_at":"2020-04-15T12:04:28.95584","media_type_id":6,"digest":"\\x01aad63a9339440e7c3e1fff2b988991b9bfb81280042fa7f39a5e327023056819"}]
+[{"size":1509,"created_at":"2020-04-15T12:04:28.95584","media_type_id":8,"digest":"\\x01a187dde48cd289ac374ad8539930628314bc581a481cdb41409c9289419ddb72","id":1}, 
+ {"size":2803255,"created_at":"2020-04-15T12:04:28.95584","media_type_id":6,"digest":"\\x01aad63a9339440e7c3e1fff2b988991b9bfb81280042fa7f39a5e327023056819","id":1}]

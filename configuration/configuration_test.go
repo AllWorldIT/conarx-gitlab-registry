@@ -55,7 +55,7 @@ var configStruct = Configuration{
 		},
 	},
 	Database: Database{
-		Enabled:  true,
+		Enabled:  DatabaseEnabledTrue,
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
@@ -333,7 +333,7 @@ func (s *ConfigSuite) TestParseSimple() {
 func (s *ConfigSuite) TestParseInmemory() {
 	s.expectedConfig.Storage = Storage{"inmemory": Parameters{}}
 	s.expectedConfig.Database = Database{
-		Enabled: true,
+		Enabled: DatabaseEnabledTrue,
 		BackgroundMigrations: BackgroundMigrations{
 			Enabled:       true,
 			MaxJobRetries: 1,
@@ -515,15 +515,15 @@ func testParameter(t *testing.T, yml, envVar string, tests []parameterTest, fn p
 	testCases := []string{"yaml", "env"}
 
 	for _, testCase := range testCases {
-		t.Run(testCase, func(t *testing.T) {
+		t.Run(testCase, func(tt *testing.T) {
 			for _, test := range tests {
-				t.Run(test.name, func(t *testing.T) {
+				tt.Run(test.name, func(tt *testing.T) {
 					var input string
 
 					if testCase == "env" {
 						// if testing with an environment variable we need to set it and defer the unset
-						require.NoError(t, os.Setenv(envVar, test.value))
-						defer func() { require.NoError(t, os.Unsetenv(envVar)) }()
+						require.NoError(tt, os.Setenv(envVar, test.value))
+						defer func() { require.NoError(tt, os.Unsetenv(envVar)) }()
 						// we also need to make sure to clean the YAML parameter
 						input = fmt.Sprintf(yml, "")
 					} else {
@@ -532,12 +532,12 @@ func testParameter(t *testing.T, yml, envVar string, tests []parameterTest, fn p
 
 					got, err := Parse(bytes.NewReader([]byte(input)))
 					if test.wantErr {
-						require.Error(t, err)
-						require.EqualError(t, err, test.err)
-						require.Nil(t, got)
+						require.Error(tt, err)
+						require.EqualError(tt, err, test.err)
+						require.Nil(tt, got)
 					} else {
-						require.NoError(t, err)
-						fn(t, test.want, got)
+						require.NoError(tt, err)
+						fn(tt, test.want, got)
 					}
 				})
 			}
@@ -592,8 +592,8 @@ storage: inmemory
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Log.Level.String())
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Log.Level.String())
 	}
 
 	testParameter(t, yml, "REGISTRY_LOG_LEVEL", tt, validator)
@@ -631,8 +631,8 @@ storage: inmemory
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Log.Output.String())
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Log.Output.String())
 	}
 
 	testParameter(t, yml, "REGISTRY_LOG_OUTPUT", tt, validator)
@@ -670,8 +670,8 @@ storage: inmemory
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Log.Formatter.String())
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Log.Formatter.String())
 	}
 
 	testParameter(t, yml, "REGISTRY_LOG_FORMATTER", tt, validator)
@@ -710,8 +710,8 @@ storage: inmemory
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Log.AccessLog.Formatter.String())
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Log.AccessLog.Formatter.String())
 	}
 
 	testParameter(t, yml, "REGISTRY_LOG_ACCESSLOG_FORMATTER", tt, validator)
@@ -720,7 +720,7 @@ storage: inmemory
 // TestParseWithDifferentEnvDatabase validates that environment variables properly override database parameters
 func (s *ConfigSuite) TestParseWithDifferentEnvDatabase() {
 	expected := Database{
-		Enabled:  true,
+		Enabled:  DatabaseEnabledTrue,
 		Host:     "127.0.0.1",
 		Port:     1234,
 		User:     "user",
@@ -743,7 +743,7 @@ func (s *ConfigSuite) TestParseWithDifferentEnvDatabase() {
 	}
 	s.expectedConfig.Database = expected
 
-	err := os.Setenv("REGISTRY_DATABASE_DISABLE", strconv.FormatBool(expected.Enabled))
+	err := os.Setenv("REGISTRY_DATABASE_DISABLE", strconv.FormatBool(expected.IsEnabled()))
 	require.NoError(s.T(), err)
 	err = os.Setenv("REGISTRY_DATABASE_HOST", expected.Host)
 	require.NoError(s.T(), err)
@@ -913,8 +913,8 @@ http:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.HTTP.Debug.Pprof.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.HTTP.Debug.Pprof.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_HTTP_DEBUG_PPROF_ENABLED", tt, validator)
@@ -931,8 +931,8 @@ http:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.HTTP.Debug.TLS.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.HTTP.Debug.TLS.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_HTTP_DEBUG_TLS_ENABLED", tt, validator)
@@ -949,8 +949,8 @@ http:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.HTTP.Debug.TLS.Certificate)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.HTTP.Debug.TLS.Certificate)
 	}
 
 	testParameter(t, yml, "REGISTRY_HTTP_DEBUG_TLS_CERTIFICATE", tt, validator)
@@ -967,8 +967,8 @@ http:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.HTTP.Debug.TLS.Key)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.HTTP.Debug.TLS.Key)
 	}
 
 	testParameter(t, yml, "REGISTRY_HTTP_DEBUG_TLS_KEY", tt, validator)
@@ -985,8 +985,8 @@ http:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.HTTP.Debug.TLS.MinimumTLS)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.HTTP.Debug.TLS.MinimumTLS)
 	}
 
 	testParameter(t, yml, "REGISTRY_HTTP_DEBUG_TLS_MINIMUMTLS", tt, validator)
@@ -1018,8 +1018,8 @@ http:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.ElementsMatch(t, want, got.HTTP.Debug.TLS.ClientCAs)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.ElementsMatch(tt, want, got.HTTP.Debug.TLS.ClientCAs)
 	}
 
 	testParameter(t, yml, "REGISTRY_HTTP_DEBUG_TLS_CLIENTCAS", tt, validator)
@@ -1035,8 +1035,8 @@ profiling:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Profiling.Stackdriver.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Profiling.Stackdriver.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_PROFILING_STACKDRIVER_ENABLED", tt, validator)
@@ -1062,8 +1062,8 @@ profiling:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Profiling.Stackdriver.Service)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Profiling.Stackdriver.Service)
 	}
 
 	testParameter(t, yml, "REGISTRY_PROFILING_STACKDRIVER_SERVICE", tt, validator)
@@ -1089,8 +1089,8 @@ profiling:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Profiling.Stackdriver.ServiceVersion)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Profiling.Stackdriver.ServiceVersion)
 	}
 
 	testParameter(t, yml, "REGISTRY_PROFILING_STACKDRIVER_SERVICEVERSION", tt, validator)
@@ -1116,8 +1116,8 @@ profiling:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Profiling.Stackdriver.ProjectID)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Profiling.Stackdriver.ProjectID)
 	}
 
 	testParameter(t, yml, "REGISTRY_PROFILING_STACKDRIVER_PROJECTID", tt, validator)
@@ -1143,8 +1143,8 @@ profiling:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Profiling.Stackdriver.KeyFile)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Profiling.Stackdriver.KeyFile)
 	}
 
 	testParameter(t, yml, "REGISTRY_PROFILING_STACKDRIVER_KEYFILE", tt, validator)
@@ -1160,8 +1160,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.TLS.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.TLS.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_TLS_ENABLED", tt, validator)
@@ -1177,8 +1177,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.TLS.Insecure))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.TLS.Insecure))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_TLS_INSECURE", tt, validator)
@@ -1208,8 +1208,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Addr)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Addr)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_ADDR", tt, validator)
@@ -1234,8 +1234,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.MainName)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.MainName)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_MAINNAME", tt, validator)
@@ -1261,8 +1261,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Pool.Size)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Pool.Size)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_POOL_SIZE", tt, validator)
@@ -1288,8 +1288,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Pool.MaxLifetime)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Pool.MaxLifetime)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_POOL_MAXLIFETIME", tt, validator)
@@ -1315,8 +1315,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Pool.IdleTimeout)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Pool.IdleTimeout)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_POOL_IDLETIMEOUT", tt, validator)
@@ -1341,8 +1341,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.SSLMode)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.SSLMode)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_SSLMODE", tt, validator)
@@ -1367,8 +1367,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.SSLCert)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.SSLCert)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_SSLCERT", tt, validator)
@@ -1393,8 +1393,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.SSLKey)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.SSLKey)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_SSLKEY", tt, validator)
@@ -1419,8 +1419,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.SSLRootCert)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.SSLRootCert)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_SSLROOTCERT", tt, validator)
@@ -1435,8 +1435,8 @@ database:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Database.PreparedStatements))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Database.PreparedStatements))
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_PREPAREDSTATEMENTS", tt, validator)
@@ -1461,8 +1461,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.DrainTimeout)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.DrainTimeout)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_DRAINTIMEOUT", tt, validator)
@@ -1488,8 +1488,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.Pool.MaxIdle)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.Pool.MaxIdle)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_POOL_MAXIDLE", tt, validator)
@@ -1515,8 +1515,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.Pool.MaxOpen)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.Pool.MaxOpen)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_POOL_MAXOPEN", tt, validator)
@@ -1542,8 +1542,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.Pool.MaxLifetime)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.Pool.MaxLifetime)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_POOL_MAXLIFETIME", tt, validator)
@@ -1559,8 +1559,8 @@ database:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Database.LoadBalancing.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Database.LoadBalancing.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_ENABLED", tt, validator)
@@ -1592,8 +1592,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.ElementsMatch(t, want, got.Database.LoadBalancing.Hosts)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.ElementsMatch(tt, want, got.Database.LoadBalancing.Hosts)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_HOSTS", tt, validator)
@@ -1613,8 +1613,8 @@ database:
 		{name: "custom", value: "nameserver.example.com", want: "nameserver.example.com"},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.LoadBalancing.Nameserver)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.LoadBalancing.Nameserver)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_NAMESERVER", tt, validator)
@@ -1641,8 +1641,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.LoadBalancing.Port)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.LoadBalancing.Port)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_PORT", tt, validator)
@@ -1662,8 +1662,8 @@ database:
 		{name: "custom", value: "db-replica-registry.service.consul", want: "db-replica-registry.service.consul"},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.LoadBalancing.Record)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.LoadBalancing.Record)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_RECORD", tt, validator)
@@ -1683,8 +1683,8 @@ database:
 		{name: "custom", value: "2m", want: 2 * time.Minute},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.LoadBalancing.ReplicaCheckInterval)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.LoadBalancing.ReplicaCheckInterval)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_LOADBALANCING_REPLICACHECKINTERVAL", tt, validator)
@@ -1700,8 +1700,8 @@ reporting:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Reporting.Sentry.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Reporting.Sentry.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_REPORTING_SENTRY_ENABLED", tt, validator)
@@ -1727,8 +1727,8 @@ reporting:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Reporting.Sentry.DSN)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Reporting.Sentry.DSN)
 	}
 
 	testParameter(t, yml, "REGISTRY_REPORTING_SENTRY_DSN", tt, validator)
@@ -1754,8 +1754,8 @@ reporting:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Reporting.Sentry.Environment)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Reporting.Sentry.Environment)
 	}
 
 	testParameter(t, yml, "REGISTRY_REPORTING_SENTRY_ENVIRONMENT", tt, validator)
@@ -1860,8 +1860,8 @@ validation:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Validation.Manifests.PayloadSizeLimit)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Validation.Manifests.PayloadSizeLimit)
 	}
 
 	testParameter(t, yml, "REGISTRY_VALIDATION_MANIFESTS_PAYLOADSIZELIMIT", tt, validator)
@@ -1877,8 +1877,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.Cache.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_ENABLED", tt, validator)
@@ -1896,8 +1896,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.TLS.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.Cache.TLS.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_TLS_ENABLED", tt, validator)
@@ -1915,8 +1915,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.Cache.TLS.Insecure))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.Cache.TLS.Insecure))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_TLS_INSECURE", tt, validator)
@@ -1948,8 +1948,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Cache.Addr)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Cache.Addr)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_ADDR", tt, validator)
@@ -1976,8 +1976,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Cache.MainName)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Cache.MainName)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_MAINNAME", tt, validator)
@@ -2006,8 +2006,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Cache.SentinelUsername)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Cache.SentinelUsername)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_SENTINELUSERNAME", tt, validator)
@@ -2035,8 +2035,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Cache.SentinelPassword)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Cache.SentinelPassword)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_SENTINELPASSWORD", tt, validator)
@@ -2064,8 +2064,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Cache.Pool.Size)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Cache.Pool.Size)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_POOL_SIZE", tt, validator)
@@ -2093,8 +2093,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Cache.Pool.MaxLifetime)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Cache.Pool.MaxLifetime)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_POOL_MAXLIFETIME", tt, validator)
@@ -2122,8 +2122,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.Cache.Pool.IdleTimeout)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.Cache.Pool.IdleTimeout)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_CACHE_POOL_IDLETIMEOUT", tt, validator)
@@ -2139,8 +2139,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.RateLimiter.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_ENABLED", tt, validator)
@@ -2158,8 +2158,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_TLS_ENABLED", tt, validator)
@@ -2177,8 +2177,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Insecure))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.RateLimiter.TLS.Insecure))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_TLS_INSECURE", tt, validator)
@@ -2210,8 +2210,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.RateLimiter.Addr)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.RateLimiter.Addr)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_ADDR", tt, validator)
@@ -2238,8 +2238,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.RateLimiter.MainName)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.RateLimiter.MainName)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_MAINNAME", tt, validator)
@@ -2267,8 +2267,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.RateLimiter.Pool.Size)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.RateLimiter.Pool.Size)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_SIZE", tt, validator)
@@ -2296,8 +2296,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.RateLimiter.Pool.MaxLifetime)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.RateLimiter.Pool.MaxLifetime)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_MAXLIFETIME", tt, validator)
@@ -2325,8 +2325,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.RateLimiter.Pool.IdleTimeout)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.RateLimiter.Pool.IdleTimeout)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_RATELIMITER_POOL_IDLETIMEOUT", tt, validator)
@@ -2342,8 +2342,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.LoadBalancing.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.LoadBalancing.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_ENABLED", tt, validator)
@@ -2375,8 +2375,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.Addr)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.Addr)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_ADDR", tt, validator)
@@ -2403,8 +2403,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.MainName)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.MainName)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_MAINNAME", tt, validator)
@@ -2431,8 +2431,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.Username)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.Username)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_USERNAME", tt, validator)
@@ -2459,8 +2459,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.Password)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.Password)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_PASSWORD", tt, validator)
@@ -2487,8 +2487,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.DB)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.DB)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_DB", tt, validator)
@@ -2515,8 +2515,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.DialTimeout)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.DialTimeout)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_DIALTIMEOUT", tt, validator)
@@ -2543,8 +2543,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.ReadTimeout)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.ReadTimeout)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_READTIMEOUT", tt, validator)
@@ -2571,8 +2571,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.WriteTimeout)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.WriteTimeout)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_WRITETIMEOUT", tt, validator)
@@ -2601,8 +2601,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.SentinelUsername)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.SentinelUsername)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_SENTINELUSERNAME", tt, validator)
@@ -2630,8 +2630,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.SentinelPassword)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.SentinelPassword)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_SENTINELPASSWORD", tt, validator)
@@ -2649,8 +2649,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.LoadBalancing.TLS.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.LoadBalancing.TLS.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_TLS_ENABLED", tt, validator)
@@ -2668,8 +2668,8 @@ redis:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Redis.LoadBalancing.TLS.Insecure))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Redis.LoadBalancing.TLS.Insecure))
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_TLS_INSECURE", tt, validator)
@@ -2697,8 +2697,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.Pool.Size)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.Pool.Size)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_POOL_SIZE", tt, validator)
@@ -2726,8 +2726,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.Pool.MaxLifetime)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.Pool.MaxLifetime)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_POOL_MAXLIFETIME", tt, validator)
@@ -2755,8 +2755,8 @@ redis:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Redis.LoadBalancing.Pool.IdleTimeout)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Redis.LoadBalancing.Pool.IdleTimeout)
 	}
 
 	testParameter(t, yml, "REGISTRY_REDIS_LOADBALANCING_POOL_IDLETIMEOUT", tt, validator)
@@ -2810,10 +2810,10 @@ database:
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name, func(tt *testing.T) {
 			config, err := Parse(bytes.NewReader([]byte(test.yml)))
-			require.NoError(t, err)
-			require.Equal(t, test.expected, config.Database.BackgroundMigrations)
+			require.NoError(tt, err)
+			require.Equal(tt, test.expected, config.Database.BackgroundMigrations)
 		})
 	}
 }
@@ -2827,8 +2827,8 @@ rate_limiter:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.RateLimiter.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.RateLimiter.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_ENABLED", tt, validator)
@@ -2845,9 +2845,9 @@ rate_limiter:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, got.RateLimiter.Limiters[0].Name)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, got.RateLimiter.Limiters[0].Name)
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_NAME", tt, validator)
@@ -2865,9 +2865,9 @@ rate_limiter:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 2)
-		require.Equal(t, want, got.RateLimiter.Limiters[1].Name)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 2)
+		require.Equal(tt, want, got.RateLimiter.Limiters[1].Name)
 	}
 
 	// Note that the array element is 1 and not 0
@@ -2886,9 +2886,9 @@ rate_limiter:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, got.RateLimiter.Limiters[0].Description)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, got.RateLimiter.Limiters[0].Description)
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_DESCRIPTION", tt, validator)
@@ -2908,9 +2908,9 @@ rate_limiter:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, strconv.FormatBool(got.RateLimiter.Limiters[0].LogOnly))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, strconv.FormatBool(got.RateLimiter.Limiters[0].LogOnly))
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_LOGONLY", tt, validator)
@@ -2931,9 +2931,9 @@ rate_limiter:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, got.RateLimiter.Limiters[0].Match.Type)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, got.RateLimiter.Limiters[0].Match.Type)
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_MATCH_TYPE", tt, validator)
@@ -2963,9 +2963,9 @@ rate_limiter:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Precedence)))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Precedence)))
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_PRECEDENCE", tt, validator)
@@ -2995,9 +2995,9 @@ rate_limiter:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Limit.Rate)))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Limit.Rate)))
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_LIMIT_RATE", tt, validator)
@@ -3027,9 +3027,9 @@ rate_limiter:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Limit.Burst)))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, strconv.Itoa(int(got.RateLimiter.Limiters[0].Limit.Burst)))
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_LIMIT_BURST", tt, validator)
@@ -3048,9 +3048,9 @@ rate_limiter:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, got.RateLimiter.Limiters[0].Limit.Period)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, got.RateLimiter.Limiters[0].Limit.Period)
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_LIMIT_PERIOD", tt, validator)
@@ -3079,9 +3079,9 @@ rate_limiter:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, fmt.Sprintf("%.1f", got.RateLimiter.Limiters[0].Action.WarnThreshold))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, fmt.Sprintf("%.1f", got.RateLimiter.Limiters[0].Action.WarnThreshold))
 	}
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_ACTION_WARNTHRESHOLD", tt, validator)
 }
@@ -3099,9 +3099,9 @@ rate_limiter:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, got.RateLimiter.Limiters[0].Action.WarnAction)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, got.RateLimiter.Limiters[0].Action.WarnAction)
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_ACTION_WARNACTION", tt, validator)
@@ -3120,9 +3120,9 @@ rate_limiter:
 `
 	tt := stringParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Len(t, got.RateLimiter.Limiters, 1)
-		require.Equal(t, want, got.RateLimiter.Limiters[0].Action.HardAction)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Len(tt, got.RateLimiter.Limiters, 1)
+		require.Equal(tt, want, got.RateLimiter.Limiters[0].Action.HardAction)
 	}
 
 	testParameter(t, yml, "REGISTRY_RATELIMITER_LIMITERS_0_ACTION_HARDACTION", tt, validator)
@@ -3138,8 +3138,8 @@ database:
 `
 	tt := boolParameterTests()
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, strconv.FormatBool(got.Database.Metrics.Enabled))
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, strconv.FormatBool(got.Database.Metrics.Enabled))
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_METRICS_ENABLED", tt, validator)
@@ -3187,8 +3187,8 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.Metrics.Interval)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.Metrics.Interval)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_METRICS_INTERVAL", tt, validator)
@@ -3236,9 +3236,52 @@ database:
 		},
 	}
 
-	validator := func(t *testing.T, want any, got *Configuration) {
-		require.Equal(t, want, got.Database.Metrics.LeaseDuration)
+	validator := func(tt *testing.T, want any, got *Configuration) {
+		require.Equal(tt, want, got.Database.Metrics.LeaseDuration)
 	}
 
 	testParameter(t, yml, "REGISTRY_DATABASE_METRICS_LEASEDURATION", tt, validator)
+}
+
+func TestParseDatabaseEnabled(t *testing.T) {
+	yml := `
+version: 0.1
+storage: inmemory
+database:
+    enabled: %s
+`
+	tt := []parameterTest{
+		{
+			name:  "string true",
+			value: "true",
+			want:  DatabaseEnabledTrue,
+		},
+		{
+			name:  "string false",
+			value: "false",
+			want:  DatabaseEnabledFalse,
+		},
+		{
+			name:  "prefer",
+			value: "prefer",
+			want:  DatabaseEnabledPrefer,
+		},
+		{
+			name:    "typo",
+			value:   "perfer",
+			wantErr: true,
+			err:     fmt.Sprintf("invalid database.enabled value: %q, valid values: false, true, prefer", "perfer"),
+		},
+		{
+			name:  "default",
+			value: "",
+			want:  DatabaseEnabledFalse,
+		},
+	}
+
+	validator := func(t *testing.T, want any, got *Configuration) {
+		require.Equal(t, want, got.Database.Enabled)
+	}
+
+	testParameter(t, yml, "REGISTRY_DATABASE_ENABLED", tt, validator)
 }

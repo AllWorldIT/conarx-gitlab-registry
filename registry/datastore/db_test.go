@@ -13,7 +13,7 @@ import (
 func TestDSN_String(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
+	testCases := []struct {
 		name string
 		arg  datastore.DSN
 		out  string
@@ -72,15 +72,15 @@ func TestDSN_String(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.out, tt.arg.String())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			require.Equal(tt, tc.out, tc.arg.String())
 		})
 	}
 }
 
 func TestDSN_Address(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name string
 		arg  datastore.DSN
 		out  string
@@ -91,9 +91,9 @@ func TestDSN_Address(t *testing.T) {
 		{name: "full", arg: datastore.DSN{Host: "127.0.0.1", Port: 5432}, out: "127.0.0.1:5432"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.out, tt.arg.Address())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			require.Equal(tt, tc.out, tc.arg.Address())
 		})
 	}
 }
@@ -114,7 +114,7 @@ func expectSingleRowQuery(db sqlmock.Sqlmock, query, column string, value driver
 }
 
 func TestDB_Address(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name string
 		arg  datastore.DB
 		out  string
@@ -126,9 +126,9 @@ func TestDB_Address(t *testing.T) {
 		{name: "full DSN", arg: datastore.DB{DSN: &datastore.DSN{Host: "127.0.0.1", Port: 5432}}, out: "127.0.0.1:5432"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.out, tt.arg.Address())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			require.Equal(tt, tc.out, tc.arg.Address())
 		})
 	}
 }
@@ -207,17 +207,17 @@ func TestQueryBuilder_Build(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
 			qb := datastore.NewQueryBuilder()
 
 			err := qb.Build(tc.query, tc.args...)
 
 			if tc.expectError {
-				require.Error(t, err)
+				require.Error(tt, err)
 			} else {
-				require.Equal(t, tc.expectedSQL, qb.SQL())
-				require.Equal(t, tc.expectedParams, qb.Params())
+				require.Equal(tt, tc.expectedSQL, qb.SQL())
+				require.Equal(tt, tc.expectedParams, qb.Params())
 			}
 		})
 	}
@@ -268,20 +268,20 @@ func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
 			qb := datastore.NewQueryBuilder()
 
 			err := qb.Build(tc.query, tc.args...)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			err = qb.WrapIntoSubqueryOf(tc.wrapQuery)
 
 			if tc.expectError {
-				require.Error(t, err)
+				require.Error(tt, err)
 			} else {
-				require.Equal(t, tc.expectedSQL, qb.SQL())
-				require.Equal(t, tc.expectedParams, qb.Params())
+				require.Equal(tt, tc.expectedSQL, qb.SQL())
+				require.Equal(tt, tc.expectedParams, qb.Params())
 			}
 		})
 	}

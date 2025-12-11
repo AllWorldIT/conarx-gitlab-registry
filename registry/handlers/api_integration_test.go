@@ -51,24 +51,24 @@ func TestBlobAPI(t *testing.T) {
 	env1 := newTestEnv(t)
 	args := makeBlobArgs(t)
 	testBlobAPIImpl(t, env1, args)
-	env1.Shutdown()
+	env1.Cleanup(t)
 
 	env2 := newTestEnv(t, withDelete)
 	args = makeBlobArgs(t)
 	testBlobAPIImpl(t, env2, args)
-	env2.Shutdown()
+	env2.Cleanup(t)
 }
 
 func TestBlobAPI_Get_BlobNotInDatabase(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
-	if !env.config.Database.Enabled {
+	if !env.config.Database.IsEnabled() {
 		t.Skip("skipping test because the metadata database is not enabled")
 	}
 
 	// Disable the database so writes only go to the filesytem.
-	env.config.Database.Enabled = false
+	env.config.Database.Enabled = configuration.DatabaseEnabledFalse
 
 	// create repository with a layer
 	args := makeBlobArgs(t)
@@ -76,7 +76,7 @@ func TestBlobAPI_Get_BlobNotInDatabase(t *testing.T) {
 	blobURL := pushLayer(t, env.builder, args.imageName, args.layerDigest, uploadURLBase, args.layerFile)
 
 	// Enable the database again so that reads first check the database.
-	env.config.Database.Enabled = true
+	env.config.Database.Enabled = configuration.DatabaseEnabledTrue
 
 	// fetch layer
 	res, err := http.Get(blobURL)
@@ -87,7 +87,7 @@ func TestBlobAPI_Get_BlobNotInDatabase(t *testing.T) {
 
 func TestBlobDelete(t *testing.T) {
 	env := newTestEnv(t, withDelete)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	args := makeBlobArgs(t)
 	env = testBlobAPIImpl(t, env, args)
@@ -98,7 +98,7 @@ func TestRelativeURL(t *testing.T) {
 	config := newConfig()
 	config.HTTP.RelativeURLs = false
 	env := newTestEnvWithConfig(t, &config)
-	defer env.Shutdown()
+	env.Cleanup(t)
 	ref, _ := reference.WithName("foo/bar")
 	uploadURLBaseAbs, _ := startPushLayer(t, env, ref)
 
@@ -143,7 +143,7 @@ func TestRelativeURL(t *testing.T) {
 
 func TestBlobDeleteDisabled(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 	args := makeBlobArgs(t)
 
 	imageName := args.imageName
@@ -422,7 +422,7 @@ func testBlobDeleteImpl(t *testing.T, env *testEnv, args blobArgs) {
 
 func TestDeleteDisabled(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, _ := reference.WithName("foo/bar")
 	// "build" our layer file
@@ -446,7 +446,7 @@ func TestDeleteReadOnly(t *testing.T) {
 	rootDir := t.TempDir()
 
 	setupEnv := newTestEnv(t, withFSDriver(rootDir))
-	defer setupEnv.Shutdown()
+	setupEnv.Cleanup(t)
 
 	imageName, _ := reference.WithName("foo/bar")
 	// "build" our layer file
@@ -458,9 +458,8 @@ func TestDeleteReadOnly(t *testing.T) {
 	pushLayer(t, setupEnv.builder, imageName, layerDigest, uploadURLBase, layerFile)
 
 	// Reconfigure environment with withReadOnly enabled.
-	setupEnv.Shutdown()
 	env := newTestEnv(t, withFSDriver(rootDir), withReadOnly)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	layerURL, err := env.builder.BuildBlobURL(ref)
 	require.NoError(t, err, "Error building blob URL")
@@ -474,7 +473,7 @@ func TestDeleteReadOnly(t *testing.T) {
 
 func TestStartPushReadOnly(t *testing.T) {
 	env := newTestEnv(t, withDelete, withReadOnly)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	imageName, _ := reference.WithName("foo/bar")
 
@@ -572,7 +571,7 @@ func TestGetManifestWithStorageError(t *testing.T) {
 	}
 	config.HTTP.Headers = headerConfig
 	env1 := newTestEnvWithConfig(t, &config)
-	defer env1.Shutdown()
+	env1.Cleanup(t)
 
 	repo, _ := reference.WithName(repositoryWithManifestNotFound)
 	testManifestWithStorageError(t, env1, repo, http.StatusNotFound, v2.ErrorCodeManifestUnknown)
@@ -609,10 +608,10 @@ func TestManifestAPI_Get_Schema2NotInDatabase(t *testing.T) {
 	rootDir2 := t.TempDir()
 
 	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir1))
-	defer env1.Shutdown()
+	env1.Cleanup(t)
 
 	env2 := newTestEnv(t, withFSDriver(rootDir2))
-	defer env2.Shutdown()
+	env2.Cleanup(t)
 
 	tagName := "schema2"
 	repoPath := "schema2/not/in/database"
@@ -625,7 +624,7 @@ func TestManifestAPI_Get_Schema2NotInDatabase(t *testing.T) {
 	tagURL := buildManifestTagURL(t, env2, repoPath, tagName)
 	digestURL := buildManifestDigestURL(t, env2, repoPath, deserializedManifest)
 
-	tt := []struct {
+	testCases := []struct {
 		name        string
 		manifestURL string
 		etag        string
@@ -640,21 +639,21 @@ func TestManifestAPI_Get_Schema2NotInDatabase(t *testing.T) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
-			require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, tc.manifestURL, nil)
+			require.NoError(tt, err)
 
 			req.Header.Set("Accept", schema2.MediaTypeManifest)
-			if test.etag != "" {
-				req.Header.Set("If-None-Match", test.etag)
+			if tc.etag != "" {
+				req.Header.Set("If-None-Match", tc.etag)
 			}
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusNotFound, resp.StatusCode)
+			require.Equal(tt, http.StatusNotFound, resp.StatusCode)
 		})
 	}
 }
@@ -667,10 +666,10 @@ func TestManifestAPI_Put_Schema2WritesNoFilesystemBlobLinkMetadata(t *testing.T)
 	rootDir2 := t.TempDir()
 
 	env1 := newTestEnv(t, withFSDriver(rootDir1))
-	defer env1.Shutdown()
+	env1.Cleanup(t)
 
 	env2 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir2))
-	defer env2.Shutdown()
+	env2.Cleanup(t)
 
 	tagName := "schema2"
 	repoPath := "schema2/not/in/database"
@@ -698,7 +697,7 @@ func TestManifestAPI_Put_Schema2WritesNoFilesystemBlobLinkMetadata(t *testing.T)
 
 func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	env.requireDB(t)
 
@@ -708,7 +707,7 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 	unknownMediaType := "fake/mediatype"
 	genericBlobMediaType := "application/octet-stream"
 
-	tt := []struct {
+	testCases := []struct {
 		name                  string
 		unknownLayerMediaType bool
 		dynamicMediaTypesFF   bool
@@ -733,12 +732,12 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(test.dynamicMediaTypesFF))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(tc.dynamicMediaTypesFF))
 
 			repoRef, err := reference.WithName(repoPath)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			manifest := &schema2.Manifest{
 				Versioned: manifest.Versioned{
@@ -749,24 +748,24 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 
 			// Create a manifest config and push up its content.
 			cfgPayload, cfgDesc := schema2Config()
-			uploadURLBase, _ := startPushLayer(t, env, repoRef)
-			pushLayer(t, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
+			uploadURLBase, _ := startPushLayer(tt, env, repoRef)
+			pushLayer(tt, env.builder, repoRef, cfgDesc.Digest, uploadURLBase, bytes.NewReader(cfgPayload))
 			manifest.Config = cfgDesc
 
 			manifest.Layers = make([]distribution.Descriptor, 1)
 
-			rs, dgst, size := createRandomSmallLayer(t)
+			rs, dgst, size := createRandomSmallLayer(tt)
 
 			// Save the layer content as pushLayer exhausts the io.ReadSeeker
 			layerBytes, err := io.ReadAll(rs)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			uploadURLBase, _ = startPushLayer(t, env, repoRef)
-			pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, bytes.NewReader(layerBytes))
+			uploadURLBase, _ = startPushLayer(tt, env, repoRef)
+			pushLayer(tt, env.builder, repoRef, dgst, uploadURLBase, bytes.NewReader(layerBytes))
 
 			layerMT := schema2.MediaTypeLayer
 
-			if test.unknownLayerMediaType {
+			if tc.unknownLayerMediaType {
 				layerMT = unknownMediaType
 			}
 
@@ -777,16 +776,16 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 			}
 
 			deserializedManifest, err := schema2.FromStruct(*manifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			// Build URLs.
-			tagURL := buildManifestTagURL(t, env, repoPath, tagName)
+			tagURL := buildManifestTagURL(tt, env, repoPath, tagName)
 
 			resp, err := putManifest("putting manifest", tagURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusCreated, resp.StatusCode)
+			require.Equal(tt, http.StatusCreated, resp.StatusCode)
 
 			// Check layer media type
 			ctx := context.Background()
@@ -795,48 +794,48 @@ func TestManifestAPI_Put_LayerMediaType(t *testing.T) {
 			bStore := datastore.NewBlobStore(env.db.Primary())
 
 			r, err := rStore.FindByPath(ctx, repoPath)
-			require.NoError(t, err)
-			require.NotNil(t, r)
+			require.NoError(tt, err)
+			require.NotNil(tt, r)
 
 			dbMfst, err := rStore.FindManifestByTagName(ctx, r, tagName)
-			require.NoError(t, err)
-			require.NotNil(t, dbMfst)
+			require.NoError(tt, err)
+			require.NotNil(tt, dbMfst)
 
 			dbLayers, err := mStore.LayerBlobs(ctx, dbMfst)
-			require.NoError(t, err)
-			require.NotNil(t, dbLayers)
-			require.Len(t, dbLayers, 1)
+			require.NoError(tt, err)
+			require.NotNil(tt, dbLayers)
+			require.Len(tt, dbLayers, 1)
 
 			wantMT := layerMT
 
-			if test.unknownLayerMediaType && !feature.DynamicMediaTypes.Enabled() {
+			if tc.unknownLayerMediaType && !feature.DynamicMediaTypes.Enabled() {
 				wantMT = genericBlobMediaType
 			}
 
-			require.Equal(t, wantMT, dbLayers[0].MediaType)
+			require.Equal(tt, wantMT, dbLayers[0].MediaType)
 
 			// Ensure underlying blob media type is always generic.
 			rBlob, err := rStore.FindBlob(ctx, r, dgst)
-			require.NoError(t, err)
-			require.NotNil(t, rBlob)
-			require.Equal(t, genericBlobMediaType, rBlob.MediaType)
+			require.NoError(tt, err)
+			require.NotNil(tt, rBlob)
+			require.Equal(tt, genericBlobMediaType, rBlob.MediaType)
 
 			dbBlob, err := bStore.FindByDigest(ctx, dgst)
-			require.NoError(t, err)
-			require.NotNil(t, dbBlob)
-			require.Equal(t, genericBlobMediaType, dbBlob.MediaType)
+			require.NoError(tt, err)
+			require.NotNil(tt, dbBlob)
+			require.Equal(tt, genericBlobMediaType, dbBlob.MediaType)
 		})
 	}
 }
 
 func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentInDatabase(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "schema2missinglayerstag"
 	repoPath := "schema2/missinglayers"
 
-	if !env.config.Database.Enabled {
+	if !env.config.Database.IsEnabled() {
 		t.Skip("skipping test because the metadata database is not enabled")
 	}
 
@@ -875,13 +874,13 @@ func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentIn
 		pushLayer(t, env.builder, fakeRepoRef, dgst, uploadURLBase, bytes.NewReader(layerBytes))
 
 		// Disable the database so writes only go to the filesytem.
-		env.config.Database.Enabled = false
+		env.config.Database.Enabled = configuration.DatabaseEnabledFalse
 
 		uploadURLBase, _ = startPushLayer(t, env, repoRef)
 		pushLayer(t, env.builder, repoRef, dgst, uploadURLBase, bytes.NewReader(layerBytes))
 
 		// Enable the database again so that reads first check the database.
-		env.config.Database.Enabled = true
+		env.config.Database.Enabled = configuration.DatabaseEnabledTrue
 
 		testManifest.Layers[i] = distribution.Descriptor{
 			Digest:    dgst,
@@ -906,7 +905,7 @@ func TestManifestAPI_Put_Schema2LayersNotAssociatedWithRepositoryButArePresentIn
 // Related to https://gitlab.com/gitlab-org/container-registry/-/issues/407.
 func TestManifestAPI_BuildkitIndex(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "latest"
 	repoPath := "cache"
@@ -986,7 +985,7 @@ func TestManifestAPI_BuildkitIndex(t *testing.T) {
 
 func TestManifestAPI_OCIIndexNoMediaType(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoRef, err := reference.WithName("foo")
 	require.NoError(t, err)
@@ -1040,7 +1039,7 @@ func TestManifestAPI_OCIIndexNoMediaType(t *testing.T) {
 // Related to https://gitlab.com/gitlab-org/container-registry/-/issues/407.
 func TestManifestAPI_ManifestListWithLayerReferences(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	tagName := "latest"
 	repoPath := "malformed-manifestlist"
@@ -1088,10 +1087,10 @@ func TestManifestAPI_ManifestListWithLayerReferences(t *testing.T) {
 
 func TestManifestAPI_Get_Schema1(t *testing.T) {
 	env := newTestEnv(t, withSchema1PreseededInMemoryDriver)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// Seed manifest in database directly since schema1 manifests are unpushable.
-	if env.config.Database.Enabled {
+	if env.config.Database.IsEnabled() {
 		repositoryStore := datastore.NewRepositoryStore(env.db.Primary())
 		dbRepo, err := repositoryStore.CreateByPath(env.ctx, preseededSchema1RepoPath)
 		require.NoError(t, err)
@@ -1121,6 +1120,11 @@ func TestManifestAPI_Get_Schema1(t *testing.T) {
 
 		err = tagStore.CreateOrUpdate(env.ctx, dbTag)
 		require.NoError(t, err)
+
+		// Since we're loading the schema 1 manifest directly to the primary database
+		// then reading it from a secondary when testing load balancing we should
+		// wait until replication as occurred before proceeding.
+		waitForReplica(t, env.db)
 	}
 
 	// Build URLs.
@@ -1135,7 +1139,7 @@ func TestManifestAPI_Get_Schema1(t *testing.T) {
 	digestURL, err := env.builder.BuildManifestURL(digestRef)
 	require.NoError(t, err)
 
-	tt := []struct {
+	testCases := []struct {
 		name        string
 		manifestURL string
 		etag        string
@@ -1150,17 +1154,17 @@ func TestManifestAPI_Get_Schema1(t *testing.T) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, test.manifestURL, nil)
-			require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, tc.manifestURL, nil)
+			require.NoError(tt, err)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-			checkBodyHasErrorCodes(t, "invalid manifest", resp, v2.ErrorCodeManifestInvalid)
+			require.Equal(tt, http.StatusBadRequest, resp.StatusCode)
+			checkBodyHasErrorCodes(tt, "invalid manifest", resp, v2.ErrorCodeManifestInvalid)
 		})
 	}
 }
@@ -1174,10 +1178,10 @@ func TestManifestAPI_Delete_Schema2ManifestNotInDatabase(t *testing.T) {
 	rootDir2 := t.TempDir()
 
 	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir1))
-	defer env1.Shutdown()
+	env1.Cleanup(t)
 
 	env2 := newTestEnv(t, withDelete, withFSDriver(rootDir2))
-	defer env2.Shutdown()
+	env2.Cleanup(t)
 
 	tagName := "schema2deletetag"
 	repoPath := "schema2/delete"
@@ -1204,9 +1208,9 @@ func TestManifestAPI_Delete_Schema2ManifestNotInDatabase(t *testing.T) {
 
 func TestManifestAPI_Delete_ManifestReferencedByList(t *testing.T) {
 	env := newTestEnv(t, withDelete)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
-	if !env.config.Database.Enabled {
+	if !env.config.Database.IsEnabled() {
 		t.Skip("skipping test because the metadata database is not enabled")
 	}
 
@@ -1231,9 +1235,9 @@ func TestManifestAPI_Delete_ManifestReferencedByList(t *testing.T) {
 
 func TestManifestAPI_Put_DatabaseEnabled_InvalidConfigMediaType(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
-	if !env.config.Database.Enabled {
+	if !env.config.Database.IsEnabled() {
 		t.Skip("skipping test because the metadata database is not enabled")
 	}
 
@@ -1299,10 +1303,10 @@ func TestManifestAPI_Put_OCIImageIndexByTagManifestsNotPresentInDatabase(t *test
 	rootDir2 := t.TempDir()
 
 	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir1))
-	defer env1.Shutdown()
+	env1.Cleanup(t)
 
 	env2 := newTestEnv(t, withFSDriver(rootDir2))
-	defer env2.Shutdown()
+	env2.Cleanup(t)
 
 	tagName := "ociindexmissingmanifeststag"
 	repoPath := "ociindex/missingmanifests"
@@ -1340,11 +1344,11 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 	}
 
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	unknownMediaType := "application/vnd.foo.manifest.v1+json"
 
-	tt := []struct {
+	testCases := []struct {
 		Name                string
 		PayloadMediaType    string
 		ContentTypeHeader   string
@@ -1492,15 +1496,15 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 	u, _ = startPushLayer(t, env, repoRef)
 	pushLayer(t, env.builder, repoRef, layerDgst, u, rs)
 
-	for _, test := range tt {
-		t.Run(test.Name, func(t *testing.T) {
-			t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(test.dynamicMediaTypesFF))
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(tt *testing.T) {
+			tt.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(tc.dynamicMediaTypesFF))
 
 			// build and push manifest
 			m := &schema2.Manifest{
 				Versioned: manifest.Versioned{
 					SchemaVersion: 2,
-					MediaType:     test.PayloadMediaType,
+					MediaType:     tc.PayloadMediaType,
 				},
 				Config: distribution.Descriptor{
 					MediaType: schema2.MediaTypeImageConfig,
@@ -1515,21 +1519,21 @@ func testManifestAPI_Put_ManifestWithAllPossibleMediaTypeAndContentTypeCombinati
 				},
 			}
 			dm, err := schema2.FromStruct(*m)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			u = buildManifestDigestURL(t, env, repoRef.Name(), dm)
-			resp, err := putManifest("", u, test.ContentTypeHeader, dm.Manifest)
-			require.NoError(t, err)
+			u = buildManifestDigestURL(tt, env, repoRef.Name(), dm)
+			resp, err := putManifest("", u, tc.ContentTypeHeader, dm.Manifest)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, test.ExpectedStatus, resp.StatusCode)
+			require.Equal(tt, tc.ExpectedStatus, resp.StatusCode)
 
-			if test.ExpectedErrCode != nil {
-				errs, _, _ := checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeManifestInvalid)
-				require.Len(t, errs, 1)
+			if tc.ExpectedErrCode != nil {
+				errs, _, _ := checkBodyHasErrorCodes(tt, "", resp, v2.ErrorCodeManifestInvalid)
+				require.Len(tt, errs, 1)
 				errc, ok := errs[0].(errcode.Error)
-				require.True(t, ok)
-				require.Equal(t, test.ExpectedErrDetail, errc.Detail)
+				require.True(tt, ok)
+				require.Equal(tt, tc.ExpectedErrDetail, errc.Detail)
 			}
 		})
 	}
@@ -1553,11 +1557,11 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 	}
 
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	unknownMediaType := "application/vnd.foo.manifest.list.v1+json"
 
-	tt := []struct {
+	testCases := []struct {
 		Name                string
 		PayloadMediaType    string
 		ContentTypeHeader   string
@@ -1700,15 +1704,15 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 	require.NoError(t, err)
 	dgst := digest.FromBytes(payload)
 
-	for _, test := range tt {
-		t.Run(test.Name, func(t *testing.T) {
-			t.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(test.dynamicMediaTypesFF))
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(tt *testing.T) {
+			tt.Setenv(feature.DynamicMediaTypes.EnvVariable, strconv.FormatBool(tc.dynamicMediaTypesFF))
 
 			// build and push manifest list
 			ml := &manifestlist.ManifestList{
 				Versioned: manifest.Versioned{
 					SchemaVersion: 2,
-					MediaType:     test.PayloadMediaType,
+					MediaType:     tc.PayloadMediaType,
 				},
 				Manifests: []manifestlist.ManifestDescriptor{
 					{
@@ -1725,21 +1729,21 @@ func testManifestAPI_Put_ManifestListWithAllPossibleMediaTypeAndContentTypeCombi
 			}
 
 			dml, err := manifestlist.FromDescriptors(ml.Manifests)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			manifestDigestURL := buildManifestDigestURL(t, env, repoRef.Name(), dml)
-			resp, err := putManifest("", manifestDigestURL, test.ContentTypeHeader, dml)
-			require.NoError(t, err)
+			manifestDigestURL := buildManifestDigestURL(tt, env, repoRef.Name(), dml)
+			resp, err := putManifest("", manifestDigestURL, tc.ContentTypeHeader, dml)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			require.Equal(t, test.ExpectedStatus, resp.StatusCode)
+			require.Equal(tt, tc.ExpectedStatus, resp.StatusCode)
 
-			if test.ExpectedErrCode != nil {
-				errs, _, _ := checkBodyHasErrorCodes(t, "", resp, v2.ErrorCodeManifestInvalid)
-				require.Len(t, errs, 1)
+			if tc.ExpectedErrCode != nil {
+				errs, _, _ := checkBodyHasErrorCodes(tt, "", resp, v2.ErrorCodeManifestInvalid)
+				require.Len(tt, errs, 1)
 				errc, ok := errs[0].(errcode.Error)
-				require.True(t, ok)
-				require.Equal(t, test.ExpectedErrDetail, errc.Detail)
+				require.True(tt, ok)
+				require.Equal(tt, tc.ExpectedErrDetail, errc.Detail)
 			}
 		})
 	}
@@ -2047,10 +2051,10 @@ func testManifestDelete(t *testing.T, env *testEnv, args manifestArgs) {
 // cause (allowing these invalid references to sneak in) is not addressed (#409).
 func TestManifestAPI_Get_Config(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// disable the database so writes only go to the filesystem
-	env.config.Database.Enabled = false
+	env.config.Database.Enabled = configuration.DatabaseEnabledFalse
 
 	// create repository with a manifest
 	repo, err := reference.WithName("foo/bar")
@@ -2084,25 +2088,26 @@ func testPrometheusMetricsCollectionDoesNotPanic(t *testing.T, env *testEnv) {
 
 func Test_PrometheusMetricsCollectionDoesNotPanic(t *testing.T) {
 	env := newTestEnv(t, withPrometheusMetrics())
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	testPrometheusMetricsCollectionDoesNotPanic(t, env)
 }
 
 func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
-	env := newTestEnv(t)
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
+	envPre := newTestEnv(t)
+	envPre.requireDB(t)
+	envPre.Cleanup(t)
 
 	// Seed repository "foo/bar"
 	repoName := "foo/bar"
 	tag := "latest"
 	refrencedRepo, err := reference.WithName(repoName)
 	require.NoError(t, err)
-	createRepository(t, env, repoName, tag)
+	createRepository(t, envPre, repoName, tag)
 
-	env, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost.Cleanup(t)
 
 	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
 	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
@@ -2114,7 +2119,7 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
 
 	// Create and execute API request to start blob upload (while project lease is in effect for "foo/bar")
-	req := newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(testToken))
+	req := newRequest(startPushLayerRequest(t, envPost, refrencedRepo), witAuthToken(testToken))
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -2124,7 +2129,7 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 	releaseProjectLease(t, redisController.Cache, repoName)
 
 	// Start another layer push with the project lease no longer in place for "foo/bar"
-	req = newRequest(startPushLayerRequest(t, env, refrencedRepo), witAuthToken(testToken))
+	req = newRequest(startPushLayerRequest(t, envPost, refrencedRepo), witAuthToken(testToken))
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -2144,16 +2149,17 @@ func TestExistingRenameLease_Prevents_Layer_Push(t *testing.T) {
 
 func TestExistingRenameLease_Prevents_Layer_Delete(t *testing.T) {
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
-	env := newTestEnv(t)
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
+	envPre := newTestEnv(t)
+	envPre.requireDB(t)
+	envPre.Cleanup(t)
 
 	// Seed repository "foo/bar"
 	repoName := "foo/bar"
-	args := createNamedRepoWithBlob(t, env, repoName)
+	args := createNamedRepoWithBlob(t, envPre, repoName)
 	repository := args.imageName
 
-	env, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost.Cleanup(t)
 
 	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
 	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
@@ -2167,7 +2173,7 @@ func TestExistingRenameLease_Prevents_Layer_Delete(t *testing.T) {
 	// Create and execute API request to delete a blob (while project lease is in effect for "foo/bar")
 	ref, err := reference.WithDigest(repository, args.layerDigest)
 	require.NoError(t, err)
-	blobDigestURL, err := env.builder.BuildBlobURL(ref)
+	blobDigestURL, err := envPost.builder.BuildBlobURL(ref)
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodDelete, blobDigestURL, nil)
 	require.NoError(t, err)
@@ -2182,18 +2188,19 @@ func TestExistingRenameLease_Prevents_Layer_Delete(t *testing.T) {
 
 func TestExistingRenameLease_Prevents_Manifest_Push(t *testing.T) {
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
-	env := newTestEnv(t)
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
+	envPre := newTestEnv(t)
+	envPre.requireDB(t)
+	envPre.Cleanup(t)
 
 	// Seed a repository "foo/bar"
 	repoName := "foo/bar"
 	tag := "latest"
 	repository, err := reference.WithName(repoName)
 	require.NoError(t, err)
-	deserializedManifest := seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+	deserializedManifest := seedRandomSchema2Manifest(t, envPre, repository.Name(), putByTag(tag))
 
-	env, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost.Cleanup(t)
 
 	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
 	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
@@ -2205,7 +2212,7 @@ func TestExistingRenameLease_Prevents_Manifest_Push(t *testing.T) {
 	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request upload manifest (while project lease is in effect for "foo/bar")
-	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
+	manifestDigestURL := buildManifestDigestURL(t, envPost, repository.Name(), deserializedManifest)
 	manifestRequest, err := putManifestRequest(manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
 	require.NoError(t, err, "putting manifest no error")
 	req := newRequest(manifestRequest, witAuthToken(testToken))
@@ -2219,18 +2226,19 @@ func TestExistingRenameLease_Prevents_Manifest_Push(t *testing.T) {
 
 func TestExistingRenameLeaseExpires_Eventually_Allows_Manifest_Push(t *testing.T) {
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
-	env := newTestEnv(t)
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
+	envPre := newTestEnv(t)
+	envPre.requireDB(t)
+	envPre.Cleanup(t)
 
 	// Seed repository "foo/bar"
 	repoName := "foo/bar"
 	tag := "latest"
 	repository, err := reference.WithName(repoName)
 	require.NoError(t, err)
-	deserializedManifest := seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+	deserializedManifest := seedRandomSchema2Manifest(t, envPre, repository.Name(), putByTag(tag))
 
-	env, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost.Cleanup(t)
 
 	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
 	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
@@ -2242,7 +2250,7 @@ func TestExistingRenameLeaseExpires_Eventually_Allows_Manifest_Push(t *testing.T
 	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request upload a manifest (while project lease is in effect for "foo/bar")
-	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
+	manifestDigestURL := buildManifestDigestURL(t, envPost, repository.Name(), deserializedManifest)
 	manifestRequest, err := putManifestRequest(manifestDigestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
 	require.NoError(t, err, "putting manifest no error")
 	req := newRequest(manifestRequest, witAuthToken(testToken))
@@ -2265,18 +2273,19 @@ func TestExistingRenameLeaseExpires_Eventually_Allows_Manifest_Push(t *testing.T
 
 func TestExistingRenameLease_Prevents_Manifest_Delete(t *testing.T) {
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
-	env := newTestEnv(t)
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
+	envPre := newTestEnv(t)
+	envPre.requireDB(t)
+	envPre.Cleanup(t)
 
 	// Seed repository "foo/bar"
 	repoName := "foo/bar"
 	tag := "latest"
 	repository, err := reference.WithName(repoName)
 	require.NoError(t, err)
-	deserializedManifest := seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+	deserializedManifest := seedRandomSchema2Manifest(t, envPre, repository.Name(), putByTag(tag))
 
-	env, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost.Cleanup(t)
 
 	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
 	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
@@ -2288,7 +2297,7 @@ func TestExistingRenameLease_Prevents_Manifest_Delete(t *testing.T) {
 	testToken := tokenProvider.tokenWithActions(deleteAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// Create and execute API request delete a manifest (while project lease is in effect for "foo/bar")
-	manifestDigestURL := buildManifestDigestURL(t, env, repository.Name(), deserializedManifest)
+	manifestDigestURL := buildManifestDigestURL(t, envPost, repository.Name(), deserializedManifest)
 	req, err := http.NewRequest(http.MethodDelete, manifestDigestURL, nil)
 	require.NoError(t, err)
 	req = newRequest(req, witAuthToken(testToken))
@@ -2302,18 +2311,19 @@ func TestExistingRenameLease_Prevents_Manifest_Delete(t *testing.T) {
 
 func TestExistingRenameLease_Prevents_Tag_Delete(t *testing.T) {
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
-	env := newTestEnv(t)
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
+	envPre := newTestEnv(t)
+	envPre.requireDB(t)
+	envPre.Cleanup(t)
 
 	// Seed a repository "foo/bar"
 	repoName := "foo/bar"
 	tag := "latest"
 	repository, err := reference.WithName(repoName)
 	require.NoError(t, err)
-	seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+	seedRandomSchema2Manifest(t, envPre, repository.Name(), putByTag(tag))
 
-	env, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost, redisController, tokenProvider := setupValidRenameEnv(t)
+	envPost.Cleanup(t)
 
 	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
 	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
@@ -2327,7 +2337,7 @@ func TestExistingRenameLease_Prevents_Tag_Delete(t *testing.T) {
 	// Create and execute API request to delete tag (while project lease is in effect for "foo/bar")
 	ref, err := reference.WithTag(repository, "latest")
 	require.NoError(t, err)
-	manifestURL, err := env.builder.BuildManifestURL(ref)
+	manifestURL, err := envPost.builder.BuildManifestURL(ref)
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
 	require.NoError(t, err)
@@ -2344,18 +2354,19 @@ func TestExistingRenameLease_Allows_Reads(t *testing.T) {
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
 	// We also need the FS driver configured correctly since we will be attempting to retrieve the seeded blobs
 	rootDir := t.TempDir()
-	env := newTestEnv(t, withFSDriver(rootDir))
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
+	envPre := newTestEnv(t, withFSDriver(rootDir))
+	envPre.requireDB(t)
+	envPre.Cleanup(t)
 
 	// Seed repository "foo/bar"
 	repoName := "foo/bar"
 	tag := "latest"
 	repository, err := reference.WithName(repoName)
 	require.NoError(t, err)
-	deserializedManifest := seedRandomSchema2Manifest(t, env, repository.Name(), putByTag(tag))
+	deserializedManifest := seedRandomSchema2Manifest(t, envPre, repository.Name(), putByTag(tag))
 
-	env, redisController, tokenProvider := setupValidRenameEnv(t, withFSDriver(rootDir))
+	envPost, redisController, tokenProvider := setupValidRenameEnv(t, withFSDriver(rootDir))
+	envPost.Cleanup(t)
 
 	// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
 	// Note: Project leases last for at most 6 seconds in the codebase - due to their impact on other registry functions (i.e pushing & deleting resources).
@@ -2367,29 +2378,28 @@ func TestExistingRenameLease_Allows_Reads(t *testing.T) {
 	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repository.Name(), repository.Name()))
 
 	// try reading from repository ongoing rename
-	assertManifestGetByDigestResponse(t, env, repository.Name(), deserializedManifest, http.StatusOK, witAuthToken(testToken))
-	assertManifestGetByTagResponse(t, env, repository.Name(), tag, http.StatusOK, witAuthToken(testToken))
-	assertManifestHeadByTagResponse(t, env, repository.Name(), tag, http.StatusOK, witAuthToken(testToken))
-	assertBlobGetResponse(t, env, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(testToken))
-	assertBlobHeadResponse(t, env, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(testToken))
+	assertManifestGetByDigestResponse(t, envPost, repository.Name(), deserializedManifest, http.StatusOK, witAuthToken(testToken))
+	assertManifestGetByTagResponse(t, envPost, repository.Name(), tag, http.StatusOK, witAuthToken(testToken))
+	assertManifestHeadByTagResponse(t, envPost, repository.Name(), tag, http.StatusOK, witAuthToken(testToken))
+	assertBlobGetResponse(t, envPost, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(testToken))
+	assertBlobHeadResponse(t, envPost, repository.Name(), deserializedManifest.Layers()[0].Digest, http.StatusOK, witAuthToken(testToken))
 }
 
 func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
 	// Apply base registry config/setup (without authorization) to allow seeding repository with test data
-	env := newTestEnv(t)
-	env.requireDB(t)
-	t.Cleanup(env.Shutdown)
+	envMain := newTestEnv(t)
+	envMain.requireDB(t)
 
 	// Seed a repository "foo/bar"
 	repoName := "foo/bar"
-	createNamedRepoWithBlob(t, env, repoName)
+	createNamedRepoWithBlob(t, envMain, repoName)
 
 	// create a token provider
 	tokenProvider := newAuthTokenProvider(t)
 	// Generate an Auth token with full access to the base repository "foo/bar"
 	testToken := tokenProvider.tokenWithActions(fullAccessTokenWithProjectMeta(repoName, repoName))
 
-	tt := []struct {
+	testCases := []struct {
 		name                 string
 		ongoingRenameCheckFF bool
 		redisEnabled         bool
@@ -2429,51 +2439,54 @@ func TestExistingRenameLease_Checks_Skipped(t *testing.T) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			t.Setenv(feature.OngoingRenameCheck.EnvVariable, strconv.FormatBool(test.ongoingRenameCheckFF))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Setenv(feature.OngoingRenameCheck.EnvVariable, strconv.FormatBool(tc.ongoingRenameCheckFF))
 
 			var opts []configOpt
 			var redisController internaltestutil.RedisCacheController
 
-			if test.redisEnabled {
+			if tc.redisEnabled {
 				// Attatch a redis cache to registry configuration
-				redisController = internaltestutil.NewRedisCacheController(t, 0)
+				redisController = internaltestutil.NewRedisCacheController(tt, 0)
 				opts = append(opts, withRedisCache(redisController.Addr()))
 
 				// Enact a project lease on "foo/bar" - indicating the project space is undergoing a rename
 				// Note: Project lease last for at most 5 seconds in the codebase. However, to test that a project lease is in effect we exaggerate the TTL of a lease to 1 hour.
 				// This is to make sure we have enough time to assert the behavior of an existing project lease while avoiding race-conditions/flakiness in the test.
-				acquireProjectLease(t, redisController.Cache, repoName, 1*time.Hour)
+				acquireProjectLease(tt, redisController.Cache, repoName, 1*time.Hour)
 			}
 
-			if !test.dbEnabled {
+			if !tc.dbEnabled {
 				opts = append(opts, withDBDisabled)
 			}
 
 			// Use token based authorization for all proceeding requests.
 			// Token based authorization is required for checking for an ongoing rename during push & delete operations.
-			env = newTestEnv(t, append(opts, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))...)
+			envSubtest := newTestEnv(tt, append(opts, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))...)
 
 			// Shutdown redis cache before making a request
-			if test.redisEnabled && test.redisUnReachable {
+			if tc.redisEnabled && tc.redisUnReachable {
 				redisController.Close()
 			}
+			t.Cleanup(func() {
+				err := envSubtest.Shutdown()
+				if err != nil {
+					require.Regexp(t, `redis flush: flushing redis cache: dial tcp 127\.0\.0\.1:\d+: connect: connection refused`, err.Error())
+				}
+			})
 			// Try pushing to the repository allegedly undergoing a rename and ensure it is successful.
 			// This signifies that a lease check on the enacted lease is never actioned upon.
-			seedRandomSchema2Manifest(t, env, repoName, putByTag("latest"), withAuthToken(testToken))
+			seedRandomSchema2Manifest(tt, envSubtest, repoName, putByTag("latest"), withAuthToken(testToken))
 		})
 	}
 }
 
 // TestManifestAPI_Delete_ProtectedTags verifies that tags can only be deleted if unprotected.
 func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
-	env := newTestEnv(t)
-	t.Cleanup(env.Shutdown)
-
 	// Set up authentication provider and test environment with delete permissions
 	tokenProvider := newAuthTokenProvider(t)
-	env = newTestEnv(t, withDelete, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
+	env := newTestEnv(t, withDelete, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// Create test repository and image tagged `latest`.
 	tag := "latest"
@@ -2489,7 +2502,7 @@ func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test cases
-	tests := []struct {
+	testCases := []struct {
 		name           string
 		customTag      string
 		denyPatterns   []string
@@ -2541,8 +2554,8 @@ func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Create auth token actions with deny access patterns for delete action
 			tokenActions := []*token.ResourceActions{
 				{
@@ -2551,7 +2564,7 @@ func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
 					Actions: []string{"delete"},
 					Meta: &token.Meta{
 						TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
-							Delete: tt.denyPatterns,
+							Delete: tc.denyPatterns,
 						},
 					},
 				},
@@ -2559,21 +2572,21 @@ func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
 
 			// Send delete request and validate response based on expected status and error codes
 			req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			checkResponse(t, "", resp, tt.expectedStatus)
+			checkResponse(tt, "", resp, tc.expectedStatus)
 
-			if tt.expectedError != nil {
-				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			if tc.expectedError != nil {
+				checkBodyHasErrorCodes(tt, "", resp, *tc.expectedError)
 			} else {
 				body, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				require.Empty(t, body)
+				require.NoError(tt, err)
+				require.Empty(tt, body)
 			}
 		})
 	}
@@ -2588,7 +2601,7 @@ func TestManifestAPI_Delete_ProtectedTags(t *testing.T) {
 // complexity of the expected/realistic test cases and keeping it separate.
 func TestManifestAPI_Delete_ProtectedTags_MultipleRepositories(t *testing.T) {
 	env := newTestEnv(t)
-	t.Cleanup(env.Shutdown)
+	env.Cleanup(t)
 
 	// Create sample repository with an image tagged as `latest`
 	imageName1, err := reference.WithName("foo/bar")
@@ -2654,7 +2667,7 @@ func TestManifestAPI_Delete_ProtectedTags_MultipleRepositories(t *testing.T) {
 // includes any tag delete deny patterns.
 func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
 	env := newTestEnv(t)
-	t.Cleanup(env.Shutdown)
+	env.Cleanup(t)
 
 	// Set up authentication provider and test environment with delete permissions
 	tokenProvider := newAuthTokenProvider(t)
@@ -2668,7 +2681,7 @@ func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
 	manifestDigestURL := buildManifestDigestURL(t, env, imageName.Name(), deserializedManifest)
 
 	// Test cases
-	tests := []struct {
+	testCases := []struct {
 		name           string
 		denyPatterns   []string
 		expectedStatus int
@@ -2686,8 +2699,8 @@ func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Create auth token actions with deny access patterns for delete action
 			tokenActions := []*token.ResourceActions{
 				{
@@ -2696,7 +2709,7 @@ func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
 					Actions: []string{"delete"},
 					Meta: &token.Meta{
 						TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
-							Delete: tt.denyPatterns,
+							Delete: tc.denyPatterns,
 						},
 					},
 				},
@@ -2704,21 +2717,21 @@ func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
 
 			// Send delete request and validate response based on expected status and error codes
 			req, err := http.NewRequest(http.MethodDelete, manifestDigestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			checkResponse(t, "", resp, tt.expectedStatus)
+			checkResponse(tt, "", resp, tc.expectedStatus)
 
-			if tt.expectedError != nil {
-				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			if tc.expectedError != nil {
+				checkBodyHasErrorCodes(tt, "", resp, *tc.expectedError)
 			} else {
 				body, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				require.Empty(t, body)
+				require.NoError(tt, err)
+				require.Empty(tt, body)
 			}
 		})
 	}
@@ -2727,7 +2740,7 @@ func TestManifestAPI_Delete_ProtectedTags_ByDigest(t *testing.T) {
 // TestManifestAPI_Put_ProtectedTags verifies that protected tags can only be created or updated if unprotected.
 func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 	env := newTestEnv(t)
-	t.Cleanup(env.Shutdown)
+	env.Cleanup(t)
 
 	imageName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
@@ -2737,7 +2750,7 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 	env = newTestEnv(t, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// Test cases
-	tests := []struct {
+	testCases := []struct {
 		name           string
 		tag            string
 		existingTag    bool
@@ -2798,13 +2811,13 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Pre-create the repository and tag if it's an update scenario
-			if tt.existingTag {
-				noAuthEnv := newTestEnv(t)
-				t.Cleanup(noAuthEnv.Shutdown)
-				seedRandomSchema2Manifest(t, noAuthEnv, imageName.Name(), putByTag(tt.tag))
+			if tc.existingTag {
+				noAuthEnv := newTestEnv(tt)
+				noAuthEnv.Cleanup(tt)
+				seedRandomSchema2Manifest(tt, noAuthEnv, imageName.Name(), putByTag(tc.tag))
 			}
 
 			// Create auth token with deny access patterns for push action
@@ -2815,33 +2828,33 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 					Actions: []string{"pull", "push"},
 					Meta: &token.Meta{
 						TagDenyAccessPatterns: &token.TagDenyAccessPatterns{
-							Push: tt.denyPatterns,
+							Push: tc.denyPatterns,
 						},
 					},
 				},
 			}
 
 			// Seed random layers and generate an image manifest
-			deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), withAuthToken(tokenProvider.tokenWithActions(tokenActions)))
+			deserializedManifest := seedRandomSchema2Manifest(tt, env, imageName.Name(), withAuthToken(tokenProvider.tokenWithActions(tokenActions)))
 
 			// Send manifest push request and ensure it responds as expected
-			manifestURL := buildManifestTagURL(t, env, imageName.Name(), tt.tag)
+			manifestURL := buildManifestTagURL(tt, env, imageName.Name(), tc.tag)
 			req, err := putManifestRequest(manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			checkResponse(t, "", resp, tt.expectedStatus)
+			checkResponse(tt, "", resp, tc.expectedStatus)
 
-			if tt.expectedError != nil {
-				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			if tc.expectedError != nil {
+				checkBodyHasErrorCodes(tt, "", resp, *tc.expectedError)
 			} else {
 				body, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				require.Empty(t, body)
+				require.NoError(tt, err)
+				require.Empty(tt, body)
 			}
 		})
 	}
@@ -2850,7 +2863,7 @@ func TestManifestAPI_Put_ProtectedTags(t *testing.T) {
 // TestManifestAPI_Delete_ImmutableTags verifies that tags can only be deleted if not immutable.
 func TestManifestAPI_Delete_ImmutableTags(t *testing.T) {
 	env := newTestEnv(t)
-	t.Cleanup(env.Shutdown)
+	env.Cleanup(t)
 
 	// Set up authentication provider and test environment with delete permissions
 	tokenProvider := newAuthTokenProvider(t)
@@ -2870,7 +2883,7 @@ func TestManifestAPI_Delete_ImmutableTags(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test cases
-	tests := []struct {
+	testCases := []struct {
 		name              string
 		customTag         string
 		immutablePatterns []string
@@ -2922,8 +2935,8 @@ func TestManifestAPI_Delete_ImmutableTags(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Create auth token actions with immutable patterns for delete action
 			tokenActions := []*token.ResourceActions{
 				{
@@ -2931,28 +2944,28 @@ func TestManifestAPI_Delete_ImmutableTags(t *testing.T) {
 					Name:    imageName.Name(),
 					Actions: []string{"delete"},
 					Meta: &token.Meta{
-						TagImmutablePatterns: tt.immutablePatterns,
+						TagImmutablePatterns: tc.immutablePatterns,
 					},
 				},
 			}
 
 			// Send delete request and validate response based on expected status and error codes
 			req, err := http.NewRequest(http.MethodDelete, manifestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			checkResponse(t, "", resp, tt.expectedStatus)
+			checkResponse(tt, "", resp, tc.expectedStatus)
 
-			if tt.expectedError != nil {
-				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			if tc.expectedError != nil {
+				checkBodyHasErrorCodes(tt, "", resp, *tc.expectedError)
 			} else {
 				body, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				require.Empty(t, body)
+				require.NoError(tt, err)
+				require.Empty(tt, body)
 			}
 		})
 	}
@@ -2967,7 +2980,7 @@ func TestManifestAPI_Delete_ImmutableTags(t *testing.T) {
 // complexity of the expected/realistic test cases and keeping it separate.
 func TestManifestAPI_Delete_ImmutableTags_MultipleRepositories(t *testing.T) {
 	env := newTestEnv(t)
-	t.Cleanup(env.Shutdown)
+	env.Cleanup(t)
 
 	// Create sample repository with an image tagged as `latest`
 	imageName1, err := reference.WithName("foo/bar")
@@ -3029,7 +3042,7 @@ func TestManifestAPI_Delete_ImmutableTags_MultipleRepositories(t *testing.T) {
 // includes any tag immutable patterns.
 func TestManifestAPI_Delete_ImmutableTags_ByDigest(t *testing.T) {
 	env := newTestEnv(t)
-	t.Cleanup(env.Shutdown)
+	env.Cleanup(t)
 
 	// Set up authentication provider and test environment with delete permissions
 	tokenProvider := newAuthTokenProvider(t)
@@ -3043,7 +3056,7 @@ func TestManifestAPI_Delete_ImmutableTags_ByDigest(t *testing.T) {
 	manifestDigestURL := buildManifestDigestURL(t, env, imageName.Name(), deserializedManifest)
 
 	// Test cases
-	tests := []struct {
+	testCases := []struct {
 		name              string
 		immutablePatterns []string
 		expectedStatus    int
@@ -3061,8 +3074,8 @@ func TestManifestAPI_Delete_ImmutableTags_ByDigest(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Create auth token actions with immutable patterns for delete action
 			tokenActions := []*token.ResourceActions{
 				{
@@ -3070,28 +3083,28 @@ func TestManifestAPI_Delete_ImmutableTags_ByDigest(t *testing.T) {
 					Name:    imageName.Name(),
 					Actions: []string{"delete"},
 					Meta: &token.Meta{
-						TagImmutablePatterns: tt.immutablePatterns,
+						TagImmutablePatterns: tc.immutablePatterns,
 					},
 				},
 			}
 
 			// Send delete request and validate response based on expected status and error codes
 			req, err := http.NewRequest(http.MethodDelete, manifestDigestURL, nil)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			checkResponse(t, "", resp, tt.expectedStatus)
+			checkResponse(tt, "", resp, tc.expectedStatus)
 
-			if tt.expectedError != nil {
-				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			if tc.expectedError != nil {
+				checkBodyHasErrorCodes(tt, "", resp, *tc.expectedError)
 			} else {
 				body, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				require.Empty(t, body)
+				require.NoError(tt, err)
+				require.Empty(tt, body)
 			}
 		})
 	}
@@ -3100,9 +3113,9 @@ func TestManifestAPI_Delete_ImmutableTags_ByDigest(t *testing.T) {
 // TestManifestAPI_Put_ImmutableTags verifies that immutable tags can only be created or updated if unprotected.
 func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 	env := newTestEnv(t)
-	t.Cleanup(env.Shutdown)
+	env.Cleanup(t)
 
-	if !env.config.Database.Enabled {
+	if !env.config.Database.IsEnabled() {
 		t.Skip("skipping test because the metadata database is not enabled")
 	}
 
@@ -3114,7 +3127,7 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 	env = newTestEnv(t, withTokenAuth(tokenProvider.certPath(), defaultIssuerProps()))
 
 	// Test cases
-	tests := []struct {
+	testCases := []struct {
 		name              string
 		tag               string
 		existingTag       bool
@@ -3177,13 +3190,13 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Pre-create the repository and tag if it's an update scenario
-			if tt.existingTag {
-				noAuthEnv := newTestEnv(t)
-				t.Cleanup(noAuthEnv.Shutdown)
-				seedRandomSchema2Manifest(t, noAuthEnv, imageName.Name(), putByTag(tt.tag))
+			if tc.existingTag {
+				noAuthEnv := newTestEnv(tt)
+				noAuthEnv.Cleanup(tt)
+				seedRandomSchema2Manifest(t, noAuthEnv, imageName.Name(), putByTag(tc.tag))
 			}
 
 			// Create auth token with immutable patterns for push action
@@ -3193,32 +3206,32 @@ func TestManifestAPI_Put_ImmutableTags(t *testing.T) {
 					Name:    imageName.Name(),
 					Actions: []string{"pull", "push"},
 					Meta: &token.Meta{
-						TagImmutablePatterns: tt.immutablePatterns,
+						TagImmutablePatterns: tc.immutablePatterns,
 					},
 				},
 			}
 
 			// Seed random layers and generate an image manifest
-			deserializedManifest := seedRandomSchema2Manifest(t, env, imageName.Name(), withAuthToken(tokenProvider.tokenWithActions(tokenActions)))
+			deserializedManifest := seedRandomSchema2Manifest(tt, env, imageName.Name(), withAuthToken(tokenProvider.tokenWithActions(tokenActions)))
 
 			// Send manifest push request and ensure it responds as expected
-			manifestURL := buildManifestTagURL(t, env, imageName.Name(), tt.tag)
+			manifestURL := buildManifestTagURL(tt, env, imageName.Name(), tc.tag)
 			req, err := putManifestRequest(manifestURL, schema2.MediaTypeManifest, deserializedManifest.Manifest)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			req = tokenProvider.requestWithAuthActions(req, tokenActions)
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
 
-			checkResponse(t, "", resp, tt.expectedStatus)
+			checkResponse(tt, "", resp, tc.expectedStatus)
 
-			if tt.expectedError != nil {
-				checkBodyHasErrorCodes(t, "", resp, *tt.expectedError)
+			if tc.expectedError != nil {
+				checkBodyHasErrorCodes(tt, "", resp, *tc.expectedError)
 			} else {
 				body, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				require.Empty(t, body)
+				require.NoError(tt, err)
+				require.Empty(tt, body)
 			}
 		})
 	}
@@ -3229,7 +3242,7 @@ func TestStatisticsAPI_Get(t *testing.T) {
 	skipDatabaseNotEnabled(t)
 
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	req, err := env.builder.BuildGitlabV1StatisticsURL()
 	require.NoError(t, err)
@@ -3265,10 +3278,10 @@ func TestStatisticsAPI_Get_ImportStats(t *testing.T) {
 	rootDir := t.TempDir()
 
 	env1 := newTestEnv(t, withDBDisabled, withFSDriver(rootDir))
-	defer env1.Shutdown()
+	env1.Cleanup(t)
 
 	env2 := newTestEnv(t, withFSDriver(rootDir))
-	defer env2.Shutdown()
+	env2.Cleanup(t)
 
 	tagName := "import-test"
 	repoPath := "my/import/path"

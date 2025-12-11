@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +58,15 @@ const (
 	// MaxReplicaLagBytes is the default maximum replication lag in bytes. This matches the Rails default, see
 	// https://gitlab.com/gitlab-org/gitlab/blob/5c68653ce8e982e255277551becb3270a92f5e9e/lib/gitlab/database/load_balancing/configuration.rb#L48-48
 	MaxReplicaLagBytes = 8 * 1024 * 1024
+
+	// flappingWindowDuration is the time window for detecting flapping behavior.
+	flappingWindowDuration = 60 * time.Second
+	// maxConsecutiveFailures is the number of consecutive failures before quarantining a replica due to flapping.
+	maxConsecutiveFailures = 3
+	// flappingThreshold is the number of add/remove events within the flapping window that triggers quarantine.
+	flappingThreshold = 5
+	// flappingQuarantineDuration is the duration to keep a replica quarantined for connectivity issues.
+	flappingQuarantineDuration = 5 * time.Minute
 )
 
 // LoadBalancingConfig represents the database load balancing configuration.
@@ -118,6 +128,9 @@ type DBLoadBalancer struct {
 
 	// For tracking replication lag
 	lagTracker LagTracker
+
+	// For tracking replica connectivity issues (flapping and consecutive failures)
+	connectivityTracker *ReplicaConnectivityTracker
 }
 
 // WithFixedHosts configures the list of static hosts to use for read replicas during database load balancing.
@@ -562,6 +575,12 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 		dsn := &resolvedDSNs[i]
 		l = l.WithFields(logrus.Fields{"db_replica_addr": dsn.Address()})
 
+		// Skip replicas quarantined for connectivity issues
+		if lb.connectivityTracker.IsQuarantined(ctx, dsn.Address()) {
+			l.Warn("skipping replica quarantined due to connectivity issues")
+			continue
+		}
+
 		r := dbByAddress(lb.replicas, dsn.Address())
 		if r != nil {
 			// check if connection to existing replica is still usable
@@ -569,20 +588,25 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 				l.WithError(err).Warn("replica is known but connection is stale, attempting to reconnect")
 				r, err = lb.connector.Open(ctx, dsn, lb.replicaOpenOpts...)
 				if err != nil {
+					lb.connectivityTracker.RecordFailure(ctx, dsn.Address())
 					result = multierror.Append(result, fmt.Errorf("reopening replica %q database connection: %w", dsn.Address(), err))
 					continue
 				}
 			} else {
 				l.Info("replica is known and healthy, reusing connection")
 			}
+			lb.connectivityTracker.RecordSuccess(ctx, r.Address())
 		} else {
 			l.Info("replica is new, opening connection")
 			if r, err = lb.connector.Open(ctx, dsn, lb.replicaOpenOpts...); err != nil {
+				lb.connectivityTracker.RecordFailure(ctx, dsn.Address())
 				result = multierror.Append(result, fmt.Errorf("failed to open replica %q database connection: %w", dsn.Address(), err))
 				continue
 			}
 			added = append(added, r.Address())
 			metrics.ReplicaAdded()
+			lb.connectivityTracker.RecordSuccess(ctx, r.Address())
+			lb.connectivityTracker.RecordPoolEvent(ctx, r.Address())
 
 			// Register metrics collector for the added replica
 			if lb.metricsEnabled {
@@ -607,6 +631,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 		if dbByAddress(outputReplicas, r.Address()) == nil {
 			removed = append(removed, r.Address())
 			metrics.ReplicaRemoved()
+			lb.connectivityTracker.RecordPoolEvent(ctx, r.Address())
 
 			// Unregister the metrics collector for the removed replica
 			lb.unregisterReplicaMetricsCollector(r)
@@ -722,6 +747,7 @@ func (lb *DBLoadBalancer) removeReplica(ctx context.Context, r *DB) {
 			lb.unregisterReplicaMetricsCollector(r)
 			metrics.ReplicaRemoved()
 			metrics.ReplicaPoolSize(len(lb.replicas))
+			lb.connectivityTracker.RecordPoolEvent(ctx, replicaAddr)
 
 			if err := r.Close(); err != nil {
 				l.WithError(err).Error("error closing retired replica connection")
@@ -767,6 +793,9 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 		WithLagCheckInterval(config.loadBalancing.replicaCheckInterval),
 	)
 
+	// Initialize the replica connectivity tracker for connectivity-based quarantine
+	lb.connectivityTracker = NewReplicaConnectivityTracker()
+
 	primary, err := lb.connector.Open(ctx, primaryDSN, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open primary database connection: %w", err)
@@ -809,14 +838,19 @@ func (lb *DBLoadBalancer) Replica(ctx context.Context) *DB {
 		return lb.primary
 	}
 
-	// Filter out quarantined replicas
+	// Filter out quarantined replicas (both lag-based and connectivity-based quarantine)
 	var availableReplicas []*DB
 	for _, r := range lb.replicas {
+		// Check if quarantined for replication lag
 		if lb.lagTracker != nil {
-			info := lb.lagTracker.Get(r.Address())
-			if info != nil && info.Quarantined {
+			lagInfo := lb.lagTracker.Get(r.Address())
+			if lagInfo != nil && lagInfo.Quarantined {
 				continue
 			}
+		}
+		// Check if quarantined for connectivity issues
+		if lb.connectivityTracker.IsQuarantined(ctx, r.Address()) {
+			continue
 		}
 		availableReplicas = append(availableReplicas, r)
 	}
@@ -842,6 +876,8 @@ func (lb *DBLoadBalancer) Replica(ctx context.Context) *DB {
 
 // Replicas returns all replica database handlers currently in the pool.
 func (lb *DBLoadBalancer) Replicas() []*DB {
+	lb.replicaMutex.Lock()
+	defer lb.replicaMutex.Unlock()
 	return lb.replicas
 }
 
@@ -1120,7 +1156,7 @@ func (t *ReplicaLagTracker) set(ctx context.Context, db *DB, timeLag time.Durati
 		info.QuarantinedAt = now
 
 		metrics.ReplicaStatusQuarantined(addr)
-		metrics.ReplicaQuarantined()
+		metrics.ReplicaQuarantinedForLag()
 
 		// Add threshold values to logs when quarantining
 		l.WithFields(log.Fields{
@@ -1133,7 +1169,7 @@ func (t *ReplicaLagTracker) set(ctx context.Context, db *DB, timeLag time.Durati
 		info.QuarantinedAt = time.Time{}
 
 		metrics.ReplicaStatusReintegrated(addr)
-		metrics.ReplicaReintegrated()
+		metrics.ReplicaReintegratedFromLag()
 
 		l.Info("replica reintegrated after catching up on replication lag")
 	}
@@ -1212,4 +1248,222 @@ func (t *ReplicaLagTracker) Check(ctx context.Context, primaryLSN string, replic
 	t.set(ctx, replica, timeLag, bytesLag)
 
 	return nil
+}
+
+// ReplicaConnectivityInfo stores health and quarantine information for a replica based on connectivity.
+type ReplicaConnectivityInfo struct {
+	Address             string
+	ConsecutiveFailures int
+	LastFailureAt       time.Time
+	Quarantined         bool
+	QuarantinedAt       time.Time
+	QuarantineReleaseAt time.Time
+	PoolEvents          []time.Time // Sliding window of add/remove events for flapping detection
+}
+
+// ReplicaConnectivityTracker manages replica health tracking to detect and mitigate connection instability.
+//
+// It protects the load balancer from unstable replicas through two detection mechanisms:
+//
+// 1. Consecutive Failure Detection:
+//   - Tracks connectivity failures per replica
+//   - Quarantines a replica after 3 consecutive failures
+//   - Prevents repeated connection attempts to unreachable replicas
+//
+// 2. Flapping Detection:
+//   - Monitors add/remove events in a 60-second sliding window
+//   - Quarantines a replica after 5 events within the window
+//   - Prevents rapid oscillation between adding and removing unstable replicas
+//
+// Quarantined replicas are:
+//   - Excluded from the replica pool during resolution
+//   - Automatically reintegrated after a 5-minute cooldown period
+//   - Cleared of all failure/event history upon reintegration
+//
+// This mechanism improves stability by preventing the load balancer from attempting unstable connections,
+// reducing latency spikes from connection failures, and providing time for transient network or
+// replica issues to resolve.
+type ReplicaConnectivityTracker struct {
+	sync.Mutex
+	connectivityInfo map[string]*ReplicaConnectivityInfo
+}
+
+// NewReplicaConnectivityTracker creates a new ReplicaConnectivityTracker.
+func NewReplicaConnectivityTracker() *ReplicaConnectivityTracker {
+	return &ReplicaConnectivityTracker{
+		connectivityInfo: make(map[string]*ReplicaConnectivityInfo),
+	}
+}
+
+// Get returns the health info for a replica.
+func (t *ReplicaConnectivityTracker) Get(replicaAddr string) *ReplicaConnectivityInfo {
+	t.Lock()
+	defer t.Unlock()
+
+	info, exists := t.connectivityInfo[replicaAddr]
+	if !exists {
+		return nil
+	}
+
+	// Return a copy to avoid race conditions
+	connectivityInfo := *info
+	connectivityInfo.PoolEvents = append(make([]time.Time, 0), info.PoolEvents...)
+	return &connectivityInfo
+}
+
+// IsQuarantined returns true if the replica is currently quarantined for connectivity issues.
+func (t *ReplicaConnectivityTracker) IsQuarantined(ctx context.Context, replicaAddr string) bool {
+	t.Lock()
+	defer t.Unlock()
+
+	info, exists := t.connectivityInfo[replicaAddr]
+	if !exists {
+		return false
+	}
+
+	// Check if quarantine has expired
+	if info.Quarantined && time.Now().After(info.QuarantineReleaseAt) {
+		t.reintegrate(ctx, replicaAddr, info)
+		return false
+	}
+
+	return info.Quarantined
+}
+
+// RecordFailure records a connectivity failure for a replica.
+func (t *ReplicaConnectivityTracker) RecordFailure(ctx context.Context, replicaAddr string) {
+	t.Lock()
+	defer t.Unlock()
+
+	info := t.getOrCreateInfo(replicaAddr)
+	info.ConsecutiveFailures++
+	info.LastFailureAt = time.Now()
+
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"db_replica_addr":      replicaAddr,
+		"consecutive_failures": info.ConsecutiveFailures,
+	})
+
+	// Check if we should quarantine due to consecutive failures
+	if !info.Quarantined && info.ConsecutiveFailures >= maxConsecutiveFailures {
+		t.quarantineForConsecutiveFailures(ctx, replicaAddr, info)
+	} else {
+		l.Info("recorded connectivity failure for replica")
+	}
+}
+
+// RecordSuccess records a successful connectivity for a replica.
+func (t *ReplicaConnectivityTracker) RecordSuccess(ctx context.Context, replicaAddr string) {
+	t.Lock()
+	defer t.Unlock()
+
+	_, exists := t.connectivityInfo[replicaAddr]
+	info := t.getOrCreateInfo(replicaAddr)
+
+	// If this is the first time we're tracking this replica, mark it as online
+	if !exists {
+		metrics.ReplicaStatusOnline(replicaAddr)
+	}
+
+	// Reset consecutive failures counter
+	if info.ConsecutiveFailures > 0 {
+		log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+			"db_replica_addr":   replicaAddr,
+			"previous_failures": info.ConsecutiveFailures,
+		}).Info("replica connectivity recovered, resetting consecutive failures counter")
+		info.ConsecutiveFailures = 0
+	}
+}
+
+// RecordPoolEvent records an add/remove event for flapping detection.
+func (t *ReplicaConnectivityTracker) RecordPoolEvent(ctx context.Context, replicaAddr string) {
+	t.Lock()
+	defer t.Unlock()
+
+	now := time.Now()
+	info := t.getOrCreateInfo(replicaAddr)
+
+	// Add current event
+	info.PoolEvents = append(info.PoolEvents, now)
+
+	// Remove events outside of the flapping window
+	cutoff := now.Add(-flappingWindowDuration)
+	idx := slices.IndexFunc(info.PoolEvents, func(eventTime time.Time) bool { return eventTime.After(cutoff) })
+	if idx != -1 {
+		info.PoolEvents = info.PoolEvents[idx:]
+	} else {
+		info.PoolEvents = info.PoolEvents[:0]
+	}
+
+	l := log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"db_replica_addr":   replicaAddr,
+		"events_in_window":  len(info.PoolEvents),
+		"window_duration_s": flappingWindowDuration.Seconds(),
+	})
+
+	// Check for flapping
+	if !info.Quarantined && len(info.PoolEvents) >= flappingThreshold {
+		t.quarantineForFlapping(ctx, replicaAddr, info)
+		l.WithFields(log.Fields{
+			"flapping_threshold":    flappingThreshold,
+			"quarantine_duration_s": flappingQuarantineDuration.Seconds(),
+		}).Warn("replica quarantined due to flapping behavior")
+	} else {
+		l.Info("recorded pool event for replica")
+	}
+}
+
+// getOrCreateInfo gets or creates health info for a replica. Must be called with lock held.
+func (t *ReplicaConnectivityTracker) getOrCreateInfo(replicaAddr string) *ReplicaConnectivityInfo {
+	info, exists := t.connectivityInfo[replicaAddr]
+	if !exists {
+		info = &ReplicaConnectivityInfo{
+			Address:    replicaAddr,
+			PoolEvents: make([]time.Time, 0),
+		}
+		t.connectivityInfo[replicaAddr] = info
+	}
+	return info
+}
+
+// quarantineForConsecutiveFailures quarantines a replica due to consecutive connectivity failures. Must be called with lock held.
+func (t *ReplicaConnectivityTracker) quarantineForConsecutiveFailures(ctx context.Context, replicaAddr string, info *ReplicaConnectivityInfo) {
+	t.quarantine(ctx, replicaAddr, info, "consecutive connection failures")
+}
+
+// quarantineForFlapping quarantines a replica due to flapping behavior. Must be called with lock held.
+func (t *ReplicaConnectivityTracker) quarantineForFlapping(ctx context.Context, replicaAddr string, info *ReplicaConnectivityInfo) {
+	t.quarantine(ctx, replicaAddr, info, "connection flapping")
+}
+
+// quarantine quarantines a replica with the specified reason. Must be called with lock held.
+func (*ReplicaConnectivityTracker) quarantine(ctx context.Context, replicaAddr string, info *ReplicaConnectivityInfo, reason string) {
+	now := time.Now()
+	info.Quarantined = true
+	info.QuarantinedAt = now
+	info.QuarantineReleaseAt = now.Add(flappingQuarantineDuration)
+
+	metrics.ReplicaStatusQuarantined(replicaAddr)
+	metrics.ReplicaQuarantinedForConnectivity()
+
+	log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"db_replica_addr": replicaAddr,
+		"reason":          reason,
+	}).Warn("replica quarantined for connectivity issues")
+}
+
+// reintegrate reintegrates a quarantined replica. Must be called with lock held.
+func (*ReplicaConnectivityTracker) reintegrate(ctx context.Context, replicaAddr string, info *ReplicaConnectivityInfo) {
+	info.Quarantined = false
+	info.QuarantinedAt = time.Time{}
+	info.QuarantineReleaseAt = time.Time{}
+	info.ConsecutiveFailures = 0
+	info.PoolEvents = nil
+
+	metrics.ReplicaStatusReintegrated(replicaAddr)
+	metrics.ReplicaReintegratedFromConnectivity()
+
+	log.GetLogger(log.WithContext(ctx)).WithFields(log.Fields{
+		"db_replica_addr": replicaAddr,
+	}).Info("replica reintegrated after quarantine period expired")
 }

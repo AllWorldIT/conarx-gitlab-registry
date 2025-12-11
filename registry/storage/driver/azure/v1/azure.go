@@ -14,6 +14,7 @@ import (
 	"time"
 
 	azure "github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/docker/distribution/log"
 	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	"github.com/docker/distribution/registry/storage/driver/azure/common"
 	"github.com/docker/distribution/registry/storage/driver/base"
@@ -107,6 +108,16 @@ func ParseParameters(parameters map[string]any) (any, error) {
 
 // New constructs a new Driver with the given Azure Storage Account credentials
 func New(in any) (storagedriver.StorageDriver, error) {
+	log.GetLogger().WithFields(log.Fields{
+		"component": "registry.storage.azure_v1.internal",
+	}).Warn(
+		"WARNING: You are using the deprecated Azure_v1 storage driver. " +
+			"Support for 'track 1' Azure SDK ended and it no longer recives support. " +
+			"Please migrate to the azure_v2 driver if you would like to continue reciveing support. " +
+			"Starting with 19.0 azure_v2 will become the default Azure storage driver. " +
+			"The change will be transparent and no action is needed. " +
+			"Issue: https://gitlab.com/gitlab-org/gitlab/-/issues/523096")
+
 	params := in.(*DriverParameters)
 	api, err := azure.NewClient(params.AccountName, params.AccountKey, params.Realm, azure.DefaultAPIVersion, true)
 	if err != nil {

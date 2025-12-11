@@ -69,18 +69,18 @@ func TestRepositoryStats_CacheError(t *testing.T) {
 
 	cacheErr := errors.New("cache error")
 
-	t.Run("increase pull count", func(t *testing.T) {
+	t.Run("increase pull count", func(tt *testing.T) {
 		mockCache.EXPECT().Incr(ctx, repoStats.key(repo.Path, statsOperationPull)).Return(cacheErr).Times(1)
 
 		err := repoStats.IncrementPullCount(ctx, repo)
-		require.EqualError(t, err, "incrementing pull count in cache: cache error")
+		require.EqualError(tt, err, "incrementing pull count in cache: cache error")
 	})
 
-	t.Run("increase push count", func(t *testing.T) {
+	t.Run("increase push count", func(tt *testing.T) {
 		mockCache.EXPECT().Incr(ctx, repoStats.key(repo.Path, statsOperationPush)).Return(cacheErr).Times(1)
 
 		err := repoStats.IncrementPushCount(ctx, repo)
-		require.EqualError(t, err, "incrementing push count in cache: cache error")
+		require.EqualError(tt, err, "incrementing push count in cache: cache error")
 	})
 }
 
@@ -104,9 +104,9 @@ func TestRepositoryStats_key(t *testing.T) {
 
 	rs := NewRepositoryStats(nil)
 	for name, tc := range tcs {
-		t.Run(name, func(t *testing.T) {
+		t.Run(name, func(tt *testing.T) {
 			out := rs.key(tc.path, tc.op)
-			require.Equal(t, tc.expectedKey, out)
+			require.Equal(tt, tc.expectedKey, out)
 		})
 	}
 }

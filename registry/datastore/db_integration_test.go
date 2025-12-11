@@ -16,7 +16,7 @@ import (
 func TestOpen(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
+	testCases := []struct {
 		name       string
 		dsnFactory func() (*datastore.DSN, error)
 		opts       []datastore.Option
@@ -64,19 +64,19 @@ func TestOpen(t *testing.T) {
 			wantErrMsg: "FATAL: password authentication failed for user",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dsn, err := tt.dsnFactory()
-			require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			dsn, err := tc.dsnFactory()
+			require.NoError(tt, err)
 
 			db, err := datastore.NewConnector().Open(context.Background(), dsn)
-			if tt.wantErr {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.wantErrMsg)
+			if tc.wantErr {
+				require.Error(tt, err)
+				require.Contains(tt, err.Error(), tc.wantErrMsg)
 			} else {
 				defer db.Close()
-				require.NoError(t, err)
-				require.IsType(t, new(datastore.DB), db)
+				require.NoError(tt, err)
+				require.IsType(tt, new(datastore.DB), db)
 			}
 		})
 	}

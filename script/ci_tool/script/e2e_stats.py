@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-import base64
-import hashlib
-import os
 import re
 import shelve
 import traceback
@@ -11,7 +8,6 @@ from datetime import datetime, timedelta
 import click
 import gitlab
 import psycopg
-import yaml
 from dateutil.parser import parse
 
 # Constants

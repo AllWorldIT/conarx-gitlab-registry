@@ -283,7 +283,7 @@ func TestEligibleForS3(t *testing.T) {
 		return dcontext.WithRequest(empty, req)
 	}
 
-	cases := []struct {
+	testCases := []struct {
 		Context  context.Context
 		Expected bool
 	}{
@@ -292,11 +292,11 @@ func TestEligibleForS3(t *testing.T) {
 		{Context: makeContext("192.168.0.2"), Expected: false},
 	}
 
-	for _, testCase := range cases {
+	for _, tc := range testCases {
 		name := fmt.Sprintf("Client IP = %v",
-			testCase.Context.Value("http.request.ip"))
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, testCase.Expected, eligibleForS3(testCase.Context, awsIPs))
+			tc.Context.Value("http.request.ip"))
+		t.Run(name, func(tt *testing.T) {
+			assert.Equal(tt, tc.Expected, eligibleForS3(tc.Context, awsIPs))
 		})
 	}
 }
@@ -318,7 +318,7 @@ func TestEligibleForS3WithAWSIPNotInitialized(t *testing.T) {
 		return dcontext.WithRequest(empty, req)
 	}
 
-	cases := []struct {
+	testCases := []struct {
 		Context  context.Context
 		Expected bool
 	}{
@@ -327,11 +327,11 @@ func TestEligibleForS3WithAWSIPNotInitialized(t *testing.T) {
 		{Context: makeContext("192.168.0.2"), Expected: false},
 	}
 
-	for _, testCase := range cases {
+	for _, tc := range testCases {
 		name := fmt.Sprintf("Client IP = %v",
-			testCase.Context.Value("http.request.ip"))
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, testCase.Expected, eligibleForS3(testCase.Context, awsIPs))
+			tc.Context.Value("http.request.ip"))
+		t.Run(name, func(tt *testing.T) {
+			assert.Equal(tt, tc.Expected, eligibleForS3(tc.Context, awsIPs))
 		})
 	}
 }

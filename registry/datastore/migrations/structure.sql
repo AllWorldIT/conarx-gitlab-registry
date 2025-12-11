@@ -212,11 +212,19 @@ BEGIN
 END;
 $$;
 
+CREATE SEQUENCE public.blobs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
 CREATE TABLE public.blobs (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 )
 PARTITION BY HASH (digest);
 
@@ -224,448 +232,512 @@ CREATE TABLE partitions.blobs_p_0 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_1 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_10 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_11 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_12 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_13 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_14 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_15 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_16 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_17 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_18 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_19 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_2 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_20 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_21 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_22 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_23 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_24 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_25 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_26 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_27 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_28 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_29 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_3 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_30 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_31 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_32 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_33 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_34 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_35 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_36 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_37 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_38 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_39 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_4 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_40 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_41 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_42 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_43 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_44 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_45 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_46 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_47 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_48 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_49 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_5 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_50 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_51 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_52 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_53 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_54 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_55 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_56 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_57 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_58 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_59 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_6 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_60 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_61 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_62 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_63 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_7 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_8 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE partitions.blobs_p_9 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
 );
 
 CREATE TABLE public.gc_blobs_configurations (
@@ -5651,7 +5723,9 @@ CREATE TABLE public.batched_background_migrations (
     column_name text NOT NULL,
     failure_error_code smallint,
     started_at timestamp with time zone,
-    finished_at timestamp with time zone
+    finished_at timestamp with time zone,
+    batching_strategy text,
+    total_tuple_count bigint
 );
 
 ALTER TABLE public.batched_background_migrations
@@ -11141,6 +11215,201 @@ CREATE INDEX gc_blobs_layers_p_8_top_level_namespace_id_repository_id_la_idx ON 
 
 CREATE INDEX gc_blobs_layers_p_9_top_level_namespace_id_repository_id_la_idx ON partitions.gc_blobs_layers_p_9 USING btree (top_level_namespace_id, repository_id, layer_id, digest);
 
+CREATE INDEX index_blobs_on_null_id ON ONLY public.blobs USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_0_on_null_id ON partitions.blobs_p_0 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_10_on_null_id ON partitions.blobs_p_10 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_11_on_null_id ON partitions.blobs_p_11 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_12_on_null_id ON partitions.blobs_p_12 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_13_on_null_id ON partitions.blobs_p_13 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_14_on_null_id ON partitions.blobs_p_14 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_15_on_null_id ON partitions.blobs_p_15 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_16_on_null_id ON partitions.blobs_p_16 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_17_on_null_id ON partitions.blobs_p_17 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_18_on_null_id ON partitions.blobs_p_18 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_19_on_null_id ON partitions.blobs_p_19 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_1_on_null_id ON partitions.blobs_p_1 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_20_on_null_id ON partitions.blobs_p_20 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_21_on_null_id ON partitions.blobs_p_21 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_22_on_null_id ON partitions.blobs_p_22 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_23_on_null_id ON partitions.blobs_p_23 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_24_on_null_id ON partitions.blobs_p_24 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_25_on_null_id ON partitions.blobs_p_25 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_26_on_null_id ON partitions.blobs_p_26 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_27_on_null_id ON partitions.blobs_p_27 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_28_on_null_id ON partitions.blobs_p_28 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_29_on_null_id ON partitions.blobs_p_29 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_2_on_null_id ON partitions.blobs_p_2 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_30_on_null_id ON partitions.blobs_p_30 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_31_on_null_id ON partitions.blobs_p_31 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_32_on_null_id ON partitions.blobs_p_32 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_33_on_null_id ON partitions.blobs_p_33 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_34_on_null_id ON partitions.blobs_p_34 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_35_on_null_id ON partitions.blobs_p_35 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_36_on_null_id ON partitions.blobs_p_36 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_37_on_null_id ON partitions.blobs_p_37 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_38_on_null_id ON partitions.blobs_p_38 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_39_on_null_id ON partitions.blobs_p_39 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_3_on_null_id ON partitions.blobs_p_3 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_40_on_null_id ON partitions.blobs_p_40 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_41_on_null_id ON partitions.blobs_p_41 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_42_on_null_id ON partitions.blobs_p_42 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_43_on_null_id ON partitions.blobs_p_43 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_44_on_null_id ON partitions.blobs_p_44 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_45_on_null_id ON partitions.blobs_p_45 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_46_on_null_id ON partitions.blobs_p_46 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_47_on_null_id ON partitions.blobs_p_47 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_48_on_null_id ON partitions.blobs_p_48 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_49_on_null_id ON partitions.blobs_p_49 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_4_on_null_id ON partitions.blobs_p_4 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_50_on_null_id ON partitions.blobs_p_50 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_51_on_null_id ON partitions.blobs_p_51 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_52_on_null_id ON partitions.blobs_p_52 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_53_on_null_id ON partitions.blobs_p_53 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_54_on_null_id ON partitions.blobs_p_54 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_55_on_null_id ON partitions.blobs_p_55 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_56_on_null_id ON partitions.blobs_p_56 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_57_on_null_id ON partitions.blobs_p_57 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_58_on_null_id ON partitions.blobs_p_58 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_59_on_null_id ON partitions.blobs_p_59 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_5_on_null_id ON partitions.blobs_p_5 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_60_on_null_id ON partitions.blobs_p_60 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_61_on_null_id ON partitions.blobs_p_61 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_62_on_null_id ON partitions.blobs_p_62 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_63_on_null_id ON partitions.blobs_p_63 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_6_on_null_id ON partitions.blobs_p_6 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_7_on_null_id ON partitions.blobs_p_7 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_8_on_null_id ON partitions.blobs_p_8 USING btree (id)
+WHERE (id IS NULL);
+
+CREATE INDEX index_blobs_p_9_on_null_id ON partitions.blobs_p_9 USING btree (id)
+WHERE (id IS NULL);
+
 CREATE INDEX index_layers_on_top_level_namespace_id_and_digest_and_size ON ONLY public.layers USING btree (top_level_namespace_id, digest, size);
 
 CREATE INDEX index_layers_p_0_on_top_level_namespace_id_and_digest_and_size ON partitions.layers_p_0 USING btree (top_level_namespace_id, digest, size);
@@ -13743,6 +14012,134 @@ ALTER INDEX public.unique_gc_blobs_layers_digest_and_layer_id ATTACH PARTITION p
 ALTER INDEX public.pk_gc_blobs_layers ATTACH PARTITION partitions.gc_blobs_layers_p_9_pkey;
 
 ALTER INDEX public.index_gc_blobs_layers_on_top_lvl_nmspc_id_rpstry_id_lyr_id_dgst ATTACH PARTITION partitions.gc_blobs_layers_p_9_top_level_namespace_id_repository_id_la_idx;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_0_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_10_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_11_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_12_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_13_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_14_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_15_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_16_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_17_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_18_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_19_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_1_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_20_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_21_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_22_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_23_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_24_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_25_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_26_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_27_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_28_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_29_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_2_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_30_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_31_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_32_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_33_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_34_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_35_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_36_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_37_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_38_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_39_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_3_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_40_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_41_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_42_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_43_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_44_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_45_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_46_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_47_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_48_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_49_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_4_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_50_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_51_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_52_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_53_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_54_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_55_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_56_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_57_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_58_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_59_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_5_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_60_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_61_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_62_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_63_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_6_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_7_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_8_on_null_id;
+
+ALTER INDEX public.index_blobs_on_null_id ATTACH PARTITION partitions.index_blobs_p_9_on_null_id;
 
 ALTER INDEX public.index_layers_on_top_level_namespace_id_and_digest_and_size ATTACH PARTITION partitions.index_layers_p_0_on_top_level_namespace_id_and_digest_and_size;
 

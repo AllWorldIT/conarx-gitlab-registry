@@ -87,6 +87,12 @@ should step-one be interrupted. The passed time duration is an offset from the
 current time: `12h` will skip repositories imported within 12 hours from
 the start of the import. Defaults to `72h`, can be disabled by passing `0`.
 
+#### Log directory
+
+The `--log-directory` option allows the importer to write the detailed import
+log to a the provided directory. This log is written to the working directory by
+default.
+
 ## Prerequisites
 
 ### Create Database

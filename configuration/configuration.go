@@ -399,10 +399,67 @@ type DatabaseMetrics struct {
 	LeaseDuration time.Duration `yaml:"leaseduration,omitempty"`
 }
 
+// DatabaseEnabled is an enum allowing the user to set various policies for
+// the registry database enabling behavior.
+type DatabaseEnabled int
+
+const (
+	// DatabaseEnabledFalse the database is explicitly disabled.
+	DatabaseEnabledFalse DatabaseEnabled = iota
+	// DatabaseEnabledTrue the database is explicitly enabled.
+	DatabaseEnabledTrue
+	// DatabaseEnabledPrefer the database remains enabled if already enabled OR
+	// there is no data detected in the container registry (fresh install).
+	DatabaseEnabledPrefer
+)
+
+var databaseEnabledStrings = map[DatabaseEnabled]string{
+	DatabaseEnabledFalse:  "false",
+	DatabaseEnabledTrue:   "true",
+	DatabaseEnabledPrefer: "prefer",
+}
+
+var stringToDatabaseEnabled = map[string]DatabaseEnabled{
+	"false":  DatabaseEnabledFalse,
+	"true":   DatabaseEnabledTrue,
+	"prefer": DatabaseEnabledPrefer,
+}
+
+func (d *DatabaseEnabled) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+	if err := unmarshal(&s); err == nil {
+		if enum, ok := stringToDatabaseEnabled[s]; ok {
+			*d = enum
+			return nil
+		}
+	}
+
+	// Convert bools to enums for backwards compatibility.
+	var b bool
+	if err := unmarshal(&b); err == nil {
+		if b {
+			*d = DatabaseEnabledTrue
+			return nil
+		}
+		*d = DatabaseEnabledFalse
+		return nil
+	}
+
+	return fmt.Errorf("invalid database.enabled value: %q, valid values: false, true, prefer", s)
+}
+
+func (d DatabaseEnabled) String() string {
+	return databaseEnabledStrings[d]
+}
+
+func (d DatabaseEnabled) MarshalYAML() (any, error) {
+	return d.String(), nil
+}
+
 // Database is the configuration for the registry's metadata database
 type Database struct {
 	// Enabled can be used to enable or bypass the metadata database
-	Enabled bool `yaml:"enabled"`
+	Enabled DatabaseEnabled `yaml:"enabled"`
 	// Host is the database server hostname
 	Host string `yaml:"host"`
 	// Port is the database server port
@@ -450,6 +507,19 @@ type Database struct {
 	LoadBalancing DatabaseLoadBalancing `yaml:"loadbalancing,omitempty"`
 	// Metrics configures database metrics collection
 	Metrics DatabaseMetrics `yaml:"metrics,omitempty"`
+
+	// PreferFallback is used to track if we've fallen back to the filesystem
+	// in prefer mode.
+	PreferFallback bool
+}
+
+// IsEnabled returns true if the database is in prefer mode or explicitly enabled.
+func (d Database) IsEnabled() bool {
+	return d.Enabled != DatabaseEnabledFalse && !d.PreferFallback
+}
+
+func (d Database) IsPrefer() bool {
+	return d.Enabled == DatabaseEnabledPrefer
 }
 
 // BackgroundMigrations represents the configuration for the asynchronous batched background migrations in the registry.

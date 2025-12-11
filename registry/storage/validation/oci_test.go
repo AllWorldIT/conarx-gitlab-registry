@@ -247,7 +247,7 @@ func TestVerifyManifest_OCI_ReferenceLimits(t *testing.T) {
 	manifestService, err := testutil.MakeManifestService(repo)
 	require.NoError(t, err)
 
-	tests := []struct {
+	testCases := []struct {
 		name           string
 		manifestLayers int
 		refLimit       int
@@ -285,32 +285,32 @@ func TestVerifyManifest_OCI_ReferenceLimits(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := makeOCIManifestTemplate(t, repo)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			m := makeOCIManifestTemplate(tt, repo)
 
 			// Create a random layer for each of the specified manifest layers.
-			rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(t)))
-			for i := 0; i < tt.manifestLayers; i++ {
+			rng := rand.NewChaCha8([32]byte(testutil.MustChaChaSeed(tt)))
+			for i := 0; i < tc.manifestLayers; i++ {
 				b := make([]byte, rand.IntN(20))
 				rng.Read(b)
 
 				layer, err := repo.Blobs(ctx).Put(ctx, v1.MediaTypeImageLayer, b)
-				require.NoError(t, err)
+				require.NoError(tt, err)
 
 				m.Layers = append(m.Layers, layer)
 			}
 
 			dm, err := ocischema.FromStruct(m)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), tt.refLimit, 0, validation.ManifestURLs{})
+			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), tc.refLimit, 0, validation.ManifestURLs{})
 
 			err = v.Validate(ctx, dm)
-			if tt.wantErr {
-				require.Error(t, err)
+			if tc.wantErr {
+				require.Error(tt, err)
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 		})
 	}
@@ -335,7 +335,7 @@ func TestVerifyManifest_OCI_PayloadLimits(t *testing.T) {
 
 	baseOCIManifestIndextSize := len(payload)
 
-	tests := map[string]struct {
+	testCases := map[string]struct {
 		payloadLimit int
 		wantErr      bool
 		expectedErr  error
@@ -365,16 +365,16 @@ func TestVerifyManifest_OCI_PayloadLimits(t *testing.T) {
 		},
 	}
 
-	for tn, tt := range tests {
-		t.Run(tn, func(t *testing.T) {
-			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), 0, tt.payloadLimit, validation.ManifestURLs{})
+	for tn, tc := range testCases {
+		t.Run(tn, func(tt *testing.T) {
+			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), 0, tc.payloadLimit, validation.ManifestURLs{})
 
 			err = v.Validate(ctx, dm)
-			if tt.wantErr {
-				require.Error(t, err)
-				require.EqualError(t, err, tt.expectedErr.Error())
+			if tc.wantErr {
+				require.Error(tt, err)
+				require.EqualError(tt, err, tc.expectedErr.Error())
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 		})
 	}
@@ -396,20 +396,20 @@ func TestVerifyManifest_OCI_AllowedReferenceManifest(t *testing.T) {
 	}
 
 	for _, manifestType := range manifestTypes {
-		t.Run(manifestType, func(t *testing.T) {
+		t.Run(manifestType, func(tt *testing.T) {
 			// put referred manifest.
-			desc := makeManifest(repo, manifestType, t)
+			desc := makeManifest(repo, manifestType, tt)
 
 			// make OCI referring manifest.
-			m := makeOCIManifestTemplate(t, repo)
+			m := makeOCIManifestTemplate(tt, repo)
 			m.Subject = desc
 			dm2, err := ocischema.FromStruct(m)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
 			// validate the referring manifest with the referer subject.
 			v := validation.NewOCIValidator(manifestService, repo.Blobs(ctx), 2, 0, validation.ManifestURLs{})
 			err = v.Validate(ctx, dm2)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 		})
 	}
 }

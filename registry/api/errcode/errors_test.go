@@ -126,7 +126,7 @@ func TestErrorsManagement(t *testing.T) {
 }
 
 func TestFromUnknownError(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		err      error
 		expected int
@@ -194,11 +194,11 @@ func TestFromUnknownError(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := FromUnknownError(tt.err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			err := FromUnknownError(tc.err)
 
-			require.Equal(t, tt.expected, err.Code.Descriptor().HTTPStatusCode)
+			require.Equal(tt, tc.expected, err.Code.Descriptor().HTTPStatusCode)
 		})
 	}
 }

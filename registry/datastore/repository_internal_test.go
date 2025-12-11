@@ -10,7 +10,7 @@ import (
 )
 
 func Test_sqlPartialMatch(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name string
 		arg  string
 		want string
@@ -40,10 +40,10 @@ func Test_sqlPartialMatch(t *testing.T) {
 			want: `%a-b.c%`,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := sqlPartialMatch(tt.arg); got != tt.want {
-				require.Equal(t, tt.want, got)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			if got := sqlPartialMatch(tc.arg); got != tc.want {
+				require.Equal(tt, tc.want, got)
 			}
 		})
 	}
@@ -80,7 +80,7 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 			t.top_level_namespace_id = $1
 			AND t.repository_id = $2`
 
-	tcs := map[string]struct {
+	testCases := map[string]struct {
 		filters       FilterParams
 		expectedQuery string
 		expectedArgs  []any
@@ -233,12 +233,12 @@ func Test_tagsDetailPaginatedQuery(t *testing.T) {
 		},
 	}
 
-	for tn, tc := range tcs {
-		t.Run(tn, func(t *testing.T) {
+	for tn, tc := range testCases {
+		t.Run(tn, func(tt *testing.T) {
 			q, args, err := tagsDetailPaginatedQuery(r, tc.filters)
-			require.NoError(t, err)
-			require.Equal(t, normalizeWhitespace(tc.expectedQuery), normalizeWhitespace(q))
-			require.ElementsMatch(t, tc.expectedArgs, args)
+			require.NoError(tt, err)
+			require.Equal(tt, normalizeWhitespace(tc.expectedQuery), normalizeWhitespace(q))
+			require.ElementsMatch(tt, tc.expectedArgs, args)
 		})
 	}
 }

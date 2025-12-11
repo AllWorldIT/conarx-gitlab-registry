@@ -47,7 +47,7 @@ func TestNewRowCountCollector(t *testing.T) {
 		require.NotNil(t, collector)
 		require.Equal(t, defaultInterval, collector.interval)
 		require.Equal(t, defaultLeaseDuration, collector.leaseDuration)
-		require.Len(t, collector.queries, 3) // Default queries: gc_blob_review_queue, applied_pre_migrations, applied_post_migrations
+		require.Len(t, collector.queries, 6) // Default queries: gc_blob_review_queue, gc_manifest_review_queue, gc_blob_review_queue_overdue, gc_manifest_review_queue_overdue, applied_pre_migrations, applied_post_migrations
 	})
 
 	t.Run("with custom interval", func(t *testing.T) {
@@ -121,8 +121,8 @@ func TestRowCountCollector_RegisterQuery(t *testing.T) {
 	collector, err := NewRowCountCollector(executor.Execute, redisClient)
 	require.NoError(t, err)
 
-	// Should start with 3 default queries
-	require.Len(t, collector.queries, 3)
+	// Should start with 6 default queries
+	require.Len(t, collector.queries, 6)
 
 	// Register a new query
 	newQuery := RowCountQuery{
@@ -133,9 +133,9 @@ func TestRowCountCollector_RegisterQuery(t *testing.T) {
 	}
 	collector.RegisterQuery(newQuery)
 
-	// Should now have 4 queries
-	require.Len(t, collector.queries, 4)
-	require.Equal(t, newQuery, collector.queries[3])
+	// Should now have 7 queries
+	require.Len(t, collector.queries, 7)
+	require.Equal(t, newQuery, collector.queries[6])
 }
 
 func TestRowCountCollector_collectMetrics(t *testing.T) {
@@ -164,12 +164,15 @@ func TestRowCountCollector_collectMetrics(t *testing.T) {
 		ctx := context.Background()
 		collector.collectMetrics(ctx)
 
-		// Verify all queries were executed (3 default + 1 added)
-		require.Len(t, executor.calls, 4)
+		// Verify all queries were executed (6 default + 1 added)
+		require.Len(t, executor.calls, 7)
 		require.Equal(t, "SELECT COUNT(*) FROM gc_blob_review_queue", executor.calls[0].query)
-		require.Equal(t, "SELECT COUNT(*) FROM schema_migrations", executor.calls[1].query)
-		require.Equal(t, "SELECT COUNT(*) FROM post_deploy_schema_migrations", executor.calls[2].query)
-		require.Equal(t, "SELECT COUNT(*) FROM test_table", executor.calls[3].query)
+		require.Equal(t, "SELECT COUNT(*) FROM gc_manifest_review_queue", executor.calls[1].query)
+		require.Equal(t, "SELECT COUNT(*) FROM gc_blob_review_queue WHERE review_after < NOW()", executor.calls[2].query)
+		require.Equal(t, "SELECT COUNT(*) FROM gc_manifest_review_queue WHERE review_after < NOW()", executor.calls[3].query)
+		require.Equal(t, "SELECT COUNT(*) FROM schema_migrations", executor.calls[4].query)
+		require.Equal(t, "SELECT COUNT(*) FROM post_deploy_schema_migrations", executor.calls[5].query)
+		require.Equal(t, "SELECT COUNT(*) FROM test_table", executor.calls[6].query)
 	})
 
 	t.Run("with query error", func(t *testing.T) {
@@ -181,8 +184,8 @@ func TestRowCountCollector_collectMetrics(t *testing.T) {
 		ctx := context.Background()
 		collector.collectMetrics(ctx)
 
-		// Verify queries were attempted (3 default queries)
-		require.Len(t, executor.calls, 3)
+		// Verify queries were attempted (6 default queries)
+		require.Len(t, executor.calls, 6)
 	})
 
 	t.Run("with query arguments", func(t *testing.T) {
@@ -202,9 +205,9 @@ func TestRowCountCollector_collectMetrics(t *testing.T) {
 		collector.collectMetrics(ctx)
 
 		// Verify the query with args was executed
-		require.Len(t, executor.calls, 4) // 3 default + new query
-		require.Equal(t, "SELECT COUNT(*) FROM table WHERE status = $1", executor.calls[3].query)
-		require.Equal(t, []any{"active"}, executor.calls[3].args)
+		require.Len(t, executor.calls, 7) // 6 default + new query
+		require.Equal(t, "SELECT COUNT(*) FROM table WHERE status = $1", executor.calls[6].query)
+		require.Equal(t, []any{"active"}, executor.calls[6].args)
 	})
 }
 

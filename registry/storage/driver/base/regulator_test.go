@@ -69,7 +69,7 @@ func TestRegulatorEnterExit(t *testing.T) {
 }
 
 func TestGetLimitFromParameter(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		Input    any
 		Expected uint64
 		Min      uint64
@@ -83,17 +83,17 @@ func TestGetLimitFromParameter(t *testing.T) {
 		{812, 812, 25, 50, nil},
 	}
 
-	for _, item := range tests {
-		t.Run(fmt.Sprint(item.Input), func(t *testing.T) {
-			actual, err := GetLimitFromParameter(item.Input, item.Min, item.Default)
+	for _, tc := range testCases {
+		t.Run(fmt.Sprint(tc.Input), func(tt *testing.T) {
+			actual, err := GetLimitFromParameter(tc.Input, tc.Min, tc.Default)
 
-			if item.Err != nil {
-				require.EqualError(t, err, item.Err.Error())
+			if tc.Err != nil {
+				require.EqualError(tt, err, tc.Err.Error())
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 
-			require.Equal(t, item.Expected, actual)
+			require.Equal(tt, tc.Expected, actual)
 		})
 	}
 }

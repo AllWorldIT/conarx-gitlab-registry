@@ -37,7 +37,7 @@ func TestNewPoolStatsCollector(t *testing.T) {
 		StaleConns: 5,
 	}
 
-	tests := []struct {
+	testCases := []struct {
 		name             string
 		opts             []Option
 		expectedLabels   prometheus.Labels
@@ -69,17 +69,17 @@ func TestNewPoolStatsCollector(t *testing.T) {
 			expectedMaxConns: 5,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := NewPoolStatsCollector(mock, tt.opts...)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			c := NewPoolStatsCollector(mock, tc.opts...)
 
-			validateGauge(t, c, hitsName, hitsDesc, float64(mock.Hits), tt.expectedLabels)
-			validateGauge(t, c, missesName, missesDesc, float64(mock.Misses), tt.expectedLabels)
-			validateGauge(t, c, timeoutsName, timeoutsDesc, float64(mock.Timeouts), tt.expectedLabels)
-			validateGauge(t, c, totalConnsName, totalConnsDesc, float64(mock.TotalConns), tt.expectedLabels)
-			validateGauge(t, c, idleConnsName, idleConnsDesc, float64(mock.IdleConns), tt.expectedLabels)
-			validateGauge(t, c, staleConnsName, staleConnsDesc, float64(mock.StaleConns), tt.expectedLabels)
-			validateGauge(t, c, maxConnsName, maxConnsDesc, float64(tt.expectedMaxConns), tt.expectedLabels)
+			validateGauge(tt, c, hitsName, hitsDesc, float64(mock.Hits), tc.expectedLabels)
+			validateGauge(tt, c, missesName, missesDesc, float64(mock.Misses), tc.expectedLabels)
+			validateGauge(tt, c, timeoutsName, timeoutsDesc, float64(mock.Timeouts), tc.expectedLabels)
+			validateGauge(tt, c, totalConnsName, totalConnsDesc, float64(mock.TotalConns), tc.expectedLabels)
+			validateGauge(tt, c, idleConnsName, idleConnsDesc, float64(mock.IdleConns), tc.expectedLabels)
+			validateGauge(tt, c, staleConnsName, staleConnsDesc, float64(mock.StaleConns), tc.expectedLabels)
+			validateGauge(tt, c, maxConnsName, maxConnsDesc, float64(tc.expectedMaxConns), tc.expectedLabels)
 		})
 	}
 }

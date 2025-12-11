@@ -75,6 +75,11 @@ const (
 	lbPoolEventsReplicaRemoved      = "replica_removed"
 	lbPoolEventsReplicaQuarantined  = "replica_quarantined"
 	lbPoolEventsReplicaReintegrated = "replica_reintegrated"
+	lbPoolEventsReasonLabel         = "reason"
+	lbQuarantineReasonLag           = "replication_lag"
+	lbQuarantineReasonConnectivity  = "connectivity"
+	lbRemoveReasonDNS               = "removed_from_dns"
+	lbAddReasonDNS                  = "discovered"
 
 	lbTargetsName            = "lb_targets_total"
 	lbTargetsDesc            = "A counter for primary and replica target elections during database load balancing."
@@ -192,7 +197,7 @@ func registerMetrics(registerer prometheus.Registerer) {
 			Name:      lbPoolEventsName,
 			Help:      lbPoolEventsDesc,
 		},
-		[]string{lbPoolEventsEventLabel},
+		[]string{lbPoolEventsEventLabel, lbPoolEventsReasonLabel},
 	)
 
 	lbTargets = prometheus.NewCounterVec(
@@ -324,22 +329,32 @@ func HostLookup() func(error) {
 
 // ReplicaAdded increments the counter for load balancing replicas added to the pool.
 func ReplicaAdded() {
-	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaAdded).Inc()
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaAdded, lbAddReasonDNS).Inc()
 }
 
 // ReplicaRemoved increments the counter for load balancing replicas removed from the pool.
 func ReplicaRemoved() {
-	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaRemoved).Inc()
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaRemoved, lbRemoveReasonDNS).Inc()
 }
 
-// ReplicaQuarantined increments the counter for load balancing replicas quarantined due to lag.
-func ReplicaQuarantined() {
-	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaQuarantined).Inc()
+// ReplicaQuarantinedForLag increments the counter for replicas quarantined due to replication lag.
+func ReplicaQuarantinedForLag() {
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaQuarantined, lbQuarantineReasonLag).Inc()
 }
 
-// ReplicaReintegrated increments the counter for load balancing replicas reintegrated after quarantine.
-func ReplicaReintegrated() {
-	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaReintegrated).Inc()
+// ReplicaQuarantinedForConnectivity increments the counter for replicas quarantined due to connectivity issues.
+func ReplicaQuarantinedForConnectivity() {
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaQuarantined, lbQuarantineReasonConnectivity).Inc()
+}
+
+// ReplicaReintegratedFromLag increments the counter for replicas reintegrated after being quarantined for replication lag.
+func ReplicaReintegratedFromLag() {
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaReintegrated, lbQuarantineReasonLag).Inc()
+}
+
+// ReplicaReintegratedFromConnectivity increments the counter for replicas reintegrated after being quarantined for connectivity issues.
+func ReplicaReintegratedFromConnectivity() {
+	lbPoolEvents.WithLabelValues(lbPoolEventsReplicaReintegrated, lbQuarantineReasonConnectivity).Inc()
 }
 
 // replicaStatus sets the gauge value for a replica's status. Internal function not meant for direct use.

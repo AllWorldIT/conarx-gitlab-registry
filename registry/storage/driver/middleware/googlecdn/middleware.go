@@ -166,19 +166,20 @@ func newGoogleCDNStorageMiddleware(storageDriver driver.StorageDriver, options m
 // for testing purposes
 var systemClock internal.Clock = clock.New()
 
-// gcsBucketKeyer is any type that is capable of returning the GCS bucket key which should be cached by Google CDN.
-type gcsBucketKeyer interface {
-	GCSBucketKey(path string) string
-}
-
 // URLFor returns a URL which may be used to retrieve the content stored at the given path, possibly using the given
 // options.
 func (lh *googleCDNStorageMiddleware) URLFor(ctx context.Context, path string, options map[string]any) (string, error) {
 	l := log.GetLogger(log.WithContext(ctx))
 
-	keyer, ok := lh.StorageDriver.(gcsBucketKeyer)
+	keyerFetcher, ok := lh.StorageDriver.(storagemiddleware.GcsBucketKeyerFetcher)
 	if !ok {
-		l.Warn("the Google CDN middleware does not support this backend storage driver, bypassing")
+		l.Warn("the Google CDN middleware does not support the underlying storage driver/middleware, bypassing")
+		metrics.CDNRedirect("gcs", true, "unsupported")
+		return lh.StorageDriver.URLFor(ctx, path, options)
+	}
+	keyer, ok := keyerFetcher.FetchGCSBucketKeyer()
+	if !ok {
+		l.Warn("the Google CDN middleware does not support one of the storage drivers/middlewares in the chain, bypassing")
 		metrics.CDNRedirect("gcs", true, "unsupported")
 		return lh.StorageDriver.URLFor(ctx, path, options)
 	}

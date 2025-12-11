@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewDigest(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name    string
 		have    digest.Digest
 		want    datastore.Digest
@@ -36,23 +36,23 @@ func TestNewDigest(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := datastore.NewDigest(tt.have)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			got, err := datastore.NewDigest(tc.have)
 
-			if tt.wantErr {
-				require.Zero(t, got)
-				require.Error(t, err)
+			if tc.wantErr {
+				require.Zero(tt, got)
+				require.Error(tt, err)
 				return
 			}
-			require.NoError(t, err)
-			require.Equal(t, tt.want, got)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.want, got)
 		})
 	}
 }
 
 func TestDigest_Parse(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name       string
 		have       datastore.Digest
 		want       digest.Digest
@@ -112,26 +112,26 @@ func TestDigest_Parse(t *testing.T) {
 			wantErrMsg: "invalid checksum digest length",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.have.Parse()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			got, err := tc.have.Parse()
 
-			if tt.wantErr {
-				require.Zero(t, got)
-				require.Error(t, err)
-				if tt.wantErrMsg != "" {
-					require.EqualError(t, err, tt.wantErrMsg)
+			if tc.wantErr {
+				require.Zero(tt, got)
+				require.Error(tt, err)
+				if tc.wantErrMsg != "" {
+					require.EqualError(tt, err, tc.wantErrMsg)
 				}
 				return
 			}
-			require.NoError(t, err)
-			require.Equal(t, tt.want, got)
+			require.NoError(tt, err)
+			require.Equal(tt, tc.want, got)
 		})
 	}
 }
 
 func TestDigest_HexDecode(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		digest   datastore.Digest
 		expected string
@@ -148,9 +148,9 @@ func TestDigest_HexDecode(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.expected, tt.digest.HexDecode())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			require.Equal(tt, tc.expected, tc.digest.HexDecode())
 		})
 	}
 }

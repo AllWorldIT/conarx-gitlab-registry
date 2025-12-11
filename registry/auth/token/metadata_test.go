@@ -11,7 +11,7 @@ func TestWithEgressMetadata(t *testing.T) {
 	testNamespaceID := int64(12345)
 	testProjectID := int64(67890)
 
-	tests := []struct {
+	testCases := []struct {
 		name                string
 		accesses            []*ResourceActions
 		expectedNamespaceID int64
@@ -99,29 +99,29 @@ func TestWithEgressMetadata(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			// Create a new context with egress metadata
 			ctx := context.Background()
-			egressCtx := WithEgressMetadata(ctx, tt.accesses)
+			egressCtx := WithEgressMetadata(ctx, tc.accesses)
 
 			// Assert that the namespace and project IDs are(n't) correctly set and retrieved from the context
 			nid, ok := egressCtx.Value(EgressNamespaceIdKey).(int64)
-			require.True(t, ok)
-			require.Equal(t, tt.expectedNamespaceID, nid)
+			require.True(tt, ok)
+			require.Equal(tt, tc.expectedNamespaceID, nid)
 			pid, ok := egressCtx.Value(EgressProjectIdKey).(int64)
-			require.True(t, ok)
-			require.Equal(t, tt.expectedProjectID, pid)
+			require.True(tt, ok)
+			require.Equal(tt, tc.expectedProjectID, pid)
 
 			// Test fallback to parent context for an unknown key
 			fallbackKey := "unknown.key"
 			fallbackValue := "fallback"
 			// nolint: revive // context-keys-type
 			parentCtx := context.WithValue(ctx, fallbackKey, fallbackValue)
-			egressCtxWithFallback := WithEgressMetadata(parentCtx, tt.accesses)
+			egressCtxWithFallback := WithEgressMetadata(parentCtx, tc.accesses)
 			val, ok := egressCtxWithFallback.Value(fallbackKey).(string)
-			require.True(t, ok)
-			require.Equal(t, fallbackValue, val)
+			require.True(tt, ok)
+			require.Equal(tt, fallbackValue, val)
 		})
 	}
 }

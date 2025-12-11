@@ -54,6 +54,7 @@ Media type IDs are currently implemented with `SMALLINT`, while it's unlikely to
 | `application/vnd.gardener.cloud.cnudie.component-descriptor.v2+yaml+tar`  |
 | `application/vnd.gardener.cloud.cnudie.component-descriptor.v2+json`      |
 | `application/vnd.dsse.envelope.v1+json`                                   |
+| `application/vnd.docker.attestation.manifest.v1+json`                     |
 | `application/vnd.docker.plugin.v1+json`                                   |
 | `application/vnd.docker.image.rootfs.foreign.diff.tar.gzip`               |
 | `application/vnd.docker.image.rootfs.diff.tar.gzip`                       |
@@ -62,6 +63,10 @@ Media type IDs are currently implemented with `SMALLINT`, while it's unlikely to
 | `application/vnd.docker.distribution.manifest.v1+prettyjws`               |
 | `application/vnd.docker.distribution.manifest.v1+json`                    |
 | `application/vnd.docker.distribution.manifest.list.v2+json`               |
+| `application/vnd.docker.compose.config.empty.v1+json`                     |
+| `application/vnd.docker.compose.envfile`                                  |
+| `application/vnd.docker.compose.file+yaml`                                |
+| `application/vnd.docker.compose.project`                                  |
 | `application/vnd.docker.container.image.v1+json`                          |
 | `application/vnd.docker.container.image.rootfs.diff+x-gtar`               |
 | `application/vnd.devcontainers.layer.v1+tar`                              |
@@ -105,5 +110,6 @@ Media type IDs are currently implemented with `SMALLINT`, while it's unlikely to
 | `application/octet-stream`                                                |
 | `application/json`                                                        |
 | `/application/vnd.acme.rocket.config`                                     |
+| `application/vnd.dev.sigstore.bundle.v0.3+json`                           |
 
 The list above should be updated by engineers whenever modifying the `media_types` database table, keeping entries in alphabetical descending order.

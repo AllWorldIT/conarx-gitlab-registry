@@ -110,10 +110,16 @@ type manifestHandler struct {
 
 // HandleGetManifest fetches the image manifest from the storage backend, if it exists.
 func (imh *manifestHandler) HandleGetManifest(w http.ResponseWriter, r *http.Request) {
-	l := log.GetLogger(log.WithContext(imh))
-	l.Debug("HandleGetImageManifest")
+	path := imh.Repository.Named().Name()
+	l := log.GetLogger(log.WithContext(imh)).WithFields(log.Fields{"path": path})
+	l.Debug("HandleGetManifest")
 
-	manifestGetter := imh.newManifestGetter(r)
+	var db *datastore.DB
+	if imh.useDatabase {
+		db = imh.App.db.UpToDateReplica(imh.Context, &models.Repository{Path: path})
+	}
+
+	manifestGetter := imh.newManifestGetter(r, db)
 
 	var (
 		m      distribution.Manifest
@@ -212,13 +218,18 @@ func (imh *manifestHandler) HandleGetManifest(w http.ResponseWriter, r *http.Req
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(p)
 
-		l.WithFields(log.Fields{
+		fields := log.Fields{
 			"media_type":      manifestType.MediaType(),
 			"size_bytes":      len(p),
 			"digest":          imh.Digest,
 			"tag_name":        imh.Tag,
 			"reference_count": len(m.References()),
-		}).Info("manifest downloaded")
+		}
+		if imh.useDatabase {
+			fields["db_host_type"] = imh.db.TypeOf(db)
+			fields["db_host_addr"] = db.Address()
+		}
+		l.WithFields(fields).Info("manifest downloaded")
 	}
 }
 
@@ -284,9 +295,15 @@ func (imh *manifestHandler) rewriteManifestList(manifestList *manifestlist.Deser
 				imh.Digest, defaultOS, defaultArch))
 	}
 
+	var db *datastore.DB
+	if imh.useDatabase {
+		path := imh.Repository.Named().Name()
+		db = imh.App.db.UpToDateReplica(imh.Context, &models.Repository{Path: path})
+	}
+
 	// TODO: We're passing an empty request here to skip etag matching logic.
 	// This should be handled more cleanly.
-	manifestGetter := imh.newManifestGetter(&http.Request{})
+	manifestGetter := imh.newManifestGetter(&http.Request{}, db)
 
 	m, err := manifestGetter.GetByDigest(imh.Context, manifestDigest)
 	if err != nil {
@@ -300,12 +317,13 @@ func (imh *manifestHandler) rewriteManifestList(manifestList *manifestlist.Deser
 
 var errETagMatches = errors.New("etag matches")
 
-func (imh *manifestHandler) newManifestGetter(req *http.Request) manifestGetter {
+func (imh *manifestHandler) newManifestGetter(req *http.Request, db *datastore.DB) manifestGetter {
 	if imh.useDatabase {
+		p := imh.Repository.Named().Name()
 		return newDBManifestGetter(
-			imh.App.db.Primary(),
+			db,
 			imh.GetRepoCache(),
-			imh.Repository.Named().Name(),
+			p,
 			req,
 		)
 	}
@@ -334,6 +352,7 @@ type dbManifestGetter struct {
 	datastore.RepositoryStore
 	repoPath string
 	req      *http.Request
+	db       datastore.Queryer
 }
 
 func newDBManifestGetter(db datastore.Queryer, rcache datastore.RepositoryCache, repoPath string, req *http.Request) *dbManifestGetter {
@@ -345,6 +364,7 @@ func newDBManifestGetter(db datastore.Queryer, rcache datastore.RepositoryCache,
 		RepositoryStore: datastore.NewRepositoryStore(db, opts...),
 		repoPath:        repoPath,
 		req:             req,
+		db:              db,
 	}
 }
 
@@ -1206,7 +1226,7 @@ func dbPutManifestList(imh *manifestHandler, manifestList *manifestlist.Deserial
 	// conditions around the manifest list insert. See:
 	// https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/gitlab/online-garbage-collection.md#creating-a-manifest-list-referencing-an-unreferenced-manifest
 	mm := make([]*models.Manifest, 0, len(manifestList.Manifests))
-	ids := make([]int64, 0, len(mm))
+	ids := make([]int64, 0, len(manifestList.Manifests))
 	for _, desc := range manifestList.Manifests {
 		m, err := dbFindManifestListManifest(imh.Context, rStore, r, desc.Digest, r.Path)
 		if err != nil {
@@ -1721,7 +1741,7 @@ func logIfManifestListInvalid(ctx context.Context, ml *manifestlist.Deserialized
 		return
 	}
 
-	seenUnknownReferenceMediaTypes := make(map[string]struct{}, 0)
+	seenUnknownReferenceMediaTypes := make(map[string]struct{})
 	var unknownReferenceMediaTypes []string
 
 	for _, desc := range mlcompat.References(ml).Blobs {

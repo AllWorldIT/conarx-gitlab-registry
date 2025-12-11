@@ -8,18 +8,19 @@ generate-db-ERD:
       - when: manual
         allow_failure: true
     services:
-      - name: postgres:${PG_CURR_VERSION}-alpine
+      - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_CURR_VERSION}
         alias: "db"
+        variables:
+          POSTGRES_ROLE: primary
     image: 
         name: aahme144/schemacrawler:latest
         entrypoint: [""]
     variables:
       POSTGRES_HOST: "db"
       POSTGRES_PORT: 5432
-      POSTGRES_DB: "registry_dev"
-      POSTGRES_USER: "registry"
-      POSTGRES_PASSWORD: "apassword"
-      PGPASSWORD: "apassword"
+      APP_DATABASE: registry_test
+      APP_USER: boryna
+      APP_PASSWORD: Chleboslaw
     before_script:
       - apk update && apk add postgresql graphviz
       # Load the prior db dump articfact generated in the "database:structure-sql" job and discard references to partitions before graphing.
@@ -28,10 +29,10 @@ generate-db-ERD:
         awk '/ATTACH[[:space:]]+PARTITION/,/;$/{ next } { print }' registry/datastore/migrations/structure.sql | 
         awk '/PARTITION BY/ { if (/\);$/) { gsub(/PARTITION BY[^\n]*;/, ";"); print $0; } else { inside = 1; statement = $0; } next; } inside { statement = statement "\n" $0; if ($0 ~ /;$/) { sub(/PARTITION BY[^\n]*\n/, "", statement); print statement; inside = 0; statement = ""; } next; } 
         { print }' > registry/datastore/migrations/new_structure.sql
-      - psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} --dbname=${POSTGRES_DB} < registry/datastore/migrations/new_structure.sql
+      - PGPASSWORD=${APP_PASSWORD} psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${APP_USER} --dbname=${APP_DATABASE} < registry/datastore/migrations/new_structure.sql
     script:
         # Generate the db graph
-        - bash -c "/opt/schemacrawler/bin/schemacrawler.sh --server=postgresql --database=${POSTGRES_DB} --password=${POSTGRES_PASSWORD} --user=${POSTGRES_USER} --host=${POSTGRES_HOST} --port=${POSTGRES_PORT} --info-level=maximum --command=schema --schemas=public --output-format=png --output-file=db-DAG.png"
+        - bash -c "/opt/schemacrawler/bin/schemacrawler.sh --server=postgresql --database=${APP_DATABASE} --password=${APP_PASSWORD} --user=${APP_USER} --host=${POSTGRES_HOST} --port=${POSTGRES_PORT} --info-level=maximum --command=schema --schemas=public --output-format=png --output-file=db-DAG.png"
     artifacts:
         expire_in: 30d
         when: on_success

@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -22,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -54,6 +57,7 @@ import (
 	"github.com/docker/distribution/testutil"
 	"github.com/docker/libtrust"
 	gorillahandlers "github.com/gorilla/handlers"
+	"github.com/hashicorp/go-multierror"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -113,7 +117,7 @@ func withSchema1PreseededInMemoryDriver(config *configuration.Configuration) {
 }
 
 func withDBDisabled(config *configuration.Configuration) {
-	config.Database.Enabled = false
+	config.Database.Enabled = configuration.DatabaseEnabledFalse
 }
 
 func withDBHostAndPort(host string, port int) configOpt {
@@ -231,7 +235,7 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 		}
 
 		config.Database = configuration.Database{
-			Enabled:     true,
+			Enabled:     configuration.DatabaseEnabledTrue,
 			Host:        dsn.Host,
 			Port:        dsn.Port,
 			User:        dsn.User,
@@ -273,6 +277,8 @@ func newConfig(opts ...configOpt) configuration.Configuration {
 					Enabled: true,
 					Hosts:   strings.Split(hosts, ","),
 				}
+			} else {
+				panic("Either `REGISTRY_DATABASE_LOADBALANCING_RECORD` or `REGISTRY_DATABASE_LOADBALANCING_HOSTS` should have been specified")
 			}
 		}
 
@@ -383,20 +389,20 @@ func (*schema1PreseededInMemoryDriverFactory) Create(_ map[string]any) (storaged
 }
 
 type testEnv struct {
-	pk           libtrust.PrivateKey
-	ctx          context.Context
-	config       *configuration.Configuration
-	app          *registryhandlers.App
-	server       *httptest.Server
-	builder      *urls.Builder
-	db           datastore.LoadBalancer
-	ns           *internaltestutil.NotificationServer
-	cacheClient  cacheClient
-	shutdownOnce *sync.Once
+	pk          libtrust.PrivateKey
+	ctx         context.Context
+	config      *configuration.Configuration
+	app         *registryhandlers.App
+	server      *httptest.Server
+	builder     *urls.Builder
+	db          datastore.LoadBalancer
+	ns          *internaltestutil.NotificationServer
+	cacheClient cacheClient
+	isShutdown  *atomic.Bool
 }
 
 func (e *testEnv) requireDB(t *testing.T) {
-	if !e.config.Database.Enabled {
+	if !e.config.Database.IsEnabled() {
 		t.Skip("skipping test because the metadata database is not enabled")
 	}
 }
@@ -414,7 +420,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	// shutdown so that environments come up with a fresh copy of the database.
 	var db datastore.LoadBalancer
 	var err error
-	if config.Database.Enabled {
+	if config.Database.IsEnabled() {
 		db, err = datastoretestutil.NewDBFromConfig(config)
 		if err != nil {
 			t.Fatal(err)
@@ -456,7 +462,7 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 
 	var notifServer *internaltestutil.NotificationServer
 	if len(config.Notifications.Endpoints) == 1 {
-		notifServer = internaltestutil.NewNotificationServer(t, config.Database.Enabled)
+		notifServer = internaltestutil.NewNotificationServer(t, config.Database.IsEnabled())
 		// ensure URL is set properly with mock server URL
 		config.Notifications.Endpoints[0].URL = notifServer.URL
 	}
@@ -479,44 +485,65 @@ func newTestEnvWithConfig(t *testing.T, config *configuration.Configuration) *te
 	require.NoError(t, err, "unexpected error generating private key")
 
 	return &testEnv{
-		pk:           pk,
-		ctx:          ctx,
-		config:       config,
-		app:          app,
-		server:       server,
-		builder:      builder,
-		db:           db,
-		ns:           notifServer,
-		cacheClient:  redis,
-		shutdownOnce: new(sync.Once),
+		pk:          pk,
+		ctx:         ctx,
+		config:      config,
+		app:         app,
+		server:      server,
+		builder:     builder,
+		db:          db,
+		ns:          notifServer,
+		cacheClient: redis,
+		isShutdown:  new(atomic.Bool),
 	}
 }
 
-func (e *testEnv) Shutdown() {
-	e.shutdownOnce.Do(func() {
-		e.server.CloseClientConnections()
-		e.server.Close()
+func (e *testEnv) Cleanup(t *testing.T) {
+	t.Cleanup(
+		func() {
+			require.NoError(t, e.Shutdown())
+		},
+	)
+}
 
-		if err := e.app.GracefulShutdown(e.ctx); err != nil {
-			panic(err)
+func (e *testEnv) Shutdown() error {
+	if e.isShutdown.Swap(true) {
+		return errors.New("test env has already been shutdown")
+	}
+
+	// NOTE(prozlach): we avoid here terminating after first error and instead
+	// carry on to try to do best-effort cleanup. E.g. redis cache flush is
+	// independent of database truncation errors so we can try to do both.
+	var errs *multierror.Error
+
+	e.server.CloseClientConnections()
+	e.server.Close()
+
+	err := e.app.GracefulShutdown(e.ctx)
+	if err != nil {
+		errs = multierror.Append(errs, fmt.Errorf("app shutdown: %w", err))
+	}
+
+	if e.config.Database.IsEnabled() {
+		err = datastoretestutil.TruncateAllTables(e.db.Primary())
+		if err != nil {
+			errs = multierror.Append(errs, fmt.Errorf("table truncation: %w", err))
 		}
 
-		if e.config.Database.Enabled {
-			if err := datastoretestutil.TruncateAllTables(e.db.Primary()); err != nil {
-				panic(err)
-			}
-
-			if err := e.db.Close(); err != nil {
-				panic(err)
-			}
+		err = e.db.Close()
+		if err != nil {
+			errs = multierror.Append(errs, fmt.Errorf("db conn close: %w", err))
 		}
+	}
 
-		if e.config.Redis.Cache.Enabled {
-			if err := e.cacheClient.FlushCache(); err != nil {
-				panic(err)
-			}
+	if e.config.Redis.Cache.Enabled {
+		err = e.cacheClient.FlushCache()
+		if err != nil {
+			errs = multierror.Append(errs, fmt.Errorf("redis flush: %w", err))
 		}
-	})
+	}
+
+	return errs.ErrorOrNil()
 }
 
 type subjectManifest interface {
@@ -1932,4 +1959,95 @@ func setupValidRenameEnv(t *testing.T, opts ...configOpt) (*testEnv, internaltes
 	// Enable the rename lease check environment variable
 	t.Setenv(feature.OngoingRenameCheck.EnvVariable, "true")
 	return env, redisController, tokenProvider
+}
+
+// waitForReplica if load balancing is enabled. It ensures that replicas have caught up.
+// See https://gitlab.com/gitlab-org/container-registry/-/issues/1430#note_2494499316.
+func waitForReplica(t *testing.T, db datastore.LoadBalancer) {
+	t.Helper()
+
+	loadBalancingEnabled := os.Getenv("REGISTRY_DATABASE_LOADBALANCING_ENABLED")
+
+	if loadBalancingEnabled != "true" {
+		return
+	}
+
+	startTime := time.Now()
+	require.Eventually(
+		t,
+		isReplicaUpToDate(t, db),
+		5*time.Second,
+		500*time.Millisecond,
+		"replica did not sync in time")
+
+	t.Logf("waitForReplica: all replicas are up to date after %v seconds", time.Since(startTime).Seconds())
+}
+
+func isReplicaUpToDate(t *testing.T, db datastore.LoadBalancer) func() bool {
+	return func() bool {
+		t.Helper()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		replicas := db.Replicas()
+		if len(replicas) == 0 {
+			// This function is only called within `waitForReplica`, which applies `require.Eventually` to handle
+			// replication delays and any temporary errors with automatic retries. So here we're just logging instead
+			// of making the test fail immediately. The latter will happen if/when attempts are exhausted upstream.
+			return true
+		}
+
+		// Get the primary's current LSN position
+		primary := db.Primary()
+		var primaryLSN sql.NullString
+		row := primary.QueryRowContext(ctx, "SELECT pg_current_wal_lsn();")
+		if err := row.Scan(&primaryLSN); err != nil {
+			t.Logf("isReplicaUpToDate: error getting primary LSN: %v", err)
+			return false
+		}
+
+		if !primaryLSN.Valid {
+			t.Logf("isReplicaUpToDate: primary LSN is null, cannot check replicas")
+			return false
+		}
+
+		t.Logf("isReplicaUpToDate: primary LSN = %q", primaryLSN.String)
+
+		for i, replica := range replicas {
+			var result sql.NullBool
+			var receiveLSN, replayLSN sql.NullString
+
+			// Check if replica has caught up to the primary's LSN
+			// We check both that the replica has processed what it received AND that it has received up to the
+			// primary's current position
+			row := replica.QueryRowContext(
+				ctx,
+				`SELECT
+					pg_last_wal_receive_lsn(),
+					pg_last_wal_replay_lsn(),
+					pg_last_wal_receive_lsn() >= $1::pg_lsn AND
+					pg_last_wal_receive_lsn() <= pg_last_wal_replay_lsn() AS is_caught_up;`,
+				primaryLSN.String,
+			)
+
+			err := row.Scan(&receiveLSN, &replayLSN, &result)
+			if err != nil {
+				t.Logf("isReplicaUpToDate: error checking replica %d: %v", i, err)
+				return false
+			}
+
+			t.Logf("isReplicaUpToDate: replica %d - receive_lsn=%q, replay_lsn=%q, is_caught_up=%v (valid=%v)",
+				i, receiveLSN.String, replayLSN.String, result.Bool, result.Valid)
+
+			// replica not in sync yet, return early
+			if !result.Valid || !result.Bool {
+				t.Logf("isReplicaUpToDate: replica %d not caught up to primary LSN %q", i, primaryLSN.String)
+				return false
+			}
+		}
+
+		t.Logf("isReplicaUpToDate: all %d replicas have caught up to primary LSN %q", len(replicas), primaryLSN.String)
+		return true
+	}
 }

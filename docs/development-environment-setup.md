@@ -65,10 +65,10 @@ will have local access to a Docker image called `registry:dev`. You may choose
 to use any name:tag combination, and you may also build multiple images with
 different versions of the registry for easier comparison of changes.
 
-This command will use the `Dockerfile` in the root of this repository.
+This command needs to be run from repository root.
 
 ```shell
-docker build -t registry:dev .
+docker build -t registry:dev -f containers/registry/Dockerfile .
 ```
 
 ### Running

@@ -113,7 +113,7 @@ func (h *statisticsHandler) HandleGetStatistics(w http.ResponseWriter, _ *http.R
 			Version:     version.Version,
 		},
 		Database: DatabaseStats{
-			Enabled: h.Config.Database.Enabled,
+			Enabled: h.Config.Database.IsEnabled(),
 		},
 	}
 

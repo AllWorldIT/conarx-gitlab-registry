@@ -38,8 +38,8 @@ type RateLimiterTestSuite struct {
 
 // SetupSuite runs once before all tests in the suite
 func (s *RateLimiterTestSuite) SetupSuite() {
-	s.redisAddr = os.Getenv("REDIS_ADDR")
-	s.Require().NotEmpty(s.redisAddr, "REDIS_ADDR environment variable must be set")
+	s.redisAddr = os.Getenv("KV_ADDR")
+	s.Require().NotEmpty(s.redisAddr, "KV_ADDR environment variable must be set")
 
 	s.T().Logf("Setting up test suite with Redis at: %s", s.redisAddr)
 }
@@ -523,7 +523,7 @@ func (s *RateLimiterTestSuite) TestZeroThreshold() {
 
 func (s *RateLimiterTestSuite) TestRedisClusterConnection() {
 	if !strings.Contains(s.redisAddr, ",") {
-		s.T().Skipf("REDIS_ADDR only has one host, skipping cluster test")
+		s.T().Skipf("KV_ADDR only has one host, skipping cluster test")
 	}
 
 	s.T().Logf("Testing Redis cluster connection to: %s", s.redisAddr)

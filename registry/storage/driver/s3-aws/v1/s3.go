@@ -199,6 +199,28 @@ func New(params *common.DriverParameters) (storagedriver.StorageDriver, error) {
 	// 	}
 	// }
 
+	dlog.GetLogger().WithFields(log.Fields{
+		"component": "registry.storage.s3_v1.internal",
+	}).Warn(
+		"WARNING: You are using the deprecated s3_v1 storage driver. " +
+			"AWS SDK v1 reached end-of-life on July 31, 2025, and no longer receives security updates or support from AWS after this date. " +
+			"Please migrate to the s3_v2 driver if you would like to continue reciveing support. " +
+			"Starting with 19.0 s3_v2 will become the default S3 storage driver. " +
+			"The change will be transparent and no action is needed. " +
+			"Issue: https://gitlab.com/gitlab-org/gitlab/-/issues/523095",
+	)
+	if !params.V4Auth {
+		dlog.GetLogger().WithFields(log.Fields{
+			"component": "registry.storage.s3_v1.internal",
+		}).Warn(
+			"WARNING: You are using the deprecated Amazon S3 Signature Version 2. " +
+				"The s3_v2 driver supports only S3 Signature Version 4." +
+				"Starting with 19.0 S3 Signature Version 4 will become default and Signature Version 2 option will be ignored. " +
+				"The change will be transparent and no action is needed. " +
+				"Issue: https://gitlab.com/gitlab-org/container-registry/-/issues/1449",
+		)
+	}
+
 	d := &driver{
 		Bucket:                      params.Bucket,
 		ChunkSize:                   params.ChunkSize,

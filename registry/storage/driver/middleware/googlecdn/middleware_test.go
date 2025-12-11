@@ -27,7 +27,7 @@ func createTmpKeyFile(t *testing.T) *os.File {
 func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 	keyFile := createTmpKeyFile(t)
 
-	tt := []struct {
+	testCases := []struct {
 		name             string
 		options          map[string]any
 		expectedError    bool
@@ -202,15 +202,15 @@ func TestNewGoogleCDNStorageMiddlewareOptions(t *testing.T) {
 		},
 	}
 
-	for _, test := range tt {
-		t.Run(test.name, func(t *testing.T) {
-			d, _, err := newGoogleCDNStorageMiddleware(nil, test.options)
-			if test.expectedError {
-				require.Nil(t, d)
-				require.EqualError(t, err, test.expectedErrorMsg)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			d, _, err := newGoogleCDNStorageMiddleware(nil, tc.options)
+			if tc.expectedError {
+				require.Nil(tt, d)
+				require.EqualError(tt, err, tc.expectedErrorMsg)
 			} else {
-				require.NotNil(t, d)
-				require.NoError(t, err)
+				require.NotNil(tt, d)
+				require.NoError(tt, err)
 			}
 		})
 	}

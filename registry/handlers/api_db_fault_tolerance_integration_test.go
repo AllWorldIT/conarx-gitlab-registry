@@ -93,10 +93,10 @@ func newDBProxy(t *testing.T) *dbProxy {
 
 func TestDBFaultTolerance_ConnectionRefused_Catalog(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	u, err := env.builder.BuildCatalogURL()
 	require.NoError(t, err)
@@ -112,10 +112,10 @@ func TestDBFaultTolerance_ConnectionRefused_Catalog(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_TagList(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	name, err := reference.WithName(repoName)
@@ -133,10 +133,10 @@ func TestDBFaultTolerance_ConnectionRefused_TagList(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_TagDelete(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDelete)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -155,10 +155,10 @@ func TestDBFaultTolerance_ConnectionRefused_TagDelete(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_BlobGet(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// we can use a non-existing repo and blob, as reads are executed against the DB first
 	repoName := "foo"
@@ -175,10 +175,10 @@ func TestDBFaultTolerance_ConnectionRefused_BlobGet(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_BlobHead(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// we can use a non-existing repo and blob, as reads are executed against the DB first
 	repoName := "foo"
@@ -195,10 +195,10 @@ func TestDBFaultTolerance_ConnectionRefused_BlobHead(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_BlobDelete(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDelete, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// query API with proxy disabled, should fail
 	// create the repo and blob, otherwise the request will halt on the filesystem search, which precedes the DB search
@@ -214,10 +214,10 @@ func TestDBFaultTolerance_ConnectionRefused_BlobDelete(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_BlobPut(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// query API with proxy disabled, should fail
 	dbProxy.Disable()
@@ -243,11 +243,11 @@ func TestDBFaultTolerance_ConnectionRefused_BlobPostMount_WithCentralRepositoryC
 // nolint: revive // var-naming - I do not see any other way to make this name readable
 func testDBFaultTolerance_ConnectionRefused_BlobPostMountImpl(t *testing.T, opts ...configOpt) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	opts = append(opts, withDBHostAndPort(dbProxy.HostAndPort()))
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	args := createRepoWithBlob(t, env)
 	destRepo := "foo"
@@ -264,10 +264,10 @@ func testDBFaultTolerance_ConnectionRefused_BlobPostMountImpl(t *testing.T, opts
 
 func TestDBFaultTolerance_ConnectionRefused_ManifestGetByDigest(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -283,10 +283,10 @@ func TestDBFaultTolerance_ConnectionRefused_ManifestGetByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_ManifestGetByTag(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "test/repo"
 	tagName := "latest"
@@ -303,10 +303,10 @@ func TestDBFaultTolerance_ConnectionRefused_ManifestGetByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_ManifestHeadByDigest(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -322,10 +322,10 @@ func TestDBFaultTolerance_ConnectionRefused_ManifestHeadByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_ManifestHeadByTag(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "test/repo"
 	tagName := "latest"
@@ -342,10 +342,10 @@ func TestDBFaultTolerance_ConnectionRefused_ManifestHeadByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_ManifestPutByDigest(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -361,10 +361,10 @@ func TestDBFaultTolerance_ConnectionRefused_ManifestPutByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_ManifestPutByTag(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -381,10 +381,10 @@ func TestDBFaultTolerance_ConnectionRefused_ManifestPutByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionRefused_ManifestDelete(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDelete, withDBHostAndPort(dbProxy.HostAndPort()))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -401,10 +401,10 @@ func TestDBFaultTolerance_ConnectionRefused_ManifestDelete(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_Catalog(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	u, err := env.builder.BuildCatalogURL()
 	require.NoError(t, err)
@@ -419,10 +419,10 @@ func TestDBFaultTolerance_ConnectionTimeout_Catalog(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_TagList(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	name, err := reference.WithName(repoName)
@@ -440,10 +440,10 @@ func TestDBFaultTolerance_ConnectionTimeout_TagList(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_TagDelete(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second), withDelete)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -462,10 +462,10 @@ func TestDBFaultTolerance_ConnectionTimeout_TagDelete(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_BlobGet(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// we can use a non-existing repo and blob, as reads are executed against the DB first
 	repoName := "foo"
@@ -482,10 +482,10 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobGet(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_BlobHead(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// we can use a non-existing repo and blob, as reads are executed against the DB first
 	repoName := "foo"
@@ -502,10 +502,10 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobHead(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_BlobDelete(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDelete, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// query API with timeout, should fail
 	// create the repo and blob, otherwise the request will halt on the filesystem search, which precedes the DB search
@@ -521,10 +521,10 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobDelete(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_BlobPut(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	// query API with timeout, should fail
 	toxic := dbProxy.AddToxic("timeout", toxiproxy.Attributes{"timeout": 2000})
@@ -550,11 +550,11 @@ func TestDBFaultTolerance_ConnectionTimeout_BlobPostMount_WithCentralRepositoryC
 // nolint: revive // var-naming - I do not see any other way to make this name readable
 func testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T, opts ...configOpt) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	opts = append(opts, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	args := createRepoWithBlob(t, env)
 	destRepo := "foo"
@@ -571,10 +571,10 @@ func testDBFaultTolerance_ConnectionTimeout_BlobPostMount(t *testing.T, opts ...
 
 func TestDBFaultTolerance_ConnectionTimeout_ManifestGetByDigest(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -590,10 +590,10 @@ func TestDBFaultTolerance_ConnectionTimeout_ManifestGetByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_ManifestGetByTag(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "test/repo"
 	tagName := "latest"
@@ -610,10 +610,10 @@ func TestDBFaultTolerance_ConnectionTimeout_ManifestGetByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_ManifestHeadByDigest(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -629,10 +629,10 @@ func TestDBFaultTolerance_ConnectionTimeout_ManifestHeadByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_ManifestHeadByTag(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "test/repo"
 	tagName := "latest"
@@ -649,10 +649,10 @@ func TestDBFaultTolerance_ConnectionTimeout_ManifestHeadByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_ManifestPutByDigest(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -668,10 +668,10 @@ func TestDBFaultTolerance_ConnectionTimeout_ManifestPutByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_ManifestPutByTag(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -688,10 +688,10 @@ func TestDBFaultTolerance_ConnectionTimeout_ManifestPutByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionTimeout_ManifestDelete(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	env := newTestEnv(t, withDelete, withDBHostAndPort(dbProxy.HostAndPort()), withDBConnectTimeout(1*time.Second))
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -708,12 +708,12 @@ func TestDBFaultTolerance_ConnectionTimeout_ManifestDelete(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionPoolSaturation(t *testing.T) {
 	dbProxy := newDBProxy(t)
-	defer dbProxy.Delete()
+	t.Cleanup(dbProxy.Delete)
 
 	// simulate connection pool with up to 10 open connections
 	poolMaxSize := 10
 	env := newTestEnv(t, withDBHostAndPort(dbProxy.HostAndPort()), withDBPoolMaxOpen(poolMaxSize))
-	defer env.Shutdown()
+	env.Cleanup(t)
 	require.Equal(t, poolMaxSize, env.app.DBStats().MaxOpenConnections)
 
 	// simulate latency of 500ms+0..100ms for every connection
@@ -730,11 +730,11 @@ func TestDBFaultTolerance_ConnectionPoolSaturation(t *testing.T) {
 	// spawn 10 times more clients than max pool open connections
 	for i := 0; i < 10*poolMaxSize; i++ {
 		wg.Add(1)
-		t.Run(fmt.Sprintf("client %d", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("client %d", i), func(tt *testing.T) {
 			go func() {
 				// If there are no available connections, database/sql should queue connection requests until they
 				// can be assigned, so all requests should succeed.
-				assert.NoError(t, assertGetResponseErr(u, http.StatusOK))
+				assert.NoError(tt, assertGetResponseErr(u, http.StatusOK))
 				wg.Done()
 			}()
 		})
@@ -749,7 +749,7 @@ func TestDBFaultTolerance_ConnectionPoolSaturation(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_Catalog(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	u, err := env.builder.BuildCatalogURL()
 	require.NoError(t, err)
@@ -768,7 +768,7 @@ func TestDBFaultTolerance_ConnectionLeak_Catalog(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_TagList(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -789,7 +789,7 @@ func TestDBFaultTolerance_ConnectionLeak_TagList(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_TagDelete(t *testing.T) {
 	env := newTestEnv(t, withDelete)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -806,7 +806,7 @@ func TestDBFaultTolerance_ConnectionLeak_TagDelete(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_BlobGet(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	blobArgs := createRepoWithBlob(t, env)
 
@@ -823,7 +823,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobGet(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_BlobHead(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	blobArgs := createRepoWithBlob(t, env)
 
@@ -840,7 +840,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobHead(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_BlobDelete(t *testing.T) {
 	env := newTestEnv(t, withDelete)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	blobArgs := createRepoWithBlob(t, env)
 
@@ -857,7 +857,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobDelete(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_BlobPut(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	assertNoDBConnections(t, env)
 
@@ -884,7 +884,7 @@ func TestDBFaultTolerance_ConnectionLeak_BlobPostMount_WithCentralRepositoryCach
 // nolint: revive // var-naming - I do not see any other way to make this name readable
 func testDBFaultTolerance_ConnectionLeak_BlobPostMountImpl(t *testing.T, opts ...configOpt) {
 	env := newTestEnv(t, opts...)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	blobArgs := createRepoWithBlob(t, env)
 
@@ -901,7 +901,7 @@ func testDBFaultTolerance_ConnectionLeak_BlobPostMountImpl(t *testing.T, opts ..
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestGetByDigest(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -919,7 +919,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestGetByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestGetByTag(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -938,7 +938,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestGetByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestHeadByDigest(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)
@@ -956,7 +956,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestHeadByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestHeadByTag(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -975,7 +975,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestHeadByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestPutByDigest(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName)
@@ -993,7 +993,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestPutByDigest(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestPutByTag(t *testing.T) {
 	env := newTestEnv(t)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	tagName := "latest"
@@ -1012,7 +1012,7 @@ func TestDBFaultTolerance_ConnectionLeak_ManifestPutByTag(t *testing.T) {
 
 func TestDBFaultTolerance_ConnectionLeak_ManifestDelete(t *testing.T) {
 	env := newTestEnv(t, withDelete)
-	defer env.Shutdown()
+	env.Cleanup(t)
 
 	repoName := "foo"
 	m := seedRandomSchema2Manifest(t, env, repoName, putByDigest)

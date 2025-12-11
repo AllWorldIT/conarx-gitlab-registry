@@ -330,7 +330,7 @@ func TestOCIManifestFromBuildkitIndex(t *testing.T) {
 		Digest:    digest.FromString("OCI Layer 2"),
 	}
 
-	tests := []struct {
+	testCases := []struct {
 		name         string
 		arg          *manifestlist.DeserializedManifestList
 		wantManifest *ocischema.Manifest
@@ -407,21 +407,21 @@ func TestOCIManifestFromBuildkitIndex(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := OCIManifestFromBuildkitIndex(tt.arg)
-			if tt.wantErr {
-				require.Error(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			got, err := OCIManifestFromBuildkitIndex(tc.arg)
+			if tc.wantErr {
+				require.Error(tt, err)
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 
-			if tt.wantManifest != nil {
-				dm, err := ocischema.FromStruct(*tt.wantManifest)
-				require.NoError(t, err)
-				require.Equal(t, dm, got)
+			if tc.wantManifest != nil {
+				dm, err := ocischema.FromStruct(*tc.wantManifest)
+				require.NoError(tt, err)
+				require.Equal(tt, dm, got)
 			} else {
-				require.Nil(t, got)
+				require.Nil(tt, got)
 			}
 		})
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 func TestEnabled(t *testing.T) {
-	cases := map[string]struct {
+	testCases := map[string]struct {
 		envVal         string
 		defaultEnabled bool
 		expected       bool
@@ -33,20 +33,20 @@ func TestEnabled(t *testing.T) {
 		},
 	}
 
-	for name, tt := range cases {
-		t.Run(name, func(t *testing.T) {
+	for name, tc := range testCases {
+		t.Run(name, func(tt *testing.T) {
 			feature := Feature{
 				EnvVariable:    "testFeatureFlag",
-				defaultEnabled: tt.defaultEnabled,
+				defaultEnabled: tc.defaultEnabled,
 			}
-			t.Setenv(feature.EnvVariable, tt.envVal)
-			require.Equal(t, tt.expected, feature.Enabled())
+			tt.Setenv(feature.EnvVariable, tc.envVal)
+			require.Equal(tt, tc.expected, feature.Enabled())
 		})
 	}
 }
 
 func TestIsKnownEnvVar(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name  string
 		input string
 		want  bool
@@ -62,9 +62,9 @@ func TestIsKnownEnvVar(t *testing.T) {
 			want:  false,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, KnownEnvVar(tt.input))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			require.Equal(tt, tc.want, KnownEnvVar(tc.input))
 		})
 	}
 }

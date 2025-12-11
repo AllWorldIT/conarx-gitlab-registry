@@ -9,7 +9,7 @@ import (
 )
 
 func TestBool(t *testing.T) {
-	tests := map[string]struct {
+	testCases := map[string]struct {
 		param          any
 		defaultt       bool
 		expected       bool
@@ -75,30 +75,30 @@ func TestBool(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
+	for name, testCase := range testCases {
+		t.Run(name, func(tt *testing.T) {
 			got, err := Bool(
 				map[string]any{
-					"param": test.param,
+					"param": testCase.param,
 				},
 				"param",
-				test.defaultt,
+				testCase.defaultt,
 			)
 
-			if test.expectedErrMsg != "" {
-				require.Error(t, err)
-				require.EqualError(t, err, test.expectedErrMsg)
+			if testCase.expectedErrMsg != "" {
+				require.Error(tt, err)
+				require.EqualError(tt, err, testCase.expectedErrMsg)
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 
-			require.Equal(t, test.expected, got)
+			require.Equal(tt, testCase.expected, got)
 		})
 	}
 }
 
 func TestInt32(t *testing.T) {
-	tests := map[string]struct {
+	testCases := map[string]struct {
 		param          any
 		defaultt       int32
 		minimum        int32
@@ -249,32 +249,32 @@ func TestInt32(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
+	for name, testCase := range testCases {
+		t.Run(name, func(tt *testing.T) {
 			got, err := Int32(
 				map[string]any{
-					"param": test.param,
+					"param": testCase.param,
 				},
 				"param",
-				test.defaultt,
-				test.minimum,
-				test.maximum,
+				testCase.defaultt,
+				testCase.minimum,
+				testCase.maximum,
 			)
 
-			if test.expectedErrMsg != "" {
-				require.Error(t, err)
-				require.EqualError(t, err, test.expectedErrMsg)
+			if testCase.expectedErrMsg != "" {
+				require.Error(tt, err)
+				require.EqualError(tt, err, testCase.expectedErrMsg)
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 
-			require.Equal(t, test.expected, got)
+			require.Equal(tt, testCase.expected, got)
 		})
 	}
 }
 
 func TestInt64(t *testing.T) {
-	tests := map[string]struct {
+	testCases := map[string]struct {
 		param          any
 		defaultt       int64
 		minimum        int64
@@ -387,32 +387,32 @@ func TestInt64(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
+	for name, tc := range testCases {
+		t.Run(name, func(tt *testing.T) {
 			got, err := Int64(
 				map[string]any{
-					"param": test.param,
+					"param": tc.param,
 				},
 				"param",
-				test.defaultt,
-				test.minimum,
-				test.maximum,
+				tc.defaultt,
+				tc.minimum,
+				tc.maximum,
 			)
 
-			if test.expectedErrMsg != "" {
-				require.Error(t, err)
-				require.EqualError(t, err, test.expectedErrMsg)
+			if tc.expectedErrMsg != "" {
+				require.Error(tt, err)
+				require.EqualError(tt, err, tc.expectedErrMsg)
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 
-			require.Equal(t, test.expected, got)
+			require.Equal(tt, tc.expected, got)
 		})
 	}
 }
 
 func TestDuration(t *testing.T) {
-	tests := map[string]struct {
+	testCases := map[string]struct {
 		param          any
 		defaultt       time.Duration
 		expected       time.Duration
@@ -558,24 +558,24 @@ func TestDuration(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
+	for name, tc := range testCases {
+		t.Run(name, func(tt *testing.T) {
 			got, err := Duration(
 				map[string]any{
-					"param": test.param,
+					"param": tc.param,
 				},
 				"param",
-				test.defaultt,
+				tc.defaultt,
 			)
 
-			if test.expectedErrMsg != "" {
-				require.Error(t, err)
-				require.EqualError(t, err, test.expectedErrMsg)
+			if tc.expectedErrMsg != "" {
+				require.Error(tt, err)
+				require.EqualError(tt, err, tc.expectedErrMsg)
 			} else {
-				require.NoError(t, err)
+				require.NoError(tt, err)
 			}
 
-			require.Equal(t, test.expected, got)
+			require.Equal(tt, tc.expected, got)
 		})
 	}
 }

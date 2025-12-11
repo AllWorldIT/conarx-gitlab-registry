@@ -14,6 +14,7 @@ run:
   build-tags:
    - api_conformance_test
    - api_gitlab_test
+   - cli_test
    - handlers_test
    - integration
    - online_gc_test

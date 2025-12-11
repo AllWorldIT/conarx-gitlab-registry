@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
 
 	"github.com/docker/distribution/configuration"
@@ -37,7 +39,10 @@ import (
 	"github.com/docker/distribution/registry/internal/testutil"
 	"github.com/docker/distribution/registry/storage"
 	memorycache "github.com/docker/distribution/registry/storage/cache/memory"
+	storagedriver "github.com/docker/distribution/registry/storage/driver"
 	_ "github.com/docker/distribution/registry/storage/driver/filesystem"
+	"github.com/docker/distribution/registry/storage/driver/inmemory"
+	storagemiddleware "github.com/docker/distribution/registry/storage/driver/middleware"
 	"github.com/docker/distribution/registry/storage/driver/testdriver"
 	dtestutil "github.com/docker/distribution/testutil"
 )
@@ -52,12 +57,11 @@ func TestAppDistribtionDispatcher(t *testing.T) {
 	registry, err := storage.NewRegistry(ctx, driver, storage.BlobDescriptorCacheProvider(memorycache.NewInMemoryBlobDescriptorCacheProvider()), storage.EnableDelete, storage.EnableRedirect)
 	require.NoError(t, err, "error creating registry")
 	app := &App{
-		Config:         &configuration.Configuration{},
-		Context:        ctx,
-		router:         &metaRouter{distribution: v2.Router()},
-		driver:         driver,
-		registry:       registry,
-		dualRedisCache: iredis.NewDualCache(nil, nil),
+		Config:   &configuration.Configuration{},
+		Context:  ctx,
+		router:   &metaRouter{distribution: v2.Router()},
+		driver:   driver,
+		registry: registry,
 	}
 
 	require.NoError(t, app.initMetaRouter())
@@ -375,7 +379,7 @@ func Test_updateOnlineGCSettings_SkipIfGCDisabled(t *testing.T) {
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
-			Enabled: true,
+			Enabled: configuration.DatabaseEnabledTrue,
 		},
 		GC: configuration.GC{
 			Disabled: true,
@@ -392,7 +396,7 @@ func Test_updateOnlineGCSettings_SkipIfAllGCWorkersDisabled(t *testing.T) {
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
-			Enabled: true,
+			Enabled: configuration.DatabaseEnabledTrue,
 		},
 		GC: configuration.GC{
 			Blobs: configuration.GCBlobs{
@@ -414,7 +418,7 @@ func Test_updateOnlineGCSettings_SkipIfReviewAfterNotSet(t *testing.T) {
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
-			Enabled: true,
+			Enabled: configuration.DatabaseEnabledTrue,
 		},
 	}
 
@@ -444,7 +448,7 @@ func Test_updateOnlineGCSettings(t *testing.T) {
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
-			Enabled: true,
+			Enabled: configuration.DatabaseEnabledTrue,
 		},
 		GC: configuration.GC{
 			ReviewAfter: 10 * time.Minute,
@@ -483,7 +487,7 @@ func Test_updateOnlineGCSettings_NoReviewDelay(t *testing.T) {
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
-			Enabled: true,
+			Enabled: configuration.DatabaseEnabledTrue,
 		},
 		GC: configuration.GC{
 			ReviewAfter: -1,
@@ -517,7 +521,7 @@ func Test_updateOnlineGCSettings_NoRowsUpdated(t *testing.T) {
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
-			Enabled: true,
+			Enabled: configuration.DatabaseEnabledTrue,
 		},
 		GC: configuration.GC{
 			ReviewAfter: 10 * time.Minute,
@@ -547,7 +551,7 @@ func Test_updateOnlineGCSettings_Error(t *testing.T) {
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
-			Enabled: true,
+			Enabled: configuration.DatabaseEnabledTrue,
 		},
 		GC: configuration.GC{
 			ReviewAfter: 10 * time.Minute,
@@ -577,7 +581,7 @@ func Test_updateOnlineGCSettings_Timeout(t *testing.T) {
 
 	config := &configuration.Configuration{
 		Database: configuration.Database{
-			Enabled: true,
+			Enabled: configuration.DatabaseEnabledTrue,
 		},
 		GC: configuration.GC{
 			ReviewAfter: 10 * time.Minute,
@@ -777,7 +781,7 @@ func Test_startDBPoolRefresh_StartupJitter(t *testing.T) {
 func TestStatusRecordingResponseWriter(t *testing.T) {
 	bodyContent := "default response"
 
-	tests := []struct {
+	testCases := []struct {
 		name         string
 		writeHeader  bool
 		customStatus int
@@ -799,20 +803,20 @@ func TestStatusRecordingResponseWriter(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
 			recorder := httptest.NewRecorder()
 			srw := newStatusRecordingResponseWriter(recorder)
 
-			if tt.writeHeader {
-				srw.WriteHeader(tt.customStatus)
+			if tc.writeHeader {
+				srw.WriteHeader(tc.customStatus)
 			}
 			srw.Write([]byte(bodyContent))
 
-			assert.Equal(t, tt.expectedCode, srw.statusCode)
+			assert.Equal(tt, tc.expectedCode, srw.statusCode)
 			// nolint: bodyclose // not required here
-			assert.Equal(t, tt.expectedCode, recorder.Result().StatusCode)
-			assert.Equal(t, tt.expectedBody, recorder.Body.String())
+			assert.Equal(tt, tc.expectedCode, recorder.Result().StatusCode)
+			assert.Equal(tt, tc.expectedBody, recorder.Body.String())
 		})
 	}
 }
@@ -831,7 +835,7 @@ func TestRecordLSNMiddleware(t *testing.T) {
 	app := &App{
 		Config: &configuration.Configuration{
 			Database: configuration.Database{
-				Enabled: true,
+				Enabled: configuration.DatabaseEnabledTrue,
 				LoadBalancing: configuration.DatabaseLoadBalancing{
 					Enabled: true,
 				},
@@ -839,11 +843,10 @@ func TestRecordLSNMiddleware(t *testing.T) {
 		},
 		Context: ctx,
 		// doesn't matter which router we use (distribution or GitLab's), we're only testing the middleware internals
-		router:         &metaRouter{distribution: v2.Router()},
-		driver:         driver,
-		registry:       registry,
-		db:             mockDB,
-		dualRedisCache: iredis.NewDualCache(nil, nil),
+		router:   &metaRouter{distribution: v2.Router()},
+		driver:   driver,
+		registry: registry,
+		db:       mockDB,
 	}
 	require.NoError(t, app.initMetaRouter())
 
@@ -861,7 +864,7 @@ func TestRecordLSNMiddleware(t *testing.T) {
 		}
 	}
 
-	for _, testcase := range []struct {
+	for _, testCase := range []struct {
 		name            string
 		endpoint        string
 		method          string
@@ -936,23 +939,23 @@ func TestRecordLSNMiddleware(t *testing.T) {
 			status:   http.StatusInternalServerError,
 		},
 	} {
-		t.Run(testcase.name, func(t *testing.T) {
-			app.registerDistribution(testcase.endpoint, testDispatcher(testcase.status))
-			route := router.GetRoute(testcase.endpoint).Host(serverURL.Host)
-			u, err := route.URL(testcase.vars...)
-			require.NoError(t, err)
+		t.Run(testCase.name, func(tt *testing.T) {
+			app.registerDistribution(testCase.endpoint, testDispatcher(testCase.status))
+			route := router.GetRoute(testCase.endpoint).Host(serverURL.Host)
+			u, err := route.URL(testCase.vars...)
+			require.NoError(tt, err)
 
-			req, err := http.NewRequest(testcase.method, u.String(), nil)
-			require.NoError(t, err)
+			req, err := http.NewRequest(testCase.method, u.String(), nil)
+			require.NoError(tt, err)
 
-			if testcase.shouldRecordLSN {
+			if testCase.shouldRecordLSN {
 				mockDB.EXPECT().RecordLSN(gomock.Any(), gomock.Any()).Times(1)
 			}
 
 			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 			defer resp.Body.Close()
-			require.Equal(t, testcase.status, resp.StatusCode)
+			require.Equal(tt, testCase.status, resp.StatusCode)
 		})
 	}
 }
@@ -962,22 +965,46 @@ func TestNewApp_Locks_Errors(t *testing.T) {
 	config := testConfig()
 	delete(config.Storage, "testdriver")
 
-	tcs := map[string]struct {
+	testCases := map[string]struct {
 		rootdir         string
-		databaseEnabled bool
+		databaseEnabled configuration.DatabaseEnabled
 		expectedError   error
 	}{
 		"database in use": {
 			rootdir: "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
 			// disabling the database when database-in-use exists should error out
-			databaseEnabled: false,
+			databaseEnabled: configuration.DatabaseEnabledFalse,
 			expectedError:   ErrDatabaseInUse,
 		},
 		"filesystem in use": {
 			rootdir: "../datastore/testdata/fixtures/importer/happy-path",
 			// enabling the database when filesystem-in-use exists should error out
-			databaseEnabled: true,
+			databaseEnabled: configuration.DatabaseEnabledTrue,
 			expectedError:   ErrFilesystemInUse,
+		},
+		"filesystem in use prefer mode": {
+			rootdir: "../datastore/testdata/fixtures/importer/happy-path",
+			// preferring the database when filesystem-in-use exists should not error out
+			databaseEnabled: configuration.DatabaseEnabledPrefer,
+			expectedError:   nil,
+		},
+		"invalid lockfiles db enabled": {
+			rootdir: "../datastore/testdata/fixtures/importer/invalid-lockfiles",
+			// preferring the database when filesystem-in-use exists should not error out
+			databaseEnabled: configuration.DatabaseEnabledTrue,
+			expectedError:   ErrInvalidLockfiles,
+		},
+		"invalid lockfiles db disabled": {
+			rootdir: "../datastore/testdata/fixtures/importer/invalid-lockfiles",
+			// preferring the database when filesystem-in-use exists should not error out
+			databaseEnabled: configuration.DatabaseEnabledFalse,
+			expectedError:   ErrInvalidLockfiles,
+		},
+		"invalid lockfiles prefer mode": {
+			rootdir: "../datastore/testdata/fixtures/importer/invalid-lockfiles",
+			// preferring the database when filesystem-in-use exists should not error out
+			databaseEnabled: configuration.DatabaseEnabledPrefer,
+			expectedError:   ErrInvalidLockfiles,
 		},
 		// we cannot test the scenario where the FF is disabled
 		// because it requires proper DB configuration and restoring of lockfiles
@@ -985,19 +1012,20 @@ func TestNewApp_Locks_Errors(t *testing.T) {
 		// we can skip this test while the FF_ENFORCE_LOCKFILES exists
 	}
 
-	for tn, tc := range tcs {
-		t.Run(tn, func(t *testing.T) {
+	for tn, tc := range testCases {
+		t.Run(tn, func(tt *testing.T) {
 			config.Storage["filesystem"] = map[string]any{
 				"rootdirectory": tc.rootdir,
 			}
 			config.Database.Enabled = tc.databaseEnabled
+			config.Database.PreferFallback = false // Reset fallback state between tests.
 
 			// Temporary use of FF while other tests are updated and fixed
 			// see https://gitlab.com/gitlab-org/container-registry/-/issues/1335
-			t.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
+			tt.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
 
 			_, err := NewApp(ctx, config)
-			require.ErrorIs(t, err, tc.expectedError)
+			assert.ErrorIs(tt, err, tc.expectedError)
 		})
 	}
 }
@@ -1009,7 +1037,7 @@ func TestNewApp_Locks_NoManifestsInFilesystem(t *testing.T) {
 	config := testConfig()
 	delete(config.Storage, "testdriver")
 
-	tcs := []struct {
+	testCases := []struct {
 		name      string
 		createDir bool
 	}{
@@ -1023,11 +1051,11 @@ func TestNewApp_Locks_NoManifestsInFilesystem(t *testing.T) {
 			createDir: false,
 		},
 	}
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			tmpDir := tt.TempDir()
 			if tc.createDir {
-				require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "docker/registry/v2/repositories"), os.FileMode(0o755)))
+				require.NoError(tt, os.MkdirAll(filepath.Join(tmpDir, "docker/registry/v2/repositories"), os.FileMode(0o755)))
 			}
 
 			config.Storage["filesystem"] = map[string]any{
@@ -1036,12 +1064,12 @@ func TestNewApp_Locks_NoManifestsInFilesystem(t *testing.T) {
 
 			// Temporary use of FF while other tests are updated and fixed
 			// see https://gitlab.com/gitlab-org/container-registry/-/issues/1335
-			t.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
+			tt.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
 
 			_, err := NewApp(ctx, config)
-			require.NoError(t, err)
+			require.NoError(tt, err)
 
-			require.NoFileExists(t, filepath.Join(tmpDir, "docker/registry/lockfiles/filesystem-in-use"))
+			require.NoFileExists(tt, filepath.Join(tmpDir, "docker/registry/lockfiles/filesystem-in-use"))
 		})
 	}
 }
@@ -1072,11 +1100,11 @@ func TestDispatcherGitlab_RepoCacheInitialization(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(tt *testing.T) {
 			app := &App{
 				Config: &configuration.Configuration{
 					Database: configuration.Database{
-						Enabled: true,
+						Enabled: configuration.DatabaseEnabledTrue,
 					},
 				},
 				Context:  ctx,
@@ -1084,16 +1112,15 @@ func TestDispatcherGitlab_RepoCacheInitialization(t *testing.T) {
 				registry: registry,
 				// Bypass authorization logic
 				accessController: nil,
-				dualRedisCache:   iredis.NewDualCache(nil, nil),
 			}
 
 			if tc.redisCache {
 				// Create a mock Redis cache
-				app.dualRedisCache = iredis.NewDualCache(&iredis.Cache{}, nil)
+				app.redisCache = &iredis.Cache{}
 			}
 
 			// Initialize the app's router to get proper GitLab v1 routes
-			require.NoError(t, app.initMetaRouter())
+			require.NoError(tt, app.initMetaRouter())
 
 			// Create a test dispatcher that captures the context
 			var capturedContext *Context
@@ -1115,12 +1142,12 @@ func TestDispatcherGitlab_RepoCacheInitialization(t *testing.T) {
 			app.ServeHTTP(w, req)
 
 			// Verify the context was captured
-			require.NotNil(t, capturedContext, "context should be captured")
+			require.NotNil(tt, capturedContext, "context should be captured")
 
 			// Check repoCache initialization
-			require.NotNil(t, capturedContext.repoCache, "repoCache should not be nil when database is enabled")
+			require.NotNil(tt, capturedContext.repoCache, "repoCache should not be nil when database is enabled")
 			// Verify the type of cache based on Redis availability
-			require.IsType(t, tc.expectedType, capturedContext.repoCache, "repoCache should be of expected type")
+			require.IsType(tt, tc.expectedType, capturedContext.repoCache, "repoCache should be of expected type")
 		})
 	}
 }
@@ -1128,7 +1155,7 @@ func TestDispatcherGitlab_RepoCacheInitialization(t *testing.T) {
 func TestApp_initializeMigrationCountMetric(t *testing.T) {
 	ctx := dtestutil.NewContextWithLogger(t)
 
-	t.Run("initializes migration count metrics successfully", func(t *testing.T) {
+	t.Run("initializes migration count metrics successfully", func(tt *testing.T) {
 		app := &App{
 			Context: ctx,
 		}
@@ -1142,8 +1169,299 @@ func TestApp_initializeMigrationCountMetric(t *testing.T) {
 		}
 
 		// This should not panic and should complete successfully
-		require.NotPanics(t, func() {
+		require.NotPanics(tt, func() {
 			app.setMigrationCountMetric(testDB)
 		})
 	})
+}
+
+// SDriverInitFuncMock is a mock for testing storage middleware initialization
+type SDriverInitFuncMock struct {
+	sDriverCalledWith storagedriver.StorageDriver
+	sDriverReturned   storagedriver.StorageDriver
+	optionsCalledWith map[string]any
+	stopFunc          func() error
+	returnError       error
+}
+
+// NewInitFuncMock creates a new mock with an inmemory driver as the returned driver
+func NewInitFuncMock() *SDriverInitFuncMock {
+	return &SDriverInitFuncMock{
+		sDriverReturned: inmemory.New(),
+	}
+}
+
+// InitFunc returns a storagemiddleware.InitFunc that captures call arguments
+func (m *SDriverInitFuncMock) InitFunc() storagemiddleware.InitFunc {
+	return func(storageDriver storagedriver.StorageDriver, options map[string]any) (storagedriver.StorageDriver, func() error, error) {
+		m.sDriverCalledWith = storageDriver
+		m.optionsCalledWith = options
+		return m.sDriverReturned, m.stopFunc, m.returnError
+	}
+}
+
+type ApplyStorageMiddlewareTestSuite struct {
+	suite.Suite
+
+	ctx context.Context
+	app *App
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) SetupTest() {
+	storagemiddleware.Clear()
+
+	s.ctx = dtestutil.NewContextWithLogger(s.T())
+	config := testConfig()
+
+	var err error
+	s.app, err = NewApp(s.ctx, config)
+	require.NoError(s.T(), err)
+
+	s.app.driver = inmemory.New()
+}
+
+func (*ApplyStorageMiddlewareTestSuite) TearDownTest() {
+	storagemiddleware.Clear()
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestSingleMiddleware_HappyPath() {
+	mock := NewInitFuncMock()
+	err := storagemiddleware.Register("googlecdn", mock.InitFunc())
+	require.NoError(s.T(), err)
+
+	originalDriver := s.app.driver
+
+	middlewares := []configuration.Middleware{
+		{
+			Name:     "googlecdn",
+			Disabled: false,
+			Options: map[string]any{
+				"param1": "value1",
+			},
+		},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), mock.sDriverCalledWith, "InitFunc should have been called")
+	require.Same(s.T(), originalDriver, mock.sDriverCalledWith, "InitFunc should receive the original driver")
+	require.Same(s.T(), mock.sDriverReturned, s.app.driver, "App driver should be updated to the returned driver")
+	require.Equal(s.T(), "value1", mock.optionsCalledWith["param1"], "Options should be passed correctly")
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestMultipleCDN_ReturnsError() {
+	cloudfrontMock := NewInitFuncMock()
+	err := storagemiddleware.Register("cloudfront", cloudfrontMock.InitFunc())
+	require.NoError(s.T(), err)
+
+	googlecdnMock := NewInitFuncMock()
+	err = storagemiddleware.Register("googlecdn", googlecdnMock.InitFunc())
+	require.NoError(s.T(), err)
+
+	middlewares := []configuration.Middleware{
+		{Name: "cloudfront", Options: make(map[string]any)},
+		{Name: "googlecdn", Options: make(map[string]any)},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+
+	require.Error(s.T(), err)
+	require.Contains(s.T(), err.Error(), "using more than one storage CDN middleware is not supported")
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestURLCacheWithCDN_NoReorderingNeeded() {
+	s.app.redisCache = &iredis.Cache{}
+
+	urlcacheMock := NewInitFuncMock()
+	err := storagemiddleware.Register("urlcache", urlcacheMock.InitFunc())
+	require.NoError(s.T(), err)
+
+	cloudfrontMock := NewInitFuncMock()
+	err = storagemiddleware.Register("cloudfront", cloudfrontMock.InitFunc())
+	require.NoError(s.T(), err)
+
+	originalDriver := s.app.driver
+
+	middlewares := []configuration.Middleware{
+		{Name: "cloudfront", Options: make(map[string]any)},
+		{Name: "urlcache", Options: make(map[string]any)},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+
+	require.NoError(s.T(), err)
+
+	require.Same(s.T(), originalDriver, urlcacheMock.sDriverCalledWith)
+	require.Same(s.T(), urlcacheMock.sDriverReturned, cloudfrontMock.sDriverCalledWith)
+	require.Same(s.T(), cloudfrontMock.sDriverReturned, s.app.driver)
+
+	require.Same(s.T(), s.app.redisCache, urlcacheMock.optionsCalledWith["_redisCache"])
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestURLCacheAfterCDN_RequiresReordering() {
+	s.app.redisCache = &iredis.Cache{}
+
+	urlcacheMock := NewInitFuncMock()
+	err := storagemiddleware.Register("urlcache", urlcacheMock.InitFunc())
+	require.NoError(s.T(), err)
+
+	cloudfrontMock := NewInitFuncMock()
+	err = storagemiddleware.Register("cloudfront", cloudfrontMock.InitFunc())
+	require.NoError(s.T(), err)
+
+	originalDriver := s.app.driver
+
+	middlewares := []configuration.Middleware{
+		{Name: "urlcache", Options: make(map[string]any)},
+		{Name: "cloudfront", Options: make(map[string]any)},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+
+	require.NoError(s.T(), err)
+
+	require.Same(s.T(), originalDriver, urlcacheMock.sDriverCalledWith)
+	require.Same(s.T(), urlcacheMock.sDriverReturned, cloudfrontMock.sDriverCalledWith)
+	require.Same(s.T(), cloudfrontMock.sDriverReturned, s.app.driver)
+
+	require.Same(s.T(), s.app.redisCache, urlcacheMock.optionsCalledWith["_redisCache"])
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestURLCacheWithSingleOtherMiddleware() {
+	s.app.redisCache = &iredis.Cache{}
+
+	urlcacheMock := NewInitFuncMock()
+	err := storagemiddleware.Register("urlcache", urlcacheMock.InitFunc())
+	require.NoError(s.T(), err)
+
+	otherMock := NewInitFuncMock()
+	err = storagemiddleware.Register("othermiddleware", otherMock.InitFunc())
+	require.NoError(s.T(), err)
+
+	originalDriver := s.app.driver
+
+	middlewares := []configuration.Middleware{
+		{Name: "othermiddleware", Options: make(map[string]any)},
+		{Name: "urlcache", Options: make(map[string]any)},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+
+	require.NoError(s.T(), err)
+
+	require.Same(s.T(), originalDriver, otherMock.sDriverCalledWith)
+	require.Same(s.T(), otherMock.sDriverReturned, urlcacheMock.sDriverCalledWith)
+	require.Same(s.T(), urlcacheMock.sDriverReturned, s.app.driver)
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestMultipleURLCache_ReturnsError() {
+	s.app.redisCache = &iredis.Cache{}
+
+	urlcacheMock1 := NewInitFuncMock()
+	err := storagemiddleware.Register("urlcache", urlcacheMock1.InitFunc())
+	require.NoError(s.T(), err)
+
+	middlewares := []configuration.Middleware{
+		{Name: "urlcache", Options: make(map[string]any)},
+		{Name: "urlcache", Options: make(map[string]any)},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+
+	require.Error(s.T(), err)
+	require.Contains(s.T(), err.Error(), "urlcache storage middleware can only be applied once")
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestGetReturnsError() {
+	middlewares := []configuration.Middleware{
+		{Name: "nonexistent", Options: make(map[string]any)},
+	}
+
+	err := s.app.applyStorageMiddleware(middlewares)
+
+	require.Error(s.T(), err)
+	require.Contains(s.T(), err.Error(), "unable to configure storage middleware")
+	require.Contains(s.T(), err.Error(), "nonexistent")
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestInitFuncReturnsError() {
+	mock := NewInitFuncMock()
+	mock.returnError = fmt.Errorf("initialization failed")
+
+	err := storagemiddleware.Register("failingmiddleware", mock.InitFunc())
+	require.NoError(s.T(), err)
+
+	middlewares := []configuration.Middleware{
+		{Name: "failingmiddleware", Options: make(map[string]any)},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+
+	require.Error(s.T(), err)
+	require.Contains(s.T(), err.Error(), "unable to configure storage middleware")
+	require.Contains(s.T(), err.Error(), "initialization failed")
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestShutdownFuncsRegistered() {
+	shutdownCalled := false
+	mock := NewInitFuncMock()
+	mock.stopFunc = func() error {
+		shutdownCalled = true
+		return nil
+	}
+
+	err := storagemiddleware.Register("testmiddleware", mock.InitFunc())
+	require.NoError(s.T(), err)
+
+	middlewares := []configuration.Middleware{
+		{Name: "testmiddleware", Options: make(map[string]any)},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+	require.NoError(s.T(), err)
+
+	shutdownErr := s.app.GracefulShutdown(s.ctx)
+
+	require.NoError(s.T(), shutdownErr)
+	require.True(s.T(), shutdownCalled, "Shutdown function should have been called")
+}
+
+func (s *ApplyStorageMiddlewareTestSuite) TestMultipleShutdownFuncs() {
+	shutdown1Called := false
+	shutdown2Called := false
+
+	mock1 := NewInitFuncMock()
+	mock1.stopFunc = func() error {
+		shutdown1Called = true
+		return nil
+	}
+	err := storagemiddleware.Register("middleware1", mock1.InitFunc())
+	require.NoError(s.T(), err)
+
+	mock2 := NewInitFuncMock()
+	mock2.stopFunc = func() error {
+		shutdown2Called = true
+		return nil
+	}
+	err = storagemiddleware.Register("middleware2", mock2.InitFunc())
+	require.NoError(s.T(), err)
+
+	middlewares := []configuration.Middleware{
+		{Name: "middleware1", Options: make(map[string]any)},
+		{Name: "middleware2", Options: make(map[string]any)},
+	}
+
+	err = s.app.applyStorageMiddleware(middlewares)
+	require.NoError(s.T(), err)
+
+	shutdownErr := s.app.GracefulShutdown(s.ctx)
+
+	require.NoError(s.T(), shutdownErr)
+	require.True(s.T(), shutdown1Called, "First shutdown function should have been called")
+	require.True(s.T(), shutdown2Called, "Second shutdown function should have been called")
+}
+
+func TestApplyStorageMiddlewareTestSuite(t *testing.T) {
+	suite.Run(t, new(ApplyStorageMiddlewareTestSuite))
 }

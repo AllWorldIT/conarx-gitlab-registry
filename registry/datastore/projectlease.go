@@ -31,11 +31,11 @@ func NewProjectLeaseStore(cache *CentralProjectLeaseCache) (*ProjectLeaseStore, 
 
 // CentralProjectLeaseCache is the interface for the centralized project lease cache backed by Redis.
 type CentralProjectLeaseCache struct {
-	cache iredis.CacheInterface
+	cache *iredis.Cache
 }
 
 // NewCentralProjectLeaseCache creates an interface for the centralized project lease cache backed by Redis.
-func NewCentralProjectLeaseCache(cache iredis.CacheInterface) *CentralProjectLeaseCache {
+func NewCentralProjectLeaseCache(cache *iredis.Cache) *CentralProjectLeaseCache {
 	return &CentralProjectLeaseCache{cache}
 }
 
