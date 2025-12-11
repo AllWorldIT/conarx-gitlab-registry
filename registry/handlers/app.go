@@ -482,17 +482,14 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 // If it does not, it checks if the filesystem is in use and locks it
 // if there are existing repositories in the filesystem.
 func (app *App) handleFilesystemLockFile(ctx context.Context) error {
-	fsLocker := &storage.FilesystemInUseLocker{Driver: app.driver}
-	dbLocker := &storage.DatabaseInUseLocker{Driver: app.driver}
-
 	log := dcontext.GetLogger(app)
-	dbLocked, err := dbLocker.IsLocked(ctx)
+	dbLocked, err := app.Lockers.DB.IsLocked(ctx)
 	if err != nil {
 		log.WithError(err).Error("could not check if database metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
 		return err
 	}
 
-	fsLocked, err := fsLocker.IsLocked(ctx)
+	fsLocked, err := app.Lockers.FS.IsLocked(ctx)
 	if err != nil {
 		log.WithError(err).Error("could not check if filesystem metadata is locked, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html")
 		return err
@@ -533,7 +530,7 @@ func (app *App) handleFilesystemLockFile(ctx context.Context) error {
 			// Lock the filesystem metadata to prevent
 			// accidental start up of the registry in database mode
 			// before an import has been completed.
-			if err := fsLocker.Lock(app.Context); err != nil {
+			if err := app.Lockers.FS.Lock(app.Context); err != nil {
 				log.WithError(err).Error("failed to mark filesystem only usage")
 				return err
 			}
@@ -545,7 +542,7 @@ func (app *App) handleFilesystemLockFile(ctx context.Context) error {
 			// ensure that only the fslockfile is present.
 			if !feature.EnforceLockfiles.Enabled() && dbLocked {
 				// nolint: revive // max-control-nesting
-				if err := dbLocker.Unlock(app.Context); err != nil {
+				if err := app.Lockers.DB.Unlock(app.Context); err != nil {
 					log.WithError(err).Error("failed to remove database-in-use lockfile")
 					return err
 				}
