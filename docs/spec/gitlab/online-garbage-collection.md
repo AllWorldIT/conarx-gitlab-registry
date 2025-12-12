@@ -1496,3 +1496,50 @@ end note
 
 @enduml
 ```
+
+## Observability
+
+This section documents the observability features available for monitoring online garbage collection.
+
+### Prometheus Metrics
+
+All metrics are prefixed with `registry_gc_`. The following metrics are exposed:
+
+| Metric                                    | Type      | Labels                                         | Description                           |
+|-------------------------------------------|-----------|------------------------------------------------|---------------------------------------|
+| `registry_gc_runs_total`                  | Counter   | `worker`, `noop`, `error`, `dangling`, `event` | Total number of worker runs           |
+| `registry_gc_run_duration_seconds`        | Histogram | `worker`, `noop`, `error`, `dangling`, `event` | Latency of worker runs                |
+| `registry_gc_deletes_total`               | Counter   | `backend`, `artifact`                          | Total number of artifacts deleted     |
+| `registry_gc_delete_duration_seconds`     | Histogram | `backend`, `artifact`, `error`                 | Latency of artifact deletions         |
+| `registry_gc_storage_deleted_bytes_total` | Counter   | `media_type`                                   | Total bytes deleted from storage      |
+| `registry_gc_postpones_total`             | Counter   | `worker`                                       | Total number of review postpones      |
+| `registry_gc_sleep_duration_seconds`      | Histogram | `worker`                                       | Duration of sleep between worker runs |
+
+#### Label Values
+
+| Label        | Possible Values                                                                                                         | Description                                                                |
+|--------------|-------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------|
+| `worker`     | `BlobWorker`, `ManifestWorker`                                                                                          | The worker type                                                            |
+| `noop`       | `true`, `false`                                                                                                         | Whether the run found no task to process                                   |
+| `error`      | `true`, `false`                                                                                                         | Whether the run resulted in an error                                       |
+| `dangling`   | `true`, `false`                                                                                                         | Whether the artifact was dangling (eligible for deletion)                  |
+| `event`      | `blob_upload`, `manifest_upload`, `manifest_delete`, `layer_delete`, `tag_delete`, `tag_switch`, `manifest_list_delete` | The event that triggered the review task                                   |
+| `backend`    | `storage`, `database`                                                                                                   | The backend from which the artifact was deleted                            |
+| `artifact`   | `blob`, `manifest`                                                                                                      | The type of artifact deleted                                               |
+| `media_type` |                                                                                                                         | The media type of the deleted blob (only on `storage_deleted_bytes_total`) |
+
+### Structured Logging
+
+Online GC emits structured JSON logs that can be filtered using the `component` field. The following components are used:
+
+| Component                           | Description                            |
+|-------------------------------------|----------------------------------------|
+| `registry.gc.Agent`                 | The main orchestration agent           |
+| `registry.gc.worker.BlobWorker`     | The blob garbage collection worker     |
+| `registry.gc.worker.ManifestWorker` | The manifest garbage collection worker |
+
+To filter logs in Kibana, use:
+
+```plaintext
+json.component.keyword: is one of registry.gc.Agent, registry.gc.worker.BlobWorker, registry.gc.worker.ManifestWorker
+```
