@@ -20,6 +20,109 @@ As a downside, observability is not as good as it could be if done at the applic
 
 On the contrary, stage 3 is handled at the application level. This process will leverage and act upon the database's work during stages 1 and 2 to actively identify and remove dangling artifacts. Therefore, it needs to happen at the application level, as connectivity to the storage backend is required. Being the last stage of garbage collection, where dangling artifacts are identified and removed, we can expose metrics and observe the garbage collection process. This should include metrics such as the number of reviewed and deleted blobs, the amount of space recovered in the storage backend after each run, and any errors that may occur.
 
+## High-Level Architecture
+
+The following diagram illustrates the overall architecture and the three stages of online garbage collection:
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam componentStyle rectangle
+
+package "HTTP API Process" as api {
+    component "Registry API" as registry
+}
+
+package "Database" as db {
+    package "Core Tables" {
+        component "blobs" as blobs_table
+        component "manifests" as manifests_table
+        component "layers" as layers_table
+        component "tags" as tags_table
+        component "manifest_references" as manifest_refs
+    }
+
+    package "GC Tracking Tables" {
+        component "gc_blobs_configurations" as gc_blobs_cfg
+        component "gc_blobs_layers" as gc_blobs_layers
+    }
+
+    package "Review Queues" {
+        component "gc_blob_review_queue" as blob_queue
+        component "gc_manifest_review_queue" as manifest_queue
+    }
+
+    package "Triggers (Stages 1 & 2)" as triggers {
+        component "gc_track_blob_uploads" as t1
+        component "gc_track_manifest_uploads" as t2
+        component "gc_track_configuration_blobs" as t3
+        component "gc_track_layer_blobs" as t4
+        component "gc_track_deleted_*" as t5
+        component "gc_track_switched_tags" as t6
+    }
+}
+
+package "GC Process (Stage 3)" as gc {
+    component "Agent" as agent
+    component "ManifestWorker" as mworker
+    component "BlobWorker" as bworker
+}
+
+cloud "Storage Backend" as storage {
+    component "Deduplicated Blobs" as dedup
+}
+
+' API interactions
+registry --> blobs_table : INSERT
+registry --> manifests_table : INSERT/DELETE
+registry --> tags_table : INSERT/UPDATE/DELETE
+
+' Trigger flows (Stage 1 & 2)
+blobs_table ..> t1 : AFTER INSERT
+manifests_table ..> t2 : AFTER INSERT
+manifests_table ..> t3 : AFTER INSERT
+layers_table ..> t4 : AFTER INSERT
+manifests_table ..> t5 : AFTER DELETE
+layers_table ..> t5 : AFTER DELETE
+tags_table ..> t5 : AFTER DELETE
+manifest_refs ..> t5 : AFTER DELETE
+tags_table ..> t6 : AFTER UPDATE
+
+t1 --> blob_queue : queue blob
+t2 --> manifest_queue : queue manifest
+t3 --> gc_blobs_cfg : track config
+t4 --> gc_blobs_layers : track layer
+t5 --> blob_queue : queue blob
+t5 --> manifest_queue : queue manifest
+t6 --> manifest_queue : queue manifest
+
+' GC Process (Stage 3)
+agent --> mworker : runs
+agent --> bworker : runs
+mworker --> manifest_queue : consume
+mworker --> manifests_table : DELETE if dangling
+bworker --> blob_queue : consume
+bworker --> gc_blobs_cfg : check references
+bworker --> gc_blobs_layers : check references
+bworker --> blobs_table : DELETE if dangling
+bworker --> storage : DELETE if dangling
+
+note left of triggers
+  **Stage 1**: Track uploads
+  **Stage 2**: Track deletions
+  (All handled by DB triggers)
+end note
+
+note right of gc
+  **Stage 3**: Identify & remove
+  dangling artifacts
+  (Application level)
+end note
+
+@enduml
+```
+
 ## Review queues
 
 The online garbage collector is a continuous and concurrency safe background process, operating asynchronously from the HTTP API server's main registry process.
@@ -27,6 +130,87 @@ The online garbage collector is a continuous and concurrency safe background pro
 There is no direct communication between the main registry process and the garbage collector. Instead, communication is handled through a series of specialized tables that act as review queues. The HTTP API process inserts records to signal objects that may be eligible for deletion in these tables. The garbage collector then continuously selects records from them and determines if the corresponding objects are eligible for deletion.
 
 **Note:** The details explained in this section are the minimum required to understand the remaining sections. Additional details will be provided as necessary.
+
+The following diagram shows the structure of the review queues and how they interact with the GC workers:
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+allowmixing
+
+package "gc_blob_review_queue" as bq {
+    object "Task" as bt {
+        digest : bytea (PK)
+        review_after : timestamp
+        review_count : int
+        created_at : timestamp
+        event : text
+    }
+}
+
+package "gc_manifest_review_queue" as mq {
+    object "Task" as mt {
+        top_level_namespace_id : bigint (PK)
+        repository_id : bigint (PK)
+        manifest_id : bigint (PK, FK)
+        review_after : timestamp
+        review_count : int
+        created_at : timestamp
+        event : text
+    }
+}
+
+package "gc_review_after_defaults" as defaults {
+    object "Config" as cfg {
+        event : text (PK)
+        value : interval
+    }
+}
+
+component "BlobWorker" as bworker
+component "ManifestWorker" as mworker
+component "gc_review_after()" as review_fn
+
+' Relationships
+review_fn --> defaults : lookup delay
+review_fn --> bq : set review_after
+review_fn --> mq : set review_after
+
+bworker --> bq : SELECT ... FOR UPDATE\nSKIP LOCKED LIMIT 1
+mworker --> mq : SELECT ... FOR UPDATE\nSKIP LOCKED LIMIT 1
+
+note bottom of bq
+  **Events:**
+  • blob_upload
+  • manifest_delete
+  • layer_delete
+end note
+
+note bottom of mq
+  **Events:**
+  • manifest_upload
+  • tag_delete
+  • tag_switch
+  • manifest_list_delete
+  • manifest_delete
+end note
+
+note right of bworker
+  Checks if blob is referenced in:
+  • gc_blobs_configurations
+  • gc_blobs_layers
+end note
+
+note right of mworker
+  Checks if manifest is referenced by:
+  • tags
+  • manifest_references
+  • manifests (as subject)
+end note
+
+@enduml
+```
 
 ### Blobs
 
@@ -75,6 +259,83 @@ Although it would be possible to obtain the list of deduplicated configuration a
 For this purpose, a separate set of "global" tables (not partitioned by repository) is used to record the association between configuration and layer blobs with repositories: `gc_blobs_configurations` and `gc_blobs_layers`, respectively. These tables must be updated every time a blob is associated with or dissociated with a repository to maintain consistency. We can then narrow down lookup queries to these two tables to determine if a given blob is being used or not (i.e. if it should be garbage collected).
 
 This section details how we can keep track of blob associations during the relevant API operations.
+
+The following sequence diagram illustrates what happens during a successful image push and how the various tracking triggers are involved:
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+actor Client
+participant "Registry API" as API
+database "Database" as DB
+collections "Storage" as Storage
+
+== Blob Upload Phase ==
+
+Client -> API : PUT /v2/<repo>/blobs/uploads/<uuid>\n(upload layer L1)
+API -> Storage : Store blob L1
+API -> DB : INSERT INTO blobs (digest)
+note right of DB
+  **Trigger: gc_track_blob_uploads**
+  INSERT INTO gc_blob_review_queue
+  (digest, review_after = now() + 1 day)
+end note
+API --> Client : 201 Created
+
+Client -> API : PUT /v2/<repo>/blobs/uploads/<uuid>\n(upload layer L2)
+API -> Storage : Store blob L2
+API -> DB : INSERT INTO blobs (digest)
+note right of DB: Trigger fires again for L2
+API --> Client : 201 Created
+
+Client -> API : PUT /v2/<repo>/blobs/uploads/<uuid>\n(upload config C)
+API -> Storage : Store blob C
+API -> DB : INSERT INTO blobs (digest)
+note right of DB: Trigger fires again for C
+API --> Client : 201 Created
+
+== Manifest Upload Phase ==
+
+Client -> API : PUT /v2/<repo>/manifests/<tag>\n(manifest M referencing C, L1, L2)
+API -> DB : INSERT INTO manifests
+note right of DB
+  **Trigger: gc_track_manifest_uploads**
+  INSERT INTO gc_manifest_review_queue
+  (manifest_id, review_after = now() + 1 day)
+
+  **Trigger: gc_track_configuration_blobs**
+  INSERT INTO gc_blobs_configurations
+  (manifest_id, digest = C)
+end note
+
+API -> DB : INSERT INTO layers (L1, L2)
+note right of DB
+  **Trigger: gc_track_layer_blobs** (×2)
+  INSERT INTO gc_blobs_layers
+  (layer_id, digest = L1)
+  (layer_id, digest = L2)
+end note
+
+API -> DB : INSERT INTO tags
+API --> Client : 201 Created
+
+note over DB
+  **Result after successful push:**
+  • Blobs L1, L2, C in gc_blob_review_queue
+  • Manifest M in gc_manifest_review_queue
+  • Config C tracked in gc_blobs_configurations
+  • Layers L1, L2 tracked in gc_blobs_layers
+
+  When GC runs, it will find L1, L2, C are
+  referenced and remove them from the queue.
+  Same for M (now tagged).
+end note
+
+@enduml
+```
 
 ### Blob uploads
 
@@ -222,6 +483,84 @@ Besides tracking blob associations, we also need to track dissociations to detec
 A manifest that is no longer tagged and referenced by any manifest list within a repository is also eligible for deletion. The garbage collector is responsible for looking at the `tags` and `manifest_references` tables to determine whether a manifest is still referenced and, if not, delete it in the database, which in turn will cause its blobs to be queued for review as well.
 
 Only a few of the operations exposed by the container registry API perform a dissociation that **may** lead to dangling blobs or manifests. This section lists these operations and describes how dangling blobs and manifests should be tracked for each.
+
+The following diagram shows the triggers that fire in response to various deletion and update operations (Stage 2):
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+package "API Operations" {
+    usecase "Delete Manifest" as del_manifest
+    usecase "Delete Tag" as del_tag
+    usecase "Delete Manifest List" as del_list
+    usecase "Update Tag\n(tag switch)" as update_tag
+}
+
+package "Database Tables" {
+    rectangle "manifests" as manifests_tbl
+    rectangle "tags" as tags_tbl
+    rectangle "layers" as layers_tbl
+    rectangle "manifest_references" as refs_tbl
+}
+
+package "Triggers" {
+    hexagon "gc_track_deleted_manifests" as t_del_manifest
+    hexagon "gc_track_deleted_layers" as t_del_layers
+    hexagon "gc_track_deleted_tags" as t_del_tags
+    hexagon "gc_track_deleted_manifest_lists" as t_del_lists
+    hexagon "gc_track_switched_tags" as t_switch
+}
+
+package "Review Queues" {
+    queue "gc_blob_review_queue" as blob_q
+    queue "gc_manifest_review_queue" as manifest_q
+}
+
+' API to table operations
+del_manifest --> manifests_tbl : DELETE
+del_tag --> tags_tbl : DELETE
+del_list --> manifests_tbl : DELETE\n(cascades)
+update_tag --> tags_tbl : UPDATE
+
+' Cascade effects
+manifests_tbl ..> tags_tbl : CASCADE
+manifests_tbl ..> layers_tbl : CASCADE
+manifests_tbl ..> refs_tbl : CASCADE
+
+' Trigger activations
+manifests_tbl --> t_del_manifest : AFTER DELETE
+layers_tbl --> t_del_layers : AFTER DELETE
+tags_tbl --> t_del_tags : AFTER DELETE
+refs_tbl --> t_del_lists : AFTER DELETE
+tags_tbl --> t_switch : AFTER UPDATE
+
+' Trigger outputs
+t_del_manifest --> blob_q : config blob digest
+t_del_manifest --> manifest_q : subject manifest\n(if exists)
+t_del_layers --> blob_q : layer blob digests
+t_del_tags --> manifest_q : manifest ID
+t_del_lists --> manifest_q : child manifest IDs
+t_switch --> manifest_q : old manifest ID
+
+note bottom of blob_q
+  Blobs queued here will be
+  checked against:
+  • gc_blobs_configurations
+  • gc_blobs_layers
+end note
+
+note bottom of manifest_q
+  Manifests queued here will be
+  checked against:
+  • tags
+  • manifest_references
+  • manifests (subject)
+end note
+
+@enduml
+```
 
 ### Deleting a manifest
 
@@ -527,9 +866,83 @@ The process of reviewing and possibly deleting a blob is the following:
       ```sql
       DELETE FROM gc_blob_review_queue
       WHERE digest = decode($1, 'hex');
-      
+
       COMMIT;
       ```
+
+#### Worker Algorithm
+
+The following flowchart illustrates the BlobWorker algorithm (Stage 3):
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+start
+
+:BEGIN transaction;
+
+:SELECT next task FROM gc_blob_review_queue
+WHERE review_after < NOW()
+FOR UPDATE SKIP LOCKED
+LIMIT 1;
+
+if (Task found?) then (no)
+    :COMMIT;
+    note right: No work to do,\nrelease transaction
+    stop
+else (yes)
+endif
+
+:Query IsDangling:
+EXISTS in gc_blobs_configurations
+OR gc_blobs_layers?;
+
+if (Blob is referenced?) then (yes)
+    #palegreen:Not dangling - blob in use;
+    :DELETE task FROM
+    gc_blob_review_queue;
+    :COMMIT;
+    stop
+else (no)
+    #mistyrose:Dangling - eligible for deletion;
+endif
+
+:Delete blob from
+**Storage Backend**
+(with timeout);
+
+if (Storage delete successful?) then (no)
+    if (PathNotFoundError?) then (yes)
+        note right: Blob already deleted\nfrom storage
+    else (no)
+        :Postpone task with
+        exponential backoff;
+        :COMMIT;
+        stop
+    endif
+else (yes)
+endif
+
+:DELETE FROM blobs
+WHERE digest = ?;
+note right: Cascades to repository_blobs
+
+:DELETE task FROM
+gc_blob_review_queue;
+
+:COMMIT;
+
+:Record metrics:
+- Bytes deleted
+- Media type
+- Duration;
+
+stop
+
+@enduml
+```
 
 #### Race conditions
 
@@ -694,6 +1107,77 @@ The process of reviewing and possibly deleting a manifest or a manifest list (it
 
       Additionally, deletes on `manifests` cascade to `gc_manifest_review_queue`, so we do not need to manually delete the record from the review queue.
 
+#### Worker Algorithm
+
+The following flowchart illustrates the ManifestWorker algorithm (Stage 3):
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+start
+
+:BEGIN transaction;
+
+:SELECT next task FROM gc_manifest_review_queue
+WHERE review_after < NOW()
+FOR UPDATE SKIP LOCKED
+LIMIT 1;
+
+if (Task found?) then (no)
+    :COMMIT;
+    note right: No work to do,\nrelease transaction
+    stop
+else (yes)
+endif
+
+:Query IsDangling:
+EXISTS in tags?
+EXISTS in manifest_references (as child)?
+EXISTS in manifests (as subject)?;
+
+if (Manifest is referenced?) then (yes)
+    #palegreen:Not dangling - manifest in use;
+    :DELETE task FROM
+    gc_manifest_review_queue;
+    :COMMIT;
+    stop
+else (no)
+    #mistyrose:Dangling - eligible for deletion;
+endif
+
+:DELETE FROM manifests
+WHERE id = ?;
+
+note right
+  **Cascading effects:**
+  • Deletes from tags (FK cascade)
+  • Deletes from layers (FK cascade)
+  • Deletes from manifest_references (FK cascade)
+  • Deletes from gc_manifest_review_queue (FK cascade)
+
+  **Triggers fire:**
+  • gc_track_deleted_manifests
+    → queues config blob
+    → queues subject manifest (if any)
+  • gc_track_deleted_layers
+    → queues layer blobs
+  • gc_track_deleted_manifest_lists
+    → queues child manifests (if list)
+end note
+
+:COMMIT;
+
+:Record metrics:
+- Manifest deleted
+- Duration;
+
+stop
+
+@enduml
+```
+
 #### Race conditions
 
 ##### Deleting the last referencing tag
@@ -733,6 +1217,55 @@ With synchronization in place, depending on which process acquires the lock firs
 
 The `SELECT FOR UPDATE` on the review queue and the subsequent tag delete must be executed within the same transaction. The tag delete will trigger `gc_track_deleted_tags`, which will attempt to acquire the same row lock on the review queue in case of conflict. Not using the same transaction for both operations in this situation would result in a deadlock.
 
+The following sequence diagram illustrates the locking mechanism for the "GC acquires lock first" scenario:
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+participant "Registry API" as API
+participant "GC ManifestWorker" as GC
+database "Database" as DB
+
+note over API, GC
+  **Scenario:** GC is reviewing manifest M while API tries to delete its last tag
+  **Protection:** Explicit locking on gc_manifest_review_queue
+end note
+
+== GC Acquires Lock First ==
+
+GC -> DB : BEGIN
+GC -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M\nFOR UPDATE SKIP LOCKED
+DB --> GC : Row locked (M)
+
+API -> DB : BEGIN
+API -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M\nFOR UPDATE
+note right of DB: **BLOCKED**\nWaiting for GC's lock
+
+GC -> DB : IsDangling(M)?
+note right of GC: Checks tags,\nmanifest_references
+
+alt M is NOT dangling (tag still exists)
+    GC -> DB : DELETE FROM gc_manifest_review_queue\nWHERE manifest_id = M
+    GC -> DB : COMMIT
+    DB --> API : Lock released, no row found
+    API -> DB : DELETE FROM tags WHERE manifest_id = M
+    note right of API: Tag deleted, triggers\ngc_track_deleted_tags\nwhich re-queues M
+    API -> DB : COMMIT
+else M is dangling
+    GC -> DB : DELETE FROM manifests WHERE id = M
+    note right of GC: Cascades to tags,\nlayers, review queue
+    GC -> DB : COMMIT
+    DB --> API : Lock released, no row found\n(manifest was deleted)
+    API -> DB : DELETE FROM tags fails\n(manifest doesn't exist)
+    API -> DB : ROLLBACK
+end
+
+@enduml
+```
+
 ##### Deleting the last referencing manifest list
 
 A manifest `M` in repository `R` is considered **not eligible for deletion** in step 2 because there is still one manifest list that references it. However, another process deletes that manifest list before step 3.
@@ -766,6 +1299,44 @@ With synchronization in place, depending on which process acquires the lock firs
 
 - The API acquires the lock first, stopping the garbage collector from reviewing the manifest(s) referenced by the manifest list until it is created. Once the manifest list is created, the transaction is committed and the review record unlocked (we do not prune the queue from the API side, we let the garbage collector do it).
 
+The following sequence diagram illustrates the locking mechanism when deleting a manifest list:
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+participant "Registry API" as API
+participant "GC ManifestWorker" as GC
+database "Database" as DB
+
+note over API, GC
+  **Scenario:** API deletes manifest list L referencing M1, M2
+  while GC is reviewing one of the child manifests
+  **Protection:** Lock ALL child manifest review records before delete
+end note
+
+== API Acquires Locks First ==
+
+API -> DB : BEGIN
+API -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id IN (M1, M2)\nORDER BY manifest_id\nFOR UPDATE
+DB --> API : Rows locked (M1, M2)
+
+GC -> DB : BEGIN
+GC -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M1\nFOR UPDATE SKIP LOCKED
+DB --> GC : SKIP (M1 locked by API)
+GC -> DB : Returns different task or none
+note right of GC: GC skips M1,\nprocesses other work
+
+API -> DB : DELETE FROM manifests WHERE id = L
+note right of API: Cascades to manifest_references\nTriggers gc_track_deleted_manifest_lists\nwhich updates review_after for M1, M2
+API -> DB : COMMIT
+note right of API: M1, M2 now queued\nfor review
+
+@enduml
+```
+
 ##### Creating a tag for an untagged manifest
 
 A manifest `M` in repository `R` is considered **eligible for deletion** in step 2 because no tags (and manifest lists) reference it. However, another process creates a tag for `M` before step 3 is executed. The manifest will be deleted from the database in step 4 when it should not.
@@ -782,6 +1353,66 @@ With synchronization in place, depending on which process acquires the lock firs
 
 - The API acquires the lock first, stopping the garbage collector from reviewing the manifest before the tag is created. Once the tag is created, the transaction is committed and the review record unlocked.
 
+The following sequence diagram illustrates the race condition when creating a tag for an untagged manifest:
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+participant "Registry API" as API
+participant "GC ManifestWorker" as GC
+database "Database" as DB
+
+note over API, GC
+  **Scenario:** GC finds manifest M dangling (no tags/refs)
+  while API is about to create a tag for M
+  **Risk:** GC deletes M right before tag is created
+  **Protection:** API locks review record before tag create
+end note
+
+== GC Acquires Lock First ==
+
+GC -> DB : BEGIN
+GC -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M\nFOR UPDATE SKIP LOCKED
+DB --> GC : Row locked (M)
+
+GC -> DB : IsDangling(M)?
+DB --> GC : true (no tags, no refs)
+
+API -> DB : BEGIN
+API -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M\nFOR UPDATE
+note right of DB: **BLOCKED**\nWaiting for GC's lock
+
+GC -> DB : DELETE FROM manifests WHERE id = M
+note right of GC: M is dangling,\ndelete it
+GC -> DB : COMMIT
+
+DB --> API : Lock released, no row found\n(manifest was deleted)
+API -> DB : SELECT * FROM manifests WHERE id = M
+DB --> API : Not found
+note right of API: Manifest doesn't exist\nReturn 404 to client
+API -> DB : ROLLBACK
+
+== API Acquires Lock First ==
+
+API -> DB : BEGIN
+API -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M\nFOR UPDATE
+DB --> API : Row locked (M)
+
+GC -> DB : BEGIN
+GC -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M\nFOR UPDATE SKIP LOCKED
+DB --> GC : SKIP (M locked by API)
+note right of GC: GC moves on to\nother tasks
+
+API -> DB : INSERT INTO tags (manifest_id = M)
+API -> DB : COMMIT
+note right of API: Tag created successfully\nM is no longer dangling
+
+@enduml
+```
+
 ##### Creating a manifest list referencing an unreferenced manifest
 
 A manifest `M` in repository `R` is considered **eligible for deletion** in step 2 because no manifest lists (or tags) reference it. However, another process uploads a manifest list that references it. The manifest will be deleted in step 4 when it should not.
@@ -797,3 +1428,71 @@ With synchronization in place, depending on which process acquires the lock firs
 - The garbage collector acquires the lock first, stopping the API from creating the manifest list until the referenced manifest(s) are reviewed. Once complete, the transaction is committed, and the API unblocked. If any of the referenced manifest(s) were garbage collected, the API would not find them while validating the manifest list, as expected;
 
 - The API acquires the lock first, stopping the garbage collector from reviewing manifest(s) referenced by the manifest list. Once the manifest list is created, the transaction is committed and the review record unlocked.
+
+The following sequence diagram illustrates the race condition when creating a manifest list:
+
+```plantuml
+@startuml
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+participant "Registry API" as API
+participant "GC ManifestWorker" as GC
+database "Database" as DB
+
+note over API, GC
+  **Scenario:** API uploads manifest list L referencing M1, M2
+  while GC is reviewing M1 (which is currently dangling)
+  **Risk:** GC deletes M1 right before L references it
+  **Protection:** API locks ALL child manifest review records first
+end note
+
+== GC Acquires Lock First ==
+
+GC -> DB : BEGIN
+GC -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M1\nFOR UPDATE SKIP LOCKED
+DB --> GC : Row locked (M1)
+
+GC -> DB : IsDangling(M1)?
+DB --> GC : true (no tags, no refs yet)
+
+API -> DB : BEGIN
+API -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id IN (M1, M2)\nORDER BY manifest_id\nFOR UPDATE
+note right of DB: **BLOCKED on M1**\nWaiting for GC's lock
+
+GC -> DB : DELETE FROM manifests WHERE id = M1
+GC -> DB : COMMIT
+
+DB --> API : Lock on M1 released (row deleted)
+DB --> API : Returns only M2 (M1 gone)
+API -> DB : Validate manifest list references
+note right of API: M1 not found!\nManifest list invalid
+API -> DB : ROLLBACK
+API --> API : Return 400 Bad Request\n(referenced manifest not found)
+
+== API Acquires Locks First ==
+
+API -> DB : BEGIN
+API -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id IN (M1, M2)\nORDER BY manifest_id\nFOR UPDATE
+DB --> API : Rows locked (M1, M2)
+
+GC -> DB : BEGIN
+GC -> DB : SELECT * FROM gc_manifest_review_queue\nWHERE manifest_id = M1\nFOR UPDATE SKIP LOCKED
+DB --> GC : SKIP (M1 locked by API)
+note right of GC: GC moves on to\nother tasks
+
+API -> DB : INSERT INTO manifests (list L)
+API -> DB : INSERT INTO manifest_references\n(L -> M1, L -> M2)
+API -> DB : COMMIT
+note right of API: List created\nM1, M2 now referenced
+
+note over GC
+  Later, when GC reviews M1:
+  IsDangling(M1) = false
+  (referenced by L)
+  M1 stays in database
+end note
+
+@enduml
+```
