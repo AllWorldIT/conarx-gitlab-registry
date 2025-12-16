@@ -140,6 +140,7 @@ func (t table) DumpAsJSON(ctx context.Context, db datastore.Queryer) ([]byte, er
 					convert_from(payload, 'UTF8')::json AS payload,
 					media_type_id,
 					configuration_media_type_id,
+					configuration_media_type_id_convert_to_bigint,
 					convert_from(configuration_payload, 'UTF8')::json AS configuration_payload,
 					encode(configuration_blob_digest, 'hex') AS configuration_blob_digest,
 					non_conformant,

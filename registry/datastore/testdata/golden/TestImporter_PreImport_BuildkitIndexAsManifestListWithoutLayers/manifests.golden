@@ -9,7 +9,7 @@
     }
   ]
 }
-,"media_type_id":17,"configuration_media_type_id":22,"configuration_payload":{
+,"media_type_id":17,"configuration_media_type_id":22,"configuration_media_type_id_convert_to_bigint":22,"configuration_payload":{
   "layers": [],
   "records": [
     {
