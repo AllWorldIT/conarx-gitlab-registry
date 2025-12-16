@@ -202,6 +202,16 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.set_config_media_type_id_convert_to_bigint ()
+    RETURNS TRIGGER
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.configuration_media_type_id_convert_to_bigint := NEW.configuration_media_type_id;
+    RETURN NEW;
+END;
+$$;
+
 CREATE FUNCTION public.set_media_type_id_convert_to_bigint ()
     RETURNS TRIGGER
     LANGUAGE plpgsql
@@ -224,7 +234,8 @@ CREATE TABLE public.blobs (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 )
 PARTITION BY HASH (digest);
 
@@ -233,7 +244,8 @@ CREATE TABLE partitions.blobs_p_0 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_1 (
@@ -241,7 +253,8 @@ CREATE TABLE partitions.blobs_p_1 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_10 (
@@ -249,7 +262,8 @@ CREATE TABLE partitions.blobs_p_10 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_11 (
@@ -257,7 +271,8 @@ CREATE TABLE partitions.blobs_p_11 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_12 (
@@ -265,7 +280,8 @@ CREATE TABLE partitions.blobs_p_12 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_13 (
@@ -273,7 +289,8 @@ CREATE TABLE partitions.blobs_p_13 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_14 (
@@ -281,7 +298,8 @@ CREATE TABLE partitions.blobs_p_14 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_15 (
@@ -289,7 +307,8 @@ CREATE TABLE partitions.blobs_p_15 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_16 (
@@ -297,7 +316,8 @@ CREATE TABLE partitions.blobs_p_16 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_17 (
@@ -305,7 +325,8 @@ CREATE TABLE partitions.blobs_p_17 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_18 (
@@ -313,7 +334,8 @@ CREATE TABLE partitions.blobs_p_18 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_19 (
@@ -321,7 +343,8 @@ CREATE TABLE partitions.blobs_p_19 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_2 (
@@ -329,7 +352,8 @@ CREATE TABLE partitions.blobs_p_2 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_20 (
@@ -337,7 +361,8 @@ CREATE TABLE partitions.blobs_p_20 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_21 (
@@ -345,7 +370,8 @@ CREATE TABLE partitions.blobs_p_21 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_22 (
@@ -353,7 +379,8 @@ CREATE TABLE partitions.blobs_p_22 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_23 (
@@ -361,7 +388,8 @@ CREATE TABLE partitions.blobs_p_23 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_24 (
@@ -369,7 +397,8 @@ CREATE TABLE partitions.blobs_p_24 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_25 (
@@ -377,7 +406,8 @@ CREATE TABLE partitions.blobs_p_25 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_26 (
@@ -385,7 +415,8 @@ CREATE TABLE partitions.blobs_p_26 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_27 (
@@ -393,7 +424,8 @@ CREATE TABLE partitions.blobs_p_27 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_28 (
@@ -401,7 +433,8 @@ CREATE TABLE partitions.blobs_p_28 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_29 (
@@ -409,7 +442,8 @@ CREATE TABLE partitions.blobs_p_29 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_3 (
@@ -417,7 +451,8 @@ CREATE TABLE partitions.blobs_p_3 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_30 (
@@ -425,7 +460,8 @@ CREATE TABLE partitions.blobs_p_30 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_31 (
@@ -433,7 +469,8 @@ CREATE TABLE partitions.blobs_p_31 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_32 (
@@ -441,7 +478,8 @@ CREATE TABLE partitions.blobs_p_32 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_33 (
@@ -449,7 +487,8 @@ CREATE TABLE partitions.blobs_p_33 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_34 (
@@ -457,7 +496,8 @@ CREATE TABLE partitions.blobs_p_34 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_35 (
@@ -465,7 +505,8 @@ CREATE TABLE partitions.blobs_p_35 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_36 (
@@ -473,7 +514,8 @@ CREATE TABLE partitions.blobs_p_36 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_37 (
@@ -481,7 +523,8 @@ CREATE TABLE partitions.blobs_p_37 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_38 (
@@ -489,7 +532,8 @@ CREATE TABLE partitions.blobs_p_38 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_39 (
@@ -497,7 +541,8 @@ CREATE TABLE partitions.blobs_p_39 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_4 (
@@ -505,7 +550,8 @@ CREATE TABLE partitions.blobs_p_4 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_40 (
@@ -513,7 +559,8 @@ CREATE TABLE partitions.blobs_p_40 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_41 (
@@ -521,7 +568,8 @@ CREATE TABLE partitions.blobs_p_41 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_42 (
@@ -529,7 +577,8 @@ CREATE TABLE partitions.blobs_p_42 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_43 (
@@ -537,7 +586,8 @@ CREATE TABLE partitions.blobs_p_43 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_44 (
@@ -545,7 +595,8 @@ CREATE TABLE partitions.blobs_p_44 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_45 (
@@ -553,7 +604,8 @@ CREATE TABLE partitions.blobs_p_45 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_46 (
@@ -561,7 +613,8 @@ CREATE TABLE partitions.blobs_p_46 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_47 (
@@ -569,7 +622,8 @@ CREATE TABLE partitions.blobs_p_47 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_48 (
@@ -577,7 +631,8 @@ CREATE TABLE partitions.blobs_p_48 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_49 (
@@ -585,7 +640,8 @@ CREATE TABLE partitions.blobs_p_49 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_5 (
@@ -593,7 +649,8 @@ CREATE TABLE partitions.blobs_p_5 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_50 (
@@ -601,7 +658,8 @@ CREATE TABLE partitions.blobs_p_50 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_51 (
@@ -609,7 +667,8 @@ CREATE TABLE partitions.blobs_p_51 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_52 (
@@ -617,7 +676,8 @@ CREATE TABLE partitions.blobs_p_52 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_53 (
@@ -625,7 +685,8 @@ CREATE TABLE partitions.blobs_p_53 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_54 (
@@ -633,7 +694,8 @@ CREATE TABLE partitions.blobs_p_54 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_55 (
@@ -641,7 +703,8 @@ CREATE TABLE partitions.blobs_p_55 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_56 (
@@ -649,7 +712,8 @@ CREATE TABLE partitions.blobs_p_56 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_57 (
@@ -657,7 +721,8 @@ CREATE TABLE partitions.blobs_p_57 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_58 (
@@ -665,7 +730,8 @@ CREATE TABLE partitions.blobs_p_58 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_59 (
@@ -673,7 +739,8 @@ CREATE TABLE partitions.blobs_p_59 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_6 (
@@ -681,7 +748,8 @@ CREATE TABLE partitions.blobs_p_6 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_60 (
@@ -689,7 +757,8 @@ CREATE TABLE partitions.blobs_p_60 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_61 (
@@ -697,7 +766,8 @@ CREATE TABLE partitions.blobs_p_61 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_62 (
@@ -705,7 +775,8 @@ CREATE TABLE partitions.blobs_p_62 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_63 (
@@ -713,7 +784,8 @@ CREATE TABLE partitions.blobs_p_63 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_7 (
@@ -721,7 +793,8 @@ CREATE TABLE partitions.blobs_p_7 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_8 (
@@ -729,7 +802,8 @@ CREATE TABLE partitions.blobs_p_8 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.blobs_p_9 (
@@ -737,7 +811,8 @@ CREATE TABLE partitions.blobs_p_9 (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
     digest bytea NOT NULL,
-    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass)
+    id bigint DEFAULT nextval('public.blobs_id_seq'::regclass),
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE public.gc_blobs_configurations (
@@ -1790,7 +1865,8 @@ CREATE TABLE public.layers (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 )
 PARTITION BY HASH (top_level_namespace_id);
 
@@ -1802,7 +1878,8 @@ CREATE TABLE partitions.layers_p_0 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_1 (
@@ -1813,7 +1890,8 @@ CREATE TABLE partitions.layers_p_1 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_10 (
@@ -1824,7 +1902,8 @@ CREATE TABLE partitions.layers_p_10 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_11 (
@@ -1835,7 +1914,8 @@ CREATE TABLE partitions.layers_p_11 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_12 (
@@ -1846,7 +1926,8 @@ CREATE TABLE partitions.layers_p_12 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_13 (
@@ -1857,7 +1938,8 @@ CREATE TABLE partitions.layers_p_13 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_14 (
@@ -1868,7 +1950,8 @@ CREATE TABLE partitions.layers_p_14 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_15 (
@@ -1879,7 +1962,8 @@ CREATE TABLE partitions.layers_p_15 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_16 (
@@ -1890,7 +1974,8 @@ CREATE TABLE partitions.layers_p_16 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_17 (
@@ -1901,7 +1986,8 @@ CREATE TABLE partitions.layers_p_17 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_18 (
@@ -1912,7 +1998,8 @@ CREATE TABLE partitions.layers_p_18 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_19 (
@@ -1923,7 +2010,8 @@ CREATE TABLE partitions.layers_p_19 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_2 (
@@ -1934,7 +2022,8 @@ CREATE TABLE partitions.layers_p_2 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_20 (
@@ -1945,7 +2034,8 @@ CREATE TABLE partitions.layers_p_20 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_21 (
@@ -1956,7 +2046,8 @@ CREATE TABLE partitions.layers_p_21 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_22 (
@@ -1967,7 +2058,8 @@ CREATE TABLE partitions.layers_p_22 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_23 (
@@ -1978,7 +2070,8 @@ CREATE TABLE partitions.layers_p_23 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_24 (
@@ -1989,7 +2082,8 @@ CREATE TABLE partitions.layers_p_24 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_25 (
@@ -2000,7 +2094,8 @@ CREATE TABLE partitions.layers_p_25 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_26 (
@@ -2011,7 +2106,8 @@ CREATE TABLE partitions.layers_p_26 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_27 (
@@ -2022,7 +2118,8 @@ CREATE TABLE partitions.layers_p_27 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_28 (
@@ -2033,7 +2130,8 @@ CREATE TABLE partitions.layers_p_28 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_29 (
@@ -2044,7 +2142,8 @@ CREATE TABLE partitions.layers_p_29 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_3 (
@@ -2055,7 +2154,8 @@ CREATE TABLE partitions.layers_p_3 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_30 (
@@ -2066,7 +2166,8 @@ CREATE TABLE partitions.layers_p_30 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_31 (
@@ -2077,7 +2178,8 @@ CREATE TABLE partitions.layers_p_31 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_32 (
@@ -2088,7 +2190,8 @@ CREATE TABLE partitions.layers_p_32 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_33 (
@@ -2099,7 +2202,8 @@ CREATE TABLE partitions.layers_p_33 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_34 (
@@ -2110,7 +2214,8 @@ CREATE TABLE partitions.layers_p_34 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_35 (
@@ -2121,7 +2226,8 @@ CREATE TABLE partitions.layers_p_35 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_36 (
@@ -2132,7 +2238,8 @@ CREATE TABLE partitions.layers_p_36 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_37 (
@@ -2143,7 +2250,8 @@ CREATE TABLE partitions.layers_p_37 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_38 (
@@ -2154,7 +2262,8 @@ CREATE TABLE partitions.layers_p_38 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_39 (
@@ -2165,7 +2274,8 @@ CREATE TABLE partitions.layers_p_39 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_4 (
@@ -2176,7 +2286,8 @@ CREATE TABLE partitions.layers_p_4 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_40 (
@@ -2187,7 +2298,8 @@ CREATE TABLE partitions.layers_p_40 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_41 (
@@ -2198,7 +2310,8 @@ CREATE TABLE partitions.layers_p_41 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_42 (
@@ -2209,7 +2322,8 @@ CREATE TABLE partitions.layers_p_42 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_43 (
@@ -2220,7 +2334,8 @@ CREATE TABLE partitions.layers_p_43 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_44 (
@@ -2231,7 +2346,8 @@ CREATE TABLE partitions.layers_p_44 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_45 (
@@ -2242,7 +2358,8 @@ CREATE TABLE partitions.layers_p_45 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_46 (
@@ -2253,7 +2370,8 @@ CREATE TABLE partitions.layers_p_46 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_47 (
@@ -2264,7 +2382,8 @@ CREATE TABLE partitions.layers_p_47 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_48 (
@@ -2275,7 +2394,8 @@ CREATE TABLE partitions.layers_p_48 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_49 (
@@ -2286,7 +2406,8 @@ CREATE TABLE partitions.layers_p_49 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_5 (
@@ -2297,7 +2418,8 @@ CREATE TABLE partitions.layers_p_5 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_50 (
@@ -2308,7 +2430,8 @@ CREATE TABLE partitions.layers_p_50 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_51 (
@@ -2319,7 +2442,8 @@ CREATE TABLE partitions.layers_p_51 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_52 (
@@ -2330,7 +2454,8 @@ CREATE TABLE partitions.layers_p_52 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_53 (
@@ -2341,7 +2466,8 @@ CREATE TABLE partitions.layers_p_53 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_54 (
@@ -2352,7 +2478,8 @@ CREATE TABLE partitions.layers_p_54 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_55 (
@@ -2363,7 +2490,8 @@ CREATE TABLE partitions.layers_p_55 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_56 (
@@ -2374,7 +2502,8 @@ CREATE TABLE partitions.layers_p_56 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_57 (
@@ -2385,7 +2514,8 @@ CREATE TABLE partitions.layers_p_57 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_58 (
@@ -2396,7 +2526,8 @@ CREATE TABLE partitions.layers_p_58 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_59 (
@@ -2407,7 +2538,8 @@ CREATE TABLE partitions.layers_p_59 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_6 (
@@ -2418,7 +2550,8 @@ CREATE TABLE partitions.layers_p_6 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_60 (
@@ -2429,7 +2562,8 @@ CREATE TABLE partitions.layers_p_60 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_61 (
@@ -2440,7 +2574,8 @@ CREATE TABLE partitions.layers_p_61 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_62 (
@@ -2451,7 +2586,8 @@ CREATE TABLE partitions.layers_p_62 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_63 (
@@ -2462,7 +2598,8 @@ CREATE TABLE partitions.layers_p_63 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_7 (
@@ -2473,7 +2610,8 @@ CREATE TABLE partitions.layers_p_7 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_8 (
@@ -2484,7 +2622,8 @@ CREATE TABLE partitions.layers_p_8 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE partitions.layers_p_9 (
@@ -2495,7 +2634,8 @@ CREATE TABLE partitions.layers_p_9 (
     size bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     media_type_id smallint NOT NULL,
-    digest bytea NOT NULL
+    digest bytea NOT NULL,
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE public.manifest_references (
@@ -3166,7 +3306,8 @@ CREATE TABLE public.manifests (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 )
 PARTITION BY HASH (top_level_namespace_id);
 
@@ -3187,7 +3328,8 @@ CREATE TABLE partitions.manifests_p_0 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_1 (
@@ -3207,7 +3349,8 @@ CREATE TABLE partitions.manifests_p_1 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_10 (
@@ -3227,7 +3370,8 @@ CREATE TABLE partitions.manifests_p_10 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_11 (
@@ -3247,7 +3391,8 @@ CREATE TABLE partitions.manifests_p_11 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_12 (
@@ -3267,7 +3412,8 @@ CREATE TABLE partitions.manifests_p_12 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_13 (
@@ -3287,7 +3433,8 @@ CREATE TABLE partitions.manifests_p_13 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_14 (
@@ -3307,7 +3454,8 @@ CREATE TABLE partitions.manifests_p_14 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_15 (
@@ -3327,7 +3475,8 @@ CREATE TABLE partitions.manifests_p_15 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_16 (
@@ -3347,7 +3496,8 @@ CREATE TABLE partitions.manifests_p_16 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_17 (
@@ -3367,7 +3517,8 @@ CREATE TABLE partitions.manifests_p_17 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_18 (
@@ -3387,7 +3538,8 @@ CREATE TABLE partitions.manifests_p_18 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_19 (
@@ -3407,7 +3559,8 @@ CREATE TABLE partitions.manifests_p_19 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_2 (
@@ -3427,7 +3580,8 @@ CREATE TABLE partitions.manifests_p_2 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_20 (
@@ -3447,7 +3601,8 @@ CREATE TABLE partitions.manifests_p_20 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_21 (
@@ -3467,7 +3622,8 @@ CREATE TABLE partitions.manifests_p_21 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_22 (
@@ -3487,7 +3643,8 @@ CREATE TABLE partitions.manifests_p_22 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_23 (
@@ -3507,7 +3664,8 @@ CREATE TABLE partitions.manifests_p_23 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_24 (
@@ -3527,7 +3685,8 @@ CREATE TABLE partitions.manifests_p_24 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_25 (
@@ -3547,7 +3706,8 @@ CREATE TABLE partitions.manifests_p_25 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_26 (
@@ -3567,7 +3727,8 @@ CREATE TABLE partitions.manifests_p_26 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_27 (
@@ -3587,7 +3748,8 @@ CREATE TABLE partitions.manifests_p_27 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_28 (
@@ -3607,7 +3769,8 @@ CREATE TABLE partitions.manifests_p_28 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_29 (
@@ -3627,7 +3790,8 @@ CREATE TABLE partitions.manifests_p_29 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_3 (
@@ -3647,7 +3811,8 @@ CREATE TABLE partitions.manifests_p_3 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_30 (
@@ -3667,7 +3832,8 @@ CREATE TABLE partitions.manifests_p_30 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_31 (
@@ -3687,7 +3853,8 @@ CREATE TABLE partitions.manifests_p_31 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_32 (
@@ -3707,7 +3874,8 @@ CREATE TABLE partitions.manifests_p_32 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_33 (
@@ -3727,7 +3895,8 @@ CREATE TABLE partitions.manifests_p_33 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_34 (
@@ -3747,7 +3916,8 @@ CREATE TABLE partitions.manifests_p_34 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_35 (
@@ -3767,7 +3937,8 @@ CREATE TABLE partitions.manifests_p_35 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_36 (
@@ -3787,7 +3958,8 @@ CREATE TABLE partitions.manifests_p_36 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_37 (
@@ -3807,7 +3979,8 @@ CREATE TABLE partitions.manifests_p_37 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_38 (
@@ -3827,7 +4000,8 @@ CREATE TABLE partitions.manifests_p_38 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_39 (
@@ -3847,7 +4021,8 @@ CREATE TABLE partitions.manifests_p_39 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_4 (
@@ -3867,7 +4042,8 @@ CREATE TABLE partitions.manifests_p_4 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_40 (
@@ -3887,7 +4063,8 @@ CREATE TABLE partitions.manifests_p_40 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_41 (
@@ -3907,7 +4084,8 @@ CREATE TABLE partitions.manifests_p_41 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_42 (
@@ -3927,7 +4105,8 @@ CREATE TABLE partitions.manifests_p_42 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_43 (
@@ -3947,7 +4126,8 @@ CREATE TABLE partitions.manifests_p_43 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_44 (
@@ -3967,7 +4147,8 @@ CREATE TABLE partitions.manifests_p_44 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_45 (
@@ -3987,7 +4168,8 @@ CREATE TABLE partitions.manifests_p_45 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_46 (
@@ -4007,7 +4189,8 @@ CREATE TABLE partitions.manifests_p_46 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_47 (
@@ -4027,7 +4210,8 @@ CREATE TABLE partitions.manifests_p_47 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_48 (
@@ -4047,7 +4231,8 @@ CREATE TABLE partitions.manifests_p_48 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_49 (
@@ -4067,7 +4252,8 @@ CREATE TABLE partitions.manifests_p_49 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_5 (
@@ -4087,7 +4273,8 @@ CREATE TABLE partitions.manifests_p_5 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_50 (
@@ -4107,7 +4294,8 @@ CREATE TABLE partitions.manifests_p_50 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_51 (
@@ -4127,7 +4315,8 @@ CREATE TABLE partitions.manifests_p_51 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_52 (
@@ -4147,7 +4336,8 @@ CREATE TABLE partitions.manifests_p_52 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_53 (
@@ -4167,7 +4357,8 @@ CREATE TABLE partitions.manifests_p_53 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_54 (
@@ -4187,7 +4378,8 @@ CREATE TABLE partitions.manifests_p_54 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_55 (
@@ -4207,7 +4399,8 @@ CREATE TABLE partitions.manifests_p_55 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_56 (
@@ -4227,7 +4420,8 @@ CREATE TABLE partitions.manifests_p_56 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_57 (
@@ -4247,7 +4441,8 @@ CREATE TABLE partitions.manifests_p_57 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_58 (
@@ -4267,7 +4462,8 @@ CREATE TABLE partitions.manifests_p_58 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_59 (
@@ -4287,7 +4483,8 @@ CREATE TABLE partitions.manifests_p_59 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_6 (
@@ -4307,7 +4504,8 @@ CREATE TABLE partitions.manifests_p_6 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_60 (
@@ -4327,7 +4525,8 @@ CREATE TABLE partitions.manifests_p_60 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_61 (
@@ -4347,7 +4546,8 @@ CREATE TABLE partitions.manifests_p_61 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_62 (
@@ -4367,7 +4567,8 @@ CREATE TABLE partitions.manifests_p_62 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_63 (
@@ -4387,7 +4588,8 @@ CREATE TABLE partitions.manifests_p_63 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_7 (
@@ -4407,7 +4609,8 @@ CREATE TABLE partitions.manifests_p_7 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_8 (
@@ -4427,7 +4630,8 @@ CREATE TABLE partitions.manifests_p_8 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE partitions.manifests_p_9 (
@@ -4447,7 +4651,8 @@ CREATE TABLE partitions.manifests_p_9 (
     non_distributable_layers boolean DEFAULT FALSE,
     subject_id bigint,
     artifact_media_type_id bigint,
-    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL
+    media_type_id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    configuration_media_type_id_convert_to_bigint bigint
 );
 
 CREATE TABLE public.repository_blobs (
@@ -17262,6 +17467,21 @@ CREATE TRIGGER gc_track_tmp_blobs_manifests_trigger
     AFTER INSERT ON public.manifests
     FOR EACH ROW
     EXECUTE FUNCTION public.gc_track_tmp_blobs_manifests ();
+
+CREATE TRIGGER set_config_media_type_id_convert_to_bigint
+    BEFORE INSERT OR UPDATE ON public.manifests
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_config_media_type_id_convert_to_bigint ();
+
+CREATE TRIGGER set_media_type_id_convert_to_bigint
+    BEFORE INSERT OR UPDATE ON public.blobs
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_media_type_id_convert_to_bigint ();
+
+CREATE TRIGGER set_media_type_id_convert_to_bigint
+    BEFORE INSERT OR UPDATE ON public.layers
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_media_type_id_convert_to_bigint ();
 
 CREATE TRIGGER set_media_type_id_convert_to_bigint
     BEFORE INSERT OR UPDATE ON public.manifests
