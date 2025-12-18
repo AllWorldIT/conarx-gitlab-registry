@@ -7,6 +7,7 @@ release:prepare:
   stage: release
   image: node:20-alpine
   resource_group: release
+  needs: []
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
