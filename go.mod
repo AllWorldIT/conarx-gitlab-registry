@@ -43,7 +43,7 @@ require (
 	github.com/redis/go-redis/v9 v9.17.2
 	github.com/rubenv/sql-migrate v1.8.1
 	github.com/samber/slog-logrus/v2 v2.5.2
-	github.com/schollz/progressbar/v3 v3.18.0
+	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
