@@ -546,7 +546,7 @@ func TestImporter_FullImport_ErrTagsTableNotEmpty(t *testing.T) {
 	// Now try to import the entire contents of the registry including what was previously imported.
 	// Expect importer to fail because the tags table is not empty.
 	imp2 := newImporter(t, suite.db)
-	require.EqualError(t, imp2.FullImport(suite.ctx), "importing all repositories: halting import to protect data: tags already present in database - this may be an imported registry! If you are retrying an import, you must manually truncate the tags table before retrying: see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#troubleshooting")
+	require.EqualError(t, imp2.FullImport(suite.ctx), "importing all repositories: halting import to protect data: tags already present in database - this may be an imported registry! If you are retrying an import, you must manually truncate the tags table before retrying: see https://docs.gitlab.com/administration/packages/container_registry_metadata_database_troubleshooting")
 }
 
 func TestImporter_ImportAllRepositories_UnknownLayerMediaType(t *testing.T) {

@@ -33,7 +33,7 @@ import (
 var (
 	errNegativeTestingDelay = errors.New("negative testing delay")
 	errManifestSkip         = errors.New("the manifest is invalid and its (pre)import should be skipped")
-	errTagsTableNotEmpty    = errors.New("halting import to protect data: tags already present in database - this may be an imported registry! If you are retrying an import, you must manually truncate the tags table before retrying: see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#troubleshooting")
+	errTagsTableNotEmpty    = errors.New("halting import to protect data: tags already present in database - this may be an imported registry! If you are retrying an import, you must manually truncate the tags table before retrying: see https://docs.gitlab.com/administration/packages/container_registry_metadata_database_troubleshooting")
 	errDBLocked             = errors.New("database-in-use lockfile exists")
 	commonBarOptions        = []progressbar.Option{
 		progressbar.OptionSetElapsedTime(true),
