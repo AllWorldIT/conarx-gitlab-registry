@@ -99,7 +99,7 @@ var (
 	// and the database is disabled.
 	ErrDatabaseInUse = errors.New(`registry metadata database in use, please enable the database https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html`)
 	// ErrInvalidLockfiles is returned when the lockfiles state is invalid.
-	ErrInvalidLockfiles = errors.New("database-in-use and filesystem-in-use lockfiles present, see https://docs.gitlab.com/ee/administration/packages/container_registry_metadata_database.html#troubleshooting")
+	ErrInvalidLockfiles = errors.New("database-in-use and filesystem-in-use lockfiles present, see https://docs.gitlab.com/administration/packages/container_registry_metadata_database_troubleshooting")
 )
 
 type (
