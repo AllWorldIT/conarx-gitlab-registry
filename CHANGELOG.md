@@ -1,3 +1,20 @@
+## [4.33.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.32.0-gitlab...v4.33.0) (2026-01-05)
+
+
+### Features
+
+* add mediatype trigger pre migrations ([9efd204](https://gitlab.com/gitlab-org/container-registry/commit/9efd204c6c0ce97eaa86ddd217bafc7cd9d58414))
+* **datastore:** add index on blobs id column ([11987ba](https://gitlab.com/gitlab-org/container-registry/commit/11987bac34ffeb4cd67bf61da805554d6a4ba8e5))
+* **datastore:** use db replica for bbm progress metric query ([0cb73be](https://gitlab.com/gitlab-org/container-registry/commit/0cb73bee69fa0a32f2d8558a6b481ae7718dbab3))
+* **handlers:** repair bad lockfile states when enforcement is disabled ([6a38fc4](https://gitlab.com/gitlab-org/container-registry/commit/6a38fc4bf156c64dc1e2b5ecfef085700ff1c771))
+
+
+### Bug Fixes
+
+* **handlers:** manage lockfiles on app start when REGISTRY_FF_ENFORCE_LOCKFILES is disabled ([54da663](https://gitlab.com/gitlab-org/container-registry/commit/54da6634df4aa0fe819f3fa36eca765807649fb0))
+* **handlers:** prevent fk violation cache race ([07da5ed](https://gitlab.com/gitlab-org/container-registry/commit/07da5edbec9863ffd3ee27dd59dd76d7c058af87))
+* **storage/s3:** correct variable reference in multipart upload loop ([8cf3275](https://gitlab.com/gitlab-org/container-registry/commit/8cf32753e2fb77025c668d96b43d22ff650e1133))
+
 ## [4.32.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.31.0-gitlab...v4.32.0) (2025-11-25)
 
 
