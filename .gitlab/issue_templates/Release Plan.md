@@ -90,7 +90,7 @@ The release documentation can be found [here](https://gitlab.com/gitlab-org/cont
    1. [ ] Check MRs included in the release for the labels ~high-risk-change, ~cannot-rollback.
       - [ ] If they exist, add the same label to each deployment stage.
       - [ ] Follow the [potentially risky deployments](#potentially-risky-deployments) instructions.
-   1. Each environment needs to be deployed and confirmed working in the order listed below, before merging the next MR. To see the version deployed in each environment, look at the [versions chart in Grafana](https://dashboards.gitlab.net/goto/F44DoeCIg?orgId=1)
+   1. Each environment needs to be deployed and confirmed working in the order listed below, before merging the next MR. To see the version deployed in each environment, look at the [versions chart in Grafana](https://dashboards.gitlab.net/goto/F44DoeCIg?orgId=1). Use the [GitLab Duo prompt](#k8s-workloads-version-bump-gitLab-duo-prompt) to create all version bump MRs.
       1. [ ] Version bump for Pre-Production and Staging.
       1. [ ] Version bump for Production Canary.
       1. [ ] Version bump for Production Main Stage.
@@ -121,6 +121,123 @@ The release documentation can be found [here](https://gitlab.com/gitlab-org/cont
      - [ ] Check [metrics dashboard](https://dashboards.gitlab.net/d/registry-main/registry-overview?orgId=1&var-PROMETHEUS_DS=Global&var-environment=gprd&var-stage=main).
 
 2. Let the assignee SRE know about these changes.
+
+</details>
+
+#### K8s-Workloads version bump GitLab Duo prompt
+
+**How to use:**
+1. Copy the entire prompt into a new GitLab Duo chat (Agentic mode). This needs to be executed while on the [gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com](https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com) project, as it's Internal (while this project is Public).
+2. Duo will detect the current registry version and ask for confirmation of the target version
+3. All MRs will be created automatically with proper descriptions, sequence, labels, and assignee
+4. Once created, review the MRs and kickoff the review/merge process in sequence (pre/gstg → gprd-cny → gprd-main)
+
+<details><summary>Click to expand</summary>
+
+``````md
+# Container Registry Version Bump
+
+## Step 1: Detect Versions
+
+1. Read `registry_version` from `gitlab-com/gl-infra/k8s-workloads/gitlab-com`:
+   - `bases/pre.yaml.gotmpl`
+   - `bases/gstg.yaml.gotmpl`
+   - `bases/gprd.yaml.gotmpl` (gprd + gprd-cny sections)
+
+2. Fetch latest from: https://gitlab.com/gitlab-org/container-registry/-/blob/master/CHANGELOG.md
+
+3. Present to user:
+
+```
+Current version: {current_version}
+Latest version:  {latest_version}
+
+Is {latest_version} your target? (yes/no/or specify a different version)
+```
+
+**Wait for confirmation before proceeding.**
+
+**Halt if:**
+- `current_version` equals `latest_version` (already up to date)
+- User specifies a `target_version` older than or equal to `current_version`
+
+Inform the user and stop execution.
+
+---
+
+## Step 2: Find Release Issue
+
+Search `gitlab-org/container-registry` for issue titled "Release Version {target_version}" with label `maintenance::release`. Extract IID and confirm with user.
+
+---
+
+## Step 3: Extract Changelog
+
+Strip `-gitlab` suffix from versions to get `current_semver` and `target_semver`.
+
+Extract entries between `current_semver` (exclusive) and `target_semver` (inclusive). Include: Features, Bug Fixes, Performance Improvements, Breaking Changes.
+
+Retain the changelog URL from the version header:
+`https://gitlab.com/gitlab-org/container-registry/-/blob/master/CHANGELOG.md#{anchor}`
+
+The anchor format is version + date in lowercase, e.g., `#4330-2026-01-05`
+
+---
+
+## Step 4: Create MRs
+
+Create 3 MRs in `gitlab-com/gl-infra/k8s-workloads/gitlab-com`:
+
+| MR | Environments | Branch | Files to Update | Draft? |
+|----|--------------|--------|-----------------|--------|
+| 1 | pre, gstg | `bump-registry-{target_semver}-pre-gstg` | `bases/pre.yaml.gotmpl`, `bases/gstg.yaml.gotmpl` | No |
+| 2 | gprd cny | `bump-registry-{target_semver}-gprd-cny` | `bases/gprd.yaml.gotmpl` (cny section) | Yes |
+| 3 | gprd main | `bump-registry-{target_semver}-gprd-main` | `bases/gprd.yaml.gotmpl` (main section) | Yes |
+
+**Notes:**
+- Default branch is `master` (use `start_branch: master` when creating commits)
+- Only update `registry_version` field (use partial edit with `old_str`/`new_str`)
+- MRs 2 and 3 are drafts because MR dependencies can't be set via API yet
+
+**MR title:** `[Draft: ]Bump Container Registry to {target_version} ({environments})`
+
+**MR description:**
+
+```
+## Container Registry {target_version}
+
+Bumps Container Registry from {current_version} to {target_version}.
+
+### Changes in {target_semver}
+
+See [v{target_semver} changelog]({changelog_url}) for full details.
+
+**Features:**
+{feature_list}
+
+**Bug Fixes:**
+{bugfix_list}
+
+### Environments Updated
+
+- {env}: {current_version} → {target_version}
+
+### Blocked By (MR 2 and 3 only)
+
+- MR {N-1} ({previous_env} deployment must complete first)
+
+Relates to gitlab-org/container-registry#{release_issue_iid}
+```
+
+---
+
+## Step 5: Configure MRs
+
+After creating all 3 MRs:
+
+1. Assign all to current user (`get_current_user()`)
+2. Add label `Service::Container Registry` to all
+``````
 
 </details>
 
