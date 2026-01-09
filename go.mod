@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0
-	cloud.google.com/go/storage v1.58.0
+	cloud.google.com/go/storage v1.59.0
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
