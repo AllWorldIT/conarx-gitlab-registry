@@ -1234,6 +1234,11 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 		w.WriteHeader(http.StatusNoContent)
 		isRenamed = true
 
+		// Clean up repository cache entries so that old/new paths cannot serve stale data if paths are reused.
+		repoCache := datastore.NewCentralRepositoryCache(cache)
+		repoCache.Invalidate(ctx, repo.source.Path)
+		repoCache.Invalidate(ctx, repo.newPath)
+
 		// When a lease fails to be destroyed after it is no longer needed it should not impact the response to the caller.
 		// The lease will eventually expire regardless, but we still need to record these failed cases.
 		if err := rlstore.Destroy(ctx, lease); err != nil {

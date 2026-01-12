@@ -99,6 +99,18 @@ func (mr *MockRepositoryCacheMockRecorder) HasSizeWithDescendantsTimedOut(ctx, r
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasSizeWithDescendantsTimedOut", reflect.TypeOf((*MockRepositoryCache)(nil).HasSizeWithDescendantsTimedOut), ctx, r)
 }
 
+// Invalidate mocks base method.
+func (m *MockRepositoryCache) Invalidate(ctx context.Context, path string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Invalidate", ctx, path)
+}
+
+// Invalidate indicates an expected call of Invalidate.
+func (mr *MockRepositoryCacheMockRecorder) Invalidate(ctx, path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Invalidate", reflect.TypeOf((*MockRepositoryCache)(nil).Invalidate), ctx, path)
+}
+
 // InvalidateSize mocks base method.
 func (m *MockRepositoryCache) InvalidateSize(ctx context.Context, repo *models.Repository) {
 	m.ctrl.T.Helper()

@@ -213,3 +213,15 @@ func TestCache_RunScript(t *testing.T) {
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 }
+
+func TestCache_DeleteMany(t *testing.T) {
+	db, mock := redismock.NewClientMock()
+	cache := iredis.NewCache(db)
+
+	keys := []string{"k1", "k2", "k3"}
+	mock.ExpectDel(keys...).SetVal(int64(len(keys)))
+
+	err := cache.DeleteMany(context.Background(), keys...)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
