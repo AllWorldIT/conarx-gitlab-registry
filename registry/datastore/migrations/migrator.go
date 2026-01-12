@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -70,6 +71,33 @@ type MigratorImpl struct {
 	ms         migrate.MigrationSet
 }
 
+// ErrUnknownMigrationsInDatabase is returned when the database has applied migrations that are not present
+// in the current registry build.
+//
+// This typically means you're running an older registry binary against a newer database schema.
+type ErrUnknownMigrationsInDatabase struct {
+	// TableName is the migrations tracking table name (e.g. schema_migrations).
+	TableName string
+	// MigrationIDs are the migration IDs present in the DB but missing from this build.
+	MigrationIDs []string
+}
+
+func (e *ErrUnknownMigrationsInDatabase) Error() string {
+	table := e.TableName
+	if table == "" {
+		table = PreDeployMigrationTableName
+	}
+
+	switch len(e.MigrationIDs) {
+	case 0:
+		return fmt.Sprintf("database contains migration records in %q that are unknown to this registry build", table)
+	case 1:
+		return fmt.Sprintf("database contains migration record %q in %q that is unknown to this registry build (this usually means you're running an older registry against a newer database; upgrade the registry to match the database schema)", e.MigrationIDs[0], table)
+	default:
+		return fmt.Sprintf("database contains %d migration records in %q that are unknown to this registry build (this usually means you're running an older registry against a newer database; upgrade the registry to match the database schema): %v", len(e.MigrationIDs), table, e.MigrationIDs)
+	}
+}
+
 type PureMigrator interface {
 	Name() string
 	Down() (int, error)
@@ -79,6 +107,7 @@ type PureMigrator interface {
 	HasPending() (bool, error)
 	Count() int
 	LatestVersion() (string, error)
+	UnknownAppliedMigrationIDs() ([]string, error)
 	Reconfigure(f MigratorOption)
 	Status() (map[string]*MigrationStatus, error)
 	Up(extraCheck ...MigrationDependencyResolver) (MigrationResult, error)
@@ -177,6 +206,10 @@ func (m *MigratorImpl) LatestVersion() (string, error) {
 }
 
 func (m *MigratorImpl) migrate(direction migrate.MigrationDirection, limit int) (int, error) {
+	if err := m.ensureSchemaCompatible(direction); err != nil {
+		return 0, err
+	}
+
 	src, err := m.EligibleMigrationSource()
 	if err != nil {
 		return 0, err
@@ -280,6 +313,30 @@ func (m *MigratorImpl) Count() int {
 }
 
 func (m *MigratorImpl) plan(direction migrate.MigrationDirection, limit int) ([]string, error) {
+	// sql-migrate rejects planning when the DB contains unknown applied migrations.
+	// For rolling upgrades we want older registry versions to be able to run even if the DB schema
+	// is ahead, as long as there are no pending known migrations to apply.
+	//
+	// For "down" we remain strict: it's unsafe to attempt rollbacks with a binary that doesn't
+	// understand the schema history.
+	if err := m.ensureSchemaCompatible(direction); err != nil {
+		return nil, err
+	}
+
+	unknownIDs, err := m.collectUnknownAppliedMigrationIDs()
+	if err != nil {
+		return nil, err
+	}
+	if direction == migrate.Up && len(unknownIDs) > 0 {
+		pending, err := m.hasPendingKnownMigrations()
+		if err != nil {
+			return nil, err
+		}
+		if !pending {
+			return make([]string, 0), nil
+		}
+	}
+
 	src, err := m.EligibleMigrationSource()
 	if err != nil {
 		return nil, err
@@ -296,6 +353,84 @@ func (m *MigratorImpl) plan(direction migrate.MigrationDirection, limit int) ([]
 	}
 
 	return result, nil
+}
+
+// ensureSchemaCompatible ensures that the schema is compatible with the current registry build.
+// It returns an error if the schema is not compatible.
+func (m *MigratorImpl) ensureSchemaCompatible(direction migrate.MigrationDirection) error {
+	unknownIDs, err := m.collectUnknownAppliedMigrationIDs()
+	if err != nil {
+		return err
+	}
+	if len(unknownIDs) == 0 {
+		return nil
+	}
+
+	// Never allow "down" operations when the DB contains migrations unknown to this build.
+	if direction == migrate.Down {
+		return &ErrUnknownMigrationsInDatabase{
+			TableName:    m.ms.TableName,
+			MigrationIDs: unknownIDs,
+		}
+	}
+
+	// For "up", only fail if we would actually apply known migrations. If there are no pending known
+	// migrations, tolerate unknown IDs to support rolling upgrades (older nodes against newer DB).
+	pending, err := m.hasPendingKnownMigrations()
+	if err != nil {
+		return err
+	}
+	if !pending {
+		return nil
+	}
+
+	return &ErrUnknownMigrationsInDatabase{
+		TableName:    m.ms.TableName,
+		MigrationIDs: unknownIDs,
+	}
+}
+
+// collectUnknownAppliedMigrationIDs returns the IDs of migrations that are applied but not known to the current registry build.
+func (m *MigratorImpl) collectUnknownAppliedMigrationIDs() ([]string, error) {
+	statuses, err := m.Status()
+	if err != nil {
+		return nil, err
+	}
+
+	unknown := make([]string, 0)
+	for id, st := range statuses {
+		if st != nil && st.Unknown {
+			unknown = append(unknown, id)
+		}
+	}
+	sort.Strings(unknown)
+	return unknown, nil
+}
+
+// UnknownAppliedMigrationIDs returns migration IDs that are present in the database migration records
+// but unknown to the current registry build.
+func (m *MigratorImpl) UnknownAppliedMigrationIDs() ([]string, error) {
+	return m.collectUnknownAppliedMigrationIDs()
+}
+
+// hasPendingKnownMigrations returns true if there are pending known migrations to apply.
+func (m *MigratorImpl) hasPendingKnownMigrations() (bool, error) {
+	records, err := m.ms.GetMigrationRecords(m.db.DB, dialect)
+	if err != nil {
+		return false, err
+	}
+
+	eligible, err := m.eligibleMigrations()
+	if err != nil {
+		return false, err
+	}
+
+	for _, k := range eligible {
+		if !migrationApplied(records, k.Id) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (m *MigratorImpl) allMigrations() ([]*migrate.Migration, error) {
@@ -357,6 +492,10 @@ func (m *MigratorImpl) FindMigrationByID(id string) *Migration {
 // Returns the number of applied (pre/post) schema migrations, background migrations, or an error if any step fails.
 func (m *MigratorImpl) migrateUpWithCheck(maximum int, extraCheck ...MigrationDependencyResolver) (MigrationResult, error) {
 	var mr MigrationResult
+	if err := m.ensureSchemaCompatible(migrate.Up); err != nil {
+		return mr, err
+	}
+
 	// Initialize a new store to manage background migrations
 	bbmStore := datastore.NewBackgroundMigrationStore(m.db)
 

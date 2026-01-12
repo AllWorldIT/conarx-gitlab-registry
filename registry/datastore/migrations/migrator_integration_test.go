@@ -176,6 +176,74 @@ func TestMigrator_UpNPlan(t *testing.T) {
 	require.Equal(t, allExceptFirstTwoPlan, plan)
 }
 
+func TestMigrator_UpNPlan_UnknownMigrationInDatabase(t *testing.T) {
+	db, err := testutil.NewDBFromEnv()
+	require.NoError(t, err)
+	defer cleanupDB(t, db)
+
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
+
+	// Apply all known migrations first, so there are no pending known migrations for this build.
+	// This matches the rolling-upgrade situation where the database schema is ahead (unknown IDs),
+	// but the older binary has nothing left to apply.
+	_, err = m.Up()
+	require.NoError(t, err)
+
+	// Simulate a database schema ahead of this binary by inserting a migration record that does not exist locally.
+	const unknownID = "99999999999999_unknown_migration"
+	_, err = db.DB.Exec("INSERT INTO "+migrationTableName+" (id, applied_at) VALUES ($1, now())", unknownID)
+	require.NoError(t, err)
+
+	plan, err := m.UpNPlan(0)
+	require.NoError(t, err)
+	require.Empty(t, plan)
+}
+
+func TestMigrator_UpNPlan_UnknownMigrationInDatabase_WithPendingKnownMigrations(t *testing.T) {
+	db, err := testutil.NewDBFromEnv()
+	require.NoError(t, err)
+	defer cleanupDB(t, db)
+
+	// Use a migration source with at least one known migration so the DB can have pending known migrations.
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
+
+	// Apply nothing, but insert an unknown migration record. This leaves known migrations pending.
+	// This matches the rolling-upgrade situation where the database schema is ahead (unknown IDs),
+	// but there are pending known migrations to apply for the older build.
+	const unknownID = "99999999999999_unknown_migration"
+	_, err = db.DB.Exec("INSERT INTO "+migrationTableName+" (id, applied_at) VALUES ($1, now())", unknownID)
+	require.NoError(t, err)
+
+	_, err = m.UpNPlan(0)
+	require.Error(t, err)
+
+	var unknownErr *migrations.ErrUnknownMigrationsInDatabase
+	require.ErrorAs(t, err, &unknownErr)
+	require.Contains(t, unknownErr.MigrationIDs, unknownID)
+	require.Equal(t, migrationTableName, unknownErr.TableName)
+}
+
+func TestMigrator_DownNPlan_UnknownMigrationInDatabase_Errors(t *testing.T) {
+	db, err := testutil.NewDBFromEnv()
+	require.NoError(t, err)
+	defer cleanupDB(t, db)
+
+	m := migrations.NewMigrator(db, migrations.WithTable(migrationTableName), migrations.Source(testmigrations.All()))
+
+	// Insert an unknown migration record. Down planning must remain strict when the schema history is unknown.
+	const unknownID = "99999999999999_unknown_migration"
+	_, err = db.DB.Exec("INSERT INTO "+migrationTableName+" (id, applied_at) VALUES ($1, now())", unknownID)
+	require.NoError(t, err)
+
+	_, err = m.DownNPlan(0)
+	require.Error(t, err)
+
+	var unknownErr *migrations.ErrUnknownMigrationsInDatabase
+	require.ErrorAs(t, err, &unknownErr)
+	require.Contains(t, unknownErr.MigrationIDs, unknownID)
+	require.Equal(t, migrationTableName, unknownErr.TableName)
+}
+
 func TestMigrator_Down(t *testing.T) {
 	db, err := testutil.NewDBFromEnv()
 	require.NoError(t, err)
