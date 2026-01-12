@@ -62,6 +62,39 @@ func TestCentralRepositoryCache(t *testing.T) {
 	require.NoError(t, redisMock.ExpectationsWereMet())
 }
 
+func TestCentralRepositoryCache_Invalidate(t *testing.T) {
+	ttl := 30 * time.Minute
+	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
+	cache := datastore.NewCentralRepositoryCache(redisCache)
+	ctx := context.Background()
+
+	repo := &models.Repository{Path: "gitlab-org/gitlab"}
+	hex := digest.FromString(repo.Path).Hex()
+	base := fmt.Sprintf("registry:db:{repository:%s:%s}", repo.TopLevelPathSegment(), hex)
+
+	keys := []string{
+		base,
+		base + ":swd-timeout",
+		base + ":swd",
+		base + ":lsn",
+	}
+
+	redisMock.ExpectDel(keys...).SetVal(int64(len(keys)))
+	cache.Invalidate(ctx, repo.Path)
+
+	require.NoError(t, redisMock.ExpectationsWereMet())
+}
+
+func TestCentralRepositoryCache_Invalidate_EmptyPath_NoOp(t *testing.T) {
+	ttl := 30 * time.Minute
+	redisCache, redisMock := testutil.RedisCacheMock(t, ttl)
+	cache := datastore.NewCentralRepositoryCache(redisCache)
+
+	// No expectations: calling Invalidate with an empty path should not touch Redis.
+	cache.Invalidate(context.Background(), "")
+	require.NoError(t, redisMock.ExpectationsWereMet())
+}
+
 // Why the SHA1 and not the actual lsnUpdateScript script source: Redis can cache the source of scripts so that clients
 // don't have to re-send the script source with every invocation. Upon a first script EVAL, a script is hashed and then
 // clients can use that SHA1 to invoke the same command with EVALSHA without transmitting its source. The
