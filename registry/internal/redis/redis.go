@@ -104,6 +104,15 @@ func (c *Cache) Delete(ctx context.Context, key string) error {
 	return c.cache.Delete(ctx, key)
 }
 
+// DeleteMany removes multiple cached items by their keys using a single Redis DEL command.
+// This is useful to clean up small, known sets of related keys while avoiding per-key round trips.
+func (c *Cache) DeleteMany(ctx context.Context, keys ...string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	return c.client.Del(ctx, keys...).Err()
+}
+
 // UnmarshalGet retrieves and unmarshal a cached object into the provided object argument.
 func (c *Cache) UnmarshalGet(ctx context.Context, key string, object any) error {
 	_, err := c.marshaler.Get(ctx, key, object)
