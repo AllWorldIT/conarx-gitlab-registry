@@ -333,6 +333,17 @@ var MigrateUpCmd = &cobra.Command{
 				return fmt.Errorf("failed to prepare Up plan: %w", err)
 			}
 
+			// If the plan is empty but the database contains unknown migration IDs (i.e. schema is ahead of this build),
+			// let operators know we're intentionally doing nothing to support rolling upgrades.
+			if len(plan) == 0 {
+				if unknownApplied, err := mig.UnknownAppliedMigrationIDs(); err == nil && len(unknownApplied) > 0 {
+					_, _ = fmt.Fprintf(os.Stderr,
+						"INFO: database schema is newer than this registry build (%d unknown %s migration record(s)); nothing to migrate\n",
+						len(unknownApplied), mig.Name(),
+					)
+				}
+			}
+
 			if len(plan) > 0 {
 				fmt.Printf("%s:\n%s\n", mig.Name(), strings.Join(plan, "\n"))
 			}

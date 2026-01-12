@@ -16,11 +16,36 @@
     REGISTRY_DATABASE_HOST: db
     REGISTRY_OLD_IMAGE: registry.gitlab.com/gitlab-org/build/cng/gitlab-container-registry:${REGISTRY_SELF_MANAGED_RELEASE_VERSION}
 
+# Helper for dind jobs: the PostgreSQL service runs in the job container network, but containers started via
+# the dind daemon need a routable IP (not just the DNS name) to reach it. This snippet resolves the IP for
+# the `db` service and exports it as POSTGRES_IP, so we can pass `--add-host=db:$POSTGRES_IP` to `docker run`.
+.dind_resolve_db_ip:
+  before_script:
+    - echo "Resolving PostgreSQL service IP for dind networking..."
+    # Install bind-tools for dig (fallback if /etc/hosts doesn't contain the service IP)
+    - apk add --no-cache bind-tools
+    # Attempt to extract the IP address of the PostgreSQL service from /etc/hosts so we can link it to containers spun up by dind
+    - |
+      POSTGRES_IP=$(awk '{if ($2 == "db") print $1;}' /etc/hosts | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || true)
+      if [ -z "$POSTGRES_IP" ]; then
+        echo "No IP found in /etc/hosts for 'db', attempting to resolve using dig..."
+        POSTGRES_IP=$(dig +short db)
+      fi
+
+      if [ -z "$POSTGRES_IP" ]; then
+        echo "Error: Could not resolve 'db' IP address."
+        exit 1
+      fi
+
+      export POSTGRES_IP
+      echo "Resolved PostgreSQL IP: $POSTGRES_IP"
+    - ping -w 2 "$POSTGRES_IP"
+
 # migrate:init-db-with-last-release is a job that runs the cli migrate command to initialize the database with the last GitLab released registry version.
 # It is a prerequisite for the other jobs that test the migration from the last GitLab released registry version to the current development version.
 #TODO: This job is convoluted because of the nature of dind. Consider building the older registry from source https://gitlab.com/gitlab-org/container-registry/-/issues/1520.
 migrate:init-db-with-last-release:
-  extends: .base_migration_config
+  extends: [.base_migration_config, .dind_resolve_db_ip]
   image: docker:${DOCKER_VERSION}
   stage: migrate
   tags:
@@ -36,33 +61,9 @@ migrate:init-db-with-last-release:
     - echo "Pulling old registry image $REGISTRY_OLD_IMAGE"
     - docker pull $REGISTRY_OLD_IMAGE
     - echo "Running migrations for old registry version..."
-    # Attempt to extract the IP address of the PostgreSQL service from /etc/hosts so we can link it to the containers spun up by dind
-    - POSTGRES_IP=$(awk '{if ($2 == "db") print $1;}' /etc/hosts | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || true)
-    
-    # Check if POSTGRES_IP is empty (meaning the first method failed)
-    - |
-      if [ -z "$POSTGRES_IP" ]; then
-        echo "No IP found in /etc/hosts for 'db', attempting to resolve using dig..."
-        
-        # Install bind-tools to use dig
-        apk add --no-cache bind-tools
-        
-        # Use dig to resolve the IP address for db (fallback method)
-        POSTGRES_IP=$(dig +short db)
-        
-        # Check if dig was successful in resolving the IP address
-        if [ -z "$POSTGRES_IP" ]; then
-          echo "Error: Could not resolve 'db' IP address using dig."
-          exit 1
-        else
-          echo "Resolved database IP address using dig: $POSTGRES_IP"
-        fi
-      else
-        echo "Found PostgreSQL IP in /etc/hosts: $POSTGRES_IP"
-      fi
-    - ping -w 2 $POSTGRES_IP
-    - docker run --rm --add-host="db:$POSTGRES_IP" -v $(pwd)/config/database-filesystem.yml:/config/database-filesystem.yml -e REGISTRY_DATABASE_HOST=${REGISTRY_DATABASE_HOST} --entrypoint \registry $REGISTRY_OLD_IMAGE \database migrate up /config/database-filesystem.yml
-    - docker run --rm --add-host="db:$POSTGRES_IP" -e PGPASSWORD=$POSTGRES_PASSWORD postgres:${PG_CURR_VERSION}-alpine pg_dump -h $REGISTRY_DATABASE_HOST -U $POSTGRES_USER -d $APP_DATABASE > db_dump.sql
+    - 'echo "Using PostgreSQL IP: $POSTGRES_IP"'
+    - 'docker run --rm --add-host="db:$POSTGRES_IP" -v "$(pwd)/config/database-filesystem.yml:/config/database-filesystem.yml" -e REGISTRY_DATABASE_HOST=${REGISTRY_DATABASE_HOST} --entrypoint registry $REGISTRY_OLD_IMAGE database migrate up /config/database-filesystem.yml'
+    - 'docker run --rm --add-host="db:$POSTGRES_IP" -e PGPASSWORD=$POSTGRES_PASSWORD postgres:${PG_CURR_VERSION}-alpine pg_dump -h $REGISTRY_DATABASE_HOST -U $POSTGRES_USER -d $APP_DATABASE > db_dump.sql'
   needs: []
   artifacts:
     paths:
@@ -172,3 +173,73 @@ compare_dumps:
     paths:
       - db_diff_output.txt
     expire_in: 5 hour
+
+# migrate:old-registry-starts-with-current-schema verifies that the registry image corresponding to
+# REGISTRY_SELF_MANAGED_RELEASE_VERSION can start successfully against a database schema migrated
+# by the current development version (rolling upgrade compatibility).
+migrate:old-registry-starts-with-current-schema:
+  extends: [.base_migration_config, .dind_resolve_db_ip]
+  image: docker:${DOCKER_VERSION}
+  stage: migrate
+  tags:
+    - gitlab-org-docker # For dind runners
+  services:
+    - name: docker:${DOCKER_VERSION}-dind
+      alias: docker
+      command: ["--insecure-registry=docker:5002"]
+    - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_CURR_VERSION}
+      alias: db
+      variables:
+        POSTGRES_ROLE: primary
+  needs: ["migrate:from-last-release-version-to-current"]
+  dependencies:
+    - migrate:from-last-release-version-to-current
+  script:
+    - echo "Restoring database from current-version dump..."
+    - apk add --no-cache curl
+    - 'echo "Using PostgreSQL IP: $POSTGRES_IP"'
+    - docker run --rm --add-host="db:$POSTGRES_IP" -v "$(pwd)/db_dump_new.sql:/dump.sql:ro" -e PGPASSWORD=$POSTGRES_PASSWORD postgres:${PG_CURR_VERSION}-alpine psql -h $REGISTRY_DATABASE_HOST -U $POSTGRES_USER -d $APP_DATABASE -f /dump.sql
+    - echo "Pulling old registry image $REGISTRY_OLD_IMAGE"
+    - docker pull $REGISTRY_OLD_IMAGE
+    - echo "Starting old registry against current schema..."
+    - echo "Registry endpoint will be available at http://docker:5002 (published from the dind service container)"
+    - docker run -d --name old-registry --add-host="db:$POSTGRES_IP" -v "$(pwd)/config/database-filesystem.yml:/config/database-filesystem.yml:ro" -e REGISTRY_DATABASE_HOST=${REGISTRY_DATABASE_HOST} -p 5002:5000 --entrypoint registry $REGISTRY_OLD_IMAGE serve /config/database-filesystem.yml
+    - |
+      echo "Waiting for old registry to become reachable..."
+      for i in $(seq 1 30); do
+        if ! docker ps --format '{{.Names}}' | grep -q '^old-registry$'; then
+          echo "Old registry container exited unexpectedly."
+          docker logs old-registry || true
+          exit 1
+        fi
+        code="$(curl -s -o /dev/null -w '%{http_code}' http://docker:5002/v2/ || true)"
+        if [ "$code" = "200" ] || [ "$code" = "401" ]; then
+          echo "Old registry is reachable (HTTP $code)."
+          break
+        fi
+        sleep 1
+      done
+      if [ "$code" != "200" ] && [ "$code" != "401" ]; then
+        echo "Old registry did not become reachable in time."
+        docker logs old-registry || true
+        exit 1
+      fi
+
+    - echo "Running simple push/pull against old registry version targetting latest db schema (smoke test)..."
+    - mkdir -p compat-image
+    - printf "hello from ci\n" > compat-image/hello.txt
+    - |
+      cat > compat-image/Dockerfile <<'EOF'
+      FROM scratch
+      ADD hello.txt /hello.txt
+      EOF
+    - echo "Building image..."
+    - docker build -t docker:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID} compat-image
+    - echo "Pushing image..."
+    - docker push docker:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
+    - echo "Removing local image to ensure pull is real..."
+    - docker rmi docker:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
+    - echo "Pulling image..."
+    - docker pull docker:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
+  after_script:
+    - docker rm -f old-registry || true
