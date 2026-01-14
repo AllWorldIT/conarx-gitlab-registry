@@ -6,7 +6,7 @@
 
 .base_migration_config:
   variables:
-    REGISTRY_SELF_MANAGED_RELEASE_VERSION: "v4.32.0-gitlab"
+    REGISTRY_SELF_MANAGED_RELEASE_VERSION: "v4.33.0-gitlab"
     DOCKER_HOST: tcp://docker:2375
     APP_DATABASE: registry_test
     APP_USER: boryna
