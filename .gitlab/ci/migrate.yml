@@ -186,7 +186,9 @@ migrate:old-registry-starts-with-current-schema:
   services:
     - name: docker:${DOCKER_VERSION}-dind
       alias: docker
-      command: ["--insecure-registry=docker:5002"]
+      # The docker CLI runs in the job container, but the *push/pull* is executed by the dind daemon.
+      # The daemon cannot resolve the GitLab service DNS name `docker`, so use localhost for registry access.
+      command: ["--insecure-registry=localhost:5002", "--insecure-registry=127.0.0.1:5002"]
     - name: registry.gitlab.com/gitlab-org/container-registry/postgresql-ci:${PG_CURR_VERSION}
       alias: db
       variables:
@@ -234,12 +236,12 @@ migrate:old-registry-starts-with-current-schema:
       ADD hello.txt /hello.txt
       EOF
     - echo "Building image..."
-    - docker build -t docker:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID} compat-image
+    - docker build -t localhost:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID} compat-image
     - echo "Pushing image..."
-    - docker push docker:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
+    - docker push localhost:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
     - echo "Removing local image to ensure pull is real..."
-    - docker rmi docker:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
+    - docker rmi localhost:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
     - echo "Pulling image..."
-    - docker pull docker:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
+    - docker pull localhost:5002/compat/old-registry-smoke:${CI_PIPELINE_ID}-${CI_JOB_ID}
   after_script:
     - docker rm -f old-registry || true
