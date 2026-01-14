@@ -1,3 +1,21 @@
+## [4.34.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.33.0-gitlab...v4.34.0) (2026-01-14)
+
+
+### Features
+
+* **datastore:** add index on layers id column ([90da9c5](https://gitlab.com/gitlab-org/container-registry/commit/90da9c5b5e11696a14d744231c644c36751355df))
+* tolerate unknown DB migrations during rolling upgrade ([2cef90b](https://gitlab.com/gitlab-org/container-registry/commit/2cef90b49df0718872af63f0f9b3e39949196b3c))
+
+
+### Bug Fixes
+
+* **handlers:** stale repository cache after rename ([25c2a59](https://gitlab.com/gitlab-org/container-registry/commit/25c2a59522764aa2180d56bb7326b2df5ec5b4ea))
+
+
+### Reverts
+
+* **deps:** update module google.golang.org/api to v0.258.0 ([b0123fb](https://gitlab.com/gitlab-org/container-registry/commit/b0123fb8d5c8e5d8090a18566b8a9882fe9af9ba))
+
 ## [4.33.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.32.0-gitlab...v4.33.0) (2026-01-05)
 
 
