@@ -20,6 +20,7 @@ Media type IDs are currently implemented with `SMALLINT`, while it's unlikely to
 | `application/vnd.zarf.config.v1+json`                                     |
 | `application/vnd.wasm.content.layer.v1+wasm`                              |
 | `application/vnd.wasm.config.v1+json`                                     |
+| `application/vnd.wasm.config.v0+json`                                     |
 | `application/vnd.vivsoft.enbuild.config.v1+json`                          |
 | `application/vnd.unknown.config.v1+json`                                  |
 | `application/vnd.timoni.content.v1.tar+gzip`                              |
@@ -105,6 +106,7 @@ Media type IDs are currently implemented with `SMALLINT`, while it's unlikely to
 | `application/vnd.acme.rocket.docs.layer.v1+tar`                           |
 | `application/vnd.acme.rocket.config`                                      |
 | `application/tar+gzip`                                                    |
+| `application/wasm`                                                        |
 | `application/spdx+json`                                                   |
 | `application/sap-cnudie+tar`                                              |
 | `application/octet-stream`                                                |
