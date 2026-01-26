@@ -99,19 +99,29 @@ func AllWork() []Work {
 	return []Work{
 		// {Name: "ExampleNameThatMatchesTheJobSignatureNameColumn", Do: ExampleDoFunction}
 		{Name: "copyManifestMediaTypeIDToNewBigIntColumn", Do: copyManifestMediaTypeIDToNewBigIntColumn},
+		{Name: "copyManifestConfigMediaTypeIDToNewBigIntColumn", Do: copyManifestConfigMediaTypeIDToNewBigIntColumn},
 		{Name: "populateBlobsIDColumn", Do: updateBlobNullIDs},
 	}
 }
 
 func copyManifestMediaTypeIDToNewBigIntColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, _ int) error {
+	return copyMediaTypeIDToNewBigIntColumn(ctx, db, paginationTable, paginationColumn, paginationAfter, paginationBefore)
+}
+
+func copyManifestConfigMediaTypeIDToNewBigIntColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, _ int) error {
+	q := fmt.Sprintf(`UPDATE %s SET configuration_media_type_id_convert_to_bigint = configuration_media_type_id WHERE %s >= $1 AND %s <= $2`, paginationTable, paginationColumn, paginationColumn)
+	log.GetLogger(log.WithContext(ctx)).
+		Info(fmt.Sprintf(`Copying configuration_media_type_id to configuration_media_type_id_convert_to_bigint for %s, starting from %s:%d to id:%d`, paginationTable, paginationColumn, paginationAfter, paginationBefore))
+	_, err := db.ExecContext(ctx, q, paginationAfter, paginationBefore)
+	return err
+}
+
+func copyMediaTypeIDToNewBigIntColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore int) error {
 	q := fmt.Sprintf(`UPDATE %s SET media_type_id_convert_to_bigint = media_type_id WHERE %s >= $1 AND %s <= $2`, paginationTable, paginationColumn, paginationColumn)
 	log.GetLogger(log.WithContext(ctx)).
-		Info(fmt.Sprintf(`Copying from column manifests.media_type_id to manifests.media_type_id_convert_to_bigint,  Starting from %s :%d to id:%d`, paginationColumn, paginationAfter, paginationBefore))
+		Info(fmt.Sprintf(`Copying media_type_id to media_type_id_convert_to_bigint for %s, starting from %s:%d to id:%d`, paginationTable, paginationColumn, paginationAfter, paginationBefore))
 	_, err := db.ExecContext(ctx, q, paginationAfter, paginationBefore)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func updateNullIDs(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn, sequenceName string, limit int) error {
