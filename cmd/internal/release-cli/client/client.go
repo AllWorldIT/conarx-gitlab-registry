@@ -48,7 +48,7 @@ func (g *Client) CreateCommit(projectID int, change []byte, fileName, commitMess
 	return commit, err
 }
 
-func (g *Client) CreateMergeRequest(projectID int, sourceBranch *gitlab.Branch, description, targetBranch, title string, labels *gitlab.LabelOptions, reviwerIDs []int) (*gitlab.MergeRequest, error) {
+func (g *Client) CreateMergeRequest(projectID int, sourceBranch *gitlab.Branch, description, targetBranch, title string, labels *gitlab.LabelOptions, reviwerIDs []int64) (*gitlab.MergeRequest, error) {
 	mr, _, err := g.client.MergeRequests.CreateMergeRequest(projectID, &gitlab.CreateMergeRequestOptions{
 		SourceBranch: gitlab.Ptr(sourceBranch.Name),
 		TargetBranch: &targetBranch,
