@@ -46,7 +46,7 @@ func TestWithoutOccurrenceBuckets_RemovesOnlyOccurrenceLabels(t *testing.T) {
 }
 
 func TestBucketForCount_Ranges(t *testing.T) {
-	cases := map[int]string{
+	cases := map[int64]string{
 		1:   "flaky-occurrences::1-3",
 		3:   "flaky-occurrences::1-3",
 		4:   "flaky-occurrences::4-10",
@@ -108,7 +108,7 @@ func TestSuiteDenylist_SlugPatternAlsoMatches(t *testing.T) {
 
 type fakeGitLab struct {
 	issues         []*gitlab.Issue
-	notes          map[int][]*gitlab.Note
+	notes          map[int64][]*gitlab.Note
 	pipelineReport *gitlab.PipelineTestReport
 
 	// error injection toggles
@@ -140,14 +140,14 @@ func (f *fakeSlackNotifier) Send(message string) error {
 }
 
 func newFakeGitLab() *fakeGitLab {
-	return &fakeGitLab{notes: make(map[int][]*gitlab.Note)}
+	return &fakeGitLab{notes: make(map[int64][]*gitlab.Note)}
 }
 
-func (f *fakeGitLab) nextIID() int {
-	return len(f.issues) + 1
+func (f *fakeGitLab) nextIID() int64 {
+	return int64(len(f.issues) + 1)
 }
 
-func (f *fakeGitLab) ListProjectIssues(_ int, opts *gitlab.ListProjectIssuesOptions) ([]*gitlab.Issue, *gitlab.Response, error) {
+func (f *fakeGitLab) ListProjectIssues(_ int64, opts *gitlab.ListProjectIssuesOptions) ([]*gitlab.Issue, *gitlab.Response, error) {
 	f.listIssuesCalls++
 	if f.errOnListIssues {
 		return nil, nil, fmt.Errorf("list issues error")
@@ -169,7 +169,7 @@ func (f *fakeGitLab) ListProjectIssues(_ int, opts *gitlab.ListProjectIssuesOpti
 	return out, &gitlab.Response{CurrentPage: 1, TotalPages: 1}, nil
 }
 
-func (f *fakeGitLab) CreateIssue(_ int, opts *gitlab.CreateIssueOptions) (*gitlab.Issue, *gitlab.Response, error) {
+func (f *fakeGitLab) CreateIssue(_ int64, opts *gitlab.CreateIssueOptions) (*gitlab.Issue, *gitlab.Response, error) {
 	f.createIssueCalls++
 	if f.errOnCreateIssue {
 		return nil, nil, fmt.Errorf("create issue error")
@@ -186,7 +186,7 @@ func (f *fakeGitLab) CreateIssue(_ int, opts *gitlab.CreateIssueOptions) (*gitla
 	return is, &gitlab.Response{}, nil
 }
 
-func (f *fakeGitLab) UpdateIssue(_, issueIID int, opts *gitlab.UpdateIssueOptions) (*gitlab.Issue, *gitlab.Response, error) {
+func (f *fakeGitLab) UpdateIssue(_, issueIID int64, opts *gitlab.UpdateIssueOptions) (*gitlab.Issue, *gitlab.Response, error) {
 	f.updateIssueCalls++
 	if f.errOnUpdateIssue {
 		return nil, nil, fmt.Errorf("update issue error")
@@ -213,7 +213,7 @@ func (f *fakeGitLab) UpdateIssue(_, issueIID int, opts *gitlab.UpdateIssueOption
 	return is, &gitlab.Response{}, nil
 }
 
-func (f *fakeGitLab) ListIssueNotes(_, issueIID int, _ *gitlab.ListIssueNotesOptions) ([]*gitlab.Note, *gitlab.Response, error) {
+func (f *fakeGitLab) ListIssueNotes(_, issueIID int64, _ *gitlab.ListIssueNotesOptions) ([]*gitlab.Note, *gitlab.Response, error) {
 	f.listNotesCalls++
 	if f.errOnListNotes {
 		return nil, nil, fmt.Errorf("list notes error")
@@ -221,7 +221,7 @@ func (f *fakeGitLab) ListIssueNotes(_, issueIID int, _ *gitlab.ListIssueNotesOpt
 	return f.notes[issueIID], &gitlab.Response{CurrentPage: 1, TotalPages: 1}, nil
 }
 
-func (f *fakeGitLab) CreateIssueNote(_, issueIID int, opts *gitlab.CreateIssueNoteOptions) (*gitlab.Note, *gitlab.Response, error) {
+func (f *fakeGitLab) CreateIssueNote(_, issueIID int64, opts *gitlab.CreateIssueNoteOptions) (*gitlab.Note, *gitlab.Response, error) {
 	f.createNoteCalls++
 	if f.errOnCreateNote {
 		return nil, nil, fmt.Errorf("create note error")
@@ -231,7 +231,7 @@ func (f *fakeGitLab) CreateIssueNote(_, issueIID int, opts *gitlab.CreateIssueNo
 	return n, &gitlab.Response{}, nil
 }
 
-func (f *fakeGitLab) GetPipelineTestReport(_, _ int, _ ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error) {
+func (f *fakeGitLab) GetPipelineTestReport(_, _ int64, _ ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error) {
 	return f.pipelineReport, &gitlab.Response{}, nil
 }
 
@@ -312,7 +312,7 @@ func TestProcessFailures_UpdatesExistingIssue(t *testing.T) {
 	is, _, err := fcli.CreateIssue(1, &gitlab.CreateIssueOptions{
 		Title:  gitlab.Ptr("[Flaky] pkg.TestTop/Leaf"),
 		Labels: (*gitlab.LabelOptions)(&[]string{"flaky::test"}),
-		Weight: gitlab.Ptr(1),
+		Weight: gitlab.Ptr(int64(1)),
 	})
 	require.NoError(t, err)
 	_, _, err = fcli.CreateIssueNote(1, is.IID, &gitlab.CreateIssueNoteOptions{Body: gitlab.Ptr("FLAKE_OCCURRENCE:\n- ...")})
@@ -326,7 +326,7 @@ func TestProcessFailures_UpdatesExistingIssue(t *testing.T) {
 	require.Equal(t, 0, created)
 	require.Equal(t, 1, updated)
 	require.Contains(t, fcli.issues[0].Labels, "flaky-occurrences::1-3")
-	require.GreaterOrEqual(t, fcli.issues[0].Weight, 2)
+	require.GreaterOrEqual(t, fcli.issues[0].Weight, int64(2))
 	require.Len(t, fcli.notes[is.IID], 2)
 	require.Empty(t, sn.msgs)
 }
@@ -337,7 +337,7 @@ func TestProcessFailures_ReopensClosedIssue(t *testing.T) {
 	_, _, err := fcli.CreateIssue(1, &gitlab.CreateIssueOptions{
 		Title:  gitlab.Ptr("[Flaky] pkg.TestTop/Leaf"),
 		Labels: (*gitlab.LabelOptions)(&[]string{"flaky::test"}),
-		Weight: gitlab.Ptr(1),
+		Weight: gitlab.Ptr(int64(1)),
 	})
 	require.NoError(t, err)
 	// Manually mark closed

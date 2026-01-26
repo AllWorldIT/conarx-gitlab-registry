@@ -192,7 +192,7 @@ type fakePipelinesClient struct {
 	err    error
 }
 
-func (f *fakePipelinesClient) GetPipelineTestReport(_, _ int, _ ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error) {
+func (f *fakePipelinesClient) GetPipelineTestReport(_, _ int64, _ ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error) {
 	return f.report, &gitlab.Response{}, f.err
 }
 
