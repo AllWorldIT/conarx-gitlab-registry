@@ -6,12 +6,12 @@ import (
 	"strings"
 )
 
-func ParseReviewerIDs(input string) []int {
+func ParseReviewerIDs(input string) []int64 {
 	idStrings := strings.Split(input, ",")
-	reviewerIDs := make([]int, 0, len(idStrings))
+	reviewerIDs := make([]int64, 0, len(idStrings))
 
 	for _, idString := range idStrings {
-		id, err := strconv.Atoi(strings.TrimSpace(idString))
+		id, err := strconv.ParseInt(strings.TrimSpace(idString), 10, 0)
 		if err != nil {
 			log.Printf("Failed to assign reviwers to the MR: %v", err)
 			return nil
