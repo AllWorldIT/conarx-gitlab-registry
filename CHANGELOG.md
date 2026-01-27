@@ -1,3 +1,12 @@
+## [4.35.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.34.0-gitlab...v4.35.0) (2026-01-27)
+
+
+### Features
+
+* add support for CNCF WASM OCI Artifact media types ([26155a8](https://gitlab.com/gitlab-org/container-registry/commit/26155a8a07030ff8d6218f272c9f278ed05c2e0d))
+* **registry:** add demo gcstats command with mock data ([e928759](https://gitlab.com/gitlab-org/container-registry/commit/e92875956d3b4c9ae24e9ab51e59854d0ccd53ac))
+* **registry:** enable REGISTRY_FF_ENFORCE_LOCKFILES by default ([150b68b](https://gitlab.com/gitlab-org/container-registry/commit/150b68bac49e09990e5beae6c6aeb94cadb35337))
+
 ## [4.34.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.33.0-gitlab...v4.34.0) (2026-01-14)
 
 
