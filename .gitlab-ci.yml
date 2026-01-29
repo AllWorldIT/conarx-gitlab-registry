@@ -15,6 +15,92 @@ include:
   - component: ${CI_SERVER_FQDN}/gitlab-org/components/danger-review/danger-review@2.1.0
     inputs:
       job_allow_failure: true
+  - component: ${CI_SERVER_FQDN}/components/opentofu/fmt@3.11.0
+    inputs:
+      as: devvm:tofu:fmt
+      base_os: debian
+      root_dir: devvm/terraform
+      stage: validate
+      use_rootless_image: false
+  - component: ${CI_SERVER_FQDN}/components/opentofu/validate@3.11.0
+    inputs:
+      as: devvm:tofu:validate
+      auto_define_backend: false
+      base_os: debian
+      use_lockfile_for_cache_key: true
+      lockfile: readonly
+      root_dir: devvm/terraform
+      stage: validate
+      state_name: devvm
+      use_rootless_image: false
+      rules:
+        - changes:
+            - devvm/terraform/*
+        - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+  - component: ${CI_SERVER_FQDN}/components/opentofu/plan@3.11.0
+    inputs:
+      as: devvm:tofu:plan
+      auto_define_backend: true
+      auto_encryption: true
+      base_os: debian
+      enable_id_tokens: true
+      use_lockfile_for_cache_key: true
+      lockfile: readonly
+      root_dir: devvm/terraform
+      stage: validate
+      state_name: devvm
+      use_rootless_image: false
+      warning_on_non_empty_plan: true
+      rules:
+        - changes:
+            - devvm/terraform/*
+        - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+  - component: ${CI_SERVER_FQDN}/components/opentofu/apply@3.11.0
+    inputs:
+      as: devvm:tofu:apply
+      base_os: debian
+      stage: aux jobs
+      use_rootless_image: false
+      use_lockfile_for_cache_key: true
+      lockfile: readonly
+      root_dir: devvm/terraform
+      state_name: devvm
+      auto_encryption: true
+      auto_define_backend: true
+      enable_id_tokens: true
+      rules:
+        - when: manual
+          allow_failure: true
+  - component: ${CI_SERVER_FQDN}/components/opentofu/destroy@3.11.0
+    inputs:
+      as: devvm:tofu:destroy
+      base_os: debian
+      stage: aux jobs
+      use_rootless_image: false
+      root_dir: devvm/terraform
+      use_lockfile_for_cache_key: true
+      lockfile: readonly
+      state_name: devvm
+      auto_encryption: true
+      auto_define_backend: true
+      enable_id_tokens: true
+      rules:
+        - when: manual
+          allow_failure: true
+
+.gitlab-tofu:id_tokens:
+  id_tokens:
+    VAULT_ID_TOKEN:
+      aud: https://vault.gitlab.net
+  secrets:
+    TF_VAR_credentials_file:
+      vault: ${VAULT_SECRETS_PATH}/devvm/devvm_gcp_creds/json_key@ci
+      token: $VAULT_ID_TOKEN
+      file: true
+    GITLAB_TOFU_AUTO_ENCRYPTION_PASSPHRASE:
+      vault: ${VAULT_SECRETS_PATH}/devvm/devvm_state_encryption/pass@ci
+      token: $VAULT_ID_TOKEN
+      file: false
 
 default:
   retry:
@@ -52,6 +138,7 @@ variables:
   PG_NEXT_VERSION: "17"
   GOLANGCI_LINT_VERSION: "2.5.0"
   DOCKER_VERSION: "28.4"
+  GITLAB_TOFU_VAR_FILE: terraform.tfvars
 
 stages:
   - validate
@@ -66,11 +153,11 @@ stages:
   parallel:
     matrix:
       - PG_VERSION: $PG_PREV_VERSION
-        GO_VERSION: [ "1.24", "1.25" ]
+        GO_VERSION: ["1.24", "1.25"]
       - PG_VERSION: $PG_CURR_VERSION
-        GO_VERSION: [ "1.24", "1.25" ]
+        GO_VERSION: ["1.24", "1.25"]
       - PG_VERSION: $PG_NEXT_VERSION
-        GO_VERSION: [ "1.24", "1.25" ]
+        GO_VERSION: ["1.24", "1.25"]
 
 # docker defaults
 .docker:
