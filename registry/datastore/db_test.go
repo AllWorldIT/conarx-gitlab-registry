@@ -7,6 +7,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/docker/distribution/registry/datastore"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -225,11 +226,20 @@ func TestQueryBuilder_Build(t *testing.T) {
 
 func TestQueryBuilder_MultipleBuildCalls(t *testing.T) {
 	t.Parallel()
+
 	qb := datastore.NewQueryBuilder()
-	qb.Build("SELECT * FROM users WHERE id = ?", 1)
-	qb.Build("AND name = ?", "John Doe")
-	require.Equal(t, "SELECT * FROM users WHERE id = $1 AND name = $2", qb.SQL())
-	require.Equal(t, []any{1, "John Doe"}, qb.Params())
+
+	err := qb.Build("SELECT * FROM users WHERE id = ?", 1)
+	require.NoError(t, err)
+
+	err = qb.WhereAnd("name = ?", "John Doe")
+	require.NoError(t, err)
+
+	err = qb.Build("LIMIT ?", 7)
+	require.NoError(t, err)
+
+	assert.Equal(t, "SELECT * FROM users WHERE id = $1 AND name = $2 LIMIT $3", qb.SQL())
+	assert.Equal(t, []any{1, "John Doe", 7}, qb.Params())
 }
 
 func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
@@ -285,4 +295,123 @@ func TestQueryBuilder_WrapIntoSubqueryOf(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestQueryBuilder_WhereAnd(t *testing.T) {
+	testCases := []struct {
+		name           string
+		condition      string
+		args           []any
+		expectedSQL    string
+		expectedParams []any
+	}{
+		{
+			name:           "empty condition",
+			condition:      "",
+			args:           make([]any, 0),
+			expectedSQL:    "",
+			expectedParams: make([]any, 0),
+		},
+		{
+			name:           "basic where",
+			condition:      "id = ?",
+			args:           []any{1},
+			expectedSQL:    "WHERE id = $1",
+			expectedParams: []any{1},
+		},
+		{
+			name:           "basic where with multiple placeholders",
+			condition:      "id = ? AND name = ?",
+			args:           []any{1, "John Doe"},
+			expectedSQL:    "WHERE id = $1 AND name = $2",
+			expectedParams: []any{1, "John Doe"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+
+			qb := datastore.NewQueryBuilder()
+
+			err := qb.WhereAnd(tc.condition, tc.args...)
+			require.NoError(tt, err)
+
+			assert.Equal(tt, tc.expectedSQL, qb.SQL())
+			assert.Equal(tt, tc.expectedParams, qb.Params())
+		})
+	}
+}
+
+func TestQueryBuilder_WhereAnd_MultipleCalls(t *testing.T) {
+	qb := datastore.NewQueryBuilder()
+
+	// First WhereAnd call should create a WHERE clause
+	err := qb.WhereAnd("id = ?", 30)
+	require.NoError(t, err)
+
+	assert.Equal(t, "WHERE id = $1", qb.SQL())
+	assert.Equal(t, []any{30}, qb.Params())
+
+	// Calling WhereAnd again should append with AND
+	err = qb.WhereAnd("name = ?", "John Doe")
+	require.NoError(t, err)
+
+	assert.Equal(t, "WHERE id = $1 AND name = $2", qb.SQL())
+	assert.Equal(t, []any{30, "John Doe"}, qb.Params())
+
+	// Further WhereAnd calls should keep appending AND
+	err = qb.WhereAnd("num_cats = ?", 12)
+	require.NoError(t, err)
+
+	assert.Equal(t, "WHERE id = $1 AND name = $2 AND num_cats = $3", qb.SQL())
+	assert.Equal(t, []any{30, "John Doe", 12}, qb.Params())
+}
+
+func TestQueryBuilder_WhereAnd_WhereFromBuild(t *testing.T) {
+	// WhereAnd should detect where clauses from previous Build calls and append to them.
+	qb := datastore.NewQueryBuilder()
+
+	err := qb.Build("SELECT * FROM users WHERE id = ?", 30)
+	require.NoError(t, err)
+
+	assert.Equal(t, "SELECT * FROM users WHERE id = $1", qb.SQL())
+	assert.Equal(t, []any{30}, qb.Params())
+
+	// Calling WhereAnd after a Build call should append with AND
+	err = qb.WhereAnd("name = ?", "John Doe")
+	require.NoError(t, err)
+
+	assert.Equal(t, "SELECT * FROM users WHERE id = $1 AND name = $2", qb.SQL())
+	assert.Equal(t, []any{30, "John Doe"}, qb.Params())
+
+	// WhereAnd should detect where and clauses from previous Build Call and append to them.
+	qb = datastore.NewQueryBuilder()
+
+	err = qb.Build("SELECT * FROM users WHERE id = ? AND name = ?", 30, "John Doe")
+	require.NoError(t, err)
+
+	assert.Equal(t, "SELECT * FROM users WHERE id = $1 AND name = $2", qb.SQL())
+	assert.Equal(t, []any{30, "John Doe"}, qb.Params())
+
+	err = qb.WhereAnd("num_cats = ?", 12)
+	require.NoError(t, err)
+
+	assert.Equal(t, "SELECT * FROM users WHERE id = $1 AND name = $2 AND num_cats = $3", qb.SQL())
+	assert.Equal(t, []any{30, "John Doe", 12}, qb.Params())
+
+	// WhereAnd should detect where or clauses from previous Build Call and append to them.
+	qb = datastore.NewQueryBuilder()
+
+	err = qb.Build("SELECT * FROM users WHERE id = ? OR name = ?", 30, "John Doe")
+	require.NoError(t, err)
+
+	assert.Equal(t, "SELECT * FROM users WHERE id = $1 OR name = $2", qb.SQL())
+	assert.Equal(t, []any{30, "John Doe"}, qb.Params())
+
+	err = qb.WhereAnd("num_cats = ?", 12)
+	require.NoError(t, err)
+
+	assert.Equal(t, "SELECT * FROM users WHERE id = $1 OR name = $2 AND num_cats = $3", qb.SQL())
+	assert.Equal(t, []any{30, "John Doe", 12}, qb.Params())
 }
