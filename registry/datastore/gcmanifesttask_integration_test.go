@@ -76,11 +76,100 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 	require.Equal(t, expected, rr)
 }
 
+func TestGCManifestTaskStore_FindAll_WithLimit(t *testing.T) {
+	reloadGCManifestTaskFixtures(t)
+
+	s := datastore.NewGCManifestTaskStore(suite.db)
+
+	// Limit works as expected
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksLimit(2))
+	require.NoError(t, err)
+
+	local := rr[0].ReviewAfter.Location()
+
+	// see testdata/fixtures/gc_manifest_review_queue.sql
+	allResults := []*models.GCManifestTask{
+		{
+			NamespaceID:  1,
+			RepositoryID: 4,
+			ManifestID:   7,
+			ReviewAfter:  testutil.ParseTimestamp(t, "2020-04-03 18:45:04.470711", local),
+			ReviewCount:  2,
+			CreatedAt:    testutil.ParseTimestamp(t, "2020-04-02 18:45:04.470711", local),
+			Event:        "manifest_upload",
+		},
+		{
+			NamespaceID:  1,
+			RepositoryID: 4,
+			ManifestID:   9,
+			ReviewAfter:  testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
+			ReviewCount:  0,
+			CreatedAt:    testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
+			Event:        "manifest_delete",
+		},
+		{
+			NamespaceID:  1,
+			RepositoryID: 4,
+			ManifestID:   4,
+			ReviewAfter:  testutil.ParseTimestamp(t, "2020-06-11 09:11:23.655121", local),
+			ReviewCount:  0,
+			CreatedAt:    testutil.ParseTimestamp(t, "2020-06-10 09:11:23.655121", local),
+			Event:        "manifest_list_delete",
+		},
+		{
+			NamespaceID:  1,
+			RepositoryID: 3,
+			ManifestID:   1,
+			ReviewAfter:  testutil.ParseTimestamp(t, "2020-03-03 17:50:26.461745", local),
+			ReviewCount:  0,
+			CreatedAt:    testutil.ParseTimestamp(t, "2020-03-02 17:50:26.461745", local),
+			Event:        "tag_switch",
+		},
+	}
+
+	expected := allResults[:2]
+	require.Equal(t, expected, rr)
+
+	// 0 limit returns all results
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(0))
+	require.NoError(t, err)
+
+	require.Equal(t, allResults, rr)
+
+	// negative limit returns all results
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(-7))
+	require.NoError(t, err)
+
+	require.Equal(t, allResults, rr)
+
+	// limit greater than all results returns all results
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(100))
+	require.NoError(t, err)
+
+	require.Equal(t, allResults, rr)
+
+	// the last filter option overwrites previous options of the same type.
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(100), datastore.WithGCTasksLimit(1))
+	require.NoError(t, err)
+
+	expected = allResults[:1]
+	require.Equal(t, expected, rr)
+}
+
 func TestGCManifestTaskStore_FindAll_NotFound(t *testing.T) {
 	unloadGCManifestTaskFixtures(t)
 
 	s := datastore.NewGCManifestTaskStore(suite.db)
 	rr, err := s.FindAll(suite.ctx)
+	require.Empty(t, rr)
+	require.NoError(t, err)
+}
+
+func TestGCManifestTaskStore_FindAll_WithLimit_NotFound(t *testing.T) {
+	unloadGCManifestTaskFixtures(t)
+
+	s := datastore.NewGCManifestTaskStore(suite.db)
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksLimit(2))
 	require.Empty(t, rr)
 	require.NoError(t, err)
 }

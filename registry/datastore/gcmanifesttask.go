@@ -16,7 +16,7 @@ import (
 )
 
 type GCManifestTaskStore interface {
-	FindAll(ctx context.Context) ([]*models.GCManifestTask, error)
+	FindAll(ctx context.Context, opts ...GCTaskFilterOption) ([]*models.GCManifestTask, error)
 	FindAndLock(ctx context.Context, namespaceID, repositoryID, manifestID int64) (*models.GCManifestTask, error)
 	FindAndLockBefore(ctx context.Context, namespaceID, repositoryID, manifestID int64, date time.Time) (*models.GCManifestTask, error)
 	FindAndLockNBefore(ctx context.Context, namespaceID, repositoryID int64, manifestIDs []int64, date time.Time) ([]*models.GCManifestTask, error)
@@ -29,6 +29,25 @@ type GCManifestTaskStore interface {
 
 type gcManifestTaskStore struct {
 	db Queryer
+}
+
+type gcTaskFilters struct {
+	limit int
+}
+
+// GCTaskFilterOption provide optional filters to GC task queries.
+type GCTaskFilterOption func(*gcTaskFilters)
+
+// WithGCTasksLimit allows the callter to limit the number of returned results.
+// Limits less than 1 return all results.
+func WithGCTasksLimit(n int) GCTaskFilterOption {
+	return func(f *gcTaskFilters) {
+		if n < 1 {
+			return
+		}
+
+		f.limit = n
+	}
 }
 
 // NewGCManifestTaskStore builds a new gcManifestTaskStore.
@@ -68,8 +87,8 @@ func scanFullGCManifestTask(row *Row) (*models.GCManifestTask, error) {
 	return r, nil
 }
 
-// FindAll finds all GC manifest tasks.
-func (s *gcManifestTaskStore) FindAll(ctx context.Context) ([]*models.GCManifestTask, error) {
+// FindAll finds all GC manifest tasks. Limit results via the optional FilterParams parameter.
+func (s *gcManifestTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterOption) ([]*models.GCManifestTask, error) {
 	defer metrics.InstrumentQuery("gc_manifest_task_find_all")()
 	q := `SELECT
 			top_level_namespace_id,
@@ -81,7 +100,27 @@ func (s *gcManifestTaskStore) FindAll(ctx context.Context) ([]*models.GCManifest
 			event
 		FROM
 			gc_manifest_review_queue`
-	rows, err := s.db.QueryContext(ctx, q)
+
+	qb := NewQueryBuilder()
+	err := qb.Build(q)
+	if err != nil {
+		return nil, fmt.Errorf("building GC manifest tasks query: %w", err)
+	}
+
+	filters := &gcTaskFilters{}
+
+	for _, o := range opts {
+		o(filters)
+	}
+
+	if filters.limit > 0 {
+		err := qb.Build("LIMIT ?", filters.limit)
+		if err != nil {
+			return nil, fmt.Errorf("building GC manifest tasks query: %w", err)
+		}
+	}
+
+	rows, err := s.db.QueryContext(ctx, qb.SQL(), qb.Params()...)
 	if err != nil {
 		return nil, fmt.Errorf("finding GC manifest tasks: %w", err)
 	}
