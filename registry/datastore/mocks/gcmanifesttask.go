@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	datastore "github.com/docker/distribution/registry/datastore"
 	models "github.com/docker/distribution/registry/datastore/models"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -72,18 +73,23 @@ func (mr *MockGCManifestTaskStoreMockRecorder) Delete(ctx, b any) *gomock.Call {
 }
 
 // FindAll mocks base method.
-func (m *MockGCManifestTaskStore) FindAll(ctx context.Context) ([]*models.GCManifestTask, error) {
+func (m *MockGCManifestTaskStore) FindAll(ctx context.Context, opts ...datastore.GCTaskFilterOption) ([]*models.GCManifestTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAll", ctx)
+	varargs := []any{ctx}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FindAll", varargs...)
 	ret0, _ := ret[0].([]*models.GCManifestTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAll indicates an expected call of FindAll.
-func (mr *MockGCManifestTaskStoreMockRecorder) FindAll(ctx any) *gomock.Call {
+func (mr *MockGCManifestTaskStoreMockRecorder) FindAll(ctx any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAll), ctx)
+	varargs := append([]any{ctx}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockGCManifestTaskStore)(nil).FindAll), varargs...)
 }
 
 // FindAndLock mocks base method.
