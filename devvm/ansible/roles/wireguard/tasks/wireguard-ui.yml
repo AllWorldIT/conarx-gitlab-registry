@@ -1,119 +1,60 @@
 ---
-- name: Install deps
-  ansible.builtin.apt:
-    name:
-      - golang-rice
-    state: present
-  register: __pkgmgr_result
-  until: __pkgmgr_result is succeeded
-  retries: 3
-  delay: 3
-
-- name: Checkout wireguard-ui
-  ansible.builtin.git:
-    repo: https://github.com/ngoduykhanh/wireguard-ui.git
-    dest: /home/dev/wireguard-ui/
-    accept_hostkey: true
-    version: master
-  # ssh auth sock issues
-  become: true
-  become_flags: -SHE
-  become_user: dev
-
-# We need to compile wireguard-ui from source as the latest release does not
-# have all the features we need
-- name: Compile wireguard-ui repo
-  ansible.builtin.shell:
-  args:
-    cmd: |
-      set -eou pipefail
-      eval "$(mise activate bash)"
-
-      go mod download
-      sed -i 's/\$YARN install --pure-lockfile --production/$YARN install/' ./prepare_assets.sh
-      ./prepare_assets.sh
-      rice embed-go
-      go build -o wireguard-ui
-    chdir: /home/dev/wireguard-ui/
-    executable: /bin/bash
-    creates: /home/dev/wireguard-ui/wireguard-ui
-  become: true
-  become_user: dev
-  # Node install through ASDF is pretty flakey
-  register: wg_compile_result
-  until: "wg_compile_result is not failed"
-  retries: 3
-  delay: 5
-
-- name: Copy wireguard binary
-  ansible.builtin.copy:
-    src: /home/dev/wireguard-ui/wireguard-ui
-    dest: /usr/bin/wireguard-ui
-    mode: 0755
-    owner: root
-    group: root
-    force: yes
-    remote_src: true
-
-- name: Create wireguard-ui conf directory
-  ansible.builtin.file:
-    path: /etc/wireguard-ui/
-    state: directory
-    mode: 0700
-    owner: root
-    group: root
-
 - name: Create wireguard-ui configuration file
   ansible.builtin.template:
-    src: wireguard-ui.conf.j2
-    dest: /etc/wireguard-ui/wireguard-ui.conf
+    src: wg-easy.j2
+    dest: /etc/default/wg-easy
     owner: root
     group: root
     mode: 0600
 
-- name: Copy systemd service
+- name: Create wg-easy systemd service file
   ansible.builtin.copy:
-    src: files/wireguard-ui.service
-    dest: /etc/systemd/system/wireguard-ui.service
-    mode: 0644
+    dest: /etc/systemd/system/wg-easy.service
     owner: root
     group: root
-
-- name: Create auto restart Wireguard daemon services (monitors for conf changes from wireguard-ui)
-  ansible.builtin.copy:
-    src: files/{{ item }}
-    dest: /etc/systemd/system/
     mode: 0644
-    owner: root
-    group: root
-  with_items:
-    - wgui.path
-    - wgui.service
+    content: |
+      [Unit]
+      Description=WireGuard Easy
+      After=docker.service network-online.target
+      Wants=network-online.target
+      Requires=docker.service
 
-# Will be enabled by booter once passwords are generated
-- name: disable wireguard-ui service
-  ansible.builtin.service:
-    name: wireguard-ui
+      [Service]
+      Type=simple
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStartSec=0
+      EnvironmentFile=/etc/default/wg-easy
+      ExecStartPre=-/usr/bin/docker stop wg-easy
+      ExecStartPre=-/usr/bin/docker rm wg-easy
+      ExecStart=/usr/bin/docker run --rm --name wg-easy \
+        --cap-add=NET_ADMIN \
+        --cap-add=SYS_MODULE \
+        --sysctl="net.ipv4.ip_forward=1" \
+        --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
+        --sysctl="net.ipv6.conf.all.disable_ipv6=1" \
+        --sysctl="net.ipv6.conf.all.forwarding=1" \
+        --sysctl="net.ipv6.conf.default.forwarding=1" \
+        --network=wghub \
+        --ip={{ wireguard_ui_ip }} \
+        --env-file=/etc/default/wg-easy \
+        -v /etc/wg-easy:/etc/wireguard \
+        -v /lib/modules:/lib/modules:ro \
+        -p 51820:51820/udp \
+        -p 127.0.0.1:51820:51821/tcp \
+        ghcr.io/wg-easy/wg-easy:15.2
+      ExecStop=/usr/bin/docker stop wg-easy
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Ensure wg-easy service is disabled until booter configures it
+  ansible.builtin.systemd:
+    name: wg-easy
     state: stopped
     enabled: false
-
-# Will be enabled by booter once passwords are generated
-- name: disable auto restart services
-  ansible.builtin.service:
-    name: "{{ item }}"
-    state: stopped
-    enabled: false
-  with_items:
-    - wgui.path
-    - wireguard-ui
-
-# Will be enabled by booter once passwords are generated
-- name: disable wgui.service
-  ansible.builtin.service:
-    name: wgui.service
-    enabled: false
-
-- name: Remove wireguard-ui data to make sure that machie starts with clean slate
-  ansible.builtin.file:
-    path: /db/
-    state: absent
