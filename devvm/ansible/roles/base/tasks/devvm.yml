@@ -1,5 +1,4 @@
 ---
-
 # Devvm repo actually resides in container-registry, but we want to keep it
 # separate from the checkout above to make things more robust/less
 # error-prone.
@@ -8,40 +7,37 @@
     repo: https://gitlab.com/gitlab-org/container-registry.git
     dest: /home/dev/devvm
     accept_hostkey: true
-    version: master
+    version: prozlach/devvm_e2e_p3
     depth: 1
   # ssh auth sock issues
   become: true
   become_flags: -SHE
   become_user: dev
 
-# - name: Bootstrap devvm repo
-#   ansible.builtin.shell:
-#   args:
-#     cmd: |
-#       set -eou pipefail
-#       . $HOME/.asdf/asdf.sh
-#
-#       eval "$(mise activate bash)"
-#       cd ./go/
-#       go mod download
-#       go build -o booter cmd/booter/main.go
-#     chdir: /home/dev/container-registry/devvm/go
-#     executable: /bin/bash
-#     creates: /home/dev/container-registry/devvm/go/booter
-#   become: true
-#   become_user: dev
-#
-# - name: Upload booter systemd service
-#   ansible.builtin.copy:
-#     src: booter.service
-#     dest: /etc/systemd/system/booter.service
-#     owner: root
-#     group: root
-#     mode: 0644
-#
-# - name: Enable booter service
-#   ansible.builtin.systemd:
-#     daemon_reload: true
-#     enabled: true
-#     name: booter.service
+- name: Bootstrap devvm repo
+  ansible.builtin.shell:
+  args:
+    cmd: |
+      set -eou pipefail
+      eval "$(mise activate bash)"
+
+      go build -o booter cmd/booter/main.go
+    chdir: /home/dev/devvm/devvm/go
+    executable: /bin/bash
+    creates: /home/dev/devvm/devvm/go/booter
+  become: true
+  become_user: dev
+
+- name: Upload booter systemd service
+  ansible.builtin.copy:
+    src: booter.service
+    dest: /etc/systemd/system/booter.service
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Enable booter service
+  ansible.builtin.systemd:
+    daemon_reload: true
+    enabled: true
+    name: booter.service
