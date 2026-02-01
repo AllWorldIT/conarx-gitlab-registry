@@ -48,7 +48,7 @@ postgresql_hba_entries:
       type: host,
       database: registry_db,
       user: registry_user,
-      address: "{{ wireguard_net}}",
+      address: "{{ wireguard_net }}",
       auth_method: "{{ postgresql_auth_method }}",
     }
   - {
@@ -69,14 +69,14 @@ postgresql_hba_entries:
       type: host,
       database: ci_db,
       user: ci_user,
-      address: "{{ wireguard_net}}",
+      address: "{{ wireguard_net }}",
       auth_method: "{{ postgresql_auth_method }}",
     }
   - {
       type: host,
       database: ci_db,
       user: ci_user,
-      address: "{{ docker_iprange}}",
+      address: "{{ docker_iprange }}",
       auth_method: "{{ postgresql_auth_method }}",
     }
   - {
