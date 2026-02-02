@@ -4,11 +4,12 @@ After=multi-user.target
 
 [Service]
 Type=oneshot
+Environment="CAROOT=/root/.local/share/mkcert"
 RemainAfterExit=yes
 KillMode=process
 Restart=on-failure
 RestartSec=3s
-ExecStart=/home/dev/container-registry/devvm/go/booter -log-level debug -log-pretty -system-mode
+ExecStart=/home/dev/devvm/devvm/go/booter -log-level debug -system-mode
 
 [Install]
 WantedBy=multi-user.target
