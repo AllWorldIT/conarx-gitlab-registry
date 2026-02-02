@@ -13,6 +13,7 @@ import (
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
 	"github.com/docker/distribution/registry/datastore/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -128,32 +129,32 @@ func TestGCManifestTaskStore_FindAll_WithLimit(t *testing.T) {
 	}
 
 	expected := allResults[:2]
-	require.Equal(t, expected, rr)
+	assert.Equal(t, expected, rr)
 
 	// 0 limit returns all results
 	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(0))
 	require.NoError(t, err)
 
-	require.Equal(t, allResults, rr)
+	assert.Equal(t, allResults, rr)
 
 	// negative limit returns all results
 	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(-7))
 	require.NoError(t, err)
 
-	require.Equal(t, allResults, rr)
+	assert.Equal(t, allResults, rr)
 
 	// limit greater than all results returns all results
 	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(100))
 	require.NoError(t, err)
 
-	require.Equal(t, allResults, rr)
+	assert.Equal(t, allResults, rr)
 
 	// the last filter option overwrites previous options of the same type.
 	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(100), datastore.WithGCTasksLimit(1))
 	require.NoError(t, err)
 
 	expected = allResults[:1]
-	require.Equal(t, expected, rr)
+	assert.Equal(t, expected, rr)
 }
 
 func TestGCManifestTaskStore_FindAll_NotFound(t *testing.T) {
@@ -170,8 +171,8 @@ func TestGCManifestTaskStore_FindAll_WithLimit_NotFound(t *testing.T) {
 
 	s := datastore.NewGCManifestTaskStore(suite.db)
 	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksLimit(2))
-	require.Empty(t, rr)
 	require.NoError(t, err)
+	assert.Empty(t, rr)
 }
 
 func TestGCManifestTaskStore_FindAndLock(t *testing.T) {

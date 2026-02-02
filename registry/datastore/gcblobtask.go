@@ -14,7 +14,7 @@ import (
 )
 
 type GCBlobTaskStore interface {
-	FindAll(ctx context.Context) ([]*models.GCBlobTask, error)
+	FindAll(ctx context.Context, opts ...GCTaskFilterOption) ([]*models.GCBlobTask, error)
 	Count(ctx context.Context) (int, error)
 	Next(ctx context.Context) (*models.GCBlobTask, error)
 	Postpone(ctx context.Context, b *models.GCBlobTask, d time.Duration) error
@@ -78,7 +78,7 @@ func scanFullGCBlobTask(row *Row) (*models.GCBlobTask, error) {
 }
 
 // FindAll finds all GC blob tasks.
-func (s *gcBlobTaskStore) FindAll(ctx context.Context) ([]*models.GCBlobTask, error) {
+func (s *gcBlobTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterOption) ([]*models.GCBlobTask, error) {
 	defer metrics.InstrumentQuery("gc_blob_task_find_all")()
 
 	q := `SELECT
@@ -89,7 +89,27 @@ func (s *gcBlobTaskStore) FindAll(ctx context.Context) ([]*models.GCBlobTask, er
 			event
 		FROM
 			gc_blob_review_queue`
-	rows, err := s.db.QueryContext(ctx, q)
+
+	qb := NewQueryBuilder()
+	err := qb.Build(q)
+	if err != nil {
+		return nil, fmt.Errorf("building GC blob tasks query: %w", err)
+	}
+
+	filters := &gcTaskFilters{}
+
+	for _, o := range opts {
+		o(filters)
+	}
+
+	if filters.limit > 0 {
+		err := qb.Build("LIMIT ?", filters.limit)
+		if err != nil {
+			return nil, fmt.Errorf("building GC blob tasks query: %w", err)
+		}
+	}
+
+	rows, err := s.db.QueryContext(ctx, qb.SQL(), qb.Params()...)
 	if err != nil {
 		return nil, fmt.Errorf("finding GC blob tasks: %w", err)
 	}
