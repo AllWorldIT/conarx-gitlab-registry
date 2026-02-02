@@ -1,3 +1,10 @@
+## [4.36.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.35.0-gitlab...v4.36.0) (2026-02-02)
+
+
+### Features
+
+* **bbm:** add configuration_media_type_id_convert_to_bigint migration ([eb27d80](https://gitlab.com/gitlab-org/container-registry/commit/eb27d80bd3a6f94a7533d190ce1f17af5c756b18))
+
 ## [4.35.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.34.0-gitlab...v4.35.0) (2026-01-27)
 
 
