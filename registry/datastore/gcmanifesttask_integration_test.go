@@ -157,6 +157,76 @@ func TestGCManifestTaskStore_FindAll_WithLimit(t *testing.T) {
 	assert.Equal(t, expected, rr)
 }
 
+func TestGCManifestTaskStore_FindAll_WithReviewAfterGreaterThan(t *testing.T) {
+	reloadGCManifestTaskFixtures(t)
+
+	// ReviewAfterGreaterThan works as expected
+	// see testdata/fixtures/gc_manifest_review_queue.sql
+	s := datastore.NewGCManifestTaskStore(suite.db)
+
+	// No tasks with review_after greater than the cutoff
+	cutoff := testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC).Add(1 * time.Second)
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff))
+	require.NoError(t, err)
+	assert.Empty(t, rr)
+
+	// Tasks with review_after greater than a specific cutoff
+	cutoff = testutil.ParseTimestamp(t, "2020-06-11 09:11:23.655121", time.UTC)
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff))
+	require.NoError(t, err)
+
+	local := rr[0].ReviewAfter.Location()
+	expected := []*models.GCManifestTask{
+		{
+			NamespaceID:  1,
+			RepositoryID: 4,
+			ManifestID:   9,
+			ReviewAfter:  testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
+			ReviewCount:  0,
+			CreatedAt:    testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
+			Event:        "manifest_delete",
+		},
+	}
+	assert.Equal(t, expected, rr)
+
+	// Combine with limit
+	cutoff = testutil.ParseTimestamp(t, "2020-03-03 17:50:26.461745", time.UTC)
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff), datastore.WithGCTasksLimit(1))
+	require.NoError(t, err)
+
+	expected = []*models.GCManifestTask{
+		{
+			NamespaceID:  1,
+			RepositoryID: 4,
+			ManifestID:   7,
+			ReviewAfter:  testutil.ParseTimestamp(t, "2020-04-03 18:45:04.470711", local),
+			ReviewCount:  2,
+			CreatedAt:    testutil.ParseTimestamp(t, "2020-04-02 18:45:04.470711", local),
+			Event:        "manifest_upload",
+		},
+	}
+	assert.Equal(t, expected, rr)
+
+	// The last filter option overwrites previous options of the same type.
+	cutoff1 := testutil.ParseTimestamp(t, "2020-04-03 18:45:04.470711", time.UTC)
+	cutoff2 := testutil.ParseTimestamp(t, "2020-06-11 09:11:23.655121", time.UTC)
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff1), datastore.WithGCTasksReviewAfterGreaterThan(cutoff2))
+	require.NoError(t, err)
+
+	expected = []*models.GCManifestTask{
+		{
+			NamespaceID:  1,
+			RepositoryID: 4,
+			ManifestID:   9,
+			ReviewAfter:  testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
+			ReviewCount:  0,
+			CreatedAt:    testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
+			Event:        "manifest_delete",
+		},
+	}
+	assert.Equal(t, expected, rr)
+}
+
 func TestGCManifestTaskStore_FindAll_NotFound(t *testing.T) {
 	unloadGCManifestTaskFixtures(t)
 
@@ -171,6 +241,15 @@ func TestGCManifestTaskStore_FindAll_WithLimit_NotFound(t *testing.T) {
 
 	s := datastore.NewGCManifestTaskStore(suite.db)
 	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksLimit(2))
+	require.NoError(t, err)
+	assert.Empty(t, rr)
+}
+
+func TestGCManifestTaskStore_Findall_WithReviewAfterGreaterThan_NotFound(t *testing.T) {
+	unloadGCManifestTaskFixtures(t)
+
+	s := datastore.NewGCManifestTaskStore(suite.db)
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(time.Now()))
 	require.NoError(t, err)
 	assert.Empty(t, rr)
 }
