@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	datastore "github.com/docker/distribution/registry/datastore"
 	models "github.com/docker/distribution/registry/datastore/models"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -72,18 +73,23 @@ func (mr *MockGCBlobTaskStoreMockRecorder) Delete(ctx, b any) *gomock.Call {
 }
 
 // FindAll mocks base method.
-func (m *MockGCBlobTaskStore) FindAll(ctx context.Context) ([]*models.GCBlobTask, error) {
+func (m *MockGCBlobTaskStore) FindAll(ctx context.Context, opts ...datastore.GCTaskFilterOption) ([]*models.GCBlobTask, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindAll", ctx)
+	varargs := []any{ctx}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FindAll", varargs...)
 	ret0, _ := ret[0].([]*models.GCBlobTask)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindAll indicates an expected call of FindAll.
-func (mr *MockGCBlobTaskStoreMockRecorder) FindAll(ctx any) *gomock.Call {
+func (mr *MockGCBlobTaskStoreMockRecorder) FindAll(ctx any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockGCBlobTaskStore)(nil).FindAll), ctx)
+	varargs := append([]any{ctx}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockGCBlobTaskStore)(nil).FindAll), varargs...)
 }
 
 // IsDangling mocks base method.

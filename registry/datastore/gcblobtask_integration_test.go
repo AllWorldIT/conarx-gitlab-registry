@@ -66,6 +66,80 @@ func TestGCBlobTaskStore_FindAll(t *testing.T) {
 	require.Equal(t, expected, rr)
 }
 
+func TestGCBlobTaskStore_FindAll_WithLimit(t *testing.T) {
+	reloadGCBlobTaskFixtures(t)
+
+	s := datastore.NewGCBlobTaskStore(suite.db)
+	// Load all tasks once for tests.
+	rr, err := s.FindAll(suite.ctx)
+	require.NoError(t, err)
+
+	// see testdata/fixtures/gc_blob_review_queue.sql
+	local := rr[0].ReviewAfter.Location()
+	all := []*models.GCBlobTask{
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", local),
+			ReviewCount: 0,
+			Digest:      "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9",
+			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-04 20:05:35.338639", local),
+			Event:       "blob_upload",
+		},
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", local),
+			ReviewCount: 3,
+			Digest:      "sha256:6b0937e234ce911b75630b744fb12836fe01bda5f7db203927edbb1390bc7e21",
+			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-04 20:05:35.338639", local),
+			Event:       "blob_upload",
+		},
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
+			ReviewCount: 0,
+			Digest:      "sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9",
+			CreatedAt:   testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
+			Event:       "blob_upload",
+		},
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-03 17:57:23.405516", local),
+			ReviewCount: 1,
+			Digest:      "sha256:9ead3a93fc9c9dd8f35221b1f22b155a513815b7b00425d6645b34d98e83b073",
+			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-02 17:57:23.405516", local),
+			Event:       "layer_delete",
+		},
+	}
+
+	// Limit works as expected
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(2))
+	require.NoError(t, err)
+
+	expected := all[:2]
+	assert.Equal(t, expected, rr)
+
+	// 0 limit returns all results
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(0))
+	require.NoError(t, err)
+
+	assert.Equal(t, all, rr)
+
+	// negative limit returns all results
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(-7))
+	require.NoError(t, err)
+
+	assert.Equal(t, all, rr)
+
+	// limit greater than all results returns all results
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(100))
+	require.NoError(t, err)
+
+	assert.Equal(t, all, rr)
+
+	// the last filter option overwrites previous options of the same type.
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(100), datastore.WithGCTasksLimit(1))
+	require.NoError(t, err)
+
+	expected = all[:1]
+	assert.Equal(t, expected, rr)
+}
+
 func TestGCBlobTaskStore_FindAll_NotFound(t *testing.T) {
 	unloadGCBlobTaskFixtures(t)
 
@@ -73,6 +147,15 @@ func TestGCBlobTaskStore_FindAll_NotFound(t *testing.T) {
 	rr, err := s.FindAll(suite.ctx)
 	require.Empty(t, rr)
 	require.NoError(t, err)
+}
+
+func TestGCBlobTaskStore_FindAll_NotFound_WithLimit(t *testing.T) {
+	unloadGCBlobTaskFixtures(t)
+
+	s := datastore.NewGCBlobTaskStore(suite.db)
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksLimit(1))
+	require.NoError(t, err)
+	assert.Empty(t, rr)
 }
 
 func TestGcBlobTaskStore_Count(t *testing.T) {
