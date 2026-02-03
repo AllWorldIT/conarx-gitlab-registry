@@ -14,8 +14,9 @@
     mode: 0644
   loop:
     - 10_br-if.netdev
-    - 20_dummy-if.netdev
-    - 30_dummy-if.network
+    - 15_br-if.network
+    - 20_svcif.netdev
+    - 30_svcif.network
   register: __base_networkd_conf_updated
 
 - name: restart systemd-networkd

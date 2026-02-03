@@ -16,7 +16,6 @@ vip_start_ip: "{{ vip_net | ansible.utils.ipaddr('1') | ansible.utils.ipaddr('ad
 vip_end_ip: "{{ vip_net | ansible.utils.ipaddr('32') | ansible.utils.ipaddr('address') }}"
 
 wireguard_net: "{{ route_address | ansible.utils.ipsubnet(24, 3) }}"
-wireguard_ui_ip: "{{ docker_network | ansible.utils.ipaddr('2') | ansible.utils.ipaddr('address') }}"
 
 docker_bridge_name: br-wg
 
@@ -28,28 +27,63 @@ postgresql_hba_entries:
       type: host,
       database: gitlab_db,
       user: gitlab_user,
-      address: "{{ svc_net}}",
+      address: "{{ wireguard_net}}",
       auth_method: "{{ postgresql_auth_method }}",
     }
   - {
       type: host,
       database: gitlab_db,
       user: gitlab_user,
-      address: "{{ vip_net}}",
+      address: "{{ docker_iprange}}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
+  - {
+      type: host,
+      database: gitlab_db,
+      user: gitlab_user,
+      address: "{{ svc_net }}",
       auth_method: "{{ postgresql_auth_method }}",
     }
   - {
       type: host,
       database: registry_db,
       user: registry_user,
-      address: "{{ svc_net}}",
+      address: "{{ wireguard_net }}",
       auth_method: "{{ postgresql_auth_method }}",
     }
   - {
       type: host,
       database: registry_db,
       user: registry_user,
-      address: "{{ vip_net}}",
+      address: "{{ docker_iprange}}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
+  - {
+      type: host,
+      database: registry_db,
+      user: registry_user,
+      address: "{{ svc_net }}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
+  - {
+      type: host,
+      database: ci_db,
+      user: ci_user,
+      address: "{{ wireguard_net }}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
+  - {
+      type: host,
+      database: ci_db,
+      user: ci_user,
+      address: "{{ docker_iprange }}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
+  - {
+      type: host,
+      database: ci_db,
+      user: ci_user,
+      address: "{{ svc_net }}",
       auth_method: "{{ postgresql_auth_method }}",
     }
 
@@ -59,6 +93,9 @@ postgresql_databases:
     state: present
   - name: registry_db
     owner: registry_user
+    state: present
+  - name: ci_db
+    owner: ci_user
     state: present
 
 # NOTE(prozlach): passwords are randomized by booter during the setup
@@ -71,22 +108,17 @@ postgresql_users:
     password: bozyDar
     db: registry_db
     state: present
+  - name: ci_user
+    password: waldemar
+    db: ci_db
+    state: present
 
-# TODO(prozlach):
+postgresql_global_config_options:
+  - option: listen_addresses
+    value: "{{ svc_ip }}"
+  - option: unix_socket_directories
+    value: '{{ postgresql_unix_socket_directories | join(",") }}'
+  - option: log_directory
+    value: "log"
+
 postgresql_privs: []
-# - db: exampledb # database (required)
-#   roles: jdoe  # role(s) the privs apply to (required)
-#   privs: # comma separated list of privileges - defaults to not set
-#   type: # type of database object to set privileges on - defaults to not set
-#   objs: # list of database objects to set privileges on - defaults to not set
-#   schema: # defaults to not set
-#   session_role: # defaults to not set
-#   fail_on_role: # defaults to true
-#   grant_option: # defaults to not set
-#   target_roles: # defaults to not set
-#   login_host: # defaults to 'localhost'
-#   login_password: # defaults to not set
-#   login_user: # defaults to '{{ postgresql_user }}'
-#   login_unix_socket: # defaults to 1st of postgresql_unix_socket_directories
-#   port: # defaults to not set
-#   state: # defaults to 'present'

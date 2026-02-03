@@ -37,7 +37,6 @@
         --sysctl="net.ipv6.conf.all.forwarding=1" \
         --sysctl="net.ipv6.conf.default.forwarding=1" \
         --network=wghub \
-        --ip={{ wireguard_ui_ip }} \
         --env-file=/etc/default/wg-easy \
         -v /etc/wg-easy:/etc/wireguard \
         -v /lib/modules:/lib/modules:ro \
