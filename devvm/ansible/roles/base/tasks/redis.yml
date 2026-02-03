@@ -1,0 +1,36 @@
+---
+# Install and configure Valkey (Redis-compatible key-value store)
+- name: Install valkey
+  ansible.builtin.apt:
+    name:
+      - valkey
+    state: present
+  register: __pkgmgr_result
+  until: __pkgmgr_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Create valkey configuration directory
+  ansible.builtin.file:
+    path: /etc/valkey
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Upload valkey configuration
+  ansible.builtin.template:
+    src: valkey.conf.j2
+    dest: /etc/valkey/valkey.conf
+    owner: valkey
+    group: valkey
+    mode: "0640"
+  notify: restart valkey
+
+# Service will be enabled by booter
+- name: Ensure valkey service does not start at boot
+  ansible.builtin.systemd:
+    daemon_reload: true
+    enabled: false
+    state: stopped
+    name: valkey-server

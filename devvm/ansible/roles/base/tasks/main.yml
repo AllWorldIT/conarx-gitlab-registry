@@ -36,8 +36,17 @@
 - ansible.builtin.import_tasks: minio.yml
   tags: base
 
+- ansible.builtin.import_tasks: minio_client.yml
+  tags: base
+
+- ansible.builtin.import_tasks: redis.yml
+  tags: base
+
 - ansible.builtin.import_tasks: devvm.yml
   tags: base
 
 - ansible.builtin.import_tasks: motd.yml
+  tags: base
+
+- ansible.builtin.import_tasks: gitlab_repo.yml
   tags: base

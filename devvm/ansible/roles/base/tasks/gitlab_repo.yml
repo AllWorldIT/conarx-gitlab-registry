@@ -1,0 +1,153 @@
+---
+- name: Install required packages for repository management
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - apt-transport-https
+      - gnupg
+    state: present
+    update_cache: yes
+  register: __pkgmgr_result
+  until: __pkgmgr_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Create APT keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+# GitLab EE Repository Setup
+- name: Download GitLab EE GPG key
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/gitlab/gitlab-ee/gpgkey
+    dest: /tmp/gitlab-ee.asc
+    mode: "0644"
+  register: __gpg_ee_result
+  until: __gpg_ee_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Convert and install GitLab EE GPG key
+  ansible.builtin.shell:
+    cmd: |
+      gpg --dearmor < /tmp/gitlab-ee.asc > /etc/apt/keyrings/gitlab-ee-archive-keyring.gpg
+    creates: /etc/apt/keyrings/gitlab-ee-archive-keyring.gpg
+
+- name: Clean up temporary GitLab EE GPG key file
+  ansible.builtin.file:
+    path: /tmp/gitlab-ee.asc
+    state: absent
+
+- name: Set correct permissions on GitLab EE GPG keyring
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/gitlab-ee-archive-keyring.gpg
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Add GitLab EE repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/gitlab-ee-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ee/ubuntu/ {{ ansible_facts['distribution_release'] }} main"
+    filename: gitlab-ee
+    state: present
+
+- name: Add GitLab EE source repository
+  ansible.builtin.apt_repository:
+    repo: "deb-src [signed-by=/etc/apt/keyrings/gitlab-ee-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ee/ubuntu/ {{ ansible_facts['distribution_release'] }} main"
+    filename: gitlab-ee
+    state: present
+
+# GitLab CE Repository Setup
+- name: Download GitLab CE GPG key
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/gitlab/gitlab-ce/gpgkey
+    dest: /tmp/gitlab-ce.asc
+    mode: "0644"
+  register: __gpg_ce_result
+  until: __gpg_ce_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Convert and install GitLab CE GPG key
+  ansible.builtin.shell:
+    cmd: |
+      gpg --dearmor < /tmp/gitlab-ce.asc > /etc/apt/keyrings/gitlab-ce-archive-keyring.gpg
+    creates: /etc/apt/keyrings/gitlab-ce-archive-keyring.gpg
+
+- name: Clean up temporary GitLab CE GPG key file
+  ansible.builtin.file:
+    path: /tmp/gitlab-ce.asc
+    state: absent
+
+- name: Set correct permissions on GitLab CE GPG keyring
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/gitlab-ce-archive-keyring.gpg
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Add GitLab CE repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu/ {{ ansible_facts['distribution_release'] }} main"
+    filename: gitlab-ce
+    state: present
+
+- name: Add GitLab CE source repository
+  ansible.builtin.apt_repository:
+    repo: "deb-src [signed-by=/etc/apt/keyrings/gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu/ {{ ansible_facts['distribution_release'] }} main"
+    filename: gitlab-ce
+    state: present
+
+# GitLab Nightly Builds Repository Setup
+- name: Download GitLab Nightly Builds GPG key
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/gitlab/nightly-builds/gpgkey
+    dest: /tmp/gitlab-nightly.asc
+    mode: "0644"
+  register: __gpg_nightly_result
+  until: __gpg_nightly_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Convert and install GitLab Nightly Builds GPG key
+  ansible.builtin.shell:
+    cmd: |
+      gpg --dearmor < /tmp/gitlab-nightly.asc > /etc/apt/keyrings/gitlab-nightly-archive-keyring.gpg
+    creates: /etc/apt/keyrings/gitlab-nightly-archive-keyring.gpg
+
+- name: Clean up temporary GitLab Nightly Builds GPG key file
+  ansible.builtin.file:
+    path: /tmp/gitlab-nightly.asc
+    state: absent
+
+- name: Set correct permissions on GitLab Nightly Builds GPG keyring
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/gitlab-nightly-archive-keyring.gpg
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Add GitLab Nightly Builds repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/gitlab-nightly-archive-keyring.gpg] https://packages.gitlab.com/gitlab/nightly-builds/ubuntu/ {{ ansible_facts['distribution_release'] }} main"
+    filename: gitlab-nightly-builds
+    state: present
+
+- name: Add GitLab Nightly Builds source repository
+  ansible.builtin.apt_repository:
+    repo: "deb-src [signed-by=/etc/apt/keyrings/gitlab-nightly-archive-keyring.gpg] https://packages.gitlab.com/gitlab/nightly-builds/ubuntu/ {{ ansible_facts['distribution_release'] }} main"
+    filename: gitlab-nightly-builds
+    state: present
+
+- name: Update APT cache after adding GitLab repositories
+  ansible.builtin.apt:
+    update_cache: yes
+  register: __apt_update_result
+  until: __apt_update_result is succeeded
+  retries: 3
+  delay: 3

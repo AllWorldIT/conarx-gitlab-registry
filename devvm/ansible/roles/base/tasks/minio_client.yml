@@ -1,0 +1,36 @@
+---
+# MinIO Client (mc) is source-only nowadays
+- name: Checkout minio client
+  ansible.builtin.git:
+    repo: https://github.com/minio/mc.git
+    dest: /home/dev/mc
+    accept_hostkey: true
+    version: RELEASE.2025-10-15T17-29-55Z
+    depth: 1
+  # ssh auth sock issues
+  become: true
+  become_flags: -SHE
+  become_user: dev
+
+- name: Build minio client
+  ansible.builtin.shell:
+  args:
+    cmd: |
+      set -eou pipefail
+      eval "$(mise activate bash)"
+
+      go build -o mc main.go
+    chdir: /home/dev/mc
+    executable: /bin/bash
+    creates: /home/dev/mc/mc
+  become: true
+  become_user: dev
+
+- name: Copy mc binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: /home/dev/mc/mc
+    dest: /usr/local/bin/mc
+    remote_src: yes
+    owner: root
+    group: root
+    mode: "0755"
