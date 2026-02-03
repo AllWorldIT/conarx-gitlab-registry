@@ -84,7 +84,7 @@
   changed_when: "'installed' in __mise_use_out.stderr"
   with_items:
     - go@latest
-    - mc@latest
+    - awscli@latest
     - kind@latest
     - kubectl@latest
     - helm@latest

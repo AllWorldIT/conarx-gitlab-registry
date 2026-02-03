@@ -1,0 +1,174 @@
+# Valkey configuration file
+# Managed by Ansible - do not edit manually
+
+################################## NETWORK #####################################
+
+# Bind to the service IP address
+bind {{ svc_ip | ansible.utils.ipaddr('address') }}
+
+# Accept connections on the specified port
+port 6379
+
+# TCP listen backlog
+tcp-backlog 511
+
+# Close the connection after a client is idle for N seconds (0 to disable)
+timeout 0
+
+# TCP keepalive
+tcp-keepalive 300
+
+# Protected mode is disabled since we're binding to a specific internal IP
+protected-mode no
+
+################################# GENERAL #####################################
+
+# Run as a daemon (systemd will manage this)
+daemonize no
+
+# Pid file location
+pidfile /run/valkey/valkey.pid
+
+# Logging level
+loglevel notice
+
+# Log file (empty string = log to stdout, systemd will capture it)
+logfile ""
+
+# Number of databases (ensures databases 0 and 1 are available)
+# Default is 16, which provides databases 0-15
+databases 16
+
+# Show ASCII art logo on startup
+always-show-logo no
+
+################################ SNAPSHOTTING  ################################
+
+# Save the DB to disk
+# After 3600 seconds (an hour) if at least 1 change was performed
+# After 300 seconds (5 minutes) if at least 100 changes were performed
+# After 60 seconds if at least 10000 changes were performed
+save 3600 1 300 100 60 10000
+
+# Stop accepting writes if RDB snapshots fail
+stop-writes-on-bgsave-error yes
+
+# Compress strings in dump files
+rdbcompression yes
+
+# Enable RDB checksum
+rdbchecksum yes
+
+# The filename for the RDB dump
+dbfilename dump.rdb
+
+# Working directory for RDB and AOF files
+dir /var/lib/valkey
+
+################################# REPLICATION #################################
+
+# Replica serves stale data while syncing
+replica-serve-stale-data yes
+
+# Replicas are read-only by default
+replica-read-only yes
+
+# Diskless sync for replicas
+repl-diskless-sync yes
+repl-diskless-sync-delay 5
+
+# Disable TCP_NODELAY on replica socket
+repl-disable-tcp-nodelay no
+
+# Replica priority for sentinel
+replica-priority 100
+
+################################## SECURITY ###################################
+
+# No password required for local development
+# requirepass <password>
+
+############################## MEMORY MANAGEMENT ################################
+
+# Max memory policy (comment out for no limit)
+# maxmemory <bytes>
+
+# Eviction policy when maxmemory is reached
+maxmemory-policy noeviction
+
+################################ LAZY FREEING ##################################
+
+lazyfree-lazy-eviction yes
+lazyfree-lazy-expire yes
+lazyfree-lazy-server-del yes
+replica-lazy-flush yes
+lazyfree-lazy-user-del yes
+lazyfree-lazy-user-flush yes
+
+############################## APPEND ONLY MODE ###############################
+
+# Disable AOF by default (RDB is sufficient for development)
+appendonly no
+
+appendfilename "appendonly.aof"
+appenddirname "appendonlydir"
+
+# fsync policy
+appendfsync everysec
+
+no-appendfsync-on-rewrite no
+
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64mb
+
+aof-load-truncated yes
+aof-use-rdb-preamble yes
+
+################################## CLIENTS ####################################
+
+# Max number of connected clients
+# maxclients 10000
+
+############################### ADVANCED CONFIG ###############################
+
+# Hash encoding thresholds
+hash-max-listpack-entries 512
+hash-max-listpack-value 64
+
+# List encoding
+list-max-listpack-size -2
+list-compress-depth 0
+
+# Set encoding thresholds
+set-max-intset-entries 512
+set-max-listpack-entries 128
+set-max-listpack-value 64
+
+# Sorted set encoding thresholds
+zset-max-listpack-entries 128
+zset-max-listpack-value 64
+
+# HyperLogLog sparse representation limit
+hll-sparse-max-bytes 3000
+
+# Stream settings
+stream-node-max-bytes 4096
+stream-node-max-entries 100
+
+# Active rehashing
+activerehashing yes
+
+# Client output buffer limits
+client-output-buffer-limit normal 0 0 0
+client-output-buffer-limit replica 256mb 64mb 60
+client-output-buffer-limit pubsub 32mb 8mb 60
+
+# Slow log settings
+slowlog-log-slower-than 10000
+slowlog-max-len 128
+
+# Latency monitoring (disabled by default)
+latency-monitor-threshold 0
+
+# Event notifications (disabled by default)
+notify-keyspace-events ""

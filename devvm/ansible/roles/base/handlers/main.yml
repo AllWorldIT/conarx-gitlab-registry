@@ -4,6 +4,11 @@
     name: systemd-network
     state: restarted
 
+- name: restart valkey
+  ansible.builtin.systemd:
+    name: valkey-server
+    state: restarted
+
 - name: Restart sshd
   ansible.builtin.service:
     name: ssh
