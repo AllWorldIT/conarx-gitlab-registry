@@ -9,24 +9,7 @@ plugins:
         - type: build
           release: patch
   - - "@semantic-release/release-notes-generator"
-    - preset: conventionalcommits
-      presetConfig:
-        types:
-          - type: feat
-            section: "✨ Features ✨"
-            hidden: false
-          - type: fix
-            section: "🐛 Bug Fixes 🐛"
-            hidden: false
-          - type: perf
-            section: "⚡️ Performance Improvements ⚡️"
-            hidden: false
-          - type: revert
-            section: "⏮️️ Reverts ⏮️️"
-            hidden: false
-          - type: build
-            section: "⚙️ Build ⚙️"
-            hidden: false
+    - config: "./.conventional-changelog.js"
   - '@semantic-release/changelog'
   - - '@semantic-release/git'
     - assets:
