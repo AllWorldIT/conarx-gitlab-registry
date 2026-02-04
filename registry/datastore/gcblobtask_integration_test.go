@@ -140,6 +140,84 @@ func TestGCBlobTaskStore_FindAll_WithLimit(t *testing.T) {
 	assert.Equal(t, expected, rr)
 }
 
+func TestGCBlobTaskStore_FindAll_WithReviewAfterGreaterThan(t *testing.T) {
+	reloadGCBlobTaskFixtures(t)
+
+	// ReviewAfterGreaterThan works as expected
+	// see testdata/fixtures/gc_blob_review_queue.sql
+	s := datastore.NewGCBlobTaskStore(suite.db)
+
+	// No tasks with review_after greater than the cutoff
+	cutoff := testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC).Add(1 * time.Second)
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff))
+	require.NoError(t, err)
+	assert.Empty(t, rr)
+
+	// Tasks with review_after greater than a specific cutoff
+	cutoff = testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", time.UTC)
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff))
+	require.NoError(t, err)
+
+	local := rr[0].ReviewAfter.Location()
+	expected := []*models.GCBlobTask{
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
+			ReviewCount: 0,
+			Digest:      "sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9",
+			CreatedAt:   testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
+			Event:       "blob_upload",
+		},
+	}
+	assert.Equal(t, expected, rr)
+
+	// Combine with limit
+	cutoff = testutil.ParseTimestamp(t, "2020-03-03 17:57:23.405516", time.UTC)
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff), datastore.WithGCTasksLimit(1))
+	require.NoError(t, err)
+
+	expected = []*models.GCBlobTask{
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", local),
+			ReviewCount: 0,
+			Digest:      "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9",
+			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-04 20:05:35.338639", local),
+			Event:       "blob_upload",
+		},
+	}
+	assert.Equal(t, expected, rr)
+
+	// The last filter option overwrites previous options of the same type.
+	cutoff1 := testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", time.UTC)
+	cutoff2 := testutil.ParseTimestamp(t, "2020-03-03 17:57:23.405516", time.UTC)
+	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff1), datastore.WithGCTasksReviewAfterGreaterThan(cutoff2))
+	require.NoError(t, err)
+
+	expected = []*models.GCBlobTask{
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", local),
+			ReviewCount: 0,
+			Digest:      "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9",
+			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-04 20:05:35.338639", local),
+			Event:       "blob_upload",
+		},
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", local),
+			ReviewCount: 3,
+			Digest:      "sha256:6b0937e234ce911b75630b744fb12836fe01bda5f7db203927edbb1390bc7e21",
+			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-04 20:05:35.338639", local),
+			Event:       "blob_upload",
+		},
+		{
+			ReviewAfter: testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
+			ReviewCount: 0,
+			Digest:      "sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9",
+			CreatedAt:   testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
+			Event:       "blob_upload",
+		},
+	}
+	assert.Equal(t, expected, rr)
+}
+
 func TestGCBlobTaskStore_FindAll_NotFound(t *testing.T) {
 	unloadGCBlobTaskFixtures(t)
 
@@ -154,6 +232,16 @@ func TestGCBlobTaskStore_FindAll_NotFound_WithLimit(t *testing.T) {
 
 	s := datastore.NewGCBlobTaskStore(suite.db)
 	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksLimit(1))
+	require.NoError(t, err)
+	assert.Empty(t, rr)
+}
+
+func TestGCBlobTaskStore_FindAll_WithReviewAfterGreaterThan_NotFound(t *testing.T) {
+	unloadGCBlobTaskFixtures(t)
+
+	s := datastore.NewGCBlobTaskStore(suite.db)
+	cutoff := testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", time.UTC)
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff))
 	require.NoError(t, err)
 	assert.Empty(t, rr)
 }
