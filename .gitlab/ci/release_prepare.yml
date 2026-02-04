@@ -48,7 +48,7 @@ release:prepare:
       echo "Updating CHANGELOG.md using conventional-changelog"
       # Generate only the latest release notes (-r 1) and stage/commit the changelog update
       echo "{\"name\":\"container-registry\",\"version\":\"${NEXT_VERSION}\"}" > /tmp/pkg.json
-      npx conventional-changelog-cli@3 -p conventionalcommits -k /tmp/pkg.json -i CHANGELOG.md -s -r 1
+      npx conventional-changelog-cli@3 -p ./.conventional-changelog.js -k /tmp/pkg.json -i CHANGELOG.md -s -r 1
       git add CHANGELOG.md
       git commit -m "chore(release): ${NEXT_VERSION}"
     - |

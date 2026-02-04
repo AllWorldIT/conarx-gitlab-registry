@@ -78,7 +78,7 @@ release:backport:
       # Release commit (skip if already present)
       if ! git log -1 --pretty=%s | grep -Eq "^chore\\(release\\):[[:space:]]*${NEW_VERSION}$"; then
         echo '{"name":"container-registry","version":"'"${NEW_VERSION}"'"}' > /tmp/pkg.json
-        npx conventional-changelog-cli@3 -p conventionalcommits -k /tmp/pkg.json -i CHANGELOG.md -s -r 1
+        npx conventional-changelog-cli@3 -p ./.conventional-changelog.js -k /tmp/pkg.json -i CHANGELOG.md -s -r 1
         git add CHANGELOG.md
         git commit -m "chore(release): ${NEW_VERSION}"
       fi
