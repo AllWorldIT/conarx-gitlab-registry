@@ -160,7 +160,7 @@ release: release-prep
 	@echo "This will generate and push a changelog update and a new tag, are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
 	@npx semantic-release --no-ci
 
-export PG_VERSIONS=$(shell egrep -E 'PG_(PREV|CURR|NEXT)_VERSION: ' .gitlab-ci.yml | cut -d\" -f 2)
+export PG_VERSIONS=$(shell grep -E 'PG_(PREV|CURR|NEXT)_VERSION: ' .gitlab-ci.yml | cut -d\" -f 2)
 
 .PHONY: rebuild-ci-container-images
 rebuild-ci-container-images:
