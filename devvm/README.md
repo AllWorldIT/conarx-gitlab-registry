@@ -492,6 +492,77 @@ When you no longer need `devvm` you should delete it:
 
 ## Common tasks
 
+### Using production DB clone for testing
+
+> Currently we only support specifying custom container registry build for charts-based Devvm.
+> Omnibus does not implement this functionality yet.
+> We will be using custom VM image here: `devvm-branchbuild` as I we are still in the process of merging golden image-related MRs to `master`.
+
+Both CE or EE variants of GitLab are acceptable - decide basing on your needs. 
+In case when CE version is desired, simply remove `--ee` and `-l` options.
+
+If you want to specify the container-registry branch to deploy from, use `-r` parameter, otherwise leave this out and latest `master` will be used. 
+
+1. Deploy VM, without deploying GitLab yet.
+
+   ```shell
+   ./devvm create <name> -i devvm-branchbuild -z <GCE zone closest to you> -k <the SSH you would like to use> -l <ee license file>  --ee --no-deploy -r <container-registry branch>
+   ```
+
+1. In [postgres.ai console](https://console.postgres.ai/gitlab/gitlab-production-registry/instances/), select the `gitlab-production-registry` instance
+1. Create a clone, note down the connection setup and credentials information.
+1. Log into Devvm, and set up SSH port forwarding. The tunnel must bind to the `svcif` interface IP so that pods can access the database:
+
+   First, find the svcif IP address (normally it is `10.15.17.1`):
+
+   ```shell
+   ip a sh dev svcif
+   ```
+
+   Then set up the SSH tunnel binding to that interface. Port 15432 is chosen arbitrary:
+
+   ```shell
+   nohup ssh -fNTML 10.15.17.1:15432:localhost:6000 -o ProxyCommand="ssh <your-ssh-username>@<postgres bastion host> -W %h:%p" <your-ssh-username>@<postgres clone address>
+   ```
+
+   This binds the local side of the tunnel to `10.15.17.1` on port `15432`, while forwarding to `localhost:6000` on the remote host through the bastion.
+   All pods already have full connectivity to the `svcif` interface as other services (MinIO, Valkey, local PostgreSQL) listen there as well.
+
+   > With properly set-up forwarding of the SSH agent, you will not need to push your SSH key to the devvm to set up tunneling.
+   > You can leave the machine running with the SSH tunnel up and disconnect/close your laptop. The tests will run on devvm until completion.
+
+1. Adjust Helm values file to use the SSH port forwarding set up in the previous step in `/home/dev/helm-values.yml` file:
+
+   ```yaml
+   registry:
+     database:
+       enabled: true
+       host: 10.15.17.1
+       port: 5432
+       user: registry_user
+       name: registry_db
+       sslmode: require
+       password:
+         secret: gitlab-postgres-registry
+         key: psql-password
+   ```
+
+1. Optional: some test/use cases may benefit from increased number of container-registry pods.
+   You can tune this in `/home/dev/helm-values.yml` file like this:
+
+   ```yaml
+   registry:
+     hpa:
+       minReplicas: 3
+       maxReplicas: 3
+   ```
+
+1. Deploy GitLab:
+
+   ```shell
+   helm upgrade --install gitlab gitlab/gitlab -n gitlab --wait --timeout 10m0s -f /home/dev/helm-values.yml 
+   ```
+
 ### Share your VM
 
 After a VM has been deployed, to give access to it:
