@@ -25,6 +25,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var whereRegex = regexp.MustCompile(`(?i)\bWHERE\b`)
+
 const driverName = "pgx"
 
 // Queryer is the common interface to execute queries on a database.
@@ -537,6 +539,36 @@ func (qb *QueryBuilder) WrapIntoSubqueryOf(outerQuery string) error {
 	qb.sql = newSQL
 
 	return nil
+}
+
+// WhereAnd conditionally appends a WHERE or AND clause to the query.
+// If a WHERE clause is already present, it appends AND; otherwise, it adds WHERE.
+//
+// Limitation: This method does not handle SQL operator precedence.
+// Appending AND to queries with OR will follow standard SQL precedence (AND before OR).
+// For complex conditions requiring specific precedence, use Build() with parentheses.
+//
+// Example of precedence issue:
+//
+//	qb.Build("WHERE a = ? OR b = ?", 1, 2)
+//	qb.WhereAnd("c = ?", 3)
+//	Produces: WHERE a = $1 OR b = $2 AND c = $3
+//	Evaluates as: WHERE a = $1 OR (b = $2 AND c = $3)
+//
+// For explicit precedence:
+//
+//	qb.Build("WHERE (a = ? OR b = ?) AND c = ?", 1, 2, 3)
+func (qb *QueryBuilder) WhereAnd(condition string, args ...any) error {
+	if condition == "" {
+		return nil
+	}
+
+	// if qb.SQL() contains WHERE (case insensitive) add an and clause
+	if whereRegex.MatchString(qb.SQL()) {
+		return qb.Build("AND "+condition, args...)
+	}
+
+	return qb.Build("WHERE "+condition, args...)
 }
 
 // SQL returns the rendered SQL query.
