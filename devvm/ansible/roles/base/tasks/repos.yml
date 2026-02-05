@@ -19,3 +19,13 @@
   become: true
   become_flags: -SHE
   become_user: dev
+
+- name: Checkout CNG repo
+  ansible.builtin.git:
+    repo: https://gitlab.com/gitlab-org/build/CNG.git
+    dest: /home/dev/CNG
+    accept_hostkey: true
+    version: master
+  become: true
+  become_flags: -SHE
+  become_user: dev

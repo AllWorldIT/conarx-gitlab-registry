@@ -19,6 +19,8 @@ wireguard_net: "{{ route_address | ansible.utils.ipsubnet(24, 3) }}"
 
 docker_bridge_name: br-wg
 
+docker_registry_port: 7000
+
 postgresql_auth_method: scram-sha-256
 
 postgresql_hba_entries:
