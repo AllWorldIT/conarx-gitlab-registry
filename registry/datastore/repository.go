@@ -17,13 +17,13 @@ import (
 	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/registry/internal/errorreporting"
 	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/redis/go-redis/v9"
-	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
 type SortOrder string
@@ -484,7 +484,7 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 		detail := "failed to invalidate repository size in cache for repo: " + r.Path
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn(detail)
 		err := fmt.Errorf("%q: %q", detail, err)
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 	}
 }
 
@@ -493,7 +493,7 @@ func (c *centralRepositoryCache) Invalidate(ctx context.Context, path string) {
 	if path == "" {
 		err := errors.New("can not invalidate an empty path")
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to delete repository cache keys")
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 		return
 	}
 	delCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
@@ -512,7 +512,7 @@ func (c *centralRepositoryCache) Invalidate(ctx context.Context, path string) {
 			"path": path,
 			"keys": keys,
 		}).Warn("failed to delete repository cache keys")
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 	}
 }
 

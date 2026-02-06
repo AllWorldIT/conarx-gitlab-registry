@@ -11,10 +11,10 @@ import (
 	"github.com/bsm/redislock"
 	dlog "github.com/docker/distribution/log"
 	"github.com/docker/distribution/metrics"
+	"github.com/docker/distribution/registry/internal/errorreporting"
 	"github.com/docker/distribution/testutil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
-	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
 const (
@@ -300,11 +300,8 @@ func (c *RowCountCollector) run(ctx context.Context) {
 
 	// Register metrics when gaining leadership
 	if err := c.registerMetrics(); err != nil {
-		errortracking.Capture(
-			fmt.Errorf("database row count metrics: failed to register metrics after obtaining lock: %w", err),
-			errortracking.WithContext(ctx),
-			errortracking.WithStackTrace(),
-		)
+		c.logger.WithError(err).Error("failed to register metrics after obtaining lock")
+		errorreporting.Capture(ctx, fmt.Errorf("database row count metrics: failed to register metrics after obtaining lock: %w", err))
 
 		// Release lock before returning
 		if releaseErr := lock.Release(ctx); releaseErr != nil {
@@ -413,11 +410,7 @@ func (c *RowCountCollector) runLockRefresh(ctx context.Context, lock *redislock.
 				// nolint:revive // max-control-nesting - acceptable for error handling logic
 				if consecutiveFailures >= lockExtensionMaxRetries {
 					c.logger.WithError(err).Error("failed to extend lock after retries, releasing leadership")
-					errortracking.Capture(
-						fmt.Errorf("database row count metrics: failed to extend lock after %d retries, releasing leadership: %w", consecutiveFailures, err),
-						errortracking.WithContext(ctx),
-						errortracking.WithStackTrace(),
-					)
+					errorreporting.Capture(ctx, fmt.Errorf("database row count metrics: failed to extend lock after %d retries, releasing leadership: %w", consecutiveFailures, err))
 					return // Too many failures, release leadership
 				}
 				continue

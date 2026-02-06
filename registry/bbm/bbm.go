@@ -18,8 +18,8 @@ import (
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/registry/internal/errorreporting"
 	"gitlab.com/gitlab-org/labkit/correlation"
-	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
 type runResult struct {
@@ -346,7 +346,7 @@ func (jw *Worker) run(ctx context.Context) (runResult, error) {
 	tx, err := jw.db.BeginTx(ctx, nil)
 	if err != nil {
 		jw.logger.WithError(err).Error("failed to create database transaction")
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 		return runRes, err
 	}
 	defer tx.Rollback()
@@ -358,7 +358,7 @@ func (jw *Worker) run(ctx context.Context) (runResult, error) {
 	if err = jw.wh.GrabLock(ctx, bbmStore); err != nil {
 		jw.logger.WithError(err).Info("failed to obtain lock")
 		if !errors.Is(err, datastore.ErrBackgroundMigrationLockInUse) {
-			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			errorreporting.Capture(ctx, err)
 			return runRes, err
 		}
 
@@ -372,7 +372,7 @@ func (jw *Worker) run(ctx context.Context) (runResult, error) {
 		throttle, err := jw.wh.ShouldThrottle(ctx, bbmStore)
 		if err != nil {
 			jw.logger.WithError(err).Info("WAL throttle check failed")
-			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			errorreporting.Capture(ctx, err)
 			return runRes, err
 		}
 
@@ -387,14 +387,14 @@ func (jw *Worker) run(ctx context.Context) (runResult, error) {
 	job, err := jw.wh.FindJob(ctx, bbmStore)
 	if err != nil {
 		jw.logger.WithError(err).Error("failed to find job")
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 		return runRes, err
 	}
 	if job == nil {
 		jw.logger.Info("no jobs to run...")
 		if err = tx.Commit(); err != nil {
 			jw.logger.WithError(err).Error("failed to commit database transaction")
-			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			errorreporting.Capture(ctx, err)
 			return runRes, err
 		}
 		return runRes, nil
@@ -420,7 +420,7 @@ func (jw *Worker) run(ctx context.Context) (runResult, error) {
 	err = jw.wh.ExecuteJob(ctx, bbmStore, job)
 	if err != nil {
 		l.WithError(err).Error("failed to execute job")
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 		return runRes, err
 	}
 
@@ -432,7 +432,7 @@ func (jw *Worker) run(ctx context.Context) (runResult, error) {
 	// We should revisit this when redis is generally available. https://gitlab.com/gitlab-org/container-registry/-/issues/1639
 	if err = tx.Commit(); err != nil {
 		jw.logger.WithError(err).Error("failed to commit database transaction")
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 		return runRes, err
 	}
 
@@ -500,7 +500,7 @@ func (jw *Worker) FindJob(ctx context.Context, bbmStore datastore.BackgroundMigr
 	err = validateMigration(ctx, bbmStore, jw.Work, bbm)
 	if err != nil {
 		l.WithError(err).Error("background migration failed validation")
-		errortracking.Capture(err, errortracking.WithContext(ctx))
+		errorreporting.Capture(ctx, err)
 
 		var migrationErr *migrationFailureError
 		if errors.As(err, &migrationErr) {

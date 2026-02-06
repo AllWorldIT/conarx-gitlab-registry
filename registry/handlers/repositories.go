@@ -25,6 +25,7 @@ import (
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/registry/internal/errorreporting"
 	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/gorilla/handlers"
 	"github.com/jackc/pgerrcode"
@@ -1025,8 +1026,8 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 		projectPath, err := findProjectPath(repo, auth.AuthorizedResources(h))
 		// prevent the request from proceeding if we cannot find the project path for the referenced repository
 		if err != nil {
-			err = errors.New("ongoing rename check: failed to find project path parameter in token")
-			errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r), errortracking.WithStackTrace())
+			l.WithError(err).Error("ongoing rename check: failed to find project path parameter in token")
+			errorreporting.Capture(h, err, errortracking.WithRequest(r))
 			h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 			return
 		}
@@ -1045,9 +1046,7 @@ func checkOngoingRename(handler http.Handler, h *Context) http.Handler {
 			// See: https://gitlab.com/gitlab-org/container-registry/-/merge_requests/1333#note_1482777410 on the rationale behind this.
 			exist, err := plStore.Exists(h.Context, projectPath)
 			if err != nil {
-				if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
-					errortracking.Capture(err, errortracking.WithContext(h), errortracking.WithRequest(r), errortracking.WithStackTrace())
-				}
+				errorreporting.Capture(h, err, errortracking.WithRequest(r))
 				l.WithError(err).Error("ongoing rename check: failed to check lease store for ongoing lease, skipping")
 				handler.ServeHTTP(w, r)
 				return
@@ -1206,7 +1205,8 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 		}
 		defer func() {
 			if err := plStore.Invalidate(ctx, repo.source.Path); err != nil {
-				errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+				log.GetLogger(log.WithContext(ctx)).WithError(err).Error("failed to invalidate project lease during repository rename")
+				errorreporting.Capture(ctx, err)
 			}
 		}()
 	}
@@ -1242,7 +1242,8 @@ func handleRenameStoreOperation(ctx context.Context, w http.ResponseWriter, repo
 		// When a lease fails to be destroyed after it is no longer needed it should not impact the response to the caller.
 		// The lease will eventually expire regardless, but we still need to record these failed cases.
 		if err := rlstore.Destroy(ctx, lease); err != nil {
-			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			log.GetLogger(log.WithContext(ctx)).WithError(err).Error("failed to destroy rename lease after successful rename")
+			errorreporting.Capture(ctx, err)
 		}
 	} else {
 		w.WriteHeader(http.StatusAccepted)

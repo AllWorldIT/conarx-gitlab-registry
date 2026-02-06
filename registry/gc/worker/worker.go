@@ -14,6 +14,7 @@ import (
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore"
 	"github.com/docker/distribution/registry/internal"
+	"github.com/docker/distribution/registry/internal/errorreporting"
 	"github.com/getsentry/sentry-go"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sirupsen/logrus"
@@ -90,13 +91,8 @@ func (w *baseWorker) run(ctx context.Context, p processor) RunResult {
 }
 
 func (w *baseWorker) logAndReportErr(ctx context.Context, err error) {
-	errortracking.Capture(
-		err,
-		errortracking.WithContext(ctx),
-		errortracking.WithField(componentKey, w.name),
-		errortracking.WithStackTrace(),
-	)
 	log.GetLogger(log.WithContext(ctx)).WithError(err).Error(err.Error())
+	errorreporting.Capture(ctx, err, errortracking.WithField(componentKey, w.name))
 }
 
 // rollbackOnExit can be used to ensure that no transaction is left open without an explicit commit/rollback. Such can
