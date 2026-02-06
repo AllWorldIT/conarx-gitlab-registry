@@ -148,8 +148,15 @@ func (s *gcBlobTaskStore) Count(ctx context.Context, opts ...GCTaskFilterOption)
 			return 0, fmt.Errorf("building GC blobs tasks count query: %w", err)
 		}
 	}
-	var count int
 
+	if filters.reviewCountCutoff != nil {
+		err := qb.WhereAnd("review_count > ?", *filters.reviewCountCutoff)
+		if err != nil {
+			return 0, fmt.Errorf("building GC blobs tasks count query: %w", err)
+		}
+	}
+
+	var count int
 	row := s.db.QueryRowContext(ctx, qb.SQL(), qb.Params()...)
 	err = row.Scan(&count)
 	if err != nil {
