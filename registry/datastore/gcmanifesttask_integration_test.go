@@ -436,15 +436,43 @@ func TestGCManifestTaskStore_FindAndLockNBefore_NotFound(t *testing.T) {
 	require.Empty(t, rr)
 }
 
-func TestGcManifestTaskStore_Count(t *testing.T) {
+func TestGCManifestTaskStore_Count(t *testing.T) {
 	reloadGCManifestTaskFixtures(t)
 
-	s := datastore.NewGCManifestTaskStore(suite.db)
-	count, err := s.Count(suite.ctx)
-	require.NoError(t, err)
+	tests := []struct {
+		name     string
+		opts     []datastore.GCTaskFilterOption
+		expected int
+	}{
+		{
+			name:     "no filters",
+			expected: 4,
+		},
+		{
+			name:     "filter by review_after less than",
+			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "2020-05-01 00:00:00.000000", time.UTC))},
+			expected: 2,
+		},
+		{
+			name:     "filter by review_after less than - no results",
+			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "1970-01-01 00:00:00.000000", time.UTC))},
+			expected: 0,
+		},
+		{
+			name:     "limit filter is ignored",
+			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksLimit(2)},
+			expected: 4,
+		},
+	}
 
-	// see testdata/fixtures/gc_manifest_review_queue.sql
-	require.Equal(t, 4, count)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s := datastore.NewGCManifestTaskStore(suite.db)
+			count, err := s.Count(suite.ctx, test.opts...)
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, count)
+		})
+	}
 }
 
 func nextGCManifestTask(t *testing.T) (datastore.Transactor, *models.GCManifestTask) {
