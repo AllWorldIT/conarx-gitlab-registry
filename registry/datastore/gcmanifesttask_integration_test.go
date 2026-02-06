@@ -35,60 +35,6 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 
 	// see testdata/fixtures/gc_manifest_review_queue.sql
 	local := rr[0].ReviewAfter.Location()
-	expected := []*models.GCManifestTask{
-		{
-			NamespaceID:  1,
-			RepositoryID: 4,
-			ManifestID:   7,
-			ReviewAfter:  testutil.ParseTimestamp(t, "2020-04-03 18:45:04.470711", local),
-			ReviewCount:  2,
-			CreatedAt:    testutil.ParseTimestamp(t, "2020-04-02 18:45:04.470711", local),
-			Event:        "manifest_upload",
-		},
-		{
-			NamespaceID:  1,
-			RepositoryID: 4,
-			ManifestID:   9,
-			ReviewAfter:  testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
-			ReviewCount:  0,
-			CreatedAt:    testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
-			Event:        "manifest_delete",
-		},
-		{
-			NamespaceID:  1,
-			RepositoryID: 4,
-			ManifestID:   4,
-			ReviewAfter:  testutil.ParseTimestamp(t, "2020-06-11 09:11:23.655121", local),
-			ReviewCount:  0,
-			CreatedAt:    testutil.ParseTimestamp(t, "2020-06-10 09:11:23.655121", local),
-			Event:        "manifest_list_delete",
-		},
-		{
-			NamespaceID:  1,
-			RepositoryID: 3,
-			ManifestID:   1,
-			ReviewAfter:  testutil.ParseTimestamp(t, "2020-03-03 17:50:26.461745", local),
-			ReviewCount:  0,
-			CreatedAt:    testutil.ParseTimestamp(t, "2020-03-02 17:50:26.461745", local),
-			Event:        "tag_switch",
-		},
-	}
-
-	require.Equal(t, expected, rr)
-}
-
-func TestGCManifestTaskStore_FindAll_WithLimit(t *testing.T) {
-	reloadGCManifestTaskFixtures(t)
-
-	s := datastore.NewGCManifestTaskStore(suite.db)
-
-	// Limit works as expected
-	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksLimit(2))
-	require.NoError(t, err)
-
-	local := rr[0].ReviewAfter.Location()
-
-	// see testdata/fixtures/gc_manifest_review_queue.sql
 	allResults := []*models.GCManifestTask{
 		{
 			NamespaceID:  1,
@@ -128,103 +74,82 @@ func TestGCManifestTaskStore_FindAll_WithLimit(t *testing.T) {
 		},
 	}
 
-	expected := allResults[:2]
-	assert.Equal(t, expected, rr)
-
-	// 0 limit returns all results
-	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(0))
-	require.NoError(t, err)
-
-	assert.Equal(t, allResults, rr)
-
-	// negative limit returns all results
-	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(-7))
-	require.NoError(t, err)
-
-	assert.Equal(t, allResults, rr)
-
-	// limit greater than all results returns all results
-	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(100))
-	require.NoError(t, err)
-
-	assert.Equal(t, allResults, rr)
-
-	// the last filter option overwrites previous options of the same type.
-	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksLimit(100), datastore.WithGCTasksLimit(1))
-	require.NoError(t, err)
-
-	expected = allResults[:1]
-	assert.Equal(t, expected, rr)
-}
-
-func TestGCManifestTaskStore_FindAll_WithReviewAfterGreaterThan(t *testing.T) {
-	reloadGCManifestTaskFixtures(t)
-
-	// ReviewAfterGreaterThan works as expected
-	// see testdata/fixtures/gc_manifest_review_queue.sql
-	s := datastore.NewGCManifestTaskStore(suite.db)
-
-	// No tasks with review_after greater than the cutoff
-	cutoff := testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC).Add(1 * time.Second)
-	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff))
-	require.NoError(t, err)
-	assert.Empty(t, rr)
-
-	// Tasks with review_after greater than a specific cutoff
-	cutoff = testutil.ParseTimestamp(t, "2020-06-11 09:11:23.655121", time.UTC)
-	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff))
-	require.NoError(t, err)
-
-	local := rr[0].ReviewAfter.Location()
-	expected := []*models.GCManifestTask{
+	tests := []struct {
+		name     string
+		opts     []datastore.GCTaskFilterOption
+		expected []*models.GCManifestTask
+	}{
 		{
-			NamespaceID:  1,
-			RepositoryID: 4,
-			ManifestID:   9,
-			ReviewAfter:  testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
-			ReviewCount:  0,
-			CreatedAt:    testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
-			Event:        "manifest_delete",
+			name:     "no filters",
+			expected: allResults,
+		},
+		{
+			name: "with limit",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksLimit(2),
+			},
+			expected: allResults[:2],
+		},
+		{
+			name: "limit 0 returns all results",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksLimit(0),
+			},
+			expected: allResults,
+		},
+		{
+			name: "negative limit returns all results",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksLimit(-1),
+			},
+			expected: allResults,
+		},
+		{
+			name: "limit greater than all results returns all results",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksLimit(9001),
+			},
+			expected: allResults,
+		},
+		{
+			name: "with review after less than",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
+			},
+			expected: []*models.GCManifestTask{allResults[0], allResults[2], allResults[3]},
+		},
+		{
+			name: "with review after less than smaller than any timestamp",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "1970-01-01 00:00:00.000000", time.UTC)),
+			},
+			expected: make([]*models.GCManifestTask, 0),
+		},
+		{
+			name: "the last filter option overwrites previous options of the same type",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksLimit(1),
+				datastore.WithGCTasksLimit(2),
+			},
+			expected: allResults[:2],
+		},
+		{
+			name: "with review after less than and limit",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
+				datastore.WithGCTasksLimit(1),
+			},
+			expected: allResults[:1],
 		},
 	}
-	assert.Equal(t, expected, rr)
 
-	// Combine with limit
-	cutoff = testutil.ParseTimestamp(t, "2020-03-03 17:50:26.461745", time.UTC)
-	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff), datastore.WithGCTasksLimit(1))
-	require.NoError(t, err)
-
-	expected = []*models.GCManifestTask{
-		{
-			NamespaceID:  1,
-			RepositoryID: 4,
-			ManifestID:   7,
-			ReviewAfter:  testutil.ParseTimestamp(t, "2020-04-03 18:45:04.470711", local),
-			ReviewCount:  2,
-			CreatedAt:    testutil.ParseTimestamp(t, "2020-04-02 18:45:04.470711", local),
-			Event:        "manifest_upload",
-		},
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rr, err := s.FindAll(suite.ctx, test.opts...)
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, rr)
+		})
 	}
-	assert.Equal(t, expected, rr)
-
-	// The last filter option overwrites previous options of the same type.
-	cutoff1 := testutil.ParseTimestamp(t, "2020-04-03 18:45:04.470711", time.UTC)
-	cutoff2 := testutil.ParseTimestamp(t, "2020-06-11 09:11:23.655121", time.UTC)
-	rr, err = s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(cutoff1), datastore.WithGCTasksReviewAfterGreaterThan(cutoff2))
-	require.NoError(t, err)
-
-	expected = []*models.GCManifestTask{
-		{
-			NamespaceID:  1,
-			RepositoryID: 4,
-			ManifestID:   9,
-			ReviewAfter:  testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
-			ReviewCount:  0,
-			CreatedAt:    testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
-			Event:        "manifest_delete",
-		},
-	}
-	assert.Equal(t, expected, rr)
 }
 
 func TestGCManifestTaskStore_FindAll_NotFound(t *testing.T) {
@@ -245,11 +170,11 @@ func TestGCManifestTaskStore_FindAll_WithLimit_NotFound(t *testing.T) {
 	assert.Empty(t, rr)
 }
 
-func TestGCManifestTaskStore_Findall_WithReviewAfterGreaterThan_NotFound(t *testing.T) {
+func TestGCManifestTaskStore_Findall_WithReviewAfterLessThan_NotFound(t *testing.T) {
 	unloadGCManifestTaskFixtures(t)
 
 	s := datastore.NewGCManifestTaskStore(suite.db)
-	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterGreaterThan(time.Now()))
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterLessThan(time.Now()))
 	require.NoError(t, err)
 	assert.Empty(t, rr)
 }
