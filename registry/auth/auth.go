@@ -29,6 +29,9 @@
 //			}
 //		}
 //	}
+//
+//go:generate mockgen -package mocks -destination mocks/access_controller.go . AccessController
+//go:generate mockgen -package mocks -destination mocks/auth_challenge.go . Challenge
 package auth
 
 import (

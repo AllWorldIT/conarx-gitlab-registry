@@ -263,4 +263,20 @@ var (
 		Description:    `Permission denied. Unable to push or delete tag due to configured immutability policies.`,
 		HTTPStatusCode: http.StatusUnauthorized,
 	})
+
+	// ErrorCodeBBMIdInvalid is returned when provided BBM is invalid.
+	ErrorCodeBBMIdInvalid = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "BBM_ID_INVALID",
+		Message:        "provided BBM Id is invalid",
+		Description:    `provided BBM Id is invalid`,
+		HTTPStatusCode: http.StatusBadRequest,
+	})
+
+	// ErrorCodeBBMNotFound is returned when BBM with given ID is not found.
+	ErrorCodeBBMNotFound = errcode.Register(errGroup, errcode.ErrorDescriptor{
+		Value:          "BBM_ID_NOT_FOUND",
+		Message:        "provided BBM Id has not been found",
+		Description:    `provided BBM Id has not been found`,
+		HTTPStatusCode: http.StatusNotFound,
+	})
 )

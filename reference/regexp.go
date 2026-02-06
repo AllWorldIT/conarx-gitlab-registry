@@ -3,6 +3,9 @@ package reference
 import "regexp"
 
 var (
+	// numericRegexp defines the numeric atom, typically an ID
+	NumericRegexp = match(`[1-9][0-9]*`)
+
 	// alphaNumericRegexp defines the alpha numeric atom, typically a
 	// component of names. This only allows lower case characters and digits.
 	alphaNumericRegexp = match(`[a-z0-9]+`)
