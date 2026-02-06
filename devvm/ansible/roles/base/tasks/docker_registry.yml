@@ -1,0 +1,33 @@
+---
+- name: Install docker-registry
+  ansible.builtin.apt:
+    name:
+      - docker-registry
+    state: present
+  register: __pkgmgr_result
+  until: __pkgmgr_result is succeeded
+  retries: 3
+  delay: 3
+
+- name: Ensure docker-registry config directory exists
+  ansible.builtin.file:
+    path: /etc/docker/registry
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Upload docker-registry configuration
+  ansible.builtin.template:
+    src: docker-registry-config.yml.j2
+    dest: /etc/docker/registry/config.yml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart docker-registry
+
+- name: Enable and start docker-registry service
+  ansible.builtin.systemd:
+    name: docker-registry
+    enabled: true
+    state: started

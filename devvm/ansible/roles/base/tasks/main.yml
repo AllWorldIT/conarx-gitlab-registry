@@ -36,6 +36,9 @@
 - ansible.builtin.import_tasks: minio.yml
   tags: base
 
+- ansible.builtin.import_tasks: docker_registry.yml
+  tags: base
+
 - ansible.builtin.import_tasks: minio_client.yml
   tags: base
 

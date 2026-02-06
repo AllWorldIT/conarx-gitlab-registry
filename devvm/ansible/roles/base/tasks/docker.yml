@@ -3,12 +3,22 @@
   ansible.builtin.apt:
     name:
       - docker.io
+      - docker-buildx
       - python3-docker
     state: present
   register: __pkgmgr_result
   until: __pkgmgr_result is succeeded
   retries: 3
   delay: 3
+
+- name: Upload docker daemon configuration
+  ansible.builtin.template:
+    src: docker-daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart docker
 
 - name: Define wghub docker network
   community.docker.docker_network:
