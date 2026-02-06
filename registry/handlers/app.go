@@ -48,6 +48,7 @@ import (
 	"github.com/docker/distribution/registry/gc"
 	"github.com/docker/distribution/registry/gc/worker"
 	"github.com/docker/distribution/registry/internal"
+	"github.com/docker/distribution/registry/internal/errorreporting"
 	redismetrics "github.com/docker/distribution/registry/internal/metrics/redis"
 	iredis "github.com/docker/distribution/registry/internal/redis"
 	"github.com/docker/distribution/registry/middleware/ratelimiter"
@@ -254,7 +255,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// it in cache) we simply log and report a failure here and proceed to
 		// not prevent the app from starting.
 		log.WithError(err).Error("failed configuring Redis cache")
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 	}
 
 	err = app.applyStorageMiddleware(config.Middleware["storage"])
@@ -266,7 +267,7 @@ func NewApp(ctx context.Context, config *configuration.Configuration) (*App, err
 		// Redis rate-limiter is not a strictly required dependency, we simply log and report a failure here
 		// and proceed to not prevent the app from starting.
 		log.WithError(err).Error("failed configuring Redis rate-limiter")
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		errorreporting.Capture(ctx, err)
 		return nil, err
 	}
 
@@ -719,8 +720,8 @@ func startOnlineGC(ctx context.Context, db *datastore.DB, storageDriver storaged
 					l.Warn("shutting down online GC agent due due to context cancellation")
 				} else {
 					// this should never happen, but leaving it here for future proofing against bugs within Agent.Start
-					errortracking.Capture(fmt.Errorf("online GC agent stopped with error: %w", err), errortracking.WithStackTrace())
 					l.WithError(err).Error("online GC agent stopped")
+					errorreporting.Capture(ctx, fmt.Errorf("online GC agent stopped with error: %w", err))
 				}
 			}
 		}(a)
@@ -764,8 +765,8 @@ func startDBLoadBalancerPeriodicTask(ctx context.Context, taskName string, taskF
 			} else {
 				// this should never happen, but leaving it here for future proofing against bugs
 				e := fmt.Errorf("database load balancing %s stopped with error: %w", taskName, err)
-				errortracking.Capture(e, errortracking.WithStackTrace())
 				l.WithError(err).Error(fmt.Sprintf("database load balancing %s stopped with error", taskName))
+				errorreporting.Capture(ctx, e)
 			}
 		}
 	}()
@@ -1642,7 +1643,7 @@ func (*App) logError(ctx context.Context, r *http.Request, errs errcode.Errors) 
 				detailSuffix = fmt.Sprintf(": %s", detail)
 			}
 			err := errcode.ErrorCodeUnknown.WithMessage(fmt.Sprintf("%s%s", message, detailSuffix))
-			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithRequest(r), errortracking.WithStackTrace())
+			errorreporting.Capture(ctx, err, errortracking.WithRequest(r))
 		}
 	}
 }
@@ -2277,8 +2278,8 @@ func startBackgroundMigrations(ctx context.Context, db *datastore.DB, config *co
 	dbWALArchivingEnabled, err := datastore.IsArchivingEnabled(ctx, db.DB)
 	if err != nil {
 		err = fmt.Errorf("checking WAL archiving mode failed: %w", err)
-		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 		l.WithError(err).Warn("background migration: checking WAL archiving mode failed, assuming WAL archiving enabled")
+		errorreporting.Capture(ctx, err)
 		// assume WAL archiving is enabled on the database unless specified otherwise.
 		dbWALArchivingEnabled = true
 		// If this assumption is incorrect, each migration run will still perform
@@ -2611,8 +2612,8 @@ func (app *App) initializeMetadataDatabase(ctx context.Context, config *configur
 	// update online GC settings (if needed) in the background to avoid delaying the app start
 	go func() {
 		if err := updateOnlineGCSettings(app.Context, app.db.Primary(), config); err != nil {
-			errortracking.Capture(err, errortracking.WithContext(app.Context), errortracking.WithStackTrace())
 			log.WithError(err).Error("failed to update online GC settings")
+			errorreporting.Capture(app.Context, err)
 		}
 	}()
 

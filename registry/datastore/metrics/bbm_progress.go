@@ -11,9 +11,9 @@ import (
 	dlog "github.com/docker/distribution/log"
 	"github.com/docker/distribution/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/registry/internal/errorreporting"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
-	"gitlab.com/gitlab-org/labkit/errortracking"
 )
 
 const (
@@ -114,11 +114,7 @@ func (c *BBMProgressCollector) run(ctx context.Context) {
 	// Ensure metrics are registered
 	if err := c.metricsRegistrar.Register(); err != nil {
 		c.logger.WithError(err).Error("failed to register bbm progress metrics")
-		errortracking.Capture(
-			fmt.Errorf("bbm progress metrics: failed to register metrics: %w", err),
-			errortracking.WithContext(ctx),
-			errortracking.WithStackTrace(),
-		)
+		errorreporting.Capture(ctx, fmt.Errorf("bbm progress metrics: failed to register metrics: %w", err))
 		return
 	}
 	defer c.metricsRegistrar.Unregister()

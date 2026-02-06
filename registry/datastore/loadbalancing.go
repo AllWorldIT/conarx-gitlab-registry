@@ -14,10 +14,10 @@ import (
 	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/datastore/metrics"
 	"github.com/docker/distribution/registry/datastore/models"
+	"github.com/docker/distribution/registry/internal/errorreporting"
 	"github.com/hashicorp/go-multierror"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"gitlab.com/gitlab-org/labkit/errortracking"
 	"gitlab.com/gitlab-org/labkit/metrics/sqlmetrics"
 )
 
@@ -514,7 +514,7 @@ func (lb *DBLoadBalancer) ProcessQueryError(ctx context.Context, db *DB, query s
 			// This is not supposed to happen, log and report
 			err := fmt.Errorf("unknown database host type: %w", err)
 			l.Error(err)
-			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			errorreporting.Capture(ctx, err)
 		}
 	}
 }
@@ -617,7 +617,7 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 				if err := lb.promRegisterer.Register(collector); err != nil {
 					l.WithError(err).WithFields(log.Fields{"db_host_addr": r.Address()}).
 						Error("failed to register collector for database replica metrics")
-					errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+					errorreporting.Capture(ctx, err)
 				}
 				lb.replicaPromCollectors[r.Address()] = collector
 			}
@@ -637,11 +637,13 @@ func (lb *DBLoadBalancer) ResolveReplicas(ctx context.Context) error {
 			lb.unregisterReplicaMetricsCollector(r)
 
 			// Close handlers for retired replicas
-			l.WithFields(log.Fields{"db_host_addr": r.Address()}).Info("closing connection handler for retired replica")
+			rl := l.WithFields(log.Fields{"db_host_addr": r.Address()})
+			rl.Info("closing connection handler for retired replica")
 			if err := r.Close(); err != nil {
 				err = fmt.Errorf("failed to close retired replica %q connection: %w", r.Address(), err)
+				rl.WithError(err).Error("failed to close retired replica connection")
 				result = multierror.Append(result, err)
-				errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+				errorreporting.Capture(ctx, err)
 			}
 		}
 	}
@@ -814,7 +816,7 @@ func NewDBLoadBalancer(ctx context.Context, primaryDSN *DSN, opts ...Option) (*D
 
 		if err := lb.ResolveReplicas(ctx); err != nil {
 			lb.logger(ctx).WithError(err).Error("failed to resolve database load balancing replicas")
-			errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+			errorreporting.Capture(ctx, err)
 		}
 	}
 
