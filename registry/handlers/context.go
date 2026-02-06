@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/docker/distribution"
 	dcontext "github.com/docker/distribution/context"
@@ -63,6 +64,14 @@ func getName(ctx context.Context) (name string) {
 
 func getTagName(ctx context.Context) string {
 	return dcontext.GetStringValue(ctx, "vars.tagName")
+}
+
+func getBBMId(ctx context.Context) (int, error) {
+	bbmIdString := dcontext.GetStringValue(ctx, "vars.bbmId")
+	if bbmIdString == "" {
+		return 0, fmt.Errorf("bbmId not found in context")
+	}
+	return strconv.Atoi(bbmIdString)
 }
 
 func getReference(ctx context.Context) (reference string) {

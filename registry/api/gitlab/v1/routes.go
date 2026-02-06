@@ -54,6 +54,34 @@ var (
 		Path: Base.Path + "statistics/",
 		ID:   Base.Path + "statistics/",
 	}
+
+	// BBM is the API route for listing all background migrations.
+	BBM = Route{
+		Name: "background-migrations",
+		Path: Base.Path + "background-migrations/",
+		ID:   Base.Path + "background-migrations",
+	}
+
+	// BBMById is the API route for getting a specific background migration by ID.
+	BBMById = Route{
+		Name: "background-migrations-by-id",
+		Path: Base.Path + "background-migrations/{bbmId:" + reference.NumericRegexp.String() + "}/",
+		ID:   Base.Path + "background-migrations/{bbmId:" + reference.NumericRegexp.String() + "}",
+	}
+
+	// BBMPause is the API route for pausing background migrations.
+	BBMPause = Route{
+		Name: "background-migrations-pause-all",
+		Path: BBM.Path + "pause/",
+		ID:   BBM.Path + "pause",
+	}
+
+	// BBMResume is the API route for resuming background migrations.
+	BBMResume = Route{
+		Name: "background-migrations-resume-all",
+		Path: BBM.Path + "resume/",
+		ID:   BBM.Path + "resume",
+	}
 )
 
 // Router returns a new *mux.Router for the Gitlab v1 API.
@@ -78,6 +106,12 @@ func RouterWithPrefix(prefix string) *mux.Router {
 	router.Path(Repositories.Path).Name(Repositories.Name)
 	router.Path(SubRepositories.Path).Name(SubRepositories.Name)
 	router.Path(Statistics.Path).Name(Statistics.Name)
+
+	// Background Migrations routes
+	router.Path(BBM.Path).Name(BBM.Name)
+	router.Path(BBMById.Path).Name(BBMById.Name)
+	router.Path(BBMPause.Path).Name(BBMPause.Name)
+	router.Path(BBMResume.Path).Name(BBMResume.Name)
 
 	return rootRouter
 }

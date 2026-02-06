@@ -1320,6 +1320,11 @@ func (app *App) initMetaRouter() error {
 	app.registerGitlab(v1.SubRepositories, h.wrap(subRepositoriesDispatcher))
 	app.registerGitlab(v1.Statistics, h.wrap(statisticsDispatcher))
 
+	app.registerGitlab(v1.BBM, h.wrap(backgroundMigrationsDispatcher))
+	app.registerGitlab(v1.BBMById, h.wrap(backgroundMigrationDispatcher))
+	app.registerGitlab(v1.BBMPause, h.wrap(backgroundMigrationsPauseDispatcher))
+	app.registerGitlab(v1.BBMResume, h.wrap(backgroundMigrationsResumeDispatcher))
+
 	var err error
 	v1PathWithPrefix := fmt.Sprintf("^%s%s.*", strings.TrimSuffix(app.Config.HTTP.Prefix, "/"), v1.Base.Path)
 	app.router.v1RouteRegex, err = regexp.Compile(v1PathWithPrefix)
@@ -1722,6 +1727,7 @@ func (app *App) authorized(w http.ResponseWriter, r *http.Request, appContext *C
 			return fmt.Errorf("forbidden: no repository name")
 		}
 		accessRecords = appendCatalogAccessRecord(accessRecords, r)
+		accessRecords = appendBBMAccessRecord(accessRecords, r)
 		accessRecords = appendStatisticsAccessRecord(accessRecords, r)
 	}
 
@@ -1785,6 +1791,8 @@ func (*App) nameRequired(r *http.Request) bool {
 
 	switch routeName {
 	case v2.RouteNameBase, v2.RouteNameCatalog, v1.Base.Name, v1.Statistics.Name:
+		return false
+	case v1.BBM.Name, v1.BBMById.Name, v1.BBMPause.Name, v1.BBMResume.Name:
 		return false
 	}
 
@@ -1891,6 +1899,25 @@ func appendRepositoryDetailsAccessRecords(accessRecords []auth.Access, r *http.R
 			},
 			Action: "pull",
 		})
+	}
+
+	return accessRecords
+}
+
+func appendBBMAccessRecord(accessRecords []auth.Access, r *http.Request) []auth.Access {
+	route := mux.CurrentRoute(r)
+	routeName := route.GetName()
+
+	switch routeName {
+	case v1.BBM.Name, v1.BBMById.Name, v1.BBMPause.Name, v1.BBMResume.Name:
+		accessRecords = append(accessRecords,
+			auth.Access{
+				Resource: auth.Resource{
+					Type: "registry",
+					Name: "background-migrations",
+				},
+				Action: "*",
+			})
 	}
 
 	return accessRecords
