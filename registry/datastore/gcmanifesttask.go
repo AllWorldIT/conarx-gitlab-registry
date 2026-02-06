@@ -32,8 +32,8 @@ type gcManifestTaskStore struct {
 }
 
 type gcTaskFilters struct {
-	limit              int
-	reviewAfterCuttoff time.Time
+	limit             int
+	reviewAfterCutoff time.Time
 }
 
 // GCTaskFilterOption provide optional filters to GC task queries.
@@ -51,9 +51,9 @@ func WithGCTasksLimit(n int) GCTaskFilterOption {
 	}
 }
 
-func WithGCTasksReviewAfterGreaterThan(t time.Time) GCTaskFilterOption {
+func WithGCTasksReviewAfterLessThan(t time.Time) GCTaskFilterOption {
 	return func(f *gcTaskFilters) {
-		f.reviewAfterCuttoff = t
+		f.reviewAfterCutoff = t
 	}
 }
 
@@ -120,8 +120,8 @@ func (s *gcManifestTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterO
 		o(filters)
 	}
 
-	if !filters.reviewAfterCuttoff.IsZero() {
-		err := qb.Build("WHERE review_after > ?", filters.reviewAfterCuttoff)
+	if !filters.reviewAfterCutoff.IsZero() {
+		err := qb.Build("WHERE review_after < ?", filters.reviewAfterCutoff)
 		if err != nil {
 			return nil, fmt.Errorf("building GC manifest tasks query: %w", err)
 		}

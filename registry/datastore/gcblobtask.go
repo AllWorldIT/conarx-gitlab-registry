@@ -102,8 +102,8 @@ func (s *gcBlobTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterOptio
 		o(filters)
 	}
 
-	if !filters.reviewAfterCuttoff.IsZero() {
-		err := qb.Build("WHERE review_after > ?", filters.reviewAfterCuttoff)
+	if !filters.reviewAfterCutoff.IsZero() {
+		err := qb.Build("WHERE review_after < ?", filters.reviewAfterCutoff)
 		if err != nil {
 			return nil, fmt.Errorf("building GC blobs tasks query: %w", err)
 		}
