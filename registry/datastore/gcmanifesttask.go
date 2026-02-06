@@ -32,7 +32,9 @@ type gcManifestTaskStore struct {
 }
 
 type gcTaskFilters struct {
-	limit             int
+	limit int
+	// We need to use an *int here because 0 is a meaningful value
+	reviewCountCutoff *int
 	reviewAfterCutoff time.Time
 }
 
@@ -54,6 +56,15 @@ func WithGCTasksLimit(n int) GCTaskFilterOption {
 func WithGCTasksReviewAfterLessThan(t time.Time) GCTaskFilterOption {
 	return func(f *gcTaskFilters) {
 		f.reviewAfterCutoff = t
+	}
+}
+
+// WithGCTasksReviewCountGreaterThan allows filtering GC tasks based on retry count greater than the specified value.
+func WithGCTasksReviewCountGreaterThan(n int) GCTaskFilterOption {
+	return func(f *gcTaskFilters) {
+		if n > -1 {
+			f.reviewCountCutoff = &n
+		}
 	}
 }
 
@@ -121,7 +132,14 @@ func (s *gcManifestTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterO
 	}
 
 	if !filters.reviewAfterCutoff.IsZero() {
-		err := qb.Build("WHERE review_after < ?", filters.reviewAfterCutoff)
+		err := qb.WhereAnd("review_after < ?", filters.reviewAfterCutoff)
+		if err != nil {
+			return nil, fmt.Errorf("building GC manifest tasks query: %w", err)
+		}
+	}
+
+	if filters.reviewCountCutoff != nil {
+		err := qb.WhereAnd("review_count > ?", *filters.reviewCountCutoff)
 		if err != nil {
 			return nil, fmt.Errorf("building GC manifest tasks query: %w", err)
 		}

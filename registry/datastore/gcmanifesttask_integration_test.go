@@ -141,6 +141,52 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 			},
 			expected: allResults[:1],
 		},
+		{
+			name: "tasks with review_count greater than a specific cutoff",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(1),
+			},
+			expected: []*models.GCManifestTask{allResults[0]},
+		},
+		{
+			name: "no task with review_count greater than the cutoff",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(2),
+			},
+			expected: make([]*models.GCManifestTask, 0),
+		},
+		{
+			name: "combine review count and limit",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(1),
+				datastore.WithGCTasksLimit(1),
+			},
+			expected: []*models.GCManifestTask{allResults[0]},
+		},
+		{
+			name: "combine review count and review after",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(1),
+				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
+			},
+			expected: []*models.GCManifestTask{allResults[0]},
+		},
+		{
+			name: "combine review count, review after and limit",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(1),
+				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
+				datastore.WithGCTasksLimit(1),
+			},
+			expected: []*models.GCManifestTask{allResults[0]},
+		},
+		{
+			name: "negative review count cutoff is ignored and all results retrieved",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(-1),
+			},
+			expected: allResults,
+		},
 	}
 
 	for _, test := range tests {
@@ -175,6 +221,15 @@ func TestGCManifestTaskStore_Findall_WithReviewAfterLessThan_NotFound(t *testing
 
 	s := datastore.NewGCManifestTaskStore(suite.db)
 	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewAfterLessThan(time.Now()))
+	require.NoError(t, err)
+	assert.Empty(t, rr)
+}
+
+func TestGCManifestTaskStore_FindAll_WithReviewCountGreaterThan_NotFound(t *testing.T) {
+	unloadGCManifestTaskFixtures(t)
+
+	s := datastore.NewGCManifestTaskStore(suite.db)
+	rr, err := s.FindAll(suite.ctx, datastore.WithGCTasksReviewCountGreaterThan(0))
 	require.NoError(t, err)
 	assert.Empty(t, rr)
 }
