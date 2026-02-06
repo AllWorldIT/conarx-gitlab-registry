@@ -20,7 +20,7 @@ type GCManifestTaskStore interface {
 	FindAndLock(ctx context.Context, namespaceID, repositoryID, manifestID int64) (*models.GCManifestTask, error)
 	FindAndLockBefore(ctx context.Context, namespaceID, repositoryID, manifestID int64, date time.Time) (*models.GCManifestTask, error)
 	FindAndLockNBefore(ctx context.Context, namespaceID, repositoryID int64, manifestIDs []int64, date time.Time) ([]*models.GCManifestTask, error)
-	Count(ctx context.Context) (int, error)
+	Count(ctx context.Context, opts ...GCTaskFilterOption) (int, error)
 	Next(ctx context.Context) (*models.GCManifestTask, error)
 	Postpone(ctx context.Context, b *models.GCManifestTask, d time.Duration) error
 	IsDangling(ctx context.Context, b *models.GCManifestTask) (bool, error)
@@ -229,13 +229,32 @@ func (s *gcManifestTaskStore) FindAndLockNBefore(ctx context.Context, namespaceI
 }
 
 // Count counts all GC manifest tasks.
-func (s *gcManifestTaskStore) Count(ctx context.Context) (int, error) {
+func (s *gcManifestTaskStore) Count(ctx context.Context, opts ...GCTaskFilterOption) (int, error) {
 	defer metrics.InstrumentQuery("gc_manifest_task_count")()
 	q := "SELECT COUNT(*) FROM gc_manifest_review_queue"
-	var count int
 
-	if err := s.db.QueryRowContext(ctx, q).Scan(&count); err != nil {
-		return count, fmt.Errorf("counting GC manifest tasks: %w", err)
+	qb := NewQueryBuilder()
+	err := qb.Build(q)
+	if err != nil {
+		return 0, fmt.Errorf("building GC manifest tasks count query: %w", err)
+	}
+
+	filters := &gcTaskFilters{}
+
+	for _, o := range opts {
+		o(filters)
+	}
+
+	if !filters.reviewAfterCutoff.IsZero() {
+		err := qb.WhereAnd("review_after < ?", filters.reviewAfterCutoff)
+		if err != nil {
+			return 0, fmt.Errorf("building GC manifest tasks count query: %w", err)
+		}
+	}
+
+	var count int
+	if err := s.db.QueryRowContext(ctx, qb.SQL(), qb.Params()...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("counting GC manifest tasks: %w", err)
 	}
 
 	return count, nil

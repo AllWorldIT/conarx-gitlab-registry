@@ -15,7 +15,7 @@ import (
 
 type GCBlobTaskStore interface {
 	FindAll(ctx context.Context, opts ...GCTaskFilterOption) ([]*models.GCBlobTask, error)
-	Count(ctx context.Context) (int, error)
+	Count(ctx context.Context, opts ...GCTaskFilterOption) (int, error)
 	Next(ctx context.Context) (*models.GCBlobTask, error)
 	Postpone(ctx context.Context, b *models.GCBlobTask, d time.Duration) error
 	IsDangling(ctx context.Context, b *models.GCBlobTask) (bool, error)
@@ -125,14 +125,35 @@ func (s *gcBlobTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterOptio
 }
 
 // Count counts all GC blob tasks.
-func (s *gcBlobTaskStore) Count(ctx context.Context) (int, error) {
+func (s *gcBlobTaskStore) Count(ctx context.Context, opts ...GCTaskFilterOption) (int, error) {
 	defer metrics.InstrumentQuery("gc_blob_task_count")()
 
 	q := "SELECT COUNT(*) FROM gc_blob_review_queue"
+
+	qb := NewQueryBuilder()
+	err := qb.Build(q)
+	if err != nil {
+		return 0, fmt.Errorf("building GC blob tasks count query: %w", err)
+	}
+
+	filters := &gcTaskFilters{}
+
+	for _, o := range opts {
+		o(filters)
+	}
+
+	if !filters.reviewAfterCutoff.IsZero() {
+		err := qb.WhereAnd("review_after < ?", filters.reviewAfterCutoff)
+		if err != nil {
+			return 0, fmt.Errorf("building GC blobs tasks count query: %w", err)
+		}
+	}
 	var count int
 
-	if err := s.db.QueryRowContext(ctx, q).Scan(&count); err != nil {
-		return count, fmt.Errorf("counting GC blob tasks: %w", err)
+	row := s.db.QueryRowContext(ctx, qb.SQL(), qb.Params()...)
+	err = row.Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("counting GC blob tasks: %w", err)
 	}
 
 	return count, nil

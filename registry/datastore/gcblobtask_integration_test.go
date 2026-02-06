@@ -172,12 +172,40 @@ func TestGCBlobTaskStore_FindAll_WithReviewAfterLessThan_NotFound(t *testing.T) 
 func TestGcBlobTaskStore_Count(t *testing.T) {
 	reloadGCBlobTaskFixtures(t)
 
-	s := datastore.NewGCBlobTaskStore(suite.db)
-	count, err := s.Count(suite.ctx)
-	require.NoError(t, err)
+	tests := []struct {
+		name     string
+		opts     []datastore.GCTaskFilterOption
+		expected int
+	}{
+		{
+			name:     "no filters",
+			expected: 4,
+		},
+		{
+			name:     "filter by review_after less than",
+			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", time.UTC))},
+			expected: 1,
+		},
+		{
+			name:     "filter by review_after less than - no results",
+			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "1970-01-01 00:00:00.000000", time.UTC))},
+			expected: 0,
+		},
+		{
+			name:     "limit filter is ignored",
+			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksLimit(2)},
+			expected: 4,
+		},
+	}
 
-	// see testdata/fixtures/gc_blob_review_queue.sql
-	require.Equal(t, 4, count)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s := datastore.NewGCBlobTaskStore(suite.db)
+			count, err := s.Count(suite.ctx, test.opts...)
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, count)
+		})
+	}
 }
 
 func nextGCBlobTask(t *testing.T) (datastore.Transactor, *models.GCBlobTask) {

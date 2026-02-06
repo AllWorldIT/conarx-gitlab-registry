@@ -44,18 +44,23 @@ func (m *MockGCBlobTaskStore) EXPECT() *MockGCBlobTaskStoreMockRecorder {
 }
 
 // Count mocks base method.
-func (m *MockGCBlobTaskStore) Count(ctx context.Context) (int, error) {
+func (m *MockGCBlobTaskStore) Count(ctx context.Context, opts ...datastore.GCTaskFilterOption) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Count", ctx)
+	varargs := []any{ctx}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Count", varargs...)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Count indicates an expected call of Count.
-func (mr *MockGCBlobTaskStoreMockRecorder) Count(ctx any) *gomock.Call {
+func (mr *MockGCBlobTaskStoreMockRecorder) Count(ctx any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Count), ctx)
+	varargs := append([]any{ctx}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockGCBlobTaskStore)(nil).Count), varargs...)
 }
 
 // Delete mocks base method.
