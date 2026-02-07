@@ -124,6 +124,7 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		chunkSize:      defaultChunkSize,
 		maxConcurrency: maxConcurrency,
 		parallelWalk:   parallelWalkBool,
+		universeDomain: defaultUniverseDomain,
 	}
 
 	return New(parameters)
@@ -563,6 +564,67 @@ func TestGCSDriverCustomParams(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
 			require.Equal(tt, tc.expectedURLValues, storagedriver.CustomParams(tc.opt, customParamKeys))
+		})
+	}
+}
+
+func TestParseParameters_UniverseDomain(t *testing.T) {
+	testCases := []struct {
+		name           string
+		params         map[string]any
+		expectedDomain string
+		shouldError    bool
+	}{
+		{
+			name: "default universe domain when not specified",
+			params: map[string]any{
+				"bucket":  "test-bucket",
+				"keyfile": "testdata/key.json",
+			},
+			expectedDomain: defaultUniverseDomain,
+			shouldError:    false,
+		},
+		{
+			name: "custom universe domain",
+			params: map[string]any{
+				"bucket":          "test-bucket",
+				"keyfile":         "testdata/key.json",
+				"universe_domain": "us-east1.goog",
+			},
+			expectedDomain: "us-east1.goog",
+			shouldError:    false,
+		},
+		{
+			name: "empty universe domain defaults to default",
+			params: map[string]any{
+				"bucket":          "test-bucket",
+				"keyfile":         "testdata/key.json",
+				"universe_domain": "",
+			},
+			expectedDomain: defaultUniverseDomain,
+			shouldError:    false,
+		},
+		{
+			name: "explicit googleapis.com universe domain",
+			params: map[string]any{
+				"bucket":          "test-bucket",
+				"keyfile":         "testdata/key.json",
+				"universe_domain": "googleapis.com",
+			},
+			expectedDomain: "googleapis.com",
+			shouldError:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			params, err := parseParameters(tc.params)
+			if tc.shouldError {
+				require.Error(tt, err)
+				return
+			}
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedDomain, params.universeDomain)
 		})
 	}
 }

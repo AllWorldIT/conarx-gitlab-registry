@@ -62,6 +62,7 @@ When using inline credentials, provide the following parameters:
 | `chunksize` | no | The chunk size for uploading large blobs. Must be a positive multiple of 256KB. Default and minimum is 5242880 (5MB). |
 | `useragent` | no | The user agent string to use when making requests to GCS. Defaults to `container-registry`. |
 | `debug_log` | no | If set to true, enables debug logging for GCS API interactions. Defaults to false. |
+| `universe_domain` | no | The universe domain to use for GCS API calls. Defaults to `googleapis.com` for standard Google Cloud. Use this for Google Cloud with restricted universe domains. |
 
 ## Chunk Size Configuration
 
@@ -74,9 +75,29 @@ The `chunksize` parameter controls the size of chunks used for uploading large o
 
 Example: To use 10MB chunks, set `chunksize: 10485760`
 
+## Universe Domain Configuration
+
+The `universe_domain` parameter allows you to configure the GCS driver
+to work with Google Cloud's restricted universe domains. This is useful
+when your organization uses Google Cloud with universe domain
+restrictions.
+
+- Defaults to `googleapis.com` for standard Google Cloud
+- For restricted universe domains, set this to your organization's
+  universe domain (e.g., `example.universe.com`)
+
+Example configuration for a restricted universe domain:
+
+```yaml
+storage:
+  gcs:
+    bucket: my-registry-bucket
+    universe_domain: example.universe.com
+```
+
 ## Debug Logging
 
-When `debug_log` is set to true, the driver will output detailed information about its interactions with the GCS API, which can be helpful for troubleshooting:
+When `debug_log` is set to true, the driver outputs detailed information about its interactions with the Google Cloud Storage API, which can be helpful for troubleshooting:
 
 ```yaml
 storage:

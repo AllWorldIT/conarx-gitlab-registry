@@ -53,13 +53,14 @@ func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 		return nil, fmt.Errorf("invalid chunksize: %d is not a positive multiple of %d", params.chunkSize, minChunkSize)
 	}
 	d := &driver{
-		bucket:        params.storageClient.Bucket(params.bucket).Retryer(storage.WithErrorFunc(ShouldRetry)),
-		rootDirectory: rootDirectory,
-		email:         params.email,
-		privateKey:    params.privateKey,
-		client:        params.client,
-		chunkSize:     params.chunkSize,
-		parallelWalk:  params.parallelWalk,
+		bucket:         params.storageClient.Bucket(params.bucket).Retryer(storage.WithErrorFunc(ShouldRetry)),
+		rootDirectory:  rootDirectory,
+		email:          params.email,
+		privateKey:     params.privateKey,
+		client:         params.client,
+		chunkSize:      params.chunkSize,
+		parallelWalk:   params.parallelWalk,
+		universeDomain: params.universeDomain,
 	}
 
 	return &Wrapper{
@@ -74,13 +75,14 @@ func New(params *driverParameters) (storagedriver.StorageDriver, error) {
 // driver is a storagedriver.StorageDriver implementation backed by GCS
 // Objects are stored at absolute keys in the provided bucket.
 type driver struct {
-	client        *http.Client
-	bucket        *storage.BucketHandle
-	email         string
-	privateKey    []byte
-	rootDirectory string
-	chunkSize     int64
-	parallelWalk  bool
+	client         *http.Client
+	bucket         *storage.BucketHandle
+	email          string
+	privateKey     []byte
+	rootDirectory  string
+	chunkSize      int64
+	parallelWalk   bool
+	universeDomain string
 }
 
 func (*driver) Name() string {
@@ -346,10 +348,11 @@ func (w *writer) putChunk(chunk []byte, totalSize int64) (int64, error) {
 // at the location designated by "path" after the call to Commit.
 func (d *driver) Writer(ctx context.Context, path string, doAppend bool) (storagedriver.FileWriter, error) {
 	w := &writer{
-		ctx:    ctx,
-		client: d.client,
-		object: d.bucket.Object(d.pathToKey(path)),
-		buffer: make([]byte, d.chunkSize),
+		ctx:            ctx,
+		client:         d.client,
+		object:         d.bucket.Object(d.pathToKey(path)),
+		universeDomain: d.universeDomain,
+		buffer:         make([]byte, d.chunkSize),
 	}
 
 	// NOTE(prozlach): Dear future maintainer of this code, the concurency
@@ -757,10 +760,18 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 // startSession starts a new resumable upload session. Documentation can be
 // found here: https://cloud.google.com/storage/docs/performing-resumable-uploads#initiate-session
 func (w *writer) startSession() (uri string, err error) {
+	// Construct the storage endpoint based on the universe domain
+	// For the default universe domain, use storage.googleapis.com
+	// For other universe domains, use storage.<universe_domain>
+	storageHost := "storage." + defaultUniverseDomain
+	if w.universeDomain != defaultUniverseDomain {
+		storageHost = fmt.Sprintf("storage.%s", w.universeDomain)
+	}
+
 	u := &url.URL{
 		Scheme: "https",
 		// https://cloud.google.com/storage/docs/request-endpoints#typical
-		Host:     "storage.googleapis.com",
+		Host:     storageHost,
 		Path:     fmt.Sprintf("/upload/storage/v1/b/%v/o", w.object.BucketName()),
 		RawQuery: fmt.Sprintf("uploadType=resumable&name=%v", w.object.ObjectName()),
 	}
@@ -803,9 +814,10 @@ func (d *driver) keyToPath(key string) string {
 }
 
 type writer struct {
-	ctx    context.Context
-	client *http.Client
-	object *storage.ObjectHandle
+	ctx            context.Context
+	client         *http.Client
+	object         *storage.ObjectHandle
+	universeDomain string
 	// size is the amount of data written to this writter using Write(), but
 	// not necessarily committed yet (i.e. offset + buffSize). If Writer was
 	// resumed, then it includes the offset of the data already persisted in

@@ -50,6 +50,7 @@ const (
 	maxDeleteConcurrency           = 150
 	maxWalkConcurrency             = 100
 	maxTries                       = 5
+	defaultUniverseDomain          = "googleapis.com"
 )
 
 // customGitlabGoogle... are the query params appended to gcs signed redirect url
@@ -95,6 +96,10 @@ type driverParameters struct {
 
 	// parallelWalk enables or disables concurrently walking the filesystem.
 	parallelWalk bool
+
+	// universeDomain is the universe domain to use for GCS API calls.
+	// Defaults to googleapis.com for standard Google Cloud.
+	universeDomain string
 }
 
 // gcsDriverFactory implements the factory.StorageDriverFactory interface
@@ -236,6 +241,15 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		}
 	}
 
+	// Parse universe domain parameter early so we can use it when creating credentials
+	universeDomain := defaultUniverseDomain
+	if ud, ok := parameters["universe_domain"]; ok {
+		if udStr, ok := ud.(string); ok && udStr != "" {
+			universeDomain = udStr
+		}
+	}
+
+	var creds *google.Credentials
 	var ts oauth2.TokenSource
 	jwtConf := new(jwt.Config)
 	if keyfile, ok := parameters["keyfile"]; ok {
@@ -247,7 +261,11 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		if err != nil {
 			return nil, err
 		}
-		ts = jwtConf.TokenSource(context.Background())
+		// Create google.Credentials for universe domain support
+		creds, err = google.CredentialsFromJSON(context.Background(), jsonKey, storage.ScopeFullControl)
+		if err != nil {
+			return nil, err
+		}
 	} else if credentials, ok := parameters["credentials"]; ok {
 		credentialMap, ok := credentials.(map[any]any)
 		if !ok {
@@ -272,21 +290,28 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		if err != nil {
 			return nil, err
 		}
-		ts = jwtConf.TokenSource(context.Background())
+		// Create google.Credentials for universe domain support
+		creds, err = google.CredentialsFromJSON(context.Background(), data, storage.ScopeFullControl)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		var err error
-		ts, err = google.DefaultTokenSource(context.Background(), storage.ScopeFullControl)
+		// For default credentials, we need the full *google.Credentials object
+		// with universe domain support, not just the TokenSource
+		creds, err = google.FindDefaultCredentials(context.Background(), storage.ScopeFullControl)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	ts = creds.TokenSource
 	maxConcurrency, err := base.GetLimitFromParameter(parameters["maxconcurrency"], minConcurrency, defaultMaxConcurrency)
 	if err != nil {
 		return nil, fmt.Errorf("maxconcurrency config error: %s", err)
 	}
 
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	opts := []option.ClientOption{option.WithCredentials(creds)}
 	debugLogging := false
 
 	if _, ok = parameters["debug_log"]; ok {
@@ -345,6 +370,11 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
 	opts = append(opts, storage.WithJSONReads())
 
+	// Add universe domain option if not using the default
+	if universeDomain != defaultUniverseDomain {
+		opts = append(opts, option.WithUniverseDomain(universeDomain))
+	}
+
 	if userAgent, ok := parameters["useragent"]; ok {
 		if ua, ok := userAgent.(string); ok && ua != "" {
 			opts = append(opts, option.WithUserAgent(ua))
@@ -374,5 +404,6 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		chunkSize:      chunkSize,
 		maxConcurrency: maxConcurrency,
 		parallelWalk:   parallelWalkBool,
+		universeDomain: universeDomain,
 	}, nil
 }
