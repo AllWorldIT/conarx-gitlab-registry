@@ -252,6 +252,15 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	var creds *google.Credentials
 	var ts oauth2.TokenSource
 	jwtConf := new(jwt.Config)
+
+	// Create CredentialsParams with optional universe domain
+	credParams := google.CredentialsParams{
+		Scopes: []string{storage.ScopeFullControl},
+	}
+	if universeDomain != defaultUniverseDomain {
+		credParams.UniverseDomain = universeDomain
+	}
+
 	if keyfile, ok := parameters["keyfile"]; ok {
 		jsonKey, err := os.ReadFile(fmt.Sprint(keyfile))
 		if err != nil {
@@ -261,8 +270,7 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Create google.Credentials for universe domain support
-		creds, err = google.CredentialsFromJSON(context.Background(), jsonKey, storage.ScopeFullControl)
+		creds, err = google.CredentialsFromJSONWithParams(context.Background(), jsonKey, credParams)
 		if err != nil {
 			return nil, err
 		}
@@ -290,16 +298,13 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Create google.Credentials for universe domain support
-		creds, err = google.CredentialsFromJSON(context.Background(), data, storage.ScopeFullControl)
+		creds, err = google.CredentialsFromJSONWithParams(context.Background(), data, credParams)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		var err error
-		// For default credentials, we need the full *google.Credentials object
-		// with universe domain support, not just the TokenSource
-		creds, err = google.FindDefaultCredentials(context.Background(), storage.ScopeFullControl)
+		creds, err = google.FindDefaultCredentialsWithParams(context.Background(), credParams)
 		if err != nil {
 			return nil, err
 		}

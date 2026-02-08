@@ -47,9 +47,7 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		return nil, fmt.Errorf("Error reading default credentials: %w", err)
 	}
 
-	ts := creds.TokenSource
-
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	opts := []option.ClientOption{option.WithCredentials(creds)}
 	if debugLog == "true" {
 		sLogger := slogt.New(tb)
 		// NOTE(prozlach): This does not work really, see https://github.com/googleapis/google-cloud-go/issues/12475
@@ -69,6 +67,13 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 	// in a future release of GCS SDK.
 	// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
 	opts = append(opts, storage.WithJSONReads())
+
+	universeDomain, err := creds.GetUniverseDomain()
+	if err != nil {
+		return nil, fmt.Errorf("Error getting universe domain: %w", err)
+	}
+
+	opts = append(opts, option.WithUniverseDomain(universeDomain))
 
 	storageClient, err := storage.NewClient(
 		log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb))),
@@ -118,13 +123,13 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		privateKey:    privateKey,
 		client: oauth2.NewClient(
 			log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb))),
-			ts,
+			creds.TokenSource,
 		),
 		storageClient:  storageClient,
 		chunkSize:      defaultChunkSize,
 		maxConcurrency: maxConcurrency,
 		parallelWalk:   parallelWalkBool,
-		universeDomain: defaultUniverseDomain,
+		universeDomain: universeDomain,
 	}
 
 	return New(parameters)
