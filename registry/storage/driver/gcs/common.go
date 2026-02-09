@@ -250,7 +250,6 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	}
 
 	var creds *google.Credentials
-	var ts oauth2.TokenSource
 	jwtConf := new(jwt.Config)
 
 	// Create CredentialsParams with optional universe domain
@@ -310,7 +309,6 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		}
 	}
 
-	ts = creds.TokenSource
 	maxConcurrency, err := base.GetLimitFromParameter(parameters["maxconcurrency"], minConcurrency, defaultMaxConcurrency)
 	if err != nil {
 		return nil, fmt.Errorf("maxconcurrency config error: %s", err)
@@ -404,7 +402,7 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		rootDirectory:  fmt.Sprint(rootDirectory),
 		email:          jwtConf.Email,
 		privateKey:     jwtConf.PrivateKey,
-		client:         oauth2.NewClient(context.Background(), ts),
+		client:         oauth2.NewClient(context.Background(), creds.TokenSource),
 		storageClient:  storageClient,
 		chunkSize:      chunkSize,
 		maxConcurrency: maxConcurrency,
