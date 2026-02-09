@@ -62,7 +62,7 @@ When using inline credentials, provide the following parameters:
 | `chunksize` | no | The chunk size for uploading large blobs. Must be a positive multiple of 256KB. Default and minimum is 5242880 (5MB). |
 | `useragent` | no | The user agent string to use when making requests to GCS. Defaults to `container-registry`. |
 | `debug_log` | no | If set to true, enables debug logging for GCS API interactions. Defaults to false. |
-| `universe_domain` | no | The universe domain to use for GCS API calls. Defaults to `googleapis.com` for standard Google Cloud. Use this for Google Cloud with restricted universe domains. |
+| `universe_domain` | no | The universe domain to use for GCS API calls. When specified, this overrides the universe domain from the credentials. For most deployments, this should not be set and the universe domain will be automatically determined from the credentials (for example, from GCE metadata server for instance credentials). |
 
 ## Chunk Size Configuration
 
@@ -77,16 +77,17 @@ Example: To use 10MB chunks, set `chunksize: 10485760`
 
 ## Universe Domain Configuration
 
-The `universe_domain` parameter allows you to configure the GCS driver
-to work with Google Cloud's restricted universe domains. This is useful
-when your organization uses Google Cloud with universe domain
-restrictions.
+The GCS driver automatically determines the universe domain from the credentials:
 
-- Defaults to `googleapis.com` for standard Google Cloud
-- For restricted universe domains, set this to your organization's
-  universe domain (e.g., `example.universe.com`)
+- For service account credentials (keyfile or inline), the universe domain is read from the credentials JSON.
+- For Application Default Credentials on GCE instances, the universe domain is retrieved from the GCE metadata server.
+- The `universe_domain` parameter can be used to explicitly override the detected universe domain if needed.
 
-Example configuration for a restricted universe domain:
+In most cases, you should not need to set the `universe_domain`
+parameter. It is only required if you need to override the universe
+domain detected from your credentials.
+
+Example configuration with explicit universe domain override:
 
 ```yaml
 storage:

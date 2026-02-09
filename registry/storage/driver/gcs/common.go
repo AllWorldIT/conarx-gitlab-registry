@@ -241,22 +241,26 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		}
 	}
 
-	// Parse universe domain parameter early so we can use it when creating credentials
+	// Parse universe domain parameter and track if user explicitly configured it
 	universeDomain := defaultUniverseDomain
+	userConfiguredUniverseDomain := false
 	if ud, ok := parameters["universe_domain"]; ok {
 		if udStr, ok := ud.(string); ok && udStr != "" {
 			universeDomain = udStr
+			userConfiguredUniverseDomain = true
 		}
 	}
 
 	var creds *google.Credentials
 	jwtConf := new(jwt.Config)
 
-	// Create CredentialsParams with optional universe domain
+	// Create CredentialsParams with explicit universe domain if user configured it
 	credParams := google.CredentialsParams{
 		Scopes: []string{storage.ScopeFullControl},
 	}
-	if universeDomain != defaultUniverseDomain {
+	// Only set UniverseDomain in credParams if explicitly configured by user
+	// Otherwise, let credentials determine it (e.g., from metadata server)
+	if userConfiguredUniverseDomain {
 		credParams.UniverseDomain = universeDomain
 	}
 
@@ -373,10 +377,16 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
 	opts = append(opts, storage.WithJSONReads())
 
-	// Add universe domain option if not using the default
-	if universeDomain != defaultUniverseDomain {
-		opts = append(opts, option.WithUniverseDomain(universeDomain))
+	// Determine universe domain: explicit config > credentials > default
+	if !userConfiguredUniverseDomain {
+		// User didn't explicitly set universe domain, try to get from credentials
+		if credUD, err := creds.GetUniverseDomain(); err == nil && credUD != "" {
+			universeDomain = credUD
+		} else if err != nil {
+			log.GetLogger().WithError(err).Warn("Could not retrieve universe domain from credentials, using default")
+		}
 	}
+	opts = append(opts, option.WithUniverseDomain(universeDomain))
 
 	if userAgent, ok := parameters["useragent"]; ok {
 		if ua, ok := userAgent.(string); ok && ua != "" {

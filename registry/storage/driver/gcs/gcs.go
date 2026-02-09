@@ -761,12 +761,7 @@ func (d *driver) WalkParallel(ctx context.Context, path string, f storagedriver.
 // found here: https://cloud.google.com/storage/docs/performing-resumable-uploads#initiate-session
 func (w *writer) startSession() (uri string, err error) {
 	// Construct the storage endpoint based on the universe domain
-	// For the default universe domain, use storage.googleapis.com
-	// For other universe domains, use storage.<universe_domain>
-	storageHost := "storage." + defaultUniverseDomain
-	if w.universeDomain != defaultUniverseDomain {
-		storageHost = fmt.Sprintf("storage.%s", w.universeDomain)
-	}
+	storageHost := fmt.Sprintf("storage.%s", w.universeDomain)
 
 	u := &url.URL{
 		Scheme: "https",
