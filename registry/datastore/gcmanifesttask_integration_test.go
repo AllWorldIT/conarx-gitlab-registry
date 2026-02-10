@@ -518,6 +518,16 @@ func TestGCManifestTaskStore_Count(t *testing.T) {
 			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksLimit(2)},
 			expected: 4,
 		},
+		{
+			name:     "filter by review_count greater than",
+			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksReviewCountGreaterThan(1)},
+			expected: 1,
+		},
+		{
+			name:     "filter by review_count greater than - no results",
+			opts:     []datastore.GCTaskFilterOption{datastore.WithGCTasksReviewCountGreaterThan(2)},
+			expected: 0,
+		},
 	}
 
 	for _, test := range tests {

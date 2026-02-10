@@ -270,6 +270,13 @@ func (s *gcManifestTaskStore) Count(ctx context.Context, opts ...GCTaskFilterOpt
 		}
 	}
 
+	if filters.reviewCountCutoff != nil {
+		err := qb.WhereAnd("review_count > ?", *filters.reviewCountCutoff)
+		if err != nil {
+			return 0, fmt.Errorf("building GC manifest tasks count query: %w", err)
+		}
+	}
+
 	var count int
 	if err := s.db.QueryRowContext(ctx, qb.SQL(), qb.Params()...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("counting GC manifest tasks: %w", err)
