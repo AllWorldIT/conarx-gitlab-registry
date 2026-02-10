@@ -82,6 +82,13 @@ var (
 		Path: BBM.Path + "resume/",
 		ID:   BBM.Path + "resume",
 	}
+
+	// BBMRestart is the API route for restarting a specific background migration.
+	BBMRestart = Route{
+		Name: "background-migrations-restart",
+		Path: Base.Path + "restart/{bbmId:" + reference.NumericRegexp.String() + "}/",
+		ID:   Base.Path + "restart/{bbmId:" + reference.NumericRegexp.String() + "}",
+	}
 )
 
 // Router returns a new *mux.Router for the Gitlab v1 API.
@@ -112,6 +119,7 @@ func RouterWithPrefix(prefix string) *mux.Router {
 	router.Path(BBMById.Path).Name(BBMById.Name)
 	router.Path(BBMPause.Path).Name(BBMPause.Name)
 	router.Path(BBMResume.Path).Name(BBMResume.Name)
+	router.Path(BBMRestart.Path).Name(BBMRestart.Name)
 
 	return rootRouter
 }

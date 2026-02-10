@@ -1325,6 +1325,7 @@ func (app *App) initMetaRouter() error {
 	app.registerGitlab(v1.BBMById, h.wrap(backgroundMigrationDispatcher))
 	app.registerGitlab(v1.BBMPause, h.wrap(backgroundMigrationsPauseDispatcher))
 	app.registerGitlab(v1.BBMResume, h.wrap(backgroundMigrationsResumeDispatcher))
+	app.registerGitlab(v1.BBMRestart, h.wrap(backgroundMigrationsRestartDispatcher))
 
 	var err error
 	v1PathWithPrefix := fmt.Sprintf("^%s%s.*", strings.TrimSuffix(app.Config.HTTP.Prefix, "/"), v1.Base.Path)
@@ -1793,7 +1794,7 @@ func (*App) nameRequired(r *http.Request) bool {
 	switch routeName {
 	case v2.RouteNameBase, v2.RouteNameCatalog, v1.Base.Name, v1.Statistics.Name:
 		return false
-	case v1.BBM.Name, v1.BBMById.Name, v1.BBMPause.Name, v1.BBMResume.Name:
+	case v1.BBM.Name, v1.BBMById.Name, v1.BBMPause.Name, v1.BBMResume.Name, v1.BBMRestart.Name:
 		return false
 	}
 
@@ -1910,7 +1911,7 @@ func appendBBMAccessRecord(accessRecords []auth.Access, r *http.Request) []auth.
 	routeName := route.GetName()
 
 	switch routeName {
-	case v1.BBM.Name, v1.BBMById.Name, v1.BBMPause.Name, v1.BBMResume.Name:
+	case v1.BBM.Name, v1.BBMById.Name, v1.BBMPause.Name, v1.BBMResume.Name, v1.BBMRestart.Name:
 		accessRecords = append(accessRecords,
 			auth.Access{
 				Resource: auth.Resource{

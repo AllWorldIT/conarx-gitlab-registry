@@ -38,7 +38,8 @@ type BackgroundMigrationGetResponse struct {
 	Migration BackgroundMigrationResponse `json:"migration"`
 }
 
-// BackgroundMigrationActionResponse is the response for action endpoints (pause/resume).
+// BackgroundMigrationActionResponse is the response for action endpoints
+// (pause/resume/restart).
 type BackgroundMigrationActionResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
@@ -101,6 +102,17 @@ func backgroundMigrationsResumeDispatcher(ctx *Context, _ *http.Request) http.Ha
 
 	return handlers.MethodHandler{
 		http.MethodPost: http.HandlerFunc(handler.ResumeBackgroundMigrations),
+	}
+}
+
+// backgroundMigrationsRestartDispatcher routes requests to the appropriate handler for the restart endpoint.
+func backgroundMigrationsRestartDispatcher(ctx *Context, _ *http.Request) http.Handler {
+	handler := &backgroundMigrationsHandler{
+		Context: ctx,
+	}
+
+	return handlers.MethodHandler{
+		http.MethodPost: http.HandlerFunc(handler.RestartBackgroundMigration),
 	}
 }
 
@@ -205,6 +217,59 @@ func (h *backgroundMigrationsHandler) ResumeBackgroundMigrations(w http.Response
 	resp := BackgroundMigrationActionResponse{
 		Success: true,
 		Message: "All eligible background migrations have been resumed",
+	}
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(resp); err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+}
+
+// RestartBackgroundMigration handles POST requests to restart a specific background migration.
+// It resets the failure_error_code to NULL and status to active (1).
+func (h *backgroundMigrationsHandler) RestartBackgroundMigration(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	bbmId, err := getBBMId(r.Context())
+	if err != nil {
+		h.Errors = append(
+			h.Errors,
+			v2.ErrorCodeBBMIdInvalid.WithDetail(err),
+		)
+		return
+	}
+
+	// First, fetch the BBM to ensure it exists
+	bbm, err := datastore.NewBackgroundMigrationStore(h.db.Primary()).
+		FindById(r.Context(), bbmId)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+	if bbm == nil {
+		h.Errors = append(
+			h.Errors,
+			v2.ErrorCodeBBMNotFound.WithDetail(fmt.Sprintf("BBM with ID %d does not exist", bbmId)),
+		)
+		return
+	}
+
+	// Set status to active and clear error code
+	bbm.Status = models.BackgroundMigrationActive
+	bbm.ErrorCode = models.NullErrCode
+
+	// Update the BBM status
+	err = datastore.NewBackgroundMigrationStore(h.db.Primary()).
+		UpdateStatus(r.Context(), bbm)
+	if err != nil {
+		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	resp := BackgroundMigrationActionResponse{
+		Success: true,
+		Message: fmt.Sprintf("Background migration %d has been restarted", bbmId),
 	}
 
 	enc := json.NewEncoder(w)
