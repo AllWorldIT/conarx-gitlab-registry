@@ -130,6 +130,52 @@ func TestGCBlobTaskStore_FindAll(t *testing.T) {
 			},
 			expected: allResults[:1],
 		},
+		{
+			name: "tasks with review_count greater than a specific cutoff",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(1),
+			},
+			expected: []*models.GCBlobTask{allResults[1]},
+		},
+		{
+			name: "no task with review_count greater than the cutoff",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(3),
+			},
+			expected: make([]*models.GCBlobTask, 0),
+		},
+		{
+			name: "combine review count and limit",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(1),
+				datastore.WithGCTasksLimit(1),
+			},
+			expected: []*models.GCBlobTask{allResults[1]},
+		},
+		{
+			name: "combine review count and review after",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(1),
+				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
+			},
+			expected: []*models.GCBlobTask{allResults[1]},
+		},
+		{
+			name: "combine review count, review after and limit",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(1),
+				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
+				datastore.WithGCTasksLimit(1),
+			},
+			expected: []*models.GCBlobTask{allResults[1]},
+		},
+		{
+			name: "negative review count cutoff is ignored and all results retrieved",
+			opts: []datastore.GCTaskFilterOption{
+				datastore.WithGCTasksReviewCountGreaterThan(-1),
+			},
+			expected: allResults,
+		},
 	}
 
 	for _, test := range tests {
