@@ -103,7 +103,14 @@ func (s *gcBlobTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterOptio
 	}
 
 	if !filters.reviewAfterCutoff.IsZero() {
-		err := qb.Build("WHERE review_after < ?", filters.reviewAfterCutoff)
+		err := qb.WhereAnd("review_after < ?", filters.reviewAfterCutoff)
+		if err != nil {
+			return nil, fmt.Errorf("building GC blobs tasks query: %w", err)
+		}
+	}
+
+	if filters.reviewCountCutoff != nil {
+		err := qb.WhereAnd("review_count > ?", *filters.reviewCountCutoff)
 		if err != nil {
 			return nil, fmt.Errorf("building GC blobs tasks query: %w", err)
 		}
