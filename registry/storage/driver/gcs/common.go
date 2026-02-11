@@ -50,6 +50,7 @@ const (
 	maxDeleteConcurrency           = 150
 	maxWalkConcurrency             = 100
 	maxTries                       = 5
+	defaultUniverseDomain          = "googleapis.com"
 )
 
 // customGitlabGoogle... are the query params appended to gcs signed redirect url
@@ -95,6 +96,10 @@ type driverParameters struct {
 
 	// parallelWalk enables or disables concurrently walking the filesystem.
 	parallelWalk bool
+
+	// universeDomain is the universe domain to use for GCS API calls.
+	// Defaults to googleapis.com for standard Google Cloud.
+	universeDomain string
 }
 
 // gcsDriverFactory implements the factory.StorageDriverFactory interface
@@ -236,8 +241,29 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		}
 	}
 
-	var ts oauth2.TokenSource
+	// Parse universe domain parameter and track if user explicitly configured it
+	universeDomain := defaultUniverseDomain
+	userConfiguredUniverseDomain := false
+	if ud, ok := parameters["universe_domain"]; ok {
+		if udStr, ok := ud.(string); ok && udStr != "" {
+			universeDomain = udStr
+			userConfiguredUniverseDomain = true
+		}
+	}
+
+	var creds *google.Credentials
 	jwtConf := new(jwt.Config)
+
+	// Create CredentialsParams with explicit universe domain if user configured it
+	credParams := google.CredentialsParams{
+		Scopes: []string{storage.ScopeFullControl},
+	}
+	// Only set UniverseDomain in credParams if explicitly configured by user
+	// Otherwise, let credentials determine it (e.g., from metadata server)
+	if userConfiguredUniverseDomain {
+		credParams.UniverseDomain = universeDomain
+	}
+
 	if keyfile, ok := parameters["keyfile"]; ok {
 		jsonKey, err := os.ReadFile(fmt.Sprint(keyfile))
 		if err != nil {
@@ -247,7 +273,10 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		if err != nil {
 			return nil, err
 		}
-		ts = jwtConf.TokenSource(context.Background())
+		creds, err = google.CredentialsFromJSONWithParams(context.Background(), jsonKey, credParams)
+		if err != nil {
+			return nil, err
+		}
 	} else if credentials, ok := parameters["credentials"]; ok {
 		credentialMap, ok := credentials.(map[any]any)
 		if !ok {
@@ -272,10 +301,13 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		if err != nil {
 			return nil, err
 		}
-		ts = jwtConf.TokenSource(context.Background())
+		creds, err = google.CredentialsFromJSONWithParams(context.Background(), data, credParams)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		var err error
-		ts, err = google.DefaultTokenSource(context.Background(), storage.ScopeFullControl)
+		creds, err = google.FindDefaultCredentialsWithParams(context.Background(), credParams)
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +318,7 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		return nil, fmt.Errorf("maxconcurrency config error: %s", err)
 	}
 
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	opts := []option.ClientOption{option.WithCredentials(creds)}
 	debugLogging := false
 
 	if _, ok = parameters["debug_log"]; ok {
@@ -345,6 +377,17 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 	// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
 	opts = append(opts, storage.WithJSONReads())
 
+	// Determine universe domain: explicit config > credentials > default
+	if !userConfiguredUniverseDomain {
+		// User didn't explicitly set universe domain, try to get from credentials
+		if credUD, err := creds.GetUniverseDomain(); err == nil && credUD != "" {
+			universeDomain = credUD
+		} else if err != nil {
+			log.GetLogger().WithError(err).Warn("Could not retrieve universe domain from credentials, using default")
+		}
+	}
+	opts = append(opts, option.WithUniverseDomain(universeDomain))
+
 	if userAgent, ok := parameters["useragent"]; ok {
 		if ua, ok := userAgent.(string); ok && ua != "" {
 			opts = append(opts, option.WithUserAgent(ua))
@@ -369,10 +412,11 @@ func parseParameters(parameters map[string]any) (*driverParameters, error) {
 		rootDirectory:  fmt.Sprint(rootDirectory),
 		email:          jwtConf.Email,
 		privateKey:     jwtConf.PrivateKey,
-		client:         oauth2.NewClient(context.Background(), ts),
+		client:         oauth2.NewClient(context.Background(), creds.TokenSource),
 		storageClient:  storageClient,
 		chunkSize:      chunkSize,
 		maxConcurrency: maxConcurrency,
 		parallelWalk:   parallelWalkBool,
+		universeDomain: universeDomain,
 	}, nil
 }

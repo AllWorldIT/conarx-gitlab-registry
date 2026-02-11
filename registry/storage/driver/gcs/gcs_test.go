@@ -47,9 +47,7 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		return nil, fmt.Errorf("Error reading default credentials: %w", err)
 	}
 
-	ts := creds.TokenSource
-
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	opts := []option.ClientOption{option.WithCredentials(creds)}
 	if debugLog == "true" {
 		sLogger := slogt.New(tb)
 		// NOTE(prozlach): This does not work really, see https://github.com/googleapis/google-cloud-go/issues/12475
@@ -69,6 +67,13 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 	// in a future release of GCS SDK.
 	// https://cloud.google.com/go/docs/reference/cloud.google.com/go/storage/latest#cloud_google_com_go_storage_WithJSONReads
 	opts = append(opts, storage.WithJSONReads())
+
+	universeDomain, err := creds.GetUniverseDomain()
+	if err != nil {
+		return nil, fmt.Errorf("Error getting universe domain: %w", err)
+	}
+
+	opts = append(opts, option.WithUniverseDomain(universeDomain))
 
 	storageClient, err := storage.NewClient(
 		log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb))),
@@ -118,12 +123,13 @@ func gcsDriverConstructor(tb testing.TB, rootDirectory string) (storagedriver.St
 		privateKey:    privateKey,
 		client: oauth2.NewClient(
 			log.WithLogger(context.Background(), log.GetLogger(log.WithTestingTB(tb))),
-			ts,
+			creds.TokenSource,
 		),
 		storageClient:  storageClient,
 		chunkSize:      defaultChunkSize,
 		maxConcurrency: maxConcurrency,
 		parallelWalk:   parallelWalkBool,
+		universeDomain: universeDomain,
 	}
 
 	return New(parameters)
@@ -563,6 +569,67 @@ func TestGCSDriverCustomParams(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
 			require.Equal(tt, tc.expectedURLValues, storagedriver.CustomParams(tc.opt, customParamKeys))
+		})
+	}
+}
+
+func TestParseParameters_UniverseDomain(t *testing.T) {
+	testCases := []struct {
+		name           string
+		params         map[string]any
+		expectedDomain string
+		shouldError    bool
+	}{
+		{
+			name: "default universe domain when not specified",
+			params: map[string]any{
+				"bucket":  "test-bucket",
+				"keyfile": "testdata/key.json",
+			},
+			expectedDomain: defaultUniverseDomain,
+			shouldError:    false,
+		},
+		{
+			name: "custom universe domain",
+			params: map[string]any{
+				"bucket":          "test-bucket",
+				"keyfile":         "testdata/key.json",
+				"universe_domain": "us-east1.goog",
+			},
+			expectedDomain: "us-east1.goog",
+			shouldError:    false,
+		},
+		{
+			name: "empty universe domain defaults to default",
+			params: map[string]any{
+				"bucket":          "test-bucket",
+				"keyfile":         "testdata/key.json",
+				"universe_domain": "",
+			},
+			expectedDomain: defaultUniverseDomain,
+			shouldError:    false,
+		},
+		{
+			name: "explicit googleapis.com universe domain",
+			params: map[string]any{
+				"bucket":          "test-bucket",
+				"keyfile":         "testdata/key.json",
+				"universe_domain": "googleapis.com",
+			},
+			expectedDomain: "googleapis.com",
+			shouldError:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(tt *testing.T) {
+			params, err := parseParameters(tc.params)
+			if tc.shouldError {
+				require.Error(tt, err)
+				return
+			}
+			require.NoError(tt, err)
+			require.Equal(tt, tc.expectedDomain, params.universeDomain)
 		})
 	}
 }

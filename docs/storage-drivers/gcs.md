@@ -62,6 +62,7 @@ When using inline credentials, provide the following parameters:
 | `chunksize` | no | The chunk size for uploading large blobs. Must be a positive multiple of 256KB. Default and minimum is 5242880 (5MB). |
 | `useragent` | no | The user agent string to use when making requests to GCS. Defaults to `container-registry`. |
 | `debug_log` | no | If set to true, enables debug logging for GCS API interactions. Defaults to false. |
+| `universe_domain` | no | The universe domain to use for GCS API calls. When specified, this overrides the universe domain from the credentials. For most deployments, this should not be set and the universe domain will be automatically determined from the credentials (for example, from GCE metadata server for instance credentials). |
 
 ## Chunk Size Configuration
 
@@ -74,9 +75,30 @@ The `chunksize` parameter controls the size of chunks used for uploading large o
 
 Example: To use 10MB chunks, set `chunksize: 10485760`
 
+## Universe Domain Configuration
+
+The GCS driver automatically determines the universe domain from the credentials:
+
+- For service account credentials (keyfile or inline), the universe domain is read from the credentials JSON.
+- For Application Default Credentials on GCE instances, the universe domain is retrieved from the GCE metadata server.
+- The `universe_domain` parameter can be used to explicitly override the detected universe domain if needed.
+
+In most cases, you should not need to set the `universe_domain`
+parameter. It is only required if you need to override the universe
+domain detected from your credentials.
+
+Example configuration with explicit universe domain override:
+
+```yaml
+storage:
+  gcs:
+    bucket: my-registry-bucket
+    universe_domain: example.universe.com
+```
+
 ## Debug Logging
 
-When `debug_log` is set to true, the driver will output detailed information about its interactions with the GCS API, which can be helpful for troubleshooting:
+When `debug_log` is set to true, the driver outputs detailed information about its interactions with the Google Cloud Storage API, which can be helpful for troubleshooting:
 
 ```yaml
 storage:
