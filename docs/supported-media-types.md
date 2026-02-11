@@ -84,6 +84,7 @@ Media type IDs are currently implemented with `SMALLINT`, while it's unlikely to
 | `application/vnd.cncf.openpolicyagent.manifest.layer.v1+json`             |
 | `application/vnd.cncf.openpolicyagent.data.layer.v1+json`                 |
 | `application/vnd.cncf.openpolicyagent.config.v1+json`                     |
+| `application/vnd.cncf.notary.signature`                                   |
 | `application/vnd.cncf.helm.config.v1+json`                                |
 | `application/vnd.cncf.helm.chart.provenance.v1.prov`                      |
 | `application/vnd.cncf.helm.chart.meta.layer.v1+json`                      |
