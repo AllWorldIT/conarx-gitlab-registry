@@ -97,6 +97,16 @@ The registry will fail to start if the database is enabled and there are pending
 
 For a complete treatment of migrations, please see the [database-migrations](database-migrations.md) guide.
 
+## Check Online Garbage Collector Statistics
+
+This command will output statistics about the garbage collector, including the
+number of untagged manifests and blobs that are eligible for deletion. This
+command is safe to run on a live registry, and does not require any downtime.
+
+```shell
+registry database gc-stats config.yml
+```
+
 ## Enabling the Database
 
 ### Fresh Install

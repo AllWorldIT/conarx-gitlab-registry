@@ -887,19 +887,32 @@ Displays health metrics for the blob and manifest GC review queues, including:
 - Long overdue tasks (pending longer than configured delay)
 - High retry tasks (>10 review attempts, may indicate issues)`,
 	RunE: func(_ *cobra.Command, args []string) error {
-		_, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		config, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
 		if err != nil {
 			return fmt.Errorf("configuration error: %w", err)
 		}
 
-		// TODO: Replace mock data with real database queries
-		stats := datastore.GetMockGCStats(gcStatsLimit)
+		db, err := dbFromConfig(config)
+		if err != nil {
+			return fmt.Errorf("failed to construct database connection: %w", err)
+		}
+
+		gcHighReviewCutoff := 10
+
+		bts := datastore.NewGCBlobTaskStore(db)
+		mts := datastore.NewGCManifestTaskStore(db)
+		s := datastore.NewGCStatsStore(mts, bts, config.GC.ReviewAfter, gcHighReviewCutoff, gcStatsLimit)
+
+		stats, err := s.GetGCStats(dcontext.Background())
+		if err != nil {
+			return fmt.Errorf("failed to get GC stats: %w", err)
+		}
 
 		switch gcStatsFormat {
 		case "json":
 			return outputGCStatsJSON(stats)
 		case "table":
-			return outputGCStatsTable(stats)
+			return outputGCStatsTable(stats, gcHighReviewCutoff)
 		default:
 			return fmt.Errorf("invalid format %q: must be 'table' or 'json'", gcStatsFormat)
 		}
@@ -912,18 +925,16 @@ func outputGCStatsJSON(stats datastore.GCStats) error {
 	return encoder.Encode(stats)
 }
 
-func outputGCStatsTable(stats datastore.GCStats) error {
+func outputGCStatsTable(stats datastore.GCStats, gcHighReviewCutoff int) error {
 	// Blob Queue Statistics
-	_, _ = fmt.Println("=== DEMO ONLY ===")
 	_, _ = fmt.Println("=== Blob Review Queue ===")
-	_, _ = fmt.Println("=== DEMO ONLY ===")
 	_, _ = fmt.Println()
 
 	// Pending Removal
 	_, _ = fmt.Printf("Tasks Pending Removal: %d\n", stats.Blobs.PendingRemoval.Count)
-	_, _ = fmt.Println("Tasks ready for GC review (review_after has passed).")
-	_, _ = fmt.Println()
 	if len(stats.Blobs.PendingRemoval.Samples) > 0 {
+		_, _ = fmt.Println("Sample tasks ready for GC review (review_after has passed).")
+		_, _ = fmt.Println()
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"Digest", "Review After", "Event"})
 		for _, s := range stats.Blobs.PendingRemoval.Samples {
@@ -939,9 +950,9 @@ func outputGCStatsTable(stats datastore.GCStats) error {
 
 	// Long Overdue
 	_, _ = fmt.Printf("Long Overdue Tasks: %d\n", stats.Blobs.LongOverdue.Count)
-	_, _ = fmt.Println("Tasks pending longer than configured delay - may need attention.")
-	_, _ = fmt.Println()
 	if len(stats.Blobs.LongOverdue.Samples) > 0 {
+		_, _ = fmt.Println("Sample tasks pending longer than configured delay - may need attention.")
+		_, _ = fmt.Println()
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"Digest", "Review After", "Event", "Overdue"})
 		for _, s := range stats.Blobs.LongOverdue.Samples {
@@ -957,9 +968,9 @@ func outputGCStatsTable(stats datastore.GCStats) error {
 
 	// High Retry
 	_, _ = fmt.Printf("High Retry Tasks: %d\n", stats.Blobs.HighRetry.Count)
-	_, _ = fmt.Println("Tasks with >10 review attempts - may indicate persistent issues.")
-	_, _ = fmt.Println()
 	if len(stats.Blobs.HighRetry.Samples) > 0 {
+		_, _ = fmt.Printf("Sample tasks with >%d review attempts - may indicate persistent issues.\n", gcHighReviewCutoff)
+		_, _ = fmt.Println()
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"Digest", "Review After", "Event", "Retries"})
 		for _, s := range stats.Blobs.HighRetry.Samples {
@@ -974,16 +985,14 @@ func outputGCStatsTable(stats datastore.GCStats) error {
 	_, _ = fmt.Println()
 
 	// Manifest Queue Statistics
-	_, _ = fmt.Println("=== DEMO ONLY ===")
 	_, _ = fmt.Println("=== Manifest Review Queue ===")
-	_, _ = fmt.Println("=== DEMO ONLY ===")
 	_, _ = fmt.Println()
 
 	// Pending Removal
 	_, _ = fmt.Printf("Tasks Pending Removal: %d\n", stats.Manifests.PendingRemoval.Count)
-	_, _ = fmt.Println("Tasks ready for GC review (review_after has passed).")
-	_, _ = fmt.Println()
 	if len(stats.Manifests.PendingRemoval.Samples) > 0 {
+		_, _ = fmt.Println("Sample tasks ready for GC review (review_after has passed).")
+		_, _ = fmt.Println()
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"Repository ID", "Manifest ID", "Review After", "Event"})
 		for _, s := range stats.Manifests.PendingRemoval.Samples {
@@ -999,9 +1008,9 @@ func outputGCStatsTable(stats datastore.GCStats) error {
 
 	// Long Overdue
 	_, _ = fmt.Printf("Long Overdue Tasks: %d\n", stats.Manifests.LongOverdue.Count)
-	_, _ = fmt.Println("Tasks pending longer than configured delay - may need attention.")
-	_, _ = fmt.Println()
 	if len(stats.Manifests.LongOverdue.Samples) > 0 {
+		_, _ = fmt.Println("Sample tasks pending longer than configured delay - may need attention.")
+		_, _ = fmt.Println()
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"Repository ID", "Manifest ID", "Review After", "Event", "Overdue"})
 		for _, s := range stats.Manifests.LongOverdue.Samples {
@@ -1017,9 +1026,9 @@ func outputGCStatsTable(stats datastore.GCStats) error {
 
 	// High Retry
 	_, _ = fmt.Printf("High Retry Tasks: %d\n", stats.Manifests.HighRetry.Count)
-	_, _ = fmt.Println("Tasks with >10 review attempts - may indicate persistent issues.")
-	_, _ = fmt.Println()
 	if len(stats.Manifests.HighRetry.Samples) > 0 {
+		_, _ = fmt.Printf("Sample tasks with >%d review attempts - may indicate persistent issues.\n", gcHighReviewCutoff)
+		_, _ = fmt.Println()
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"Repository ID", "Manifest ID", "Review After", "Event", "Retries"})
 		for _, s := range stats.Manifests.HighRetry.Samples {

@@ -1,6 +1,12 @@
 package datastore
 
-import "time"
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/docker/distribution/registry/datastore/models"
+)
 
 // GCStats holds garbage collection statistics for both blob and manifest queues.
 type GCStats struct {
@@ -105,101 +111,253 @@ type ManifestHighRetrySample struct {
 	ReviewTask
 }
 
-// GetMockGCStats returns mock GC statistics for development and testing.
-// TODO: Replace with real database queries.
-func GetMockGCStats(limit int) GCStats {
-	now := time.Now().UTC()
+// GCStatsStore defines the interface for retrieving garbage collection statistics.
+type GCStatsStore interface {
+	GetGCStats(ctx context.Context) (GCStats, error)
+}
 
-	// Mock blob pending samples
-	blobPendingSamples := []BlobPendingSample{
-		{Digest: "sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22e", ReviewTask: ReviewTask{ReviewAfter: now.Add(-2 * time.Hour), Event: "blob_upload"}},
-		{Digest: "sha256:b4f5e6d7c8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2", ReviewTask: ReviewTask{ReviewAfter: now.Add(-4 * time.Hour), Event: "manifest_delete"}},
-		{Digest: "sha256:c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3", ReviewTask: ReviewTask{ReviewAfter: now.Add(-6 * time.Hour), Event: "layer_delete"}},
+type manifestFinderCounter interface {
+	FindAll(ctx context.Context, opts ...GCTaskFilterOption) ([]*models.GCManifestTask, error)
+	Count(ctx context.Context, opts ...GCTaskFilterOption) (int, error)
+}
+
+type blobFinderCounter interface {
+	FindAll(ctx context.Context, opts ...GCTaskFilterOption) ([]*models.GCBlobTask, error)
+	Count(ctx context.Context, opts ...GCTaskFilterOption) (int, error)
+}
+
+type gcStatsStore struct {
+	manifests   manifestFinderCounter
+	blobs       blobFinderCounter
+	limit       int
+	retryCount  int
+	reviewDelay time.Duration
+
+	now time.Time
+}
+
+// NewGCStatsStore creates a new GCStatsStore instance.
+func NewGCStatsStore(manifestStore GCManifestTaskStore, blobStore GCBlobTaskStore, reviewDelay time.Duration, retryCount, limit int) GCStatsStore {
+	return &gcStatsStore{
+		manifests:   manifestStore,
+		blobs:       blobStore,
+		limit:       limit,
+		retryCount:  retryCount,
+		reviewDelay: reviewDelay,
+	}
+}
+
+// GetGCStats retrieves garbage collection statistics for blobs and manifests.
+func (s *gcStatsStore) GetGCStats(ctx context.Context) (GCStats, error) {
+	s.now = time.Now().UTC()
+
+	blobPendingSamples, err := s.getBlobPendingSamples(ctx)
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching blob pending samples: %w", err)
 	}
 
-	// Mock blob overdue samples
-	blobOverdueSamples := []BlobOverdueSample{
-		{Digest: "sha256:d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4", ReviewTask: ReviewTask{ReviewAfter: now.Add(-5 * 24 * time.Hour), Event: "blob_upload", Overdue: 4 * 24 * time.Hour}},
-		{Digest: "sha256:e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5", ReviewTask: ReviewTask{ReviewAfter: now.Add(-3 * 24 * time.Hour), Event: "layer_delete", Overdue: 2 * 24 * time.Hour}},
+	blobPendingCount, err := s.blobs.Count(ctx, WithGCTasksReviewAfterLessThan(s.now))
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching blob pending count: %w", err)
 	}
 
-	// Mock blob high retry samples
-	blobHighRetrySamples := []BlobHighRetrySample{
-		{Digest: "sha256:f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6", ReviewTask: ReviewTask{ReviewAfter: now.Add(1 * time.Hour), ReviewCount: 15, Event: "blob_upload"}},
-		{Digest: "sha256:a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7", ReviewTask: ReviewTask{ReviewAfter: now.Add(2 * time.Hour), ReviewCount: 12, Event: "manifest_delete"}},
+	blobLongOverdueSamples, err := s.getBlobOverdueSamples(ctx)
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching blob long overdue samples: %w", err)
 	}
 
-	// Mock manifest pending samples
-	manifestPendingSamples := []ManifestPendingSample{
-		{RepositoryID: 1001, ManifestID: 12345, ReviewTask: ReviewTask{ReviewAfter: now.Add(-1 * time.Hour), Event: "tag_delete"}},
-		{RepositoryID: 1002, ManifestID: 67890, ReviewTask: ReviewTask{ReviewAfter: now.Add(-3 * time.Hour), Event: "manifest_upload"}},
-		{RepositoryID: 1003, ManifestID: 11111, ReviewTask: ReviewTask{ReviewAfter: now.Add(-5 * time.Hour), Event: "tag_switch"}},
-		{RepositoryID: 2001, ManifestID: 22222, ReviewTask: ReviewTask{ReviewAfter: now.Add(-7 * time.Hour), Event: "manifest_list_delete"}},
+	blobLongOverdueCount, err := s.blobs.Count(ctx, WithGCTasksReviewAfterLessThan(s.now.Add(-s.reviewDelay)))
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching blob long overdue count: %w", err)
 	}
 
-	// Mock manifest overdue samples
-	manifestOverdueSamples := []ManifestOverdueSample{
-		{RepositoryID: 3001, ManifestID: 33333, ReviewTask: ReviewTask{ReviewAfter: now.Add(-4 * 24 * time.Hour), Event: "tag_delete", Overdue: 3 * 24 * time.Hour}},
-		{RepositoryID: 3002, ManifestID: 44444, ReviewTask: ReviewTask{ReviewAfter: now.Add(-2 * 24 * time.Hour), Event: "manifest_delete", Overdue: 1 * 24 * time.Hour}},
+	blobHighRetrySamples, err := s.getBlobHighRetrySamples(ctx)
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching blob high retry samples: %w", err)
 	}
 
-	// Mock manifest high retry samples
-	manifestHighRetrySamples := []ManifestHighRetrySample{
-		{RepositoryID: 4001, ManifestID: 55555, ReviewTask: ReviewTask{ReviewAfter: now.Add(30 * time.Minute), ReviewCount: 18, Event: "tag_delete"}},
-		{RepositoryID: 4002, ManifestID: 66666, ReviewTask: ReviewTask{ReviewAfter: now.Add(45 * time.Minute), ReviewCount: 11, Event: "manifest_upload"}},
+	blobHighRetryCount, err := s.blobs.Count(ctx, WithGCTasksReviewCountGreaterThan(s.retryCount))
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching blob high retry count: %w", err)
 	}
 
-	// Apply limit to samples consistently
-	// limit <= 0 means no limit (show all samples)
-	if limit > 0 {
-		if limit < len(blobPendingSamples) {
-			blobPendingSamples = blobPendingSamples[:limit]
-		}
-		if limit < len(blobOverdueSamples) {
-			blobOverdueSamples = blobOverdueSamples[:limit]
-		}
-		if limit < len(blobHighRetrySamples) {
-			blobHighRetrySamples = blobHighRetrySamples[:limit]
-		}
-		if limit < len(manifestPendingSamples) {
-			manifestPendingSamples = manifestPendingSamples[:limit]
-		}
-		if limit < len(manifestOverdueSamples) {
-			manifestOverdueSamples = manifestOverdueSamples[:limit]
-		}
-		if limit < len(manifestHighRetrySamples) {
-			manifestHighRetrySamples = manifestHighRetrySamples[:limit]
-		}
+	manifestPendingSamples, err := s.getManifestPendingSamples(ctx)
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching manifest pending samples: %w", err)
+	}
+
+	manifestPendingCount, err := s.manifests.Count(ctx, WithGCTasksReviewAfterLessThan(s.now))
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching manifest pending count: %w", err)
+	}
+
+	manifestLongOverdueSamples, err := s.getManifestOverdueSamples(ctx)
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching manifest long overdue samples: %w", err)
+	}
+
+	manifestLongOverdueCount, err := s.manifests.Count(ctx, WithGCTasksReviewAfterLessThan(s.now.Add(-s.reviewDelay)))
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching manifest long overdue count: %w", err)
+	}
+
+	manifestHighRetrySamples, err := s.getManifestHighRetrySamples(ctx)
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching manifest high retry samples: %w", err)
+	}
+
+	manifestHighRetryCount, err := s.manifests.Count(ctx, WithGCTasksReviewCountGreaterThan(s.retryCount))
+	if err != nil {
+		return GCStats{}, fmt.Errorf("fetching manifest high retry count: %w", err)
 	}
 
 	return GCStats{
 		Blobs: BlobQueueStats{
 			PendingRemoval: BlobPendingStats{
-				Count:   42,
+				Count:   blobPendingCount,
 				Samples: blobPendingSamples,
 			},
 			LongOverdue: BlobOverdueStats{
-				Count:   5,
-				Samples: blobOverdueSamples,
+				Count:   blobLongOverdueCount,
+				Samples: blobLongOverdueSamples,
 			},
 			HighRetry: BlobHighRetryStats{
-				Count:   2,
+				Count:   blobHighRetryCount,
 				Samples: blobHighRetrySamples,
 			},
 		},
 		Manifests: ManifestQueueStats{
 			PendingRemoval: ManifestPendingStats{
-				Count:   128,
+				Count:   manifestPendingCount,
 				Samples: manifestPendingSamples,
 			},
 			LongOverdue: ManifestOverdueStats{
-				Count:   8,
-				Samples: manifestOverdueSamples,
+				Count:   manifestLongOverdueCount,
+				Samples: manifestLongOverdueSamples,
 			},
 			HighRetry: ManifestHighRetryStats{
-				Count:   3,
+				Count:   manifestHighRetryCount,
 				Samples: manifestHighRetrySamples,
 			},
 		},
+	}, nil
+}
+
+func (s *gcStatsStore) getBlobPendingSamples(ctx context.Context) ([]BlobPendingSample, error) {
+	rawBlobTasks, err := s.blobs.FindAll(ctx, WithGCTasksReviewAfterLessThan(s.now), WithGCTasksLimit(s.limit))
+	if err != nil {
+		return nil, fmt.Errorf("fetching blob tasks: %w", err)
+	}
+
+	// Convert rawBlobTasks to []BlobPendingSamples
+	samples := make([]BlobPendingSample, 0, len(rawBlobTasks))
+	for _, task := range rawBlobTasks {
+		samples = append(samples, BlobPendingSample{
+			Digest:     task.Digest.String(),
+			ReviewTask: rawBlobTaskToReviewTask(task),
+		})
+	}
+	return samples, nil
+}
+
+func (s *gcStatsStore) getBlobOverdueSamples(ctx context.Context) ([]BlobOverdueSample, error) {
+	rawBlobTasks, err := s.blobs.FindAll(ctx, WithGCTasksReviewAfterLessThan(s.now.Add(-s.reviewDelay)), WithGCTasksLimit(s.limit))
+	if err != nil {
+		return nil, fmt.Errorf("fetching long overdue blob tasks: %w", err)
+	}
+
+	samples := make([]BlobOverdueSample, 0, len(rawBlobTasks))
+	for _, task := range rawBlobTasks {
+		samples = append(samples, BlobOverdueSample{
+			Digest:     task.Digest.String(),
+			ReviewTask: rawBlobTaskToReviewTask(task),
+		})
+	}
+	return samples, nil
+}
+
+func (s *gcStatsStore) getBlobHighRetrySamples(ctx context.Context) ([]BlobHighRetrySample, error) {
+	rawBlobTasks, err := s.blobs.FindAll(ctx, WithGCTasksReviewCountGreaterThan(s.retryCount), WithGCTasksLimit(s.limit))
+	if err != nil {
+		return nil, fmt.Errorf("fetching high retry blob tasks: %w", err)
+	}
+
+	samples := make([]BlobHighRetrySample, 0, len(rawBlobTasks))
+	for _, task := range rawBlobTasks {
+		samples = append(samples, BlobHighRetrySample{
+			Digest:     task.Digest.String(),
+			ReviewTask: rawBlobTaskToReviewTask(task),
+		})
+	}
+
+	return samples, nil
+}
+
+func (s *gcStatsStore) getManifestPendingSamples(ctx context.Context) ([]ManifestPendingSample, error) {
+	rawManifestTasks, err := s.manifests.FindAll(ctx, WithGCTasksReviewAfterLessThan(s.now), WithGCTasksLimit(s.limit))
+	if err != nil {
+		return nil, fmt.Errorf("fetching manifest tasks: %w", err)
+	}
+
+	samples := make([]ManifestPendingSample, 0, len(rawManifestTasks))
+	for _, task := range rawManifestTasks {
+		samples = append(samples, ManifestPendingSample{
+			RepositoryID: task.RepositoryID,
+			ManifestID:   task.ManifestID,
+			ReviewTask:   rawManifestTaskToReviewTask(task),
+		})
+	}
+	return samples, nil
+}
+
+func (s *gcStatsStore) getManifestOverdueSamples(ctx context.Context) ([]ManifestOverdueSample, error) {
+	rawManifestTasks, err := s.manifests.FindAll(ctx, WithGCTasksReviewAfterLessThan(s.now.Add(-s.reviewDelay)), WithGCTasksLimit(s.limit))
+	if err != nil {
+		return nil, fmt.Errorf("fetching long overdue manifest tasks: %w", err)
+	}
+
+	samples := make([]ManifestOverdueSample, 0, len(rawManifestTasks))
+	for _, task := range rawManifestTasks {
+		samples = append(samples, ManifestOverdueSample{
+			RepositoryID: task.RepositoryID,
+			ManifestID:   task.ManifestID,
+			ReviewTask:   rawManifestTaskToReviewTask(task),
+		})
+	}
+	return samples, nil
+}
+
+func (s *gcStatsStore) getManifestHighRetrySamples(ctx context.Context) ([]ManifestHighRetrySample, error) {
+	rawManifestTasks, err := s.manifests.FindAll(ctx, WithGCTasksReviewCountGreaterThan(s.retryCount), WithGCTasksLimit(s.limit))
+	if err != nil {
+		return nil, fmt.Errorf("fetching high retry manifest tasks: %w", err)
+	}
+
+	samples := make([]ManifestHighRetrySample, 0, len(rawManifestTasks))
+	for _, task := range rawManifestTasks {
+		samples = append(samples, ManifestHighRetrySample{
+			RepositoryID: task.RepositoryID,
+			ManifestID:   task.ManifestID,
+			ReviewTask:   rawManifestTaskToReviewTask(task),
+		})
+	}
+	return samples, nil
+}
+
+func rawManifestTaskToReviewTask(task *models.GCManifestTask) ReviewTask {
+	return ReviewTask{
+		ReviewAfter: task.ReviewAfter,
+		ReviewCount: task.ReviewCount,
+		Event:       task.Event,
+		Overdue:     time.Since(task.ReviewAfter),
+	}
+}
+
+func rawBlobTaskToReviewTask(task *models.GCBlobTask) ReviewTask {
+	return ReviewTask{
+		ReviewAfter: task.ReviewAfter,
+		ReviewCount: task.ReviewCount,
+		Event:       task.Event,
+		Overdue:     time.Since(task.ReviewAfter),
 	}
 }
