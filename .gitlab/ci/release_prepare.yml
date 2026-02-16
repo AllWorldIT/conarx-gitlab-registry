@@ -4,22 +4,10 @@
 # - Pushes a temporary branch "release/vX.Y.Z" and opens an MR to the target branch
 # - Maintainers review/merge; tagging happens in the follow-up release:tag job
 release:prepare:
-  stage: release
-  image: node:20-alpine
-  resource_group: release
-  needs: []
+  extends: .release_push_base
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
-  variables:
-    GIT_STRATEGY: fetch
-    GIT_DEPTH: "0" # ensure tags are present for semantic-release dry-run
-    GITLAB_TOKEN: $RELEASE_TOKEN
-    REPO_URL: "https://oauth2:${RELEASE_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-  before_script:
-    - apk add --no-cache git curl bash jq
-    - git config --global user.email "project_13831684_bot_1f10d664ae815e69d247c8cd4c319058@noreply.${CI_SERVER_HOST}"
-    - git config --global user.name "Registry Release Bot"
   script:
     - |
       set -eo pipefail
@@ -31,12 +19,12 @@ release:prepare:
     - |
       echo "Determining next version via semantic-release (dry run)"
       npx \
-        -p semantic-release@21 \
-        -p @semantic-release/commit-analyzer@10 \
-        -p @semantic-release/release-notes-generator@11 \
-        -p @semantic-release/changelog@6 \
-        -p @semantic-release/git@10 \
-        -p conventional-changelog-conventionalcommits@6 \
+        -p semantic-release@${SEMANTIC_RELEASE_VERSION} \
+        -p @semantic-release/commit-analyzer@${COMMIT_ANALYZER_VERSION} \
+        -p @semantic-release/release-notes-generator@${RELEASE_NOTES_VERSION} \
+        -p @semantic-release/changelog@${SR_CHANGELOG_VERSION} \
+        -p @semantic-release/git@${SR_GIT_VERSION} \
+        -p conventional-changelog-conventionalcommits@${CONVENTIONALCOMMITS_VERSION} \
         semantic-release --no-ci --dry-run --repository-url "$REPO_URL" | tee /tmp/semantic-release.log || true
       NEXT_VERSION=$(grep -Eo "The next release version is [0-9]+\.[0-9]+\.[0-9]+" /tmp/semantic-release.log | awk '{print $6}' | tail -n1)
       if [ -z "$NEXT_VERSION" ]; then
@@ -48,7 +36,11 @@ release:prepare:
       echo "Updating CHANGELOG.md using conventional-changelog"
       # Generate only the latest release notes (-r 1) and stage/commit the changelog update
       echo "{\"name\":\"container-registry\",\"version\":\"${NEXT_VERSION}\"}" > /tmp/pkg.json
-      npx conventional-changelog-cli@3 -p ./.conventional-changelog.js -k /tmp/pkg.json -i CHANGELOG.md -s -r 1
+      npx conventional-changelog-cli@${CHANGELOG_CLI_VERSION} \
+        -n ./.changelog.config.js \
+        -p conventionalcommits \
+        -k /tmp/pkg.json \
+        -i CHANGELOG.md -s -r 1
       git add CHANGELOG.md
       git commit -m "chore(release): ${NEXT_VERSION}"
     - |
@@ -59,15 +51,14 @@ release:prepare:
       git push "$REPO_URL" "$BRANCH_NAME:$BRANCH_NAME"
     - |
       echo "Creating merge request to $CI_DEFAULT_BRANCH"
-      : "Require an access token with api scope in RELEASE_TOKEN"
-      API_TOKEN="${RELEASE_TOKEN}"
-      if [ -z "$API_TOKEN" ]; then
+      # Require an access token with api scope in RELEASE_TOKEN
+      if [ -z "${RELEASE_TOKEN:-}" ]; then
         echo "RELEASE_TOKEN is not set; cannot create MR automatically."
-        echo "Manually open an MR from branch $BRANCH_NAME to $CI_DEFAULT_BRANCH ."
+        echo "Manually open an MR from branch $BRANCH_NAME to $CI_DEFAULT_BRANCH."
         exit 0
       fi
       MR_TITLE="chore(release): ${NEXT_VERSION}"
-      curl --fail -sS --header "PRIVATE-TOKEN: ${API_TOKEN}" \
+      curl --fail -sS --header "PRIVATE-TOKEN: ${RELEASE_TOKEN}" \
         --data-urlencode "source_branch=${BRANCH_NAME}" \
         --data-urlencode "target_branch=${CI_DEFAULT_BRANCH}" \
         --data-urlencode "title=${MR_TITLE}" \
@@ -80,3 +71,59 @@ release:prepare:
     paths:
       - CHANGELOG.md
       - /tmp/semantic-release.log
+
+# Dry-run job for testing release configuration changes
+# Tests both semantic-release and conventional-changelog-cli without side effects
+release:dry-run:
+  extends: .release_test_base
+  rules:
+    - when: manual
+      allow_failure: true
+  script:
+    - |
+      set -eo pipefail
+      
+      echo "=== Testing semantic-release (dry-run) ==="
+      REPO_URL="https://gitlab.com/${CI_PROJECT_PATH}.git"
+      npx \
+        -p semantic-release@${SEMANTIC_RELEASE_VERSION} \
+        -p @semantic-release/commit-analyzer@${COMMIT_ANALYZER_VERSION} \
+        -p @semantic-release/release-notes-generator@${RELEASE_NOTES_VERSION} \
+        -p @semantic-release/changelog@${SR_CHANGELOG_VERSION} \
+        -p @semantic-release/git@${SR_GIT_VERSION} \
+        -p conventional-changelog-conventionalcommits@${CONVENTIONALCOMMITS_VERSION} \
+        semantic-release --no-ci --dry-run --repository-url "$REPO_URL" 2>&1 | tee semantic-release.log || true
+      
+      # Check for the specific error we're trying to fix
+      if grep -q "Failed step \"generateNotes\"" semantic-release.log; then
+        echo "ERROR: generateNotes step failed!"
+        cat semantic-release.log
+        exit 1
+      fi
+      
+      echo "semantic-release dry-run passed - no generateNotes errors"
+      
+      # Use || true to prevent grep from failing the script when no match
+      NEXT_VERSION=$(grep -Eo "The next release version is [0-9]+\.[0-9]+\.[0-9]+" semantic-release.log | awk '{print $6}' | tail -n1 || true)
+      if [ -z "$NEXT_VERSION" ]; then
+        echo "No new version detected by semantic-release (expected on feature branches)"
+        NEXT_VERSION="0.0.0-test"
+      fi
+      echo "Next version for changelog test: $NEXT_VERSION"
+      
+      echo "=== Testing conventional-changelog-cli ==="
+      echo "{\"name\":\"container-registry\",\"version\":\"${NEXT_VERSION}\"}" > /tmp/pkg.json
+      npx conventional-changelog-cli@${CHANGELOG_CLI_VERSION} \
+        -n ./.changelog.config.js \
+        -p conventionalcommits \
+        -k /tmp/pkg.json \
+        -r 1 > changelog-output.md
+      echo "=== Generated changelog ==="
+      cat changelog-output.md
+      echo "=== Dry-run complete ==="
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - semantic-release.log
+      - changelog-output.md

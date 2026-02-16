@@ -1,32 +1,23 @@
-# .gitlab/ci/release_backport.yml
 # Manual backport helper: branch from BASE_TAG, cherry-pick SHAs, regenerate CHANGELOG,
 # create release commit, tag v<NEW_VERSION>-gitlab.
-# - RESUME:            Optional true/false. If true, the job resumes on BRANCH_NAME after you manually resolve
-#                      cherry-pick conflicts and push. Defaults to "false".
-# - TAG:               Optional. The tag to create, e.g., v4.13.1-gitlab. Defaults to "v${NEW_VERSION}-gitlab".
-
-# - BASE_TAG:          Required. The base tag to branch from, e.g., v4.13.0-gitlab.
-# - CHERRY_PICK_SHAS:  Required. The SHAs to cherry-pick, space/comma/newline-separated.
-# - NEW_VERSION:       Required. The new version to release, e.g., 4.13.1.
+#
+# Required variables:
+#   - BASE_TAG:          The base tag to branch from, e.g., v4.13.0-gitlab.
+#   - CHERRY_PICK_SHAS:  The SHAs to cherry-pick, space/comma/newline-separated.
+#   - NEW_VERSION:       The new version to release, e.g., 4.13.1.
+#
+# Optional variables:
+#   - RESUME:      If true, resumes on BRANCH_NAME after manual conflict resolution. Default: false.
+#   - TAG:         The tag to create. Default: v${NEW_VERSION}-gitlab.
+#   - BRANCH_NAME: The branch name. Default: release/v${NEW_VERSION}.
 
 release:backport:
-  stage: release
-  image: node:20-alpine
-  resource_group: release
-  needs: []
+  extends: .release_push_base
   rules:
     - when: manual
       allow_failure: true
-  variables:
-    GIT_STRATEGY: fetch
-    GIT_DEPTH: "0"
-    REPO_URL: "https://oauth2:${RELEASE_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-  before_script:
-    - apk add --no-cache git bash curl jq
-    - git config --global user.email "project_13831684_bot_1f10d664ae815e69d247c8cd4c319058@noreply.${CI_SERVER_HOST}"
-    - git config --global user.name "Registry Release Bot"
   environment:
-  # only users with access to the release environment (i.e. maintainers) can run this manual job
+    # only users with access to the release environment (i.e. maintainers) can run this manual job
     name: release
   script:
     - |
@@ -78,7 +69,11 @@ release:backport:
       # Release commit (skip if already present)
       if ! git log -1 --pretty=%s | grep -Eq "^chore\\(release\\):[[:space:]]*${NEW_VERSION}$"; then
         echo '{"name":"container-registry","version":"'"${NEW_VERSION}"'"}' > /tmp/pkg.json
-        npx conventional-changelog-cli@3 -p ./.conventional-changelog.js -k /tmp/pkg.json -i CHANGELOG.md -s -r 1
+        npx conventional-changelog-cli@${CHANGELOG_CLI_VERSION} \
+          -n ./.changelog.config.js \
+          -p conventionalcommits \
+          -k /tmp/pkg.json \
+          -i CHANGELOG.md -s -r 1
         git add CHANGELOG.md
         git commit -m "chore(release): ${NEW_VERSION}"
       fi
