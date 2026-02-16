@@ -6,6 +6,7 @@ include:
   - local: .gitlab/ci/test.yml
   - local: .gitlab/ci/integration.yml
   - local: .gitlab/ci/release.yml
+  - local: .gitlab/ci/release_common.yml
   - local: .gitlab/ci/release_prepare.yml
   - local: .gitlab/ci/release_tag.yml
   - local: .gitlab/ci/release_backport.yml

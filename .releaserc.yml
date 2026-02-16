@@ -8,8 +8,30 @@ plugins:
       releaseRules:
         - type: build
           release: patch
+  # NOTE: The type-to-section mapping is also defined in .changelog.config.js
+  # for conventional-changelog-cli. If you update the types here, update them there too.
   - - "@semantic-release/release-notes-generator"
-    - config: "./.conventional-changelog.js"
+    - preset: conventionalcommits
+      presetConfig:
+        types:
+          - type: feat
+            section: "✨ Features ✨"
+            hidden: false
+          - type: fix
+            section: "🐛 Bug Fixes 🐛"
+            hidden: false
+          - type: perf
+            section: "⚡️ Performance Improvements ⚡️"
+            hidden: false
+          - type: revert
+            section: "⏮️️ Reverts ⏮️️"
+            hidden: false
+          - type: build
+            section: "⚙️ Build ⚙️"
+            hidden: false
+          - type: refactor
+            section: "♻️ Refactors ♻️"
+            hidden: false
   - '@semantic-release/changelog'
   - - '@semantic-release/git'
     - assets:

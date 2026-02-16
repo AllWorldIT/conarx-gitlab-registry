@@ -1,0 +1,41 @@
+# Common configuration for release jobs
+# This file defines shared settings to reduce duplication across release jobs.
+
+# Pinned package versions - update these when upgrading
+variables:
+  SEMANTIC_RELEASE_VERSION: "21"
+  COMMIT_ANALYZER_VERSION: "10"
+  RELEASE_NOTES_VERSION: "11"
+  SR_CHANGELOG_VERSION: "6"
+  SR_GIT_VERSION: "10"
+  CONVENTIONALCOMMITS_VERSION: "6"
+  CHANGELOG_CLI_VERSION: "3"
+
+# Base configuration for all release jobs
+.release_base:
+  stage: release
+  image: node:20-alpine
+  needs: []
+  variables:
+    GIT_STRATEGY: fetch
+    GIT_DEPTH: "0"
+
+# Extended base for jobs that push changes (uses bot identity)
+.release_push_base:
+  extends: .release_base
+  resource_group: release
+  variables:
+    GITLAB_TOKEN: $RELEASE_TOKEN
+    REPO_URL: "https://oauth2:${RELEASE_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+  before_script:
+    - apk add --no-cache git curl bash jq
+    - git config --global user.email "project_13831684_bot_1f10d664ae815e69d247c8cd4c319058@noreply.${CI_SERVER_HOST}"
+    - git config --global user.name "Registry Release Bot"
+
+# Base for dry-run/test jobs (uses test identity)
+.release_test_base:
+  extends: .release_base
+  before_script:
+    - apk add --no-cache git curl bash jq
+    - git config --global user.email "test@example.com"
+    - git config --global user.name "Test"
