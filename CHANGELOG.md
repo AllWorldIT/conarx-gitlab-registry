@@ -1,3 +1,44 @@
+## [4.37.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.36.0-gitlab...v4.37.0) (2026-02-17)
+
+
+### ✨ Features ✨
+
+* add /v1/gitlab api endpoint for asynchronous restarting of BBMs ([1dfd1f2](https://gitlab.com/gitlab-org/container-registry/commit/1dfd1f28cb0a8e02f8d0434b1d1f4fc972511458))
+* Add support for Notation signature media type ([1bc93ea](https://gitlab.com/gitlab-org/container-registry/commit/1bc93eaa0ec48ce1bef17205caa08586033b9756))
+* **gcs:** add support for configuring Google universe domain ([de8cbc6](https://gitlab.com/gitlab-org/container-registry/commit/de8cbc652526f794cee13178fe47f2573d76e81f))
+* **gcs:** automatically derive universe domain from credentials ([3153db5](https://gitlab.com/gitlab-org/container-registry/commit/3153db5d14009fa88b76e087c24215112a8b9b82))
+* implement rudimentary /v1/gitlab/bbm api for BBM controll ([9baad80](https://gitlab.com/gitlab-org/container-registry/commit/9baad80a8629b0a7f79fd1939af937ce1e7ea930))
+* **registry:** add gc-stats command to show online gc statistics ([8f28e31](https://gitlab.com/gitlab-org/container-registry/commit/8f28e3194bf70a9212d3e296d40baf4538384a75))
+
+
+### 🐛 Bug Fixes 🐛
+
+* make GCS integration tests work with universe domains ([2dc4599](https://gitlab.com/gitlab-org/container-registry/commit/2dc4599b2e07d28163f426000c696d29e9cc75e9))
+* **makefile:** replace egrep with grep -E ([4e153d5](https://gitlab.com/gitlab-org/container-registry/commit/4e153d51fdd4138bb08d47e0b24754da2d9a8ba0))
+* **release:** use inline presetConfig for release-notes-generator ([adfd63c](https://gitlab.com/gitlab-org/container-registry/commit/adfd63c1a450cff67cecc97e67b7243bb82f9166))
+
+
+### ⏮️️ Reverts ⏮️️
+
+* gcs version upgrade due to deprecation issue ([ca9add9](https://gitlab.com/gitlab-org/container-registry/commit/ca9add9ba113edbb687239e00afac65079417630))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module cloud.google.com/go/storage to v1.60.0 ([d4ce471](https://gitlab.com/gitlab-org/container-registry/commit/d4ce4710795ceffb5a90a3fb3f02642fe9123cc0))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.96.0 ([4964620](https://gitlab.com/gitlab-org/container-registry/commit/49646207d6222f06c0afd5258812174327f17fb3))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.21.0 ([480e76f](https://gitlab.com/gitlab-org/container-registry/commit/480e76fa53b695c094260c258f92e899e9916335))
+* **deps:** update module github.com/getsentry/sentry-go to v0.42.0 ([10f8b8e](https://gitlab.com/gitlab-org/container-registry/commit/10f8b8ecee9a725213dd34823dd52090913c1e77))
+* **deps:** update module github.com/lib/pq to v1.11.1 ([731091f](https://gitlab.com/gitlab-org/container-registry/commit/731091ff21451957636d34c18c3a40e1699f7ffe))
+* **deps:** update module github.com/lib/pq to v1.11.2 ([a09aaa7](https://gitlab.com/gitlab-org/container-registry/commit/a09aaa79569d026c5478f27a6763edff8ca06d10))
+* **deps:** update module github.com/samber/slog-logrus/v2 to v2.5.3 ([fc1d482](https://gitlab.com/gitlab-org/container-registry/commit/fc1d482237d3b430fb1c33bef2a83fb88673af71))
+* **deps:** update module google.golang.org/api to v0.265.0 ([750b2d3](https://gitlab.com/gitlab-org/container-registry/commit/750b2d36c7bb234aa67e1aa548ea95db98310ec6))
+
+
+### ♻️ Refactors ♻️
+
+* filter transient errors from Sentry ([bf9e1fa](https://gitlab.com/gitlab-org/container-registry/commit/bf9e1faff8a62428311399b6becf91246010cd89))
+
 ## [4.36.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.35.0-gitlab...v4.36.0) (2026-02-02)
 
 
