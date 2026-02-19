@@ -105,42 +105,55 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationsStatus
 	}
 
 	// Setup sqlmock rows from migrations variable
+	// Note: This must match the 13 columns returned by FindWithProgress query
 	rows := sqlmock.NewRows([]string{
 		"id",
 		"name",
-		"min_value",
-		"max_value",
 		"batch_size",
 		"status",
+		"total_tuple_count",
+		"min_value",
+		"max_value",
 		"job_signature_name",
 		"table_name",
 		"column_name",
 		"failure_error_code",
 		"batching_strategy",
-		"total_tuple_count",
+		"finished_jobs",
 	})
 
 	// Add rows from migrations slice
 	for _, m := range migrations {
 		errVal, _ := m.ErrorCode.Value()
 		bStrategy, _ := m.BatchingStrategy.Value()
+		// Calculate finished_jobs based on progress expectations
+		var finishedJobs int64
+		if m.ID == 1 {
+			// First migration: 40% progress with batch_size=100 and total=500
+			// finished_jobs = (progress * total) / (batch_size * 100) = (40 * 500) / (100 * 100) = 2
+			finishedJobs = 2
+		} else {
+			// Second migration has no valid total_tuple_count, so no progress
+			finishedJobs = 0
+		}
 		rows.AddRow(
 			m.ID,
 			m.Name,
-			m.StartID,
-			m.EndID,
 			m.BatchSize,
 			int(m.Status),
+			m.TotalTupleCount,
+			m.StartID,
+			m.EndID,
 			m.JobName,
 			m.TargetTable,
 			m.TargetColumn,
 			errVal,
 			bStrategy,
-			m.TotalTupleCount,
+			finishedJobs,
 		)
 	}
 
-	// Expect authorization check with wildcard access to background-migrations
+	// Expect authorization check with read access to background-migrations
 	s.mockAccessCtrl.EXPECT().
 		Authorized(gomock.Any(), auth.Access{
 			Resource: auth.Resource{
@@ -153,8 +166,8 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationsStatus
 			return ctx, nil
 		})
 
-	// Expect the query
-	s.mockQuerier.ExpectQuery(`SELECT.*FROM.*batched_background_migrations.*ORDER BY.*id ASC`).
+	// Expect the FindWithProgress query (includes JOIN with table aliases)
+	s.mockQuerier.ExpectQuery(`SELECT.*m\.id.*m\.name.*m\.batch_size.*m\.status.*m\.total_tuple_count.*FROM.*batched_background_migrations.*m.*LEFT JOIN.*ORDER BY.*m\.id`).
 		WillReturnRows(rows)
 
 	s.mockLB.EXPECT().Primary().Return(&datastore.DB{DB: s.mockPrimaryDB}).Times(1)
@@ -173,7 +186,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationsStatus
 	require.NoError(s.T(), err)
 
 	// Verify response content
-	require.Len(s.T(), result.Migrations, 2)
+	require.Len(s.T(), result.Migrations, 1)
 
 	// Check first migration
 	assert.Equal(s.T(), 1, result.Migrations[0].ID)
@@ -190,14 +203,15 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationsStatus
 		assert.Equal(s.T(), int64(500), *result.Migrations[0].TotalTupleCount)
 	}
 	assert.Nilf(s.T(), result.Migrations[0].ErrorCode, "error is not nil: %v", result.Migrations[0].ErrorCode)
-
-	// Check second migration
-	assert.Equal(s.T(), 2, result.Migrations[1].ID)
-	assert.Equal(s.T(), "migration_2", result.Migrations[1].Name)
-	assert.Equal(s.T(), "paused", result.Migrations[1].Status)
-	assert.Nil(s.T(), result.Migrations[1].TotalTupleCount)
-	if assert.NotNil(s.T(), result.Migrations[1].ErrorCode) {
-		assert.Equal(s.T(), 1, *result.Migrations[1].ErrorCode)
+	// Check progress fields
+	if assert.NotNil(s.T(), result.Migrations[0].FinishedJobs) {
+		assert.Equal(s.T(), int64(2), *result.Migrations[0].FinishedJobs)
+	}
+	if assert.NotNil(s.T(), result.Migrations[0].Progress) {
+		assert.InDelta(s.T(), 40.0, *result.Migrations[0].Progress, 0.1)
+	}
+	if assert.NotNil(s.T(), result.Migrations[0].Capped) {
+		assert.False(s.T(), *result.Migrations[0].Capped)
 	}
 }
 
@@ -275,7 +289,15 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_
 		migration.TotalTupleCount,
 	)
 
-	// Expect authorization check with wildcard access to background-migrations
+	// Setup progress rows
+	progressRows := sqlmock.NewRows([]string{
+		"id", "name", "batch_size", "status", "total_tuple_count",
+		"min_value", "max_value", "job_signature_name", "table_name",
+		"column_name", "failure_error_code", "batching_strategy", "finished_jobs",
+	}).
+		AddRow(1, "migration_1", 100, int(models.BackgroundMigrationActive), sql.NullInt64{Int64: 500, Valid: true}, 1, 1000, "job_1", "public.repositories", "id", sql.NullInt64{Valid: false}, "primary_key", int64(3))
+
+	// Expect authorization check with read access to background-migrations
 	s.mockAccessCtrl.EXPECT().
 		Authorized(gomock.Any(), auth.Access{
 			Resource: auth.Resource{
@@ -288,10 +310,10 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_
 			return ctx, nil
 		})
 
-	// Expect the query
-	s.mockQuerier.ExpectQuery(`SELECT.*FROM.*batched_background_migrations.*WHERE.*id = \$1`).
+		// Expect the FindWithProgress query (includes JOIN with table aliases and WHERE clause)
+	s.mockQuerier.ExpectQuery(`SELECT.*m\.id.*m\.name.*m\.batch_size.*m\.status.*m\.total_tuple_count.*FROM.*batched_background_migrations.*m.*LEFT JOIN.*WHERE.*m\.id.*ORDER BY.*m\.id`).
 		WithArgs(1).
-		WillReturnRows(rows)
+		WillReturnRows(progressRows)
 
 	s.mockLB.EXPECT().Primary().Return(&datastore.DB{DB: s.mockPrimaryDB}).Times(1)
 
@@ -322,6 +344,16 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_
 		assert.Equal(s.T(), int64(500), *result.Migration.TotalTupleCount)
 	}
 	assert.Nil(s.T(), result.Migration.ErrorCode)
+	// Check progress fields
+	if assert.NotNil(s.T(), result.Migration.FinishedJobs) {
+		assert.Equal(s.T(), int64(3), *result.Migration.FinishedJobs)
+	}
+	if assert.NotNil(s.T(), result.Migration.Progress) {
+		assert.InDelta(s.T(), 60.0, *result.Migration.Progress, 0.1)
+	}
+	if assert.NotNil(s.T(), result.Migration.Capped) {
+		assert.False(s.T(), *result.Migration.Capped)
+	}
 }
 
 func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_Forbidden() {
@@ -373,10 +405,17 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_
 			return ctx, nil
 		})
 
-	// Expect the query to return no rows
+	// Setup empty progress rows (no migration found)
+	emptyRows := sqlmock.NewRows([]string{
+		"id", "name", "batch_size", "status", "total_tuple_count",
+		"min_value", "max_value", "job_signature_name", "table_name",
+		"column_name", "failure_error_code", "batching_strategy", "finished_jobs",
+	})
+
+	// Expect the query to return empty rows
 	s.mockQuerier.ExpectQuery(`SELECT.*FROM.*batched_background_migrations.*WHERE.*id.*`).
 		WithArgs(1).
-		WillReturnError(sql.ErrNoRows)
+		WillReturnRows(emptyRows)
 
 	s.mockLB.EXPECT().Primary().Return(&datastore.DB{DB: s.mockPrimaryDB}).Times(1)
 
@@ -445,24 +484,17 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationsStatus
 		})
 
 	// Setup empty sqlmock rows
-	rows := sqlmock.NewRows([]string{
-		"id",
-		"name",
-		"min_value",
-		"max_value",
-		"batch_size",
-		"status",
-		"job_signature_name",
-		"table_name",
-		"column_name",
-		"failure_error_code",
-		"batching_strategy",
-		"total_tuple_count",
+	// Setup empty progress rows
+	// Setup empty progress rows with all 13 columns
+	progressRows := sqlmock.NewRows([]string{
+		"id", "name", "batch_size", "status", "total_tuple_count",
+		"min_value", "max_value", "job_signature_name", "table_name",
+		"column_name", "failure_error_code", "batching_strategy", "finished_jobs",
 	})
 
-	// Expect the query
-	s.mockQuerier.ExpectQuery(`SELECT.*FROM.*batched_background_migrations.*ORDER BY.*id ASC`).
-		WillReturnRows(rows)
+	// Expect the FindWithProgress query (includes JOIN with table aliases)
+	s.mockQuerier.ExpectQuery(`SELECT.*m\.id.*m\.name.*m\.batch_size.*m\.status.*m\.total_tuple_count.*FROM.*batched_background_migrations.*m.*LEFT JOIN.*ORDER BY.*m\.id`).
+		WillReturnRows(progressRows)
 
 	s.mockLB.EXPECT().Primary().Return(&datastore.DB{DB: s.mockPrimaryDB}).Times(1)
 

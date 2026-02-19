@@ -265,6 +265,21 @@ func (mr *MockBackgroundMigrationStoreMockRecorder) FindNextByStatus(ctx, status
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindNextByStatus", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindNextByStatus), ctx, status)
 }
 
+// FindWithProgress mocks base method.
+func (m *MockBackgroundMigrationStore) FindWithProgress(arg0 context.Context, arg1 *int) (models.BackgroundMigrationsWithProgress, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindWithProgress", arg0, arg1)
+	ret0, _ := ret[0].(models.BackgroundMigrationsWithProgress)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindWithProgress indicates an expected call of FindWithProgress.
+func (mr *MockBackgroundMigrationStoreMockRecorder) FindWithProgress(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindWithProgress", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).FindWithProgress), arg0, arg1)
+}
+
 // GetPendingWALCount mocks base method.
 func (m *MockBackgroundMigrationStore) GetPendingWALCount(ctx context.Context) (int, error) {
 	m.ctrl.T.Helper()
@@ -350,21 +365,6 @@ func (m *MockBackgroundMigrationStore) Pause(ctx context.Context) error {
 func (mr *MockBackgroundMigrationStoreMockRecorder) Pause(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pause", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Pause), ctx)
-}
-
-// Progress mocks base method.
-func (m *MockBackgroundMigrationStore) Progress(ctx context.Context) ([]*models.BackgroundMigrationProgress, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Progress", ctx)
-	ret0, _ := ret[0].([]*models.BackgroundMigrationProgress)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Progress indicates an expected call of Progress.
-func (mr *MockBackgroundMigrationStoreMockRecorder) Progress(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Progress", reflect.TypeOf((*MockBackgroundMigrationStore)(nil).Progress), ctx)
 }
 
 // Resume mocks base method.

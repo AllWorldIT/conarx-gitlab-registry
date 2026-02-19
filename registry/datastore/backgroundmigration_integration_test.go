@@ -999,7 +999,7 @@ func TestBackgroundMigrationStore_Progress(t *testing.T) {
 	reloadBackgroundMigrationJobFixtures(t)
 
 	s := datastore.NewBackgroundMigrationStore(suite.db)
-	progress, err := s.Progress(suite.ctx)
+	progress, err := s.FindWithProgress(suite.ctx, nil)
 	require.NoError(t, err)
 	require.NotNil(t, progress)
 
@@ -1015,12 +1015,13 @@ func TestBackgroundMigrationStore_Progress(t *testing.T) {
 	require.Len(t, progress, 1)
 
 	// Verify migration 1 details
-	require.Equal(t, 1, progress[0].MigrationId)
-	require.Equal(t, "CopyMediaTypesIDToNewIDColumn", progress[0].MigrationName)
-	require.Equal(t, "finished", progress[0].Status)
+	require.Equal(t, 1, progress[0].ID)
+	require.Equal(t, "CopyMediaTypesIDToNewIDColumn", progress[0].Name)
+	require.Equal(t, "finished", progress[0].Status.String())
 	require.Equal(t, 20, progress[0].BatchSize)
 	require.Equal(t, int64(2), progress[0].FinishedJobs)
-	require.Equal(t, int64(0), progress[0].TotalTupleCount)
+	require.Equal(t, int64(0), progress[0].TotalTupleCount.Int64)
+	require.False(t, progress[0].TotalTupleCount.Valid)
 	require.InDelta(t, 100.0, progress[0].Progress, 0.0001)
 	require.False(t, progress[0].Capped)
 }
@@ -1036,7 +1037,7 @@ func TestBackgroundMigrationStore_Progress_WithTotalTupleCount(t *testing.T) {
 	const totalTuples int64 = 100
 	require.NoError(t, s.SetTotalTupleCount(suite.ctx, migrationID, totalTuples))
 
-	progress, err := s.Progress(suite.ctx)
+	progress, err := s.FindWithProgress(suite.ctx, nil)
 	require.NoError(t, err)
 	require.NotNil(t, progress)
 
@@ -1044,9 +1045,9 @@ func TestBackgroundMigrationStore_Progress_WithTotalTupleCount(t *testing.T) {
 	require.Len(t, progress, 2)
 
 	// Find migration 2 in results
-	var mig2 *models.BackgroundMigrationProgress
+	var mig2 *models.BackgroundMigrationWithProgress
 	for _, p := range progress {
-		if p.MigrationId == migrationID {
+		if p.ID == migrationID {
 			mig2 = p
 			break
 		}
@@ -1055,11 +1056,12 @@ func TestBackgroundMigrationStore_Progress_WithTotalTupleCount(t *testing.T) {
 
 	// Migration 2: 1 finished job, batch_size=1, total=100
 	// Progress = (1 * 1) / 100 * 100 = 1%
-	require.Equal(t, "CopyBlobIDToNewIDColumn", mig2.MigrationName)
-	require.Equal(t, "active", mig2.Status)
+	require.Equal(t, "CopyBlobIDToNewIDColumn", mig2.Name)
+	require.Equal(t, "active", mig2.Status.String())
 	require.Equal(t, 1, mig2.BatchSize)
 	require.Equal(t, int64(1), mig2.FinishedJobs)
-	require.Equal(t, totalTuples, mig2.TotalTupleCount)
+	require.Equal(t, totalTuples, mig2.TotalTupleCount.Int64)
+	require.True(t, mig2.TotalTupleCount.Valid)
 	require.InDelta(t, 1.0, mig2.Progress, 0.001)
 	require.False(t, mig2.Capped)
 }
@@ -1071,7 +1073,7 @@ func TestBackgroundMigrationStore_Progress_CappedAt99Point9(t *testing.T) {
 	s := datastore.NewBackgroundMigrationStore(suite.db)
 
 	// Set total_tuple_count for migration 3 to test capping behavior
-	const migrationID = 3
+	migrationID := 3
 	const totalTuples int64 = 10
 	require.NoError(t, s.SetTotalTupleCount(suite.ctx, migrationID, totalTuples))
 
@@ -1088,25 +1090,17 @@ func TestBackgroundMigrationStore_Progress_CappedAt99Point9(t *testing.T) {
 		require.NoError(t, s.UpdateJobStatus(suite.ctx, job))
 	}
 
-	progress, err := s.Progress(suite.ctx)
+	progress, err := s.FindWithProgress(suite.ctx, &migrationID)
 	require.NoError(t, err)
-
-	// Find migration 3 in results
-	var mig3 *models.BackgroundMigrationProgress
-	for _, p := range progress {
-		if p.MigrationId == migrationID {
-			mig3 = p
-			break
-		}
-	}
-	require.NotNil(t, mig3)
+	require.Len(t, progress, 1)
 
 	// Progress should be capped at 99.9% (not 100% since migration is still active)
-	require.Equal(t, 1, mig3.BatchSize) // batch_size from fixtures is 1, but we're checking the fixture value
-	require.Equal(t, int64(10), mig3.FinishedJobs)
-	require.Equal(t, totalTuples, mig3.TotalTupleCount)
-	require.InDelta(t, 99.9, mig3.Progress, 0.001)
-	require.True(t, mig3.Capped)
+	require.Equal(t, 1, progress[0].BatchSize) // batch_size from fixtures is 1, but we're checking the fixture value
+	require.Equal(t, int64(10), progress[0].FinishedJobs)
+	require.Equal(t, totalTuples, progress[0].TotalTupleCount.Int64)
+	require.True(t, progress[0].TotalTupleCount.Valid)
+	require.InDelta(t, 99.9, progress[0].Progress, 0.001)
+	require.True(t, progress[0].Capped)
 }
 
 func TestBackgroundMigrationStore_Progress_ProcessedExceedsTotal(t *testing.T) {
@@ -1116,7 +1110,7 @@ func TestBackgroundMigrationStore_Progress_ProcessedExceedsTotal(t *testing.T) {
 	s := datastore.NewBackgroundMigrationStore(suite.db)
 
 	// Set total_tuple_count lower than what finished jobs would process
-	const migrationID = 2
+	migrationID := 2
 	const totalTuples int64 = 50
 	require.NoError(t, s.SetTotalTupleCount(suite.ctx, migrationID, totalTuples))
 
@@ -1134,32 +1128,24 @@ func TestBackgroundMigrationStore_Progress_ProcessedExceedsTotal(t *testing.T) {
 		require.NoError(t, s.UpdateJobStatus(suite.ctx, job))
 	}
 
-	progress, err := s.Progress(suite.ctx)
+	progress, err := s.FindWithProgress(suite.ctx, &migrationID)
 	require.NoError(t, err)
-
-	// Find migration 2 in results
-	var mig2 *models.BackgroundMigrationProgress
-	for _, p := range progress {
-		if p.MigrationId == migrationID {
-			mig2 = p
-			break
-		}
-	}
-	require.NotNil(t, mig2)
+	require.Len(t, progress, 1)
 
 	// Progress should be capped at 99.9% because processed is clamped to total
 	// and the result would be 100%
-	require.Equal(t, int64(102), mig2.FinishedJobs) // 2 from fixture + 100 created
-	require.Equal(t, totalTuples, mig2.TotalTupleCount)
-	require.InDelta(t, 99.9, mig2.Progress, 0.0001)
-	require.True(t, mig2.Capped)
+	require.Equal(t, int64(102), progress[0].FinishedJobs) // 2 from fixture + 100 created
+	require.Equal(t, totalTuples, progress[0].TotalTupleCount.Int64)
+	require.True(t, progress[0].TotalTupleCount.Valid)
+	require.InDelta(t, 99.9, progress[0].Progress, 0.0001)
+	require.True(t, progress[0].Capped)
 }
 
 func TestBackgroundMigrationStore_Progress_NoMigrations(t *testing.T) {
 	unloadBackgroundMigrationFixtures(t)
 
 	s := datastore.NewBackgroundMigrationStore(suite.db)
-	progress, err := s.Progress(suite.ctx)
+	progress, err := s.FindWithProgress(suite.ctx, nil)
 	require.NoError(t, err)
 	require.Empty(t, progress)
 }
@@ -1175,7 +1161,7 @@ func TestBackgroundMigrationStore_Progress_MultipleStatuses(t *testing.T) {
 		require.NoError(t, s.SetTotalTupleCount(suite.ctx, id, 100))
 	}
 
-	progress, err := s.Progress(suite.ctx)
+	progress, err := s.FindWithProgress(suite.ctx, nil)
 	require.NoError(t, err)
 
 	// Should have all 5 migrations now
@@ -1184,7 +1170,7 @@ func TestBackgroundMigrationStore_Progress_MultipleStatuses(t *testing.T) {
 	// Verify each migration has correct status
 	statusMap := make(map[int]string)
 	for _, p := range progress {
-		statusMap[p.MigrationId] = p.Status
+		statusMap[p.ID] = p.Status.String()
 	}
 
 	require.Equal(t, "finished", statusMap[1])
@@ -1195,7 +1181,7 @@ func TestBackgroundMigrationStore_Progress_MultipleStatuses(t *testing.T) {
 
 	// Verify finished migration is always 100%
 	for _, p := range progress {
-		if p.MigrationId == 1 {
+		if p.ID == 1 {
 			require.InDelta(t, 100.0, p.Progress, 0.001)
 			require.False(t, p.Capped)
 		}

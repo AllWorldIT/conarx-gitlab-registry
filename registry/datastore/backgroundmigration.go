@@ -85,8 +85,8 @@ type BackgroundMigrationStore interface {
 	SetTotalTupleCount(ctx context.Context, id int, total int64) error
 	// EstimateTotalTupleCount estimates total tuples to process for a BBM using reltuples and pg_stats
 	EstimateTotalTupleCount(ctx context.Context, bbm *models.BackgroundMigration) (int64, error)
-	// Progress estimates progress of BBM migrations
-	Progress(ctx context.Context) ([]*models.BackgroundMigrationProgress, error)
+	// FindWithProgress estimates progress of BBM migrations
+	FindWithProgress(context.Context, *int) (models.BackgroundMigrationsWithProgress, error)
 }
 
 // NewBackgroundMigrationStore builds a new backgroundMigrationStore.
@@ -321,84 +321,110 @@ func (bms *backgroundMigrationStore) FindById(ctx context.Context, id int) (*mod
 	return scanBackgroundMigration(row)
 }
 
-// Progress estimates progress of BBM migrations.
-func (bms *backgroundMigrationStore) Progress(ctx context.Context) ([]*models.BackgroundMigrationProgress, error) {
-	defer metrics.InstrumentQuery("bbm_collect_progress")()
+// FindWithProgress estimates progress of BBM migrations.
+func (bms *backgroundMigrationStore) FindWithProgress(ctx context.Context, id *int) (models.BackgroundMigrationsWithProgress, error) {
+	if id == nil {
+		defer metrics.InstrumentQuery("bbm_collect_progress")()
+	} else {
+		defer metrics.InstrumentQuery("bbm_collect_progress_with_id")()
+	}
 
 	// Use a single SQL query to get progress inputs per migration
 	// status values are stored as ints in the DB; models.BackgroundMigrationFinished indicates finished status
-	q := `SELECT
-                m.id,
-                m.name,
-                m.batch_size,
-                m.status,
-                m.total_tuple_count,
-                COALESCE(j.finished_jobs, 0) AS finished_jobs
-            FROM
-                batched_background_migrations m
-                LEFT JOIN (
-                    SELECT
-                        batched_background_migration_id AS bbm_id,
-                        COUNT(*) AS finished_jobs
-                    FROM
-                        batched_background_migration_jobs
-                    WHERE
-                        status = $1
-                    GROUP BY
-                        batched_background_migration_id) j ON j.bbm_id = m.id
-            ORDER BY
-                m.id`
+	q := fmt.Sprintf(`SELECT
+			m.id,
+			m.name,
+			m.batch_size,
+			m.status,
+			m.total_tuple_count,
+			m.min_value,
+			m.max_value,
+			m.job_signature_name,
+			m.table_name,
+			m.column_name,
+			m.failure_error_code,
+			m.batching_strategy,
+			COALESCE(j.finished_jobs, 0) AS finished_jobs
+		FROM
+			batched_background_migrations m
+			LEFT JOIN (
+				SELECT
+					batched_background_migration_id AS bbm_id,
+					COUNT(*) AS finished_jobs
+				FROM
+					batched_background_migration_jobs
+				WHERE
+					status = %d
+				GROUP BY
+					batched_background_migration_id) j ON j.bbm_id = m.id`,
+		models.BackgroundMigrationFinished)
 
-	rows, err := bms.db.QueryContext(ctx, q, int(models.BackgroundMigrationFinished))
+	qb := NewQueryBuilder()
+	err := qb.Build(q)
+	if err != nil {
+		return nil, fmt.Errorf("building FindWithProgress query: %w", err)
+	}
+
+	if id != nil {
+		err = qb.Build("WHERE m.id = ?", *id)
+		if err != nil {
+			return nil, fmt.Errorf("adding WHERE parameter in FindWithProgress query: %w", err)
+		}
+	}
+
+	err = qb.Build("ORDER BY m.id")
+	if err != nil {
+		return nil, fmt.Errorf("adding ORDER BY clause in FindWithProgress query: %w", err)
+	}
+
+	rows, err := bms.db.QueryContext(ctx, qb.SQL(), qb.Params()...)
 	if err != nil {
 		return nil, fmt.Errorf("querying background migrations progress: %w", err)
 	}
 	defer rows.Close()
 
-	res := make([]*models.BackgroundMigrationProgress, 0)
+	res := make(models.BackgroundMigrationsWithProgress, 0)
 
 	for rows.Next() {
-		var (
-			id           int
-			name         string
-			batchSize    int
-			statusInt    int
-			total        sql.NullInt64
-			finishedJobs int64
+		bmp := new(models.BackgroundMigrationWithProgress)
+		err := rows.Scan(
+			&bmp.ID,
+			&bmp.Name,
+			&bmp.BatchSize,
+			&bmp.Status,
+			&bmp.TotalTupleCount,
+			&bmp.StartID,
+			&bmp.EndID,
+			&bmp.JobName,
+			&bmp.TargetTable,
+			&bmp.TargetColumn,
+			&bmp.ErrorCode,
+			&bmp.BatchingStrategy,
+			&bmp.FinishedJobs,
 		)
-		if err := rows.Scan(&id, &name, &batchSize, &statusInt, &total, &finishedJobs); err != nil {
+		if err != nil {
 			return nil, fmt.Errorf("scanning background migrations progress row: %w", err)
 		}
 
-		status := models.BackgroundMigrationStatus(statusInt).String()
-
-		// Default: only report progress when total_tuple_count present; finished always 100.
-		var (
-			progress float64
-			capped   bool
-		)
-		switch models.BackgroundMigrationStatus(statusInt) {
+		// Default: only report progress when total_tuple_count present;
+		// finished always 100.
+		switch bmp.Status {
 		case models.BackgroundMigrationFinished:
-			progress = 100.0
+			bmp.Progress = 100.0
 		default:
-			p, ok, c := estimateProgress(total, finishedJobs, batchSize)
+			p, ok, c := estimateProgress(
+				bmp.TotalTupleCount,
+				bmp.FinishedJobs,
+				bmp.BatchSize,
+			)
 			if !ok {
 				continue
 			}
-			progress = p
-			capped = c
+			bmp.Progress = p
+			bmp.Capped = c
 		}
 
-		res = append(res, &models.BackgroundMigrationProgress{
-			Capped:          capped,
-			MigrationId:     id,
-			MigrationName:   name,
-			Status:          status,
-			BatchSize:       batchSize,
-			FinishedJobs:    finishedJobs,
-			TotalTupleCount: total.Int64,
-			Progress:        progress,
-		})
+		res = append(res, bmp)
 	}
 
 	if err := rows.Err(); err != nil {

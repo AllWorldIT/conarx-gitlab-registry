@@ -3,6 +3,7 @@ package metrics
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -30,7 +31,7 @@ func TestNewBBMProgressCollector_DefaultsAndOptions(t *testing.T) {
 
 	t.Run("with defaults", func(t *testing.T) {
 		// dummy executor not used here
-		exec := func(_ context.Context) ([]*models.BackgroundMigrationProgress, error) { return nil, nil }
+		exec := func(_ context.Context) (models.BackgroundMigrationsWithProgress, error) { return nil, nil }
 		c, err := NewBBMProgressCollector(exec, client)
 		require.NoError(t, err)
 		require.NotNil(t, c)
@@ -39,7 +40,7 @@ func TestNewBBMProgressCollector_DefaultsAndOptions(t *testing.T) {
 	})
 
 	t.Run("with custom options", func(t *testing.T) {
-		exec := func(_ context.Context) ([]*models.BackgroundMigrationProgress, error) { return nil, nil }
+		exec := func(_ context.Context) (models.BackgroundMigrationsWithProgress, error) { return nil, nil }
 		customInterval := 5 * time.Second
 		customLease := 12 * time.Second
 		c, err := NewBBMProgressCollector(exec, client, WithProgressInterval(customInterval), WithProgressLeaseDuration(customLease))
@@ -49,7 +50,7 @@ func TestNewBBMProgressCollector_DefaultsAndOptions(t *testing.T) {
 	})
 
 	t.Run("validation: lease <= interval", func(t *testing.T) {
-		exec := func(_ context.Context) ([]*models.BackgroundMigrationProgress, error) { return nil, nil }
+		exec := func(_ context.Context) (models.BackgroundMigrationsWithProgress, error) { return nil, nil }
 		_, err := NewBBMProgressCollector(exec, client, WithProgressInterval(10*time.Second), WithProgressLeaseDuration(10*time.Second))
 		require.EqualError(t, err, "bbm metrics lease duration (10s) must be longer than interval (10s)")
 
@@ -66,40 +67,52 @@ func TestBBMProgressCollector_Collect_ComputesProgress(t *testing.T) {
 	bbmProgressGauge.Reset()
 
 	// Create mock progress data
-	progressData := []*models.BackgroundMigrationProgress{
-		{
-			MigrationId:     1,
-			MigrationName:   "mig1",
-			BatchSize:       10,
-			Status:          "running",
-			TotalTupleCount: 100,
-			FinishedJobs:    3,
-			Progress:        30.0,
-			Capped:          false,
+	progressData := models.BackgroundMigrationsWithProgress{
+		&models.BackgroundMigrationWithProgress{
+			BackgroundMigration: models.BackgroundMigration{
+				ID:              1,
+				Name:            "mig1",
+				BatchSize:       10,
+				Status:          models.BackgroundMigrationRunning,
+				TotalTupleCount: sql.NullInt64{Int64: 100, Valid: true},
+			},
+			BackgroundMigrationProgress: models.BackgroundMigrationProgress{
+				FinishedJobs: 3,
+				Progress:     30.0,
+				Capped:       false,
+			},
 		},
-		{
-			MigrationId:     2,
-			MigrationName:   "mig2",
-			BatchSize:       10,
-			Status:          "finished",
-			TotalTupleCount: 0,
-			FinishedJobs:    7,
-			Progress:        100.0,
-			Capped:          false,
+		&models.BackgroundMigrationWithProgress{
+			BackgroundMigration: models.BackgroundMigration{
+				ID:              2,
+				Name:            "mig2",
+				BatchSize:       10,
+				Status:          models.BackgroundMigrationFinished,
+				TotalTupleCount: sql.NullInt64{Int64: 0, Valid: false},
+			},
+			BackgroundMigrationProgress: models.BackgroundMigrationProgress{
+				FinishedJobs: 7,
+				Progress:     100.0,
+				Capped:       false,
+			},
 		},
-		{
-			MigrationId:     3,
-			MigrationName:   "mig3",
-			BatchSize:       10,
-			Status:          "running",
-			TotalTupleCount: 100,
-			FinishedJobs:    10,
-			Progress:        99.9,
-			Capped:          true,
+		&models.BackgroundMigrationWithProgress{
+			BackgroundMigration: models.BackgroundMigration{
+				ID:              3,
+				Name:            "mig3",
+				BatchSize:       10,
+				Status:          models.BackgroundMigrationRunning,
+				TotalTupleCount: sql.NullInt64{Int64: 100, Valid: true},
+			},
+			BackgroundMigrationProgress: models.BackgroundMigrationProgress{
+				FinishedJobs: 10,
+				Progress:     99.9,
+				Capped:       true,
+			},
 		},
 	}
 
-	exec := func(_ context.Context) ([]*models.BackgroundMigrationProgress, error) {
+	exec := func(_ context.Context) (models.BackgroundMigrationsWithProgress, error) {
 		return progressData, nil
 	}
 
@@ -140,9 +153,9 @@ func TestBBMProgressCollector_StartStop_WithLock(t *testing.T) {
 	defer mr.Close()
 
 	var calls int
-	exec := func(_ context.Context) ([]*models.BackgroundMigrationProgress, error) {
+	exec := func(_ context.Context) (models.BackgroundMigrationsWithProgress, error) {
 		calls++
-		return make([]*models.BackgroundMigrationProgress, 0), nil
+		return make(models.BackgroundMigrationsWithProgress, 0), nil
 	}
 
 	// Use short timings for test
@@ -167,9 +180,9 @@ func TestBBMProgressCollector_LeaderExclusivity(t *testing.T) {
 
 	// build executor that supports arbitrary calls
 	mkExec := func(counter *int) BBMProgressExecutor {
-		return func(_ context.Context) ([]*models.BackgroundMigrationProgress, error) {
+		return func(_ context.Context) (models.BackgroundMigrationsWithProgress, error) {
 			*counter++
-			return make([]*models.BackgroundMigrationProgress, 0), nil
+			return make(models.BackgroundMigrationsWithProgress, 0), nil
 		}
 	}
 
