@@ -36,7 +36,7 @@ func init() {
 }
 
 // BBMProgressExecutor runs a query and returns rows for scanning.
-type BBMProgressExecutor func(ctx context.Context) ([]*models.BackgroundMigrationProgress, error)
+type BBMProgressExecutor func(ctx context.Context) (models.BackgroundMigrationsWithProgress, error)
 
 // BBMProgressCollector periodically collects BBM progress metrics with distributed locking.
 type BBMProgressCollector struct {
@@ -188,8 +188,8 @@ func (c *BBMProgressCollector) collect(ctx context.Context) {
 	for _, v := range progressItems {
 		c.logger.WithFields(dlog.Fields{
 			"capped":            v.Capped,
-			"migration_id":      v.MigrationId,
-			"migration_name":    v.MigrationName,
+			"migration_id":      v.ID,
+			"migration_name":    v.Name,
 			"bbm_status":        v.Status,
 			"batch_size":        v.BatchSize,
 			"finished_jobs":     v.FinishedJobs,
@@ -198,7 +198,7 @@ func (c *BBMProgressCollector) collect(ctx context.Context) {
 		}).Info("bbm progress")
 
 		bbmProgressGauge.
-			WithLabelValues(fmt.Sprint(v.MigrationId), v.MigrationName, v.Status).
+			WithLabelValues(fmt.Sprint(v.ID), v.Name, v.Status.String()).
 			Set(v.Progress)
 	}
 }

@@ -14,18 +14,21 @@ import (
 
 // BackgroundMigrationResponse represents a single background migration in API responses.
 type BackgroundMigrationResponse struct {
-	ID               int    `json:"id"`
-	Name             string `json:"name"`
-	Status           string `json:"status"`
-	JobSignatureName string `json:"job_signature_name"`
-	TargetTable      string `json:"target_table"`
-	TargetColumn     string `json:"target_column"`
-	BatchSize        int    `json:"batch_size"`
-	MinValue         int    `json:"min_value"`
-	MaxValue         int    `json:"max_value"`
-	BatchingStrategy string `json:"batching_strategy"`
-	TotalTupleCount  *int64 `json:"total_tuple_count,omitempty"`
-	ErrorCode        *int   `json:"error_code,omitempty"`
+	ID               int      `json:"id"`
+	Name             string   `json:"name"`
+	Status           string   `json:"status"`
+	JobSignatureName string   `json:"job_signature_name"`
+	TargetTable      string   `json:"target_table"`
+	TargetColumn     string   `json:"target_column"`
+	BatchSize        int      `json:"batch_size"`
+	MinValue         int      `json:"min_value"`
+	MaxValue         int      `json:"max_value"`
+	BatchingStrategy string   `json:"batching_strategy"`
+	TotalTupleCount  *int64   `json:"total_tuple_count,omitempty"`
+	ErrorCode        *int     `json:"error_code,omitempty"`
+	Capped           *bool    `json:"capped,omitempty"`
+	FinishedJobs     *int64   `json:"finished_jobs,omitempty"`
+	Progress         *float64 `json:"progress,omitempty"`
 }
 
 // BackgroundMigrationsListResponse is the response for listing all background migrations.
@@ -121,12 +124,13 @@ func backgroundMigrationsRestartDispatcher(ctx *Context, _ *http.Request) http.H
 func (h *backgroundMigrationsHandler) GetBackgroundMigrations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	migrations, err := datastore.NewBackgroundMigrationStore(h.db.Primary()).FindAll(r.Context())
+	store := datastore.NewBackgroundMigrationStore(h.db.Primary())
+
+	migrations, err := store.FindWithProgress(r.Context(), nil)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
-
 	resp := BackgroundMigrationsListResponse{
 		Migrations: convertToBackgroundMigrationResponses(migrations),
 	}
@@ -152,25 +156,23 @@ func (h *backgroundMigrationsHandler) GetBackgroundMigration(w http.ResponseWrit
 		return
 	}
 
-	migrations, err := datastore.NewBackgroundMigrationStore(h.db.Primary()).
-		FindById(
-			r.Context(),
-			bbmId,
-		)
+	store := datastore.NewBackgroundMigrationStore(h.db.Primary())
+
+	migration, err := store.FindWithProgress(r.Context(), &bbmId)
 	if err != nil {
 		h.Errors = append(h.Errors, errcode.FromUnknownError(err))
 		return
 	}
-	if migrations == nil {
+	if len(migration) != 1 {
 		h.Errors = append(
 			h.Errors,
-			v2.ErrorCodeBBMNotFound.WithDetail(fmt.Sprintf("BBM with ID %d does not exist", bbmId)),
+			v2.ErrorCodeBBMNotFound.WithDetail(fmt.Sprintf("BBM with ID %d not found", bbmId)),
 		)
 		return
 	}
 
 	resp := BackgroundMigrationGetResponse{
-		Migration: convertToBackgroundMigrationResponse(migrations),
+		Migration: convertToBackgroundMigrationResponse(migration[0]),
 	}
 
 	enc := json.NewEncoder(w)
@@ -280,10 +282,7 @@ func (h *backgroundMigrationsHandler) RestartBackgroundMigration(w http.Response
 }
 
 // convertToBackgroundMigrationResponse converts a single models.BackgroundMigration to API response format.
-func convertToBackgroundMigrationResponse(m *models.BackgroundMigration) BackgroundMigrationResponse {
-	if m == nil {
-		return BackgroundMigrationResponse{}
-	}
+func convertToBackgroundMigrationResponse(m *models.BackgroundMigrationWithProgress) BackgroundMigrationResponse {
 	resp := BackgroundMigrationResponse{
 		ID:               m.ID,
 		Name:             m.Name,
@@ -295,6 +294,9 @@ func convertToBackgroundMigrationResponse(m *models.BackgroundMigration) Backgro
 		MinValue:         m.StartID,
 		MaxValue:         m.EndID,
 		BatchingStrategy: m.BatchingStrategy.String,
+		Capped:           &m.Capped,
+		FinishedJobs:     &m.FinishedJobs,
+		Progress:         &m.Progress,
 	}
 
 	// Only include total_tuple_count if it's been set (not null)
@@ -313,7 +315,7 @@ func convertToBackgroundMigrationResponse(m *models.BackgroundMigration) Backgro
 }
 
 // convertToBackgroundMigrationResponses converts a slice of models.BackgroundMigration to API response format.
-func convertToBackgroundMigrationResponses(migrations models.BackgroundMigrations) []BackgroundMigrationResponse {
+func convertToBackgroundMigrationResponses(migrations models.BackgroundMigrationsWithProgress) []BackgroundMigrationResponse {
 	responses := make([]BackgroundMigrationResponse, 0, len(migrations))
 
 	for i := range migrations {

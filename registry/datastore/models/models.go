@@ -223,15 +223,19 @@ type BackgroundMigration struct {
 
 // BackgroundMigrationProgress is the representation of a BBM progress.
 type BackgroundMigrationProgress struct {
-	Capped          bool
-	MigrationId     int
-	MigrationName   string
-	Status          string
-	BatchSize       int
-	FinishedJobs    int64
-	TotalTupleCount int64
-	Progress        float64
+	Capped       bool
+	FinishedJobs int64
+	Progress     float64
 }
+
+// BackgroundMigrationWithProgress describes a migration together with its progress information
+type BackgroundMigrationWithProgress struct {
+	BackgroundMigration
+	BackgroundMigrationProgress
+}
+
+// BackgroundMigrationsWithProgress is a slice of BackgroundMigrationWithProgress pointers
+type BackgroundMigrationsWithProgress []*BackgroundMigrationWithProgress
 
 // BackgroundMigrations is a slice of BackgroundMigration pointers.
 type BackgroundMigrations []*BackgroundMigration
