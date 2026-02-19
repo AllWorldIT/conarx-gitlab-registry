@@ -15,9 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// assertionDelay used when the event notifications mock server is used, to account for the time
-// for the mock server to receive the expected notification.
-const assertionDelay = 50 * time.Millisecond
+// assertionDelay is the polling interval when waiting for event notifications
+const assertionDelay = 500 * time.Millisecond
+
+// assertionTimeout is the maximum time to wait for event notifications
+const assertionTimeout = 5 * time.Second
 
 // NotificationServer acts as a mock server that receives event notifications as configured by the registry.
 type NotificationServer struct {
@@ -69,6 +71,9 @@ func NewNotificationServer(t *testing.T, databaseEnabled bool) *NotificationServ
 	return ns
 }
 
+// AssertEventNotification polls for the expected event notification with a timeout.
+// This replaces the fixed time.Sleep() with a polling-based approach to handle
+// timing variability in CI environments and database load balancing scenarios.
 func (ns *NotificationServer) AssertEventNotification(t *testing.T, expectedEvent notifications.Event) {
 	t.Helper()
 
@@ -78,64 +83,81 @@ func (ns *NotificationServer) AssertEventNotification(t *testing.T, expectedEven
 		return
 	}
 
-	// allow some time for the mock server to handle the notification
-	time.Sleep(assertionDelay)
+	lastSeenSize := 0
 
-	ns.mu.Lock()
-	defer ns.mu.Unlock()
+	// Poll for the event with a reasonable timeout to handle async webhook delivery
+	checkF := func() bool {
+		ns.mu.Lock()
+		defer ns.mu.Unlock()
 
-	// loop over the received events as we don't know the ID the notification system generated
-	for _, receivedEvent := range ns.receivedEvents {
-		if receivedEvent.Action != expectedEvent.Action {
-			continue
+		if len(ns.receivedEvents) == lastSeenSize {
+			t.Logf("no new events received")
+			return false
 		}
 
-		var err error
-		switch expectedEvent.Action {
-		case "push":
-			// TODO: handle different push validations
-			err = ns.validateManifestPush(t, expectedEvent, receivedEvent)
-			if err != nil {
-				t.Logf("manifest push event mismatch: %v", err)
-				continue
-			}
-			// found a match!
-			return
-		case "pull":
-			err := ns.validateManifestPull(t, expectedEvent, receivedEvent)
-			if err != nil {
-				t.Logf("manifest pulled event mismatch: %v", err)
+		// loop over the received events as we don't know the ID the notification system generated
+		for _, receivedEvent := range ns.receivedEvents[lastSeenSize:] {
+			if receivedEvent.Action != expectedEvent.Action {
 				continue
 			}
 
-			return
-		case "delete":
-			err := ns.validateManifestDelete(t, expectedEvent, receivedEvent)
-			if err != nil {
-				t.Logf("manifest delete event mismatch: %v", err)
-				continue
+			var err error
+			switch expectedEvent.Action {
+			case "push":
+				err = ns.validateManifestPush(t, expectedEvent, receivedEvent)
+				if err != nil {
+					t.Logf("manifest push event mismatch: %v", err)
+					continue
+				}
+				return true
+			case "pull":
+				err = ns.validateManifestPull(t, expectedEvent, receivedEvent)
+				if err != nil {
+					t.Logf("manifest pulled event mismatch: %v", err)
+					continue
+				}
+				return true
+			case "delete":
+				err = ns.validateManifestDelete(t, expectedEvent, receivedEvent)
+				if err != nil {
+					t.Logf("manifest delete event mismatch: %v", err)
+					continue
+				}
+				return true
+			case "rename":
+				// validateRepositoryRename uses require internally,
+				// so we need to check if it would pass without using require
+				err = ns.validateRepositoryRename(t, expectedEvent, receivedEvent)
+				if err != nil {
+					t.Logf("manifest rename event mismatch: %v", err)
+					continue
+				}
+				return true
+			default:
+				t.Errorf("unknown action: %q", expectedEvent.Action)
+				return false
 			}
-
-			return
-		case "rename":
-			validateRepositoryRename(t, expectedEvent, receivedEvent)
-
-			return
-		default:
-			t.Errorf("unknown action: %q", expectedEvent.Action)
 		}
+		lastSeenSize = len(ns.receivedEvents)
+
+		return false
 	}
 
-	t.Errorf("expected event did not match any received events")
+	require.Eventually(
+		t,
+		checkF,
+		assertionTimeout, assertionDelay,
+		"expected event did not match any received events",
+	)
 }
 
 func (*NotificationServer) validateManifestPush(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
-	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
-	require.NotEmpty(t, receivedEvent.Timestamp, "timestamp was empty")
-	require.NotEmpty(t, receivedEvent.Request, "request was empty")
-	require.NotEmpty(t, receivedEvent.Source, "source was empty")
+	assert.NotEmpty(t, receivedEvent.ID, "event ID was empty")
+	assert.NotEmpty(t, receivedEvent.Timestamp, "timestamp was empty")
+	assert.NotEmpty(t, receivedEvent.Request, "request was empty")
+	assert.NotEmpty(t, receivedEvent.Source, "source was empty")
 
 	// we loop over a bunch of events looking for a match but we don't have a way
 	// of identifying the event easily, so we can't use require.Equal or else the test would
@@ -171,10 +193,10 @@ func (*NotificationServer) validateManifestPush(t *testing.T, expectedEvent, rec
 func (*NotificationServer) validateManifestDelete(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
-	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
-	require.NotEmpty(t, receivedEvent.Timestamp, "timestamp was empty")
-	require.NotEmpty(t, receivedEvent.Request, "request was empty")
-	require.NotEmpty(t, receivedEvent.Source, "source was empty")
+	assert.NotEmpty(t, receivedEvent.ID, "event ID was empty")
+	assert.NotEmpty(t, receivedEvent.Timestamp, "timestamp was empty")
+	assert.NotEmpty(t, receivedEvent.Request, "request was empty")
+	assert.NotEmpty(t, receivedEvent.Source, "source was empty")
 
 	if expectedEvent.Action != receivedEvent.Action {
 		return fmt.Errorf("expected action: %q but got: %q", expectedEvent.Action, receivedEvent.Action)
@@ -205,10 +227,10 @@ func (*NotificationServer) validateManifestDelete(t *testing.T, expectedEvent, r
 func (*NotificationServer) validateManifestPull(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
-	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
-	require.NotEmpty(t, receivedEvent.Timestamp, "timestamp was empty")
-	require.NotEmpty(t, receivedEvent.Request, "request was empty")
-	require.NotEmpty(t, receivedEvent.Source, "source was empty")
+	assert.NotEmpty(t, receivedEvent.ID, "event ID was empty")
+	assert.NotEmpty(t, receivedEvent.Timestamp, "timestamp was empty")
+	assert.NotEmpty(t, receivedEvent.Request, "request was empty")
+	assert.NotEmpty(t, receivedEvent.Source, "source was empty")
 
 	if expectedEvent.Action != receivedEvent.Action {
 		return fmt.Errorf("expected action: %q but got: %q", expectedEvent.Action, receivedEvent.Action)
@@ -234,14 +256,33 @@ func (*NotificationServer) validateManifestPull(t *testing.T, expectedEvent, rec
 }
 
 // validateRepositoryRename validates that a rename event contains the necessary fields.
-func validateRepositoryRename(t *testing.T, expectedEvent, receivedEvent notifications.Event) {
+func (*NotificationServer) validateRepositoryRename(t *testing.T, expectedEvent, receivedEvent notifications.Event) error {
 	t.Helper()
 
-	require.NotEmpty(t, receivedEvent.ID, "event ID was empty")
-	require.NotEmpty(t, receivedEvent.Timestamp, "timestamp was empty")
-	require.NotEmpty(t, receivedEvent.Request, "request was empty")
-	require.NotEmpty(t, receivedEvent.Source, "source was empty")
-	require.Equal(t, expectedEvent.Action, receivedEvent.Action)
-	require.Equal(t, expectedEvent.Target.Repository, receivedEvent.Target.Repository)
-	require.Equal(t, expectedEvent.Target.Rename, receivedEvent.Target.Rename)
+	assert.NotEmpty(t, receivedEvent.ID, "event ID was empty")
+	assert.NotEmpty(t, receivedEvent.Timestamp, "timestamp was empty")
+	assert.NotEmpty(t, receivedEvent.Request, "request was empty")
+	assert.NotEmpty(t, receivedEvent.Source, "source was empty")
+
+	if expectedEvent.Action != receivedEvent.Action {
+		return fmt.Errorf("expected action: %q but got: %q", expectedEvent.Action, receivedEvent.Action)
+	}
+
+	if expectedEvent.Target.Repository != receivedEvent.Target.Repository {
+		return fmt.Errorf("expected target repository: %q but got: %q", expectedEvent.Target.Repository, receivedEvent.Target.Repository)
+	}
+
+	if expectedEvent.Target.Rename.Type != receivedEvent.Target.Rename.Type {
+		return fmt.Errorf("expected rename type: %q but got: %q", expectedEvent.Target.Rename.Type, receivedEvent.Target.Rename.Type)
+	}
+
+	if expectedEvent.Target.Rename.From != receivedEvent.Target.Rename.From {
+		return fmt.Errorf("expected rename from path: %q but got: %q", expectedEvent.Target.Rename.From, receivedEvent.Target.Rename.From)
+	}
+
+	if expectedEvent.Target.Rename.To != receivedEvent.Target.Rename.To {
+		return fmt.Errorf("expected rename to path: %q but got: %q", expectedEvent.Target.Rename.To, receivedEvent.Target.Rename.To)
+	}
+
+	return nil
 }
