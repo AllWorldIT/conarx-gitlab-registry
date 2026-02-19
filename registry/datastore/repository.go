@@ -1469,6 +1469,11 @@ func (s *repositoryStore) HasTagsAfterName(ctx context.Context, r *models.Reposi
 		}
 	}
 
+	err = qb.Build(`LIMIT 1`)
+	if err != nil {
+		return false, err
+	}
+
 	var count int
 	if err := s.db.QueryRowContext(ctx, qb.SQL(), qb.Params()...).Scan(&count); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("checking if there are more tags after name: %w", err)
@@ -1524,6 +1529,11 @@ func (s *repositoryStore) HasTagsBeforeName(ctx context.Context, r *models.Repos
 		if err != nil {
 			return false, err
 		}
+	}
+
+	err = qb.Build(`LIMIT 1`)
+	if err != nil {
+		return false, err
 	}
 
 	var count int
