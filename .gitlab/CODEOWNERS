@@ -18,7 +18,7 @@
 [CI Tool]  @vespian_gl @suleimiahmed 
 /script/ci_tool/
 
-[CI]  @vespian_gl @suleimiahmed 
+[CI]  @suleimiahmed @vespian_gl
 /.gitlab/
 
 [Database] @jdrpereira @suleimiahmed 
