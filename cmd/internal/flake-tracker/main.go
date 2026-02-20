@@ -272,6 +272,9 @@ func processFailures(cli gitlabAPI, notifier slackNotifier, issuePID int64, fail
 				Description: gitlab.Ptr(desc),
 				Labels:      &lo,
 				Weight:      gitlab.Ptr(int64(1)),
+				// Assign to AI flake investigator https://gitlab.com/ai-container-registry-flake-investigator-gitlab-org
+				// as first point of contact for automated investigation
+				AssigneeIDs: gitlab.Ptr([]int64{34741781}),
 			}
 			is, _, err := cli.CreateIssue(issuePID, cio)
 			if err != nil {
