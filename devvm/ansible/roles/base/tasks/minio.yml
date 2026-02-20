@@ -5,8 +5,7 @@
     repo: https://github.com/minio/minio.git
     dest: /home/dev/minio
     accept_hostkey: true
-    version: RELEASE.2025-10-15T17-29-55Z
-    depth: 1
+    version: master
   # ssh auth sock issues
   become: true
   become_flags: -SHE
