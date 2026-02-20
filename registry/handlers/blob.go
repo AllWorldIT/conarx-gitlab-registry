@@ -36,13 +36,19 @@ func blobDispatcher(ctx *Context, _ *http.Request) http.Handler {
 		Digest:  dgst,
 	}
 
+	deleteHandler := blobHandler.LegacyDeleteBlob
+
+	if blobHandler.useDatabase {
+		deleteHandler = blobHandler.DeleteBlob
+	}
+
 	mhandler := handlers.MethodHandler{
 		http.MethodGet:  http.HandlerFunc(blobHandler.HandleGetBlob),
 		http.MethodHead: http.HandlerFunc(blobHandler.HandleGetBlob),
 	}
 
 	if !ctx.readOnly {
-		mhandler[http.MethodDelete] = http.HandlerFunc(blobHandler.DeleteBlob)
+		mhandler[http.MethodDelete] = http.HandlerFunc(deleteHandler)
 	}
 	return checkOngoingRename(mhandler, ctx)
 }
@@ -181,38 +187,32 @@ func deleteEnabled(config *configuration.Configuration) bool {
 	return false
 }
 
-// DeleteBlob deletes a layer blob
+// DeleteBlob unlinks a layer reference from the repository.
 func (bh *blobHandler) DeleteBlob(w http.ResponseWriter, _ *http.Request) {
 	log.GetLogger(log.WithContext(bh)).Debug("DeleteBlob")
 
-	err := bh.deleteBlobImpl()
+	err := dbDeleteBlob(bh.Context, bh.App.Config, bh.db.Primary(), bh.GetRepoCache(), bh.Repository.Named().Name(), bh.Digest)
 	if err != nil {
-		switch err {
-		case distribution.ErrUnsupported:
-			bh.Errors = append(bh.Errors, errcode.ErrorCodeUnsupported)
-			return
-		case distribution.ErrBlobUnknown:
-			bh.Errors = append(bh.Errors, v2.ErrorCodeBlobUnknown)
-			return
-		case distribution.ErrRepositoryUnknown{Name: bh.Repository.Named().Name()}:
-			bh.Errors = append(bh.Errors, v2.ErrorCodeNameUnknown)
-			return
-		default:
-			bh.Errors = append(bh.Errors, errcode.FromUnknownError(err))
-			log.GetLogger(log.WithContext(bh)).WithError(err).Error("failed to delete blob")
-			return
-		}
+		bh.appendBlobDeleteError(err)
+		return
 	}
 
 	w.Header().Set("Content-Length", "0")
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (bh *blobHandler) deleteBlobImpl() error {
-	if !bh.useDatabase {
-		blobs := bh.Repository.Blobs(bh)
-		return blobs.Delete(bh, bh.Digest)
-	}
+func (bh *blobHandler) appendBlobDeleteError(err error) {
+	var repoUnknown distribution.ErrRepositoryUnknown
 
-	return dbDeleteBlob(bh.Context, bh.App.Config, bh.db.Primary(), bh.GetRepoCache(), bh.Repository.Named().Name(), bh.Digest)
+	switch {
+	case errors.Is(err, distribution.ErrUnsupported):
+		bh.Errors = append(bh.Errors, errcode.ErrorCodeUnsupported)
+	case errors.Is(err, distribution.ErrBlobUnknown):
+		bh.Errors = append(bh.Errors, v2.ErrorCodeBlobUnknown)
+	case errors.As(err, &repoUnknown):
+		bh.Errors = append(bh.Errors, v2.ErrorCodeNameUnknown)
+	default:
+		bh.Errors = append(bh.Errors, errcode.FromUnknownError(err))
+		log.GetLogger(log.WithContext(bh)).WithError(err).Error("failed to delete blob")
+	}
 }
