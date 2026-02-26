@@ -926,10 +926,8 @@ func TestImporter_PreImportAll_LastPublishedAtDateNotUpdatedOnFailure(t *testing
 	require.False(t, r.LastPublishedAt.Valid)
 }
 
-func TestImporter_ImportAllRepositories_AlwaysLocksTheDatabaseInUse_FFEnabled(t *testing.T) {
+func TestImporter_ImportAllRepositories_AlwaysLocksTheDatabaseInUse(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	t.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(true))
 	root := "happy-path"
 
 	sdriver := newFilesystemStorageDriverWithRoot(t, root)
@@ -949,55 +947,8 @@ func TestImporter_ImportAllRepositories_AlwaysLocksTheDatabaseInUse_FFEnabled(t 
 	assert.False(t, ok)
 }
 
-func TestImporter_ImportAllRepositories_AlwaysLocksTheDatabaseInUse_FFDisabled(t *testing.T) {
+func TestImporter_ImportAllRepositories_AlwaysLocksTheDatabaseInUse_NoFilesystemLockfile(t *testing.T) {
 	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	t.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(false))
-	root := "happy-path"
-
-	sdriver := newFilesystemStorageDriverWithRoot(t, root)
-	registry := newRegistry(t, sdriver)
-	require.NoError(t, registry.Lockers().FSLock(suite.ctx))
-
-	imp := newImporterWithRoot(t, suite.db, root)
-	err := imp.ImportAllRepositories(suite.ctx)
-	require.NoError(t, err)
-
-	ok, err := registry.Lockers().DBIsLocked(suite.ctx)
-	require.NoError(t, err)
-	assert.True(t, ok)
-
-	ok, err = registry.Lockers().FSIsLocked(suite.ctx)
-	require.NoError(t, err)
-	assert.False(t, ok)
-}
-
-func TestImporter_ImportAllRepositories_AlwaysLocksTheDatabaseInUse_NoFilesystemLockfile_FFEnabled(t *testing.T) {
-	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	t.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(true))
-	root := "happy-path"
-
-	imp := newImporterWithRoot(t, suite.db, root)
-	err := imp.ImportAllRepositories(suite.ctx)
-	require.NoError(t, err)
-
-	sdriver := newFilesystemStorageDriverWithRoot(t, root)
-	registry := newRegistry(t, sdriver)
-
-	ok, err := registry.Lockers().DBIsLocked(suite.ctx)
-	require.NoError(t, err)
-	assert.True(t, ok)
-
-	ok, err = registry.Lockers().FSIsLocked(suite.ctx)
-	require.NoError(t, err)
-	assert.False(t, ok)
-}
-
-func TestImporter_ImportAllRepositories_AlwaysLocksTheDatabaseInUse_NoFilesystemLockfile_FFDisabled(t *testing.T) {
-	require.NoError(t, testutil.TruncateAllTables(suite.db))
-
-	t.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(false))
 	root := "happy-path"
 
 	imp := newImporterWithRoot(t, suite.db, root)

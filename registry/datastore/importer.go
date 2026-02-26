@@ -1402,10 +1402,6 @@ func (imp *Importer) importBlobsImpl(ctx context.Context) error {
 	return nil
 }
 
-// Ingore feature.EnforceLockfiles here. We're not stoping or starting the import
-// based on their presence or absence and we need to manage their state because
-// they persist across enabling and disabling the feature flag see:
-// https://gitlab.com/gitlab-org/container-registry/-/merge_requests/2647
 func (imp *Importer) handleLockers(ctx context.Context, err error) error {
 	if err != nil || imp.dryRun {
 		if err := imp.RestoreLockfiles(ctx); err != nil {

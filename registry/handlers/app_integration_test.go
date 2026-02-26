@@ -7,12 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/docker/distribution/configuration"
-	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/registry/datastore/migrations"
 	"github.com/docker/distribution/registry/datastore/migrations/postmigrations"
 	"github.com/docker/distribution/registry/datastore/migrations/premigrations"
@@ -27,70 +25,39 @@ import (
 
 func TestNewApp_Lockfiles(t *testing.T) {
 	testCases := map[string]struct {
-		path               string
-		dbEnabled          configuration.DatabaseEnabled
-		ffEnforceLockfiles bool
-		expectedErr        error
+		path        string
+		dbEnabled   configuration.DatabaseEnabled
+		expectedErr error
 	}{
-		"filesystem-in-use with db disabled and ff enabled": {
-			path:               "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:          configuration.DatabaseEnabledFalse,
-			ffEnforceLockfiles: true,
-			expectedErr:        nil,
+		"filesystem-in-use with db disabled": {
+			path:        "../datastore/testdata/fixtures/importer/happy-path",
+			dbEnabled:   configuration.DatabaseEnabledFalse,
+			expectedErr: nil,
 		},
-		"filesystem-in-use with db enabled and ff enabled": {
-			path:               "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:          configuration.DatabaseEnabledTrue,
-			ffEnforceLockfiles: true,
-			expectedErr:        handlers.ErrFilesystemInUse,
+		"filesystem-in-use with db enabled": {
+			path:        "../datastore/testdata/fixtures/importer/happy-path",
+			dbEnabled:   configuration.DatabaseEnabledTrue,
+			expectedErr: handlers.ErrFilesystemInUse,
 		},
-		"filesystem-in-use with db enabled and ff disabled": {
-			path:               "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:          configuration.DatabaseEnabledTrue,
-			ffEnforceLockfiles: false,
-			expectedErr:        nil,
+		"filesystem-in-use with db prefer": {
+			path:        "../datastore/testdata/fixtures/importer/happy-path",
+			dbEnabled:   configuration.DatabaseEnabledPrefer,
+			expectedErr: nil,
 		},
-		"filesystem-in-use with db prefer and ff enabled": {
-			path:               "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:          configuration.DatabaseEnabledPrefer,
-			ffEnforceLockfiles: true,
-			expectedErr:        nil,
+		"database-in-use with db disabled": {
+			path:        "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			dbEnabled:   configuration.DatabaseEnabledFalse,
+			expectedErr: handlers.ErrDatabaseInUse,
 		},
-		"filesystem-in-use with db prefer and ff disabled": {
-			path:               "../datastore/testdata/fixtures/importer/happy-path",
-			dbEnabled:          configuration.DatabaseEnabledPrefer,
-			ffEnforceLockfiles: false,
-			expectedErr:        nil,
+		"database-in-use with db enabled": {
+			path:        "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			dbEnabled:   configuration.DatabaseEnabledTrue,
+			expectedErr: nil,
 		},
-		"database-in-use with db disabled and ff enabled": {
-			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:          configuration.DatabaseEnabledFalse,
-			ffEnforceLockfiles: true,
-			expectedErr:        handlers.ErrDatabaseInUse,
-		},
-		"database-in-use with db disabled and ff disabled": {
-			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:          configuration.DatabaseEnabledFalse,
-			ffEnforceLockfiles: false,
-			expectedErr:        nil,
-		},
-		"database-in-use with db enabled and ff enabled": {
-			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:          configuration.DatabaseEnabledTrue,
-			ffEnforceLockfiles: true,
-			expectedErr:        nil,
-		},
-		"database-in-use with db prefer and ff disabled": {
-			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:          configuration.DatabaseEnabledPrefer,
-			ffEnforceLockfiles: false,
-			expectedErr:        nil,
-		},
-		"database-in-use with db prefer and ff enabled": {
-			path:               "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
-			dbEnabled:          configuration.DatabaseEnabledPrefer,
-			ffEnforceLockfiles: true,
-			expectedErr:        nil,
+		"database-in-use with db prefer": {
+			path:        "../datastore/testdata/fixtures/importer/lockfile-db-in-use",
+			dbEnabled:   configuration.DatabaseEnabledPrefer,
+			expectedErr: nil,
 		},
 	}
 
@@ -99,8 +66,6 @@ func TestNewApp_Lockfiles(t *testing.T) {
 			if os.Getenv("REGISTRY_DATABASE_ENABLED") != "true" {
 				tt.Skip("Skipping test as database is disabled")
 			}
-
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
 
 			opts := []configOpt{withFSDriver(tc.path)}
 
@@ -152,32 +117,21 @@ func restoreLockfiles(t *testing.T, config *configuration.Configuration) {
 // behavior when both filesystem and database lockfiles are present.
 func TestHandleFilesystemLockFile_BothLocksPresent(t *testing.T) {
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
-		expectedErr        error
-		expectDBLock       bool
-		expectFSLock       bool
+		name         string
+		expectedErr  error
+		expectDBLock bool
+		expectFSLock bool
 	}{
 		{
-			name:               "both locks with ff enabled",
-			ffEnforceLockfiles: true,
-			expectedErr:        handlers.ErrInvalidLockfiles,
-			expectDBLock:       true,
-			expectFSLock:       true,
-		},
-		{
-			name:               "both locks with ff disabled",
-			ffEnforceLockfiles: false,
-			expectedErr:        nil,   // No enforcement when FF disabled
-			expectDBLock:       false, // Data repair when FF disabled
-			expectFSLock:       true,
+			name:         "both locks",
+			expectedErr:  handlers.ErrInvalidLockfiles,
+			expectDBLock: true,
+			expectFSLock: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Copy happy-path fixture and set both locks
 			tmpDir := tt.TempDir()
 			copyFixture(tt, tmpDir)
@@ -216,23 +170,15 @@ func TestHandleFilesystemLockFile_BothLocksPresent(t *testing.T) {
 // behavior when only the filesystem lockfile is present.
 func TestHandleFilesystemLockFile_FSLockedOnly(t *testing.T) {
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
+		name string
 	}{
 		{
-			name:               "fs locked only with ff enabled",
-			ffEnforceLockfiles: true,
-		},
-		{
-			name:               "fs locked only with ff disabled",
-			ffEnforceLockfiles: false,
+			name: "fs locked only",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Copy happy-path fixture and set only FS lock
 			tmpDir := tt.TempDir()
 			copyFixture(tt, tmpDir)
@@ -257,32 +203,21 @@ func TestHandleFilesystemLockFile_FSLockedOnly(t *testing.T) {
 // behavior when only the database lockfile is present.
 func TestHandleFilesystemLockFile_DBLockedOnly(t *testing.T) {
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
-		expectedErr        error
-		expectDBLock       bool
-		expectFSLock       bool
+		name         string
+		expectedErr  error
+		expectDBLock bool
+		expectFSLock bool
 	}{
 		{
-			name:               "db locked only with ff enabled",
-			ffEnforceLockfiles: true,
-			expectedErr:        handlers.ErrDatabaseInUse,
-			expectDBLock:       true,
-			expectFSLock:       false,
-		},
-		{
-			name:               "db locked only with ff disabled",
-			ffEnforceLockfiles: false,
-			expectedErr:        nil,   // No enforcement when FF disabled
-			expectDBLock:       false, // Data repair when FF disabled
-			expectFSLock:       true,
+			name:         "db locked only",
+			expectedErr:  handlers.ErrDatabaseInUse,
+			expectDBLock: true,
+			expectFSLock: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Copy happy-path fixture and set only DB lock
 			tmpDir := tt.TempDir()
 			copyFixture(tt, tmpDir)
@@ -321,23 +256,15 @@ func TestHandleFilesystemLockFile_DBLockedOnly(t *testing.T) {
 // behavior when no lockfiles exist but legacy repositories are present. Should create FS lock.
 func TestHandleFilesystemLockFile_NoLocksWithLegacyRepos(t *testing.T) {
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
+		name string
 	}{
 		{
-			name:               "no locks with legacy repos and ff enabled",
-			ffEnforceLockfiles: true,
-		},
-		{
-			name:               "no locks with legacy repos and ff disabled",
-			ffEnforceLockfiles: false,
+			name: "no locks with legacy repos",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Copy happy-path fixture and remove all locks
 			tmpDir := tt.TempDir()
 			copyFixture(tt, tmpDir)
@@ -367,23 +294,15 @@ func TestHandleFilesystemLockFile_NoLocksWithLegacyRepos(t *testing.T) {
 // behavior when no lockfiles exist and no repositories are present. Should not create any locks.
 func TestHandleFilesystemLockFile_NoLocksNoRepos(t *testing.T) {
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
+		name string
 	}{
 		{
-			name:               "clean fs with ff enabled",
-			ffEnforceLockfiles: true,
-		},
-		{
-			name:               "clean fs with ff disabled",
-			ffEnforceLockfiles: false,
+			name: "clean fs",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			tmpDir := tt.TempDir()
 
 			config := newConfig(withFSDriver(tmpDir))
@@ -409,51 +328,30 @@ func TestInitializeMetadataDatabase_BothLocksPresent(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
-		dbMode             configuration.DatabaseEnabled
-		expectedErr        error
-		expectDBLock       bool
-		expectFSLock       bool
+		name         string
+		dbMode       configuration.DatabaseEnabled
+		expectedErr  error
+		expectDBLock bool
+		expectFSLock bool
 	}{
 		{
-			name:               "both locks with db enabled and ff enabled",
-			ffEnforceLockfiles: true,
-			dbMode:             configuration.DatabaseEnabledTrue,
-			expectedErr:        handlers.ErrInvalidLockfiles,
-			expectDBLock:       true,
-			expectFSLock:       true,
+			name:         "both locks with db enabled",
+			dbMode:       configuration.DatabaseEnabledTrue,
+			expectedErr:  handlers.ErrInvalidLockfiles,
+			expectDBLock: true,
+			expectFSLock: true,
 		},
 		{
-			name:               "both locks with db enabled and ff disabled",
-			ffEnforceLockfiles: false,
-			dbMode:             configuration.DatabaseEnabledTrue,
-			expectedErr:        nil, // No enforcement, continues initialization
-			expectDBLock:       true,
-			expectFSLock:       false, // Data repair when FF disabled
-		},
-		{
-			name:               "both locks with db prefer and ff enabled",
-			ffEnforceLockfiles: true,
-			dbMode:             configuration.DatabaseEnabledPrefer,
-			expectedErr:        handlers.ErrInvalidLockfiles,
-			expectDBLock:       true,
-			expectFSLock:       true,
-		},
-		{
-			name:               "both locks with db prefer and ff disabled",
-			ffEnforceLockfiles: false,
-			dbMode:             configuration.DatabaseEnabledPrefer,
-			expectedErr:        nil,
-			expectDBLock:       true,
-			expectFSLock:       false, // Data repair when FF disabled
+			name:         "both locks with db prefer",
+			dbMode:       configuration.DatabaseEnabledPrefer,
+			expectedErr:  handlers.ErrInvalidLockfiles,
+			expectDBLock: true,
+			expectFSLock: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Copy happy-path fixture
 			tmpDir := tt.TempDir()
 			copyFixture(tt, tmpDir)
@@ -501,26 +399,17 @@ func TestInitializeMetadataDatabase_FSLockedPreferMode(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
-		expectFallback     bool
+		name           string
+		expectFallback bool
 	}{
 		{
-			name:               "fs locked prefer mode with ff enabled",
-			ffEnforceLockfiles: true,
-			expectFallback:     true, // Falls back to filesystem
-		},
-		{
-			name:               "fs locked prefer mode with ff disabled",
-			ffEnforceLockfiles: false,
-			expectFallback:     false, // Continues with DB
+			name:           "fs locked prefer mode",
+			expectFallback: true, // Falls back to filesystem
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Copy happy-path fixture
 			tmpDir := tt.TempDir()
 			copyFixture(tt, tmpDir)
@@ -557,32 +446,21 @@ func TestInitializeMetadataDatabase_FSLockedEnabledMode(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
-		expectedErr        error
-		expectDBLock       bool
-		expectFSLock       bool
+		name         string
+		expectedErr  error
+		expectDBLock bool
+		expectFSLock bool
 	}{
 		{
-			name:               "fs locked enabled mode with ff enabled",
-			ffEnforceLockfiles: true,
-			expectedErr:        handlers.ErrFilesystemInUse,
-			expectDBLock:       false,
-			expectFSLock:       true,
-		},
-		{
-			name:               "fs locked enabled mode with ff disabled",
-			ffEnforceLockfiles: false,
-			expectedErr:        nil, // No enforcement, continues
-			expectDBLock:       true,
-			expectFSLock:       false, // Data repair when FF disabled
+			name:         "fs locked enabled mode with",
+			expectedErr:  handlers.ErrFilesystemInUse,
+			expectDBLock: false,
+			expectFSLock: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Copy happy-path fixture and set only FS lock
 			tmpDir := tt.TempDir()
 			copyFixture(tt, tmpDir)
@@ -623,43 +501,28 @@ func TestInitializeMetadataDatabase_FSLockedEnabledMode(t *testing.T) {
 }
 
 // TestInitializeMetadataDatabase_NoLocksCreatesDBLock tests that DB lock is
-// created after successful database initialization regardless of FF state.
+// created after successful database initialization
 func TestInitializeMetadataDatabase_NoLocksCreatesDBLock(t *testing.T) {
 	if os.Getenv("REGISTRY_DATABASE_ENABLED") != "true" {
 		t.Skip("Skipping test as database is disabled")
 	}
 
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
-		dbMode             configuration.DatabaseEnabled
+		name   string
+		dbMode configuration.DatabaseEnabled
 	}{
 		{
-			name:               "no locks db enabled with ff enabled",
-			ffEnforceLockfiles: true,
-			dbMode:             configuration.DatabaseEnabledTrue,
+			name:   "no locks db enabled",
+			dbMode: configuration.DatabaseEnabledTrue,
 		},
 		{
-			name:               "no locks db enabled with ff disabled",
-			ffEnforceLockfiles: false,
-			dbMode:             configuration.DatabaseEnabledTrue,
-		},
-		{
-			name:               "no locks db prefer with ff enabled",
-			ffEnforceLockfiles: true,
-			dbMode:             configuration.DatabaseEnabledPrefer,
-		},
-		{
-			name:               "no locks db prefer with ff disabled",
-			ffEnforceLockfiles: false,
-			dbMode:             configuration.DatabaseEnabledPrefer,
+			name:   "no locks db prefer",
+			dbMode: configuration.DatabaseEnabledPrefer,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Use a fresh temp directory with no locks
 			tmpDir := tt.TempDir()
 
@@ -697,36 +560,21 @@ func TestInitializeMetadataDatabase_DBLockedOnly(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name               string
-		ffEnforceLockfiles bool
-		dbMode             configuration.DatabaseEnabled
+		name   string
+		dbMode configuration.DatabaseEnabled
 	}{
 		{
-			name:               "db locked only with db enabled and ff enabled",
-			ffEnforceLockfiles: true,
-			dbMode:             configuration.DatabaseEnabledTrue,
+			name:   "db locked only with db enabled",
+			dbMode: configuration.DatabaseEnabledTrue,
 		},
 		{
-			name:               "db locked only with db enabled and ff disabled",
-			ffEnforceLockfiles: false,
-			dbMode:             configuration.DatabaseEnabledTrue,
-		},
-		{
-			name:               "db locked only with db prefer and ff enabled",
-			ffEnforceLockfiles: true,
-			dbMode:             configuration.DatabaseEnabledPrefer,
-		},
-		{
-			name:               "db locked only with db prefer and ff disabled",
-			ffEnforceLockfiles: false,
-			dbMode:             configuration.DatabaseEnabledPrefer,
+			name:   "db locked only with db prefer",
+			dbMode: configuration.DatabaseEnabledPrefer,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(tt *testing.T) {
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, strconv.FormatBool(tc.ffEnforceLockfiles))
-
 			// Copy happy-path fixture and set only DB lock
 			tmpDir := tt.TempDir()
 			copyFixture(tt, tmpDir)
