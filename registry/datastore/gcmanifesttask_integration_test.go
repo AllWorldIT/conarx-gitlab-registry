@@ -38,21 +38,21 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 	allResults := []*models.GCManifestTask{
 		{
 			NamespaceID:  1,
+			RepositoryID: 3,
+			ManifestID:   1,
+			ReviewAfter:  testutil.ParseTimestamp(t, "2020-03-03 17:50:26.461745", local),
+			ReviewCount:  0,
+			CreatedAt:    testutil.ParseTimestamp(t, "2020-03-02 17:50:26.461745", local),
+			Event:        "tag_switch",
+		},
+		{
+			NamespaceID:  1,
 			RepositoryID: 4,
 			ManifestID:   7,
 			ReviewAfter:  testutil.ParseTimestamp(t, "2020-04-03 18:45:04.470711", local),
 			ReviewCount:  2,
 			CreatedAt:    testutil.ParseTimestamp(t, "2020-04-02 18:45:04.470711", local),
 			Event:        "manifest_upload",
-		},
-		{
-			NamespaceID:  1,
-			RepositoryID: 4,
-			ManifestID:   9,
-			ReviewAfter:  testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
-			ReviewCount:  0,
-			CreatedAt:    testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
-			Event:        "manifest_delete",
 		},
 		{
 			NamespaceID:  1,
@@ -65,12 +65,12 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 		},
 		{
 			NamespaceID:  1,
-			RepositoryID: 3,
-			ManifestID:   1,
-			ReviewAfter:  testutil.ParseTimestamp(t, "2020-03-03 17:50:26.461745", local),
+			RepositoryID: 4,
+			ManifestID:   9,
+			ReviewAfter:  testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
 			ReviewCount:  0,
-			CreatedAt:    testutil.ParseTimestamp(t, "2020-03-02 17:50:26.461745", local),
-			Event:        "tag_switch",
+			CreatedAt:    testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
+			Event:        "manifest_delete",
 		},
 	}
 
@@ -116,7 +116,7 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 			opts: []datastore.GCTaskFilterOption{
 				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
 			},
-			expected: []*models.GCManifestTask{allResults[0], allResults[2], allResults[3]},
+			expected: allResults[:3],
 		},
 		{
 			name: "with review after less than smaller than any timestamp",
@@ -146,7 +146,7 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 			opts: []datastore.GCTaskFilterOption{
 				datastore.WithGCTasksReviewCountGreaterThan(1),
 			},
-			expected: []*models.GCManifestTask{allResults[0]},
+			expected: []*models.GCManifestTask{allResults[1]},
 		},
 		{
 			name: "no task with review_count greater than the cutoff",
@@ -161,7 +161,7 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 				datastore.WithGCTasksReviewCountGreaterThan(1),
 				datastore.WithGCTasksLimit(1),
 			},
-			expected: []*models.GCManifestTask{allResults[0]},
+			expected: []*models.GCManifestTask{allResults[1]},
 		},
 		{
 			name: "combine review count and review after",
@@ -169,7 +169,7 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 				datastore.WithGCTasksReviewCountGreaterThan(1),
 				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
 			},
-			expected: []*models.GCManifestTask{allResults[0]},
+			expected: []*models.GCManifestTask{allResults[1]},
 		},
 		{
 			name: "combine review count, review after and limit",
@@ -178,7 +178,7 @@ func TestGCManifestTaskStore_FindAll(t *testing.T) {
 				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
 				datastore.WithGCTasksLimit(1),
 			},
-			expected: []*models.GCManifestTask{allResults[0]},
+			expected: []*models.GCManifestTask{allResults[1]},
 		},
 		{
 			name: "negative review count cutoff is ignored and all results retrieved",

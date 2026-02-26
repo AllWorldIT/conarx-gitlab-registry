@@ -145,6 +145,10 @@ func (s *gcManifestTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterO
 		}
 	}
 
+	if err := qb.Build("ORDER BY review_after ASC, top_level_namespace_id ASC, repository_id ASC, manifest_id ASC"); err != nil {
+		return nil, fmt.Errorf("building GC manifest tasks query: %w", err)
+	}
+
 	if filters.limit > 0 {
 		err := qb.Build("LIMIT ?", filters.limit)
 		if err != nil {

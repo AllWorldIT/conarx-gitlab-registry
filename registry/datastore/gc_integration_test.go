@@ -787,8 +787,16 @@ func TestGC_TrackDeletedManifestLists_PostponeReviewOnConflict(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rr, 2)
 
-	// Grab the review record for the child manifest
-	require.Equal(t, m.ID, rr[0].ManifestID)
+	// Grab the child manifest
+	// Because FindAll sorts by review_after, and random jitter is applied when a
+	// manifest is added to the review queue, we can't depend on a stable order between runs.
+	var manifest *models.GCManifestTask
+	for _, record := range rr {
+		if record.ManifestID == m.ID {
+			manifest = record
+			break
+		}
+	}
 
 	// delete manifest list
 	deletedAt := time.Now()
@@ -801,9 +809,9 @@ func TestGC_TrackDeletedManifestLists_PostponeReviewOnConflict(t *testing.T) {
 	rr2, err := mrs.FindAll(suite.ctx)
 	require.NoError(t, err)
 	require.Len(t, rr2, 1) // the manifest list delete cascaded and deleted its review record as well
-	require.Equal(t, rr[0].RepositoryID, rr2[0].RepositoryID)
-	require.Equal(t, rr[0].ManifestID, rr2[0].ManifestID)
-	require.Equal(t, rr[0].ReviewCount, rr2[0].ReviewCount)
+	require.Equal(t, manifest.RepositoryID, rr2[0].RepositoryID)
+	require.Equal(t, manifest.ManifestID, rr2[0].ManifestID)
+	require.Equal(t, manifest.ReviewCount, rr2[0].ReviewCount)
 	// We cannot control the random jitter applied when the config blob was first created and then when the manifest was
 	// deleted (causing the config blob task to be pushed forward). This means that for this particular test case, the
 	// "review after" after the manifest delete might be smaller than the "review after" after the blob creation. So we

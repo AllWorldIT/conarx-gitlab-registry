@@ -34,11 +34,11 @@ func TestGCBlobTaskStore_FindAll(t *testing.T) {
 	local := rr[0].ReviewAfter.Location()
 	allResults := []*models.GCBlobTask{
 		{
-			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", local),
-			ReviewCount: 0,
-			Digest:      "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9",
-			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-04 20:05:35.338639", local),
-			Event:       "blob_upload",
+			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-03 17:57:23.405516", local),
+			ReviewCount: 1,
+			Digest:      "sha256:9ead3a93fc9c9dd8f35221b1f22b155a513815b7b00425d6645b34d98e83b073",
+			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-02 17:57:23.405516", local),
+			Event:       "layer_delete",
 		},
 		{
 			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", local),
@@ -48,18 +48,18 @@ func TestGCBlobTaskStore_FindAll(t *testing.T) {
 			Event:       "blob_upload",
 		},
 		{
+			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-05 20:05:35.338639", local),
+			ReviewCount: 0,
+			Digest:      "sha256:c9b1b535fdd91a9855fb7f82348177e5f019329a58c53c47272962dd60f71fc9",
+			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-04 20:05:35.338639", local),
+			Event:       "blob_upload",
+		},
+		{
 			ReviewAfter: testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", local),
 			ReviewCount: 0,
 			Digest:      "sha256:ea8a54fd13889d3649d0a4e45735116474b8a650815a2cda4940f652158579b9",
 			CreatedAt:   testutil.ParseTimestamp(t, "9999-12-30 23:59:59.999999", local),
 			Event:       "blob_upload",
-		},
-		{
-			ReviewAfter: testutil.ParseTimestamp(t, "2020-03-03 17:57:23.405516", local),
-			ReviewCount: 1,
-			Digest:      "sha256:9ead3a93fc9c9dd8f35221b1f22b155a513815b7b00425d6645b34d98e83b073",
-			CreatedAt:   testutil.ParseTimestamp(t, "2020-03-02 17:57:23.405516", local),
-			Event:       "layer_delete",
 		},
 	}
 
@@ -105,7 +105,7 @@ func TestGCBlobTaskStore_FindAll(t *testing.T) {
 			opts: []datastore.GCTaskFilterOption{
 				datastore.WithGCTasksReviewAfterLessThan(testutil.ParseTimestamp(t, "9999-12-31 23:59:59.999999", time.UTC)),
 			},
-			expected: []*models.GCBlobTask{allResults[0], allResults[1], allResults[3]},
+			expected: allResults[:3],
 		},
 		{
 			name: "with review after less than smaller than any timestamp",
