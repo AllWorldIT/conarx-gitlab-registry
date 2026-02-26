@@ -24,7 +24,6 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	dcontext "github.com/docker/distribution/context"
-	"github.com/docker/distribution/internal/feature"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
 	v1 "github.com/docker/distribution/registry/api/gitlab/v1"
@@ -1020,10 +1019,6 @@ func TestNewApp_Locks_Errors(t *testing.T) {
 			config.Database.Enabled = tc.databaseEnabled
 			config.Database.PreferFallback = false // Reset fallback state between tests.
 
-			// Temporary use of FF while other tests are updated and fixed
-			// see https://gitlab.com/gitlab-org/container-registry/-/issues/1335
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
-
 			_, err := NewApp(ctx, config)
 			assert.ErrorIs(tt, err, tc.expectedError)
 		})
@@ -1061,10 +1056,6 @@ func TestNewApp_Locks_NoManifestsInFilesystem(t *testing.T) {
 			config.Storage["filesystem"] = map[string]any{
 				"rootdirectory": tmpDir,
 			}
-
-			// Temporary use of FF while other tests are updated and fixed
-			// see https://gitlab.com/gitlab-org/container-registry/-/issues/1335
-			tt.Setenv(feature.EnforceLockfiles.EnvVariable, "true")
 
 			_, err := NewApp(ctx, config)
 			require.NoError(tt, err)
