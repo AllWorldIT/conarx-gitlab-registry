@@ -421,12 +421,23 @@ func CompareWithGoldenFile(tb testing.TB, path string, actual []byte, create, up
 }
 
 type RedisClient struct {
-	redis redis.UniversalClient
+	redis.UniversalClient
 }
 
 // FlushCache Removes all cached data in the cache
 func (r *RedisClient) FlushCache() error {
-	if err := r.redis.FlushAll(context.Background()).Err(); err != nil {
+	// for cluster redis we need to flush all the nodes using the ForEachMaster method
+	// because FlushAll is not expected to work across all the nodes in a cluster.
+	// https://github.com/redis/go-redis/issues/1689#issuecomment-2984015398
+	if clusterClient, ok := r.UniversalClient.(*redis.ClusterClient); ok {
+		return clusterClient.ForEachMaster(context.Background(), func(nodeCtx context.Context, master *redis.Client) error {
+			if err := master.FlushAll(nodeCtx).Err(); err != nil {
+				return fmt.Errorf("flushing redis cache: %w", err)
+			}
+			return nil
+		})
+	}
+	if err := r.UniversalClient.FlushAll(context.Background()).Err(); err != nil {
 		return fmt.Errorf("flushing redis cache: %w", err)
 	}
 	return nil

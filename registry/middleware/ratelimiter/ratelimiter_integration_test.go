@@ -17,6 +17,7 @@ import (
 
 	"github.com/docker/distribution/configuration"
 	"github.com/docker/distribution/log"
+	"github.com/docker/distribution/registry/datastore/testutil"
 	"github.com/docker/distribution/registry/handlers"
 	"github.com/docker/distribution/registry/middleware/ratelimiter"
 	"github.com/redis/go-redis/v9"
@@ -213,7 +214,7 @@ func (s *RateLimiterTestSuite) cleanupRedisKeys() {
 
 	s.Require().EventuallyWithT(
 		func(tt *assert.CollectT) {
-			err := redisClient.FlushAll(s.ctx).Err()
+			err := (&testutil.RedisClient{UniversalClient: redisClient}).FlushCache()
 			if !assert.NoError(tt, err) {
 				return
 			}
