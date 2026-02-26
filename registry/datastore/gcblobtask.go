@@ -116,6 +116,10 @@ func (s *gcBlobTaskStore) FindAll(ctx context.Context, opts ...GCTaskFilterOptio
 		}
 	}
 
+	if err := qb.Build("ORDER BY review_after ASC, digest ASC"); err != nil {
+		return nil, fmt.Errorf("building GC blob tasks query: %w", err)
+	}
+
 	if filters.limit > 0 {
 		err := qb.Build("LIMIT ?", filters.limit)
 		if err != nil {
