@@ -51,6 +51,7 @@ func Execute() error {
 		logLevel, "log-level", "info", "logging subsystem log level")
 
 	rootCmd.AddCommand(newCreateCmd(logLevel))
+	rootCmd.AddCommand(newListCmd(logLevel))
 
 	return rootCmd.ExecuteContext(ctx)
 }
