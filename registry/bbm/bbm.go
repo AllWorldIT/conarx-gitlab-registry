@@ -578,7 +578,15 @@ func (jw *Worker) ExecuteJob(ctx context.Context, bbmStore datastore.BackgroundM
 	if work, found := jw.Work[job.JobName]; found {
 		defer metrics.InstrumentQuery(job.JobName, fmt.Sprint(job.BBMID))()
 
-		err := work.Do(ctx, jw.db, job.PaginationTable, job.PaginationColumn, job.StartID, job.EndID, job.BatchSize)
+		err := executeWorkInSubBatches(
+			ctx,
+			jw.db,
+			jw.logger,
+			work,
+			job,
+			job.SubBatchSize,
+			bbmStore.FindJobEndFromJobStart,
+		)
 		if err != nil {
 			jw.logger.WithError(err).Error("failed executing job")
 			job.Status = models.BackgroundMigrationFailed
@@ -631,6 +639,7 @@ func findRetryableJobs(ctx context.Context, bbmStore datastore.BackgroundMigrati
 	job.PaginationTable = bbm.TargetTable
 	job.PaginationColumn = bbm.TargetColumn
 	job.BatchSize = bbm.BatchSize
+	job.SubBatchSize = bbm.SubBatchSize
 
 	return job, nil
 }
@@ -685,6 +694,7 @@ func findNewJob(ctx context.Context, bbmStore datastore.BackgroundMigrationStore
 		StartID:          start,
 		EndID:            end,
 		BatchSize:        bbm.BatchSize,
+		SubBatchSize:     bbm.SubBatchSize,
 		JobName:          bbm.JobName,
 		PaginationColumn: bbm.TargetColumn,
 		PaginationTable:  bbm.TargetTable,
@@ -740,6 +750,7 @@ func createNullColumnJob(ctx context.Context, bbmStore datastore.BackgroundMigra
 	job := &models.BackgroundMigrationJob{
 		BBMID:            bbm.ID,
 		BatchSize:        bbm.BatchSize,
+		SubBatchSize:     bbm.SubBatchSize,
 		JobName:          bbm.JobName,
 		PaginationColumn: bbm.TargetColumn,
 		PaginationTable:  bbm.TargetTable,

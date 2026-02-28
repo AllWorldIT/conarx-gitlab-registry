@@ -218,6 +218,7 @@ func (bms *backgroundMigrationStore) FindNext(ctx context.Context) (*models.Back
 			min_value,
 			max_value,
 			batch_size,
+			sub_batch_size,
 			status,
 			job_signature_name,
 			table_name,
@@ -304,6 +305,7 @@ func (bms *backgroundMigrationStore) FindById(ctx context.Context, id int) (*mod
 			min_value,
 			max_value,
 			batch_size,
+			sub_batch_size,
 			status,
 			job_signature_name,
 			table_name,
@@ -335,6 +337,7 @@ func (bms *backgroundMigrationStore) FindWithProgress(ctx context.Context, id *i
 			m.id,
 			m.name,
 			m.batch_size,
+			m.sub_batch_size,
 			m.status,
 			m.total_tuple_count,
 			m.min_value,
@@ -391,6 +394,7 @@ func (bms *backgroundMigrationStore) FindWithProgress(ctx context.Context, id *i
 			&bmp.ID,
 			&bmp.Name,
 			&bmp.BatchSize,
+			&bmp.SubBatchSize,
 			&bmp.Status,
 			&bmp.TotalTupleCount,
 			&bmp.StartID,
@@ -466,6 +470,7 @@ func (bms *backgroundMigrationStore) FindNextByStatus(ctx context.Context, statu
 			min_value,
 			max_value,
 			batch_size,
+			sub_batch_size,
 			status,
 			job_signature_name,
 			table_name,
@@ -496,6 +501,7 @@ func (bms *backgroundMigrationStore) FindByName(ctx context.Context, name string
 			min_value,
 			max_value,
 			batch_size,
+			sub_batch_size,
 			status,
 			job_signature_name,
 			table_name,
@@ -622,6 +628,7 @@ func (bms *backgroundMigrationStore) FindAll(ctx context.Context) (models.Backgr
 			min_value,
 			max_value,
 			batch_size,
+			sub_batch_size,
 			status,
 			job_signature_name,
 			table_name,
@@ -1096,7 +1103,7 @@ func scanBackgroundMigrationJob(row *Row) (*models.BackgroundMigrationJob, error
 
 func scanBackgroundMigration(row *Row) (*models.BackgroundMigration, error) {
 	bm := new(models.BackgroundMigration)
-	if err := row.Scan(&bm.ID, &bm.Name, &bm.StartID, &bm.EndID, &bm.BatchSize, &bm.Status, &bm.JobName, &bm.TargetTable, &bm.TargetColumn, &bm.ErrorCode, &bm.BatchingStrategy, &bm.TotalTupleCount); err != nil {
+	if err := row.Scan(&bm.ID, &bm.Name, &bm.StartID, &bm.EndID, &bm.BatchSize, &bm.SubBatchSize, &bm.Status, &bm.JobName, &bm.TargetTable, &bm.TargetColumn, &bm.ErrorCode, &bm.BatchingStrategy, &bm.TotalTupleCount); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("scanning batched background migration: %w", err)
 		}
@@ -1112,7 +1119,7 @@ func scanFullBackgroundMigrations(rows *sql.Rows) (models.BackgroundMigrations, 
 
 	for rows.Next() {
 		b := new(models.BackgroundMigration)
-		err := rows.Scan(&b.ID, &b.Name, &b.StartID, &b.EndID, &b.BatchSize, &b.Status, &b.JobName, &b.TargetTable, &b.TargetColumn, &b.ErrorCode, &b.BatchingStrategy, &b.TotalTupleCount)
+		err := rows.Scan(&b.ID, &b.Name, &b.StartID, &b.EndID, &b.BatchSize, &b.SubBatchSize, &b.Status, &b.JobName, &b.TargetTable, &b.TargetColumn, &b.ErrorCode, &b.BatchingStrategy, &b.TotalTupleCount)
 		if err != nil {
 			return nil, fmt.Errorf("scanning background migrations: %w", err)
 		}

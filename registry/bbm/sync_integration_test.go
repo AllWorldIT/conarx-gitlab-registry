@@ -602,6 +602,7 @@ func (s *BackgroundMigrationTestSuite) requireBackgroundMigrations(expected map[
 					min_value,
 					max_value,
 					batch_size,
+					sub_batch_size,
 					status,
 					job_signature_name,
 					table_name,
@@ -614,7 +615,7 @@ func (s *BackgroundMigrationTestSuite) requireBackgroundMigrations(expected map[
 
 		rowBM := s.db.QueryRow(qBM, expectedBM.Name)
 		actualBM := new(models.BackgroundMigration)
-		err := rowBM.Scan(&actualBM.ID, &actualBM.Name, &actualBM.StartID, &actualBM.EndID, &actualBM.BatchSize, &actualBM.Status, &actualBM.JobName, &actualBM.TargetTable, &actualBM.TargetColumn, &actualBM.ErrorCode)
+		err := rowBM.Scan(&actualBM.ID, &actualBM.Name, &actualBM.StartID, &actualBM.EndID, &actualBM.BatchSize, &actualBM.SubBatchSize, &actualBM.Status, &actualBM.JobName, &actualBM.TargetTable, &actualBM.TargetColumn, &actualBM.ErrorCode)
 		s.Require().NoError(err)
 
 		require.Equal(s.T(), &expectedBM, actualBM)
@@ -667,6 +668,7 @@ func (s *BackgroundMigrationTestSuite) requireBBMFinally(bbmName string, expecte
 			min_value,
 			max_value,
 			batch_size,
+			sub_batch_size,
 			status,
 			job_signature_name,
 			table_name,
@@ -680,7 +682,7 @@ func (s *BackgroundMigrationTestSuite) requireBBMFinally(bbmName string, expecte
 	row := s.db.QueryRow(q, bbmName)
 
 	bm := new(models.BackgroundMigration)
-	if err := row.Scan(&bm.ID, &bm.Name, &bm.StartID, &bm.EndID, &bm.BatchSize, &bm.Status, &bm.JobName, &bm.TargetTable, &bm.TargetColumn, &bm.ErrorCode); err != nil {
+	if err := row.Scan(&bm.ID, &bm.Name, &bm.StartID, &bm.EndID, &bm.BatchSize, &bm.SubBatchSize, &bm.Status, &bm.JobName, &bm.TargetTable, &bm.TargetColumn, &bm.ErrorCode); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			err = nil
 		}
@@ -697,8 +699,8 @@ func generateBBMFixtures(bms map[models.BackgroundMigration][]models.BackgroundM
 
 	for bm, jobs := range bms {
 		up = append(up,
-			fmt.Sprintf(`INSERT INTO batched_background_migrations ("id", "name", "min_value", "max_value", "batch_size", "status", "job_signature_name", "table_name", "column_name")
-				VALUES ('%d','%s', %d, %d,  %d, %d, '%s', '%s', '%s')`, bm.ID, bm.Name, bm.StartID, bm.EndID, bm.BatchSize, bm.Status, bm.JobName, bm.TargetTable, bm.TargetColumn))
+			fmt.Sprintf(`INSERT INTO batched_background_migrations ("id", "name", "min_value", "max_value", "batch_size", "sub_batch_size", "status", "job_signature_name", "table_name", "column_name")
+				VALUES ('%d','%s', %d, %d,  %d, %d, %d, '%s', '%s', '%s')`, bm.ID, bm.Name, bm.StartID, bm.EndID, bm.BatchSize, bm.SubBatchSize, bm.Status, bm.JobName, bm.TargetTable, bm.TargetColumn))
 
 		for _, job := range jobs {
 			up = append(up,

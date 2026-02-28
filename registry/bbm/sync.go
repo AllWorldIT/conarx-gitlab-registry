@@ -403,7 +403,15 @@ func (jw *SyncWorker) ExecuteJob(ctx context.Context, bbmStore datastore.Backgro
 	if work, found := jw.work[job.JobName]; found {
 		for i := 0; i < jw.maxJobAttempt; i++ {
 			jw.logger.WithFields(log.Fields{"sync_attempt": i + 1}).Info("executing job")
-			err := work.Do(ctx, jw.db, job.PaginationTable, job.PaginationColumn, job.StartID, job.EndID, job.BatchSize)
+			err := executeWorkInSubBatches(
+				ctx,
+				jw.db,
+				jw.logger,
+				work,
+				job,
+				job.SubBatchSize,
+				bbmStore.FindJobEndFromJobStart,
+			)
 			if err == nil {
 				jw.logger.Info("job execution completed successfully, updating job status")
 				job.Status = models.BackgroundMigrationFinished
@@ -445,6 +453,7 @@ func enrichJobWithBBMAttributes(job *models.BackgroundMigrationJob, bbm *models.
 		job.PaginationTable = bbm.TargetTable
 		job.PaginationColumn = bbm.TargetColumn
 		job.BatchSize = bbm.BatchSize
+		job.SubBatchSize = bbm.SubBatchSize
 		job.BatchingStrategy = bbm.BatchingStrategy
 	}
 }

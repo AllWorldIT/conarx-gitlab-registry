@@ -845,6 +845,51 @@ func TestExecuteJob(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestExecuteJob_SubBatching(t *testing.T) {
+	ctx := context.TODO()
+	localJob := &models.BackgroundMigrationJob{
+		ID:               10,
+		BBMID:            20,
+		JobName:          "subbatch_job",
+		StartID:          1,
+		EndID:            5,
+		BatchSize:        5,
+		SubBatchSize:     2,
+		PaginationTable:  "public.test_table",
+		PaginationColumn: "id",
+	}
+
+	var calls [][2]int
+	worker := NewWorker(map[string]Work{
+		localJob.JobName: {
+			Name: localJob.JobName,
+			Do: func(_ context.Context, _ datastore.Handler, _, _ string, from, to, limit int) error {
+				require.Equal(t, 2, limit)
+				calls = append(calls, [2]int{from, to})
+				return nil
+			},
+		},
+	})
+
+	setupMocks := func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
+		bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
+		finishedJob := *localJob
+		finishedJob.Status = models.BackgroundMigrationFinished
+		gomock.InOrder(
+			bbmStoreMock.EXPECT().IncrementJobAttempts(ctx, localJob.ID).Return(nil).Times(1),
+			bbmStoreMock.EXPECT().FindJobEndFromJobStart(ctx, localJob.PaginationTable, localJob.PaginationColumn, 1, 5, 2).Return(2, nil).Times(1),
+			bbmStoreMock.EXPECT().FindJobEndFromJobStart(ctx, localJob.PaginationTable, localJob.PaginationColumn, 3, 5, 2).Return(4, nil).Times(1),
+			bbmStoreMock.EXPECT().FindJobEndFromJobStart(ctx, localJob.PaginationTable, localJob.PaginationColumn, 5, 5, 2).Return(5, nil).Times(1),
+			bbmStoreMock.EXPECT().UpdateJobStatus(ctx, &finishedJob).Return(nil).Times(1),
+		)
+		return bbmStoreMock
+	}
+
+	err := worker.ExecuteJob(ctx, setupMocks(gomock.NewController(t)), localJob)
+	require.NoError(t, err)
+	require.Equal(t, [][2]int{{1, 2}, {3, 4}, {5, 5}}, calls)
+}
+
 // TestGrabLock tests all the paths on the `GrabLock` method.
 func TestGrabLock(t *testing.T) {
 	ctx := context.TODO()

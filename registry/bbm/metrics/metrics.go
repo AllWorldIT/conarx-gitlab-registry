@@ -8,15 +8,16 @@ import (
 )
 
 var (
-	timeSince           = time.Since // for test purposes only
-	queryDurationHist   *prometheus.HistogramVec
-	jobBatchSize        *prometheus.GaugeVec
-	jobDurationHist     *prometheus.HistogramVec
-	runDurationHist     *prometheus.HistogramVec
-	sleepDurationHist   *prometheus.HistogramVec
-	runCounter          *prometheus.CounterVec
-	migratedTuplesTotal *prometheus.CounterVec
-	buckets             = []float64{.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600} // 0.5s to 1h
+	timeSince            = time.Since // for test purposes only
+	queryDurationHist    *prometheus.HistogramVec
+	jobBatchSize         *prometheus.GaugeVec
+	jobDurationHist      *prometheus.HistogramVec
+	subBatchDurationHist *prometheus.HistogramVec
+	runDurationHist      *prometheus.HistogramVec
+	sleepDurationHist    *prometheus.HistogramVec
+	runCounter           *prometheus.CounterVec
+	migratedTuplesTotal  *prometheus.CounterVec
+	buckets              = []float64{.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600} // 0.5s to 1h
 )
 
 const (
@@ -37,6 +38,9 @@ const (
 
 	jobDurationName = "job_duration_seconds"
 	jobDurationDesc = "A histogram of latencies for a batched migration job."
+
+	subBatchDurationName = "sub_batch_duration_seconds"
+	subBatchDurationDesc = "A histogram of latencies for each sub-batch query execution in a batched migration job."
 
 	migratedTuplesTotalName = "migrated_tuples_total"
 	migratedTuplesTotalDesc = "A counter for total batched migration records migrated."
@@ -90,6 +94,17 @@ func init() {
 		[]string{migrationNameLabel, migrationIDLabel},
 	)
 
+	subBatchDurationHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metrics.NamespacePrefix,
+			Subsystem: subsystem,
+			Name:      subBatchDurationName,
+			Help:      subBatchDurationDesc,
+			Buckets:   buckets,
+		},
+		[]string{migrationNameLabel, migrationIDLabel},
+	)
+
 	migratedTuplesTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: metrics.NamespacePrefix,
@@ -126,6 +141,7 @@ func init() {
 	prometheus.MustRegister(queryDurationHist)
 	prometheus.MustRegister(jobBatchSize)
 	prometheus.MustRegister(jobDurationHist)
+	prometheus.MustRegister(subBatchDurationHist)
 	prometheus.MustRegister(runDurationHist)
 	prometheus.MustRegister(runCounter)
 	prometheus.MustRegister(migratedTuplesTotal)
@@ -148,6 +164,15 @@ func Job(batchSize int, migrationName, migrationID string) func() {
 	jobBatchSize.WithLabelValues(migrationName, migrationID).Set(float64(batchSize))
 	return func() {
 		jobDurationHist.WithLabelValues(migrationName, migrationID).Observe(timeSince(start).Seconds())
+	}
+}
+
+// SubBatch starts a timer to measure the duration of a migration sub-batch query.
+// Returns a function to stop the timer and capture the sub-batch latency.
+func SubBatch(migrationName, migrationID string) func() {
+	start := time.Now()
+	return func() {
+		subBatchDurationHist.WithLabelValues(migrationName, migrationID).Observe(timeSince(start).Seconds())
 	}
 }
 

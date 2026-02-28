@@ -368,11 +368,13 @@ func TestSyncWorker_FindJob(t *testing.T) {
 				// create a local copy with Active status to trigger status update to Running
 				active := *sync
 				active.Status = models.BackgroundMigrationActive
+				active.SubBatchSize = 10
 				job := &models.BackgroundMigrationJob{
 					BBMID:            active.ID,
 					StartID:          active.StartID,
 					EndID:            jobEndID,
 					BatchSize:        active.BatchSize,
+					SubBatchSize:     active.SubBatchSize,
 					JobName:          active.JobName,
 					PaginationColumn: active.TargetColumn,
 					PaginationTable:  active.TargetTable,
@@ -387,11 +389,16 @@ func TestSyncWorker_FindJob(t *testing.T) {
 					bbmStoreMock.EXPECT().SetTotalTupleCount(ctx, active.ID, gomock.Any()).Return(nil).Times(1),
 					bbmStoreMock.EXPECT().FindJobEndFromJobStart(ctx, active.TargetTable, active.TargetColumn, active.StartID, active.EndID, active.BatchSize).Return(jobEndID, nil).Times(1),
 					bbmStoreMock.EXPECT().CreateNewJob(ctx, job).Return(nil),
-					bbmStoreMock.EXPECT().UpdateStatus(ctx, &models.BackgroundMigration{ID: active.ID, Name: active.Name, Status: models.BackgroundMigrationRunning, StartID: active.StartID, EndID: active.EndID, BatchSize: active.BatchSize, JobName: active.JobName, TargetTable: active.TargetTable, TargetColumn: active.TargetColumn, ErrorCode: active.ErrorCode, BatchingStrategy: active.BatchingStrategy, TotalTupleCount: active.TotalTupleCount}).Return(nil).Times(1),
+					bbmStoreMock.EXPECT().UpdateStatus(ctx, &models.BackgroundMigration{ID: active.ID, Name: active.Name, Status: models.BackgroundMigrationRunning, StartID: active.StartID, EndID: active.EndID, BatchSize: active.BatchSize, SubBatchSize: active.SubBatchSize, JobName: active.JobName, TargetTable: active.TargetTable, TargetColumn: active.TargetColumn, ErrorCode: active.ErrorCode, BatchingStrategy: active.BatchingStrategy, TotalTupleCount: active.TotalTupleCount}).Return(nil).Times(1),
 				)
 				return bbmStoreMock
 			},
-			expectedJob: &expectedJob,
+			expectedJob: &models.BackgroundMigrationJob{
+				BBMID:        expectedJob.BBMID,
+				EndID:        expectedJob.EndID,
+				JobName:      expectedJob.JobName,
+				SubBatchSize: 10,
+			},
 		},
 		{
 			name:   "no failed jobs, set migration to running",
@@ -450,6 +457,7 @@ func TestSyncWorker_FindJob(t *testing.T) {
 					Name:             "NullBackfill",
 					Status:           models.BackgroundMigrationActive,
 					BatchSize:        25,
+					SubBatchSize:     5,
 					JobName:          "NullBackfill",
 					TargetTable:      "public.repositories",
 					TargetColumn:     "id",
@@ -458,6 +466,7 @@ func TestSyncWorker_FindJob(t *testing.T) {
 				job := &models.BackgroundMigrationJob{
 					BBMID:            nb.ID,
 					BatchSize:        nb.BatchSize,
+					SubBatchSize:     nb.SubBatchSize,
 					JobName:          nb.JobName,
 					PaginationColumn: nb.TargetColumn,
 					PaginationTable:  nb.TargetTable,
@@ -479,6 +488,7 @@ func TestSyncWorker_FindJob(t *testing.T) {
 			expectedJob: &models.BackgroundMigrationJob{
 				BBMID:            101,
 				BatchSize:        25,
+				SubBatchSize:     5,
 				JobName:          "NullBackfill",
 				PaginationColumn: "id",
 				PaginationTable:  "public.repositories",
@@ -549,6 +559,52 @@ func TestSyncWorker_ExecuteJob(t *testing.T) {
 
 	err := worker.ExecuteJob(ctx, setupMocks(gomock.NewController(t)), syncJob)
 	require.NoError(t, err)
+}
+
+func TestSyncWorker_ExecuteJob_SubBatching(t *testing.T) {
+	ctx := context.TODO()
+	localJob := &models.BackgroundMigrationJob{
+		ID:               30,
+		BBMID:            31,
+		JobName:          "sync_subbatch_job",
+		StartID:          1,
+		EndID:            5,
+		BatchSize:        5,
+		SubBatchSize:     2,
+		PaginationTable:  "public.test_table",
+		PaginationColumn: "id",
+	}
+
+	var calls [][2]int
+	worker := NewSyncWorker(nil,
+		WithWorkMap(map[string]Work{
+			localJob.JobName: {
+				Name: localJob.JobName,
+				Do: func(_ context.Context, _ datastore.Handler, _, _ string, from, to, limit int) error {
+					require.Equal(t, 2, limit)
+					calls = append(calls, [2]int{from, to})
+					return nil
+				},
+			},
+		}),
+	)
+
+	setupMocks := func(ctrl *gomock.Controller) datastore.BackgroundMigrationStore {
+		bbmStoreMock := mocks.NewMockBackgroundMigrationStore(ctrl)
+		finishedJob := *localJob
+		finishedJob.Status = models.BackgroundMigrationFinished
+		gomock.InOrder(
+			bbmStoreMock.EXPECT().FindJobEndFromJobStart(ctx, localJob.PaginationTable, localJob.PaginationColumn, 1, 5, 2).Return(2, nil).Times(1),
+			bbmStoreMock.EXPECT().FindJobEndFromJobStart(ctx, localJob.PaginationTable, localJob.PaginationColumn, 3, 5, 2).Return(4, nil).Times(1),
+			bbmStoreMock.EXPECT().FindJobEndFromJobStart(ctx, localJob.PaginationTable, localJob.PaginationColumn, 5, 5, 2).Return(5, nil).Times(1),
+			bbmStoreMock.EXPECT().UpdateJobStatus(ctx, &finishedJob).Return(nil).Times(1),
+		)
+		return bbmStoreMock
+	}
+
+	err := worker.ExecuteJob(ctx, setupMocks(gomock.NewController(t)), localJob)
+	require.NoError(t, err)
+	require.Equal(t, [][2]int{{1, 2}, {3, 4}, {5, 5}}, calls)
 }
 
 // TestSyncWorker_Run tests the run method of the sync worker.
