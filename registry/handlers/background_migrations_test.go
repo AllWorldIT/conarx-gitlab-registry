@@ -105,11 +105,12 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationsStatus
 	}
 
 	// Setup sqlmock rows from migrations variable
-	// Note: This must match the 13 columns returned by FindWithProgress query
+	// Note: This must match the 14 columns returned by FindWithProgress query
 	rows := sqlmock.NewRows([]string{
 		"id",
 		"name",
 		"batch_size",
+		"sub_batch_size",
 		"status",
 		"total_tuple_count",
 		"min_value",
@@ -140,6 +141,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationsStatus
 			m.ID,
 			m.Name,
 			m.BatchSize,
+			m.SubBatchSize,
 			int(m.Status),
 			m.TotalTupleCount,
 			m.StartID,
@@ -263,6 +265,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_
 		"min_value",
 		"max_value",
 		"batch_size",
+		"sub_batch_size",
 		"status",
 		"job_signature_name",
 		"table_name",
@@ -280,6 +283,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_
 		migration.StartID,
 		migration.EndID,
 		migration.BatchSize,
+		migration.SubBatchSize,
 		int(migration.Status),
 		migration.JobName,
 		migration.TargetTable,
@@ -291,11 +295,11 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_
 
 	// Setup progress rows
 	progressRows := sqlmock.NewRows([]string{
-		"id", "name", "batch_size", "status", "total_tuple_count",
+		"id", "name", "batch_size", "sub_batch_size", "status", "total_tuple_count",
 		"min_value", "max_value", "job_signature_name", "table_name",
 		"column_name", "failure_error_code", "batching_strategy", "finished_jobs",
 	}).
-		AddRow(1, "migration_1", 100, int(models.BackgroundMigrationActive), sql.NullInt64{Int64: 500, Valid: true}, 1, 1000, "job_1", "public.repositories", "id", sql.NullInt64{Valid: false}, "primary_key", int64(3))
+		AddRow(1, "migration_1", 100, 0, int(models.BackgroundMigrationActive), sql.NullInt64{Int64: 500, Valid: true}, 1, 1000, "job_1", "public.repositories", "id", sql.NullInt64{Valid: false}, "primary_key", int64(3))
 
 	// Expect authorization check with read access to background-migrations
 	s.mockAccessCtrl.EXPECT().
@@ -407,7 +411,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationStatus_
 
 	// Setup empty progress rows (no migration found)
 	emptyRows := sqlmock.NewRows([]string{
-		"id", "name", "batch_size", "status", "total_tuple_count",
+		"id", "name", "batch_size", "sub_batch_size", "status", "total_tuple_count",
 		"min_value", "max_value", "job_signature_name", "table_name",
 		"column_name", "failure_error_code", "batching_strategy", "finished_jobs",
 	})
@@ -487,7 +491,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestGetBackgroundMigrationsStatus
 	// Setup empty progress rows
 	// Setup empty progress rows with all 13 columns
 	progressRows := sqlmock.NewRows([]string{
-		"id", "name", "batch_size", "status", "total_tuple_count",
+		"id", "name", "batch_size", "sub_batch_size", "status", "total_tuple_count",
 		"min_value", "max_value", "job_signature_name", "table_name",
 		"column_name", "failure_error_code", "batching_strategy", "finished_jobs",
 	})
@@ -708,6 +712,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_Su
 		"min_value",
 		"max_value",
 		"batch_size",
+		"sub_batch_size",
 		"status",
 		"job_signature_name",
 		"table_name",
@@ -725,6 +730,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_Su
 		migration.StartID,
 		migration.EndID,
 		migration.BatchSize,
+		migration.SubBatchSize,
 		int(migration.Status),
 		migration.JobName,
 		migration.TargetTable,
@@ -894,6 +900,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_Up
 		"min_value",
 		"max_value",
 		"batch_size",
+		"sub_batch_size",
 		"status",
 		"job_signature_name",
 		"table_name",
@@ -911,6 +918,7 @@ func (s *BackgroundMigrationsHandlerTestSuite) TestRestartBackgroundMigration_Up
 		migration.StartID,
 		migration.EndID,
 		migration.BatchSize,
+		migration.SubBatchSize,
 		int(migration.Status),
 		migration.JobName,
 		migration.TargetTable,

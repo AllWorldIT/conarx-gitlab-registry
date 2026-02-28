@@ -5930,7 +5930,8 @@ CREATE TABLE public.batched_background_migrations (
     started_at timestamp with time zone,
     finished_at timestamp with time zone,
     batching_strategy text,
-    total_tuple_count bigint
+    total_tuple_count bigint,
+    sub_batch_size integer DEFAULT 0 NOT NULL
 );
 
 ALTER TABLE public.batched_background_migrations

@@ -213,6 +213,7 @@ type BackgroundMigration struct {
 	StartID          int
 	EndID            int
 	BatchSize        int
+	SubBatchSize     int
 	JobName          string
 	TargetTable      string
 	TargetColumn     string
@@ -252,6 +253,7 @@ type BackgroundMigrationJob struct {
 	PaginationColumn string
 	PaginationTable  string
 	BatchSize        int
+	SubBatchSize     int
 	ErrorCode        BBMErrorCode
 	BatchingStrategy BBMStrategy
 }

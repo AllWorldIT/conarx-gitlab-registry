@@ -53,6 +53,7 @@ var (
 		"20240711211048_add_background_migration_jobs_indices",
 		"20241031081325_add_background_migration_timing_columns",
 		"20250904041325_add_batching_strategy_and_total_tuple_count",
+		"20260223191423_add_bbm_sub_batch_size_column",
 	}
 )
 
@@ -72,7 +73,8 @@ func init() {
 			// will eventually be cleaned up by the down migration of 20240604074823_create_batched_background_migrations_table irregardless.
 			if v == "20240711175726_add_background_migration_failure_error_code_column" ||
 				v == "20241031081325_add_background_migration_timing_columns" ||
-				v == "20250904041325_add_batching_strategy_and_total_tuple_count" {
+				v == "20250904041325_add_batching_strategy_and_total_tuple_count" ||
+				v == "20260223191423_add_bbm_sub_batch_size_column" {
 				continue
 			}
 			downMigrations = append(downMigrations, mig.Down...)
@@ -285,8 +287,8 @@ func (s *BackgroundMigrationTestSuite) SetupTest() {
 // bbmToSchemaMigratorRecord creates a schema migration record for a bbm entry.
 func bbmToSchemaMigratorRecord(bm models.BackgroundMigration) ([]string, []string) {
 	return []string{
-			fmt.Sprintf(`INSERT INTO batched_background_migrations ("name", "min_value", "max_value", "batch_size", "status", "job_signature_name", "table_name", "column_name")
-				VALUES ('%s', %d, %d,  %d, %d, '%s', '%s', '%s')`, bm.Name, bm.StartID, bm.EndID, bm.BatchSize, models.BackgroundMigrationActive, bm.JobName, bm.TargetTable, bm.TargetColumn),
+			fmt.Sprintf(`INSERT INTO batched_background_migrations ("name", "min_value", "max_value", "batch_size", "sub_batch_size", "status", "job_signature_name", "table_name", "column_name")
+				VALUES ('%s', %d, %d,  %d, %d, %d, '%s', '%s', '%s')`, bm.Name, bm.StartID, bm.EndID, bm.BatchSize, bm.SubBatchSize, models.BackgroundMigrationActive, bm.JobName, bm.TargetTable, bm.TargetColumn),
 		},
 		[]string{
 			fmt.Sprintf(`DELETE FROM batched_background_migration_jobs WHERE batched_background_migration_id IN (SELECT id FROM batched_background_migrations WHERE name = '%s')`, bm.Name),
@@ -357,7 +359,7 @@ func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigration(workerCount 
 
 	// Test Assertions:
 	// assert the background migration runs to completion asynchronously
-	s.requireBBMEventually(expectedBBM, 20*time.Second, 100*time.Millisecond)
+	s.requireBBMEventually(expectedBBM, 20*time.Second)
 	s.requireBBMJobsFinally(expectedBBM.Name, expectedBBMJobs)
 	s.requireMigrationLogicComplete(func(db *datastore.DB) (bool, error) {
 		var exists bool
@@ -372,6 +374,66 @@ func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigration(workerCount 
 // Test_AsyncBackgroundMigration tests that if a background migration is introduced via regular database migration, it will be picked up and executed asynchronously to completion.
 func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration() {
 	s.testAsyncBackgroundMigration(1)
+}
+
+// Test_AsyncBackgroundMigration_WithSubBatch tests async execution when sub_batch_size is configured.
+func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_WithSubBatch() {
+	expectedBBM := models.BackgroundMigration{
+		ID:           1,
+		Name:         "CopyIDColumnInTestTableToNewIDColumnWithSubBatch",
+		Status:       models.BackgroundMigrationFinished,
+		ErrorCode:    models.BBMErrorCode{},
+		StartID:      1,
+		EndID:        93,
+		TargetTable:  targetBBMTable,
+		TargetColumn: targetBBMColumn,
+		BatchSize:    50,
+		SubBatchSize: 10,
+		JobName:      "CopyIDColumnInTestTableToNewIDColumnWithSubBatch",
+	}
+
+	expectedBBMJobs := []models.BackgroundMigrationJob{
+		{
+			ID:        1,
+			BBMID:     expectedBBM.ID,
+			StartID:   1,
+			EndID:     50,
+			Status:    models.BackgroundMigrationFinished,
+			Attempts:  1,
+			ErrorCode: models.BBMErrorCode{},
+		},
+		{
+			ID:        2,
+			BBMID:     expectedBBM.ID,
+			StartID:   51,
+			EndID:     93,
+			Status:    models.BackgroundMigrationFinished,
+			Attempts:  1,
+			ErrorCode: models.BBMErrorCode{},
+		},
+	}
+
+	up, down := bbmToSchemaMigratorRecord(expectedBBM)
+	m := newMigrator(s.T(), s.db.DB, up, down)
+	m.runSchemaMigration(s.T())
+
+	worker, err := bbm.RegisterWork(
+		[]bbm.Work{{Name: expectedBBM.JobName, Do: CopyIDColumnInTestTableToNewIDColumn}},
+		bbm.WithJobInterval(100*time.Millisecond),
+		bbm.WithDB(s.db),
+		bbm.WithWorkerStartupJitterSeconds(1),
+	)
+	s.Require().NoError(err)
+	s.startAsyncBBMWorker(worker)
+
+	s.requireBBMEventually(expectedBBM, 20*time.Second)
+	s.requireBBMJobsFinally(expectedBBM.Name, expectedBBMJobs)
+	s.requireMigrationLogicComplete(func(db *datastore.DB) (bool, error) {
+		var exists bool
+		query := fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s WHERE %s BETWEEN $1 AND $2)", expectedBBM.TargetTable, targetBBMNewColumn)
+		err := db.QueryRow(query, expectedBBM.StartID, expectedBBM.EndID).Scan(&exists)
+		return exists, err
+	})
 }
 
 // Test_AsyncBackgroundMigration_Concurrent tests that if a background migration is introduced via regular database migration, and there are two workers, the migration will still be picked up and executed asynchronously to completion.
@@ -405,7 +467,7 @@ func (s *BackgroundMigrationTestSuite) Test_AsyncBackgroundMigration_NullBatchin
 	s.startAsyncBBMWorker(worker)
 
 	// Assert finished and no remaining NULLs in new_id
-	s.requireBBMEventually(expectedBBM, 30*time.Second, 100*time.Millisecond)
+	s.requireBBMEventually(expectedBBM, 30*time.Second)
 	s.requireNoNulls(targetBBMTable, targetBBMNullColumn)
 	// Assert total_tuple_count matches computed expected from table/column for null-batching
 	s.requireTotalTupleCountMatches(expectedBBM.Name)
@@ -580,12 +642,12 @@ func (s *BackgroundMigrationTestSuite) testAsyncBackgroundMigrationExpected(expe
 
 	// Test Assertions:
 	// assert the background migration runs to the expected state
-	s.requireBBMEventually(expectedBBM, 30*time.Second, 100*time.Millisecond)
+	s.requireBBMEventually(expectedBBM, 30*time.Second)
 	s.requireBBMJobsFinally(expectedBBM.Name, expectedBBMJobs)
 }
 
-// requireBBMEventually checks on every `tick` that a BBM in the database with name `bbmName` eventually matches `expectedBBM` in `waitFor` duration.
-func (s *BackgroundMigrationTestSuite) requireBBMEventually(expectedBBM models.BackgroundMigration, waitFor, tick time.Duration) {
+// requireBBMEventually checks on a fixed interval that a BBM in the database with name `bbmName` eventually matches `expectedBBM` in `waitFor` duration.
+func (s *BackgroundMigrationTestSuite) requireBBMEventually(expectedBBM models.BackgroundMigration, waitFor time.Duration) {
 	s.Require().Eventually(
 		func() bool {
 			q := `SELECT
@@ -594,6 +656,7 @@ func (s *BackgroundMigrationTestSuite) requireBBMEventually(expectedBBM models.B
 				min_value,
 				max_value,
 				batch_size,
+				sub_batch_size,
 				status,
 				job_signature_name,
 				table_name,
@@ -607,7 +670,7 @@ func (s *BackgroundMigrationTestSuite) requireBBMEventually(expectedBBM models.B
 			row := s.db.QueryRow(q, expectedBBM.Name)
 
 			actualBBM := new(models.BackgroundMigration)
-			err := row.Scan(&actualBBM.ID, &actualBBM.Name, &actualBBM.StartID, &actualBBM.EndID, &actualBBM.BatchSize, &actualBBM.Status, &actualBBM.JobName, &actualBBM.TargetTable, &actualBBM.TargetColumn, &actualBBM.ErrorCode, &actualBBM.BatchingStrategy)
+			err := row.Scan(&actualBBM.ID, &actualBBM.Name, &actualBBM.StartID, &actualBBM.EndID, &actualBBM.BatchSize, &actualBBM.SubBatchSize, &actualBBM.Status, &actualBBM.JobName, &actualBBM.TargetTable, &actualBBM.TargetColumn, &actualBBM.ErrorCode, &actualBBM.BatchingStrategy)
 			if err != nil {
 				s.T().Logf("scanning background migration failed: %v", err)
 				return false
@@ -616,7 +679,7 @@ func (s *BackgroundMigrationTestSuite) requireBBMEventually(expectedBBM models.B
 				return false
 			}
 			return true
-		}, waitFor, tick)
+		}, waitFor, 100*time.Millisecond)
 }
 
 // requireBBMJobsFinally checks that the expected array of BBM jobs are present in the database.

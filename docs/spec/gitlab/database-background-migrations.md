@@ -644,8 +644,6 @@ These following optimizations are out of scope for the initial release:
 
 - Concurrent migration processing: To reduce complexity, for the first iteration only one migration and one job can be run at a time.
 
-- Sub batching: It is often beneficial to run a dedicated migration query in a job batch on one "sub" batch (a smaller division of your batch) at a time. Although this is very useful I think we can consider introducing this when the need arises, for the time being we can make our batch small enough to satisfy our own constraints.
-
 - Dynamic optimization of batch sizes: Rails can optimize the batch size per job based on how long a prior job took.
 
 - Down migrating background migrations.

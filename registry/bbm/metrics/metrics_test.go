@@ -96,6 +96,39 @@ registry_bbm_job_batch_size {migration_id="foo_migration_id",migration_name="foo
 	require.NoError(t, err)
 }
 
+func TestSubBatch(t *testing.T) {
+	mockTimeSince(t, 1*time.Second)
+	SubBatch(migrationName, migrationID)()
+
+	var expected bytes.Buffer
+	_, err := expected.WriteString(`
+# HELP registry_bbm_sub_batch_duration_seconds A histogram of latencies for each sub-batch query execution in a batched migration job.
+# TYPE registry_bbm_sub_batch_duration_seconds histogram
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="0.5"} 0
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="1"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="2"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="5"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="10"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="15"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="30"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="60"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="120"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="300"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="600"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="900"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="1800"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="3600"} 1
+registry_bbm_sub_batch_duration_seconds_bucket{migration_id="foo_migration_id",migration_name="foo_migration_name",le="+Inf"} 1
+registry_bbm_sub_batch_duration_seconds_sum{migration_id="foo_migration_id",migration_name="foo_migration_name"} 1
+registry_bbm_sub_batch_duration_seconds_count{migration_id="foo_migration_id",migration_name="foo_migration_name"} 1
+`)
+	require.NoError(t, err)
+
+	durationFullName := fmt.Sprintf("%s_%s_%s", metrics.NamespacePrefix, subsystem, subBatchDurationName)
+	err = testutil.GatherAndCompare(prometheus.DefaultGatherer, &expected, durationFullName)
+	require.NoError(t, err)
+}
+
 func TestWorkerRun(t *testing.T) {
 	mockTimeSince(t, 1*time.Second)
 	WorkerRun()()
