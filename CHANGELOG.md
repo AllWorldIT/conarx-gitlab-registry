@@ -1,3 +1,29 @@
+## [4.38.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.37.0-gitlab...v4.38.0) (2026-03-03)
+
+
+### ✨ Features ✨
+
+* **bbm:** add support for sub-batching ([affde12](https://gitlab.com/gitlab-org/container-registry/commit/affde128222a688857a64f064e90d358cff5fd2a))
+* **datastore:** deterministic sorting for review queue FindAll methods ([e621f6e](https://gitlab.com/gitlab-org/container-registry/commit/e621f6e09865c5b291ad6fb9300853e61cf1442c))
+* **registry:** remove REGISTRY_FF_ENFORCE_LOCKFILES ([8d786b7](https://gitlab.com/gitlab-org/container-registry/commit/8d786b7920d361ba390e3afb209a246253fef671))
+
+
+### 🐛 Bug Fixes 🐛
+
+* replace fixed sleep with polling in notification test assertions ([62e255b](https://gitlab.com/gitlab-org/container-registry/commit/62e255b55756abceb7c425f0a7d93d642ff1d736))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.32.10 ([00868b8](https://gitlab.com/gitlab-org/container-registry/commit/00868b83403bb9429a57330c787b22a84bee823a))
+* **deps:** update module github.com/redis/go-redis/v9 to v9.18.0 ([0aea56e](https://gitlab.com/gitlab-org/container-registry/commit/0aea56e86a2e7f1bdeaedec04a5dea3ce8e20a22))
+* **deps:** update module gitlab.com/gitlab-org/labkit to v1.38.6 ([72ee607](https://gitlab.com/gitlab-org/container-registry/commit/72ee607aaa14bca1dc7528f88e442fe8caf3d375))
+
+
+### ♻️ Refactors ♻️
+
+* **handlers:** separate legacy blob delete code ([c7ee850](https://gitlab.com/gitlab-org/container-registry/commit/c7ee850713b0cafb3abb619d3c9c13c5a1d74cba))
+
 ## [4.37.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.36.0-gitlab...v4.37.0) (2026-02-17)
 
 
