@@ -52,6 +52,8 @@ func Execute() error {
 
 	rootCmd.AddCommand(newCreateCmd(logLevel))
 	rootCmd.AddCommand(newListCmd(logLevel))
+	rootCmd.AddCommand(newDeleteCmd(logLevel))
+	rootCmd.AddCommand(newKubeconfigCmd(logLevel))
 
 	return rootCmd.ExecuteContext(ctx)
 }
