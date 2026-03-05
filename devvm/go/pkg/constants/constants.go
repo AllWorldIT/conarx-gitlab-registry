@@ -152,8 +152,9 @@ const (
 	MetricsServerRelease  = "metrics-server"
 	MetricsServerVersion  = "^3.12"
 
-	GitLabRepoName = "gitlab"
-	GitLabRepoURL  = "https://charts.gitlab.io"
+	GitLabRepoName       = "gitlab"
+	GitLabRepoURL        = "https://charts.gitlab.io"
+	GitLabChartDirectory = "/home/dev/gitlab-chart"
 
 	// ============================================
 	// Status Stage Names
@@ -204,3 +205,18 @@ const (
 	GitlabOmnibusStageName        = "Install Gitlab Omnibus package"
 	OmnibusVipInterface           = "Ensure omnibus Vip dummy interface"
 )
+
+// MinioUnifiedBuckets returns the list of bucket names for the unified GitLab services
+func MinioUnifiedBuckets() []string {
+	return []string{
+		MinioArtifactsBucketName,
+		MinioLfsBucketName,
+		MinioUploadsBucketName,
+		MinioPackagesBucketName,
+		MinioMrDiffsBucketName,
+		MinioTerraformStateBucketName,
+		MinioCiSecureFilesBucketName,
+		MinioDependencyProxyBucketName,
+		MinioBackupsBucketName,
+	}
+}
