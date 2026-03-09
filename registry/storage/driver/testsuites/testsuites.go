@@ -2000,6 +2000,7 @@ func (s *DriverSuite) TestStatCall() {
 	dirPathZero := path.Join(dirPathBase, "foo")
 	dirPathLong := path.Join(dirPathBase, "fooabc")
 	dirPathDot := path.Join(dirPathBase, "foo.")
+	dirPathSubdir := path.Join(dirPathBase, "fix", "faz")
 	fileDirPathZero := path.Join(dirPathBase, "foo", fileNameBase)
 	fileDirPathLong := path.Join(dirPathLong, fileNameBase)
 	// Trigger a case where for given prefix there is more than one object
@@ -2010,6 +2011,11 @@ func (s *DriverSuite) TestStatCall() {
 	fileZero := path.Join(dirPathBase, "bara")
 	fileLong := path.Join(dirPathBase, "barabc")
 	fileDot := path.Join(dirPathBase, "bar.a") // Azure shortens `bar.` to just `bar` :|
+	fileSubdir := path.Join(dirPathSubdir, "friz")
+	fileSpecialBase := path.Join(dirPathBase, "zuu")
+	fileSpecialDotSibling := path.Join(dirPathBase, "zuu.bar")
+	fileSpecialUnderscoreSibling := path.Join(dirPathBase, "zuu_bar")
+	fileSpecialDashSibling := path.Join(dirPathBase, "zuu-bar")
 
 	s.T().Logf(
 		"fileNameBase: %s, dirPathBase: %s",
@@ -2034,6 +2040,8 @@ func (s *DriverSuite) TestStatCall() {
 	require.NoError(s.T(), err)
 	err = s.StorageDriver.PutContent(s.ctx, fileZero, contentA)
 	require.NoError(s.T(), err)
+	err = s.StorageDriver.PutContent(s.ctx, fileSubdir, contentA)
+	require.NoError(s.T(), err)
 	err = s.StorageDriver.PutContent(s.ctx, fileLong, contentA)
 	require.NoError(s.T(), err)
 	err = s.StorageDriver.PutContent(s.ctx, fileDot, contentA)
@@ -2048,6 +2056,8 @@ func (s *DriverSuite) TestStatCall() {
 		err = s.StorageDriverRootless.PutContent(s.ctx, fileDirPathZero, contentA)
 		require.NoError(s.T(), err)
 		err = s.StorageDriverRootless.PutContent(s.ctx, fileZero, contentA)
+		require.NoError(s.T(), err)
+		err = s.StorageDriverRootless.PutContent(s.ctx, fileSubdir, contentA)
 		require.NoError(s.T(), err)
 		err = s.StorageDriverRootless.PutContent(s.ctx, fileLong, contentA)
 		require.NoError(s.T(), err)
@@ -2179,10 +2189,11 @@ func (s *DriverSuite) TestStatCall() {
 				s.T().Skip("filesystem driver does not support prefix-less operation")
 			}
 
-			fi, err := drv.Stat(s.ctx, dirPathBase)
+			subdir := path.Dir(dirPathSubdir)
+			fi, err := drv.Stat(s.ctx, subdir)
 			require.NoError(s.T(), err)
 			require.NotNil(s.T(), fi)
-			assert.Equal(s.T(), dirPathBase, fi.Path())
+			assert.Equal(s.T(), subdir, fi.Path())
 			assert.Zero(s.T(), fi.Size())
 			assert.True(s.T(), fi.IsDir())
 		})
@@ -2268,6 +2279,46 @@ func (s *DriverSuite) TestStatCall() {
 			})
 			assert.Nil(s.T(), fi)
 		})
+
+		err = s.StorageDriver.PutContent(s.ctx, fileSpecialBase, contentA)
+		require.NoError(s.T(), err)
+		if s.StorageDriver.Name() != "filesystem" {
+			err = s.StorageDriverRootless.PutContent(s.ctx, fileSpecialBase, contentA)
+			require.NoError(s.T(), err)
+		}
+		// Stat `foo` when `foo.bar`, `foo_bar`, and `foo-bar` exist as
+		// siblings. Each separator character is tested independently to
+		// ensure the driver does not confuse the sibling with the target.
+		for _, tc := range []struct {
+			sep     string
+			sibling string
+		}{
+			{"dot", fileSpecialDotSibling},
+			{"underscore", fileSpecialUnderscoreSibling},
+			{"dash", fileSpecialDashSibling},
+		} {
+			s.Run(fmt.Sprintf("FileWithSeparatedSibling/%s - %s", tc.sep, name), func() {
+				if s.StorageDriver.Name() == "filesystem" && name == "unprefixed" {
+					s.T().Skip("filesystem driver does not support prefix-less operation")
+				}
+
+				err = s.StorageDriver.PutContent(s.ctx, tc.sibling, contentA)
+				require.NoError(s.T(), err)
+				defer s.deletePath(s.StorageDriver, tc.sibling)
+				if s.StorageDriver.Name() != "filesystem" {
+					err = s.StorageDriverRootless.PutContent(s.ctx, tc.sibling, contentA)
+					require.NoError(s.T(), err)
+					defer s.deletePath(s.StorageDriverRootless, tc.sibling)
+				}
+
+				fi, err := drv.Stat(s.ctx, fileSpecialBase)
+				require.NoError(s.T(), err)
+				require.NotNil(s.T(), fi)
+				assert.Equal(s.T(), fileSpecialBase, fi.Path())
+				assert.EqualValues(s.T(), len(contentA), fi.Size())
+				assert.False(s.T(), fi.IsDir())
+			})
+		}
 	}
 }
 
