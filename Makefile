@@ -127,6 +127,9 @@ db-new-migration:
 %:
 	@:
 
+validate-migration-timestamps:
+	@./script/validate-migration-timestamps.sh
+
 db-structure-dump:
 	@./script/dev/db-structure-dump
 
