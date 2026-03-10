@@ -288,3 +288,19 @@ devvm:packer:validate:
   script:
     - packer init ./devvm/packer/
     - packer validate ./devvm/packer/
+
+database:migration-timestamp-check:
+  stage: validate
+  image: alpine:latest
+  cache: {}
+  needs: []
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+      changes:
+        - registry/datastore/migrations/premigrations/*.go
+        - registry/datastore/migrations/postmigrations/*.go
+  before_script:
+    - apk add --no-cache git bash
+  script:
+    - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME --depth=1
+    - ./script/validate-migration-timestamps.sh
