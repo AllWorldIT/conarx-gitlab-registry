@@ -245,6 +245,9 @@ type RepositoryCache interface {
 	Get(ctx context.Context, path string) *models.Repository
 	Set(ctx context.Context, repo *models.Repository)
 	InvalidateSize(ctx context.Context, repo *models.Repository)
+	// Invalidate removes repository-scoped cached entries for the given repository path, including derived keys.
+	// This is intended to prevent stale path->repository mappings when repository paths are reused.
+	Invalidate(ctx context.Context, path string)
 
 	SizeWithDescendantsTimedOut(ctx context.Context, r *models.Repository)
 	HasSizeWithDescendantsTimedOut(ctx context.Context, r *models.Repository) bool
@@ -278,6 +281,7 @@ func NewNoOpRepositoryCache() RepositoryCache {
 func (*noOpRepositoryCache) Get(context.Context, string) *models.Repository                  { return nil }
 func (*noOpRepositoryCache) Set(context.Context, *models.Repository)                         {}
 func (*noOpRepositoryCache) InvalidateSize(context.Context, *models.Repository)              {}
+func (*noOpRepositoryCache) Invalidate(context.Context, string)                              {}
 func (*noOpRepositoryCache) SizeWithDescendantsTimedOut(context.Context, *models.Repository) {}
 func (*noOpRepositoryCache) HasSizeWithDescendantsTimedOut(context.Context, *models.Repository) bool {
 	return false
@@ -324,6 +328,15 @@ func (c *singleRepositoryCache) Set(_ context.Context, r *models.Repository) {
 func (c *singleRepositoryCache) InvalidateSize(_ context.Context, r *models.Repository) {
 	if r != nil {
 		c.r.Size = nil
+	}
+}
+
+func (c *singleRepositoryCache) Invalidate(_ context.Context, path string) {
+	if c.r == nil {
+		return
+	}
+	if c.r.Path == path {
+		c.r = nil
 	}
 }
 
@@ -471,6 +484,34 @@ func (c *centralRepositoryCache) InvalidateSize(ctx context.Context, r *models.R
 		detail := "failed to invalidate repository size in cache for repo: " + r.Path
 		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn(detail)
 		err := fmt.Errorf("%q: %q", detail, err)
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+	}
+}
+
+// Invalidate implements RepositoryCache.
+func (c *centralRepositoryCache) Invalidate(ctx context.Context, path string) {
+	if path == "" {
+		err := errors.New("can not invalidate an empty path")
+		log.GetLogger(log.WithContext(ctx)).WithError(err).Warn("failed to delete repository cache keys")
+		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
+		return
+	}
+	delCtx, cancel := context.WithTimeout(ctx, cacheOpTimeout)
+	defer cancel()
+
+	keys := []string{
+		c.key(path),
+		c.sizeWithDescendantsTimedOutKey(path),
+		c.sizeWithDescendantsKey(path),
+		c.lsnKey(path),
+	}
+
+	// Best-effort: avoid failing the request due to cache cleanup issues.
+	if err := c.cache.DeleteMany(delCtx, keys...); err != nil {
+		log.GetLogger(log.WithContext(ctx)).WithError(err).WithFields(log.Fields{
+			"path": path,
+			"keys": keys,
+		}).Warn("failed to delete repository cache keys")
 		errortracking.Capture(err, errortracking.WithContext(ctx), errortracking.WithStackTrace())
 	}
 }

@@ -18,3 +18,21 @@
   until: __pkgmgr_result is succeeded
   retries: 3
   delay: 3
+
+- name: Disable root login via SSH
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-disable-root.conf
+    content: |
+      # Disable password auth
+      PasswordAuthentication no
+
+      # Disable root login
+      PermitRootLogin no
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart sshd
+
+- name: Validate sshd configuration
+  ansible.builtin.command: sshd -t
+  changed_when: false

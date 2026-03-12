@@ -47,13 +47,13 @@ var (
 
 // gitlabAPI is a minimal interface over the GitLab client used for testability.
 type gitlabAPI interface {
-	ListProjectIssues(projectID int, opts *gitlab.ListProjectIssuesOptions) ([]*gitlab.Issue, *gitlab.Response, error)
-	CreateIssue(projectID int, opts *gitlab.CreateIssueOptions) (*gitlab.Issue, *gitlab.Response, error)
-	UpdateIssue(projectID, issueIID int, opts *gitlab.UpdateIssueOptions) (*gitlab.Issue, *gitlab.Response, error)
-	ListIssueNotes(projectID, issueIID int, opts *gitlab.ListIssueNotesOptions) ([]*gitlab.Note, *gitlab.Response, error)
-	CreateIssueNote(projectID, issueIID int, opts *gitlab.CreateIssueNoteOptions) (*gitlab.Note, *gitlab.Response, error)
+	ListProjectIssues(projectID int64, opts *gitlab.ListProjectIssuesOptions) ([]*gitlab.Issue, *gitlab.Response, error)
+	CreateIssue(projectID int64, opts *gitlab.CreateIssueOptions) (*gitlab.Issue, *gitlab.Response, error)
+	UpdateIssue(projectID, issueIID int64, opts *gitlab.UpdateIssueOptions) (*gitlab.Issue, *gitlab.Response, error)
+	ListIssueNotes(projectID, issueIID int64, opts *gitlab.ListIssueNotesOptions) ([]*gitlab.Note, *gitlab.Response, error)
+	CreateIssueNote(projectID, issueIID int64, opts *gitlab.CreateIssueNoteOptions) (*gitlab.Note, *gitlab.Response, error)
 	// Pipelines
-	GetPipelineTestReport(projectID, pipelineID int, opts ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error)
+	GetPipelineTestReport(projectID, pipelineID int64, opts ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error)
 }
 
 // realGitLab wraps the official client to implement gitlabAPI.
@@ -61,27 +61,27 @@ type realGitLab struct {
 	cli *gitlab.Client
 }
 
-func (r realGitLab) ListProjectIssues(projectID int, opts *gitlab.ListProjectIssuesOptions) ([]*gitlab.Issue, *gitlab.Response, error) {
+func (r realGitLab) ListProjectIssues(projectID int64, opts *gitlab.ListProjectIssuesOptions) ([]*gitlab.Issue, *gitlab.Response, error) {
 	return r.cli.Issues.ListProjectIssues(projectID, opts)
 }
 
-func (r realGitLab) CreateIssue(projectID int, opts *gitlab.CreateIssueOptions) (*gitlab.Issue, *gitlab.Response, error) {
+func (r realGitLab) CreateIssue(projectID int64, opts *gitlab.CreateIssueOptions) (*gitlab.Issue, *gitlab.Response, error) {
 	return r.cli.Issues.CreateIssue(projectID, opts)
 }
 
-func (r realGitLab) UpdateIssue(projectID, issueIID int, opts *gitlab.UpdateIssueOptions) (*gitlab.Issue, *gitlab.Response, error) {
+func (r realGitLab) UpdateIssue(projectID, issueIID int64, opts *gitlab.UpdateIssueOptions) (*gitlab.Issue, *gitlab.Response, error) {
 	return r.cli.Issues.UpdateIssue(projectID, issueIID, opts)
 }
 
-func (r realGitLab) ListIssueNotes(projectID, issueIID int, opts *gitlab.ListIssueNotesOptions) ([]*gitlab.Note, *gitlab.Response, error) {
+func (r realGitLab) ListIssueNotes(projectID, issueIID int64, opts *gitlab.ListIssueNotesOptions) ([]*gitlab.Note, *gitlab.Response, error) {
 	return r.cli.Notes.ListIssueNotes(projectID, issueIID, opts)
 }
 
-func (r realGitLab) CreateIssueNote(projectID, issueIID int, opts *gitlab.CreateIssueNoteOptions) (*gitlab.Note, *gitlab.Response, error) {
+func (r realGitLab) CreateIssueNote(projectID, issueIID int64, opts *gitlab.CreateIssueNoteOptions) (*gitlab.Note, *gitlab.Response, error) {
 	return r.cli.Notes.CreateIssueNote(projectID, issueIID, opts)
 }
 
-func (r realGitLab) GetPipelineTestReport(projectID, pipelineID int, opts ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error) {
+func (r realGitLab) GetPipelineTestReport(projectID, pipelineID int64, opts ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error) {
 	return r.cli.Pipelines.GetPipelineTestReport(projectID, pipelineID, opts...)
 }
 
@@ -115,7 +115,7 @@ func main() {
 	projectID := mustEnv("CI_PROJECT_ID")
 	workingDir := mustEnv("CI_PROJECT_DIR")
 	// Convert project ID to integer for SDK usage
-	projectIDInt, err := strconv.Atoi(projectID)
+	projectIDInt, err := strconv.ParseInt(projectID, 10, 0)
 	if err != nil {
 		logf("invalid project id: %v", err)
 		os.Exit(1)
@@ -126,14 +126,14 @@ func main() {
 	if issueProjectID == "" {
 		issueProjectID = projectID
 	}
-	issuePID, err := strconv.Atoi(issueProjectID)
+	issuePID, err := strconv.ParseInt(issueProjectID, 10, 0)
 	if err != nil {
 		logf("invalid project id: %v", err)
 		os.Exit(1)
 	}
 	pipelineID := mustEnv("CI_PIPELINE_ID")
 	// Convert pipeline ID to integer for SDK usage
-	pipelineIDInt, err := strconv.Atoi(pipelineID)
+	pipelineIDInt, err := strconv.ParseInt(pipelineID, 10, 0)
 	if err != nil {
 		logf("invalid pipeline id: %v", err)
 		os.Exit(1)
@@ -220,7 +220,7 @@ func prefilterFailures(in []report.Failure, denylist, suiteDenylist *testDenylis
 // processFailures contains the core logic for processing failures into issues
 // and updating existing issues with new occurrences and sending slack notifications.
 // It returns the number of created and updated issues.
-func processFailures(cli gitlabAPI, notifier slackNotifier, issuePID int, failures []report.Failure, ref, sha, pipelineID, pipelineURL string) (int, int) {
+func processFailures(cli gitlabAPI, notifier slackNotifier, issuePID int64, failures []report.Failure, ref, sha, pipelineID, pipelineURL string) (int, int) {
 	created := 0
 	updated := 0
 	for _, c := range failures {
@@ -271,7 +271,7 @@ func processFailures(cli gitlabAPI, notifier slackNotifier, issuePID int, failur
 				Title:       gitlab.Ptr(title),
 				Description: gitlab.Ptr(desc),
 				Labels:      &lo,
-				Weight:      gitlab.Ptr(1),
+				Weight:      gitlab.Ptr(int64(1)),
 			}
 			is, _, err := cli.CreateIssue(issuePID, cio)
 			if err != nil {
@@ -376,7 +376,7 @@ func logf(format string, args ...any) {
 }
 
 // bucketForCount maps an occurrence count to a label used for triage buckets.
-func bucketForCount(n int) string {
+func bucketForCount(n int64) string {
 	switch {
 	case n <= 3:
 		return "flaky-occurrences::1-3"
@@ -391,7 +391,7 @@ func bucketForCount(n int) string {
 
 // findIssueByExactTitle searches issues by title in the target project and
 // returns an exact-match issue if found (opened first, then closed).
-func findIssueByExactTitle(cli gitlabAPI, projectID int, title string) (*gitlab.Issue, error) {
+func findIssueByExactTitle(cli gitlabAPI, projectID int64, title string) (*gitlab.Issue, error) {
 	if is, err := searchTitleByState(cli, projectID, title, "opened"); err != nil || is != nil {
 		return is, err
 	}
@@ -399,8 +399,8 @@ func findIssueByExactTitle(cli gitlabAPI, projectID int, title string) (*gitlab.
 }
 
 // searchTitleByState searches issues by title in the target project and returns an exact-match issue if found.
-func searchTitleByState(cli gitlabAPI, projectID int, title, state string) (*gitlab.Issue, error) {
-	page := 1
+func searchTitleByState(cli gitlabAPI, projectID int64, title, state string) (*gitlab.Issue, error) {
+	var page int64 = 1
 	for {
 		issues, resp, err := cli.ListProjectIssues(projectID, &gitlab.ListProjectIssuesOptions{
 			Search: gitlab.Ptr(title),
@@ -427,9 +427,9 @@ func searchTitleByState(cli gitlabAPI, projectID int, title, state string) (*git
 
 // countOccurrences counts how many tracker comments were previously added to
 // the issue by scanning for the "FLAKE_OCCURRENCE:" marker.
-func countOccurrences(cli gitlabAPI, projectID, issueIID int) (int, error) {
-	page := 1
-	total := 0
+func countOccurrences(cli gitlabAPI, projectID, issueIID int64) (int64, error) {
+	var page int64 = 1
+	var total int64
 	for {
 		notes, resp, err := cli.ListIssueNotes(projectID, issueIID, &gitlab.ListIssueNotesOptions{
 			ListOptions: gitlab.ListOptions{PerPage: 100, Page: page},

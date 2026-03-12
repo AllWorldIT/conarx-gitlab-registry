@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -82,6 +83,10 @@ func init() {
 	BBMCmd.AddCommand(BBMRunCmd)
 	BBMRunCmd.Flags().VarP(nullableInt{&maxBBMJobRetry}, "max-job-retry", "r", "Set the maximum number of job retry attempts (default 2, must be between 1 and 10)")
 
+	GCStatsCmd.Flags().StringVarP(&gcStatsFormat, "format", "f", "table", "output format: 'table' or 'json'")
+	GCStatsCmd.Flags().IntVarP(&gcStatsLimit, "limit", "l", 10, "maximum number of sample entries to display per category, pass 0 to show all entries")
+	DBCmd.AddCommand(GCStatsCmd)
+
 	RootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		return fmt.Errorf("%w\n\n%s", err, c.UsageString())
 	})
@@ -111,6 +116,8 @@ var (
 	stats                bool
 	preImportSkipCutoff  time.Duration
 	logDir               string
+	gcStatsFormat        string
+	gcStatsLimit         int
 )
 
 var parallelwalkKey = "parallelwalk"
@@ -331,6 +338,17 @@ var MigrateUpCmd = &cobra.Command{
 			plan, err := mig.UpNPlan(maxNumMigrations)
 			if err != nil {
 				return fmt.Errorf("failed to prepare Up plan: %w", err)
+			}
+
+			// If the plan is empty but the database contains unknown migration IDs (i.e. schema is ahead of this build),
+			// let operators know we're intentionally doing nothing to support rolling upgrades.
+			if len(plan) == 0 {
+				if unknownApplied, err := mig.UnknownAppliedMigrationIDs(); err == nil && len(unknownApplied) > 0 {
+					_, _ = fmt.Fprintf(os.Stderr,
+						"INFO: database schema is newer than this registry build (%d unknown %s migration record(s)); nothing to migrate\n",
+						len(unknownApplied), mig.Name(),
+					)
+				}
 			}
 
 			if len(plan) > 0 {
@@ -856,4 +874,175 @@ var BBMRunCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// GCStatsCmd is the `gc-stats` sub-command of `database` that shows GC queue statistics.
+var GCStatsCmd = &cobra.Command{
+	Use:   "gc-stats <config>",
+	Short: "Show online garbage collection queue statistics",
+	Long: `Show online garbage collection queue statistics.
+
+Displays health metrics for the blob and manifest GC review queues, including:
+- Tasks pending removal (ready for GC review)
+- Long overdue tasks (pending longer than configured delay)
+- High retry tasks (>10 review attempts, may indicate issues)`,
+	RunE: func(_ *cobra.Command, args []string) error {
+		_, err := resolveConfiguration(args, configuration.WithoutStorageValidation())
+		if err != nil {
+			return fmt.Errorf("configuration error: %w", err)
+		}
+
+		// TODO: Replace mock data with real database queries
+		stats := datastore.GetMockGCStats(gcStatsLimit)
+
+		switch gcStatsFormat {
+		case "json":
+			return outputGCStatsJSON(stats)
+		case "table":
+			return outputGCStatsTable(stats)
+		default:
+			return fmt.Errorf("invalid format %q: must be 'table' or 'json'", gcStatsFormat)
+		}
+	},
+}
+
+func outputGCStatsJSON(stats datastore.GCStats) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(stats)
+}
+
+func outputGCStatsTable(stats datastore.GCStats) error {
+	// Blob Queue Statistics
+	_, _ = fmt.Println("=== DEMO ONLY ===")
+	_, _ = fmt.Println("=== Blob Review Queue ===")
+	_, _ = fmt.Println("=== DEMO ONLY ===")
+	_, _ = fmt.Println()
+
+	// Pending Removal
+	_, _ = fmt.Printf("Tasks Pending Removal: %d\n", stats.Blobs.PendingRemoval.Count)
+	_, _ = fmt.Println("Tasks ready for GC review (review_after has passed).")
+	_, _ = fmt.Println()
+	if len(stats.Blobs.PendingRemoval.Samples) > 0 {
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"Digest", "Review After", "Event"})
+		for _, s := range stats.Blobs.PendingRemoval.Samples {
+			if err := table.Append([]string{s.Digest, formatTime(s.ReviewAfter), s.Event}); err != nil {
+				return fmt.Errorf("appending table row: %w", err)
+			}
+		}
+		if err := table.Render(); err != nil {
+			return fmt.Errorf("rendering table: %w", err)
+		}
+	}
+	_, _ = fmt.Println()
+
+	// Long Overdue
+	_, _ = fmt.Printf("Long Overdue Tasks: %d\n", stats.Blobs.LongOverdue.Count)
+	_, _ = fmt.Println("Tasks pending longer than configured delay - may need attention.")
+	_, _ = fmt.Println()
+	if len(stats.Blobs.LongOverdue.Samples) > 0 {
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"Digest", "Review After", "Event", "Overdue"})
+		for _, s := range stats.Blobs.LongOverdue.Samples {
+			if err := table.Append([]string{s.Digest, formatTime(s.ReviewAfter), s.Event, formatOverdue(s.Overdue)}); err != nil {
+				return fmt.Errorf("appending table row: %w", err)
+			}
+		}
+		if err := table.Render(); err != nil {
+			return fmt.Errorf("rendering table: %w", err)
+		}
+	}
+	_, _ = fmt.Println()
+
+	// High Retry
+	_, _ = fmt.Printf("High Retry Tasks: %d\n", stats.Blobs.HighRetry.Count)
+	_, _ = fmt.Println("Tasks with >10 review attempts - may indicate persistent issues.")
+	_, _ = fmt.Println()
+	if len(stats.Blobs.HighRetry.Samples) > 0 {
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"Digest", "Review After", "Event", "Retries"})
+		for _, s := range stats.Blobs.HighRetry.Samples {
+			if err := table.Append([]string{s.Digest, formatTime(s.ReviewAfter), s.Event, fmt.Sprintf("%d", s.ReviewCount)}); err != nil {
+				return fmt.Errorf("appending table row: %w", err)
+			}
+		}
+		if err := table.Render(); err != nil {
+			return fmt.Errorf("rendering table: %w", err)
+		}
+	}
+	_, _ = fmt.Println()
+
+	// Manifest Queue Statistics
+	_, _ = fmt.Println("=== DEMO ONLY ===")
+	_, _ = fmt.Println("=== Manifest Review Queue ===")
+	_, _ = fmt.Println("=== DEMO ONLY ===")
+	_, _ = fmt.Println()
+
+	// Pending Removal
+	_, _ = fmt.Printf("Tasks Pending Removal: %d\n", stats.Manifests.PendingRemoval.Count)
+	_, _ = fmt.Println("Tasks ready for GC review (review_after has passed).")
+	_, _ = fmt.Println()
+	if len(stats.Manifests.PendingRemoval.Samples) > 0 {
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"Repository ID", "Manifest ID", "Review After", "Event"})
+		for _, s := range stats.Manifests.PendingRemoval.Samples {
+			if err := table.Append([]string{fmt.Sprintf("%d", s.RepositoryID), fmt.Sprintf("%d", s.ManifestID), formatTime(s.ReviewAfter), s.Event}); err != nil {
+				return fmt.Errorf("appending table row: %w", err)
+			}
+		}
+		if err := table.Render(); err != nil {
+			return fmt.Errorf("rendering table: %w", err)
+		}
+	}
+	_, _ = fmt.Println()
+
+	// Long Overdue
+	_, _ = fmt.Printf("Long Overdue Tasks: %d\n", stats.Manifests.LongOverdue.Count)
+	_, _ = fmt.Println("Tasks pending longer than configured delay - may need attention.")
+	_, _ = fmt.Println()
+	if len(stats.Manifests.LongOverdue.Samples) > 0 {
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"Repository ID", "Manifest ID", "Review After", "Event", "Overdue"})
+		for _, s := range stats.Manifests.LongOverdue.Samples {
+			if err := table.Append([]string{fmt.Sprintf("%d", s.RepositoryID), fmt.Sprintf("%d", s.ManifestID), formatTime(s.ReviewAfter), s.Event, formatOverdue(s.Overdue)}); err != nil {
+				return fmt.Errorf("appending table row: %w", err)
+			}
+		}
+		if err := table.Render(); err != nil {
+			return fmt.Errorf("rendering table: %w", err)
+		}
+	}
+	_, _ = fmt.Println()
+
+	// High Retry
+	_, _ = fmt.Printf("High Retry Tasks: %d\n", stats.Manifests.HighRetry.Count)
+	_, _ = fmt.Println("Tasks with >10 review attempts - may indicate persistent issues.")
+	_, _ = fmt.Println()
+	if len(stats.Manifests.HighRetry.Samples) > 0 {
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"Repository ID", "Manifest ID", "Review After", "Event", "Retries"})
+		for _, s := range stats.Manifests.HighRetry.Samples {
+			if err := table.Append([]string{fmt.Sprintf("%d", s.RepositoryID), fmt.Sprintf("%d", s.ManifestID), formatTime(s.ReviewAfter), s.Event, fmt.Sprintf("%d", s.ReviewCount)}); err != nil {
+				return fmt.Errorf("appending table row: %w", err)
+			}
+		}
+		if err := table.Render(); err != nil {
+			return fmt.Errorf("rendering table: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// formatTime formats a time.Time for table display.
+func formatTime(t time.Time) string {
+	return t.Format("2006-01-02 15:04:05")
+}
+
+// formatOverdue formats a duration as "Xd Yh" for table display.
+func formatOverdue(d time.Duration) string {
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	return fmt.Sprintf("%dd %dh", days, hours)
 }

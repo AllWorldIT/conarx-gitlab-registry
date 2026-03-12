@@ -1,5 +1,4 @@
 ---
-
 # Minio is source-only nowadays
 - name: Checkout minio
   ansible.builtin.git:
@@ -34,7 +33,7 @@
     remote_src: yes
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Create /srv/minio parent directory
   ansible.builtin.file:
@@ -42,7 +41,7 @@
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
   become: yes
 
 - name: Create minio-user group
@@ -76,7 +75,7 @@
     state: directory
     owner: minio-user
     group: minio-user
-    mode: '0750'
+    mode: "0750"
   become: yes
 
 - name: Upload minio configuration
@@ -87,8 +86,10 @@
     group: minio-user
     mode: 0640
 
-- name: Enable minio service
+# Service will be enabled by booter
+- name: Ensure minio service does not start at boot
   ansible.builtin.systemd:
     daemon_reload: true
-    enabled: true
+    enabled: false
+    state: stopped
     name: minio.service

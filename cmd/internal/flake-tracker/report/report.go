@@ -20,10 +20,10 @@ type Failure struct {
 
 // PipelinesClient abstracts the pipelines API used to fetch test reports.
 type PipelinesClient interface {
-	GetPipelineTestReport(projectID, pipelineID int, opts ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error)
+	GetPipelineTestReport(projectID, pipelineID int64, opts ...gitlab.RequestOptionFunc) (*gitlab.PipelineTestReport, *gitlab.Response, error)
 }
 
-func FetchFailures(cli PipelinesClient, projectID, pipelineID int) ([]Failure, error) {
+func FetchFailures(cli PipelinesClient, projectID, pipelineID int64) ([]Failure, error) {
 	tr, _, err := cli.GetPipelineTestReport(projectID, pipelineID)
 	if err != nil {
 		return nil, err

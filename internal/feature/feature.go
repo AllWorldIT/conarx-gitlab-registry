@@ -53,7 +53,7 @@ var BBMProcess = Feature{
 // take care to manage their state when appropreate. This feature, when enabled, should only prevent the registry
 // from taking action based on the state of existing lockfiles.
 var EnforceLockfiles = Feature{
-	defaultEnabled: false,
+	defaultEnabled: true,
 	EnvVariable:    "REGISTRY_FF_ENFORCE_LOCKFILES",
 }
 

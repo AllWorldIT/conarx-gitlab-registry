@@ -1,3 +1,37 @@
+## [4.36.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.35.0-gitlab...v4.36.0) (2026-02-02)
+
+
+### Features
+
+* **bbm:** add configuration_media_type_id_convert_to_bigint migration ([eb27d80](https://gitlab.com/gitlab-org/container-registry/commit/eb27d80bd3a6f94a7533d190ce1f17af5c756b18))
+
+## [4.35.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.34.0-gitlab...v4.35.0) (2026-01-27)
+
+
+### Features
+
+* add support for CNCF WASM OCI Artifact media types ([26155a8](https://gitlab.com/gitlab-org/container-registry/commit/26155a8a07030ff8d6218f272c9f278ed05c2e0d))
+* **registry:** add demo gcstats command with mock data ([e928759](https://gitlab.com/gitlab-org/container-registry/commit/e92875956d3b4c9ae24e9ab51e59854d0ccd53ac))
+* **registry:** enable REGISTRY_FF_ENFORCE_LOCKFILES by default ([150b68b](https://gitlab.com/gitlab-org/container-registry/commit/150b68bac49e09990e5beae6c6aeb94cadb35337))
+
+## [4.34.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.33.0-gitlab...v4.34.0) (2026-01-14)
+
+
+### Features
+
+* **datastore:** add index on layers id column ([90da9c5](https://gitlab.com/gitlab-org/container-registry/commit/90da9c5b5e11696a14d744231c644c36751355df))
+* tolerate unknown DB migrations during rolling upgrade ([2cef90b](https://gitlab.com/gitlab-org/container-registry/commit/2cef90b49df0718872af63f0f9b3e39949196b3c))
+
+
+### Bug Fixes
+
+* **handlers:** stale repository cache after rename ([25c2a59](https://gitlab.com/gitlab-org/container-registry/commit/25c2a59522764aa2180d56bb7326b2df5ec5b4ea))
+
+
+### Reverts
+
+* **deps:** update module google.golang.org/api to v0.258.0 ([b0123fb](https://gitlab.com/gitlab-org/container-registry/commit/b0123fb8d5c8e5d8090a18566b8a9882fe9af9ba))
+
 ## [4.33.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.32.0-gitlab...v4.33.0) (2026-01-05)
 
 

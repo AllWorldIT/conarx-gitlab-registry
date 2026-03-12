@@ -16,37 +16,61 @@ vip_start_ip: "{{ vip_net | ansible.utils.ipaddr('1') | ansible.utils.ipaddr('ad
 vip_end_ip: "{{ vip_net | ansible.utils.ipaddr('32') | ansible.utils.ipaddr('address') }}"
 
 wireguard_net: "{{ route_address | ansible.utils.ipsubnet(24, 3) }}"
-wireguard_server_ip: "{{ wireguard_net | ansible.utils.ipaddr('1') }}"
+wireguard_ui_ip: "{{ docker_network | ansible.utils.ipaddr('2') | ansible.utils.ipaddr('address') }}"
 
 docker_bridge_name: br-wg
 
 postgresql_auth_method: scram-sha-256
 
 postgresql_hba_entries:
-  - {type: local, database: all, user: postgres, auth_method: peer}
-  - {type: host, database: gitlab_db, user: gitlab_user, address: '{{ svc_net}}', auth_method: "{{ postgresql_auth_method }}"}
-  - {type: host, database: gitlab_db, user: gitlab_user, address: '{{ vip_net}}', auth_method: "{{ postgresql_auth_method }}"}
-  - {type: host, database: registry_db, user: registry_user, address: '{{ svc_net}}', auth_method: "{{ postgresql_auth_method }}"}
-  - {type: host, database: registry_db, user: registry_user, address: '{{ vip_net}}', auth_method: "{{ postgresql_auth_method }}"}
+  - { type: local, database: all, user: postgres, auth_method: peer }
+  - {
+      type: host,
+      database: gitlab_db,
+      user: gitlab_user,
+      address: "{{ svc_net}}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
+  - {
+      type: host,
+      database: gitlab_db,
+      user: gitlab_user,
+      address: "{{ vip_net}}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
+  - {
+      type: host,
+      database: registry_db,
+      user: registry_user,
+      address: "{{ svc_net}}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
+  - {
+      type: host,
+      database: registry_db,
+      user: registry_user,
+      address: "{{ vip_net}}",
+      auth_method: "{{ postgresql_auth_method }}",
+    }
 
 postgresql_databases:
- - name: gitlab_db
-   owner: gitlab_user
-   state: present
- - name: registry_db
-   owner: registry_user
-   state: present
+  - name: gitlab_db
+    owner: gitlab_user
+    state: present
+  - name: registry_db
+    owner: registry_user
+    state: present
 
 # NOTE(prozlach): passwords are randomized by booter during the setup
 postgresql_users:
- - name: gitlab_user
-   password: chleboslaw
-   db: gitlab_db
-   state: present
- - name: registry_user
-   password: bozyDar
-   db: registry_db
-   state: present
+  - name: gitlab_user
+    password: chleboslaw
+    db: gitlab_db
+    state: present
+  - name: registry_user
+    password: bozyDar
+    db: registry_db
+    state: present
 
 # TODO(prozlach):
 postgresql_privs: []

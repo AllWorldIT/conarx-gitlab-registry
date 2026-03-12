@@ -42,6 +42,8 @@ devvm:packer:deploy:
   needs:
     - devvm:packer:validate
   rules:
+    - if: $CI_COMMIT_TAG
+      when: never
     - <<: *if-fork-merge-request
       when: never
     - changes:
@@ -49,6 +51,7 @@ devvm:packer:deploy:
         - devvm/go/**/*
         - devvm/packer/*
       when: manual
+      allow_failure: true
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
   id_tokens:
     VAULT_ID_TOKEN:
