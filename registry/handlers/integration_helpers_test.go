@@ -335,6 +335,14 @@ func skipDatabaseNotEnabled(tb testing.TB) {
 	}
 }
 
+func skipDatabaseEnabled(tb testing.TB) {
+	tb.Helper()
+
+	if os.Getenv("REGISTRY_DATABASE_ENABLED") == "true" {
+		tb.Skip("skipping test because the metadata database is enabled")
+	}
+}
+
 var (
 	preseededSchema1RepoPath = "schema1/preseeded"
 	preseededSchema1TagName  = "schema1preseededtag"

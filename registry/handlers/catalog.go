@@ -4,18 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
+	"github.com/docker/distribution/log"
 	"github.com/docker/distribution/registry/api/errcode"
 	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/docker/distribution/registry/datastore"
-	"github.com/docker/distribution/registry/storage/driver"
 
 	"github.com/gorilla/handlers"
 )
@@ -30,12 +28,17 @@ const (
 )
 
 func catalogDispatcher(ctx *Context, _ *http.Request) http.Handler {
-	catalogHandler := &catalogHandler{
+	ch := &catalogHandler{
 		Context: ctx,
 	}
 
+	getHandler := ch.LegacyHandleGetCatalog
+	if ch.useDatabase {
+		getHandler = ch.HandleGetCatalog
+	}
+
 	return handlers.MethodHandler{
-		http.MethodGet: http.HandlerFunc(catalogHandler.HandleGetCatalog),
+		http.MethodGet: http.HandlerFunc(getHandler),
 	}
 }
 
@@ -71,9 +74,7 @@ func dbGetCatalog(ctx context.Context, db datastore.Queryer, filters datastore.F
 	return repos, moreEntries, nil
 }
 
-func (ch *catalogHandler) HandleGetCatalog(w http.ResponseWriter, r *http.Request) {
-	moreEntries := true
-
+func (ch *catalogHandler) parseCatalogParams(r *http.Request) (string, int, bool) {
 	q := r.URL.Query()
 	lastEntry := q.Get("last")
 	maxEntries, err := strconv.Atoi(q.Get("n"))
@@ -82,42 +83,21 @@ func (ch *catalogHandler) HandleGetCatalog(w http.ResponseWriter, r *http.Reques
 	}
 	if maxEntries > maximumReturnEntriesUpperLimit {
 		ch.Errors = append(ch.Errors, v2.ErrorCodePaginationNumberInvalid.WithDetail(fmt.Sprintf("n must be no larger than %d", maximumReturnEntriesUpperLimit)))
-		return
+		return "", 0, false
 	}
+	return lastEntry, maxEntries, true
+}
 
-	filters := datastore.FilterParams{
-		LastEntry:  lastEntry,
-		MaxEntries: maxEntries,
-	}
-
-	var filled int
-	var repos []string
-
-	if ch.useDatabase {
-		repos, moreEntries, err = dbGetCatalog(ch.Context, ch.db.Primary(), filters)
-		if err != nil {
-			ch.Errors = append(ch.Errors, errcode.FromUnknownError(err))
-			return
-		}
-		filled = len(repos)
-	} else {
-		repos = make([]string, filters.MaxEntries)
-
-		filled, err = ch.App.registry.Repositories(ch.Context, repos, filters.LastEntry)
-
-		if errors.Is(err, io.EOF) || errors.As(err, new(driver.PathNotFoundError)) {
-			moreEntries = false
-		} else if err != nil {
-			ch.Errors = append(ch.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
-			return
-		}
-	}
-
+// writeCatalogResponse sets the Content-Type and Link headers and writes the JSON catalog body.
+func (ch *catalogHandler) writeCatalogResponse(w http.ResponseWriter, r *http.Request, repos []string, moreEntries bool, maxEntries int) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Add a link header if there are more entries to retrieve
-	if moreEntries {
-		filters.LastEntry = repos[len(repos)-1]
+	if moreEntries && len(repos) > 0 {
+		filters := datastore.FilterParams{
+			LastEntry:  repos[len(repos)-1],
+			MaxEntries: maxEntries,
+		}
 		urlStr, err := createLinkEntry(r.URL.String(), filters, "", "")
 		if err != nil {
 			ch.Errors = append(ch.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
@@ -128,13 +108,29 @@ func (ch *catalogHandler) HandleGetCatalog(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	enc := json.NewEncoder(w)
-	if err := enc.Encode(catalogAPIResponse{
-		Repositories: repos[0:filled],
-	}); err != nil {
+	if err := json.NewEncoder(w).Encode(catalogAPIResponse{Repositories: repos}); err != nil {
 		ch.Errors = append(ch.Errors, errcode.ErrorCodeUnknown.WithDetail(err))
+	}
+}
+
+func (ch *catalogHandler) HandleGetCatalog(w http.ResponseWriter, r *http.Request) {
+	log.GetLogger(log.WithContext(ch)).Debug("HandleGetCatalog")
+
+	lastEntry, maxEntries, ok := ch.parseCatalogParams(r)
+	if !ok {
 		return
 	}
+
+	repos, moreEntries, err := dbGetCatalog(ch.Context, ch.db.Primary(), datastore.FilterParams{
+		LastEntry:  lastEntry,
+		MaxEntries: maxEntries,
+	})
+	if err != nil {
+		ch.Errors = append(ch.Errors, errcode.FromUnknownError(err))
+		return
+	}
+
+	ch.writeCatalogResponse(w, r, repos, moreEntries, maxEntries)
 }
 
 // Use the original URL from the request to create a new URL for
