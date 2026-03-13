@@ -101,6 +101,7 @@ func AllWork() []Work {
 		{Name: "copyManifestMediaTypeIDToNewBigIntColumn", Do: copyManifestMediaTypeIDToNewBigIntColumn},
 		{Name: "copyManifestConfigMediaTypeIDToNewBigIntColumn", Do: copyManifestConfigMediaTypeIDToNewBigIntColumn},
 		{Name: "populateBlobsIDColumn", Do: updateBlobNullIDs},
+		{Name: "copyBlobMediaTypeIDToNewBigIntColumn", Do: copyBlobMediaTypeIDToNewBigIntColumn},
 	}
 }
 
@@ -114,6 +115,10 @@ func copyManifestConfigMediaTypeIDToNewBigIntColumn(ctx context.Context, db data
 		Info(fmt.Sprintf(`Copying configuration_media_type_id to configuration_media_type_id_convert_to_bigint for %s, starting from %s:%d to id:%d`, paginationTable, paginationColumn, paginationAfter, paginationBefore))
 	_, err := db.ExecContext(ctx, q, paginationAfter, paginationBefore)
 	return err
+}
+
+func copyBlobMediaTypeIDToNewBigIntColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore, _ int) error {
+	return copyMediaTypeIDToNewBigIntColumn(ctx, db, paginationTable, paginationColumn, paginationAfter, paginationBefore)
 }
 
 func copyMediaTypeIDToNewBigIntColumn(ctx context.Context, db datastore.Handler, paginationTable, paginationColumn string, paginationAfter, paginationBefore int) error {
