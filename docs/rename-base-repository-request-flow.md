@@ -32,11 +32,11 @@ sequenceDiagram
           R->>G: 409 Conflict
         else There are no conflicting repository leases
           R->>P: Count number of repositories that start with "my-group/my-sub-group/old-name" <br> in database's repository table
-          alt path contains more than 1000 sub-repos
+          alt path contains more than 2000 sub-repos
             R->>G: 422 Unprocessable Entity
           else path contains 0 sub-repos
             R->>G: 404 Not Found
-          else path contains less than 1000 (but greater than 0) sub-repos
+          else path contains less than 2000 (but greater than 0) sub-repos
             R->>RR: Retrieve the existing repository lease (if any)
             alt There is no existing repository lease for <br>"my-group/my-sub-group/old-name" to "my-group/my-sub-group/new-name"
               R->>RR: Create the necessary repository lease on "new-name" for 60 seconds
@@ -77,11 +77,11 @@ sequenceDiagram
           R->>G: 409 Conflict
         else There are no conflicting repository leases
           R->>P: Count number of repositories that start with "my-group/my-sub-group/old-name" <br> in database's repository table
-          alt path contains more than 1000 sub-repos
+          alt path contains more than 2000 sub-repos
             R->>G: 422 Unprocessable Entity
           else path contains 0 sub-repos
             R->>G: 404 Not Found
-          else path contains less than 1000 (but greater than 0) sub-repos
+          else path contains less than 2000 (but greater than 0) sub-repos
             R->>RR: Retrieve the existing repository lease (if any)
             alt There is no existing repository lease for <br>"my-group/my-sub-group/old-name" to "my-group/my-sub-group/new-name"
               R->>RR: Create the necessary repository lease on "new-name" for 60 seconds

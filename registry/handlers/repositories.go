@@ -92,7 +92,7 @@ const (
 	referrersQueryParamKey                 = "referrers"
 	referrerTypeQueryParamKey              = "referrer_type"
 	defaultDryRunRenameOperationTimeout    = 5 * time.Second
-	maxRepositoriesToRename                = 1000
+	maxRepositoriesToRename                = 2000
 )
 
 var (
@@ -1135,7 +1135,7 @@ func validateRenameRequest(ctx context.Context, r *http.Request, repoName string
 
 // assertRenameRepositoryCount asserts that the repository count under the repository path is not zero and does not exceed the supported size.
 func assertRenameRepositoryCount(ctx context.Context, repo *models.Repository, repoCount int) error {
-	// verify the source path does not contain more than 1000 sub repositories.
+	// verify the source path does not contain more than 2000 sub repositories.
 	// This is a pre-cautious measure for scalability and performance reasons:
 	// https://gitlab.com/gitlab-org/gitlab/-/issues/357014
 	if repoCount > maxRepositoriesToRename {

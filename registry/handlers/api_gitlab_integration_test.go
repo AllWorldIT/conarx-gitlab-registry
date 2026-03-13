@@ -2138,13 +2138,13 @@ func TestGitlabAPI_RenameRepository_ExceedsLimit(t *testing.T) {
 	envPre.Cleanup(t)
 	envPre.requireDB(t)
 
-	// seed 1000 + 1 sub repos of base-repo: foo/bar
+	// seed 2000 + 1 sub repos of base-repo: foo/bar
 	baseRepoName, err := reference.WithName("foo/bar")
 	require.NoError(t, err)
 
-	nestedRepos := make([]string, 0, 1001)
+	nestedRepos := make([]string, 0, 2001)
 	nestedRepos = append(nestedRepos, "foo/bar")
-	for i := 0; i <= 1000; i++ {
+	for i := 0; i <= 2000; i++ {
 		nestedRepos = append(nestedRepos, fmt.Sprintf("foo/bar/%d", i))
 	}
 	seedMultipleRepositoriesWithTaggedLatestManifest(t, envPre, nestedRepos)
