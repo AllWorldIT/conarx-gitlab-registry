@@ -3339,3 +3339,130 @@ func TestStatisticsAPI_Get_ImportStats(t *testing.T) {
 	require.NotZero(t, imp.BlobsCount)
 	require.NotZero(t, imp.BlobsSizeBytes)
 }
+
+// TestLegacyHandleGetCatalog tests the legacy filesystem catalog handler.
+// Each subtest targets a distinct branch of the three-way error-to-moreEntries
+// mapping in LegacyHandleGetCatalog:
+//
+//   - nil error         → buffer filled   → moreEntries=true  → Link header set
+//   - io.EOF            → partial fill    → moreEntries=false → no Link header
+//   - PathNotFoundError → empty registry  → moreEntries=false → empty body
+func TestLegacyHandleGetCatalog(t *testing.T) {
+	skipDatabaseEnabled(t)
+
+	type catalogAPIResponse struct {
+		Repositories []string `json:"repositories"`
+	}
+
+	// Repos are chosen to sort predictably under filesystem lexical ordering.
+	allRepos := []string{
+		"aaaa",
+		"bbbb",
+		"cccc",
+		"dddd",
+		"eeee",
+	}
+
+	t.Run("full buffer sets Link header", func(t *testing.T) {
+		// Repositories() returns err=nil when the slice is exactly filled —
+		// moreEntries must be true and a Link header must be present.
+		env := newTestEnv(t, withFSDriver(t.TempDir()))
+		env.Cleanup(t)
+
+		for _, repo := range allRepos {
+			createRepository(t, env, repo, "latest")
+		}
+
+		catalogURL, err := env.builder.BuildCatalogURL(url.Values{"n": []string{"3"}})
+		require.NoError(t, err)
+
+		resp, err := http.Get(catalogURL)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var body catalogAPIResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+
+		require.Equal(t, []string{"aaaa", "bbbb", "cccc"}, body.Repositories)
+		require.Equal(t, `</v2/_catalog?last=cccc&n=3>; rel="next"`, resp.Header.Get("Link"))
+	})
+
+	t.Run("partial fill omits Link header", func(t *testing.T) {
+		// Repositories() returns io.EOF when the walk completes before filling
+		// the buffer — moreEntries must be false and no Link header present.
+		env := newTestEnv(t, withFSDriver(t.TempDir()))
+		env.Cleanup(t)
+
+		for _, repo := range allRepos[:3] {
+			createRepository(t, env, repo, "latest")
+		}
+
+		catalogURL, err := env.builder.BuildCatalogURL(url.Values{"n": []string{"10"}})
+		require.NoError(t, err)
+
+		resp, err := http.Get(catalogURL)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var body catalogAPIResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+
+		require.Equal(t, []string{"aaaa", "bbbb", "cccc"}, body.Repositories)
+		require.Empty(t, resp.Header.Get("Link"))
+	})
+
+	t.Run("empty registry omits Link header and returns empty body", func(t *testing.T) {
+		// Repositories() returns driver.PathNotFoundError when the repository
+		// root does not exist — moreEntries must be false, body must be empty.
+		env := newTestEnv(t, withFSDriver(t.TempDir()))
+		env.Cleanup(t)
+
+		catalogURL, err := env.builder.BuildCatalogURL()
+		require.NoError(t, err)
+
+		resp, err := http.Get(catalogURL)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var body catalogAPIResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+
+		require.Empty(t, body.Repositories)
+		require.Empty(t, resp.Header.Get("Link"))
+	})
+
+	t.Run("last parameter advances cursor", func(t *testing.T) {
+		// Verify the last query param is correctly passed through to
+		// Repositories() and pagination works on the legacy path.
+		env := newTestEnv(t, withFSDriver(t.TempDir()))
+		env.Cleanup(t)
+
+		for _, repo := range allRepos {
+			createRepository(t, env, repo, "latest")
+		}
+
+		catalogURL, err := env.builder.BuildCatalogURL(url.Values{
+			"last": []string{"cccc"},
+			"n":    []string{"10"},
+		})
+		require.NoError(t, err)
+
+		resp, err := http.Get(catalogURL)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var body catalogAPIResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+
+		require.Equal(t, []string{"dddd", "eeee"}, body.Repositories)
+		require.Empty(t, resp.Header.Get("Link"))
+	})
+}
