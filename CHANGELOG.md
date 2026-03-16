@@ -1,3 +1,23 @@
+## [4.39.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.38.0-gitlab...v4.39.0) (2026-03-16)
+
+
+### ✨ Features ✨
+
+* **api:** bump rename sub-repository limit from 1000 to 2000 ([4d39bcc](https://gitlab.com/gitlab-org/container-registry/commit/4d39bcce941f09b48fd1cfc4c08c02826980a469))
+* batched migration for blobs.media_type_id_convert_to_bigint backfill ([38f61b2](https://gitlab.com/gitlab-org/container-registry/commit/38f61b27a67242b0dfd953cd9444d587699f8765))
+
+
+### ⚙️ Build ⚙️
+
+* **deps:** update module github.com/aws/aws-sdk-go-v2/config to v1.32.11 ([3e7c952](https://gitlab.com/gitlab-org/container-registry/commit/3e7c9526201d686dbff35f1a2dbf9711bbbf897d))
+* **deps:** update module github.com/aws/aws-sdk-go-v2/service/s3 to v1.96.3 ([7dd637b](https://gitlab.com/gitlab-org/container-registry/commit/7dd637bc4e6f78c4839e2d6e6ebf5a276648a6ff))
+
+
+### ♻️ Refactors ♻️
+
+* **handlers:** separate legacy filesystem and database code paths for catalog GET ([b5c78f3](https://gitlab.com/gitlab-org/container-registry/commit/b5c78f30eb571f9b5dc10051155baf8e4c926877))
+* improve tests for Stat call in tests suite ([d20b86e](https://gitlab.com/gitlab-org/container-registry/commit/d20b86e378ea6b8ab086cb76c0ff597e76570661))
+
 ## [4.38.0](https://gitlab.com/gitlab-org/container-registry/compare/v4.37.0-gitlab...v4.38.0) (2026-03-03)
 
 
